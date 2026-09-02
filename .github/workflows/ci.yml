@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: yuksalish_test
+          POSTGRES_USER: yuksalish_test
+          POSTGRES_PASSWORD: change-me-integration-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yuksalish_test -d yuksalish_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      YUKSALISH_DATABASE_URL: postgresql+asyncpg://yuksalish_test:change-me-integration-only@127.0.0.1:5432/yuksalish_test
+      YUKSALISH_TEST_DATABASE_URL: postgresql+asyncpg://yuksalish_test:change-me-integration-only@127.0.0.1:5432/yuksalish_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.lock.txt
+      - run: python -m pip install --no-deps -e .
+      - run: alembic -c apps/api/alembic.ini upgrade head
+      - run: ruff check .
+      - run: mypy apps modules
+      - run: pytest
+      - run: bandit -q -r apps modules -x tests
+      - run: pip-audit
+
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm audit --audit-level low
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2

@@ -1,0 +1,51 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+*.key
+*.pfx
+
+# Python
+.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node / Electron
+node_modules/
+**/node_modules/
+**/dist/
+**/dist-electron/
+**/release/
+*.tsbuildinfo
+
+# Runtime and production data
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.log
+*.pdf
+*.docx
+*.exe
+*.zip
+/Hisobot AI/
+/tmp/
+/.qa_hisobot_pdfs/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

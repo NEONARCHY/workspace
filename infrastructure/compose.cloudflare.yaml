@@ -1,0 +1,10 @@
+services:
+  cloudflared:
+    image: ${CLOUDFLARED_IMAGE:?Set a reviewed, pinned cloudflared image tag}
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:?Tunnel token is required}"]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - edge

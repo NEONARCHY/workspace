@@ -1,0 +1,132 @@
+{
+  "version": "1.0.0",
+  "source_system": "yuksalish_hisobot_sqlite",
+  "tables": [
+    {
+      "source": "reports",
+      "source_key": ["employee_key", "report_date"],
+      "target": "hisobot_reports",
+      "strategy": "upsert_if_payload_hash_matches",
+      "disposition": "migrate"
+    },
+    {
+      "source": "vacations",
+      "source_key": ["employee_key"],
+      "target": "hisobot_vacations",
+      "strategy": "upsert_if_payload_hash_matches",
+      "disposition": "migrate"
+    },
+    {
+      "source": "user_preferences",
+      "source_key": ["telegram_id"],
+      "target": "hisobot_legacy_user_preferences",
+      "strategy": "archive_with_unresolved_legacy_identity",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "daily_summaries",
+      "source_key": ["report_date"],
+      "target": "hisobot_summaries",
+      "strategy": "insert_immutable_variant_central_daily",
+      "disposition": "migrate"
+    },
+    {
+      "source": "hudud_daily_summaries",
+      "source_key": ["report_date"],
+      "target": "hisobot_summaries",
+      "strategy": "insert_immutable_variant_hudud_daily",
+      "disposition": "migrate"
+    },
+    {
+      "source": "packages",
+      "source_key": ["report_date"],
+      "target": "hisobot_report_artifacts",
+      "strategy": "rebase_file_verify_hash_central_daily",
+      "disposition": "migrate"
+    },
+    {
+      "source": "hudud_packages",
+      "source_key": ["report_date"],
+      "target": "hisobot_report_artifacts",
+      "strategy": "rebase_file_verify_hash_hudud_daily",
+      "disposition": "migrate"
+    },
+    {
+      "source": "weekly_packages",
+      "source_key": ["week_end"],
+      "target": "hisobot_report_artifacts",
+      "strategy": "rebase_file_verify_hash_central_weekly",
+      "disposition": "migrate"
+    },
+    {
+      "source": "hudud_weekly_packages",
+      "source_key": ["week_end"],
+      "target": "hisobot_report_artifacts",
+      "strategy": "rebase_file_verify_hash_hudud_weekly",
+      "disposition": "migrate"
+    },
+    {
+      "source": "deliveries",
+      "source_key": ["report_date", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "summary_deliveries",
+      "source_key": ["report_date", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "hudud_deliveries",
+      "source_key": ["report_date", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "hudud_summary_deliveries",
+      "source_key": ["report_date", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "weekly_deliveries",
+      "source_key": ["week_end", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "hudud_weekly_deliveries",
+      "source_key": ["week_end", "telegram_id"],
+      "target": "hisobot_legacy_delivery_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "reminders",
+      "source_key": ["report_date", "telegram_id"],
+      "target": "hisobot_legacy_reminder_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "reminder_events",
+      "source_key": ["report_date", "reminder_slot", "telegram_id"],
+      "target": "hisobot_legacy_reminder_states",
+      "strategy": "archive_state_without_requeue",
+      "disposition": "legacy_only"
+    },
+    {
+      "source": "ui_messages",
+      "source_key": ["chat_id", "message_id"],
+      "target": "hisobot_legacy_ui_messages",
+      "strategy": "archive_only",
+      "disposition": "legacy_only"
+    }
+  ]
+}

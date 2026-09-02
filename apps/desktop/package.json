@@ -1,0 +1,38 @@
+{
+  "name": "@yuksalish/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist-electron/main/main.js",
+  "scripts": {
+    "build": "vite build && tsup src/main/main.ts src/preload/preload.ts --format cjs --platform node --target node20 --out-dir dist-electron --sourcemap --clean --external electron",
+    "dev": "pnpm build:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "build:electron": "tsup src/main/main.ts src/preload/preload.ts --format cjs --platform node --target node20 --out-dir dist-electron --sourcemap --clean --external electron",
+    "lint": "eslint src vite.config.mts",
+    "postinstall": "node node_modules/electron/install.js",
+    "start": "electron .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@yuksalish/contracts": "workspace:*",
+    "@yuksalish/i18n": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "concurrently": "10.0.5",
+    "cross-env": "10.1.0",
+    "electron": "44.1.1",
+    "jsdom": "26.1.0",
+    "tsup": "8.5.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.11",
+    "wait-on": "9.1.0"
+  }
+}

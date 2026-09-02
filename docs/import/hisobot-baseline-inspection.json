@@ -1,0 +1,52 @@
+{
+  "inspector_version": "0.1.0",
+  "mapping_version": "1.0.0",
+  "inspected_at": "2026-09-02",
+  "source_system": "yuksalish_hisobot_sqlite",
+  "snapshot_fingerprint": "d69f11e742fa26e2b5d39b3387707fe1cc9d1d89bade631f0f8a77ed2c1cc2a7",
+  "database": {
+    "bytes": 1114112,
+    "sha256": "0cc6bae63e7df9060af9a5d8c147e44ca6796eccaf6aff2edf8e8aedadec8eb7",
+    "integrity": "ok",
+    "schema_sha256": "1fe17ffedae2cdfffa395d34ddfd30fb1ff774d47e74006ec996867ed8b9c15f",
+    "schema_issues": []
+  },
+  "archive": {
+    "file_count": 54,
+    "manifest_sha256": "d84985dd56a826ed8a05c24fe4e7773b68a15d871d12a760df4b035770aec61d"
+  },
+  "package_paths": {
+    "total": 47,
+    "direct": 0,
+    "rebase_unique": 47,
+    "missing": 0,
+    "ambiguous": 0
+  },
+  "reports": {
+    "total": 333,
+    "employee_count": 32,
+    "first_date": "2026-08-03",
+    "last_date": "2026-09-02",
+    "late_count": 89
+  },
+  "table_counts": {
+    "daily_summaries": 23,
+    "deliveries": 104,
+    "hudud_daily_summaries": 16,
+    "hudud_deliveries": 80,
+    "hudud_packages": 16,
+    "hudud_summary_deliveries": 5,
+    "hudud_weekly_deliveries": 15,
+    "hudud_weekly_packages": 3,
+    "packages": 24,
+    "reminder_events": 2238,
+    "reminders": 235,
+    "reports": 333,
+    "summary_deliveries": 26,
+    "ui_messages": 730,
+    "user_preferences": 37,
+    "vacations": 2,
+    "weekly_deliveries": 18,
+    "weekly_packages": 4
+  }
+}

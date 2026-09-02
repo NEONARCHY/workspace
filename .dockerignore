@@ -1,0 +1,23 @@
+.git
+.github
+.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+node_modules
+**/node_modules
+**/dist
+**/dist-electron
+Hisobot AI
+inventory
+tmp
+.qa_hisobot_pdfs
+*.env
+*.sqlite*
+*.db
+*.log
+*.pdf
+*.docx
+*.exe
+*.zip

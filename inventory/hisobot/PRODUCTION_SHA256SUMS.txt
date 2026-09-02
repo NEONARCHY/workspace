@@ -1,0 +1,62 @@
+# Yuksalish Hisobot production snapshot candidate
+# Generated: 2026-09-02
+# Source: C:/Users/User/Desktop/Yuksalish Workspace/Hisobot AI
+# Includes hashes for secrets and personal-data files, but never their contents.
+22798fc1ebf15c503beb5ef8ff27dc68f361721e948c827d744ab7ddb6a724a4  .env
+b1c23acbab084610532ab344b10228ee6db6f5381fa2188e193223727fdee49a  data/archive/2026/Hisobot 03.08.26.pdf
+f80804473e4d1d73fb5f444e2a60fae509e99ff7b47f05dd6387b5a9f33744d6  data/archive/2026/Hisobot 04.08.26.pdf
+6ae520f12fe42383d553c0e1549b07b16decc11fc6cea62c4eedd2626f9cd2b5  data/archive/2026/Hisobot 05.08.26.pdf
+101fbf7d281c01b46a2f669213d96f69280fe746c7999e22fa91d34d9e8aa3d1  data/archive/2026/Hisobot 06.08.26.pdf
+bb599f0981646d14782856c16fe01e23920435a4119a44ed9ea779c4b893c635  data/archive/2026/Hisobot 07.08.26.pdf
+49664afca291a2a91241ac448f965b2f6b1c70fd740f31dac332f4be0336c49b  data/archive/2026/Hisobot 08.08.26.pdf
+cc3a454517742f93e48746f50ef6e527c29aed82e526692a6adb8c31bae8408b  data/archive/2026/Hisobot 09.08.26.pdf
+f103beaf41db1f4acb6234b1ccac816f5cbebfa6c3f05c44d3de5dd60e9d0a4b  data/archive/2026/Hisobot 10.08.26.pdf
+faf51a7303996cddcdd0a5b4a55d366bfbfe6ef5c7828e45eca56cdb2f6ee78c  data/archive/2026/Hisobot 11.08.26.pdf
+d84908a06550e973afd2d2e40fcadee30d35a3526046635666c7a3b72065dbc5  data/archive/hudud/2026/Hudud Hisobot 11.08.26.pdf
+c8eadd69654356343cfc04ba174da9f740a34dff9c5d9a76260e34b9784aed4d  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 01.09.26.pdf
+2625cad2930cfa70596f81553a988651f651dc34967bcfcb3cfe05f80708d0f3  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 11.08.26.docx
+ef78a0aa73486de4a87fa2e0f31c4c0dd46a13be84e60d921d18e92652e7f883  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 12.08.26.pdf
+d706708f97f58d6848e2e98937cd36629d7c06501b6750a5ca0f67078a11e0e4  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 13.08.26.pdf
+c740421f0acd74af20f590e98bf522b376897980c1205c7788b61ac7a72df59d  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 14.08.26.pdf
+112fe3120b2adaeeb29fa9b0c2fba3f955a81e3edb272c75bf65728849775560  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 17.08.26.pdf
+89afbc2a49cc7c3b66b58a63d7c142b06a5854f08960fd22178ad3b74fde34f4  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 18.08.26.pdf
+6aebb3f5cf39494f3214a9dce733e53f4d7c9dfcca8f3602f80bae1c57f941b5  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 19.08.26.pdf
+c73051cd935cc742a19f99a346d3044f07969592fd91ac643d12a29a88d7cf1d  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 20.08.26.pdf
+1b643f7a2d34f7be7951ed36cf90c549095079a4be016ac68757a8df7e920638  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 21.08.26.pdf
+091ae14f78573e4abba938c430b5bd470d8fda1bda000246636060b11beedea7  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 24.08.26.pdf
+10278b7c60f550722add38f27f065f6c0d92db9ab8e45ebc0f165fde29b4d808  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 25.08.26.pdf
+40fc86ae22cc48c3d28837a58123dbf95c5b79981fbbe2511d5a853632408b31  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 26.08.26.pdf
+2520c3652a82ae5b55f466efafdaada9d793909109d46c78505660b97d309ee2  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 27.08.26.pdf
+403bfad528cb99fa28cca28d2a8eae6552cf38f3a7eaf4cbbc71f105c8045baa  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 28.08.26.pdf
+103ab77bf612708541202547008178ba53b3e34b7ad4331f65d8e38db4b59d62  data/archive/hudud/summary/2026/Hudud Qisqa Hisobot 31.08.26.pdf
+150181add63205958ffc85e16ec380dd605d695109d5c05843440f5a44070c65  data/archive/hudud/weekly/summary/2026/Hudud Haftalik Qisqa Hisobot 10.08.26-14.08.26.pdf
+dbd16a4cf2b14119ec23b38a6bf76bda3eeb0a874e88f8c5c3a7371cc9bcb6cd  data/archive/hudud/weekly/summary/2026/Hudud Haftalik Qisqa Hisobot 17.08.26-21.08.26.pdf
+574e7f258e8dd2f114a9fb19438c7baa9a5078d48d1a197d637d2e155dda578b  data/archive/hudud/weekly/summary/2026/Hudud Haftalik Qisqa Hisobot 24.08.26-28.08.26.pdf
+2cff9a2c99870988bb26c815f83c852776ca9cd4bb40acda94b1f625ab7f5a30  data/archive/summary/2026/Qisqa Hisobot 01.09.26.pdf
+a915cdfc2d620e79eeaa3874cdf8908de19ca8f4e4eaf419d3312aab86bfc25f  data/archive/summary/2026/Qisqa Hisobot 06.08.26.docx
+7e5ea013665e35699b7dc61af08b438743d9b4fe1d10a2776aa022c6441df6d0  data/archive/summary/2026/Qisqa Hisobot 07.08.26.docx
+21c43d4f48d074518ef55934279f689726ed9035358b26b092f4377c498175cb  data/archive/summary/2026/Qisqa Hisobot 08.08.26.docx
+3d54f4dc2e6d19ca112186ffedf0c1bc314fb01657a5723ea63ce0f98d0adfb2  data/archive/summary/2026/Qisqa Hisobot 09.08.26.docx
+7d7137594a06e5b2cbbe5443d4f3f9a35d24218cd860c20af1476ae895ece891  data/archive/summary/2026/Qisqa Hisobot 10.08.26.docx
+c1116715dd41d8a9f953554ee0f01c2b11618d0f33d0f3bffaef79220cc36263  data/archive/summary/2026/Qisqa Hisobot 11.08.26.docx
+b3c1354e6ab93f20e4dbbaa9e53a4bfa78ceec617a0bc9fcbfdc42af1fa7a9d3  data/archive/summary/2026/Qisqa Hisobot 12.08.26.pdf
+ab6adcf45b744778a8fc263f98ccaad67b03cba8b41cb28a23c37b3ef1a35769  data/archive/summary/2026/Qisqa Hisobot 13.08.26.pdf
+cc98f96ca87b84b2489ffa49d5eb8c0a77ac30aeeb67b6126ebee01c335a259b  data/archive/summary/2026/Qisqa Hisobot 14.08.26.pdf
+ee4e75063e888066c7896378dee360ca84a82016f16c2d61d272312797cea664  data/archive/summary/2026/Qisqa Hisobot 17.08.26.pdf
+e4c238a7f68b5d3a2075b1a003e6b217e4fef98ed1ea1777e2b453e82845a50d  data/archive/summary/2026/Qisqa Hisobot 18.08.26.pdf
+ca78587bc269916eec5b76ed49b9f7540b1e113afc79137ab760381aa98a176f  data/archive/summary/2026/Qisqa Hisobot 19.08.26.pdf
+dce0d26761a5de108bcecf10ac9a26500960a2b9c08810c688618936a8138288  data/archive/summary/2026/Qisqa Hisobot 20.08.26.pdf
+1de225ed28413d4fe13556269efffe2f3e3ce290461ba619c4381c3d1616fc47  data/archive/summary/2026/Qisqa Hisobot 21.08.26.pdf
+d5cc5bdc07da251e09fe4d0c433788c097dd795fd7b8c0361870015687a370f2  data/archive/summary/2026/Qisqa Hisobot 24.08.26.pdf
+90e3e5e6ad3fa99ad910248141d7ced3002cd7347743dc09b16c9710472801bb  data/archive/summary/2026/Qisqa Hisobot 25.08.26.pdf
+7778f75dd9023c946593bfd28f5f050c00654f34eaae05bf6991111c634db3f3  data/archive/summary/2026/Qisqa Hisobot 26.08.26.pdf
+8a0cb2cf53c673175733d951cca319339d3e3a63d09d1cd6c89d93791cd1a351  data/archive/summary/2026/Qisqa Hisobot 27.08.26.pdf
+5f751003aa5d69cc8780454c29c3f58f6181f59ada5440bb272a1db8dc7fa2a2  data/archive/summary/2026/Qisqa Hisobot 28.08.26.pdf
+f1270672b2ddd1112f4133a71a1463656c7ef6290ae68465edb10c429258a726  data/archive/summary/2026/Qisqa Hisobot 31.08.26.pdf
+575c9096e31ab17fb20c7dad94ea9499fa7d6ca42f2c37ff1be577fe5c4bcdbf  data/archive/weekly/2026/Haftalik Hisobot 03.08.26-07.08.26.pdf
+6c8ee397d9fa947671be74610626eb6aa8a82a29b228d0badc990027f717eeba  data/archive/weekly/summary/2026/Haftalik Qisqa Hisobot 10.08.26-14.08.26.pdf
+f403e6df6ccfd3b4038196e51406c93aaa4e15db1c992147e0706bfa112ba7ff  data/archive/weekly/summary/2026/Haftalik Qisqa Hisobot 17.08.26-21.08.26.pdf
+b07adb4cc097188cd6c1ee51af9c66fbcfe83ff1e9e843ba3e3758c0240968b2  data/archive/weekly/summary/2026/Haftalik Qisqa Hisobot 24.08.26-28.08.26.pdf
+0cc6bae63e7df9060af9a5d8c147e44ca6796eccaf6aff2edf8e8aedadec8eb7  data/hisobot.sqlite3
+a6648c4a6d030b106ea4902a6fac2f671b18024b390d84e05233e7a02d326864  logs/hisobot_bot.log
+a977e0bce689afc6ae40d1c3ef26f998eadd9f49cce4d97cb0165561f23706fc  YuksalishHisobotBot.exe

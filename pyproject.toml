@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools==83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yuksalish-workspace"
+version = "0.1.0"
+description = "Backend foundation and migration tooling for Yuksalish Workspace"
+readme = "README.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "alembic==1.19.1",
+  "asyncpg==0.31.0",
+  "fastapi==0.141.1",
+  "minio==7.2.20",
+  "pydantic-settings==2.15.0",
+  "redis==8.1.0",
+  "sqlalchemy==2.0.52",
+  "structlog==26.1.0",
+  "tzdata==2026.3",
+  "uvicorn[standard]==0.52.4",
+]
+
+[project.optional-dependencies]
+dev = [
+  "bandit==1.9.4",
+  "httpx==0.28.1",
+  "mypy==2.3.1",
+  "pip-audit==2.10.1",
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.5",
+  "setuptools==83.0.0",
+]
+
+[project.scripts]
+yuksalish-api = "yuksalish_api.main:run"
+yuksalish-worker = "yuksalish_worker.main:run"
+yuksalish-scheduler = "yuksalish_scheduler.main:run"
+hisobot-import = "hisobot_import.cli:main"
+
+[tool.setuptools.packages.find]
+where = [
+  "apps/api/src",
+  "apps/worker/src",
+  "apps/scheduler/src",
+  "modules/hisobot/importer/src",
+]
+
+[tool.setuptools.package-data]
+hisobot_import = ["spec/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+addopts = "-q --strict-config --strict-markers --cov=yuksalish_api --cov=hisobot_import --cov-report=term-missing --cov-fail-under=80"
+markers = [
+  "postgres: integration test requiring YUKSALISH_TEST_DATABASE_URL",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["yuksalish_api", "hisobot_import"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = [
+  "apps/api/src",
+  "apps/worker/src",
+  "apps/scheduler/src",
+  "modules/hisobot/importer/src",
+  "tests/python",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+exclude = ["apps/api/migrations"]
+mypy_path = [
+  "apps/api/src",
+  "apps/worker/src",
+  "apps/scheduler/src",
+  "modules/hisobot/importer/src",
+]
