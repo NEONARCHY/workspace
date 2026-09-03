@@ -1,9 +1,20 @@
 import react from "@vitejs/plugin-react";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+const tabsterEsmPath = fileURLToPath(
+  new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
+);
 
 export default defineConfig({
   plugins: [react()],
   root: ".",
+  base: "./",
+  resolve: {
+    alias: {
+      tabster: tabsterEsmPath,
+    },
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -13,8 +24,16 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
+  ssr: {
+    noExternal: [/@fluentui/, /tabster/, /keyborg/],
+  },
   test: {
     environment: "jsdom",
     setupFiles: "./src/renderer/test-setup.ts",
+    server: {
+      deps: {
+        inline: [/@fluentui/, /tabster/, /keyborg/],
+      },
+    },
   },
 });

@@ -1,28 +1,75 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import type { ModuleDescriptor } from "@yuksalish/contracts";
-import { localeNames, locales, translate, type Locale } from "@yuksalish/i18n";
+import type { WorkspaceSection } from "@yuksalish/contracts";
+import {
+  Avatar,
+  Button,
+  FluentProvider,
+  Input,
+  Tooltip,
+  webLightTheme,
+} from "@fluentui/react-components";
+import {
+  Alert24Regular,
+  ApprovalsApp24Regular,
+  Chat24Filled,
+  Chat24Regular,
+  Home24Regular,
+  Search24Regular,
+  Settings24Regular,
+  TaskListSquareLtr24Filled,
+  TaskListSquareLtr24Regular,
+} from "@fluentui/react-icons";
 
-import { fallbackModules, loadModuleCatalog } from "./module-catalog";
+import { ApprovalsView } from "./ApprovalsView";
+import { MessengerView } from "./MessengerView";
+import { loadModuleCatalog } from "./module-catalog";
+import { TasksView } from "./TasksView";
+
+interface NavItem {
+  readonly key: WorkspaceSection;
+  readonly label: string;
+  readonly icon: ReactNode;
+  readonly activeIcon: ReactNode;
+  readonly badge?: number;
+}
+
+const navItems: readonly NavItem[] = [
+  {
+    key: "messenger",
+    label: "Сообщения",
+    icon: <Chat24Regular />,
+    activeIcon: <Chat24Filled />,
+    badge: 4,
+  },
+  {
+    key: "tasks",
+    label: "Задачи",
+    icon: <TaskListSquareLtr24Regular />,
+    activeIcon: <TaskListSquareLtr24Filled />,
+    badge: 2,
+  },
+  {
+    key: "approvals",
+    label: "Согласования",
+    icon: <ApprovalsApp24Regular />,
+    activeIcon: <ApprovalsApp24Regular />,
+    badge: 4,
+  },
+];
 
 export function App() {
-  const [locale, setLocale] = useState<Locale>("ru");
-  const [modules, setModules] = useState<readonly ModuleDescriptor[]>(fallbackModules);
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>("messenger");
   const [online, setOnline] = useState(false);
 
   useEffect(() => {
     let active = true;
     void loadModuleCatalog()
-      .then((catalog) => {
-        if (active) {
-          setModules(catalog);
-          setOnline(true);
-        }
+      .then(() => {
+        if (active) setOnline(true);
       })
       .catch(() => {
-        if (active) {
-          setOnline(false);
-        }
+        if (active) setOnline(false);
       });
     return () => {
       active = false;
@@ -30,64 +77,70 @@ export function App() {
   }, []);
 
   return (
-    <main className="shell">
-      <aside className="sidebar" aria-label="Навигация по модулям">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden="true">Y</span>
-          <div>
-            <strong>Yuksalish</strong>
-            <span>{translate(locale, "workspace")}</span>
-          </div>
-        </div>
-        <nav>
-          {modules.map((module, index) => (
-            <button className={index === 0 ? "module active" : "module"} key={module.key}>
-              <span className="module-index">0{index + 1}</span>
-              <span>{module.label[locale]}</span>
+    <FluentProvider theme={webLightTheme} className="app-provider">
+      <div className="app-shell">
+        <aside className="app-rail" aria-label="Основная навигация">
+          <div className="workspace-logo" aria-label="Yuksalish Workspace">Y</div>
+          <Tooltip content="Главная" relationship="label" positioning="after">
+            <button className="rail-action" type="button" aria-label="Главная">
+              <Home24Regular />
             </button>
-          ))}
-        </nav>
-        <span className={online ? "status online" : "status"}>
-          <span aria-hidden="true" />
-          {translate(locale, online ? "apiOnline" : "apiOffline")}
-        </span>
-      </aside>
-
-      <section className="content">
-        <header>
-          <div>
-            <p className="eyebrow">Foundation · v{window.yuksalish?.version ?? "0.1.0"}</p>
-            <h1>{translate(locale, "foundation")}</h1>
+          </Tooltip>
+          <nav className="rail-nav">
+            {navItems.map((item) => (
+              <Tooltip key={item.key} content={item.label} relationship="label" positioning="after">
+                <button
+                  className={`rail-action ${activeSection === item.key ? "active" : ""}`}
+                  type="button"
+                  aria-label={item.label}
+                  aria-current={activeSection === item.key ? "page" : undefined}
+                  onClick={() => setActiveSection(item.key)}
+                >
+                  {activeSection === item.key ? item.activeIcon : item.icon}
+                  {item.badge !== undefined ? <span className="rail-badge">{item.badge}</span> : null}
+                </button>
+              </Tooltip>
+            ))}
+          </nav>
+          <div className="rail-bottom">
+            <Tooltip content="Уведомления" relationship="label" positioning="after">
+              <button className="rail-action" type="button" aria-label="Уведомления">
+                <Alert24Regular />
+              </button>
+            </Tooltip>
+            <Tooltip content="Настройки" relationship="label" positioning="after">
+              <button className="rail-action" type="button" aria-label="Настройки">
+                <Settings24Regular />
+              </button>
+            </Tooltip>
+            <Avatar name="Азиза Каримова" size={36} color="colorful" />
           </div>
-          <label className="locale-control">
-            <span className="sr-only">Язык</span>
-            <select value={locale} onChange={(event) => setLocale(event.target.value as Locale)}>
-              {locales.map((item) => (
-                <option key={item} value={item}>{localeNames[item]}</option>
-              ))}
-            </select>
-          </label>
-        </header>
+        </aside>
 
-        <div className="foundation-card">
-          <div className="card-number">01</div>
-          <div>
-            <p className="eyebrow">System status</p>
-            <h2>{modules[0]?.label[locale]}</h2>
-            <p>{translate(locale, "placeholder")}. API, desktop shell и модульные контракты подключены.</p>
-          </div>
-        </div>
+        <div className="app-stage">
+          <header className="global-bar">
+            <div className="global-brand">
+              <strong>Yuksalish Workspace</strong>
+              <span className={`connection-state ${online ? "online" : ""}`}>
+                {online ? "Сервер подключён" : "Демонстрационный режим"}
+              </span>
+            </div>
+            <Input
+              aria-label="Глобальный поиск"
+              className="global-search"
+              contentBefore={<Search24Regular />}
+              placeholder="Найти сообщение, задачу или заявку"
+            />
+            <Button appearance="subtle">Помощь</Button>
+          </header>
 
-        <div className="module-grid">
-          {modules.slice(1).map((module) => (
-            <article key={module.key}>
-              <span>{module.key}</span>
-              <h3>{module.label[locale]}</h3>
-              <p>{translate(locale, "placeholder")}</p>
-            </article>
-          ))}
+          <main className="app-content">
+            {activeSection === "messenger" ? <MessengerView /> : null}
+            {activeSection === "tasks" ? <TasksView /> : null}
+            {activeSection === "approvals" ? <ApprovalsView /> : null}
+          </main>
         </div>
-      </section>
-    </main>
+      </div>
+    </FluentProvider>
   );
 }

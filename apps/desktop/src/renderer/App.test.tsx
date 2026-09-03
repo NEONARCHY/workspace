@@ -3,27 +3,33 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
 
-
-describe("desktop shell", () => {
+describe("corporate workspace alpha", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
   });
 
-  it("keeps the local module catalog when the API is unavailable", async () => {
+  it("opens in messenger and sends a local test message", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     render(<App />);
 
-    expect(screen.getAllByText("Сообщения")).toHaveLength(2);
-    await waitFor(() => expect(screen.getByText("Локальный режим")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Демонстрационный режим")).toBeInTheDocument());
+    const composer = screen.getByRole("textbox", { name: "Новое сообщение" });
+    fireEvent.change(composer, { target: { value: "Заявку подготовила" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    expect(screen.getByText("Заявку подготовила")).toBeInTheDocument();
   });
 
-  it("switches the shell to Uzbek Latin", () => {
+  it("creates a task inside the same application shell", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
     render(<App />);
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "uz_latn" } });
-    expect(screen.getByText("Ish maydoni")).toBeInTheDocument();
-    expect(screen.getAllByText("Xabarlar")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая задача" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
+      target: { value: "Проверить новый маршрут оплаты" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Создать" }));
+    expect(screen.getAllByText("Проверить новый маршрут оплаты").length).toBeGreaterThan(0);
   });
 });

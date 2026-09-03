@@ -19,7 +19,7 @@ function createWindow(): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     show: false,
-    backgroundColor: "#f4f1e8",
+    backgroundColor: "#f5f7fa",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
       nodeIntegration: false,
