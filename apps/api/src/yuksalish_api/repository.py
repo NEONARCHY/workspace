@@ -22,13 +22,18 @@ from .tables import (
     message_versions,
     messages,
     positions,
+    project_stage_actions,
     task_checklist_items,
     task_comments,
     task_cycles,
     task_dependencies,
     task_participants,
     tasks,
+    trip_request_actions,
+    trip_request_employees,
+    trip_requests,
     users,
+    workspace_projects,
 )
 from .workspace_schemas import (
     ApprovalActionHistoryResponse,
@@ -38,15 +43,20 @@ from .workspace_schemas import (
     ApprovalStageResponse,
     AttachmentOwnerType,
     AttachmentResponse,
+    ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     ChatSummaryResponse,
     CreateApprovalRequest,
     CreateChecklistItemRequest,
+    CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
+    CreateTripRequest,
     PaymentRequestDetails,
     PersonResponse,
+    ProjectResponse,
+    ProjectStageActionResponse,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskChecklistItemResponse,
@@ -58,9 +68,15 @@ from .workspace_schemas import (
     TaskParticipantRequest,
     TaskParticipantResponse,
     TaskResponse,
+    TripAction,
+    TripActionHistoryResponse,
+    TripActionRequest,
+    TripRequestResponse,
     UpdateApprovalRequest,
     UpdateChecklistItemRequest,
+    UpdateProjectRequest,
     UpdateTaskRequest,
+    UpdateTripRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
     WorkflowPositionResponse,
@@ -76,6 +92,34 @@ STATUS_LABELS = {
     "approved": "Согласовано",
     "rejected": "Отклонено",
     "cancelled": "Отменено",
+}
+PROJECT_STAGE_STATUS = {
+    "start": "new",
+    "preparation": "in_progress",
+    "approval": "in_progress",
+    "success": "completed",
+    "failure": "completed",
+}
+PROJECT_TRANSITIONS = {
+    "start": {"preparation"},
+    "preparation": {"start", "approval"},
+    "approval": {"preparation", "success", "failure"},
+    "success": {"approval"},
+    "failure": {"approval"},
+}
+TRIP_STAGE_LABELS = {
+    "launch": "Запуск",
+    "manager_approval": "Утверждение руководителем",
+    "hr": "Кадровая служба",
+    "approved": "Утверждено",
+    "rejected": "Отклонено",
+}
+TRIP_STATUS_LABELS = {
+    "draft": "Черновик",
+    "running": "На согласовании",  # noqa: RUF001 - Russian UI label.
+    "needs_revision": "На доработке",  # noqa: RUF001 - Russian UI label.
+    "approved": "Утверждено",
+    "rejected": "Отклонено",
 }
 
 Record = Mapping[str, Any] | RowMapping
@@ -344,6 +388,166 @@ def _can_act_from_config(
     if approver_role == "manager":
         return current_user.role in {"manager", "admin"}
     return current_user.role == approver_role or current_user.role == "admin"
+
+
+def _is_privileged(current_user: AuthenticatedUser) -> bool:
+    return current_user.role in {"manager", "admin", "superadmin"}
+
+
+def _project_action(row: Record) -> ProjectStageActionResponse:
+    return ProjectStageActionResponse(
+        id=str(row["id"]),
+        actor_user_id=str(row["actor_user_id"]),
+        from_stage=row["from_stage"],
+        to_stage=row["to_stage"],
+        action=row["action"],
+        comment=row["comment"],
+        created_at=row["created_at"],
+    )
+
+
+def _project(
+    row: Record,
+    current_user: AuthenticatedUser,
+    history: Sequence[ProjectStageActionResponse] = (),
+) -> ProjectResponse:
+    can_manage = _is_privileged(current_user)
+    return ProjectResponse(
+        id=str(row["id"]),
+        code=row["code"],
+        title=row["title"],
+        description=row["description"] or "",
+        manager_user_id=str(row["manager_user_id"]),
+        start_date=row["start_date"],
+        end_date=row["end_date"],
+        budget=int(row["budget"]),
+        spent_budget=int(row["spent_budget"]),
+        remaining_budget=int(row["budget"]) - int(row["spent_budget"]),
+        currency=row["currency"],
+        status=row["status"],
+        stage=row["stage"],
+        created_by_user_id=str(row["created_by_user_id"]),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        can_edit=can_manage,
+        can_move=can_manage,
+        history=list(history),
+    )
+
+
+def _trip_action(row: Record) -> TripActionHistoryResponse:
+    return TripActionHistoryResponse(
+        id=str(row["id"]),
+        actor_user_id=str(row["actor_user_id"]),
+        from_stage=row["from_stage"],
+        to_stage=row["to_stage"],
+        action=row["action"],
+        comment=row["comment"],
+        created_at=row["created_at"],
+    )
+
+
+def _trip_allowed_actions(row: Record, current_user: AuthenticatedUser) -> list[TripAction]:
+    stage = row["stage"]
+    status = row["status"]
+    if stage == "launch" and row["requester_user_id"] == current_user.id:
+        return ["resubmit"] if status == "needs_revision" else ["submit"]
+    if stage == "manager_approval" and _is_privileged(current_user):
+        return ["approve", "return", "reject"]
+    if stage == "hr" and current_user.role in {"admin", "superadmin"}:
+        return ["approve", "return", "reject"]
+    return []
+
+
+def _trip_request(
+    row: Record,
+    current_user: AuthenticatedUser,
+    employee_ids: Sequence[UUID] = (),
+    actions: Sequence[TripActionHistoryResponse] = (),
+) -> TripRequestResponse:
+    return TripRequestResponse(
+        id=str(row["id"]),
+        number=f"TR-{str(row['id']).replace('-', '')[:8].upper()}",
+        requester_user_id=str(row["requester_user_id"]),
+        purpose=row["purpose"],
+        destination=row["destination"],
+        start_date=row["start_date"],
+        end_date=row["end_date"],
+        employee_ids=[str(value) for value in employee_ids],
+        stage=row["stage"],
+        stage_label=TRIP_STAGE_LABELS[row["stage"]],
+        status=row["status"],
+        status_label=TRIP_STATUS_LABELS[row["status"]],
+        can_edit=(
+            row["requester_user_id"] == current_user.id
+            and row["status"] in {"draft", "needs_revision"}
+        ),
+        allowed_actions=_trip_allowed_actions(row, current_user),
+        actions=list(actions),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+        finished_at=row["finished_at"],
+    )
+
+
+async def _project_action_map(
+    connection: AsyncConnection,
+    project_ids: Sequence[UUID],
+) -> dict[UUID, list[ProjectStageActionResponse]]:
+    if not project_ids:
+        return {}
+    rows = (
+        (
+            await connection.execute(
+                select(project_stage_actions)
+                .where(project_stage_actions.c.project_id.in_(project_ids))
+                .order_by(project_stage_actions.c.project_id, project_stage_actions.c.created_at)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    result: dict[UUID, list[ProjectStageActionResponse]] = {}
+    for row in rows:
+        result.setdefault(row["project_id"], []).append(_project_action(row))
+    return result
+
+
+async def _trip_detail_maps(
+    connection: AsyncConnection,
+    request_ids: Sequence[UUID],
+) -> tuple[dict[UUID, list[UUID]], dict[UUID, list[TripActionHistoryResponse]]]:
+    if not request_ids:
+        return {}, {}
+    employee_rows = (
+        (
+            await connection.execute(
+                select(trip_request_employees)
+                .where(trip_request_employees.c.request_id.in_(request_ids))
+                .order_by(trip_request_employees.c.request_id, trip_request_employees.c.user_id)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    action_rows = (
+        (
+            await connection.execute(
+                select(trip_request_actions)
+                .where(trip_request_actions.c.request_id.in_(request_ids))
+                .order_by(trip_request_actions.c.request_id, trip_request_actions.c.created_at)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    employees: dict[UUID, list[UUID]] = {}
+    actions: dict[UUID, list[TripActionHistoryResponse]] = {}
+    for row in employee_rows:
+        employees.setdefault(row["request_id"], []).append(row["user_id"])
+    for row in action_rows:
+        actions.setdefault(row["request_id"], []).append(_trip_action(row))
+    return employees, actions
 
 
 async def _active_stages_for_requests(
@@ -854,6 +1058,35 @@ async def load_workspace(
     versions_by_request = await _request_versions(connection, request_ids)
     actions_by_request = await _request_actions(connection, request_ids)
 
+    project_rows = (
+        (
+            await connection.execute(
+                select(workspace_projects).order_by(workspace_projects.c.updated_at.desc())
+            )
+        )
+        .mappings()
+        .all()
+    )
+    project_history = await _project_action_map(
+        connection,
+        [row["id"] for row in project_rows],
+    )
+
+    trip_statement = select(trip_requests).order_by(trip_requests.c.updated_at.desc())
+    if current_user.role == "employee":
+        participating_trip_ids = select(trip_request_employees.c.request_id).where(
+            trip_request_employees.c.user_id == current_user.id
+        )
+        trip_statement = trip_statement.where(
+            (trip_requests.c.requester_user_id == current_user.id)
+            | trip_requests.c.id.in_(participating_trip_ids)
+        )
+    trip_rows = (await connection.execute(trip_statement)).mappings().all()
+    trip_employee_ids, trip_actions = await _trip_detail_maps(
+        connection,
+        [row["id"] for row in trip_rows],
+    )
+
     attachment_filters = []
     message_ids = [row["id"] for row in message_rows]
     task_ids = [row["id"] for row in task_rows]
@@ -918,6 +1151,18 @@ async def load_workspace(
                 stages_by_request.get(row["id"], []),
             )
             for row in request_rows
+        ],
+        projects=[
+            _project(row, current_user, project_history.get(row["id"], [])) for row in project_rows
+        ],
+        trip_requests=[
+            _trip_request(
+                row,
+                current_user,
+                trip_employee_ids.get(row["id"], []),
+                trip_actions.get(row["id"], []),
+            )
+            for row in trip_rows
         ],
         attachments=[_attachment(row) for row in attachment_rows],
         workflow=await get_workflow(connection),
@@ -2228,6 +2473,364 @@ async def get_attachment(
         write=False,
     )
     return _attachment(row), row["storage_key"]
+
+
+async def _project_response(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    project_id: UUID,
+) -> ProjectResponse:
+    row = (
+        (
+            await connection.execute(
+                select(workspace_projects).where(workspace_projects.c.id == project_id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Project was not found")
+    history = await _project_action_map(connection, [project_id])
+    return _project(row, current_user, history.get(project_id, []))
+
+
+async def create_project(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: CreateProjectRequest,
+) -> ProjectResponse:
+    if not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Only managers can create projects")
+    manager_id = await _active_user_id(connection, payload.manager_user_id)
+    normalized_code = payload.code.upper()
+    duplicate = await connection.scalar(
+        select(workspace_projects.c.id).where(
+            func.lower(workspace_projects.c.code) == normalized_code.lower()
+        )
+    )
+    if duplicate is not None:
+        raise WorkspaceRepositoryError(409, "Project code is already in use")
+    project_id = uuid4()
+    action_id = uuid4()
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(workspace_projects).values(
+            id=project_id,
+            code=normalized_code,
+            title=payload.title,
+            description=payload.description,
+            manager_user_id=manager_id,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            budget=payload.budget,
+            spent_budget=payload.spent_budget,
+            currency=payload.currency,
+            status="new",
+            stage="start",
+            created_by_user_id=current_user.id,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await connection.execute(
+        insert(project_stage_actions).values(
+            id=action_id,
+            project_id=project_id,
+            actor_user_id=current_user.id,
+            from_stage=None,
+            to_stage="start",
+            action="created",
+            comment=None,
+            created_at=now,
+        )
+    )
+    return await _project_response(connection, current_user, project_id)
+
+
+async def update_project(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    project_id: UUID,
+    payload: UpdateProjectRequest,
+) -> ProjectResponse:
+    if not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Only managers can edit projects")
+    exists = await connection.scalar(
+        select(workspace_projects.c.id).where(workspace_projects.c.id == project_id)
+    )
+    if exists is None:
+        raise WorkspaceRepositoryError(404, "Project was not found")
+    manager_id = await _active_user_id(connection, payload.manager_user_id)
+    normalized_code = payload.code.upper()
+    duplicate = await connection.scalar(
+        select(workspace_projects.c.id).where(
+            func.lower(workspace_projects.c.code) == normalized_code.lower(),
+            workspace_projects.c.id != project_id,
+        )
+    )
+    if duplicate is not None:
+        raise WorkspaceRepositoryError(409, "Project code is already in use")
+    await connection.execute(
+        update(workspace_projects)
+        .where(workspace_projects.c.id == project_id)
+        .values(
+            code=normalized_code,
+            title=payload.title,
+            description=payload.description,
+            manager_user_id=manager_id,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            budget=payload.budget,
+            spent_budget=payload.spent_budget,
+            currency=payload.currency,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    return await _project_response(connection, current_user, project_id)
+
+
+async def change_project_stage(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    project_id: UUID,
+    payload: ChangeProjectStageRequest,
+) -> ProjectResponse:
+    if not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Only managers can move projects")
+    row = (
+        (
+            await connection.execute(
+                select(workspace_projects)
+                .where(workspace_projects.c.id == project_id)
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Project was not found")
+    if payload.stage not in PROJECT_TRANSITIONS[row["stage"]]:
+        raise WorkspaceRepositoryError(409, "Project cannot move between these stages")
+    comment = payload.comment.strip() or None
+    if payload.stage == "failure" and comment is None:
+        raise WorkspaceRepositoryError(422, "A failure comment is required")
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(workspace_projects)
+        .where(workspace_projects.c.id == project_id)
+        .values(
+            stage=payload.stage,
+            status=PROJECT_STAGE_STATUS[payload.stage],
+            updated_at=now,
+        )
+    )
+    await connection.execute(
+        insert(project_stage_actions).values(
+            id=uuid4(),
+            project_id=project_id,
+            actor_user_id=current_user.id,
+            from_stage=row["stage"],
+            to_stage=payload.stage,
+            action="moved",
+            comment=comment,
+            created_at=now,
+        )
+    )
+    return await _project_response(connection, current_user, project_id)
+
+
+async def _trip_response(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+) -> TripRequestResponse:
+    row = (
+        (await connection.execute(select(trip_requests).where(trip_requests.c.id == request_id)))
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    employees, actions = await _trip_detail_maps(connection, [request_id])
+    if (
+        current_user.role == "employee"
+        and row["requester_user_id"] != current_user.id
+        and current_user.id not in employees.get(request_id, [])
+    ):
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    return _trip_request(
+        row,
+        current_user,
+        employees.get(request_id, []),
+        actions.get(request_id, []),
+    )
+
+
+async def _validate_trip_employees(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    values: Sequence[str],
+) -> list[UUID]:
+    try:
+        employee_ids = list(dict.fromkeys(UUID(value) for value in values))
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid trip employee identifier") from error
+    rows = (
+        await connection.execute(
+            select(users.c.id).where(users.c.id.in_(employee_ids), users.c.status == "active")
+        )
+    ).all()
+    if len(rows) != len(employee_ids):
+        raise WorkspaceRepositoryError(422, "Every trip employee must be active")
+    if current_user.role == "employee" and employee_ids != [current_user.id]:
+        raise WorkspaceRepositoryError(
+            403, "Employees can create trip requests only for themselves"
+        )
+    return employee_ids
+
+
+async def create_trip_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: CreateTripRequest,
+) -> TripRequestResponse:
+    employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
+    request_id = uuid4()
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(trip_requests).values(
+            id=request_id,
+            requester_user_id=current_user.id,
+            purpose=payload.purpose,
+            destination=payload.destination,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            stage="launch",
+            status="draft",
+            created_at=now,
+            updated_at=now,
+            finished_at=None,
+        )
+    )
+    await connection.execute(
+        insert(trip_request_employees),
+        [{"request_id": request_id, "user_id": user_id} for user_id in employee_ids],
+    )
+    await connection.execute(
+        insert(trip_request_actions).values(
+            id=uuid4(),
+            request_id=request_id,
+            actor_user_id=current_user.id,
+            from_stage=None,
+            to_stage="launch",
+            action="created",
+            comment=None,
+            created_at=now,
+        )
+    )
+    return await _trip_response(connection, current_user, request_id)
+
+
+async def update_trip_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+    payload: UpdateTripRequest,
+) -> TripRequestResponse:
+    row = (
+        (
+            await connection.execute(
+                select(trip_requests).where(trip_requests.c.id == request_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    if row["requester_user_id"] != current_user.id:
+        raise WorkspaceRepositoryError(403, "Only the requester can edit this trip")
+    if row["stage"] != "launch" or row["status"] not in {"draft", "needs_revision"}:
+        raise WorkspaceRepositoryError(409, "Only a draft or returned trip can be edited")
+    employee_ids = await _validate_trip_employees(connection, current_user, payload.employee_ids)
+    await connection.execute(
+        update(trip_requests)
+        .where(trip_requests.c.id == request_id)
+        .values(
+            purpose=payload.purpose,
+            destination=payload.destination,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await connection.execute(
+        delete(trip_request_employees).where(trip_request_employees.c.request_id == request_id)
+    )
+    await connection.execute(
+        insert(trip_request_employees),
+        [{"request_id": request_id, "user_id": user_id} for user_id in employee_ids],
+    )
+    return await _trip_response(connection, current_user, request_id)
+
+
+async def act_on_trip_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+    payload: TripActionRequest,
+) -> TripRequestResponse:
+    row = (
+        (
+            await connection.execute(
+                select(trip_requests).where(trip_requests.c.id == request_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Trip request was not found")
+    allowed = _trip_allowed_actions(row, current_user)
+    if payload.action not in allowed:
+        raise WorkspaceRepositoryError(403, "This trip action is not allowed for the user")
+    comment = payload.comment.strip() or None
+    if payload.action in {"return", "reject"} and comment is None:
+        raise WorkspaceRepositoryError(422, "A decision comment is required")
+
+    from_stage = row["stage"]
+    if payload.action in {"submit", "resubmit"}:
+        to_stage, status, finished_at = "manager_approval", "running", None
+    elif payload.action == "approve" and from_stage == "manager_approval":
+        to_stage, status, finished_at = "hr", "running", None
+    elif payload.action == "approve":
+        to_stage, status, finished_at = "approved", "approved", datetime.now(UTC)
+    elif payload.action == "return":
+        to_stage, status, finished_at = "launch", "needs_revision", None
+    else:
+        to_stage, status, finished_at = "rejected", "rejected", datetime.now(UTC)
+
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(trip_requests)
+        .where(trip_requests.c.id == request_id)
+        .values(stage=to_stage, status=status, updated_at=now, finished_at=finished_at)
+    )
+    await connection.execute(
+        insert(trip_request_actions).values(
+            id=uuid4(),
+            request_id=request_id,
+            actor_user_id=current_user.id,
+            from_stage=from_stage,
+            to_stage=to_stage,
+            action=payload.action,
+            comment=comment,
+            created_at=now,
+        )
+    )
+    return await _trip_response(connection, current_user, request_id)
 
 
 def _condition_outcome(condition: Mapping[str, Any], request_payload: Mapping[str, Any]) -> bool:

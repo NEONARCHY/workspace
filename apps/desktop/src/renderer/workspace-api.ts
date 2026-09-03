@@ -9,15 +9,21 @@ import type {
   InvitationResult,
   PasswordResetResult,
   PaymentRequestDetails,
+  ProjectInput,
+  ProjectStage,
   SessionSummary,
   TaskParticipantRole,
   TaskStatus,
+  TripAction,
+  TripRequest,
+  TripRequestInput,
   WorkflowDefinition,
   WorkspaceBootstrap,
   WorkspaceAttachment,
   WorkspaceTask,
   TotpSetup,
   WorkspacePosition,
+  WorkspaceProject,
   WorkspaceRole,
 } from "@yuksalish/contracts";
 
@@ -441,6 +447,78 @@ export function updateWorkspaceApproval(
   return apiRequest<ApprovalRequestSummary>(
     `/approval-requests/${requestId}`,
     { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function createWorkspaceProject(
+  token: string,
+  payload: ProjectInput,
+): Promise<WorkspaceProject> {
+  return apiRequest<WorkspaceProject>(
+    "/projects",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateWorkspaceProject(
+  token: string,
+  projectId: string,
+  payload: ProjectInput,
+): Promise<WorkspaceProject> {
+  return apiRequest<WorkspaceProject>(
+    `/projects/${projectId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function changeWorkspaceProjectStage(
+  token: string,
+  projectId: string,
+  stage: ProjectStage,
+  comment = "",
+): Promise<WorkspaceProject> {
+  return apiRequest<WorkspaceProject>(
+    `/projects/${projectId}/stage`,
+    { method: "PATCH", body: JSON.stringify({ stage, comment }) },
+    token,
+  );
+}
+
+export function createWorkspaceTripRequest(
+  token: string,
+  payload: TripRequestInput,
+): Promise<TripRequest> {
+  return apiRequest<TripRequest>(
+    "/trip-requests",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateWorkspaceTripRequest(
+  token: string,
+  requestId: string,
+  payload: TripRequestInput,
+): Promise<TripRequest> {
+  return apiRequest<TripRequest>(
+    `/trip-requests/${requestId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function actOnWorkspaceTripRequest(
+  token: string,
+  requestId: string,
+  action: TripAction,
+  comment = "",
+): Promise<TripRequest> {
+  return apiRequest<TripRequest>(
+    `/trip-requests/${requestId}/actions`,
+    { method: "POST", body: JSON.stringify({ action, comment }) },
     token,
   );
 }

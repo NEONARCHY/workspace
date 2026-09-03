@@ -82,7 +82,7 @@ Bitrix entity type `1038`, category `17` (`Согласование поездо
 4. Утверждено
 5. Отклонено
 
-Trip purpose, start/end dates and employee selection are shared fields of entity type 1038. Package BP-7 must verify which fields are mandatory and which actors may perform each transition before the workflow is declared equivalent.
+Trip purpose, start/end dates and employee selection are shared fields of entity type 1038. Alpha 0.8.0 implements these fields, the five-stage route, correction cycle and immutable history. Until the process owner confirms position IDs, the safe provisional policy is requester → manager → administrator/HR; the workflow is functional but is not yet declared actor-equivalent to Bitrix.
 
 ## Smart process: project list
 
@@ -148,7 +148,7 @@ The two unresolved IDs are not guessed. Before a production employee import, the
 | BP-4 | Navigation shell; employee directory; position catalog; role/position assignment and audit | Current auth alpha | Migration, API authorization tests, desktop tests |
 | BP-5 | Bitrix-equivalent task list/card, filters, participants, checklist, comments, files, dependencies and cycles | BP-4 | Characterisation matrix against selected real tasks |
 | BP-6 | Payment request form, all 13 stages, decisions, correction loop, files and editable graph | BP-4, then task link from BP-5 | Golden requests complete the same routes and permissions |
-| BP-7 | Project list and trip approvals | BP-4, BP-6 graph engine | Six project shapes and trip scenarios verified |
+| BP-7 | Project list and trip approvals; functional slice delivered in alpha 0.8.0 | BP-4, BP-6 workflow rules | Project lifecycle and trip return/approval scenarios pass; exact trip position IDs remain to verify |
 | BP-8 | Messenger parity, activity feed and calendar | BP-4; expanded read-only Bitrix scope for feed | Two-client realtime and selected reference scenarios |
 | BP-9 | CRM scope chosen from actual business need, then implemented | Product decision after empty baseline review | Agreed CRM scenarios, not generic unused screens |
 

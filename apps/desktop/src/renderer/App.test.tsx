@@ -4,7 +4,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ApprovalRequestSummary,
   PaymentRequestDetails,
+  TripRequest,
   WorkspaceAttachment,
+  WorkspaceProject,
   WorkspaceTask,
 } from "@yuksalish/contracts";
 
@@ -159,6 +161,50 @@ function mockServer(
         },
       ]
     : [];
+  let projects: WorkspaceProject[] = [
+    {
+      id: "project-1",
+      code: "WS-26",
+      title: "Yuksalish Workspace",
+      description: "Единая корпоративная среда",
+      managerUserId: people[0]!.id,
+      startDate: "2026-08-01",
+      endDate: "2026-12-20",
+      budget: 100_000_000,
+      spentBudget: 20_000_000,
+      remainingBudget: 80_000_000,
+      currency: "UZS",
+      status: "in_progress",
+      stage: "preparation",
+      createdByUserId: people[0]!.id,
+      createdAt: "2026-08-01T09:00:00Z",
+      updatedAt: "2026-09-03T09:00:00Z",
+      canEdit: true,
+      canMove: true,
+      history: [],
+    },
+  ];
+  let tripRequests: TripRequest[] = [
+    {
+      id: "trip-1",
+      number: "TR-00000001",
+      requesterUserId: people[0]!.id,
+      purpose: "Встреча с региональной командой",
+      destination: "Самарканд",
+      startDate: "2026-09-18",
+      endDate: "2026-09-20",
+      employeeIds: [people[0]!.id],
+      stage: "launch",
+      stageLabel: "Запуск",
+      status: "draft",
+      statusLabel: "Черновик",
+      canEdit: true,
+      allowedActions: ["submit"],
+      actions: [],
+      createdAt: "2026-09-03T09:00:00Z",
+      updatedAt: "2026-09-03T09:00:00Z",
+    },
+  ];
   const attachments: WorkspaceAttachment[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
@@ -191,6 +237,8 @@ function mockServer(
         messages: initialMessages,
         tasks,
         requests,
+        projects,
+        tripRequests,
         attachments: [...attachments],
         workflow: activeWorkflow,
       });
@@ -394,6 +442,94 @@ function mockServer(
         ...currentTask,
         cycle: { ...payload, id: "cycle-1", timezone: "Asia/Tashkent" },
       });
+    }
+    if (url.endsWith("/projects") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as {
+        code: string;
+        title: string;
+        description: string;
+        managerUserId: string;
+        budget: number;
+        spentBudget: number;
+        currency: WorkspaceProject["currency"];
+      };
+      const created: WorkspaceProject = {
+        id: "project-created",
+        ...payload,
+        remainingBudget: payload.budget - payload.spentBudget,
+        status: "new",
+        stage: "start",
+        createdByUserId: currentUser.id,
+        createdAt: "2026-09-03T12:00:00Z",
+        updatedAt: "2026-09-03T12:00:00Z",
+        canEdit: true,
+        canMove: true,
+        history: [],
+      };
+      projects = [created, ...projects];
+      return response(created);
+    }
+    const projectMatch = url.match(/\/projects\/([^/?]+)/);
+    const project = projects.find((item) => item.id === projectMatch?.[1]);
+    if (project && url.endsWith("/stage") && options?.method === "PATCH") {
+      const payload = JSON.parse(String(options.body)) as { stage: WorkspaceProject["stage"] };
+      const changed = { ...project, stage: payload.stage, status: "in_progress" as const };
+      projects = projects.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (project && options?.method === "PATCH") {
+      const payload = JSON.parse(String(options.body)) as Partial<WorkspaceProject>;
+      const changed = { ...project, ...payload };
+      projects = projects.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (url.endsWith("/trip-requests") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as {
+        purpose: string;
+        destination: string;
+        startDate: string;
+        endDate: string;
+        employeeIds: string[];
+      };
+      const created: TripRequest = {
+        id: "trip-created",
+        number: "TR-00000002",
+        requesterUserId: currentUser.id,
+        ...payload,
+        stage: "launch",
+        stageLabel: "Запуск",
+        status: "draft",
+        statusLabel: "Черновик",
+        canEdit: true,
+        allowedActions: ["submit"],
+        actions: [],
+        createdAt: "2026-09-03T12:00:00Z",
+        updatedAt: "2026-09-03T12:00:00Z",
+      };
+      tripRequests = [created, ...tripRequests];
+      return response(created);
+    }
+    const tripMatch = url.match(/\/trip-requests\/([^/?]+)/);
+    const trip = tripRequests.find((item) => item.id === tripMatch?.[1]);
+    if (trip && url.endsWith("/actions") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { action: string };
+      const changed: TripRequest = {
+        ...trip,
+        stage: payload.action === "submit" ? "manager_approval" : trip.stage,
+        stageLabel: payload.action === "submit" ? "Утверждение руководителем" : trip.stageLabel,
+        status: payload.action === "submit" ? "running" : trip.status,
+        statusLabel: payload.action === "submit" ? "На согласовании" : trip.statusLabel,
+        canEdit: false,
+        allowedActions: ["approve", "return", "reject"],
+      };
+      tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (trip && options?.method === "PATCH") {
+      const payload = JSON.parse(String(options.body)) as Partial<TripRequest>;
+      const changed = { ...trip, ...payload };
+      tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
     }
     if (url.endsWith("/approval-requests") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as {
@@ -785,6 +921,47 @@ describe("corporate workspace authentication alpha", () => {
       "Календарь",
       "Сотрудники",
     ]);
+  });
+
+  it("creates a project and moves it through the project board", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Список проектов" }));
+    expect(screen.getByLabelText("Стадии проектов")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
+    fireEvent.change(screen.getByLabelText("Код"), { target: { value: "BP7-TEST" } });
+    fireEvent.change(screen.getByLabelText("Название"), { target: { value: "Тестовый проект BP-7" } });
+    fireEvent.change(screen.getByLabelText("Бюджет"), { target: { value: "50000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Подготовка" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/projects/project-created/stage"),
+      expect.objectContaining({ method: "PATCH" }),
+    ));
+  });
+
+  it("creates and submits a trip request", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Согласование поездок" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    fireEvent.change(screen.getByLabelText("Цель поездки"), { target: { value: "Рабочая встреча BP-7" } });
+    fireEvent.change(screen.getByLabelText("Куда едем"), { target: { value: "Бухара" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByRole("heading", { name: "Бухара" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Отправить руководителю" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/trip-requests/trip-created/actions"),
+      expect.objectContaining({ method: "POST" }),
+    ));
+    expect(await screen.findByText("На согласовании")).toBeInTheDocument();
   });
 
   it("opens the employee directory and creates a position", async () => {

@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from itertools import pairwise
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -22,13 +22,18 @@ from .tables import (
     message_versions,
     messages,
     positions,
+    project_stage_actions,
     task_checklist_items,
     task_comments,
     task_cycles,
     task_dependencies,
     task_participants,
     tasks,
+    trip_request_actions,
+    trip_request_employees,
+    trip_requests,
     users,
+    workspace_projects,
 )
 
 
@@ -832,5 +837,141 @@ async def seed_demo_data(
                         now - timedelta(days=3),
                     ),
                 )
+            ],
+        )
+        project_rows = [
+            {
+                "id": demo_uuid("project/digital-workspace"),
+                "code": "YUK-WS",
+                "title": "Yuksalish Workspace",
+                "description": "Единая корпоративная среда для коммуникаций и процессов.",
+                "manager_user_id": person_ids["baxtiyor"],
+                "start_date": date(2026, 8, 1),
+                "end_date": date(2026, 12, 20),
+                "budget": 320_000_000,
+                "spent_budget": 96_000_000,
+                "currency": "UZS",
+                "status": "in_progress",
+                "stage": "preparation",
+                "created_by_user_id": person_ids["aziza"],
+                "created_at": now - timedelta(days=30),
+                "updated_at": now,
+            },
+            {
+                "id": demo_uuid("project/regional-forum"),
+                "code": "FORUM-26",
+                "title": "Региональный форум 2026",
+                "description": "Подготовка программы, партнёров и площадки форума.",
+                "manager_user_id": person_ids["aziza"],
+                "start_date": date(2026, 9, 1),
+                "end_date": date(2026, 11, 15),
+                "budget": 48_000,
+                "spent_budget": 13_500,
+                "currency": "USD",
+                "status": "in_progress",
+                "stage": "approval",
+                "created_by_user_id": person_ids["aziza"],
+                "created_at": now - timedelta(days=18),
+                "updated_at": now - timedelta(days=1),
+            },
+            {
+                "id": demo_uuid("project/office"),
+                "code": "OFFICE-26",
+                "title": "Новый офис",
+                "description": "Оснащение рабочих мест и запуск новой площадки.",
+                "manager_user_id": person_ids["baxtiyor"],
+                "start_date": date(2026, 6, 1),
+                "end_date": date(2026, 8, 30),
+                "budget": 510_000_000,
+                "spent_budget": 498_000_000,
+                "currency": "UZS",
+                "status": "completed",
+                "stage": "success",
+                "created_by_user_id": person_ids["baxtiyor"],
+                "created_at": now - timedelta(days=90),
+                "updated_at": now - timedelta(days=4),
+            },
+        ]
+        await _insert_missing(connection, workspace_projects, project_rows)
+        await _insert_missing(
+            connection,
+            project_stage_actions,
+            [
+                {
+                    "id": demo_uuid(f"project-action/{row['code']}/created"),
+                    "project_id": row["id"],
+                    "actor_user_id": row["created_by_user_id"],
+                    "from_stage": None,
+                    "to_stage": "start",
+                    "action": "created",
+                    "comment": None,
+                    "created_at": row["created_at"],
+                }
+                for row in project_rows
+            ]
+            + [
+                {
+                    "id": demo_uuid(f"project-action/{row['code']}/{row['stage']}"),
+                    "project_id": row["id"],
+                    "actor_user_id": row["manager_user_id"],
+                    "from_stage": "start",
+                    "to_stage": row["stage"],
+                    "action": "moved",
+                    "comment": "Демонстрационный переход",
+                    "created_at": row["updated_at"],
+                }
+                for row in project_rows
+                if row["stage"] != "start"
+            ],
+        )
+        trip_id = demo_uuid("trip-request/tashkent-samarkand")
+        await _insert_missing(
+            connection,
+            trip_requests,
+            [
+                {
+                    "id": trip_id,
+                    "requester_user_id": person_ids["dilshod"],
+                    "purpose": "Рабочая встреча с региональной командой",  # noqa: RUF001
+                    "destination": "Самарканд",
+                    "start_date": date(2026, 9, 18),
+                    "end_date": date(2026, 9, 20),
+                    "stage": "manager_approval",
+                    "status": "running",
+                    "created_at": now - timedelta(days=1),
+                    "updated_at": now - timedelta(hours=4),
+                    "finished_at": None,
+                }
+            ],
+        )
+        await _insert_missing(
+            connection,
+            trip_request_employees,
+            [{"request_id": trip_id, "user_id": person_ids["dilshod"]}],
+        )
+        await _insert_missing(
+            connection,
+            trip_request_actions,
+            [
+                {
+                    "id": demo_uuid("trip-action/tashkent-samarkand/created"),
+                    "request_id": trip_id,
+                    "actor_user_id": person_ids["dilshod"],
+                    "from_stage": None,
+                    "to_stage": "launch",
+                    "action": "created",
+                    "comment": None,
+                    "created_at": now - timedelta(days=1),
+                },
+                {
+                    "id": demo_uuid("trip-action/tashkent-samarkand/submitted"),
+                    "request_id": trip_id,
+                    "actor_user_id": person_ids["dilshod"],
+                    "from_stage": "launch",
+                    "to_stage": "manager_approval",
+                    "action": "submit",
+                    "comment": None,
+                    "created_at": now - timedelta(hours=4),
+                },
             ],
         )

@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def to_camel(value: str) -> str:
@@ -438,6 +438,160 @@ class SaveWorkflowRequest(ApiModel):
     edges: list[WorkflowEdgeResponse]
 
 
+ProjectStage = Literal["start", "preparation", "approval", "success", "failure"]
+ProjectStatus = Literal["new", "in_progress", "completed"]
+
+
+class ProjectStageActionResponse(ApiModel):
+    id: str
+    actor_user_id: str
+    from_stage: ProjectStage | None
+    to_stage: ProjectStage
+    action: Literal["created", "moved"]
+    comment: str | None
+    created_at: datetime
+
+
+class ProjectResponse(ApiModel):
+    id: str
+    code: str
+    title: str
+    description: str
+    manager_user_id: str
+    start_date: date | None
+    end_date: date | None
+    budget: int
+    spent_budget: int
+    remaining_budget: int
+    currency: Literal["UZS", "USD", "EUR"]
+    status: ProjectStatus
+    stage: ProjectStage
+    created_by_user_id: str
+    created_at: datetime
+    updated_at: datetime
+    can_edit: bool
+    can_move: bool
+    history: list[ProjectStageActionResponse] = Field(default_factory=list)
+
+
+class ProjectWriteRequest(ApiModel):
+    code: str = Field(min_length=1, max_length=48)
+    title: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=20_000)
+    manager_user_id: str
+    start_date: date | None = None
+    end_date: date | None = None
+    budget: int = Field(default=0, ge=0)
+    spent_budget: int = Field(default=0, ge=0)
+    currency: Literal["UZS", "USD", "EUR"] = "UZS"
+
+    @field_validator("code", "title")
+    @classmethod
+    def project_text_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Project code and title must not be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_project_limits(self) -> "ProjectWriteRequest":
+        if (
+            self.end_date is not None
+            and self.start_date is not None
+            and self.end_date < self.start_date
+        ):
+            raise ValueError("Project end date must not precede start date")
+        if self.spent_budget > self.budget:
+            raise ValueError("Spent budget must not exceed project budget")
+        return self
+
+
+class CreateProjectRequest(ProjectWriteRequest):
+    pass
+
+
+class UpdateProjectRequest(ProjectWriteRequest):
+    pass
+
+
+class ChangeProjectStageRequest(ApiModel):
+    stage: ProjectStage
+    comment: str = Field(default="", max_length=4000)
+
+
+TripStage = Literal["launch", "manager_approval", "hr", "approved", "rejected"]
+TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected"]
+TripAction = Literal["submit", "approve", "return", "reject", "resubmit"]
+
+
+class TripActionHistoryResponse(ApiModel):
+    id: str
+    actor_user_id: str
+    from_stage: TripStage | None
+    to_stage: TripStage
+    action: Literal["created", "submit", "approve", "return", "reject", "resubmit"]
+    comment: str | None
+    created_at: datetime
+
+
+class TripRequestResponse(ApiModel):
+    id: str
+    number: str
+    requester_user_id: str
+    purpose: str
+    destination: str
+    start_date: date
+    end_date: date
+    employee_ids: list[str]
+    stage: TripStage
+    stage_label: str
+    status: TripStatus
+    status_label: str
+    can_edit: bool
+    allowed_actions: list[TripAction]
+    actions: list[TripActionHistoryResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+    finished_at: datetime | None
+
+
+class TripWriteRequest(ApiModel):
+    purpose: str = Field(min_length=1, max_length=4000)
+    destination: str = Field(min_length=1, max_length=240)
+    start_date: date
+    end_date: date
+    employee_ids: list[str] = Field(min_length=1, max_length=100)
+
+    @field_validator("purpose", "destination")
+    @classmethod
+    def trip_text_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Trip purpose and destination must not be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_trip_dates(self) -> "TripWriteRequest":
+        if self.end_date < self.start_date:
+            raise ValueError("Trip end date must not precede start date")
+        if len(set(self.employee_ids)) != len(self.employee_ids):
+            raise ValueError("Trip employees must be unique")
+        return self
+
+
+class CreateTripRequest(TripWriteRequest):
+    pass
+
+
+class UpdateTripRequest(TripWriteRequest):
+    pass
+
+
+class TripActionRequest(ApiModel):
+    action: TripAction
+    comment: str = Field(default="", max_length=4000)
+
+
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
     can_create_payment_requests: bool
@@ -447,5 +601,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     messages: list[ChatMessageResponse]
     tasks: list[TaskResponse]
     requests: list[ApprovalRequestResponse]
+    projects: list[ProjectResponse]
+    trip_requests: list[TripRequestResponse]
     attachments: list[AttachmentResponse]
     workflow: WorkflowResponse

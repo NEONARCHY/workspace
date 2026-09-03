@@ -189,6 +189,96 @@ export interface WorkspaceTask {
   readonly cycle?: TaskCycle | null;
 }
 
+export type ProjectStage = "start" | "preparation" | "approval" | "success" | "failure";
+export type ProjectStatus = "new" | "in_progress" | "completed";
+
+export interface ProjectStageAction {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly fromStage?: ProjectStage | null;
+  readonly toStage: ProjectStage;
+  readonly action: "created" | "moved";
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface WorkspaceProject {
+  readonly id: string;
+  readonly code: string;
+  readonly title: string;
+  readonly description: string;
+  readonly managerUserId: string;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly budget: number;
+  readonly spentBudget: number;
+  readonly remainingBudget: number;
+  readonly currency: "UZS" | "USD" | "EUR";
+  readonly status: ProjectStatus;
+  readonly stage: ProjectStage;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly canEdit: boolean;
+  readonly canMove: boolean;
+  readonly history: readonly ProjectStageAction[];
+}
+
+export interface ProjectInput {
+  readonly code: string;
+  readonly title: string;
+  readonly description: string;
+  readonly managerUserId: string;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly budget: number;
+  readonly spentBudget: number;
+  readonly currency: "UZS" | "USD" | "EUR";
+}
+
+export type TripStage = "launch" | "manager_approval" | "hr" | "approved" | "rejected";
+export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected";
+export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit";
+
+export interface TripActionHistory {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly fromStage?: TripStage | null;
+  readonly toStage: TripStage;
+  readonly action: "created" | TripAction;
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface TripRequest {
+  readonly id: string;
+  readonly number: string;
+  readonly requesterUserId: string;
+  readonly purpose: string;
+  readonly destination: string;
+  readonly startDate: string;
+  readonly endDate: string;
+  readonly employeeIds: readonly string[];
+  readonly stage: TripStage;
+  readonly stageLabel: string;
+  readonly status: TripStatus;
+  readonly statusLabel: string;
+  readonly canEdit: boolean;
+  readonly allowedActions: readonly TripAction[];
+  readonly actions: readonly TripActionHistory[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly finishedAt?: string | null;
+}
+
+export interface TripRequestInput {
+  readonly purpose: string;
+  readonly destination: string;
+  readonly startDate: string;
+  readonly endDate: string;
+  readonly employeeIds: readonly string[];
+}
+
 export type ApprovalNodeKind =
   | "start"
   | "approval"
@@ -322,6 +412,8 @@ export interface WorkspaceBootstrap {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly projects: readonly WorkspaceProject[];
+  readonly tripRequests: readonly TripRequest[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow: WorkflowDefinition;
 }

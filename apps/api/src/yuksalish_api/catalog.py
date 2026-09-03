@@ -40,7 +40,7 @@ MODULE_CATALOG = (
             uz_latn="Loyihalar ro‘yxati",
         ),
         route="/projects",
-        status="placeholder",
+        status="available",
     ),
     ModuleDescriptor(
         key="trip_approvals",
@@ -50,7 +50,7 @@ MODULE_CATALOG = (
             uz_latn="Safarni kelishish",
         ),
         route="/trip-approvals",
-        status="placeholder",
+        status="available",
     ),
     ModuleDescriptor(
         key="messenger",

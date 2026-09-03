@@ -23,12 +23,16 @@ from yuksalish_api.position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
+    act_on_trip_request,
     add_task_checklist_item,
     add_task_comment,
+    change_project_stage,
     change_task_status,
     create_approval_request,
     create_attachment,
+    create_project,
     create_task,
+    create_trip_request,
     delete_task_checklist_item,
     find_active_user_by_username,
     get_attachment,
@@ -43,26 +47,34 @@ from yuksalish_api.repository import (
     set_task_dependency,
     set_task_participant,
     update_approval_request,
+    update_project,
     update_task,
     update_task_checklist_item,
+    update_trip_request,
 )
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import audit_events
 from yuksalish_api.workspace_schemas import (
     ApprovalActionRequest,
+    ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     CreateApprovalRequest,
     CreateChecklistItemRequest,
+    CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
+    CreateTripRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskParticipantRequest,
+    TripActionRequest,
     UpdateApprovalRequest,
     UpdateChecklistItemRequest,
+    UpdateProjectRequest,
     UpdateTaskRequest,
+    UpdateTripRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
 )
@@ -87,6 +99,8 @@ async def _exercise_live_workspace(database_url: str) -> None:
             initial = await load_workspace(connection, aziza)
             assert len(initial.people) == 4
             assert len(initial.chats) == 4
+            assert len(initial.projects) == 3
+            assert len(initial.trip_requests) == 1
             assert initial.workflow.nodes
             assert initial.workflow.published_version == 6
             assert {node.label for node in initial.workflow.nodes} == {
@@ -443,6 +457,148 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert approval.amount == 82_400_000
             assert approval.revision == 3
+
+            project = await create_project(
+                connection,
+                aziza,
+                CreateProjectRequest(
+                    code="INT-BP7",
+                    title="Integration BP-7 project",
+                    description="Project lifecycle coverage",
+                    manager_user_id=str(aziza.id),
+                    start_date=date(2026, 9, 10),
+                    end_date=date(2026, 12, 1),
+                    budget=100_000_000,
+                    spent_budget=12_000_000,
+                    currency="UZS",
+                ),
+            )
+            assert project.stage == "start"
+            assert project.remaining_budget == 88_000_000
+            assert project.history[-1].action == "created"
+            project = await update_project(
+                connection,
+                aziza,
+                UUID(project.id),
+                UpdateProjectRequest(
+                    code="INT-BP7",
+                    title="Integration BP-7 project updated",
+                    description="Updated project lifecycle coverage",
+                    manager_user_id=str(admin.id),
+                    start_date=date(2026, 9, 10),
+                    end_date=date(2026, 12, 1),
+                    budget=100_000_000,
+                    spent_budget=18_000_000,
+                    currency="UZS",
+                ),
+            )
+            assert project.manager_user_id == str(admin.id)
+            project = await change_project_stage(
+                connection,
+                aziza,
+                UUID(project.id),
+                ChangeProjectStageRequest(stage="preparation"),
+            )
+            project = await change_project_stage(
+                connection,
+                aziza,
+                UUID(project.id),
+                ChangeProjectStageRequest(stage="approval"),
+            )
+            with pytest.raises(WorkspaceRepositoryError, match="failure comment"):
+                await change_project_stage(
+                    connection,
+                    aziza,
+                    UUID(project.id),
+                    ChangeProjectStageRequest(stage="failure"),
+                )
+            project = await change_project_stage(
+                connection,
+                aziza,
+                UUID(project.id),
+                ChangeProjectStageRequest(stage="success", comment="Accepted"),
+            )
+            assert project.status == "completed"
+            assert project.history[-1].to_stage == "success"
+            with pytest.raises(WorkspaceRepositoryError, match="Only managers"):
+                await create_project(
+                    connection,
+                    dilshod_auth,
+                    CreateProjectRequest(
+                        code="DENIED",
+                        title="Denied project",
+                        manager_user_id=str(dilshod_auth.id),
+                    ),
+                )
+
+            trip = await create_trip_request(
+                connection,
+                dilshod_auth,
+                CreateTripRequest(
+                    purpose="Integration trip approval",
+                    destination="Samarkand",
+                    start_date=date(2026, 10, 5),
+                    end_date=date(2026, 10, 7),
+                    employee_ids=[str(dilshod_auth.id)],
+                ),
+            )
+            assert trip.stage == "launch"
+            assert trip.allowed_actions == ["submit"]
+            trip = await act_on_trip_request(
+                connection,
+                dilshod_auth,
+                UUID(trip.id),
+                TripActionRequest(action="submit"),
+            )
+            assert trip.stage == "manager_approval"
+            trip = await act_on_trip_request(
+                connection,
+                aziza,
+                UUID(trip.id),
+                TripActionRequest(action="return", comment="Fix destination details"),
+            )
+            assert trip.status == "needs_revision"
+            trip = await update_trip_request(
+                connection,
+                dilshod_auth,
+                UUID(trip.id),
+                UpdateTripRequest(
+                    purpose="Integration trip approval corrected",
+                    destination="Samarkand office",
+                    start_date=date(2026, 10, 5),
+                    end_date=date(2026, 10, 8),
+                    employee_ids=[str(dilshod_auth.id)],
+                ),
+            )
+            trip = await act_on_trip_request(
+                connection,
+                dilshod_auth,
+                UUID(trip.id),
+                TripActionRequest(action="resubmit", comment="Corrected"),
+            )
+            trip = await act_on_trip_request(
+                connection,
+                aziza,
+                UUID(trip.id),
+                TripActionRequest(action="approve"),
+            )
+            assert trip.stage == "hr"
+            with pytest.raises(WorkspaceRepositoryError, match="not allowed"):
+                await act_on_trip_request(
+                    connection,
+                    aziza,
+                    UUID(trip.id),
+                    TripActionRequest(action="approve"),
+                )
+            trip = await act_on_trip_request(
+                connection,
+                admin,
+                UUID(trip.id),
+                TripActionRequest(action="approve", comment="HR documents verified"),
+            )
+            assert trip.stage == "approved"
+            assert trip.status == "approved"
+            assert trip.finished_at is not None
             assert len(approval.versions) == 3
             assert approval.versions[-1].attachment_ids == [approval_attachment.id]
             approval = await act_on_request(
@@ -489,6 +645,8 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert message.id in {item.id for item in after.messages}
             assert task.id in {item.id for item in after.tasks}
             assert approval.id in {item.id for item in after.requests}
+            assert project.id in {item.id for item in after.projects}
+            assert trip.id in {item.id for item in after.trip_requests}
             assert message_attachment.id in {item.id for item in after.attachments}
             assert approval_attachment.id in {item.id for item in after.attachments}
         finally:

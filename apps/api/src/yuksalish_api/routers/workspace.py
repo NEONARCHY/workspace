@@ -29,12 +29,16 @@ from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
+    act_on_trip_request,
     add_task_checklist_item,
     add_task_comment,
+    change_project_stage,
     change_task_status,
     create_approval_request,
     create_attachment,
+    create_project,
     create_task,
+    create_trip_request,
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
@@ -47,8 +51,10 @@ from yuksalish_api.repository import (
     set_task_dependency,
     set_task_participant,
     update_approval_request,
+    update_project,
     update_task,
     update_task_checklist_item,
+    update_trip_request,
     validate_attachment_owner,
 )
 from yuksalish_api.workspace_schemas import (
@@ -56,21 +62,29 @@ from yuksalish_api.workspace_schemas import (
     ApprovalRequestResponse,
     AttachmentOwnerType,
     AttachmentResponse,
+    ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     CreateApprovalRequest,
     CreateChecklistItemRequest,
+    CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
+    CreateTripRequest,
+    ProjectResponse,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskParticipantRequest,
     TaskResponse,
+    TripActionRequest,
+    TripRequestResponse,
     UpdateApprovalRequest,
     UpdateChecklistItemRequest,
+    UpdateProjectRequest,
     UpdateTaskRequest,
+    UpdateTripRequest,
     WorkflowResponse,
     WorkspaceBootstrapResponse,
 )
@@ -398,6 +412,100 @@ async def post_approval_action(
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "approval.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/projects", response_model=ProjectResponse, status_code=201)
+async def post_project(
+    payload: CreateProjectRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ProjectResponse:
+    try:
+        result = await create_project(connection, current_user, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "project.created", "entityId": result.id})
+    return result
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectResponse)
+async def patch_project(
+    project_id: UUID,
+    payload: UpdateProjectRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ProjectResponse:
+    try:
+        result = await update_project(connection, current_user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "project.updated", "entityId": result.id})
+    return result
+
+
+@router.patch("/projects/{project_id}/stage", response_model=ProjectResponse)
+async def patch_project_stage(
+    project_id: UUID,
+    payload: ChangeProjectStageRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ProjectResponse:
+    try:
+        result = await change_project_stage(connection, current_user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "project.moved", "entityId": result.id})
+    return result
+
+
+@router.post("/trip-requests", response_model=TripRequestResponse, status_code=201)
+async def post_trip_request(
+    payload: CreateTripRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TripRequestResponse:
+    try:
+        result = await create_trip_request(connection, current_user, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "trip.created", "entityId": result.id})
+    return result
+
+
+@router.patch("/trip-requests/{request_id}", response_model=TripRequestResponse)
+async def patch_trip_request(
+    request_id: UUID,
+    payload: UpdateTripRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TripRequestResponse:
+    try:
+        result = await update_trip_request(connection, current_user, request_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "trip.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/trip-requests/{request_id}/actions", response_model=TripRequestResponse)
+async def post_trip_action(
+    request_id: UUID,
+    payload: TripActionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TripRequestResponse:
+    try:
+        result = await act_on_trip_request(connection, current_user, request_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "trip.updated", "entityId": result.id})
     return result
 
 

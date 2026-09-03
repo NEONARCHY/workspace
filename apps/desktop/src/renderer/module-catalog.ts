@@ -29,13 +29,13 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     key: "projects",
     label: { ru: "Список проектов", uz_cyrl: "Лойиҳалар рўйхати", uz_latn: "Loyihalar ro‘yxati" },
     route: "/projects",
-    status: "placeholder",
+    status: "available",
   },
   {
     key: "trip_approvals",
     label: { ru: "Согласование поездок", uz_cyrl: "Сафарни келишиш", uz_latn: "Safarni kelishish" },
     route: "/trip-approvals",
-    status: "placeholder",
+    status: "available",
   },
   {
     key: "messenger",

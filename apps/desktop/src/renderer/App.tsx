@@ -4,10 +4,16 @@ import type {
   ApprovalRequestSummary,
   AuthenticationSession,
   ChatMessage,
+  ProjectInput,
+  ProjectStage,
   TaskStatus,
+  TripAction,
+  TripRequest,
+  TripRequestInput,
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspacePerson,
+  WorkspaceProject,
   WorkflowPosition,
   WorkspaceSection,
   WorkspaceTask,
@@ -22,7 +28,6 @@ import {
 import {
   Alert24Regular,
   ApprovalsApp24Regular,
-  Briefcase24Regular,
   Building24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
@@ -44,16 +49,22 @@ import { initialChats, initialMessages, initialTasks, people } from "./demo-data
 import { EmployeesView } from "./EmployeesView";
 import { LoginView } from "./LoginView";
 import { MessengerView } from "./MessengerView";
+import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
+import { TripApprovalsView } from "./TripApprovalsView";
 import {
   acceptInvitation,
+  actOnWorkspaceTripRequest,
   actOnWorkspaceApproval,
   addWorkspaceTaskChecklistItem,
   addWorkspaceTaskComment,
   changeWorkspaceTaskStatus,
+  changeWorkspaceProjectStage,
   completePasswordReset,
   createWorkspaceApproval,
+  createWorkspaceProject,
   createWorkspaceTask,
+  createWorkspaceTripRequest,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
@@ -70,7 +81,9 @@ import {
   setWorkspaceTaskParticipant,
   subscribeToWorkspaceEvents,
   updateWorkspaceApproval,
+  updateWorkspaceProject,
   updateWorkspaceTask,
+  updateWorkspaceTripRequest,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
   type PaymentRequestInput,
@@ -91,6 +104,8 @@ interface WorkspaceState {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly projects: readonly WorkspaceProject[];
+  readonly tripRequests: readonly TripRequest[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
 }
@@ -104,6 +119,8 @@ const initialWorkspace: WorkspaceState = {
   messages: initialMessages,
   tasks: initialTasks,
   requests: [],
+  projects: [],
+  tripRequests: [],
   attachments: [],
 };
 
@@ -604,6 +621,73 @@ export function App() {
     }
   };
 
+  const mergeProject = (project: WorkspaceProject) => {
+    setWorkspace((current) => ({
+      ...current,
+      projects: current.projects.some((item) => item.id === project.id)
+        ? current.projects.map((item) => (item.id === project.id ? project : item))
+        : [project, ...current.projects],
+    }));
+    return project;
+  };
+
+  const runProjectMutation = async (
+    mutation: (token: string) => Promise<WorkspaceProject>,
+  ): Promise<WorkspaceProject | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeProject(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateProject = (payload: ProjectInput) =>
+    runProjectMutation((token) => createWorkspaceProject(token, payload));
+
+  const handleUpdateProject = (project: WorkspaceProject, payload: ProjectInput) =>
+    runProjectMutation((token) => updateWorkspaceProject(token, project.id, payload));
+
+  const handleMoveProject = (
+    project: WorkspaceProject,
+    stage: ProjectStage,
+    comment = "",
+  ) => runProjectMutation((token) =>
+    changeWorkspaceProjectStage(token, project.id, stage, comment));
+
+  const mergeTripRequest = (tripRequest: TripRequest) => {
+    setWorkspace((current) => ({
+      ...current,
+      tripRequests: current.tripRequests.some((item) => item.id === tripRequest.id)
+        ? current.tripRequests.map((item) => item.id === tripRequest.id ? tripRequest : item)
+        : [tripRequest, ...current.tripRequests],
+    }));
+    return tripRequest;
+  };
+
+  const runTripMutation = async (
+    mutation: (token: string) => Promise<TripRequest>,
+  ): Promise<TripRequest | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeTripRequest(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateTrip = (payload: TripRequestInput) =>
+    runTripMutation((token) => createWorkspaceTripRequest(token, payload));
+
+  const handleUpdateTrip = (tripRequest: TripRequest, payload: TripRequestInput) =>
+    runTripMutation((token) => updateWorkspaceTripRequest(token, tripRequest.id, payload));
+
+  const handleTripAction = (tripRequest: TripRequest, action: TripAction, comment = "") =>
+    runTripMutation((token) =>
+      actOnWorkspaceTripRequest(token, tripRequest.id, action, comment));
+
   if (session === undefined) {
     return (
       <FluentProvider theme={webLightTheme} className="app-provider">
@@ -771,19 +855,23 @@ export function App() {
               />
             ) : null}
             {activeSection === "projects" ? (
-              <ModulePreview
-                icon={<Briefcase24Regular />}
-                title="Список проектов"
-                evidence="В Bitrix найдено 6 проектов и пять стадий: Начало, Подготовка, Согласование, Успех и Провал."
-                packageLabel="Пакет BP‑7 · Проекты и поездки"
+              <ProjectsView
+                projects={workspace.projects}
+                people={workspace.people}
+                currentUser={workspace.currentUser}
+                onCreate={handleCreateProject}
+                onUpdate={handleUpdateProject}
+                onMove={handleMoveProject}
               />
             ) : null}
             {activeSection === "trip_approvals" ? (
-              <ModulePreview
-                icon={<ApprovalsApp24Regular />}
-                title="Согласование поездок"
-                evidence="В Bitrix найден отдельный маршрут из пяти стадий и одна текущая карточка. Поля дат, цели и сотрудников зафиксированы в спецификации."
-                packageLabel="Пакет BP‑7 · Проекты и поездки"
+              <TripApprovalsView
+                requests={workspace.tripRequests}
+                people={workspace.people}
+                currentUser={workspace.currentUser}
+                onCreate={handleCreateTrip}
+                onUpdate={handleUpdateTrip}
+                onAction={handleTripAction}
               />
             ) : null}
             {activeSection === "calendar" ? (

@@ -337,3 +337,72 @@ approval_actions = sa.Table(
     sa.Column("comment", sa.Text()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
+
+workspace_projects = sa.Table(
+    "workspace_projects",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("code", sa.String(48)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("manager_user_id", uuid_type),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
+    sa.Column("budget", sa.BigInteger()),
+    sa.Column("spent_budget", sa.BigInteger()),
+    sa.Column("currency", sa.String(3)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("stage", sa.String(24)),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+project_stage_actions = sa.Table(
+    "project_stage_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("project_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("from_stage", sa.String(24)),
+    sa.Column("to_stage", sa.String(24)),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+trip_requests = sa.Table(
+    "trip_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("purpose", sa.Text()),
+    sa.Column("destination", sa.String(240)),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
+    sa.Column("stage", sa.String(32)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("finished_at", sa.DateTime(timezone=True)),
+)
+
+trip_request_employees = sa.Table(
+    "trip_request_employees",
+    metadata,
+    sa.Column("request_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+)
+
+trip_request_actions = sa.Table(
+    "trip_request_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("from_stage", sa.String(32)),
+    sa.Column("to_stage", sa.String(32)),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
