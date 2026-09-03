@@ -43,6 +43,7 @@ class InvitationCreateRequest(ApiModel):
     username: str = Field(min_length=3, max_length=64)
     full_name: str = Field(min_length=2, max_length=200)
     job_title: str | None = Field(default=None, max_length=160)
+    position_id: UUID | None = None
     role: Literal["admin", "manager", "employee"] = "employee"
     department_id: UUID | None = None
 

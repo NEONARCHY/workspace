@@ -15,15 +15,21 @@ import {
   Button,
   FluentProvider,
   Input,
-  Tooltip,
   webLightTheme,
 } from "@fluentui/react-components";
 import {
   Alert24Regular,
   ApprovalsApp24Regular,
+  Briefcase24Regular,
+  Building24Regular,
+  CalendarLtr24Regular,
   Chat24Filled,
   Chat24Regular,
-  Home24Regular,
+  DocumentBulletList24Regular,
+  FolderPeople24Regular,
+  Navigation24Regular,
+  News24Regular,
+  PeopleTeam24Regular,
   Search24Regular,
   Settings24Regular,
   TaskListSquareLtr24Filled,
@@ -33,6 +39,7 @@ import {
 import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
+import { EmployeesView } from "./EmployeesView";
 import { LoginView } from "./LoginView";
 import { MessengerView } from "./MessengerView";
 import { TasksView } from "./TasksView";
@@ -56,8 +63,6 @@ interface NavItem {
   readonly key: WorkspaceSection;
   readonly label: string;
   readonly icon: ReactNode;
-  readonly activeIcon: ReactNode;
-  readonly badge?: number;
 }
 
 interface WorkspaceState {
@@ -80,28 +85,56 @@ const initialWorkspace: WorkspaceState = {
 };
 
 const navItems: readonly NavItem[] = [
-  {
-    key: "messenger",
-    label: "Сообщения",
-    icon: <Chat24Regular />,
-    activeIcon: <Chat24Filled />,
-    badge: 4,
-  },
+  { key: "crm", label: "CRM", icon: <Building24Regular /> },
   {
     key: "tasks",
     label: "Задачи",
     icon: <TaskListSquareLtr24Regular />,
-    activeIcon: <TaskListSquareLtr24Filled />,
-    badge: 2,
   },
   {
-    key: "approvals",
-    label: "Согласования",
-    icon: <ApprovalsApp24Regular />,
-    activeIcon: <ApprovalsApp24Regular />,
-    badge: 4,
+    key: "payment_requests",
+    label: "Заявки на оплату",
+    icon: <DocumentBulletList24Regular />,
   },
+  { key: "feed", label: "Лента", icon: <News24Regular /> },
+  { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
+  {
+    key: "trip_approvals",
+    label: "Согласование поездок",
+    icon: <ApprovalsApp24Regular />,
+  },
+  {
+    key: "messenger",
+    label: "Мессенджер",
+    icon: <Chat24Regular />,
+  },
+  { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
+  { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
 ];
+
+interface ModulePreviewProps {
+  readonly icon: ReactNode;
+  readonly title: string;
+  readonly evidence: string;
+  readonly packageLabel: string;
+}
+
+function ModulePreview({ icon, title, evidence, packageLabel }: ModulePreviewProps) {
+  return (
+    <section className="workspace-view parity-preview" aria-label={title}>
+      <div className="parity-preview-card">
+        <span className="parity-preview-icon">{icon}</span>
+        <span className="parity-kicker">Вкладка закреплена в общей навигации</span>
+        <h1>{title}</h1>
+        <p>{evidence}</p>
+        <div>
+          <strong>{packageLabel}</strong>
+          <span>Функции будут подключаться вертикальным срезом по зафиксированной Bitrix‑спецификации.</span>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function readableAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Не удалось войти";
@@ -308,49 +341,62 @@ export function App() {
     );
   }
 
+  const badgeBySection: Partial<Record<WorkspaceSection, number>> = {
+    messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
+    tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
+    payment_requests: workspace.requests.filter((request) => request.status === "running").length,
+  };
+
   return (
     <FluentProvider theme={webLightTheme} className="app-provider">
       <div className="app-shell">
         <aside className="app-rail" aria-label="Основная навигация">
-          <div className="workspace-logo" aria-label="Yuksalish Workspace">Y</div>
-          <Tooltip content="Главная" relationship="label" positioning="after">
-            <button className="rail-action" type="button" aria-label="Главная">
-              <Home24Regular />
-            </button>
-          </Tooltip>
+          <div className="workspace-logo" aria-label="Yuksalish Workspace">
+            <Navigation24Regular />
+            <strong>Yuksalish</strong>
+          </div>
           <nav className="rail-nav">
-            {navItems.map((item) => (
-              <Tooltip key={item.key} content={item.label} relationship="label" positioning="after">
+            {navItems.map((item) => {
+              const badge = badgeBySection[item.key];
+              const icon = activeSection === item.key && item.key === "messenger"
+                ? <Chat24Filled />
+                : activeSection === item.key && item.key === "tasks"
+                  ? <TaskListSquareLtr24Filled />
+                  : item.icon;
+              return (
                 <button
+                  key={item.key}
                   className={`rail-action ${activeSection === item.key ? "active" : ""}`}
                   type="button"
                   aria-label={item.label}
                   aria-current={activeSection === item.key ? "page" : undefined}
                   onClick={() => setActiveSection(item.key)}
                 >
-                  {activeSection === item.key ? item.activeIcon : item.icon}
-                  {item.badge !== undefined ? <span className="rail-badge">{item.badge}</span> : null}
+                  <span className="rail-icon">{icon}</span>
+                  <span className="rail-label">{item.label}</span>
+                  {badge ? <span className="rail-badge">{badge > 99 ? "99+" : badge}</span> : null}
                 </button>
-              </Tooltip>
-            ))}
+              );
+            })}
           </nav>
           <div className="rail-bottom">
-            <Tooltip content="Уведомления" relationship="label" positioning="after">
-              <button className="rail-action" type="button" aria-label="Уведомления">
-                <Alert24Regular />
-              </button>
-            </Tooltip>
-            <Tooltip content="Настройки" relationship="label" positioning="after">
-              <button
-                className="rail-action"
-                type="button"
-                aria-label="Настройки"
-                onClick={() => setAccountOpen(true)}
-              >
-                <Settings24Regular />
-              </button>
-            </Tooltip>
-            <Avatar name={workspace.currentUser.name} size={36} color="colorful" />
+            <button className="rail-action" type="button" aria-label="Уведомления">
+              <span className="rail-icon"><Alert24Regular /></span>
+              <span className="rail-label">Уведомления</span>
+            </button>
+            <button
+              className="rail-action"
+              type="button"
+              aria-label="Настройки"
+              onClick={() => setAccountOpen(true)}
+            >
+              <span className="rail-icon"><Settings24Regular /></span>
+              <span className="rail-label">Настройки</span>
+            </button>
+            <button className="rail-profile" type="button" onClick={() => setAccountOpen(true)}>
+              <Avatar name={workspace.currentUser.name} size={32} color="colorful" />
+              <span>{workspace.currentUser.name}</span>
+            </button>
           </div>
         </aside>
 
@@ -377,6 +423,14 @@ export function App() {
           </header>
 
           <main className="app-content">
+            {activeSection === "crm" ? (
+              <ModulePreview
+                icon={<Building24Regular />}
+                title="CRM"
+                evidence="В действующем Bitrix стандартные лиды, сделки, контакты и компании пусты. До реализации уточним, какие CRM‑сценарии действительно нужны Workspace."
+                packageLabel="Пакет BP‑9 · CRM"
+              />
+            ) : null}
             {activeSection === "messenger" ? (
               <MessengerView
                 chats={workspace.chats}
@@ -394,7 +448,7 @@ export function App() {
                 onChangeStatus={handleTaskStatus}
               />
             ) : null}
-            {activeSection === "approvals" ? (
+            {activeSection === "payment_requests" ? (
               <ApprovalsView
                 key={workspace.workflow === undefined ? "offline" : JSON.stringify(workspace.workflow)}
                 canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
@@ -405,6 +459,41 @@ export function App() {
                 onCreateRequest={handleCreateApproval}
                 onAction={handleApprovalAction}
               />
+            ) : null}
+            {activeSection === "feed" ? (
+              <ModulePreview
+                icon={<News24Regular />}
+                title="Лента"
+                evidence="Текущий webhook не разрешает безопасно прочитать структуру живой ленты. Потребуется отдельный read‑only доступ перед фиксацией точного поведения."
+                packageLabel="Пакет BP‑8 · Лента, календарь и коммуникации"
+              />
+            ) : null}
+            {activeSection === "projects" ? (
+              <ModulePreview
+                icon={<Briefcase24Regular />}
+                title="Список проектов"
+                evidence="В Bitrix найдено 6 проектов и пять стадий: Начало, Подготовка, Согласование, Успех и Провал."
+                packageLabel="Пакет BP‑7 · Проекты и поездки"
+              />
+            ) : null}
+            {activeSection === "trip_approvals" ? (
+              <ModulePreview
+                icon={<ApprovalsApp24Regular />}
+                title="Согласование поездок"
+                evidence="В Bitrix найден отдельный маршрут из пяти стадий и одна текущая карточка. Поля дат, цели и сотрудников зафиксированы в спецификации."
+                packageLabel="Пакет BP‑7 · Проекты и поездки"
+              />
+            ) : null}
+            {activeSection === "calendar" ? (
+              <ModulePreview
+                icon={<CalendarLtr24Regular />}
+                title="Календарь"
+                evidence="Webhook подтверждает один календарный раздел текущего пользователя. Содержимое событий не выгружалось."
+                packageLabel="Пакет BP‑8 · Лента, календарь и коммуникации"
+              />
+            ) : null}
+            {activeSection === "employees" ? (
+              <EmployeesView token={session.accessToken} currentUser={workspace.currentUser} />
             ) : null}
           </main>
         </div>

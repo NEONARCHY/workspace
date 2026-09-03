@@ -1,4 +1,14 @@
-export const moduleKeys = ["messenger", "tasks", "requests", "hisobot"] as const;
+export const moduleKeys = [
+  "crm",
+  "tasks",
+  "payment_requests",
+  "feed",
+  "projects",
+  "trip_approvals",
+  "messenger",
+  "calendar",
+  "employees",
+] as const;
 
 export type ModuleKey = (typeof moduleKeys)[number];
 export type ModuleStatus = "placeholder" | "available";
@@ -20,7 +30,40 @@ export interface ModuleCatalogResponse {
   readonly modules: readonly ModuleDescriptor[];
 }
 
-export type WorkspaceSection = "messenger" | "tasks" | "approvals";
+export type WorkspaceSection = ModuleKey;
+
+export type WorkspaceRole = "superadmin" | "admin" | "manager" | "employee";
+
+export interface RoleDescriptor {
+  readonly key: WorkspaceRole;
+  readonly label: string;
+  readonly description: string;
+}
+
+export interface WorkspacePosition {
+  readonly id: string;
+  readonly name: string;
+  readonly isActive: boolean;
+  readonly sortOrder: number;
+  readonly source: string;
+  readonly assignedUsersCount: number;
+}
+
+export interface DirectoryEmployee {
+  readonly id: string;
+  readonly username: string;
+  readonly name: string;
+  readonly role: WorkspaceRole;
+  readonly positionId?: string | null;
+  readonly jobTitle?: string | null;
+  readonly status: string;
+}
+
+export interface DirectoryBootstrap {
+  readonly roles: readonly RoleDescriptor[];
+  readonly positions: readonly WorkspacePosition[];
+  readonly employees: readonly DirectoryEmployee[];
+}
 
 export interface WorkspacePerson {
   readonly id: string;

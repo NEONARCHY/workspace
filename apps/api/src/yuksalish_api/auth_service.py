@@ -27,6 +27,7 @@ from .tables import (
     auth_password_resets,
     auth_sessions,
     auth_totp_factors,
+    positions,
     users,
 )
 
@@ -370,15 +371,29 @@ async def create_invitation(
     user_id = uuid4()
     invitation_id = uuid4()
     invite_token = secrets.token_urlsafe(48)
+    position_name = payload.job_title.strip() if payload.job_title else None
+    if payload.position_id is not None:
+        position = (
+            await connection.execute(
+                select(positions.c.name).where(
+                    positions.c.id == payload.position_id,
+                    positions.c.is_active.is_(True),
+                )
+            )
+        ).mappings().first()
+        if position is None:
+            raise AuthServiceError(422, "Position is not active or does not exist")
+        position_name = position["name"]
     await connection.execute(
         insert(users).values(
             id=user_id,
             username=payload.username,
             full_name=payload.full_name.strip(),
-            job_title=payload.job_title.strip() if payload.job_title else None,
+            job_title=position_name,
             role=payload.role,
             status="pending",
             department_id=payload.department_id,
+            position_id=payload.position_id,
             created_at=created_at,
             updated_at=created_at,
             failed_login_count=0,

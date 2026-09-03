@@ -54,13 +54,25 @@ async def test_authentication_http_vertical_slice() -> None:
         assert me.status_code == 200
         assert me.json()["role"] == "admin"
 
+        directory = await client.get("/api/v1/directory", headers=admin_headers)
+        assert directory.status_code == 200
+        assert len(directory.json()["positions"]) >= 24
+        position_name = f"API Position {uuid4().hex[:8]}"
+        position = await client.post(
+            "/api/v1/directory/positions",
+            headers=admin_headers,
+            json={"name": position_name, "sortOrder": 50_000},
+        )
+        assert position.status_code == 201
+        position_id = position.json()["id"]
+
         invitation = await client.post(
             "/api/v1/auth/invitations",
             headers=admin_headers,
             json={
                 "username": username,
                 "fullName": "API Employee",
-                "jobTitle": "Tester",
+                "positionId": position_id,
                 "role": "employee",
             },
         )
@@ -76,7 +88,15 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert activated.status_code == 200
         employee_session = activated.json()
+        assert employee_session["user"]["jobTitle"] == position_name
         employee_headers = {"Authorization": f"Bearer {employee_session['accessToken']}"}
+
+        denied_position = await client.post(
+            "/api/v1/directory/positions",
+            headers=employee_headers,
+            json={"name": "Denied Position"},
+        )
+        assert denied_position.status_code == 403
 
         forbidden = await client.post(
             "/api/v1/auth/invitations",
@@ -88,6 +108,25 @@ async def test_authentication_http_vertical_slice() -> None:
             },
         )
         assert forbidden.status_code == 403
+
+        directory = await client.get("/api/v1/directory", headers=admin_headers)
+        employee = next(
+            item for item in directory.json()["employees"] if item["username"] == username
+        )
+        changed = await client.patch(
+            f"/api/v1/directory/employees/{employee['id']}",
+            headers=admin_headers,
+            json={"role": "manager", "positionId": position_id},
+        )
+        assert changed.status_code == 200
+        assert changed.json()["role"] == "manager"
+        deactivated = await client.patch(
+            f"/api/v1/directory/positions/{position_id}",
+            headers=admin_headers,
+            json={"isActive": False},
+        )
+        assert deactivated.status_code == 200
+        assert deactivated.json()["isActive"] is False
 
         status = await client.get("/api/v1/auth/totp", headers=employee_headers)
         assert status.json() == {"enabled": False}

@@ -25,7 +25,7 @@ async def test_live_health_and_security_headers() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "yuksalish-api",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "environment": "test",
     }
     assert response.headers["x-content-type-options"] == "nosniff"
@@ -46,10 +46,15 @@ async def test_module_catalog_has_all_locales() -> None:
 
     assert response.status_code == 200
     assert [module["key"] for module in payload["modules"]] == [
-        "messenger",
+        "crm",
         "tasks",
-        "requests",
-        "hisobot",
+        "payment_requests",
+        "feed",
+        "projects",
+        "trip_approvals",
+        "messenger",
+        "calendar",
+        "employees",
     ]
     assert all(
         set(module["label"]) == {"ru", "uz_cyrl", "uz_latn"} for module in payload["modules"]

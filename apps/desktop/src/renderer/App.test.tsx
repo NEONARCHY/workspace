@@ -41,31 +41,74 @@ const workflow = {
   ],
 };
 
+const position = {
+  id: "position-finance",
+  name: "Финансовый менеджер",
+  isActive: true,
+  sortOrder: 10,
+  source: "bitrix",
+  assignedUsersCount: 1,
+};
+
+const directory = {
+  roles: [
+    { key: "employee", label: "Сотрудник", description: "" },
+    { key: "manager", label: "Руководитель", description: "" },
+    { key: "admin", label: "Администратор", description: "" },
+  ],
+  positions: [position],
+  employees: people.map((person, index) => ({
+    id: person.id,
+    username: person.username,
+    name: person.name,
+    role: person.role,
+    positionId: index === 0 ? position.id : null,
+    jobTitle: person.jobTitle,
+    status: "active",
+  })),
+};
+
 function response(payload: unknown): Response {
   return { ok: true, json: async () => payload } as Response;
 }
 
 function mockServer() {
+  let currentUser = people[0]!;
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/login")) {
+      const payload = JSON.parse(String(options?.body)) as { username: string };
+      currentUser = people.find((person) => person.username === payload.username) ?? people[0]!;
       return response({
         accessToken: "access-token",
         refreshToken: "refresh-token",
         tokenType: "bearer",
         expiresIn: 900,
-        user: people[0],
+        user: currentUser,
       });
     }
     if (url.endsWith("/workspace/bootstrap")) {
       return response({
-        currentUser: people[0],
+        currentUser,
         people,
         chats: initialChats,
         messages: initialMessages,
         tasks: initialTasks,
         requests: [],
         workflow,
+      });
+    }
+    if (url.endsWith("/directory") && options?.method === undefined) {
+      return response(directory);
+    }
+    if (url.endsWith("/directory/positions") && options?.method === "POST") {
+      return response({
+        id: "position-new",
+        name: "Новая должность",
+        isActive: true,
+        sortOrder: 10,
+        source: "workspace",
+        assignedUsersCount: 0,
       });
     }
     if (url.includes("/messages") && options?.method === "POST") {
@@ -105,7 +148,10 @@ function mockServer() {
   return fetchMock;
 }
 
-async function loginToWorkspace() {
+async function loginToWorkspace(username = "aziza") {
+  fireEvent.change(screen.getByLabelText(/^Логин/), {
+    target: { value: username },
+  });
   fireEvent.change(screen.getByLabelText(/^Пароль/), {
     target: { value: "Yuksalish-Local-2026!" },
   });
@@ -159,10 +205,46 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Согласования" }));
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
     expect(screen.getByRole("button", { name: "Новая заявка" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
     expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
+  });
+
+  it("shows the Bitrix-derived navigation in the confirmed order", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    const navigation = screen.getByRole("navigation");
+    const labels = Array.from(navigation.querySelectorAll("button")).map((button) =>
+      button.getAttribute("aria-label"),
+    );
+    expect(labels).toEqual([
+      "CRM",
+      "Задачи",
+      "Заявки на оплату",
+      "Лента",
+      "Список проектов",
+      "Согласование поездок",
+      "Мессенджер",
+      "Календарь",
+      "Сотрудники",
+    ]);
+  });
+
+  it("opens the employee directory and creates a position", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("malika");
+
+    fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
+    expect(await screen.findByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Название новой должности" }), {
+      target: { value: "Новая должность" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить" }));
+    expect((await screen.findAllByText("Новая должность")).length).toBeGreaterThan(0);
   });
 
   it("shows invitation activation without entering the workspace", () => {

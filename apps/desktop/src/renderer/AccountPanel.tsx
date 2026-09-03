@@ -6,6 +6,7 @@ import type {
   SessionSummary,
   TotpSetup,
   WorkspacePerson,
+  WorkspacePosition,
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-components";
 
@@ -14,6 +15,7 @@ import {
   createInvitation,
   createPasswordReset,
   getTotpStatus,
+  loadDirectory,
   loadSessions,
   revokeSession,
   setupTotp,
@@ -35,6 +37,8 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
   const [inviteName, setInviteName] = useState("");
   const [inviteUsername, setInviteUsername] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "employee">("employee");
+  const [invitePositionId, setInvitePositionId] = useState("");
+  const [positions, setPositions] = useState<readonly WorkspacePosition[]>([]);
   const [reset, setReset] = useState<PasswordResetResult>();
   const [resetUsername, setResetUsername] = useState("");
   const [resetTotp, setResetTotp] = useState(false);
@@ -51,11 +55,12 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
 
   useEffect(() => {
     let active = true;
-    void Promise.all([getTotpStatus(token), loadSessions(token)])
-      .then(([totp, currentSessions]) => {
+    void Promise.all([getTotpStatus(token), loadSessions(token), loadDirectory(token)])
+      .then(([totp, currentSessions, directory]) => {
         if (!active) return;
         setTotpActive(totp.enabled);
         setSessions(currentSessions);
+        setPositions(directory.positions.filter((position) => position.isActive));
       })
       .catch((error: unknown) => {
         if (active) {
@@ -95,6 +100,7 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
         username: inviteUsername,
         fullName: inviteName,
         role: inviteRole,
+        positionId: invitePositionId || undefined,
       });
       setInvite(created);
       setFeedback("Приглашение создано. Передайте код сотруднику безопасным каналом.");
@@ -222,6 +228,17 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
                   <option value="employee">Сотрудник</option>
                   <option value="manager">Руководитель</option>
                   <option value="admin">Администратор</option>
+                </Select>
+              </Field>
+              <Field label="Должность">
+                <Select
+                  value={invitePositionId}
+                  onChange={(event) => setInvitePositionId(event.target.value)}
+                >
+                  <option value="">Не назначена</option>
+                  {positions.map((position) => (
+                    <option key={position.id} value={position.id}>{position.name}</option>
+                  ))}
                 </Select>
               </Field>
               <Button type="submit" appearance="primary" disabled={!inviteName || !inviteUsername}>

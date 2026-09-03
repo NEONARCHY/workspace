@@ -45,6 +45,7 @@ node_modules/
 *.exe
 *.zip
 /Hisobot AI/
+/ВРЕМЕННО/
 /tmp/
 /.qa_hisobot_pdfs/
 

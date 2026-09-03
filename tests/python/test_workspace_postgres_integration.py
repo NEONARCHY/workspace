@@ -3,9 +3,21 @@ import os
 from uuid import UUID
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
+from yuksalish_api.directory_schemas import (
+    EmployeeAccessUpdateRequest,
+    PositionCreateRequest,
+    PositionUpdateRequest,
+)
+from yuksalish_api.directory_service import (
+    create_position,
+    load_directory,
+    update_employee_access,
+    update_position,
+)
 from yuksalish_api.repository import (
     act_on_request,
     change_task_status,
@@ -17,6 +29,7 @@ from yuksalish_api.repository import (
     send_message,
 )
 from yuksalish_api.seed import seed_demo_data
+from yuksalish_api.tables import audit_events
 from yuksalish_api.workspace_schemas import (
     ApprovalActionRequest,
     ChangeTaskStatusRequest,
@@ -38,10 +51,52 @@ async def _exercise_live_workspace(database_url: str) -> None:
             aziza = await load_authenticated_user(connection, aziza_row["id"])
             assert aziza is not None
 
+            admin_row = await find_active_user_by_username(connection, "malika")
+            assert admin_row is not None
+            admin = await load_authenticated_user(connection, admin_row["id"])
+            assert admin is not None
+
             initial = await load_workspace(connection, aziza)
             assert len(initial.people) == 4
             assert len(initial.chats) == 4
             assert initial.workflow.nodes
+
+            directory = await load_directory(connection)
+            assert len(directory.positions) >= 24
+            audit_event_count = await connection.scalar(
+                select(func.count()).select_from(audit_events)
+            )
+            new_position = await create_position(
+                connection,
+                admin,
+                PositionCreateRequest(name="Integration Position", sort_order=50_000),
+            )
+            dilshod = next(
+                employee for employee in directory.employees if employee.username == "dilshod"
+            )
+            updated_employee = await update_employee_access(
+                connection,
+                admin,
+                UUID(dilshod.id),
+                EmployeeAccessUpdateRequest(
+                    role="manager",
+                    position_id=UUID(new_position.id),
+                ),
+            )
+            assert updated_employee.role == "manager"
+            assert updated_employee.job_title == "Integration Position"
+            renamed_position = await update_position(
+                connection,
+                admin,
+                UUID(new_position.id),
+                PositionUpdateRequest(name="Integration Lead", is_active=False),
+            )
+            assert renamed_position.name == "Integration Lead"
+            assert renamed_position.assigned_users_count == 1
+            assert (
+                await connection.scalar(select(func.count()).select_from(audit_events))
+                == audit_event_count + 3
+            )
 
             message = await send_message(
                 connection,

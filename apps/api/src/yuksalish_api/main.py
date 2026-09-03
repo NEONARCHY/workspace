@@ -11,7 +11,7 @@ from . import __version__
 from .database import create_database_engine
 from .events import WorkspaceEventBus
 from .logging import configure_logging
-from .routers import authentication, health, modules, workspace
+from .routers import authentication, directory, health, modules, workspace
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
 
@@ -66,6 +66,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
+    application.include_router(directory.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     return application
 

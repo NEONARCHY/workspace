@@ -14,6 +14,19 @@ departments = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+positions = sa.Table(
+    "core_positions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("name", sa.String(160)),
+    sa.Column("is_active", sa.Boolean()),
+    sa.Column("sort_order", sa.Integer()),
+    sa.Column("source", sa.String(32)),
+    sa.Column("aliases", postgresql.JSONB()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 users = sa.Table(
     "core_users",
     metadata,
@@ -25,11 +38,24 @@ users = sa.Table(
     sa.Column("role", sa.String(24)),
     sa.Column("status", sa.String(24)),
     sa.Column("department_id", uuid_type),
+    sa.Column("position_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
     sa.Column("failed_login_count", sa.Integer()),
     sa.Column("locked_until", sa.DateTime(timezone=True)),
     sa.Column("password_changed_at", sa.DateTime(timezone=True)),
+)
+
+audit_events = sa.Table(
+    "core_audit_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(96)),
+    sa.Column("target_type", sa.String(64)),
+    sa.Column("target_id", uuid_type),
+    sa.Column("details", postgresql.JSONB()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 auth_invitations = sa.Table(

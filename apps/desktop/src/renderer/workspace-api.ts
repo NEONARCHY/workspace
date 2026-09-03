@@ -2,6 +2,8 @@ import type {
   ApprovalRequestSummary,
   AuthenticationSession,
   ChatMessage,
+  DirectoryBootstrap,
+  DirectoryEmployee,
   DevelopmentSession,
   InvitationResult,
   PasswordResetResult,
@@ -11,6 +13,8 @@ import type {
   WorkspaceBootstrap,
   WorkspaceTask,
   TotpSetup,
+  WorkspacePosition,
+  WorkspaceRole,
 } from "@yuksalish/contracts";
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
@@ -71,12 +75,54 @@ export function createInvitation(
     readonly username: string;
     readonly fullName: string;
     readonly jobTitle?: string;
+    readonly positionId?: string;
     readonly role: "admin" | "manager" | "employee";
   },
 ): Promise<InvitationResult> {
   return apiRequest<InvitationResult>(
     "/auth/invitations",
     { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function loadDirectory(token: string): Promise<DirectoryBootstrap> {
+  return apiRequest<DirectoryBootstrap>("/directory", {}, token);
+}
+
+export function createPosition(
+  token: string,
+  name: string,
+  sortOrder = 0,
+): Promise<WorkspacePosition> {
+  return apiRequest<WorkspacePosition>(
+    "/directory/positions",
+    { method: "POST", body: JSON.stringify({ name, sortOrder }) },
+    token,
+  );
+}
+
+export function updatePosition(
+  token: string,
+  positionId: string,
+  payload: { readonly name?: string; readonly isActive?: boolean; readonly sortOrder?: number },
+): Promise<WorkspacePosition> {
+  return apiRequest<WorkspacePosition>(
+    `/directory/positions/${positionId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateEmployeeAccess(
+  token: string,
+  employeeId: string,
+  role: Exclude<WorkspaceRole, "superadmin">,
+  positionId?: string,
+): Promise<DirectoryEmployee> {
+  return apiRequest<DirectoryEmployee>(
+    `/directory/employees/${employeeId}`,
+    { method: "PATCH", body: JSON.stringify({ role, positionId: positionId || null }) },
     token,
   );
 }

@@ -18,6 +18,7 @@ from .tables import (
     departments,
     message_versions,
     messages,
+    positions,
     tasks,
     users,
 )
@@ -25,6 +26,10 @@ from .tables import (
 
 def demo_uuid(key: str) -> UUID:
     return uuid5(NAMESPACE_URL, f"https://workspace.yuksalish.uz/demo/{key}")
+
+
+def position_uuid(name: str) -> UUID:
+    return uuid5(NAMESPACE_URL, f"https://workspace.yuksalish.uz/position/{name}")
 
 
 async def _insert_missing(
@@ -48,6 +53,12 @@ async def seed_demo_data(
         "dilshod": demo_uuid("user/dilshod"),
         "malika": demo_uuid("user/malika"),
     }
+    demo_positions = (
+        "Финансовый менеджер",
+        "Руководитель отдела",
+        "Специалист по закупкам",
+        "Директор",
+    )
     chat_ids = {
         "finance": demo_uuid("chat/finance"),
         "baxtiyor": demo_uuid("chat/baxtiyor"),
@@ -180,6 +191,23 @@ async def seed_demo_data(
     async with engine.begin() as connection:
         await _insert_missing(
             connection,
+            positions,
+            [
+                {
+                    "id": position_uuid(name),
+                    "name": name,
+                    "is_active": True,
+                    "sort_order": 1_000 + index * 10,
+                    "source": "workspace",
+                    "aliases": [],
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                for index, name in enumerate(demo_positions)
+            ],
+        )
+        await _insert_missing(
+            connection,
             departments,
             [
                 {
@@ -203,6 +231,7 @@ async def seed_demo_data(
                     "role": "manager",
                     "status": "active",
                     "department_id": department_id,
+                    "position_id": position_uuid("Финансовый менеджер"),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -214,6 +243,7 @@ async def seed_demo_data(
                     "role": "manager",
                     "status": "active",
                     "department_id": department_id,
+                    "position_id": position_uuid("Руководитель отдела"),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -225,6 +255,7 @@ async def seed_demo_data(
                     "role": "employee",
                     "status": "active",
                     "department_id": department_id,
+                    "position_id": position_uuid("Специалист по закупкам"),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -236,6 +267,7 @@ async def seed_demo_data(
                     "role": "admin",
                     "status": "active",
                     "department_id": department_id,
+                    "position_id": position_uuid("Директор"),
                     "created_at": now,
                     "updated_at": now,
                 },

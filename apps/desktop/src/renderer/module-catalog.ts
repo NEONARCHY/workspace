@@ -2,28 +2,58 @@ import type { ModuleCatalogResponse, ModuleDescriptor } from "@yuksalish/contrac
 
 export const fallbackModules: readonly ModuleDescriptor[] = [
   {
-    key: "messenger",
-    label: { ru: "Сообщения", uz_cyrl: "Хабарлар", uz_latn: "Xabarlar" },
-    route: "/messenger",
+    key: "crm",
+    label: { ru: "CRM", uz_cyrl: "CRM", uz_latn: "CRM" },
+    route: "/crm",
     status: "placeholder",
   },
   {
     key: "tasks",
     label: { ru: "Задачи", uz_cyrl: "Вазифалар", uz_latn: "Vazifalar" },
     route: "/tasks",
+    status: "available",
+  },
+  {
+    key: "payment_requests",
+    label: { ru: "Заявки на оплату", uz_cyrl: "Тўлов аризалари", uz_latn: "To‘lov arizalari" },
+    route: "/payment-requests",
+    status: "available",
+  },
+  {
+    key: "feed",
+    label: { ru: "Лента", uz_cyrl: "Лента", uz_latn: "Lenta" },
+    route: "/feed",
     status: "placeholder",
   },
   {
-    key: "requests",
-    label: { ru: "Заявки", uz_cyrl: "Аризалар", uz_latn: "Arizalar" },
-    route: "/requests",
+    key: "projects",
+    label: { ru: "Список проектов", uz_cyrl: "Лойиҳалар рўйхати", uz_latn: "Loyihalar ro‘yxati" },
+    route: "/projects",
     status: "placeholder",
   },
   {
-    key: "hisobot",
-    label: { ru: "Отчёты", uz_cyrl: "Ҳисоботлар", uz_latn: "Hisobotlar" },
-    route: "/hisobot",
+    key: "trip_approvals",
+    label: { ru: "Согласование поездок", uz_cyrl: "Сафарни келишиш", uz_latn: "Safarni kelishish" },
+    route: "/trip-approvals",
     status: "placeholder",
+  },
+  {
+    key: "messenger",
+    label: { ru: "Мессенджер", uz_cyrl: "Мессенжер", uz_latn: "Messenjer" },
+    route: "/messenger",
+    status: "available",
+  },
+  {
+    key: "calendar",
+    label: { ru: "Календарь", uz_cyrl: "Тақвим", uz_latn: "Taqvim" },
+    route: "/calendar",
+    status: "placeholder",
+  },
+  {
+    key: "employees",
+    label: { ru: "Сотрудники", uz_cyrl: "Ходимлар", uz_latn: "Xodimlar" },
+    route: "/employees",
+    status: "available",
   },
 ];
 
