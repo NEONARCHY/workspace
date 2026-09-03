@@ -29,15 +29,25 @@ from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
+    add_task_checklist_item,
+    add_task_comment,
     change_task_status,
     create_approval_request,
     create_attachment,
     create_task,
+    delete_task_checklist_item,
     get_attachment,
     load_workspace,
+    remove_task_dependency,
+    remove_task_participant,
     save_workflow,
     send_message,
+    set_task_cycle,
+    set_task_dependency,
+    set_task_participant,
     update_approval_request,
+    update_task,
+    update_task_checklist_item,
     validate_attachment_owner,
 )
 from yuksalish_api.workspace_schemas import (
@@ -48,11 +58,18 @@ from yuksalish_api.workspace_schemas import (
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     CreateApprovalRequest,
+    CreateChecklistItemRequest,
+    CreateTaskCommentRequest,
     CreateTaskRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
+    TaskCycleRequest,
+    TaskDependencyRequest,
+    TaskParticipantRequest,
     TaskResponse,
     UpdateApprovalRequest,
+    UpdateChecklistItemRequest,
+    UpdateTaskRequest,
     WorkflowResponse,
     WorkspaceBootstrapResponse,
 )
@@ -136,6 +153,175 @@ async def patch_task_status(
 ) -> TaskResponse:
     try:
         result = await change_task_status(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskResponse)
+async def patch_task(
+    task_id: UUID,
+    payload: UpdateTaskRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await update_task(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/tasks/{task_id}/participants", response_model=TaskResponse)
+async def put_task_participant(
+    task_id: UUID,
+    payload: TaskParticipantRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await set_task_participant(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.delete("/tasks/{task_id}/participants/{user_id}", response_model=TaskResponse)
+async def delete_task_participant(
+    task_id: UUID,
+    user_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await remove_task_participant(connection, current_user, task_id, user_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/checklist", response_model=TaskResponse, status_code=201)
+async def post_task_checklist_item(
+    task_id: UUID,
+    payload: CreateChecklistItemRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await add_task_checklist_item(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.patch("/tasks/{task_id}/checklist/{item_id}", response_model=TaskResponse)
+async def patch_task_checklist_item(
+    task_id: UUID,
+    item_id: UUID,
+    payload: UpdateChecklistItemRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await update_task_checklist_item(
+            connection, current_user, task_id, item_id, payload
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.delete("/tasks/{task_id}/checklist/{item_id}", response_model=TaskResponse)
+async def remove_task_checklist_item(
+    task_id: UUID,
+    item_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await delete_task_checklist_item(
+            connection, current_user, task_id, item_id
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/comments", response_model=TaskResponse, status_code=201)
+async def post_task_comment(
+    task_id: UUID,
+    payload: CreateTaskCommentRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await add_task_comment(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/tasks/{task_id}/dependencies", response_model=TaskResponse)
+async def put_task_dependency(
+    task_id: UUID,
+    payload: TaskDependencyRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await set_task_dependency(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.delete(
+    "/tasks/{task_id}/dependencies/{depends_on_task_id}", response_model=TaskResponse
+)
+async def delete_task_dependency(
+    task_id: UUID,
+    depends_on_task_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await remove_task_dependency(
+            connection, current_user, task_id, depends_on_task_id
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/tasks/{task_id}/cycle", response_model=TaskResponse)
+async def put_task_cycle(
+    task_id: UUID,
+    payload: TaskCycleRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await set_task_cycle(connection, current_user, task_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})

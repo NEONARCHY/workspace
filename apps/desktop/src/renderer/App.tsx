@@ -47,19 +47,29 @@ import { TasksView } from "./TasksView";
 import {
   acceptInvitation,
   actOnWorkspaceApproval,
+  addWorkspaceTaskChecklistItem,
+  addWorkspaceTaskComment,
   changeWorkspaceTaskStatus,
   completePasswordReset,
   createWorkspaceApproval,
   createWorkspaceTask,
+  deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
   login,
   logout,
   refreshAuthentication,
+  removeWorkspaceTaskDependency,
+  removeWorkspaceTaskParticipant,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
+  setWorkspaceTaskCycle,
+  setWorkspaceTaskDependency,
+  setWorkspaceTaskParticipant,
   subscribeToWorkspaceEvents,
   updateWorkspaceApproval,
+  updateWorkspaceTask,
+  toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
 } from "./workspace-api";
 
@@ -353,6 +363,85 @@ export function App() {
     }
   };
 
+  const mergeTask = (task: WorkspaceTask) => {
+    setWorkspace((current) => ({
+      ...current,
+      tasks: current.tasks.map((item) => (item.id === task.id ? task : item)),
+    }));
+    return task;
+  };
+
+  const runTaskMutation = async (
+    mutation: (token: string) => Promise<WorkspaceTask>,
+  ): Promise<WorkspaceTask | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeTask(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleUpdateTask = (
+    task: WorkspaceTask,
+    payload: {
+      readonly title: string;
+      readonly description: string;
+      readonly project: string;
+      readonly assigneeId: string;
+      readonly priority: WorkspaceTask["priority"];
+      readonly dueAt?: string | null;
+    },
+  ) => runTaskMutation((token) => updateWorkspaceTask(token, task.id, payload));
+
+  const handleSetTaskParticipant = (
+    task: WorkspaceTask,
+    userId: string,
+    role: "co_assignee" | "observer",
+  ) => runTaskMutation((token) => setWorkspaceTaskParticipant(token, task.id, userId, role));
+
+  const handleRemoveTaskParticipant = (task: WorkspaceTask, userId: string) =>
+    runTaskMutation((token) => removeWorkspaceTaskParticipant(token, task.id, userId));
+
+  const handleAddChecklistItem = (task: WorkspaceTask, title: string) =>
+    runTaskMutation((token) => addWorkspaceTaskChecklistItem(token, task.id, title));
+
+  const handleToggleChecklistItem = (
+    task: WorkspaceTask,
+    itemId: string,
+    completed: boolean,
+  ) => runTaskMutation((token) =>
+    toggleWorkspaceTaskChecklistItem(token, task.id, itemId, completed));
+
+  const handleDeleteChecklistItem = (task: WorkspaceTask, itemId: string) =>
+    runTaskMutation((token) => deleteWorkspaceTaskChecklistItem(token, task.id, itemId));
+
+  const handleAddTaskComment = (task: WorkspaceTask, body: string) =>
+    runTaskMutation((token) => addWorkspaceTaskComment(token, task.id, body));
+
+  const handleSetTaskDependency = (
+    task: WorkspaceTask,
+    dependsOnTaskId: string,
+    dependencyKind: "blocks" | "relates",
+  ) => runTaskMutation((token) =>
+    setWorkspaceTaskDependency(token, task.id, dependsOnTaskId, dependencyKind));
+
+  const handleRemoveTaskDependency = (task: WorkspaceTask, dependsOnTaskId: string) =>
+    runTaskMutation((token) =>
+      removeWorkspaceTaskDependency(token, task.id, dependsOnTaskId));
+
+  const handleSetTaskCycle = (
+    task: WorkspaceTask,
+    payload: {
+      readonly title: string;
+      readonly scheduleKind: "daily" | "weekly" | "monthly";
+      readonly interval: number;
+      readonly nextRunAt?: string | null;
+      readonly isEnabled: boolean;
+    },
+  ) => runTaskMutation((token) => setWorkspaceTaskCycle(token, task.id, payload));
+
   const handleSaveWorkflow = async (workflow: WorkflowDefinition) => {
     if (session === undefined) return;
     const saved = await saveWorkspaceWorkflow(session.accessToken, workflow);
@@ -597,6 +686,16 @@ export function App() {
                 currentUserId={workspace.currentUser.id}
                 onCreateTask={handleCreateTask}
                 onChangeStatus={handleTaskStatus}
+                onUpdateTask={handleUpdateTask}
+                onSetParticipant={handleSetTaskParticipant}
+                onRemoveParticipant={handleRemoveTaskParticipant}
+                onAddChecklistItem={handleAddChecklistItem}
+                onToggleChecklistItem={handleToggleChecklistItem}
+                onDeleteChecklistItem={handleDeleteChecklistItem}
+                onAddComment={handleAddTaskComment}
+                onSetDependency={handleSetTaskDependency}
+                onRemoveDependency={handleRemoveTaskDependency}
+                onSetCycle={handleSetTaskCycle}
                 onCreateApprovalFromTask={handleCreateApprovalFromTask}
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDownloadAttachment={handleDownloadAttachment}

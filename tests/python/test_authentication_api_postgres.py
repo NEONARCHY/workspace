@@ -89,6 +89,119 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert task.status_code == 201
         assert task.json()["sourceMessageId"] == message_id
+        task_id = task.json()["id"]
+        participant_id = next(
+            person["id"]
+            for person in workspace.json()["people"]
+            if person["id"] != admin_session["user"]["id"]
+        )
+        edited_task = await client.patch(
+            f"/api/v1/tasks/{task_id}",
+            headers=admin_headers,
+            json={
+                "title": "HTTP task card edited",
+                "description": "Full task card from the HTTP contract",
+                "project": "Workspace BP-5",
+                "assigneeId": admin_session["user"]["id"],
+                "priority": "urgent",
+                "dueAt": "2026-09-20T09:00:00Z",
+            },
+        )
+        assert edited_task.status_code == 200
+        assert edited_task.json()["priority"] == "urgent"
+        participant = await client.put(
+            f"/api/v1/tasks/{task_id}/participants",
+            headers=admin_headers,
+            json={"userId": participant_id, "role": "observer"},
+        )
+        assert participant.status_code == 200
+        assert participant.json()["participants"][0]["role"] == "observer"
+        checklist = await client.post(
+            f"/api/v1/tasks/{task_id}/checklist",
+            headers=admin_headers,
+            json={"title": "Verify the BP-5 task card"},
+        )
+        assert checklist.status_code == 201
+        checklist_id = checklist.json()["checklist"][0]["id"]
+        checked = await client.patch(
+            f"/api/v1/tasks/{task_id}/checklist/{checklist_id}",
+            headers=admin_headers,
+            json={"isCompleted": True},
+        )
+        assert checked.status_code == 200
+        assert checked.json()["checklistDone"] == 1
+        commented = await client.post(
+            f"/api/v1/tasks/{task_id}/comments",
+            headers=admin_headers,
+            json={"body": "BP-5 HTTP comment"},
+        )
+        assert commented.status_code == 201
+        assert commented.json()["comments"][-1]["body"] == "BP-5 HTTP comment"
+        task_file = await client.put(
+            f"/api/v1/attachments/task/{task_id}",
+            headers={**admin_headers, "Content-Type": "text/plain"},
+            params={"fileName": "task-result.txt"},
+            content=b"task-result",
+        )
+        assert task_file.status_code == 201
+
+        blocker = await client.post(
+            "/api/v1/tasks",
+            headers=admin_headers,
+            json={
+                "title": "HTTP blocking task",
+                "assigneeId": admin_session["user"]["id"],
+            },
+        )
+        assert blocker.status_code == 201
+        blocker_id = blocker.json()["id"]
+        dependency = await client.put(
+            f"/api/v1/tasks/{task_id}/dependencies",
+            headers=admin_headers,
+            json={"dependsOnTaskId": blocker_id, "dependencyKind": "blocks"},
+        )
+        assert dependency.status_code == 200
+        blocked_completion = await client.patch(
+            f"/api/v1/tasks/{task_id}/status",
+            headers=admin_headers,
+            json={"status": "completed"},
+        )
+        assert blocked_completion.status_code == 409
+        blocker_completed = await client.patch(
+            f"/api/v1/tasks/{blocker_id}/status",
+            headers=admin_headers,
+            json={"status": "completed"},
+        )
+        assert blocker_completed.status_code == 200
+        dependency_removed = await client.delete(
+            f"/api/v1/tasks/{task_id}/dependencies/{blocker_id}",
+            headers=admin_headers,
+        )
+        assert dependency_removed.status_code == 200
+        participant_removed = await client.delete(
+            f"/api/v1/tasks/{task_id}/participants/{participant_id}",
+            headers=admin_headers,
+        )
+        assert participant_removed.status_code == 200
+        checklist_removed = await client.delete(
+            f"/api/v1/tasks/{task_id}/checklist/{checklist_id}",
+            headers=admin_headers,
+        )
+        assert checklist_removed.status_code == 200
+        cycle = await client.put(
+            f"/api/v1/tasks/{task_id}/cycle",
+            headers=admin_headers,
+            json={
+                "title": "HTTP weekly cycle",
+                "scheduleKind": "weekly",
+                "interval": 2,
+                "timezone": "Asia/Tashkent",
+                "nextRunAt": "2026-09-21T06:00:00Z",
+                "isEnabled": True,
+            },
+        )
+        assert cycle.status_code == 200
+        assert cycle.json()["cycle"]["scheduleKind"] == "weekly"
         approval = await client.post(
             "/api/v1/approval-requests",
             headers=admin_headers,

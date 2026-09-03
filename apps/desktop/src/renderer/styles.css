@@ -179,7 +179,7 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .section-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 78px; padding: 18px 22px; border-bottom: 1px solid #d8dee7; background: #ffffff; }
 .tasks-view { display: grid; grid-template-columns: minmax(0, 1fr) 330px; }
-.tasks-main { min-width: 0; min-height: 0; overflow-y: auto; }
+.tasks-main { min-width: 0; min-height: 0; overflow: auto; }
 .task-filters { display: flex; align-items: center; gap: 4px; padding: 12px 20px; border-bottom: 1px solid #e1e6ec; background: #ffffff; }
 .task-filters > button:not([class*="fui-"]) { padding: 7px 11px; border: 0; border-radius: 8px; color: #506579; background: transparent; font-size: 12px; cursor: pointer; }
 .task-filters > button:not([class*="fui-"]):hover { background: #edf2f6; }
@@ -216,6 +216,51 @@ button { -webkit-tap-highlight-color: transparent; }
 .detail-section label { display: block; margin-top: 8px; }
 .detail-footer { display: grid; gap: 8px; margin-top: auto; padding-top: 20px; }
 .task-approval-create { grid-template-columns: 1fr; margin-top: 12px; padding: 12px; border: 1px solid #bdd8ed; border-radius: 9px; }
+.bp5-tasks { grid-template-columns: minmax(0, 1fr) 410px; }
+.task-toolbar-actions, .view-switch { display: flex; align-items: center; gap: 8px; }
+.view-switch { padding: 3px; border: 1px solid #d8e1e9; border-radius: 9px; background: #f4f7fa; }
+.view-switch button { padding: 6px 10px; border: 0; border-radius: 6px; color: #52687c; background: transparent; cursor: pointer; }
+.view-switch button.active { color: #0f6cbd; background: #fff; box-shadow: 0 1px 4px #1d385315; font-weight: 700; }
+.task-kanban { display: grid; grid-template-columns: repeat(4, minmax(190px, 1fr)); gap: 10px; min-width: 790px; padding: 14px 18px 28px; }
+.kanban-column { min-height: 410px; padding: 9px; border-radius: 12px; background: #f2f5f8; }
+.kanban-column > header { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 3px 8px; color: #40566b; }
+.kanban-stack { display: grid; align-content: start; gap: 8px; }
+.kanban-card { display: grid; gap: 7px; width: 100%; padding: 12px; border: 1px solid #dde4eb; border-radius: 9px; color: #33495e; background: #fff; text-align: left; cursor: grab; box-shadow: 0 2px 8px #25384b0a; }
+.kanban-card:hover, .kanban-card.selected { border-color: #79acd2; box-shadow: 0 4px 12px #0f6cbd16; }
+.kanban-card span, .kanban-card small { color: #738496; font-size: 10px; }
+.task-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.task-detail-heading h2 { margin-bottom: 18px; }
+.task-status-field { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; margin-top: 14px; color: #617588; font-size: 11px; }
+.task-status-field select, .task-card-editor select, .task-card-editor input, .inline-task-form select, .inline-task-form input { min-height: 32px; padding: 5px 8px; border: 1px solid #c9d4df; border-radius: 6px; color: #263d52; background: #fff; }
+.task-card-editor { display: grid; gap: 9px; margin-top: 16px; padding: 13px; border: 1px solid #b9d7ec; border-radius: 10px; background: #f4f9fd; }
+.task-card-editor > textarea { min-height: 90px; }
+.task-card-editor > label { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; color: #637689; font-size: 11px; }
+.task-editor-actions { display: flex; gap: 8px; }
+.participant-list { display: flex; flex-wrap: wrap; gap: 7px; }
+.participant-chip { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid #dce4eb; border-radius: 9px; background: #fafcfd; }
+.participant-chip > span { display: grid; color: #31485d; font-size: 10px; }
+.participant-chip small { color: #718397; font-size: 8px; }
+.participant-chip > button, .checklist-row > button, .dependency-row > button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: #708294; background: transparent; cursor: pointer; }
+.participant-chip > button:hover, .checklist-row > button:hover, .dependency-row > button:hover { color: #b10e1e; background: #fdecec; }
+.inline-task-form { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 7px; margin-top: 10px; }
+.checklist-items { display: grid; gap: 3px; }
+.checklist-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.checklist-row label { flex: 1; margin: 0; }
+.dependency-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 8px 0; }
+.dependency-row > span, .cycle-summary > span { display: grid; gap: 2px; }
+.dependency-row small, .cycle-summary small { color: #718397; font-size: 9px; }
+.cycle-summary { display: flex; gap: 9px; padding: 10px; border-radius: 8px; color: #24577c; background: #edf6fc; }
+.cycle-summary.disabled { color: #718397; background: #f2f5f7; }
+.cycle-actions { display: flex; align-items: center; gap: 2px; }
+.cycle-form { grid-template-columns: repeat(2, minmax(95px, 1fr)); }
+.cycle-form > :nth-child(3) { grid-column: 1 / -1; }
+.task-comment-list { display: grid; gap: 10px; }
+.task-comment { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+.task-comment > span { display: grid; gap: 2px; }
+.task-comment small { color: #7b8c9d; font-size: 8px; }
+.task-comment p { white-space: pre-wrap; }
+.task-comment-composer { display: grid; gap: 7px; margin-top: 11px; }
+.task-comment-composer textarea { min-height: 64px; }
 .empty-state { display: grid; min-height: 260px; place-items: center; align-content: center; gap: 8px; color: #718096; text-align: center; }
 .empty-state svg { color: #0f6cbd; font-size: 28px; }
 .empty-state strong { color: #32485d; }
@@ -390,7 +435,7 @@ button { -webkit-tap-highlight-color: transparent; }
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 204px minmax(0, 1fr); }
   .directory-layout { grid-template-columns: 260px minmax(300px, 1fr) 330px; }
-  .tasks-view { grid-template-columns: minmax(0, 1fr) 300px; }
+  .tasks-view { grid-template-columns: minmax(0, 1fr) 360px; }
   .task-table-head, .task-row { grid-template-columns: minmax(230px, 1.4fr) 130px 120px 108px; gap: 10px; }
   .workflow-layout { grid-template-columns: 200px minmax(0, 1fr) 224px; }
 }

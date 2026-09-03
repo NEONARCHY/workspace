@@ -116,18 +116,70 @@ export type TaskStatus =
   | "overdue"
   | "cancelled";
 
+export type TaskParticipantRole = "co_assignee" | "observer";
+
+export interface TaskParticipant {
+  readonly userId: string;
+  readonly role: TaskParticipantRole;
+}
+
+export interface TaskChecklistItem {
+  readonly id: string;
+  readonly title: string;
+  readonly isCompleted: boolean;
+  readonly sortOrder: number;
+  readonly createdByUserId: string;
+  readonly completedByUserId?: string | null;
+  readonly completedAt?: string | null;
+  readonly createdAt: string;
+}
+
+export interface TaskComment {
+  readonly id: string;
+  readonly authorUserId: string;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly editedAt?: string | null;
+}
+
+export interface TaskDependency {
+  readonly dependsOnTaskId: string;
+  readonly dependencyKind: "blocks" | "relates";
+  readonly title: string;
+  readonly status: TaskStatus;
+}
+
+export interface TaskCycle {
+  readonly id: string;
+  readonly title: string;
+  readonly scheduleKind: "daily" | "weekly" | "monthly";
+  readonly interval: number;
+  readonly timezone: string;
+  readonly nextRunAt?: string | null;
+  readonly isEnabled: boolean;
+}
+
 export interface WorkspaceTask {
   readonly id: string;
   readonly title: string;
   readonly description?: string;
   readonly project: string;
+  readonly authorId: string;
   readonly assigneeId: string;
   readonly dueLabel: string;
+  readonly startsAt?: string | null;
+  readonly dueAt?: string | null;
   readonly status: TaskStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
   readonly checklistDone: number;
   readonly checklistTotal: number;
   readonly sourceMessageId?: string | null;
+  readonly resultText?: string | null;
+  readonly participants: readonly TaskParticipant[];
+  readonly checklist: readonly TaskChecklistItem[];
+  readonly comments: readonly TaskComment[];
+  readonly dependencies: readonly TaskDependency[];
+  readonly cycle?: TaskCycle | null;
 }
 
 export type ApprovalNodeKind =

@@ -9,6 +9,7 @@ import type {
   InvitationResult,
   PasswordResetResult,
   SessionSummary,
+  TaskParticipantRole,
   TaskStatus,
   WorkflowDefinition,
   WorkspaceBootstrap,
@@ -208,11 +209,33 @@ export function createWorkspaceTask(
     readonly assigneeId: string;
     readonly project?: string;
     readonly sourceMessageId?: string;
+    readonly description?: string;
+    readonly priority?: WorkspaceTask["priority"];
+    readonly dueAt?: string;
   },
 ): Promise<WorkspaceTask> {
   return apiRequest<WorkspaceTask>(
     "/tasks",
     { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateWorkspaceTask(
+  token: string,
+  taskId: string,
+  payload: {
+    readonly title: string;
+    readonly description: string;
+    readonly project: string;
+    readonly assigneeId: string;
+    readonly priority: WorkspaceTask["priority"];
+    readonly dueAt?: string | null;
+  },
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
     token,
   );
 }
@@ -225,6 +248,124 @@ export function changeWorkspaceTaskStatus(
   return apiRequest<WorkspaceTask>(
     `/tasks/${taskId}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
+    token,
+  );
+}
+
+export function setWorkspaceTaskParticipant(
+  token: string,
+  taskId: string,
+  userId: string,
+  role: TaskParticipantRole,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/participants`,
+    { method: "PUT", body: JSON.stringify({ userId, role }) },
+    token,
+  );
+}
+
+export function removeWorkspaceTaskParticipant(
+  token: string,
+  taskId: string,
+  userId: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/participants/${userId}`,
+    { method: "DELETE" },
+    token,
+  );
+}
+
+export function addWorkspaceTaskChecklistItem(
+  token: string,
+  taskId: string,
+  title: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/checklist`,
+    { method: "POST", body: JSON.stringify({ title }) },
+    token,
+  );
+}
+
+export function toggleWorkspaceTaskChecklistItem(
+  token: string,
+  taskId: string,
+  itemId: string,
+  isCompleted: boolean,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/checklist/${itemId}`,
+    { method: "PATCH", body: JSON.stringify({ isCompleted }) },
+    token,
+  );
+}
+
+export function deleteWorkspaceTaskChecklistItem(
+  token: string,
+  taskId: string,
+  itemId: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/checklist/${itemId}`,
+    { method: "DELETE" },
+    token,
+  );
+}
+
+export function addWorkspaceTaskComment(
+  token: string,
+  taskId: string,
+  body: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/comments`,
+    { method: "POST", body: JSON.stringify({ body }) },
+    token,
+  );
+}
+
+export function setWorkspaceTaskDependency(
+  token: string,
+  taskId: string,
+  dependsOnTaskId: string,
+  dependencyKind: "blocks" | "relates" = "blocks",
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/dependencies`,
+    { method: "PUT", body: JSON.stringify({ dependsOnTaskId, dependencyKind }) },
+    token,
+  );
+}
+
+export function removeWorkspaceTaskDependency(
+  token: string,
+  taskId: string,
+  dependsOnTaskId: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/dependencies/${dependsOnTaskId}`,
+    { method: "DELETE" },
+    token,
+  );
+}
+
+export function setWorkspaceTaskCycle(
+  token: string,
+  taskId: string,
+  payload: {
+    readonly title: string;
+    readonly scheduleKind: "daily" | "weekly" | "monthly";
+    readonly interval: number;
+    readonly nextRunAt?: string | null;
+    readonly isEnabled: boolean;
+    readonly timezone?: string;
+  },
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/cycle`,
+    { method: "PUT", body: JSON.stringify(payload) },
     token,
   );
 }

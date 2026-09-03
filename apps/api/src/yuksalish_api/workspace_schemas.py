@@ -89,18 +89,71 @@ TaskStatus = Literal[
 ]
 
 
+TaskParticipantRole = Literal["co_assignee", "observer"]
+
+
+class TaskParticipantResponse(ApiModel):
+    user_id: str
+    role: TaskParticipantRole
+
+
+class TaskChecklistItemResponse(ApiModel):
+    id: str
+    title: str
+    is_completed: bool
+    sort_order: int
+    created_by_user_id: str
+    completed_by_user_id: str | None
+    completed_at: datetime | None
+    created_at: datetime
+
+
+class TaskCommentResponse(ApiModel):
+    id: str
+    author_user_id: str
+    body: str
+    created_at: datetime
+    edited_at: datetime | None
+
+
+class TaskDependencyResponse(ApiModel):
+    depends_on_task_id: str
+    dependency_kind: Literal["blocks", "relates"]
+    title: str
+    status: TaskStatus
+
+
+class TaskCycleResponse(ApiModel):
+    id: str
+    title: str
+    schedule_kind: Literal["daily", "weekly", "monthly"]
+    interval: int
+    timezone: str
+    next_run_at: datetime | None
+    is_enabled: bool
+
+
 class TaskResponse(ApiModel):
     id: str
     title: str
     description: str
     project: str
+    author_id: str
     assignee_id: str
     due_label: str
+    starts_at: datetime | None
+    due_at: datetime | None
     status: TaskStatus
     priority: Literal["low", "normal", "high", "urgent"]
     checklist_done: int = 0
     checklist_total: int = 0
     source_message_id: str | None = None
+    result_text: str | None = None
+    participants: list[TaskParticipantResponse] = Field(default_factory=list)
+    checklist: list[TaskChecklistItemResponse] = Field(default_factory=list)
+    comments: list[TaskCommentResponse] = Field(default_factory=list)
+    dependencies: list[TaskDependencyResponse] = Field(default_factory=list)
+    cycle: TaskCycleResponse | None = None
 
 
 class CreateTaskRequest(ApiModel):
@@ -110,10 +163,83 @@ class CreateTaskRequest(ApiModel):
     assignee_id: str | None = None
     source_message_id: str | None = None
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    due_at: datetime | None = None
+
+    @field_validator("title")
+    @classmethod
+    def create_task_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Task title must not be blank")
+        return stripped
+
+
+class UpdateTaskRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=20_000)
+    project: str = Field(default="Без проекта", max_length=96)
+    assignee_id: str
+    priority: Literal["low", "normal", "high", "urgent"] = "normal"
+    due_at: datetime | None = None
+
+    @field_validator("title")
+    @classmethod
+    def task_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Task title must not be blank")
+        return stripped
 
 
 class ChangeTaskStatusRequest(ApiModel):
     status: TaskStatus
+
+
+class TaskParticipantRequest(ApiModel):
+    user_id: str
+    role: TaskParticipantRole
+
+
+class CreateChecklistItemRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=500)
+
+    @field_validator("title")
+    @classmethod
+    def checklist_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Checklist title must not be blank")
+        return stripped
+
+
+class UpdateChecklistItemRequest(ApiModel):
+    is_completed: bool
+
+
+class CreateTaskCommentRequest(ApiModel):
+    body: str = Field(min_length=1, max_length=20_000)
+
+    @field_validator("body")
+    @classmethod
+    def comment_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Comment must not be blank")
+        return stripped
+
+
+class TaskDependencyRequest(ApiModel):
+    depends_on_task_id: str
+    dependency_kind: Literal["blocks", "relates"] = "blocks"
+
+
+class TaskCycleRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    schedule_kind: Literal["daily", "weekly", "monthly"]
+    interval: int = Field(default=1, ge=1, le=365)
+    timezone: str = Field(default="Asia/Tashkent", min_length=1, max_length=64)
+    next_run_at: datetime | None = None
+    is_enabled: bool = True
 
 
 ApprovalStatus = Literal[

@@ -20,6 +20,11 @@ from .tables import (
     message_versions,
     messages,
     positions,
+    task_checklist_items,
+    task_comments,
+    task_cycles,
+    task_dependencies,
+    task_participants,
     tasks,
     users,
 )
@@ -357,6 +362,25 @@ async def seed_demo_data(
                 for row in message_rows
             ],
         )
+        monthly_cycle_id = demo_uuid("task-cycle/monthly-budget")
+        await _insert_missing(
+            connection,
+            task_cycles,
+            [
+                {
+                    "id": monthly_cycle_id,
+                    "title": "Сверить лимиты бюджета",
+                    "schedule_kind": "monthly",
+                    "schedule_config": {"interval": 1},
+                    "timezone": "Asia/Tashkent",
+                    "next_run_at": now + timedelta(days=30),
+                    "is_enabled": True,
+                    "created_by_user_id": person_ids["baxtiyor"],
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            ],
+        )
         await _insert_missing(
             connection,
             tasks,
@@ -415,6 +439,84 @@ async def seed_demo_data(
                     "created_at": now,
                     "updated_at": now,
                 },
+            ],
+        )
+        await connection.execute(
+            update(tasks)
+            .where(tasks.c.id == demo_uuid("task/105"), tasks.c.cycle_id.is_(None))
+            .values(cycle_id=monthly_cycle_id, cycle_occurrence_key="initial")
+        )
+        await _insert_missing(
+            connection,
+            task_participants,
+            [
+                {
+                    "task_id": demo_uuid("task/104"),
+                    "user_id": person_ids["aziza"],
+                    "participant_role": "observer",
+                },
+                {
+                    "task_id": demo_uuid("task/106"),
+                    "user_id": person_ids["dilshod"],
+                    "participant_role": "co_assignee",
+                },
+            ],
+        )
+        await _insert_missing(
+            connection,
+            task_checklist_items,
+            [
+                {
+                    "id": demo_uuid("task-checklist/104/1"),
+                    "task_id": demo_uuid("task/104"),
+                    "title": "Проверить реквизиты поставщика",
+                    "is_completed": True,
+                    "sort_order": 1,
+                    "created_by_user_id": person_ids["baxtiyor"],
+                    "completed_by_user_id": person_ids["dilshod"],
+                    "completed_at": now - timedelta(minutes=20),
+                    "created_at": now - timedelta(hours=2),
+                    "updated_at": now - timedelta(minutes=20),
+                },
+                {
+                    "id": demo_uuid("task-checklist/104/2"),
+                    "task_id": demo_uuid("task/104"),
+                    "title": "Согласовать условия поставки",
+                    "is_completed": False,
+                    "sort_order": 2,
+                    "created_by_user_id": person_ids["baxtiyor"],
+                    "completed_by_user_id": None,
+                    "completed_at": None,
+                    "created_at": now - timedelta(hours=2),
+                    "updated_at": now - timedelta(hours=2),
+                },
+            ],
+        )
+        await _insert_missing(
+            connection,
+            task_comments,
+            [
+                {
+                    "id": demo_uuid("task-comment/104/1"),
+                    "task_id": demo_uuid("task/104"),
+                    "author_user_id": person_ids["aziza"],
+                    "body": "Бюджет подтверждён, можно завершать проверку договора.",
+                    "created_at": now - timedelta(minutes=15),
+                    "edited_at": None,
+                }
+            ],
+        )
+        await _insert_missing(
+            connection,
+            task_dependencies,
+            [
+                {
+                    "task_id": demo_uuid("task/106"),
+                    "depends_on_task_id": demo_uuid("task/104"),
+                    "dependency_kind": "blocks",
+                    "created_by_user_id": person_ids["aziza"],
+                    "created_at": now,
+                }
             ],
         )
         await _insert_missing(

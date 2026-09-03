@@ -1,5 +1,6 @@
+from calendar import monthrange
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -20,6 +21,11 @@ from .tables import (
     chats,
     message_versions,
     messages,
+    task_checklist_items,
+    task_comments,
+    task_cycles,
+    task_dependencies,
+    task_participants,
     tasks,
     users,
 )
@@ -34,12 +40,24 @@ from .workspace_schemas import (
     ChatMessageResponse,
     ChatSummaryResponse,
     CreateApprovalRequest,
+    CreateChecklistItemRequest,
+    CreateTaskCommentRequest,
     CreateTaskRequest,
     PersonResponse,
     SaveWorkflowRequest,
     SendMessageRequest,
+    TaskChecklistItemResponse,
+    TaskCommentResponse,
+    TaskCycleRequest,
+    TaskCycleResponse,
+    TaskDependencyRequest,
+    TaskDependencyResponse,
+    TaskParticipantRequest,
+    TaskParticipantResponse,
     TaskResponse,
     UpdateApprovalRequest,
+    UpdateChecklistItemRequest,
+    UpdateTaskRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
     WorkflowResponse,
@@ -98,19 +116,84 @@ def _due_label(value: datetime | None) -> str:
     return value.astimezone().strftime("%d.%m.%Y, %H:%M")
 
 
-def _task(row: Record) -> TaskResponse:
+def _task_cycle(row: Record) -> TaskCycleResponse:
+    config = row["schedule_config"] or {}
+    return TaskCycleResponse(
+        id=str(row["id"]),
+        title=row["title"],
+        schedule_kind=row["schedule_kind"],
+        interval=int(config.get("interval", 1)),
+        timezone=row["timezone"],
+        next_run_at=row["next_run_at"],
+        is_enabled=row["is_enabled"],
+    )
+
+
+def _task_checklist_item(row: Record) -> TaskChecklistItemResponse:
+    return TaskChecklistItemResponse(
+        id=str(row["id"]),
+        title=row["title"],
+        is_completed=row["is_completed"],
+        sort_order=row["sort_order"],
+        created_by_user_id=str(row["created_by_user_id"]),
+        completed_by_user_id=(
+            str(row["completed_by_user_id"]) if row["completed_by_user_id"] else None
+        ),
+        completed_at=row["completed_at"],
+        created_at=row["created_at"],
+    )
+
+
+def _task_comment(row: Record) -> TaskCommentResponse:
+    return TaskCommentResponse(
+        id=str(row["id"]),
+        author_user_id=str(row["author_user_id"]),
+        body=row["body"],
+        created_at=row["created_at"],
+        edited_at=row["edited_at"],
+    )
+
+
+def _task_dependency(row: Record, dependency: Record) -> TaskDependencyResponse:
+    return TaskDependencyResponse(
+        depends_on_task_id=str(row["depends_on_task_id"]),
+        dependency_kind=row["dependency_kind"],
+        title=dependency["title"],
+        status=dependency["status"],
+    )
+
+
+def _task(
+    row: Record,
+    *,
+    participants: Sequence[TaskParticipantResponse] = (),
+    checklist: Sequence[TaskChecklistItemResponse] = (),
+    comments: Sequence[TaskCommentResponse] = (),
+    dependencies: Sequence[TaskDependencyResponse] = (),
+    cycle: TaskCycleResponse | None = None,
+) -> TaskResponse:
+    checklist_done = sum(item.is_completed for item in checklist)
     return TaskResponse(
         id=str(row["id"]),
         title=row["title"],
         description=row["description"],
         project=row["project_key"] or "Без проекта",
+        author_id=str(row["author_user_id"]),
         assignee_id=str(row["primary_assignee_user_id"]),
         due_label=_due_label(row["due_at"]),
+        starts_at=row["starts_at"],
+        due_at=row["due_at"],
         status=row["status"],
         priority=row["priority"],
-        checklist_done=0,
-        checklist_total=0,
+        checklist_done=checklist_done,
+        checklist_total=len(checklist),
         source_message_id=(str(row["source_message_id"]) if row["source_message_id"] else None),
+        result_text=row["result_text"],
+        participants=list(participants),
+        checklist=list(checklist),
+        comments=list(comments),
+        dependencies=list(dependencies),
+        cycle=cycle,
     )
 
 
@@ -312,6 +395,117 @@ async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
     )
 
 
+async def _task_detail_maps(
+    connection: AsyncConnection,
+    task_rows: Sequence[Record],
+) -> tuple[
+    dict[UUID, list[TaskParticipantResponse]],
+    dict[UUID, list[TaskChecklistItemResponse]],
+    dict[UUID, list[TaskCommentResponse]],
+    dict[UUID, list[TaskDependencyResponse]],
+    dict[UUID, TaskCycleResponse],
+]:
+    task_ids = [row["id"] for row in task_rows]
+    if not task_ids:
+        return {}, {}, {}, {}, {}
+
+    participant_rows = (
+        await connection.execute(
+            select(task_participants)
+            .where(task_participants.c.task_id.in_(task_ids))
+            .order_by(task_participants.c.task_id, task_participants.c.participant_role)
+        )
+    ).mappings().all()
+    participants: dict[UUID, list[TaskParticipantResponse]] = {}
+    for row in participant_rows:
+        participants.setdefault(row["task_id"], []).append(
+            TaskParticipantResponse(
+                user_id=str(row["user_id"]),
+                role=row["participant_role"],
+            )
+        )
+
+    checklist_rows = (
+        await connection.execute(
+            select(task_checklist_items)
+            .where(task_checklist_items.c.task_id.in_(task_ids))
+            .order_by(
+                task_checklist_items.c.task_id,
+                task_checklist_items.c.sort_order,
+                task_checklist_items.c.created_at,
+            )
+        )
+    ).mappings().all()
+    checklist: dict[UUID, list[TaskChecklistItemResponse]] = {}
+    for row in checklist_rows:
+        checklist.setdefault(row["task_id"], []).append(_task_checklist_item(row))
+
+    comment_rows = (
+        await connection.execute(
+            select(task_comments)
+            .where(task_comments.c.task_id.in_(task_ids))
+            .order_by(task_comments.c.task_id, task_comments.c.created_at)
+        )
+    ).mappings().all()
+    comments: dict[UUID, list[TaskCommentResponse]] = {}
+    for row in comment_rows:
+        comments.setdefault(row["task_id"], []).append(_task_comment(row))
+
+    dependency_rows = (
+        await connection.execute(
+            select(task_dependencies)
+            .where(task_dependencies.c.task_id.in_(task_ids))
+            .order_by(task_dependencies.c.task_id, task_dependencies.c.created_at)
+        )
+    ).mappings().all()
+    dependency_ids = list({row["depends_on_task_id"] for row in dependency_rows})
+    dependency_task_rows = (
+        (
+            await connection.execute(select(tasks).where(tasks.c.id.in_(dependency_ids)))
+        ).mappings().all()
+        if dependency_ids
+        else []
+    )
+    dependency_tasks = {row["id"]: row for row in dependency_task_rows}
+    dependencies: dict[UUID, list[TaskDependencyResponse]] = {}
+    for row in dependency_rows:
+        dependency = dependency_tasks.get(row["depends_on_task_id"])
+        if dependency is not None:
+            dependencies.setdefault(row["task_id"], []).append(
+                _task_dependency(row, dependency)
+            )
+
+    cycle_ids = list({row["cycle_id"] for row in task_rows if row["cycle_id"] is not None})
+    cycle_rows = (
+        (await connection.execute(select(task_cycles).where(task_cycles.c.id.in_(cycle_ids))))
+        .mappings()
+        .all()
+        if cycle_ids
+        else []
+    )
+    cycles = {row["id"]: _task_cycle(row) for row in cycle_rows}
+    return participants, checklist, comments, dependencies, cycles
+
+
+async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResponse:
+    row = (
+        await connection.execute(select(tasks).where(tasks.c.id == task_id))
+    ).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    participants, checklist, comments, dependencies, cycles = await _task_detail_maps(
+        connection, [row]
+    )
+    return _task(
+        row,
+        participants=participants.get(task_id, []),
+        checklist=checklist.get(task_id, []),
+        comments=comments.get(task_id, []),
+        dependencies=dependencies.get(task_id, []),
+        cycle=cycles.get(row["cycle_id"]),
+    )
+
+
 async def load_workspace(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -387,11 +581,22 @@ async def load_workspace(
 
     task_statement = select(tasks).order_by(tasks.c.updated_at.desc())
     if current_user.role == "employee":
+        participant_task_ids = select(task_participants.c.task_id).where(
+            task_participants.c.user_id == current_user.id
+        )
         task_statement = task_statement.where(
             (tasks.c.author_user_id == current_user.id)
             | (tasks.c.primary_assignee_user_id == current_user.id)
+            | tasks.c.id.in_(participant_task_ids)
         )
     task_rows = (await connection.execute(task_statement)).mappings().all()
+    (
+        task_participants_by_task,
+        task_checklist_by_task,
+        task_comments_by_task,
+        task_dependencies_by_task,
+        task_cycles_by_id,
+    ) = await _task_detail_maps(connection, task_rows)
 
     request_statement = select(approval_requests).order_by(
         approval_requests.c.updated_at.desc()
@@ -438,7 +643,17 @@ async def load_workspace(
         people=people,
         chats=chat_responses,
         messages=message_responses,
-        tasks=[_task(row) for row in task_rows],
+        tasks=[
+            _task(
+                row,
+                participants=task_participants_by_task.get(row["id"], []),
+                checklist=task_checklist_by_task.get(row["id"], []),
+                comments=task_comments_by_task.get(row["id"], []),
+                dependencies=task_dependencies_by_task.get(row["id"], []),
+                cycle=task_cycles_by_id.get(row["cycle_id"]),
+            )
+            for row in task_rows
+        ],
         requests=[
             _approval_request(
                 row,
@@ -501,6 +716,58 @@ async def send_message(
     )
 
 
+async def _task_access_row(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    *,
+    edit: bool = False,
+    manage: bool = False,
+) -> Record:
+    row = (
+        await connection.execute(select(tasks).where(tasks.c.id == task_id))
+    ).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    participant_roles = (
+        await connection.execute(
+            select(task_participants.c.participant_role).where(
+                task_participants.c.task_id == task_id,
+                task_participants.c.user_id == current_user.id,
+            )
+        )
+    ).scalars().all()
+    privileged = current_user.role in {"manager", "admin", "superadmin"}
+    is_author = row["author_user_id"] == current_user.id
+    is_assignee = row["primary_assignee_user_id"] == current_user.id
+    can_read = privileged or is_author or is_assignee or bool(participant_roles)
+    can_edit = privileged or is_author or is_assignee or "co_assignee" in participant_roles
+    can_manage = privileged or is_author
+    if not can_read:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    if manage and not can_manage:
+        raise WorkspaceRepositoryError(403, "Task participants cannot be managed by this user")
+    if edit and not can_edit:
+        raise WorkspaceRepositoryError(403, "Task cannot be changed by this user")
+    return row
+
+
+async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
+    try:
+        user_id = UUID(value)
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid user identifier") from error
+    exists = await connection.scalar(
+        select(func.count()).select_from(users).where(
+            users.c.id == user_id,
+            users.c.status == "active",
+        )
+    )
+    if not exists:
+        raise WorkspaceRepositoryError(422, "User is not active")
+    return user_id
+
+
 async def create_task(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -512,9 +779,10 @@ async def create_task(
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
     assignee_exists = await connection.scalar(
-        select(func.count())
-        .select_from(users)
-        .where(users.c.id == assignee_id, users.c.status == "active")
+        select(func.count()).select_from(users).where(
+            users.c.id == assignee_id,
+            users.c.status == "active",
+        )
     )
     if not assignee_exists:
         raise WorkspaceRepositoryError(422, "Assignee is not active")
@@ -544,7 +812,7 @@ async def create_task(
         "cycle_occurrence_key": None,
         "project_key": payload.project,
         "starts_at": now,
-        "due_at": None,
+        "due_at": payload.due_at,
         "result_text": None,
         "source_message_id": source_message_id,
         "created_at": now,
@@ -554,31 +822,463 @@ async def create_task(
     return _task(values)
 
 
+async def update_task(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: UpdateTaskRequest,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    assignee_id = await _active_user_id(connection, payload.assignee_id)
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(tasks)
+        .where(tasks.c.id == task_id)
+        .values(
+            title=payload.title,
+            description=payload.description,
+            project_key=payload.project,
+            primary_assignee_user_id=assignee_id,
+            priority=payload.priority,
+            due_at=payload.due_at,
+            updated_at=now,
+        )
+    )
+    await connection.execute(
+        delete(task_participants).where(
+            task_participants.c.task_id == task_id,
+            task_participants.c.user_id == assignee_id,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
 async def change_task_status(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     task_id: UUID,
     payload: ChangeTaskStatusRequest,
 ) -> TaskResponse:
-    row = (
-        await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update())
-    ).mappings().first()
-    if row is None:
-        raise WorkspaceRepositoryError(404, "Task was not found")
-    can_change = (
-        current_user.role in {"manager", "admin", "superadmin"}
-        or row["author_user_id"] == current_user.id
-        or row["primary_assignee_user_id"] == current_user.id
-    )
-    if not can_change:
-        raise WorkspaceRepositoryError(403, "Task status cannot be changed by this user")
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    if payload.status == "completed":
+        incomplete_blockers = await connection.scalar(
+            select(func.count())
+            .select_from(
+                task_dependencies.join(
+                    tasks,
+                    tasks.c.id == task_dependencies.c.depends_on_task_id,
+                )
+            )
+            .where(
+                task_dependencies.c.task_id == task_id,
+                task_dependencies.c.dependency_kind == "blocks",
+                tasks.c.status != "completed",
+            )
+        )
+        if incomplete_blockers:
+            raise WorkspaceRepositoryError(
+                409,
+                "Task cannot be completed until its blocking dependencies are completed",
+            )
     updated_at = datetime.now(UTC)
     await connection.execute(
         update(tasks)
         .where(tasks.c.id == task_id)
         .values(status=payload.status, updated_at=updated_at)
     )
-    return _task({**row, "status": payload.status, "updated_at": updated_at})
+    return await _task_response(connection, task_id)
+
+
+async def set_task_participant(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: TaskParticipantRequest,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    user_id = await _active_user_id(connection, payload.user_id)
+    if user_id == task_row["primary_assignee_user_id"]:
+        raise WorkspaceRepositoryError(409, "The primary assignee is already a task participant")
+    await connection.execute(
+        delete(task_participants).where(
+            task_participants.c.task_id == task_id,
+            task_participants.c.user_id == user_id,
+        )
+    )
+    await connection.execute(
+        insert(task_participants).values(
+            task_id=task_id,
+            user_id=user_id,
+            participant_role=payload.role,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def remove_task_participant(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    user_id: UUID,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, manage=True)
+    await connection.execute(
+        delete(task_participants).where(
+            task_participants.c.task_id == task_id,
+            task_participants.c.user_id == user_id,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def add_task_checklist_item(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: CreateChecklistItemRequest,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    current_max = await connection.scalar(
+        select(func.max(task_checklist_items.c.sort_order)).where(
+            task_checklist_items.c.task_id == task_id
+        )
+    )
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(task_checklist_items).values(
+            id=uuid4(),
+            task_id=task_id,
+            title=payload.title,
+            is_completed=False,
+            sort_order=int(current_max or 0) + 1,
+            created_by_user_id=current_user.id,
+            completed_by_user_id=None,
+            completed_at=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def update_task_checklist_item(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    item_id: UUID,
+    payload: UpdateChecklistItemRequest,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    exists = await connection.scalar(
+        select(func.count()).select_from(task_checklist_items).where(
+            task_checklist_items.c.id == item_id,
+            task_checklist_items.c.task_id == task_id,
+        )
+    )
+    if not exists:
+        raise WorkspaceRepositoryError(404, "Checklist item was not found")
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(task_checklist_items)
+        .where(task_checklist_items.c.id == item_id)
+        .values(
+            is_completed=payload.is_completed,
+            completed_by_user_id=current_user.id if payload.is_completed else None,
+            completed_at=now if payload.is_completed else None,
+            updated_at=now,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def delete_task_checklist_item(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    item_id: UUID,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    await connection.execute(
+        delete(task_checklist_items).where(
+            task_checklist_items.c.id == item_id,
+            task_checklist_items.c.task_id == task_id,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def add_task_comment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: CreateTaskCommentRequest,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id)
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(task_comments).values(
+            id=uuid4(),
+            task_id=task_id,
+            author_user_id=current_user.id,
+            body=payload.body,
+            created_at=now,
+            edited_at=None,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def _would_create_dependency_cycle(
+    connection: AsyncConnection,
+    task_id: UUID,
+    depends_on_task_id: UUID,
+) -> bool:
+    rows = (
+        await connection.execute(
+            select(
+                task_dependencies.c.task_id,
+                task_dependencies.c.depends_on_task_id,
+            ).where(task_dependencies.c.dependency_kind == "blocks")
+        )
+    ).all()
+    graph: dict[UUID, list[UUID]] = {}
+    for source, target in rows:
+        graph.setdefault(source, []).append(target)
+    pending = [depends_on_task_id]
+    visited: set[UUID] = set()
+    while pending:
+        current = pending.pop()
+        if current == task_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        pending.extend(graph.get(current, []))
+    return False
+
+
+async def set_task_dependency(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: TaskDependencyRequest,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    try:
+        depends_on_task_id = UUID(payload.depends_on_task_id)
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid dependency task identifier") from error
+    if depends_on_task_id == task_id:
+        raise WorkspaceRepositoryError(422, "A task cannot depend on itself")
+    await _task_access_row(connection, current_user, depends_on_task_id)
+    if payload.dependency_kind == "blocks" and await _would_create_dependency_cycle(
+        connection, task_id, depends_on_task_id
+    ):
+        raise WorkspaceRepositoryError(409, "This dependency would create a cycle")
+    await connection.execute(
+        delete(task_dependencies).where(
+            task_dependencies.c.task_id == task_id,
+            task_dependencies.c.depends_on_task_id == depends_on_task_id,
+        )
+    )
+    await connection.execute(
+        insert(task_dependencies).values(
+            task_id=task_id,
+            depends_on_task_id=depends_on_task_id,
+            dependency_kind=payload.dependency_kind,
+            created_by_user_id=current_user.id,
+            created_at=datetime.now(UTC),
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+async def remove_task_dependency(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    depends_on_task_id: UUID,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    await connection.execute(
+        delete(task_dependencies).where(
+            task_dependencies.c.task_id == task_id,
+            task_dependencies.c.depends_on_task_id == depends_on_task_id,
+        )
+    )
+    return await _task_response(connection, task_id)
+
+
+def _advance_cycle_time(value: datetime, schedule_kind: str, interval: int) -> datetime:
+    if schedule_kind == "daily":
+        return value + timedelta(days=interval)
+    if schedule_kind == "weekly":
+        return value + timedelta(weeks=interval)
+    month_index = value.month - 1 + interval
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
+async def set_task_cycle(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: TaskCycleRequest,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
+    now = datetime.now(UTC)
+    next_run_at = payload.next_run_at or _advance_cycle_time(
+        now, payload.schedule_kind, payload.interval
+    )
+    cycle_id = task_row["cycle_id"] or uuid4()
+    values = {
+        "title": payload.title,
+        "schedule_kind": payload.schedule_kind,
+        "schedule_config": {"interval": payload.interval},
+        "timezone": payload.timezone,
+        "next_run_at": next_run_at,
+        "is_enabled": payload.is_enabled,
+        "updated_at": now,
+    }
+    if task_row["cycle_id"] is None:
+        await connection.execute(
+            insert(task_cycles).values(
+                id=cycle_id,
+                created_by_user_id=current_user.id,
+                created_at=now,
+                **values,
+            )
+        )
+        await connection.execute(
+            update(tasks)
+            .where(tasks.c.id == task_id)
+            .values(cycle_id=cycle_id, cycle_occurrence_key="initial", updated_at=now)
+        )
+    else:
+        await connection.execute(
+            update(task_cycles).where(task_cycles.c.id == cycle_id).values(**values)
+        )
+    return await _task_response(connection, task_id)
+
+
+async def materialize_due_task_cycles(
+    connection: AsyncConnection,
+    now: datetime | None = None,
+) -> int:
+    current_time = now or datetime.now(UTC)
+    cycle_rows = (
+        await connection.execute(
+            select(task_cycles)
+            .where(
+                task_cycles.c.is_enabled.is_(True),
+                task_cycles.c.next_run_at.is_not(None),
+                task_cycles.c.next_run_at <= current_time,
+            )
+            .order_by(task_cycles.c.next_run_at)
+            .with_for_update(skip_locked=True)
+        )
+    ).mappings().all()
+    created = 0
+    for cycle in cycle_rows:
+        scheduled_at = cycle["next_run_at"]
+        interval = int((cycle["schedule_config"] or {}).get("interval", 1))
+        next_run_at = _advance_cycle_time(scheduled_at, cycle["schedule_kind"], interval)
+        template = (
+            await connection.execute(
+                select(tasks)
+                .where(tasks.c.cycle_id == cycle["id"])
+                .order_by(tasks.c.created_at.desc())
+                .limit(1)
+            )
+        ).mappings().first()
+        occurrence_key = scheduled_at.isoformat()
+        exists = await connection.scalar(
+            select(func.count()).select_from(tasks).where(
+                tasks.c.cycle_id == cycle["id"],
+                tasks.c.cycle_occurrence_key == occurrence_key,
+            )
+        )
+        if template is not None and not exists:
+            task_id = uuid4()
+            duration = (
+                template["due_at"] - template["starts_at"]
+                if template["due_at"] is not None and template["starts_at"] is not None
+                else None
+            )
+            await connection.execute(
+                insert(tasks).values(
+                    id=task_id,
+                    title=cycle["title"],
+                    description=template["description"],
+                    status="new",
+                    priority=template["priority"],
+                    author_user_id=cycle["created_by_user_id"],
+                    primary_assignee_user_id=template["primary_assignee_user_id"],
+                    cycle_id=cycle["id"],
+                    cycle_occurrence_key=occurrence_key,
+                    project_key=template["project_key"],
+                    starts_at=scheduled_at,
+                    due_at=scheduled_at + duration if duration is not None else None,
+                    result_text=None,
+                    source_message_id=None,
+                    created_at=current_time,
+                    updated_at=current_time,
+                )
+            )
+            participant_rows = (
+                await connection.execute(
+                    select(task_participants).where(
+                        task_participants.c.task_id == template["id"]
+                    )
+                )
+            ).mappings().all()
+            if participant_rows:
+                await connection.execute(
+                    insert(task_participants),
+                    [
+                        {
+                            "task_id": task_id,
+                            "user_id": row["user_id"],
+                            "participant_role": row["participant_role"],
+                        }
+                        for row in participant_rows
+                    ],
+                )
+            checklist_rows = (
+                await connection.execute(
+                    select(task_checklist_items).where(
+                        task_checklist_items.c.task_id == template["id"]
+                    )
+                )
+            ).mappings().all()
+            if checklist_rows:
+                await connection.execute(
+                    insert(task_checklist_items),
+                    [
+                        {
+                            "id": uuid4(),
+                            "task_id": task_id,
+                            "title": row["title"],
+                            "is_completed": False,
+                            "sort_order": row["sort_order"],
+                            "created_by_user_id": cycle["created_by_user_id"],
+                            "completed_by_user_id": None,
+                            "completed_at": None,
+                            "created_at": current_time,
+                            "updated_at": current_time,
+                        }
+                        for row in checklist_rows
+                    ],
+                )
+            created += 1
+        await connection.execute(
+            update(task_cycles)
+            .where(task_cycles.c.id == cycle["id"])
+            .values(next_run_at=next_run_at, updated_at=current_time)
+        )
+    return created
 
 
 def _validate_graph(payload: SaveWorkflowRequest) -> None:
@@ -854,16 +1554,7 @@ async def validate_attachment_owner(
         return
 
     if owner_type == "task":
-        row = (
-            await connection.execute(select(tasks).where(tasks.c.id == owner_id))
-        ).mappings().first()
-        accessible = row is not None and (
-            current_user.role in {"manager", "admin", "superadmin"}
-            or row["author_user_id"] == current_user.id
-            or row["primary_assignee_user_id"] == current_user.id
-        )
-        if not accessible:
-            raise WorkspaceRepositoryError(404, "Task was not found")
+        await _task_access_row(connection, current_user, owner_id, edit=write)
         return
 
     row = (

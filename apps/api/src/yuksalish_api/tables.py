@@ -190,6 +190,65 @@ tasks = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+task_cycles = sa.Table(
+    "tasks_cycles",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("title", sa.String(240)),
+    sa.Column("schedule_kind", sa.String(24)),
+    sa.Column("schedule_config", postgresql.JSONB()),
+    sa.Column("timezone", sa.String(64)),
+    sa.Column("next_run_at", sa.DateTime(timezone=True)),
+    sa.Column("is_enabled", sa.Boolean()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+task_participants = sa.Table(
+    "tasks_participants",
+    metadata,
+    sa.Column("task_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("participant_role", sa.String(24), primary_key=True),
+)
+
+task_checklist_items = sa.Table(
+    "task_checklist_items",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("task_id", uuid_type),
+    sa.Column("title", sa.String(500)),
+    sa.Column("is_completed", sa.Boolean()),
+    sa.Column("sort_order", sa.Integer()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("completed_by_user_id", uuid_type),
+    sa.Column("completed_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+task_comments = sa.Table(
+    "task_comments",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("task_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("edited_at", sa.DateTime(timezone=True)),
+)
+
+task_dependencies = sa.Table(
+    "task_dependencies",
+    metadata,
+    sa.Column("task_id", uuid_type, primary_key=True),
+    sa.Column("depends_on_task_id", uuid_type, primary_key=True),
+    sa.Column("dependency_kind", sa.String(24)),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 approval_templates = sa.Table(
     "approval_templates",
     metadata,

@@ -1,7 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { ApprovalRequestSummary, WorkspaceAttachment } from "@yuksalish/contracts";
+import type {
+  ApprovalRequestSummary,
+  WorkspaceAttachment,
+  WorkspaceTask,
+} from "@yuksalish/contracts";
 
 import { App } from "./App";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
@@ -81,6 +85,7 @@ function response(payload: unknown): Response {
 
 function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
   let currentUser = people[0]!;
+  let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
   let requests: ApprovalRequestSummary[] = options.withReturnedRequest
     ? [
         {
@@ -141,7 +146,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         people,
         chats: initialChats,
         messages: initialMessages,
-        tasks: initialTasks,
+        tasks,
         requests,
         attachments: [...attachments],
         workflow,
@@ -192,7 +197,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         title: string;
         sourceMessageId?: string;
       };
-      return response({
+      const created: WorkspaceTask = {
         id: "server-task",
         title: payload.title,
         description: "",
@@ -204,6 +209,143 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         checklistDone: 0,
         checklistTotal: 0,
         sourceMessageId: payload.sourceMessageId,
+        authorId: currentUser.id,
+        participants: [],
+        checklist: [],
+        comments: [],
+        dependencies: [],
+      };
+      tasks = [created, ...tasks];
+      return response(created);
+    }
+    const taskMatch = url.match(/\/tasks\/([^/?]+)/);
+    const taskId = taskMatch?.[1];
+    const currentTask = tasks.find((item) => item.id === taskId);
+    const replaceTask = (changed: WorkspaceTask) => {
+      tasks = tasks.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    };
+    if (currentTask && url.endsWith("/status") && options?.method === "PATCH") {
+      const payload = JSON.parse(String(options.body)) as { status: WorkspaceTask["status"] };
+      return replaceTask({ ...currentTask, status: payload.status });
+    }
+    if (currentTask && options?.method === "PATCH" && /\/tasks\/[^/]+$/.test(url)) {
+      const payload = JSON.parse(String(options.body)) as Partial<WorkspaceTask>;
+      return replaceTask({
+        ...currentTask,
+        ...payload,
+        dueLabel: payload.dueAt ? "20 сент., 14:00" : "Срок не указан",
+      });
+    }
+    if (currentTask && url.endsWith("/participants") && options?.method === "PUT") {
+      const payload = JSON.parse(String(options.body)) as {
+        userId: string;
+        role: "co_assignee" | "observer";
+      };
+      return replaceTask({
+        ...currentTask,
+        participants: [
+          ...currentTask.participants.filter((item) => item.userId !== payload.userId),
+          payload,
+        ],
+      });
+    }
+    if (currentTask && url.includes("/participants/") && options?.method === "DELETE") {
+      const userId = url.split("/participants/")[1]!;
+      return replaceTask({
+        ...currentTask,
+        participants: currentTask.participants.filter((item) => item.userId !== userId),
+      });
+    }
+    if (currentTask && url.endsWith("/checklist") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { title: string };
+      const checklist = [
+        ...currentTask.checklist,
+        {
+          id: `check-${currentTask.checklist.length + 1}`,
+          title: payload.title,
+          isCompleted: false,
+          sortOrder: currentTask.checklist.length,
+          createdByUserId: currentUser.id,
+          createdAt: "2026-09-03T12:00:00Z",
+        },
+      ];
+      return replaceTask({
+        ...currentTask,
+        checklist,
+        checklistDone: checklist.filter((item) => item.isCompleted).length,
+        checklistTotal: checklist.length,
+      });
+    }
+    if (currentTask && url.includes("/checklist/") && options?.method === "PATCH") {
+      const itemId = url.split("/checklist/")[1]!;
+      const payload = JSON.parse(String(options.body)) as { isCompleted: boolean };
+      const checklist = currentTask.checklist.map((item) =>
+        item.id === itemId ? { ...item, isCompleted: payload.isCompleted } : item,
+      );
+      return replaceTask({
+        ...currentTask,
+        checklist,
+        checklistDone: checklist.filter((item) => item.isCompleted).length,
+      });
+    }
+    if (currentTask && url.includes("/checklist/") && options?.method === "DELETE") {
+      const itemId = url.split("/checklist/")[1]!;
+      const checklist = currentTask.checklist.filter((item) => item.id !== itemId);
+      return replaceTask({
+        ...currentTask,
+        checklist,
+        checklistDone: checklist.filter((item) => item.isCompleted).length,
+        checklistTotal: checklist.length,
+      });
+    }
+    if (currentTask && url.endsWith("/comments") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { body: string };
+      return replaceTask({
+        ...currentTask,
+        comments: [
+          ...currentTask.comments,
+          {
+            id: `comment-${currentTask.comments.length + 1}`,
+            authorUserId: currentUser.id,
+            body: payload.body,
+            createdAt: "2026-09-03T12:00:00Z",
+          },
+        ],
+      });
+    }
+    if (currentTask && url.endsWith("/dependencies") && options?.method === "PUT") {
+      const payload = JSON.parse(String(options.body)) as {
+        dependsOnTaskId: string;
+        dependencyKind: "blocks" | "relates";
+      };
+      const dependencyTask = tasks.find((item) => item.id === payload.dependsOnTaskId)!;
+      return replaceTask({
+        ...currentTask,
+        dependencies: [
+          ...currentTask.dependencies,
+          {
+            ...payload,
+            title: dependencyTask.title,
+            status: dependencyTask.status,
+          },
+        ],
+      });
+    }
+    if (currentTask && url.includes("/dependencies/") && options?.method === "DELETE") {
+      const dependsOnTaskId = url.split("/dependencies/")[1]!;
+      return replaceTask({
+        ...currentTask,
+        dependencies: currentTask.dependencies.filter(
+          (item) => item.dependsOnTaskId !== dependsOnTaskId,
+        ),
+      });
+    }
+    if (currentTask && url.endsWith("/cycle") && options?.method === "PUT") {
+      const payload = JSON.parse(String(options.body)) as NonNullable<WorkspaceTask["cycle"]>;
+      return replaceTask({
+        ...currentTask,
+        cycle: { ...payload, id: "cycle-1", timezone: "Asia/Tashkent" },
       });
     }
     if (url.endsWith("/approval-requests") && options?.method === "POST") {
@@ -384,6 +526,75 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Проверить новый маршрут оплаты").length).toBeGreaterThan(0),
     );
+  });
+
+  it("opens the Kanban board and manages a full task card", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
+    expect(screen.getByLabelText("Kanban задач")).toBeInTheDocument();
+    expect(screen.getAllByText("Новые").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать карточку" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название в карточке" }), {
+      target: { value: "Полная карточка BP-5" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание задачи" }), {
+      target: { value: "Описание, участники и контроль исполнения" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить карточку" }));
+    expect(await screen.findByRole("heading", { name: "Полная карточка BP-5" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Новый участник"), {
+      target: { value: people[0]!.id },
+    });
+    fireEvent.change(screen.getByLabelText("Роль участника"), {
+      target: { value: "observer" },
+    });
+    fireEvent.click(screen.getAllByRole("button", { name: "Добавить" })[0]!);
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/participants"),
+        expect.objectContaining({ method: "PUT" }),
+      ),
+    );
+
+    fireEvent.change(screen.getByLabelText("Новый пункт чек-листа"), {
+      target: { value: "Проверить результат" },
+    });
+    const checklistForm = screen.getByLabelText("Новый пункт чек-листа").closest(".inline-task-form")!;
+    fireEvent.click(checklistForm.querySelector("button")!);
+    const checklistItem = await screen.findByRole("checkbox", { name: "Проверить результат" });
+    fireEvent.click(checklistItem);
+    await waitFor(() => expect(screen.getByText("1/1")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Зависимая задача"), {
+      target: { value: initialTasks[1]!.id },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Связать" }));
+    expect((await screen.findAllByText(initialTasks[1]!.title)).length).toBeGreaterThan(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Добавить цикл" }));
+    fireEvent.change(screen.getByLabelText("Период повторения"), {
+      target: { value: "weekly" },
+    });
+    fireEvent.change(screen.getByLabelText("Интервал повторения"), {
+      target: { value: "2" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить цикл" }));
+    expect(await screen.findByText(/Каждую неделю · интервал 2/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Отключить" }));
+    expect(await screen.findByText(/Отключено · Каждую неделю/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Новый комментарий" }), {
+      target: { value: "Карточка готова к проверке" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
+    expect(await screen.findByText("Карточка готова к проверке")).toBeInTheDocument();
   });
 
   it("creates a payment request from the selected task", async () => {
