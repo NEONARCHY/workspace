@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
+from .position_policy import latin_position_name
 from .workspace_schemas import ApiModel, PersonResponse
 
 
@@ -51,6 +52,11 @@ class InvitationCreateRequest(ApiModel):
     @classmethod
     def normalize_username(cls, value: str) -> str:
         return _normalize_username(value)
+
+    @field_validator("job_title")
+    @classmethod
+    def job_title_must_use_latin(cls, value: str | None) -> str | None:
+        return None if value is None else latin_position_name(value)
 
 
 class InvitationResponse(ApiModel):

@@ -33,13 +33,13 @@ importers:
   apps/desktop:
     dependencies:
       '@fluentui/react-components':
-        specifier: ^9.74.7
+        specifier: 9.74.7
         version: 9.74.7(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(scheduler@0.27.0)
       '@fluentui/react-icons':
-        specifier: ^2.0.339
+        specifier: 2.0.339
         version: 2.0.339(react@19.2.8)
       '@xyflow/react':
-        specifier: ^12.11.6
+        specifier: 12.11.6
         version: 12.11.6(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@yuksalish/contracts':
         specifier: workspace:*
@@ -82,7 +82,7 @@ importers:
         specifier: 44.1.1
         version: 44.1.1
       electron-builder:
-        specifier: ^26.15.3
+        specifier: 26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
       jsdom:
         specifier: 26.1.0

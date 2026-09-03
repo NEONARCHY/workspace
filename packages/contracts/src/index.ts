@@ -71,8 +71,14 @@ export interface WorkspacePerson {
   readonly name: string;
   readonly initials: string;
   readonly role: string;
+  readonly positionId?: string | null;
   readonly jobTitle?: string | null;
   readonly color: string;
+}
+
+export interface WorkflowPosition {
+  readonly id: string;
+  readonly name: string;
 }
 
 export interface ChatSummary {
@@ -309,7 +315,9 @@ export interface WorkflowDefinition {
 
 export interface WorkspaceBootstrap {
   readonly currentUser: WorkspacePerson;
+  readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly positions: readonly WorkflowPosition[];
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];

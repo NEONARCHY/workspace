@@ -21,6 +21,7 @@ from .tables import (
     chats,
     message_versions,
     messages,
+    positions,
     task_checklist_items,
     task_comments,
     task_cycles,
@@ -62,6 +63,7 @@ from .workspace_schemas import (
     UpdateTaskRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
+    WorkflowPositionResponse,
     WorkflowResponse,
     WorkspaceBootstrapResponse,
 )
@@ -97,6 +99,7 @@ def person_from_record(row: Record, color_index: int = 0) -> PersonResponse:
         name=row["full_name"],
         initials=_initials(row["full_name"]),
         role=row["role"],
+        position_id=(str(row["position_id"]) if row.get("position_id") else None),
         job_title=row["job_title"],
         color=PERSON_COLORS[color_index % len(PERSON_COLORS)],
     )
@@ -328,6 +331,15 @@ def _can_act_from_config(
     approver_user_id = config.get("approverUserId")
     if approver_user_id:
         return str(current_user.id) == str(approver_user_id)
+    position_id = str(current_user.position_id) if current_user.position_id else None
+    approver_position_ids = config.get("approverPositionIds")
+    if isinstance(approver_position_ids, list):
+        return position_id is not None and position_id in {
+            str(value) for value in approver_position_ids
+        }
+    approver_position_id = config.get("approverPositionId")
+    if approver_position_id:
+        return position_id == str(approver_position_id)
     approver_role = config.get("approverRole", "manager")
     if approver_role == "manager":
         return current_user.role in {"manager", "admin"}
@@ -738,6 +750,18 @@ async def load_workspace(
     )
     people = [person_from_record(row, index) for index, row in enumerate(people_rows)]
     current = next(person for person in people if person.id == str(current_user.id))
+    position_rows = (
+        (
+            await connection.execute(
+                select(positions.c.id, positions.c.name)
+                .where(positions.c.is_active.is_(True))
+                .order_by(positions.c.sort_order, positions.c.name)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    published_payment_template = await _published_payment_template(connection)
 
     accessible_chat_ids = select(chat_members.c.chat_id).where(
         chat_members.c.user_id == current_user.id
@@ -864,7 +888,15 @@ async def load_workspace(
 
     return WorkspaceBootstrapResponse(
         current_user=current,
+        can_create_payment_requests=await _can_create_payment_request(
+            connection,
+            current_user,
+            published_payment_template["id"],
+        ),
         people=people,
+        positions=[
+            WorkflowPositionResponse(id=str(row["id"]), name=row["name"]) for row in position_rows
+        ],
         chats=chat_responses,
         messages=message_responses,
         tasks=[
@@ -1829,12 +1861,37 @@ async def _validate_request_people(
     return responsible_id, validated_employees
 
 
+async def _can_create_payment_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    template_id: UUID,
+) -> bool:
+    if current_user.role == "superadmin":
+        return True
+    start_config = await connection.scalar(
+        select(approval_nodes.c.config).where(
+            approval_nodes.c.template_id == template_id,
+            approval_nodes.c.kind == "start",
+        )
+    )
+    creator_position_ids = (start_config or {}).get("creatorPositionIds")
+    if not isinstance(creator_position_ids, list):
+        return True
+    position_id = str(current_user.position_id) if current_user.position_id else None
+    return position_id is not None and position_id in {str(value) for value in creator_position_ids}
+
+
 async def create_approval_request(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     payload: CreateApprovalRequest,
 ) -> ApprovalRequestResponse:
     template = await _published_payment_template(connection)
+    if not await _can_create_payment_request(connection, current_user, template["id"]):
+        raise WorkspaceRepositoryError(
+            403,
+            "This position cannot create payment requests",
+        )
     try:
         source_task_id = UUID(payload.source_task_id) if payload.source_task_id else None
     except ValueError as error:
@@ -1980,10 +2037,16 @@ async def update_approval_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
-    if row["requester_user_id"] != current_user.id:
-        raise WorkspaceRepositoryError(403, "Only the requester can edit this request")
     if row["status"] != "needs_revision":
         raise WorkspaceRepositoryError(409, "Only a returned request can be edited")
+    can_revise = row["requester_user_id"] == current_user.id or any(
+        [
+            await _can_act_on_node(connection, current_user, row, node_key)
+            for node_key in row["active_node_keys"] or []
+        ]
+    )
+    if not can_revise:
+        raise WorkspaceRepositoryError(403, "This user cannot edit the returned request")
 
     responsible_id, employee_ids = await _validate_request_people(
         connection,
@@ -2067,7 +2130,7 @@ async def validate_attachment_owner(
         .first()
     )
     assigned_actor = False
-    if row is not None and not write:
+    if row is not None:
         assigned_actor = any(
             [
                 await _can_act_on_node(connection, current_user, row, node_key)
@@ -2082,8 +2145,11 @@ async def validate_attachment_owner(
     )
     writable = (
         row is not None
-        and row["requester_user_id"] == current_user.id
         and row["status"] in {"running", "needs_revision"}
+        and (
+            row["requester_user_id"] == current_user.id
+            or (row["status"] == "needs_revision" and assigned_actor)
+        )
     )
     if not accessible or (write and not writable):
         raise WorkspaceRepositoryError(404, "Approval request was not found")
@@ -2397,10 +2463,7 @@ async def act_on_request(
     if payload.action in {"return", "reject"} and not (payload.comment or "").strip():
         raise WorkspaceRepositoryError(422, "A decision comment is required")
     resubmitting = payload.action == "resubmit"
-    if resubmitting:
-        if row["status"] != "needs_revision" or row["requester_user_id"] != current_user.id:
-            raise WorkspaceRepositoryError(403, "Only the requester can resubmit a correction")
-    elif (
+    if not resubmitting and (
         payload.action == "cancel"
         and row["requester_user_id"] != current_user.id
         and current_user.role
@@ -2416,6 +2479,14 @@ async def act_on_request(
     active_node = payload.node_key or active_nodes[0]
     if active_node not in active_nodes:
         raise WorkspaceRepositoryError(409, "The selected workflow stage is not active")
+    if resubmitting and (
+        row["status"] != "needs_revision"
+        or (
+            row["requester_user_id"] != current_user.id
+            and not await _can_act_on_node(connection, current_user, row, active_node)
+        )
+    ):
+        raise WorkspaceRepositoryError(403, "This user cannot resubmit the correction")
     if (
         not resubmitting
         and payload.action != "cancel"

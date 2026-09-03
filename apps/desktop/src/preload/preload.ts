@@ -7,7 +7,7 @@ export interface DesktopBridge {
 
 const bridge: DesktopBridge = Object.freeze({
   platform: process.platform,
-  version: process.env.npm_package_version ?? "0.7.0",
+  version: process.env.npm_package_version ?? "0.7.1",
 });
 
 contextBridge.exposeInMainWorld("yuksalish", bridge);

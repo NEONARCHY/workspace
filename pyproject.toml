@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yuksalish-workspace"
-version = "0.7.0"
+version = "0.7.1"
 description = "Backend foundation and migration tooling for Yuksalish Workspace"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"

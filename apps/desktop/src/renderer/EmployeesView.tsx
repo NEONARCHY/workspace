@@ -261,7 +261,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
             <div className="position-create">
               <Input
                 aria-label="Название новой должности"
-                placeholder="Новая должность"
+                placeholder="Yangi lavozim"
                 value={newPositionName}
                 onChange={(_, data) => setNewPositionName(data.value)}
               />

@@ -33,6 +33,7 @@ class AuthenticatedUser:
     id: UUID
     username: str
     full_name: str
+    position_id: UUID | None
     job_title: str | None
     role: str
     session_id: UUID | None = None
@@ -129,6 +130,7 @@ async def load_authenticated_user(
         users.c.id,
         users.c.username,
         users.c.full_name,
+        users.c.position_id,
         users.c.job_title,
         users.c.role,
     ).where(users.c.id == user_id, users.c.status == "active")
@@ -139,6 +141,7 @@ async def load_authenticated_user(
         id=row["id"],
         username=row["username"],
         full_name=row["full_name"],
+        position_id=row["position_id"],
         job_title=row["job_title"],
         role=row["role"],
         session_id=session_id,

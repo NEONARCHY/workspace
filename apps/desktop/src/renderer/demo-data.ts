@@ -12,7 +12,8 @@ export const people: readonly WorkspacePerson[] = [
     name: "Азиза Каримова",
     initials: "АК",
     role: "manager",
-    jobTitle: "Финансовый менеджер",
+    positionId: "position-chief-accountant",
+    jobTitle: "Bosh hisobchi",
     color: "#0f6cbd",
   },
   {
@@ -21,7 +22,8 @@ export const people: readonly WorkspacePerson[] = [
     name: "Бахтиёр Самугов",
     initials: "БС",
     role: "manager",
-    jobTitle: "Руководитель отдела",
+    positionId: "position-regional-lead",
+    jobTitle: "Hududiy bo‘linmalar bilan ishlash bo‘limi boshlig‘i",
     color: "#6b5b95",
   },
   {
@@ -30,7 +32,8 @@ export const people: readonly WorkspacePerson[] = [
     name: "Дилшод Рахимов",
     initials: "ДР",
     role: "employee",
-    jobTitle: "Специалист по закупкам",
+    positionId: "position-deputy-chair",
+    jobTitle: "Rais o‘rinbosari",
     color: "#0e7a0d",
   },
   {
@@ -39,7 +42,8 @@ export const people: readonly WorkspacePerson[] = [
     name: "Малика Нурова",
     initials: "МН",
     role: "admin",
-    jobTitle: "Директор",
+    positionId: "position-chair",
+    jobTitle: "Yuksalish harakati raisi",
     color: "#9b3a4d",
   },
 ];

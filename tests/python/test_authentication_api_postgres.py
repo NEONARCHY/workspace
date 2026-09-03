@@ -202,9 +202,19 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert cycle.status_code == 200
         assert cycle.json()["cycle"]["scheduleKind"] == "weekly"
+        finance_login = await client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "aziza",
+                "password": demo_password,
+                "deviceLabel": "HTTP payment actor",
+            },
+        )
+        assert finance_login.status_code == 200
+        finance_headers = {"Authorization": f"Bearer {finance_login.json()['accessToken']}"}
         approval = await client.post(
             "/api/v1/approval-requests",
-            headers=admin_headers,
+            headers=finance_headers,
             json={
                 "title": "HTTP approval from task",
                 "amount": 5_000_000,
@@ -230,7 +240,7 @@ async def test_authentication_http_vertical_slice() -> None:
         assert approval.json()["responsibleUserId"] == participant_id
         approval_file = await client.put(
             f"/api/v1/attachments/approval_request/{approval_id}",
-            headers={**admin_headers, "Content-Type": "application/pdf"},
+            headers={**finance_headers, "Content-Type": "application/pdf"},
             params={"fileName": "contract.pdf", "documentRole": "additional"},
             content=b"contract-body",
         )
@@ -238,7 +248,7 @@ async def test_authentication_http_vertical_slice() -> None:
         assert approval_file.json()["documentRole"] == "additional"
         returned = await client.post(
             f"/api/v1/approval-requests/{approval_id}/actions",
-            headers=admin_headers,
+            headers=finance_headers,
             json={"action": "return", "comment": "Correct the amount"},
         )
         assert returned.status_code == 200
@@ -247,7 +257,7 @@ async def test_authentication_http_vertical_slice() -> None:
         assert returned.json()["actions"][-1]["comment"] == "Correct the amount"
         revised = await client.patch(
             f"/api/v1/approval-requests/{approval_id}",
-            headers=admin_headers,
+            headers=finance_headers,
             json={
                 "title": "HTTP corrected approval",
                 "amount": 4_800_000,
@@ -261,7 +271,7 @@ async def test_authentication_http_vertical_slice() -> None:
         assert len(revised.json()["versions"]) == 3
         resubmitted = await client.post(
             f"/api/v1/approval-requests/{approval_id}/actions",
-            headers=admin_headers,
+            headers=finance_headers,
             json={"action": "resubmit", "comment": "Ready again"},
         )
         assert resubmitted.status_code == 200
@@ -269,7 +279,7 @@ async def test_authentication_http_vertical_slice() -> None:
 
         directory = await client.get("/api/v1/directory", headers=admin_headers)
         assert directory.status_code == 200
-        assert len(directory.json()["positions"]) >= 24
+        assert len(directory.json()["positions"]) >= 20
         position_name = f"API Position {uuid4().hex[:8]}"
         position = await client.post(
             "/api/v1/directory/positions",
@@ -278,6 +288,12 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert position.status_code == 201
         position_id = position.json()["id"]
+        cyrillic_position = await client.post(
+            "/api/v1/directory/positions",
+            headers=admin_headers,
+            json={"name": "Новая должность"},
+        )
+        assert cyrillic_position.status_code == 422
 
         invitation = await client.post(
             "/api/v1/auth/invitations",

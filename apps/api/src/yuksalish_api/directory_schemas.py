@@ -3,16 +3,10 @@ from uuid import UUID
 
 from pydantic import Field, field_validator
 
+from .position_policy import latin_position_name
 from .workspace_schemas import ApiModel
 
 EditableRole = Literal["admin", "manager", "employee"]
-
-
-def _non_blank(value: str) -> str:
-    normalized = value.strip()
-    if not normalized:
-        raise ValueError("Value must not be blank")
-    return normalized
 
 
 class RoleDescriptorResponse(ApiModel):
@@ -37,7 +31,7 @@ class PositionCreateRequest(ApiModel):
     @field_validator("name")
     @classmethod
     def name_must_not_be_blank(cls, value: str) -> str:
-        return _non_blank(value)
+        return latin_position_name(value)
 
 
 class PositionUpdateRequest(ApiModel):
@@ -48,7 +42,7 @@ class PositionUpdateRequest(ApiModel):
     @field_validator("name")
     @classmethod
     def name_must_not_be_blank(cls, value: str | None) -> str | None:
-        return None if value is None else _non_blank(value)
+        return None if value is None else latin_position_name(value)
 
 
 class DirectoryEmployeeResponse(ApiModel):

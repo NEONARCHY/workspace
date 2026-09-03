@@ -70,7 +70,7 @@ const paymentDetails: PaymentRequestDetails = {
 
 const position = {
   id: "position-finance",
-  name: "Финансовый менеджер",
+  name: "Bosh hisobchi",
   isActive: true,
   sortOrder: 10,
   source: "bitrix",
@@ -104,10 +104,15 @@ function response(payload: unknown): Response {
   } as Response;
 }
 
-function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
+function mockServer(
+  serverOptions: {
+    readonly withReturnedRequest?: boolean;
+    readonly restrictPaymentCreators?: boolean;
+  } = {},
+) {
   let currentUser = people[0]!;
   let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
-  let requests: ApprovalRequestSummary[] = options.withReturnedRequest
+  let requests: ApprovalRequestSummary[] = serverOptions.withReturnedRequest
     ? [
         {
           id: "returned-request",
@@ -119,7 +124,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
           status: "needs_revision" as const,
           statusLabel: "На доработке",
           activeNodeKeys: ["correction"],
-          activeStages: [{ key: "correction", label: "Доработка", kind: "correction", canAct: false }],
+          activeStages: [{ key: "correction", label: "Доработка", kind: "correction", canAct: true }],
           stageLabel: "Доработка",
           requesterId: people[0]!.id,
           responsibleUserId: people[0]!.id,
@@ -169,15 +174,25 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
       });
     }
     if (url.endsWith("/workspace/bootstrap")) {
+      const activeWorkflow = serverOptions.restrictPaymentCreators
+        ? {
+            ...workflow,
+            nodes: workflow.nodes.map((node) => node.kind === "start"
+              ? { ...node, config: { creatorPositionIds: ["another-position"] } }
+              : node),
+          }
+        : workflow;
       return response({
         currentUser,
+        canCreatePaymentRequests: !serverOptions.restrictPaymentCreators,
         people,
+        positions: directory.positions.map(({ id, name }) => ({ id, name })),
         chats: initialChats,
         messages: initialMessages,
         tasks,
         requests,
         attachments: [...attachments],
-        workflow,
+        workflow: activeWorkflow,
       });
     }
     if (url.endsWith("/directory") && options?.method === undefined) {
@@ -189,7 +204,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
     if (url.endsWith("/directory/positions") && options?.method === "POST") {
       return response({
         id: "position-new",
-        name: "Новая должность",
+        name: "Yangi lavozim",
         isActive: true,
         sortOrder: 10,
         source: "workspace",
@@ -738,6 +753,18 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
   });
 
+  it("disables payment creation for a position outside the workflow policy", async () => {
+    mockServer({ restrictPaymentCreators: true });
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    expect(screen.getByRole("button", { name: "Новая заявка" })).toBeDisabled();
+    expect(
+      screen.getByText("Ваша должность не может создавать заявки на оплату"),
+    ).toBeInTheDocument();
+  });
+
   it("shows the Bitrix-derived navigation in the confirmed order", async () => {
     mockServer();
     render(<App />);
@@ -768,10 +795,10 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
     expect(await screen.findByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Название новой должности" }), {
-      target: { value: "Новая должность" },
+      target: { value: "Yangi lavozim" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить" }));
-    expect((await screen.findAllByText("Новая должность")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Yangi lavozim")).length).toBeGreaterThan(0);
   });
 
   it("shows invitation activation without entering the workspace", () => {

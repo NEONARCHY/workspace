@@ -19,8 +19,14 @@ class PersonResponse(ApiModel):
     name: str
     initials: str
     role: str
+    position_id: str | None
     job_title: str | None
     color: str
+
+
+class WorkflowPositionResponse(ApiModel):
+    id: str
+    name: str
 
 
 class DevelopmentSessionRequest(ApiModel):
@@ -434,7 +440,9 @@ class SaveWorkflowRequest(ApiModel):
 
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
+    can_create_payment_requests: bool
     people: list[PersonResponse]
+    positions: list[WorkflowPositionResponse]
     chats: list[ChatSummaryResponse]
     messages: list[ChatMessageResponse]
     tasks: list[TaskResponse]

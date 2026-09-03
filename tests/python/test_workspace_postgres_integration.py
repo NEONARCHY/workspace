@@ -19,6 +19,7 @@ from yuksalish_api.directory_service import (
     update_employee_access,
     update_position,
 )
+from yuksalish_api.position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
@@ -87,7 +88,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert len(initial.people) == 4
             assert len(initial.chats) == 4
             assert initial.workflow.nodes
-            assert initial.workflow.published_version == 4
+            assert initial.workflow.published_version == 6
             assert {node.label for node in initial.workflow.nodes} == {
                 "Запуск",
                 "Утверждение финансистом проекта",
@@ -105,7 +106,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             }
 
             directory = await load_directory(connection)
-            assert len(directory.positions) >= 24
+            assert len(directory.positions) >= 20
             audit_event_count = await connection.scalar(
                 select(func.count()).select_from(audit_events)
             )
@@ -640,3 +641,144 @@ def test_parallel_workflow_all_and_any_decisions() -> None:
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     asyncio.run(_exercise_parallel_workflow(database_url))
+
+
+async def _exercise_payment_position_policy(database_url: str) -> None:
+    engine = create_async_engine(database_url, pool_pre_ping=True)
+    await seed_demo_data(engine)
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        try:
+            actors = {}
+            for username in ("aziza", "baxtiyor", "dilshod", "malika"):
+                row = await find_active_user_by_username(connection, username)
+                assert row is not None
+                actor = await load_authenticated_user(connection, row["id"])
+                assert actor is not None
+                assert actor.position_id is not None
+                actors[username] = actor
+
+            nargiza = actors["aziza"]
+            javohir = actors["baxtiyor"]
+            umid = actors["dilshod"]
+            bobur = actors["malika"]
+            assert nargiza.job_title == PAYMENT_CREATOR_POSITION_NAMES[0]
+            assert javohir.job_title == PAYMENT_CREATOR_POSITION_NAMES[1]
+            assert umid.job_title == PAYMENT_CREATOR_POSITION_NAMES[2]
+            assert bobur.job_title == PAYMENT_CREATOR_POSITION_NAMES[3]
+
+            workspace = await load_workspace(connection, nargiza)
+            assert workspace.workflow.published_version == 6
+            assert all(
+                not any("Ѐ" <= character <= "ԯ" for character in position.name)
+                for position in workspace.positions
+            )
+            node_config = {node.id: node.config for node in workspace.workflow.nodes}
+            expected_creator_ids = {
+                str(actor.position_id) for actor in (nargiza, javohir, umid, bobur)
+            }
+            assert set(node_config["start"]["creatorPositionIds"]) == expected_creator_ids
+            assert node_config["project_financier"]["approverPositionId"] == str(
+                nargiza.position_id
+            )
+            assert node_config["chair_assistant"]["approverPositionId"] == str(javohir.position_id)
+            assert node_config["deputy_chair"]["approverPositionId"] == str(umid.position_id)
+            assert node_config["chair"]["approverPositionId"] == str(bobur.position_id)
+            assert set(node_config["correction"]["approverPositionIds"]) == (expected_creator_ids)
+
+            request = await create_approval_request(
+                connection,
+                nargiza,
+                CreateApprovalRequest(title="Position-routed payment", amount=1_000_000),
+            )
+            for node_key in (
+                "project_financier",
+                "finance_manager_projects",
+                "members",
+            ):
+                assert request.active_node_keys == [node_key]
+                request = await act_on_request(
+                    connection,
+                    nargiza,
+                    UUID(request.id),
+                    ApprovalActionRequest(action="approve", node_key=node_key),
+                )
+            with pytest.raises(WorkspaceRepositoryError, match="cannot decide"):
+                await act_on_request(
+                    connection,
+                    nargiza,
+                    UUID(request.id),
+                    ApprovalActionRequest(action="approve", node_key="chair_assistant"),
+                )
+            stage_actors = (
+                ("chair_assistant", javohir),
+                ("chief_accountant", nargiza),
+                ("deputy_chair", umid),
+                ("chair", bobur),
+                ("awaiting_payment", nargiza),
+                ("payment", nargiza),
+            )
+            for node_key, actor in stage_actors:
+                assert request.active_node_keys == [node_key]
+                request = await act_on_request(
+                    connection,
+                    actor,
+                    UUID(request.id),
+                    ApprovalActionRequest(action="approve", node_key=node_key),
+                )
+            assert request.status == "approved"
+
+            for actor in (nargiza, javohir, umid, bobur):
+                correction = await create_approval_request(
+                    connection,
+                    nargiza,
+                    CreateApprovalRequest(title="Correction policy", amount=500_000),
+                )
+                correction = await act_on_request(
+                    connection,
+                    nargiza,
+                    UUID(correction.id),
+                    ApprovalActionRequest(action="return", comment="Fix details"),
+                )
+                assert correction.status == "needs_revision"
+                correction = await act_on_request(
+                    connection,
+                    actor,
+                    UUID(correction.id),
+                    ApprovalActionRequest(action="resubmit", comment="Ready"),
+                )
+                assert correction.active_node_keys == ["project_financier"]
+
+            outsider_position = await create_position(
+                connection,
+                bobur,
+                PositionCreateRequest(name="Sinov mutaxassisi", sort_order=90_000),
+            )
+            await update_employee_access(
+                connection,
+                bobur,
+                umid.id,
+                EmployeeAccessUpdateRequest(
+                    role="employee",
+                    position_id=UUID(outsider_position.id),
+                ),
+            )
+            outsider = await load_authenticated_user(connection, umid.id)
+            assert outsider is not None
+            with pytest.raises(WorkspaceRepositoryError, match="cannot create"):
+                await create_approval_request(
+                    connection,
+                    outsider,
+                    CreateApprovalRequest(title="Forbidden payment", amount=100_000),
+                )
+        finally:
+            await transaction.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.postgres
+def test_payment_position_policy() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    asyncio.run(_exercise_payment_position_policy(database_url))

@@ -8,6 +8,7 @@ import type {
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspacePerson,
+  WorkflowPosition,
   WorkspaceSection,
   WorkspaceTask,
 } from "@yuksalish/contracts";
@@ -83,7 +84,9 @@ interface NavItem {
 
 interface WorkspaceState {
   readonly currentUser: WorkspacePerson;
+  readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly positions: readonly WorkflowPosition[];
   readonly chats: typeof initialChats;
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
@@ -94,7 +97,9 @@ interface WorkspaceState {
 
 const initialWorkspace: WorkspaceState = {
   currentUser: people[0]!,
+  canCreatePaymentRequests: true,
   people,
+  positions: [],
   chats: initialChats,
   messages: initialMessages,
   tasks: initialTasks,
@@ -741,8 +746,10 @@ export function App() {
               <ApprovalsView
                 key={workspace.workflow === undefined ? "offline" : JSON.stringify(workspace.workflow)}
                 canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
+                canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
+                positions={workspace.positions}
                 requests={workspace.requests}
                 attachments={workspace.attachments}
                 workflow={workspace.workflow}

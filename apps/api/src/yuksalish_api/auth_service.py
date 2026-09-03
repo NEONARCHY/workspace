@@ -116,7 +116,7 @@ async def bootstrap_initial_admin(
             id=user_id,
             username=normalized_username,
             full_name=normalized_full_name,
-            job_title="Системный администратор",
+            job_title="Tizim administratori",
             password_hash=hash_password(password),
             role="admin",
             status="active",
@@ -263,17 +263,13 @@ async def login_with_password(
         raise AuthServiceError(401, "Invalid username or password")
 
     factor = (
-        (
-            await connection.execute(
-                select(auth_totp_factors).where(
-                    auth_totp_factors.c.user_id == row["id"],
-                    auth_totp_factors.c.confirmed_at.is_not(None),
-                ).with_for_update()
-            )
+        await connection.execute(
+            select(auth_totp_factors).where(
+                auth_totp_factors.c.user_id == row["id"],
+                auth_totp_factors.c.confirmed_at.is_not(None),
+            ).with_for_update()
         )
-        .mappings()
-        .first()
-    )
+    ).mappings().first()
     if factor is not None:
         if totp_code is None:
             raise AuthServiceError(401, "TOTP code required")
@@ -316,6 +312,7 @@ async def refresh_session(
             users.c.id,
             users.c.username,
             users.c.full_name,
+            users.c.position_id,
             users.c.job_title,
             users.c.role,
             users.c.status,
@@ -443,6 +440,7 @@ async def accept_invitation(
             users.c.id,
             users.c.username,
             users.c.full_name,
+            users.c.position_id,
             users.c.job_title,
             users.c.role,
             users.c.status,
@@ -559,6 +557,7 @@ async def complete_password_reset(
                     users.c.id,
                     users.c.username,
                     users.c.full_name,
+                    users.c.position_id,
                     users.c.job_title,
                     users.c.role,
                     users.c.status,

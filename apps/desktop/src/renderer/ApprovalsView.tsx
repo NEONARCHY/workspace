@@ -8,6 +8,7 @@ import type {
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspacePerson,
+  WorkflowPosition,
 } from "@yuksalish/contracts";
 import {
   Badge,
@@ -56,8 +57,10 @@ type ApprovalEdge = Edge<ApprovalEdgeData>;
 
 interface ApprovalsViewProps {
   readonly canManage: boolean;
+  readonly canCreateRequest: boolean;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
+  readonly positions: readonly WorkflowPosition[];
   readonly requests: readonly ApprovalRequestSummary[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
@@ -438,8 +441,10 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
 
 export function ApprovalsView({
   canManage,
+  canCreateRequest,
   currentUserId,
   people,
+  positions,
   requests,
   attachments,
   workflow,
@@ -739,9 +744,17 @@ export function ApprovalsView({
               <strong>{requests.filter((request) => request.status === "approved").length}</strong>
               <span>Согласованы</span>
             </div>
-            <Button appearance="primary" icon={<Add24Regular />} onClick={() => setCreatingRequest(true)}>
+            <Button
+              appearance="primary"
+              icon={<Add24Regular />}
+              disabled={!canCreateRequest}
+              onClick={() => setCreatingRequest(true)}
+            >
               Новая заявка
             </Button>
+            {!canCreateRequest ? (
+              <span className="request-create-policy">Ваша должность не может создавать заявки на оплату</span>
+            ) : null}
           </div>
           {creatingRequest ? (
             <div className="quick-create request-create" role="region" aria-label="Создание заявки">
@@ -855,7 +868,10 @@ export function ApprovalsView({
                       </div>
                     ))}
                   </div>
-                ) : request.status === "needs_revision" && request.requesterId === currentUserId ? (
+                ) : request.status === "needs_revision" && (
+                  request.requesterId === currentUserId
+                  || request.activeStages.some((stage) => stage.canAct)
+                ) ? (
                   <Button appearance="primary" onClick={() => startRevision(request)}>
                     Исправить заявку
                   </Button>
@@ -954,8 +970,10 @@ export function ApprovalsView({
                         && ["primary", "general"].includes(attachment.documentRole),
                     )}
                     canUpload={
-                      request.requesterId === currentUserId
-                      && ["running", "needs_revision"].includes(request.status)
+                      (request.requesterId === currentUserId
+                        && ["running", "needs_revision"].includes(request.status))
+                      || (request.status === "needs_revision"
+                        && request.activeStages.some((stage) => stage.canAct))
                     }
                     onUpload={(files) => onUploadAttachments(request, files, "primary")}
                     onDownload={onDownloadAttachment}
@@ -969,8 +987,10 @@ export function ApprovalsView({
                         && attachment.documentRole === "additional",
                     )}
                     canUpload={
-                      request.requesterId === currentUserId
-                      && ["running", "needs_revision"].includes(request.status)
+                      (request.requesterId === currentUserId
+                        && ["running", "needs_revision"].includes(request.status))
+                      || (request.status === "needs_revision"
+                        && request.activeStages.some((stage) => stage.canAct))
                     }
                     onUpload={(files) => onUploadAttachments(request, files, "additional")}
                     onDownload={onDownloadAttachment}
@@ -1104,7 +1124,22 @@ export function ApprovalsView({
                 {selectedNode.data.kind === "approval" ? (
                   <>
                     <label>
-                      Роль согласующего
+                      Должность согласующего
+                      <select
+                        value={String(selectedNode.data.approverPositionId ?? "")}
+                        onChange={(event) => updateSelected({
+                          approverPositionId: event.target.value || undefined,
+                          approverUserId: undefined,
+                        })}
+                      >
+                        <option value="">Определяется ролью</option>
+                        {positions.map((position) => (
+                          <option key={position.id} value={position.id}>{position.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Роль согласующего, если должность не выбрана
                       <select
                         value={String(selectedNode.data.approverRole ?? "manager")}
                         onChange={(event) => updateSelected({ approverRole: event.target.value })}
@@ -1112,7 +1147,7 @@ export function ApprovalsView({
                         <option value="manager">Руководитель</option>
                         <option value="admin">Администратор</option>
                         <option value="superadmin">Суперадминистратор</option>
-                        <option value="user">Сотрудник</option>
+                        <option value="employee">Сотрудник</option>
                       </select>
                     </label>
                     <label>
@@ -1121,6 +1156,7 @@ export function ApprovalsView({
                         value={String(selectedNode.data.approverUserId ?? "")}
                         onChange={(event) => updateSelected({
                           approverUserId: event.target.value || undefined,
+                          approverPositionId: undefined,
                         })}
                       >
                         <option value="">Определяется ролью</option>
@@ -1130,6 +1166,37 @@ export function ApprovalsView({
                       </select>
                     </label>
                   </>
+                ) : null}
+                {selectedNode.data.kind === "start" || selectedNode.data.kind === "correction" ? (
+                  <label>
+                    {selectedNode.data.kind === "start"
+                      ? "Должности, которые создают заявки"
+                      : "Должности, которые выводят из доработки"}
+                    <select
+                      multiple
+                      value={(
+                        selectedNode.data.kind === "start"
+                          ? selectedNode.data.creatorPositionIds
+                          : selectedNode.data.approverPositionIds
+                      ) as string[] | undefined}
+                      onChange={(event) => {
+                        const values = Array.from(
+                          event.currentTarget.selectedOptions,
+                          (option) => option.value,
+                        );
+                        updateSelected(
+                          selectedNode.data.kind === "start"
+                            ? { creatorPositionIds: values }
+                            : { approverPositionIds: values },
+                        );
+                      }}
+                    >
+                      {positions.map((position) => (
+                        <option key={position.id} value={position.id}>{position.name}</option>
+                      ))}
+                    </select>
+                    <small>Ctrl позволяет выбрать несколько должностей</small>
+                  </label>
                 ) : null}
                 {selectedNode.data.kind === "parallel" ? (
                   <label>

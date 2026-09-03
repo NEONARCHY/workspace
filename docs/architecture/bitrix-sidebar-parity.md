@@ -110,8 +110,8 @@ Rules for the position catalog:
 - create, rename, activate and deactivate; no destructive delete while history or assignments exist;
 - inactive positions remain visible on previously assigned employees but cannot be newly assigned;
 - renaming a position preserves its stable ID and employee links;
-- exact source spelling is preserved;
-- visually similar apostrophes and mixed Latin/Cyrillic spellings are not silently merged;
+- название должности хранится только на латинице; кириллические и смешанные исходные варианты нормализуются миграцией;
+- варианты апострофов сохраняются осознанно и не объединяются автоматически;
 - privileged changes are written to an append-only audit event table.
 
 ## Position baseline from Bitrix
@@ -135,9 +135,9 @@ The supplied file has 24 current staff references but contains names and aliases
 15. `Dizayner`
 16. `Bosh hisobchi`
 17. `Auditor`
-18. `Инсон капитали бўйича бўлим`
+18. `Inson kapitali bo‘yicha bo‘lim`
 19. `Hududiy bo‘linmalar bilan ishlash bo‘limi boshlig‘i`
-20. `Xalqaro hamkorlikni rivojlantirish bo‘limи boshlig‘i`
+20. `Xalqaro hamkorlikni rivojlantirish bo‘limi boshlig‘i`
 
 The two unresolved IDs are not guessed. Before a production employee import, they must either be mapped manually or explicitly marked obsolete.
 

@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from .auth_service import hash_password
+from .position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from .tables import (
     approval_edges,
     approval_nodes,
@@ -60,11 +61,12 @@ async def seed_demo_data(
         "dilshod": demo_uuid("user/dilshod"),
         "malika": demo_uuid("user/malika"),
     }
-    demo_positions = (
-        "Финансовый менеджер",
-        "Руководитель отдела",
-        "Специалист по закупкам",
-        "Директор",
+    demo_positions = PAYMENT_CREATOR_POSITION_NAMES
+    payment_position_ids = {
+        name: str(position_uuid(name)) for name in PAYMENT_CREATOR_POSITION_NAMES
+    }
+    nargiza_position_id, javohir_position_id, umid_position_id, bobur_position_id = (
+        payment_position_ids[name] for name in PAYMENT_CREATOR_POSITION_NAMES
     )
     chat_ids = {
         "finance": demo_uuid("chat/finance"),
@@ -139,10 +141,18 @@ async def seed_demo_data(
             "deleted_at": None,
         },
     ]
-    template_id = demo_uuid("approval-template/payment-v4")
-    draft_template_id = demo_uuid("approval-template/payment-v5")
-    workflow_nodes = [
-        ("start", "start", "Запуск", "Сотрудник отправил форму", 40.0, 180.0, {}),
+    template_id = demo_uuid("approval-template/payment-v6")
+    draft_template_id = demo_uuid("approval-template/payment-v7")
+    workflow_nodes: list[tuple[str, str, str, str, float, float, dict[str, object]]] = [
+        (
+            "start",
+            "start",
+            "Запуск",
+            "Заявку создаёт одна из четырёх уполномоченных должностей",
+            40.0,
+            180.0,
+            {"creatorPositionIds": list(payment_position_ids.values())},
+        ),
         (
             "project_financier",
             "approval",
@@ -150,7 +160,7 @@ async def seed_demo_data(
             "Проверка проекта и источника финансирования",
             260.0,
             40.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "finance_manager_projects",
@@ -159,7 +169,7 @@ async def seed_demo_data(
             "Финансовая проверка заявки",
             480.0,
             40.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "members",
@@ -168,7 +178,7 @@ async def seed_demo_data(
             "Проверка рабочей группы",
             700.0,
             40.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "chair_assistant",
@@ -177,7 +187,7 @@ async def seed_demo_data(
             "Решение помощника председателя",
             920.0,
             40.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": javohir_position_id},
         ),
         (
             "chief_accountant",
@@ -186,7 +196,7 @@ async def seed_demo_data(
             "Бухгалтерская проверка",
             1140.0,
             40.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "deputy_chair",
@@ -195,7 +205,7 @@ async def seed_demo_data(
             "Решение заместителя председателя",
             260.0,
             320.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": umid_position_id},
         ),
         (
             "chair",
@@ -204,7 +214,7 @@ async def seed_demo_data(
             "Финальное управленческое решение",
             480.0,
             320.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": bobur_position_id},
         ),
         (
             "awaiting_payment",
@@ -213,7 +223,7 @@ async def seed_demo_data(
             "Заявка передана на исполнение",
             700.0,
             320.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "payment",
@@ -222,7 +232,7 @@ async def seed_demo_data(
             "Подтверждение фактической оплаты",
             920.0,
             320.0,
-            {"approverRole": "manager"},
+            {"approverPositionId": nargiza_position_id},
         ),
         (
             "correction",
@@ -231,7 +241,7 @@ async def seed_demo_data(
             "Комментарий обязателен",
             700.0,
             570.0,
-            {},
+            {"approverPositionIds": list(payment_position_ids.values())},
         ),
         ("completed", "end", "Выполнено", "Оплата завершена", 1140.0, 320.0, {}),
         ("cancelled", "end", "Отмена", "Заявка отклонена или отменена", 1140.0, 570.0, {}),
@@ -322,11 +332,11 @@ async def seed_demo_data(
                     "id": person_ids["aziza"],
                     "username": "aziza",
                     "full_name": "Азиза Каримова",
-                    "job_title": "Финансовый менеджер",
+                    "job_title": PAYMENT_CREATOR_POSITION_NAMES[0],
                     "role": "manager",
                     "status": "active",
                     "department_id": department_id,
-                    "position_id": position_uuid("Финансовый менеджер"),
+                    "position_id": position_uuid(PAYMENT_CREATOR_POSITION_NAMES[0]),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -334,11 +344,11 @@ async def seed_demo_data(
                     "id": person_ids["baxtiyor"],
                     "username": "baxtiyor",
                     "full_name": "Бахтиёр Самугов",
-                    "job_title": "Руководитель отдела",
+                    "job_title": PAYMENT_CREATOR_POSITION_NAMES[1],
                     "role": "manager",
                     "status": "active",
                     "department_id": department_id,
-                    "position_id": position_uuid("Руководитель отдела"),
+                    "position_id": position_uuid(PAYMENT_CREATOR_POSITION_NAMES[1]),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -346,11 +356,11 @@ async def seed_demo_data(
                     "id": person_ids["dilshod"],
                     "username": "dilshod",
                     "full_name": "Дилшод Рахимов",
-                    "job_title": "Специалист по закупкам",
+                    "job_title": PAYMENT_CREATOR_POSITION_NAMES[2],
                     "role": "employee",
                     "status": "active",
                     "department_id": department_id,
-                    "position_id": position_uuid("Специалист по закупкам"),
+                    "position_id": position_uuid(PAYMENT_CREATOR_POSITION_NAMES[2]),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -358,16 +368,30 @@ async def seed_demo_data(
                     "id": person_ids["malika"],
                     "username": "malika",
                     "full_name": "Малика Нурова",
-                    "job_title": "Директор",
+                    "job_title": PAYMENT_CREATOR_POSITION_NAMES[3],
                     "role": "admin",
                     "status": "active",
                     "department_id": department_id,
-                    "position_id": position_uuid("Директор"),
+                    "position_id": position_uuid(PAYMENT_CREATOR_POSITION_NAMES[3]),
                     "created_at": now,
                     "updated_at": now,
                 },
             ],
         )
+        for username, position_name in zip(
+            person_ids,
+            PAYMENT_CREATOR_POSITION_NAMES,
+            strict=True,
+        ):
+            await connection.execute(
+                update(users)
+                .where(users.c.id == person_ids[username])
+                .values(
+                    position_id=position_uuid(position_name),
+                    job_title=position_name,
+                    updated_at=now,
+                )
+            )
         if demo_password is not None:
             for user_id in person_ids.values():
                 await connection.execute(
@@ -617,7 +641,7 @@ async def seed_demo_data(
                     "template_key": "payment",
                     "name": "Заявка на оплату",
                     "request_kind": "payment",
-                    "version": 4,
+                    "version": 6,
                     "status": "published",
                     "form_schema": payment_form_schema,
                     "created_by_user_id": person_ids["aziza"],
@@ -629,7 +653,7 @@ async def seed_demo_data(
                     "template_key": "payment",
                     "name": "Заявка на оплату",
                     "request_kind": "payment",
-                    "version": 5,
+                    "version": 7,
                     "status": "draft",
                     "form_schema": payment_form_schema,
                     "created_by_user_id": person_ids["aziza"],
@@ -642,8 +666,8 @@ async def seed_demo_data(
             update(approval_templates)
             .where(
                 approval_templates.c.template_key == "payment",
-                approval_templates.c.status == "draft",
-                approval_templates.c.version < 5,
+                approval_templates.c.status.in_(["draft", "published"]),
+                approval_templates.c.version < 6,
             )
             .values(status="archived")
         )
