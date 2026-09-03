@@ -27,6 +27,10 @@ docker compose --env-file .env -f infrastructure\compose.yaml up --build
 
 API через gateway: `http://127.0.0.1:8080/api/v1/health/live`.
 
+Для staging и production используются отдельные локальные файлы секретов. Порядок их
+подготовки и обязательная проверка описаны в `docs/operations/environments.md`; шаблоны
+`.env.staging.example` и `.env.production.example` нельзя запускать без замены заглушек.
+
 Desktop в dev-режиме:
 
 ```powershell

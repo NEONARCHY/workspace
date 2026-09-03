@@ -2,9 +2,13 @@
 .env
 .env.*
 !.env.example
+!.env.staging.example
+!.env.production.example
 **/.env
 **/.env.*
 !**/.env.example
+!**/.env.staging.example
+!**/.env.production.example
 *.pem
 *.key
 *.pfx
