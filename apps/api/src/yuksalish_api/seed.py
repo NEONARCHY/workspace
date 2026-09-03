@@ -1,5 +1,6 @@
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
+from itertools import pairwise
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import SecretStr
@@ -138,61 +139,149 @@ async def seed_demo_data(
             "deleted_at": None,
         },
     ]
-    template_id = demo_uuid("approval-template/payment-v3")
+    template_id = demo_uuid("approval-template/payment-v4")
+    draft_template_id = demo_uuid("approval-template/payment-v5")
     workflow_nodes = [
-        ("start", "start", "Новая заявка", "Сотрудник отправил форму", 40.0, 170.0),
+        ("start", "start", "Запуск", "Сотрудник отправил форму", 40.0, 180.0, {}),
         (
-            "manager",
+            "project_financier",
             "approval",
-            "Руководитель отдела",
-            "Один согласующий, срок 1 день",
+            "Утверждение финансистом проекта",
+            "Проверка проекта и источника финансирования",
             260.0,
-            80.0,
+            40.0,
+            {"approverRole": "manager"},
         ),
-        ("amount", "condition", "Сумма выше 50 млн?", "Поле: amount", 500.0, 80.0),
         (
-            "finance",
+            "finance_manager_projects",
             "approval",
-            "Финансовый менеджер",
-            "Проверка бюджета",
-            740.0,
-            20.0,
+            "Утверждение финансовым менеджером по проектам",
+            "Финансовая проверка заявки",
+            480.0,
+            40.0,
+            {"approverRole": "manager"},
         ),
-        ("director", "approval", "Директор", "Обязательное решение", 740.0, 150.0),
-        ("approved", "end", "Оплата согласована", "Финальный статус", 980.0, 80.0),
+        (
+            "members",
+            "approval",
+            "Работа с членами Юксалиш",  # noqa: RUF001 - Cyrillic title
+            "Проверка рабочей группы",
+            700.0,
+            40.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "chair_assistant",
+            "approval",
+            "Утверждение помощником председателя",
+            "Решение помощника председателя",
+            920.0,
+            40.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "chief_accountant",
+            "approval",
+            "Утверждение главным бухгалтером",
+            "Бухгалтерская проверка",
+            1140.0,
+            40.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "deputy_chair",
+            "approval",
+            "Утверждение заместителя председателя",
+            "Решение заместителя председателя",
+            260.0,
+            320.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "chair",
+            "approval",
+            "Утверждение председателем",
+            "Финальное управленческое решение",
+            480.0,
+            320.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "awaiting_payment",
+            "approval",
+            "Ожидает оплаты",
+            "Заявка передана на исполнение",
+            700.0,
+            320.0,
+            {"approverRole": "manager"},
+        ),
+        (
+            "payment",
+            "approval",
+            "Оплата",
+            "Подтверждение фактической оплаты",
+            920.0,
+            320.0,
+            {"approverRole": "manager"},
+        ),
         (
             "correction",
             "correction",
-            "Вернуть на доработку",
+            "Доработка",
             "Комментарий обязателен",
-            500.0,
-            280.0,
+            700.0,
+            570.0,
+            {},
         ),
+        ("completed", "end", "Выполнено", "Оплата завершена", 1140.0, 320.0, {}),
+        ("cancelled", "end", "Отмена", "Заявка отклонена или отменена", 1140.0, 570.0, {}),
     ]
-    workflow_edges = [
-        ("start", "manager", "submit", None, {}, 0),
-        ("manager", "amount", "approve", None, {}, 0),
-        (
-            "amount",
-            "finance",
-            "true",
-            "Да",
-            {"field": "amount", "operator": "gt", "value": 50_000_000},
-            0,
-        ),
-        (
-            "amount",
-            "director",
-            "false",
-            "Нет",
-            {"field": "amount", "operator": "lte", "value": 50_000_000},
-            0,
-        ),
-        ("finance", "director", "approve", None, {}, 0),
-        ("director", "approved", "approve", None, {}, 0),
-        ("manager", "correction", "return", "Вернуть", {}, 0),
+    approval_stage_keys = [
+        "project_financier",
+        "finance_manager_projects",
+        "members",
+        "chair_assistant",
+        "chief_accountant",
+        "deputy_chair",
+        "chair",
+        "awaiting_payment",
+        "payment",
+    ]
+    workflow_edges: list[tuple[str, str, str, str | None, dict[str, object], int]] = [
+        ("start", approval_stage_keys[0], "submit", None, {}, 0),
+        *[
+            (source, target, "approve", None, {}, 0)
+            for source, target in pairwise(approval_stage_keys)
+        ],
+        (approval_stage_keys[-1], "completed", "approve", None, {}, 0),
+        *[(source, "correction", "return", "Вернуть", {}, 0) for source in approval_stage_keys],
+        *[(source, "cancelled", "reject", "Отклонить", {}, 0) for source in approval_stage_keys],
         ("correction", "start", "resubmit", None, {}, 0),
     ]
+    payment_form_schema = {
+        "fields": [
+            "title",
+            "transferType",
+            "projectName",
+            "projectCode",
+            "sourceAccount",
+            "destinationAccount",
+            "requestPriority",
+            "deadline",
+            "primaryFiles",
+            "additionalFiles",
+            "comment",
+            "tripPurpose",
+            "tripStartDate",
+            "tripEndDate",
+            "employeeIds",
+            "paymentPurpose",
+            "paymentReason",
+            "amount",
+            "currency",
+            "responsibleUserId",
+        ]
+    }
 
     async with engine.begin() as connection:
         await _insert_missing(
@@ -528,32 +617,52 @@ async def seed_demo_data(
                     "template_key": "payment",
                     "name": "Заявка на оплату",
                     "request_kind": "payment",
-                    "version": 3,
+                    "version": 4,
+                    "status": "published",
+                    "form_schema": payment_form_schema,
+                    "created_by_user_id": person_ids["aziza"],
+                    "created_at": now,
+                    "published_at": now,
+                },
+                {
+                    "id": draft_template_id,
+                    "template_key": "payment",
+                    "name": "Заявка на оплату",
+                    "request_kind": "payment",
+                    "version": 5,
                     "status": "draft",
-                    "form_schema": {
-                        "fields": ["title", "amount", "currency", "purpose", "sourceTaskId"]
-                    },
+                    "form_schema": payment_form_schema,
                     "created_by_user_id": person_ids["aziza"],
                     "created_at": now,
                     "published_at": None,
-                }
+                },
             ],
+        )
+        await connection.execute(
+            update(approval_templates)
+            .where(
+                approval_templates.c.template_key == "payment",
+                approval_templates.c.status == "draft",
+                approval_templates.c.version < 5,
+            )
+            .values(status="archived")
         )
         await _insert_missing(
             connection,
             approval_nodes,
             [
                 {
-                    "id": demo_uuid(f"approval-node/{node_key}"),
-                    "template_id": template_id,
+                    "id": demo_uuid(f"approval-node/{current_template_id}/{node_key}"),
+                    "template_id": current_template_id,
                     "node_key": node_key,
                     "kind": kind,
                     "title": title,
-                    "config": {"detail": detail},
+                    "config": {**config, "detail": detail},
                     "position_x": x,
                     "position_y": y,
                 }
-                for node_key, kind, title, detail, x, y in workflow_nodes
+                for current_template_id in (template_id, draft_template_id)
+                for node_key, kind, title, detail, x, y, config in workflow_nodes
             ],
         )
         await _insert_missing(
@@ -561,8 +670,10 @@ async def seed_demo_data(
             approval_edges,
             [
                 {
-                    "id": demo_uuid(f"approval-edge/{source}/{target}/{outcome}"),
-                    "template_id": template_id,
+                    "id": demo_uuid(
+                        f"approval-edge/{current_template_id}/{source}/{target}/{outcome}"
+                    ),
+                    "template_id": current_template_id,
                     "source_node_key": source,
                     "target_node_key": target,
                     "outcome": outcome,
@@ -570,6 +681,7 @@ async def seed_demo_data(
                     "condition": condition,
                     "sort_order": sort_order,
                 }
+                for current_template_id in (template_id, draft_template_id)
                 for source, target, outcome, label, condition, sort_order in workflow_edges
             ],
         )
@@ -581,6 +693,7 @@ async def seed_demo_data(
                     "id": demo_uuid("approval-request/148"),
                     "template_id": template_id,
                     "requester_user_id": person_ids["dilshod"],
+                    "responsible_user_id": person_ids["dilshod"],
                     "title": "Оплата ноутбуков для нового офиса",
                     "payload": {
                         "amount": 84_600_000,
@@ -589,7 +702,8 @@ async def seed_demo_data(
                         "number": "148",
                     },
                     "status": "running",
-                    "active_node_keys": ["manager"],
+                    "active_node_keys": ["project_financier"],
+                    "actor_overrides": {},
                     "source_task_id": demo_uuid("task/104"),
                     "current_version": 1,
                     "created_at": now,
@@ -600,6 +714,7 @@ async def seed_demo_data(
                     "id": demo_uuid("approval-request/147"),
                     "template_id": template_id,
                     "requester_user_id": person_ids["aziza"],
+                    "responsible_user_id": person_ids["aziza"],
                     "title": "Продление лицензий на программное обеспечение",
                     "payload": {
                         "amount": 12_400_000,
@@ -608,7 +723,8 @@ async def seed_demo_data(
                         "number": "147",
                     },
                     "status": "running",
-                    "active_node_keys": ["finance"],
+                    "active_node_keys": ["chief_accountant"],
+                    "actor_overrides": {},
                     "source_task_id": None,
                     "current_version": 1,
                     "created_at": now - timedelta(days=1),
@@ -619,6 +735,7 @@ async def seed_demo_data(
                     "id": demo_uuid("approval-request/142"),
                     "template_id": template_id,
                     "requester_user_id": person_ids["baxtiyor"],
+                    "responsible_user_id": person_ids["baxtiyor"],
                     "title": "Аванс на региональное мероприятие",
                     "payload": {
                         "amount": 6_800_000,
@@ -628,6 +745,7 @@ async def seed_demo_data(
                     },
                     "status": "approved",
                     "active_node_keys": [],
+                    "actor_overrides": {},
                     "source_task_id": None,
                     "current_version": 1,
                     "created_at": now - timedelta(days=3),

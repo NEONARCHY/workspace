@@ -1,6 +1,6 @@
 import asyncio
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -33,6 +33,7 @@ from yuksalish_api.repository import (
     get_attachment,
     load_workspace,
     materialize_due_task_cycles,
+    publish_workflow,
     remove_task_dependency,
     remove_task_participant,
     save_workflow,
@@ -61,6 +62,8 @@ from yuksalish_api.workspace_schemas import (
     UpdateApprovalRequest,
     UpdateChecklistItemRequest,
     UpdateTaskRequest,
+    WorkflowEdgeResponse,
+    WorkflowNodeResponse,
 )
 
 
@@ -84,12 +87,29 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert len(initial.people) == 4
             assert len(initial.chats) == 4
             assert initial.workflow.nodes
+            assert initial.workflow.published_version == 4
+            assert {node.label for node in initial.workflow.nodes} == {
+                "Запуск",
+                "Утверждение финансистом проекта",
+                "Утверждение финансовым менеджером по проектам",
+                "Работа с членами Юксалиш",  # noqa: RUF001 - Cyrillic stage title
+                "Утверждение помощником председателя",
+                "Утверждение главным бухгалтером",
+                "Утверждение заместителя председателя",
+                "Утверждение председателем",
+                "Ожидает оплаты",
+                "Оплата",
+                "Доработка",
+                "Выполнено",
+                "Отмена",
+            }
 
             directory = await load_directory(connection)
             assert len(directory.positions) >= 24
             audit_event_count = await connection.scalar(
                 select(func.count()).select_from(audit_events)
             )
+            assert audit_event_count is not None
             new_position = await create_position(
                 connection,
                 admin,
@@ -338,17 +358,52 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     title="Integration payment",
                     amount=84_600_000,
                     source_task_id=task.id,
+                    transfer_type="Другие услуги",
+                    project_name="Workspace",
+                    project_code="WS-26",
+                    source_account="Operating account",
+                    destination_account="Supplier account",
+                    request_priority="urgent",
+                    deadline=datetime.now(UTC) + timedelta(days=3),
+                    comment="Integration BP-6 request",
+                    trip_purpose="Vendor meeting",
+                    trip_start_date=date(2026, 9, 20),
+                    trip_end_date=date(2026, 9, 22),
+                    employee_ids=[str(dilshod_auth.id)],
+                    payment_purpose="Оплата за услуги",
+                    payment_reason="Contract 42",
+                    responsible_user_id=str(dilshod_auth.id),
                 ),
             )
-            assert approval.active_node_keys == ["manager"]
+            assert approval.active_node_keys == ["project_financier"]
+            assert approval.stage_label == "Утверждение финансистом проекта"
+            assert approval.details.project_code == "WS-26"
+            assert approval.details.employee_ids == [str(dilshod_auth.id)]
+            assert approval.responsible_user_id == str(dilshod_auth.id)
             approval = await act_on_request(
                 connection,
                 aziza,
                 UUID(approval.id),
+                ApprovalActionRequest(
+                    action="delegate",
+                    comment="Delegated for integration coverage",
+                    delegate_to_user_id=str(dilshod_auth.id),
+                ),
+            )
+            assert approval.actions[-1].delegated_to_user_id == str(dilshod_auth.id)
+            delegated_workspace = await load_workspace(connection, dilshod_auth)
+            delegated_request = next(
+                item for item in delegated_workspace.requests if item.id == approval.id
+            )
+            assert delegated_request.active_stages[0].can_act is True
+            approval = await act_on_request(
+                connection,
+                dilshod_auth,
+                UUID(approval.id),
                 ApprovalActionRequest(action="approve", comment="Integration approval"),
             )
             assert approval.status == "running"
-            assert approval.active_node_keys == ["finance"]
+            assert approval.active_node_keys == ["finance_manager_projects"]
             approval = await act_on_request(
                 connection,
                 aziza,
@@ -369,8 +424,10 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 byte_size=11,
                 sha256="b" * 64,
                 storage_key=f"approval_request/{approval.id}/corrected-invoice",
+                document_role="primary",
             )
             assert approval_attachment.owner_type == "approval_request"
+            assert approval_attachment.document_role == "primary"
             approval = await update_approval_request(
                 connection,
                 aziza,
@@ -394,7 +451,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ApprovalActionRequest(action="resubmit", comment="Corrected"),
             )
             assert approval.status == "running"
-            assert approval.active_node_keys == ["manager"]
+            assert approval.active_node_keys == ["project_financier"]
             assert approval.amount == 82_400_000
             assert approval.revision == 3
 
@@ -408,6 +465,24 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert len(saved.nodes) == len(initial.workflow.nodes)
+            next_draft = await publish_workflow(
+                connection,
+                aziza,
+                UUID(initial.workflow.id),
+            )
+            assert next_draft.version == initial.workflow.version + 1
+            assert next_draft.published_version == initial.workflow.version
+            assert next_draft.status == "draft"
+            with pytest.raises(WorkspaceRepositoryError, match="cannot be edited"):
+                await save_workflow(
+                    connection,
+                    aziza,
+                    UUID(initial.workflow.id),
+                    SaveWorkflowRequest(
+                        nodes=list(initial.workflow.nodes),
+                        edges=list(initial.workflow.edges),
+                    ),
+                )
 
             after = await load_workspace(connection, aziza)
             assert message.id in {item.id for item in after.messages}
@@ -426,3 +501,142 @@ def test_live_workspace_vertical_slice() -> None:
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     asyncio.run(_exercise_live_workspace(database_url))
+
+
+async def _exercise_parallel_workflow(database_url: str) -> None:
+    engine = create_async_engine(database_url, pool_pre_ping=True)
+    await seed_demo_data(engine)
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        try:
+            aziza_row = await find_active_user_by_username(connection, "aziza")
+            assert aziza_row is not None
+            aziza = await load_authenticated_user(connection, aziza_row["id"])
+            assert aziza is not None
+            workflow = (await load_workspace(connection, aziza)).workflow
+            nodes = [
+                WorkflowNodeResponse(
+                    id="start",
+                    kind="start",
+                    label="Запуск",
+                    detail="",
+                    position_x=0,
+                    position_y=0,
+                ),
+                WorkflowNodeResponse(
+                    id="split",
+                    kind="parallel",
+                    label="Параллельная проверка",
+                    detail="",
+                    position_x=200,
+                    position_y=0,
+                    config={"decisionMode": "all"},
+                ),
+                WorkflowNodeResponse(
+                    id="finance",
+                    kind="approval",
+                    label="Финансы",
+                    detail="",
+                    position_x=400,
+                    position_y=-100,
+                    config={"approverRole": "manager"},
+                ),
+                WorkflowNodeResponse(
+                    id="director",
+                    kind="approval",
+                    label="Директор",
+                    detail="",
+                    position_x=400,
+                    position_y=100,
+                    config={"approverRole": "manager"},
+                ),
+                WorkflowNodeResponse(
+                    id="done",
+                    kind="end",
+                    label="Выполнено",
+                    detail="",
+                    position_x=650,
+                    position_y=0,
+                ),
+            ]
+            edges = [
+                WorkflowEdgeResponse(id="submit", source="start", target="split", outcome="submit"),
+                WorkflowEdgeResponse(
+                    id="finance", source="split", target="finance", outcome="branch"
+                ),
+                WorkflowEdgeResponse(
+                    id="director",
+                    source="split",
+                    target="director",
+                    outcome="branch",
+                    sort_order=1,
+                ),
+                WorkflowEdgeResponse(id="finance-done", source="finance", target="done"),
+                WorkflowEdgeResponse(id="director-done", source="director", target="done"),
+            ]
+            await save_workflow(
+                connection,
+                aziza,
+                UUID(workflow.id),
+                SaveWorkflowRequest(nodes=nodes, edges=edges),
+            )
+            next_draft = await publish_workflow(connection, aziza, UUID(workflow.id))
+            request = await create_approval_request(
+                connection,
+                aziza,
+                CreateApprovalRequest(title="Parallel all", amount=1_000_000),
+            )
+            assert set(request.active_node_keys) == {"finance", "director"}
+            request = await act_on_request(
+                connection,
+                aziza,
+                UUID(request.id),
+                ApprovalActionRequest(action="approve", node_key="finance"),
+            )
+            assert request.active_node_keys == ["director"]
+            request = await act_on_request(
+                connection,
+                aziza,
+                UUID(request.id),
+                ApprovalActionRequest(action="approve", node_key="director"),
+            )
+            assert request.status == "approved"
+
+            any_nodes = [
+                node.model_copy(
+                    update={"config": {"decisionMode": "any"}} if node.id == "split" else {}
+                )
+                for node in nodes
+            ]
+            await save_workflow(
+                connection,
+                aziza,
+                UUID(next_draft.id),
+                SaveWorkflowRequest(nodes=any_nodes, edges=edges),
+            )
+            await publish_workflow(connection, aziza, UUID(next_draft.id))
+            request = await create_approval_request(
+                connection,
+                aziza,
+                CreateApprovalRequest(title="Parallel any", amount=2_000_000),
+            )
+            assert set(request.active_node_keys) == {"finance", "director"}
+            request = await act_on_request(
+                connection,
+                aziza,
+                UUID(request.id),
+                ApprovalActionRequest(action="approve", node_key="finance"),
+            )
+            assert request.status == "approved"
+            assert request.active_node_keys == []
+        finally:
+            await transaction.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.postgres
+def test_parallel_workflow_all_and_any_decisions() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    asyncio.run(_exercise_parallel_workflow(database_url))

@@ -61,6 +61,7 @@ import {
   refreshAuthentication,
   removeWorkspaceTaskDependency,
   removeWorkspaceTaskParticipant,
+  publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
   setWorkspaceTaskCycle,
@@ -71,6 +72,7 @@ import {
   updateWorkspaceTask,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
+  type PaymentRequestInput,
 } from "./workspace-api";
 
 interface NavItem {
@@ -266,6 +268,7 @@ export function App() {
     ownerType: "message" | "task" | "approval_request",
     ownerId: string,
     files: readonly File[],
+    documentRole: "general" | "primary" | "additional" = "general",
   ) => {
     if (session === undefined || files.length === 0) return [];
     const uploaded: WorkspaceAttachment[] = [];
@@ -275,6 +278,7 @@ export function App() {
         ownerType,
         ownerId,
         file,
+        documentRole,
       );
       uploaded.push(attachment);
       setWorkspace((current) => ({
@@ -448,25 +452,33 @@ export function App() {
     setWorkspace((current) => ({ ...current, workflow: saved }));
   };
 
+  const handlePublishWorkflow = async (workflow: WorkflowDefinition) => {
+    if (session === undefined) return undefined;
+    try {
+      const nextDraft = await publishWorkspaceWorkflow(session.accessToken, workflow.id);
+      setWorkspace((current) => ({ ...current, workflow: nextDraft }));
+      setConnectionDetail(`Маршрут версии ${workflow.version} опубликован`);
+      return nextDraft;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
   const handleCreateApproval = async (
-    title: string,
-    amount: number,
-    purpose = title,
-    files: readonly File[] = [],
-    sourceTaskId?: string,
+    payload: PaymentRequestInput,
+    primaryFiles: readonly File[] = [],
+    additionalFiles: readonly File[] = [],
   ) => {
     if (session === undefined) return undefined;
     try {
-      const request = await createWorkspaceApproval(session.accessToken, {
-        title,
-        amount,
-        currency: "UZS",
-        purpose,
-        sourceTaskId,
-      });
+      const request = await createWorkspaceApproval(session.accessToken, payload);
       setWorkspace((current) => ({ ...current, requests: [request, ...current.requests] }));
-      await uploadFiles("approval_request", request.id, files);
-      if (files.length > 0) await refreshWorkspace(session.accessToken);
+      await uploadFiles("approval_request", request.id, primaryFiles, "primary");
+      await uploadFiles("approval_request", request.id, additionalFiles, "additional");
+      if (primaryFiles.length + additionalFiles.length > 0) {
+        await refreshWorkspace(session.accessToken);
+      }
       return request;
     } catch (error) {
       reportError(error);
@@ -479,7 +491,24 @@ export function App() {
     title: string,
     amount: number,
   ) => {
-    const request = await handleCreateApproval(title, amount, task.title, [], task.id);
+    const request = await handleCreateApproval({
+      title,
+      amount,
+      currency: "UZS",
+      purpose: task.title,
+      sourceTaskId: task.id,
+      projectName: task.project,
+      projectCode: "",
+      sourceAccount: "",
+      destinationAccount: "",
+      requestPriority: task.priority === "urgent" ? "urgent" : "normal",
+      deadline: task.dueAt,
+      comment: `Создано из задачи: ${task.title}`,
+      tripPurpose: "",
+      employeeIds: [task.assigneeId],
+      paymentReason: task.title,
+      responsibleUserId: task.assigneeId,
+    });
     if (request !== undefined) {
       setActiveSection("payment_requests");
       setConnectionDetail("Заявка создана из задачи");
@@ -498,10 +527,11 @@ export function App() {
   const handleUploadApprovalAttachments = async (
     request: ApprovalRequestSummary,
     files: readonly File[],
+    documentRole: "general" | "primary" | "additional" = "additional",
   ) => {
     if (session === undefined) return;
     try {
-      await uploadFiles("approval_request", request.id, files);
+      await uploadFiles("approval_request", request.id, files, documentRole);
       await refreshWorkspace(session.accessToken);
     } catch (error) {
       reportError(error);
@@ -510,12 +540,14 @@ export function App() {
 
   const handleReviseApproval = async (
     request: ApprovalRequestSummary,
-    payload: { readonly title: string; readonly amount: number; readonly purpose: string },
-    files: readonly File[],
+    payload: PaymentRequestInput,
+    primaryFiles: readonly File[],
+    additionalFiles: readonly File[],
   ) => {
     if (session === undefined) return undefined;
     try {
-      await uploadFiles("approval_request", request.id, files);
+      await uploadFiles("approval_request", request.id, primaryFiles, "primary");
+      await uploadFiles("approval_request", request.id, additionalFiles, "additional");
       await updateWorkspaceApproval(session.accessToken, request.id, {
         ...payload,
         currency: request.currency,
@@ -525,7 +557,7 @@ export function App() {
         session.accessToken,
         request.id,
         "resubmit",
-        "Исправленная версия отправлена повторно",
+        { comment: "Исправленная версия отправлена повторно" },
       );
       setWorkspace((current) => ({
         ...current,
@@ -543,8 +575,12 @@ export function App() {
 
   const handleApprovalAction = async (
     requestId: string,
-    action: "approve" | "reject" | "return" | "resubmit",
-    comment?: string,
+    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+    options?: {
+      readonly comment?: string;
+      readonly nodeKey?: string;
+      readonly delegateToUserId?: string;
+    },
   ) => {
     if (session === undefined) return;
     try {
@@ -552,7 +588,7 @@ export function App() {
         session.accessToken,
         requestId,
         action,
-        comment,
+        options,
       );
       setWorkspace((current) => ({
         ...current,
@@ -706,10 +742,12 @@ export function App() {
                 key={workspace.workflow === undefined ? "offline" : JSON.stringify(workspace.workflow)}
                 canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
                 currentUserId={workspace.currentUser.id}
+                people={workspace.people}
                 requests={workspace.requests}
                 attachments={workspace.attachments}
                 workflow={workspace.workflow}
                 onSaveWorkflow={handleSaveWorkflow}
+                onPublishWorkflow={handlePublishWorkflow}
                 onCreateRequest={handleCreateApproval}
                 onAction={handleApprovalAction}
                 onReviseRequest={handleReviseApproval}

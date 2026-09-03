@@ -1,7 +1,7 @@
 import asyncio
 import hashlib
 from pathlib import PurePosixPath
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -38,6 +38,7 @@ from yuksalish_api.repository import (
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
+    publish_workflow,
     remove_task_dependency,
     remove_task_participant,
     save_workflow,
@@ -251,9 +252,7 @@ async def remove_task_checklist_item(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TaskResponse:
     try:
-        result = await delete_task_checklist_item(
-            connection, current_user, task_id, item_id
-        )
+        result = await delete_task_checklist_item(connection, current_user, task_id, item_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
@@ -292,9 +291,7 @@ async def put_task_dependency(
     return result
 
 
-@router.delete(
-    "/tasks/{task_id}/dependencies/{depends_on_task_id}", response_model=TaskResponse
-)
+@router.delete("/tasks/{task_id}/dependencies/{depends_on_task_id}", response_model=TaskResponse)
 async def delete_task_dependency(
     task_id: UUID,
     depends_on_task_id: UUID,
@@ -303,9 +300,7 @@ async def delete_task_dependency(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TaskResponse:
     try:
-        result = await remove_task_dependency(
-            connection, current_user, task_id, depends_on_task_id
-        )
+        result = await remove_task_dependency(connection, current_user, task_id, depends_on_task_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
@@ -341,6 +336,21 @@ async def put_workflow(
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "workflow.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/approval-templates/{template_id}/publish", response_model=WorkflowResponse)
+async def post_publish_workflow(
+    template_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> WorkflowResponse:
+    try:
+        result = await publish_workflow(connection, current_user, template_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "workflow.published", "entityId": str(template_id)})
     return result
 
 
@@ -403,6 +413,10 @@ async def put_attachment(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
     file_name: Annotated[str, Query(alias="fileName", min_length=1, max_length=500)],
+    document_role: Annotated[
+        Literal["general", "primary", "additional"],
+        Query(alias="documentRole"),
+    ] = "general",
 ) -> AttachmentResponse:
     safe_name = _safe_file_name(file_name)
     try:
@@ -443,6 +457,7 @@ async def put_attachment(
             byte_size=len(content),
             sha256=hashlib.sha256(content).hexdigest(),
             storage_key=storage_key,
+            document_role=document_role,
         )
     except WorkspaceRepositoryError as error:
         await storage.delete(storage_key)

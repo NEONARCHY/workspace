@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -64,6 +64,7 @@ class AttachmentResponse(ApiModel):
     byte_size: int
     sha256: str
     uploaded_by_user_id: str
+    document_role: Literal["general", "primary", "additional"] = "general"
     created_at: datetime
 
 
@@ -256,8 +257,59 @@ class ApprovalActionHistoryResponse(ApiModel):
     action: str
     comment: str | None
     actor_user_id: str
+    delegated_to_user_id: str | None = None
     node_key: str
     created_at: datetime
+
+
+class ApprovalStageResponse(ApiModel):
+    key: str
+    label: str
+    kind: str
+    can_act: bool = False
+
+
+class PaymentRequestDetails(ApiModel):
+    transfer_type: (
+        Literal[
+            "Гонорар (с расчетом)",  # noqa: RUF001 - Cyrillic enum value
+            "Конвертация",
+            "Другие услуги",
+        ]
+        | None
+    ) = None
+    project_name: str = Field(default="", max_length=240)
+    project_code: str = Field(default="", max_length=96)
+    source_account: str = Field(default="", max_length=500)
+    destination_account: str = Field(default="", max_length=500)
+    request_priority: Literal["normal", "urgent"] = "normal"
+    deadline: datetime | None = None
+    comment: str = Field(default="", max_length=20_000)
+    trip_purpose: str = Field(default="", max_length=4000)
+    trip_start_date: date | None = None
+    trip_end_date: date | None = None
+    employee_ids: list[str] = Field(default_factory=list, max_length=100)
+    payment_purpose: (
+        Literal[
+            "Мероприятия",
+            "Гонорары",
+            "Зарплаты",
+            "Перелеты",
+            "Оплата за услуги",
+            "Другие",
+        ]
+        | None
+    ) = None
+    payment_reason: str = Field(default="", max_length=20_000)
+    responsible_user_id: str | None = None
+
+    @field_validator("trip_end_date")
+    @classmethod
+    def trip_dates_must_be_ordered(cls, value: date | None, info: Any) -> date | None:
+        start = info.data.get("trip_start_date")
+        if value is not None and start is not None and value < start:
+            raise ValueError("Trip end date must not be before its start date")
+        return value
 
 
 class ApprovalRequestResponse(ApiModel):
@@ -269,9 +321,15 @@ class ApprovalRequestResponse(ApiModel):
     status: ApprovalStatus
     status_label: str
     active_node_keys: list[str]
+    active_stages: list[ApprovalStageResponse] = Field(default_factory=list)
+    stage_label: str
     requester_id: str
+    responsible_user_id: str
     source_task_id: str | None = None
     purpose: str = ""
+    details: PaymentRequestDetails = Field(default_factory=PaymentRequestDetails)
+    created_at: datetime
+    updated_at: datetime
     revision: int = 1
     versions: list["ApprovalRequestVersionResponse"] = Field(default_factory=list)
     actions: list[ApprovalActionHistoryResponse] = Field(default_factory=list)
@@ -283,6 +341,7 @@ class ApprovalRequestVersionResponse(ApiModel):
     amount: int
     currency: str
     purpose: str
+    details: PaymentRequestDetails = Field(default_factory=PaymentRequestDetails)
     attachment_ids: list[str]
     edited_by_user_id: str
     change_reason: str
@@ -290,15 +349,23 @@ class ApprovalRequestVersionResponse(ApiModel):
     created_at: datetime
 
 
-class CreateApprovalRequest(ApiModel):
+class CreateApprovalRequest(PaymentRequestDetails):
     title: str = Field(min_length=1, max_length=240)
     amount: int = Field(gt=0)
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     source_task_id: str | None = None
 
+    @field_validator("title")
+    @classmethod
+    def create_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Title must not be blank")
+        return stripped
 
-class UpdateApprovalRequest(ApiModel):
+
+class UpdateApprovalRequest(PaymentRequestDetails):
     title: str = Field(min_length=1, max_length=240)
     amount: int = Field(gt=0)
     currency: str = Field(default="UZS", min_length=3, max_length=3)
@@ -315,8 +382,18 @@ class UpdateApprovalRequest(ApiModel):
 
 
 class ApprovalActionRequest(ApiModel):
-    action: Literal["approve", "reject", "return", "clarify", "delegate", "resubmit"]
+    action: Literal[
+        "approve",
+        "reject",
+        "return",
+        "clarify",
+        "delegate",
+        "resubmit",
+        "cancel",
+    ]
     comment: str | None = Field(default=None, max_length=4000)
+    node_key: str | None = Field(default=None, max_length=96)
+    delegate_to_user_id: str | None = None
 
 
 class WorkflowNodeResponse(ApiModel):
@@ -344,6 +421,8 @@ class WorkflowResponse(ApiModel):
     name: str
     version: int
     status: str
+    published_version: int | None = None
+    form_schema: dict[str, Any] = Field(default_factory=dict)
     nodes: list[WorkflowNodeResponse]
     edges: list[WorkflowEdgeResponse]
 

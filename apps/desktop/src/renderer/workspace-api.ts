@@ -8,6 +8,7 @@ import type {
   DevelopmentSession,
   InvitationResult,
   PasswordResetResult,
+  PaymentRequestDetails,
   SessionSummary,
   TaskParticipantRole,
   TaskStatus,
@@ -384,15 +385,29 @@ export function saveWorkspaceWorkflow(
   );
 }
 
+export function publishWorkspaceWorkflow(
+  token: string,
+  workflowId: string,
+): Promise<WorkflowDefinition> {
+  return apiRequest<WorkflowDefinition>(
+    `/approval-templates/${workflowId}/publish`,
+    { method: "POST" },
+    token,
+  );
+}
+
+export interface PaymentRequestInput extends PaymentRequestDetails {
+  readonly title: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly purpose: string;
+  readonly sourceTaskId?: string;
+  readonly changeComment?: string;
+}
+
 export function createWorkspaceApproval(
   token: string,
-  payload: {
-    readonly title: string;
-    readonly amount: number;
-    readonly currency: string;
-    readonly purpose: string;
-    readonly sourceTaskId?: string;
-  },
+  payload: PaymentRequestInput,
 ): Promise<ApprovalRequestSummary> {
   return apiRequest<ApprovalRequestSummary>(
     "/approval-requests",
@@ -404,12 +419,16 @@ export function createWorkspaceApproval(
 export function actOnWorkspaceApproval(
   token: string,
   requestId: string,
-  action: "approve" | "reject" | "return" | "resubmit",
-  comment?: string,
+  action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+  options: {
+    readonly comment?: string;
+    readonly nodeKey?: string;
+    readonly delegateToUserId?: string;
+  } = {},
 ): Promise<ApprovalRequestSummary> {
   return apiRequest<ApprovalRequestSummary>(
     `/approval-requests/${requestId}/actions`,
-    { method: "POST", body: JSON.stringify({ action, comment }) },
+    { method: "POST", body: JSON.stringify({ action, ...options }) },
     token,
   );
 }
@@ -417,13 +436,7 @@ export function actOnWorkspaceApproval(
 export function updateWorkspaceApproval(
   token: string,
   requestId: string,
-  payload: {
-    readonly title: string;
-    readonly amount: number;
-    readonly currency: string;
-    readonly purpose: string;
-    readonly changeComment?: string;
-  },
+  payload: PaymentRequestInput,
 ): Promise<ApprovalRequestSummary> {
   return apiRequest<ApprovalRequestSummary>(
     `/approval-requests/${requestId}`,
@@ -437,8 +450,9 @@ export async function uploadWorkspaceAttachment(
   ownerType: AttachmentOwnerType,
   ownerId: string,
   file: File,
+  documentRole: "general" | "primary" | "additional" = "general",
 ): Promise<WorkspaceAttachment> {
-  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?fileName=${encodeURIComponent(file.name)}`;
+  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?fileName=${encodeURIComponent(file.name)}&documentRole=${documentRole}`;
   const response = await fetch(url, {
     method: "PUT",
     headers: {

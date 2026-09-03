@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ApprovalRequestSummary,
+  PaymentRequestDetails,
   WorkspaceAttachment,
   WorkspaceTask,
 } from "@yuksalish/contracts";
@@ -15,6 +16,8 @@ const workflow = {
   name: "Оплата",
   version: 1,
   status: "draft",
+  publishedVersion: 1,
+  formSchema: {},
   nodes: [
     {
       id: "start",
@@ -45,6 +48,24 @@ const workflow = {
       sortOrder: 0,
     },
   ],
+};
+
+const paymentDetails: PaymentRequestDetails = {
+  transferType: "Другие услуги",
+  projectName: "Yuksalish",
+  projectCode: "YUK",
+  sourceAccount: "Основной счёт",
+  destinationAccount: "Счёт поставщика",
+  requestPriority: "normal",
+  deadline: null,
+  comment: "",
+  tripPurpose: "",
+  tripStartDate: null,
+  tripEndDate: null,
+  employeeIds: [],
+  paymentPurpose: "Оплата за услуги",
+  paymentReason: "Рабочие расходы",
+  responsibleUserId: people[0]!.id,
 };
 
 const position = {
@@ -98,8 +119,14 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
           status: "needs_revision" as const,
           statusLabel: "На доработке",
           activeNodeKeys: ["correction"],
+          activeStages: [{ key: "correction", label: "Доработка", kind: "correction", canAct: false }],
+          stageLabel: "Доработка",
           requesterId: people[0]!.id,
+          responsibleUserId: people[0]!.id,
           sourceTaskId: initialTasks[0]!.id,
+          details: paymentDetails,
+          createdAt: "2026-09-03T10:00:00Z",
+          updatedAt: "2026-09-03T10:15:00Z",
           revision: 1,
           versions: [
             {
@@ -108,6 +135,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
               amount: 5_000_000,
               currency: "UZS",
               purpose: "Требует исправления",
+              details: paymentDetails,
               attachmentIds: [],
               editedByUserId: people[0]!.id,
               changeReason: "initial",
@@ -155,6 +183,9 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
     if (url.endsWith("/directory") && options?.method === undefined) {
       return response(directory);
     }
+    if (url.endsWith("/approval-templates/workflow/publish") && options?.method === "POST") {
+      return response({ ...workflow, id: "workflow-v2", version: 2, publishedVersion: 1 });
+    }
     if (url.endsWith("/directory/positions") && options?.method === "POST") {
       return response({
         id: "position-new",
@@ -187,6 +218,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         byteSize: 7,
         sha256: "a".repeat(64),
         uploadedByUserId: currentUser.id,
+        documentRole: (new URL(url).searchParams.get("documentRole") ?? "general") as WorkspaceAttachment["documentRole"],
         createdAt: "2026-09-03T10:00:00Z",
       };
       attachments.push(attachment);
@@ -354,6 +386,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         amount: number;
         purpose: string;
         sourceTaskId?: string;
+        responsibleUserId?: string;
       };
       const created = {
         id: "server-request",
@@ -365,8 +398,14 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
         status: "running" as const,
         statusLabel: "Ожидает решения",
         activeNodeKeys: ["manager"],
+        activeStages: [{ key: "manager", label: "Согласование", kind: "approval", canAct: true }],
+        stageLabel: "Согласование",
         requesterId: currentUser.id,
+        responsibleUserId: payload.responsibleUserId ?? currentUser.id,
         sourceTaskId: payload.sourceTaskId,
+        details: { ...paymentDetails, ...payload },
+        createdAt: "2026-09-03T10:00:00Z",
+        updatedAt: "2026-09-03T10:00:00Z",
         revision: 1,
         versions: [],
         actions: [],
@@ -393,6 +432,7 @@ function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
             amount: payload.amount,
             currency: "UZS",
             purpose: payload.purpose,
+            details: { ...current.details, ...payload },
             attachmentIds: [],
             editedByUserId: currentUser.id,
             changeReason: "correction",
@@ -614,6 +654,60 @@ describe("corporate workspace authentication alpha", () => {
 
     expect(await screen.findByText("Оплатить поставку по задаче")).toBeInTheDocument();
     expect(screen.getByText("Версия 1 · создана из задачи")).toBeInTheDocument();
+  });
+
+  it("submits the complete payment card and publishes a workflow version", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+      target: { value: "Полная заявка BP-6" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+      target: { value: "12500000" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Назначение платежа" }), {
+      target: { value: "Оплата подрядчику" },
+    });
+    fireEvent.change(screen.getByLabelText("тип перевода"), {
+      target: { value: "Другие услуги" },
+    });
+    fireEvent.change(screen.getByLabelText("название проекта"), {
+      target: { value: "Workspace" },
+    });
+    fireEvent.change(screen.getByLabelText("код проекта"), {
+      target: { value: "WS-26" },
+    });
+    fireEvent.change(screen.getByLabelText("категория платежа"), {
+      target: { value: "Оплата за услуги" },
+    });
+    fireEvent.change(screen.getByLabelText("основание платежа"), {
+      target: { value: "Договор 42" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+
+    expect(await screen.findByText("Полная заявка BP-6")).toBeInTheDocument();
+    const createCall = fetchMock.mock.calls.find(([url, options]) =>
+      String(url).endsWith("/approval-requests") && options?.method === "POST",
+    );
+    const payload = JSON.parse(String(createCall?.[1]?.body)) as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      transferType: "Другие услуги",
+      projectName: "Workspace",
+      projectCode: "WS-26",
+      paymentPurpose: "Оплата за услуги",
+      paymentReason: "Договор 42",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
+    fireEvent.click(screen.getByRole("button", { name: "Опубликовать v1" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/approval-templates/workflow/publish"),
+      expect.objectContaining({ method: "POST" }),
+    ));
   });
 
   it("edits a returned request and resubmits its new version", async () => {

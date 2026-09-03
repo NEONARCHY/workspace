@@ -34,6 +34,7 @@ from .workspace_schemas import (
     ApprovalActionRequest,
     ApprovalRequestResponse,
     ApprovalRequestVersionResponse,
+    ApprovalStageResponse,
     AttachmentOwnerType,
     AttachmentResponse,
     ChangeTaskStatusRequest,
@@ -43,6 +44,7 @@ from .workspace_schemas import (
     CreateChecklistItemRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
+    PaymentRequestDetails,
     PersonResponse,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -205,6 +207,7 @@ def _approval_version(row: Record) -> ApprovalRequestVersionResponse:
         amount=int(payload.get("amount", 0)),
         currency=str(payload.get("currency", "UZS")),
         purpose=str(payload.get("purpose", "")),
+        details=_payment_details(payload),
         attachment_ids=[str(value) for value in row["attachment_ids"] or []],
         edited_by_user_id=str(row["edited_by_user_id"]),
         change_reason=row["change_reason"],
@@ -218,6 +221,9 @@ def _approval_action(row: Record) -> ApprovalActionHistoryResponse:
         action=row["action"],
         comment=row["comment"],
         actor_user_id=str(row["actor_user_id"]),
+        delegated_to_user_id=(
+            str(row["delegated_to_user_id"]) if row.get("delegated_to_user_id") else None
+        ),
         node_key=row["node_key"],
         created_at=row["created_at"],
     )
@@ -233,7 +239,35 @@ def _attachment(row: Record) -> AttachmentResponse:
         byte_size=row["byte_size"],
         sha256=row["sha256"],
         uploaded_by_user_id=str(row["uploaded_by_user_id"]),
+        document_role=row.get("document_role") or "general",
         created_at=row["created_at"],
+    )
+
+
+def _payment_details(
+    payload: Mapping[str, Any],
+    responsible_user_id: UUID | str | None = None,
+) -> PaymentRequestDetails:
+    return PaymentRequestDetails(
+        transfer_type=payload.get("transfer_type"),
+        project_name=str(payload.get("project_name", "")),
+        project_code=str(payload.get("project_code", "")),
+        source_account=str(payload.get("source_account", "")),
+        destination_account=str(payload.get("destination_account", "")),
+        request_priority=payload.get("request_priority", "normal"),
+        deadline=payload.get("deadline"),
+        comment=str(payload.get("comment", "")),
+        trip_purpose=str(payload.get("trip_purpose", "")),
+        trip_start_date=payload.get("trip_start_date"),
+        trip_end_date=payload.get("trip_end_date"),
+        employee_ids=[str(value) for value in payload.get("employee_ids", [])],
+        payment_purpose=payload.get("payment_purpose"),
+        payment_reason=str(payload.get("payment_reason", "")),
+        responsible_user_id=(
+            str(responsible_user_id)
+            if responsible_user_id is not None
+            else payload.get("responsible_user_id")
+        ),
     )
 
 
@@ -241,6 +275,7 @@ def _approval_request(
     row: Record,
     versions: Sequence[ApprovalRequestVersionResponse] = (),
     actions: Sequence[ApprovalActionHistoryResponse] = (),
+    active_stages: Sequence[ApprovalStageResponse] = (),
 ) -> ApprovalRequestResponse:
     payload = row["payload"] or {}
     status_value = str(row["status"])
@@ -253,13 +288,92 @@ def _approval_request(
         status=row["status"],
         status_label=STATUS_LABELS.get(status_value, status_value),
         active_node_keys=list(row["active_node_keys"] or []),
+        active_stages=list(active_stages),
+        stage_label=(
+            " · ".join(stage.label for stage in active_stages)
+            if active_stages
+            else "Выполнено"
+            if status_value == "approved"
+            else "Отмена"
+            if status_value in {"rejected", "cancelled"}
+            else STATUS_LABELS.get(status_value, status_value)
+        ),
         requester_id=str(row["requester_user_id"]),
+        responsible_user_id=str(row.get("responsible_user_id") or row["requester_user_id"]),
         source_task_id=(str(row["source_task_id"]) if row["source_task_id"] else None),
         purpose=str(payload.get("purpose", "")),
+        details=_payment_details(
+            payload,
+            row.get("responsible_user_id") or row["requester_user_id"],
+        ),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
         revision=int(row.get("current_version", 1)),
         versions=list(versions),
         actions=list(actions),
     )
+
+
+def _can_act_from_config(
+    current_user: AuthenticatedUser,
+    request_row: Record,
+    node_key: str,
+    config: Mapping[str, Any],
+) -> bool:
+    if current_user.role == "superadmin":
+        return True
+    override = (request_row.get("actor_overrides") or {}).get(node_key)
+    if override is not None:
+        return str(current_user.id) == str(override)
+    approver_user_id = config.get("approverUserId")
+    if approver_user_id:
+        return str(current_user.id) == str(approver_user_id)
+    approver_role = config.get("approverRole", "manager")
+    if approver_role == "manager":
+        return current_user.role in {"manager", "admin"}
+    return current_user.role == approver_role or current_user.role == "admin"
+
+
+async def _active_stages_for_requests(
+    connection: AsyncConnection,
+    request_rows: Sequence[Record],
+    current_user: AuthenticatedUser,
+) -> dict[UUID, list[ApprovalStageResponse]]:
+    template_ids = list({row["template_id"] for row in request_rows})
+    if not template_ids:
+        return {}
+    node_rows = (
+        (
+            await connection.execute(
+                select(approval_nodes).where(approval_nodes.c.template_id.in_(template_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    nodes = {(row["template_id"], row["node_key"]): row for row in node_rows}
+    result: dict[UUID, list[ApprovalStageResponse]] = {}
+    for request_row in request_rows:
+        stages: list[ApprovalStageResponse] = []
+        for key in request_row["active_node_keys"] or []:
+            node = nodes.get((request_row["template_id"], key))
+            if node is None:
+                continue
+            stages.append(
+                ApprovalStageResponse(
+                    key=node["node_key"],
+                    label=node["title"],
+                    kind=node["kind"],
+                    can_act=_can_act_from_config(
+                        current_user,
+                        request_row,
+                        key,
+                        node["config"] or {},
+                    ),
+                )
+            )
+        result[request_row["id"]] = stages
+    return result
 
 
 async def _request_versions(
@@ -269,15 +383,19 @@ async def _request_versions(
     if not request_ids:
         return {}
     rows = (
-        await connection.execute(
-            select(approval_request_versions)
-            .where(approval_request_versions.c.request_id.in_(request_ids))
-            .order_by(
-                approval_request_versions.c.request_id,
-                approval_request_versions.c.version,
+        (
+            await connection.execute(
+                select(approval_request_versions)
+                .where(approval_request_versions.c.request_id.in_(request_ids))
+                .order_by(
+                    approval_request_versions.c.request_id,
+                    approval_request_versions.c.version,
+                )
             )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     result: dict[UUID, list[ApprovalRequestVersionResponse]] = {}
     for row in rows:
         result.setdefault(row["request_id"], []).append(_approval_version(row))
@@ -291,12 +409,16 @@ async def _request_actions(
     if not request_ids:
         return {}
     rows = (
-        await connection.execute(
-            select(approval_actions)
-            .where(approval_actions.c.request_id.in_(request_ids))
-            .order_by(approval_actions.c.request_id, approval_actions.c.created_at)
+        (
+            await connection.execute(
+                select(approval_actions)
+                .where(approval_actions.c.request_id.in_(request_ids))
+                .order_by(approval_actions.c.request_id, approval_actions.c.created_at)
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     result: dict[UUID, list[ApprovalActionHistoryResponse]] = {}
     for row in rows:
         result.setdefault(row["request_id"], []).append(_approval_action(row))
@@ -306,20 +428,27 @@ async def _request_actions(
 async def _request_response(
     connection: AsyncConnection,
     request_id: UUID,
+    current_user: AuthenticatedUser,
 ) -> ApprovalRequestResponse:
     row = (
-        await connection.execute(
-            select(approval_requests).where(approval_requests.c.id == request_id)
+        (
+            await connection.execute(
+                select(approval_requests).where(approval_requests.c.id == request_id)
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
     versions = await _request_versions(connection, [request_id])
     actions = await _request_actions(connection, [request_id])
+    stages = await _active_stages_for_requests(connection, [row], current_user)
     return _approval_request(
         row,
         versions.get(request_id, []),
         actions.get(request_id, []),
+        stages.get(request_id, []),
     )
 
 
@@ -331,16 +460,10 @@ async def find_active_user_by_username(
     return (await connection.execute(statement)).mappings().first()
 
 
-async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
-    template_statement = (
-        select(approval_templates)
-        .where(approval_templates.c.template_key == "payment")
-        .order_by(approval_templates.c.version.desc())
-        .limit(1)
-    )
-    template = (await connection.execute(template_statement)).mappings().first()
-    if template is None:
-        raise WorkspaceRepositoryError(503, "Payment workflow is not configured")
+async def _workflow_response(
+    connection: AsyncConnection,
+    template: Record,
+) -> WorkflowResponse:
     node_rows = (
         (
             await connection.execute(
@@ -363,11 +486,19 @@ async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
         .mappings()
         .all()
     )
+    published_version = await connection.scalar(
+        select(func.max(approval_templates.c.version)).where(
+            approval_templates.c.template_key == template["template_key"],
+            approval_templates.c.status == "published",
+        )
+    )
     return WorkflowResponse(
         id=str(template["id"]),
         name=template["name"],
         version=template["version"],
         status=template["status"],
+        published_version=published_version,
+        form_schema=template["form_schema"] or {},
         nodes=[
             WorkflowNodeResponse(
                 id=row["node_key"],
@@ -395,6 +526,80 @@ async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
     )
 
 
+async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
+    template = (
+        (
+            await connection.execute(
+                select(approval_templates)
+                .where(
+                    approval_templates.c.template_key == "payment",
+                    approval_templates.c.status == "draft",
+                )
+                .order_by(approval_templates.c.version.desc())
+                .limit(1)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if template is None:
+        template = (
+            (
+                await connection.execute(
+                    select(approval_templates)
+                    .where(
+                        approval_templates.c.template_key == "payment",
+                        approval_templates.c.status == "published",
+                    )
+                    .order_by(approval_templates.c.version.desc())
+                    .limit(1)
+                )
+            )
+            .mappings()
+            .first()
+        )
+    if template is None:
+        raise WorkspaceRepositoryError(503, "Payment workflow is not configured")
+    return await _workflow_response(connection, template)
+
+
+async def _published_payment_template(connection: AsyncConnection) -> RowMapping:
+    template = (
+        (
+            await connection.execute(
+                select(approval_templates)
+                .where(
+                    approval_templates.c.template_key == "payment",
+                    approval_templates.c.status == "published",
+                )
+                .order_by(approval_templates.c.version.desc())
+                .limit(1)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if template is None:
+        template = (
+            (
+                await connection.execute(
+                    select(approval_templates)
+                    .where(
+                        approval_templates.c.template_key == "payment",
+                        approval_templates.c.status == "draft",
+                    )
+                    .order_by(approval_templates.c.version.desc())
+                    .limit(1)
+                )
+            )
+            .mappings()
+            .first()
+        )
+    if template is None:
+        raise WorkspaceRepositoryError(503, "Payment workflow is not configured")
+    return template
+
+
 async def _task_detail_maps(
     connection: AsyncConnection,
     task_rows: Sequence[Record],
@@ -410,12 +615,16 @@ async def _task_detail_maps(
         return {}, {}, {}, {}, {}
 
     participant_rows = (
-        await connection.execute(
-            select(task_participants)
-            .where(task_participants.c.task_id.in_(task_ids))
-            .order_by(task_participants.c.task_id, task_participants.c.participant_role)
+        (
+            await connection.execute(
+                select(task_participants)
+                .where(task_participants.c.task_id.in_(task_ids))
+                .order_by(task_participants.c.task_id, task_participants.c.participant_role)
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     participants: dict[UUID, list[TaskParticipantResponse]] = {}
     for row in participant_rows:
         participants.setdefault(row["task_id"], []).append(
@@ -426,43 +635,55 @@ async def _task_detail_maps(
         )
 
     checklist_rows = (
-        await connection.execute(
-            select(task_checklist_items)
-            .where(task_checklist_items.c.task_id.in_(task_ids))
-            .order_by(
-                task_checklist_items.c.task_id,
-                task_checklist_items.c.sort_order,
-                task_checklist_items.c.created_at,
+        (
+            await connection.execute(
+                select(task_checklist_items)
+                .where(task_checklist_items.c.task_id.in_(task_ids))
+                .order_by(
+                    task_checklist_items.c.task_id,
+                    task_checklist_items.c.sort_order,
+                    task_checklist_items.c.created_at,
+                )
             )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     checklist: dict[UUID, list[TaskChecklistItemResponse]] = {}
     for row in checklist_rows:
         checklist.setdefault(row["task_id"], []).append(_task_checklist_item(row))
 
     comment_rows = (
-        await connection.execute(
-            select(task_comments)
-            .where(task_comments.c.task_id.in_(task_ids))
-            .order_by(task_comments.c.task_id, task_comments.c.created_at)
+        (
+            await connection.execute(
+                select(task_comments)
+                .where(task_comments.c.task_id.in_(task_ids))
+                .order_by(task_comments.c.task_id, task_comments.c.created_at)
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     comments: dict[UUID, list[TaskCommentResponse]] = {}
     for row in comment_rows:
         comments.setdefault(row["task_id"], []).append(_task_comment(row))
 
     dependency_rows = (
-        await connection.execute(
-            select(task_dependencies)
-            .where(task_dependencies.c.task_id.in_(task_ids))
-            .order_by(task_dependencies.c.task_id, task_dependencies.c.created_at)
+        (
+            await connection.execute(
+                select(task_dependencies)
+                .where(task_dependencies.c.task_id.in_(task_ids))
+                .order_by(task_dependencies.c.task_id, task_dependencies.c.created_at)
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     dependency_ids = list({row["depends_on_task_id"] for row in dependency_rows})
     dependency_task_rows = (
-        (
-            await connection.execute(select(tasks).where(tasks.c.id.in_(dependency_ids)))
-        ).mappings().all()
+        (await connection.execute(select(tasks).where(tasks.c.id.in_(dependency_ids))))
+        .mappings()
+        .all()
         if dependency_ids
         else []
     )
@@ -471,9 +692,7 @@ async def _task_detail_maps(
     for row in dependency_rows:
         dependency = dependency_tasks.get(row["depends_on_task_id"])
         if dependency is not None:
-            dependencies.setdefault(row["task_id"], []).append(
-                _task_dependency(row, dependency)
-            )
+            dependencies.setdefault(row["task_id"], []).append(_task_dependency(row, dependency))
 
     cycle_ids = list({row["cycle_id"] for row in task_rows if row["cycle_id"] is not None})
     cycle_rows = (
@@ -488,9 +707,7 @@ async def _task_detail_maps(
 
 
 async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResponse:
-    row = (
-        await connection.execute(select(tasks).where(tasks.c.id == task_id))
-    ).mappings().first()
+    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     participants, checklist, comments, dependencies, cycles = await _task_detail_maps(
@@ -598,14 +815,17 @@ async def load_workspace(
         task_cycles_by_id,
     ) = await _task_detail_maps(connection, task_rows)
 
-    request_statement = select(approval_requests).order_by(
-        approval_requests.c.updated_at.desc()
-    )
-    if current_user.role == "employee":
-        request_statement = request_statement.where(
-            approval_requests.c.requester_user_id == current_user.id
-        )
+    request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
     request_rows = (await connection.execute(request_statement)).mappings().all()
+    stages_by_request = await _active_stages_for_requests(connection, request_rows, current_user)
+    if current_user.role == "employee":
+        request_rows = [
+            row
+            for row in request_rows
+            if row["requester_user_id"] == current_user.id
+            or row["responsible_user_id"] == current_user.id
+            or any(stage.can_act for stage in stages_by_request.get(row["id"], []))
+        ]
     request_ids = [row["id"] for row in request_rows]
     versions_by_request = await _request_versions(connection, request_ids)
     actions_by_request = await _request_actions(connection, request_ids)
@@ -631,12 +851,16 @@ async def load_workspace(
     attachment_rows: Sequence[RowMapping] = ()
     if attachment_filters:
         attachment_rows = (
-            await connection.execute(
-                select(attachments)
-                .where(or_(*attachment_filters))
-                .order_by(attachments.c.created_at)
+            (
+                await connection.execute(
+                    select(attachments)
+                    .where(or_(*attachment_filters))
+                    .order_by(attachments.c.created_at)
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
 
     return WorkspaceBootstrapResponse(
         current_user=current,
@@ -659,6 +883,7 @@ async def load_workspace(
                 row,
                 versions_by_request.get(row["id"], []),
                 actions_by_request.get(row["id"], []),
+                stages_by_request.get(row["id"], []),
             )
             for row in request_rows
         ],
@@ -724,19 +949,21 @@ async def _task_access_row(
     edit: bool = False,
     manage: bool = False,
 ) -> Record:
-    row = (
-        await connection.execute(select(tasks).where(tasks.c.id == task_id))
-    ).mappings().first()
+    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     participant_roles = (
-        await connection.execute(
-            select(task_participants.c.participant_role).where(
-                task_participants.c.task_id == task_id,
-                task_participants.c.user_id == current_user.id,
+        (
+            await connection.execute(
+                select(task_participants.c.participant_role).where(
+                    task_participants.c.task_id == task_id,
+                    task_participants.c.user_id == current_user.id,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     privileged = current_user.role in {"manager", "admin", "superadmin"}
     is_author = row["author_user_id"] == current_user.id
     is_assignee = row["primary_assignee_user_id"] == current_user.id
@@ -758,7 +985,9 @@ async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid user identifier") from error
     exists = await connection.scalar(
-        select(func.count()).select_from(users).where(
+        select(func.count())
+        .select_from(users)
+        .where(
             users.c.id == user_id,
             users.c.status == "active",
         )
@@ -779,7 +1008,9 @@ async def create_task(
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
     assignee_exists = await connection.scalar(
-        select(func.count()).select_from(users).where(
+        select(func.count())
+        .select_from(users)
+        .where(
             users.c.id == assignee_id,
             users.c.status == "active",
         )
@@ -970,7 +1201,9 @@ async def update_task_checklist_item(
 ) -> TaskResponse:
     await _task_access_row(connection, current_user, task_id, edit=True)
     exists = await connection.scalar(
-        select(func.count()).select_from(task_checklist_items).where(
+        select(func.count())
+        .select_from(task_checklist_items)
+        .where(
             task_checklist_items.c.id == item_id,
             task_checklist_items.c.task_id == task_id,
         )
@@ -1169,33 +1402,43 @@ async def materialize_due_task_cycles(
 ) -> int:
     current_time = now or datetime.now(UTC)
     cycle_rows = (
-        await connection.execute(
-            select(task_cycles)
-            .where(
-                task_cycles.c.is_enabled.is_(True),
-                task_cycles.c.next_run_at.is_not(None),
-                task_cycles.c.next_run_at <= current_time,
+        (
+            await connection.execute(
+                select(task_cycles)
+                .where(
+                    task_cycles.c.is_enabled.is_(True),
+                    task_cycles.c.next_run_at.is_not(None),
+                    task_cycles.c.next_run_at <= current_time,
+                )
+                .order_by(task_cycles.c.next_run_at)
+                .with_for_update(skip_locked=True)
             )
-            .order_by(task_cycles.c.next_run_at)
-            .with_for_update(skip_locked=True)
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     created = 0
     for cycle in cycle_rows:
         scheduled_at = cycle["next_run_at"]
         interval = int((cycle["schedule_config"] or {}).get("interval", 1))
         next_run_at = _advance_cycle_time(scheduled_at, cycle["schedule_kind"], interval)
         template = (
-            await connection.execute(
-                select(tasks)
-                .where(tasks.c.cycle_id == cycle["id"])
-                .order_by(tasks.c.created_at.desc())
-                .limit(1)
+            (
+                await connection.execute(
+                    select(tasks)
+                    .where(tasks.c.cycle_id == cycle["id"])
+                    .order_by(tasks.c.created_at.desc())
+                    .limit(1)
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         occurrence_key = scheduled_at.isoformat()
         exists = await connection.scalar(
-            select(func.count()).select_from(tasks).where(
+            select(func.count())
+            .select_from(tasks)
+            .where(
                 tasks.c.cycle_id == cycle["id"],
                 tasks.c.cycle_occurrence_key == occurrence_key,
             )
@@ -1228,12 +1471,16 @@ async def materialize_due_task_cycles(
                 )
             )
             participant_rows = (
-                await connection.execute(
-                    select(task_participants).where(
-                        task_participants.c.task_id == template["id"]
+                (
+                    await connection.execute(
+                        select(task_participants).where(
+                            task_participants.c.task_id == template["id"]
+                        )
                     )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             if participant_rows:
                 await connection.execute(
                     insert(task_participants),
@@ -1247,12 +1494,16 @@ async def materialize_due_task_cycles(
                     ],
                 )
             checklist_rows = (
-                await connection.execute(
-                    select(task_checklist_items).where(
-                        task_checklist_items.c.task_id == template["id"]
+                (
+                    await connection.execute(
+                        select(task_checklist_items).where(
+                            task_checklist_items.c.task_id == template["id"]
+                        )
                     )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             if checklist_rows:
                 await connection.execute(
                     insert(task_checklist_items),
@@ -1292,6 +1543,12 @@ def _validate_graph(payload: SaveWorkflowRequest) -> None:
     node_set = set(node_ids)
     if any(edge.source not in node_set or edge.target not in node_set for edge in payload.edges):
         raise WorkspaceRepositoryError(422, "Every workflow edge must reference existing nodes")
+    routes = [(edge.source, edge.outcome, edge.sort_order) for edge in payload.edges]
+    if len(routes) != len(set(routes)):
+        raise WorkspaceRepositoryError(
+            422,
+            "Outgoing workflow routes must have unique sort order per outcome",
+        )
     adjacency: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
     for edge in payload.edges:
         adjacency[edge.source].append(edge.target)
@@ -1317,16 +1574,27 @@ async def save_workflow(
         raise WorkspaceRepositoryError(403, "Only managers can edit workflows")
     _validate_graph(payload)
     template = (
-        await connection.execute(
-            select(approval_templates)
-            .where(approval_templates.c.id == template_id)
-            .with_for_update()
+        (
+            await connection.execute(
+                select(approval_templates)
+                .where(approval_templates.c.id == template_id)
+                .with_for_update()
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if template is None:
         raise WorkspaceRepositoryError(404, "Workflow was not found")
     if template["status"] != "draft":
         raise WorkspaceRepositoryError(409, "Published workflow versions cannot be edited")
+    referenced = await connection.scalar(
+        select(func.count())
+        .select_from(approval_requests)
+        .where(approval_requests.c.template_id == template_id)
+    )
+    if referenced:
+        raise WorkspaceRepositoryError(409, "A workflow used by requests cannot be edited")
     await connection.execute(
         delete(approval_edges).where(approval_edges.c.template_id == template_id)
     )
@@ -1365,7 +1633,200 @@ async def save_workflow(
             for edge in payload.edges
         ],
     )
-    return await get_workflow(connection)
+    return await _workflow_response(connection, template)
+
+
+async def publish_workflow(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    template_id: UUID,
+) -> WorkflowResponse:
+    if current_user.role not in {"manager", "admin", "superadmin"}:
+        raise WorkspaceRepositoryError(403, "Only managers can publish workflows")
+    template = (
+        (
+            await connection.execute(
+                select(approval_templates)
+                .where(approval_templates.c.id == template_id)
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if template is None:
+        raise WorkspaceRepositoryError(404, "Workflow was not found")
+    if template["status"] != "draft":
+        raise WorkspaceRepositoryError(409, "Only a draft workflow can be published")
+    referenced = await connection.scalar(
+        select(func.count())
+        .select_from(approval_requests)
+        .where(approval_requests.c.template_id == template_id)
+    )
+    if referenced:
+        raise WorkspaceRepositoryError(409, "A workflow used by requests cannot be published")
+
+    node_rows = (
+        (
+            await connection.execute(
+                select(approval_nodes).where(approval_nodes.c.template_id == template_id)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    edge_rows = (
+        (
+            await connection.execute(
+                select(approval_edges).where(approval_edges.c.template_id == template_id)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    _validate_graph(
+        SaveWorkflowRequest(
+            nodes=[
+                WorkflowNodeResponse(
+                    id=row["node_key"],
+                    kind=row["kind"],
+                    label=row["title"],
+                    detail=str((row["config"] or {}).get("detail", "")),
+                    position_x=row["position_x"],
+                    position_y=row["position_y"],
+                    config=row["config"] or {},
+                )
+                for row in node_rows
+            ],
+            edges=[
+                WorkflowEdgeResponse(
+                    id=str(row["id"]),
+                    source=row["source_node_key"],
+                    target=row["target_node_key"],
+                    outcome=row["outcome"],
+                    label=row["label"],
+                    condition=row["condition"] or {},
+                    sort_order=row["sort_order"],
+                )
+                for row in edge_rows
+            ],
+        )
+    )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(approval_templates)
+        .where(
+            approval_templates.c.template_key == template["template_key"],
+            approval_templates.c.status == "published",
+        )
+        .values(status="archived")
+    )
+    await connection.execute(
+        update(approval_templates)
+        .where(approval_templates.c.id == template_id)
+        .values(status="published", published_at=now)
+    )
+
+    next_version = (
+        int(
+            await connection.scalar(
+                select(func.max(approval_templates.c.version)).where(
+                    approval_templates.c.template_key == template["template_key"]
+                )
+            )
+            or template["version"]
+        )
+        + 1
+    )
+    draft_id = uuid4()
+    draft_values = {
+        "id": draft_id,
+        "template_key": template["template_key"],
+        "name": template["name"],
+        "request_kind": template["request_kind"],
+        "version": next_version,
+        "status": "draft",
+        "form_schema": template["form_schema"] or {},
+        "created_by_user_id": current_user.id,
+        "created_at": now,
+        "published_at": None,
+    }
+    await connection.execute(insert(approval_templates).values(**draft_values))
+    if node_rows:
+        await connection.execute(
+            insert(approval_nodes),
+            [
+                {
+                    "id": uuid4(),
+                    "template_id": draft_id,
+                    "node_key": row["node_key"],
+                    "kind": row["kind"],
+                    "title": row["title"],
+                    "config": row["config"] or {},
+                    "position_x": row["position_x"],
+                    "position_y": row["position_y"],
+                }
+                for row in node_rows
+            ],
+        )
+    if edge_rows:
+        await connection.execute(
+            insert(approval_edges),
+            [
+                {
+                    "id": uuid4(),
+                    "template_id": draft_id,
+                    "source_node_key": row["source_node_key"],
+                    "target_node_key": row["target_node_key"],
+                    "outcome": row["outcome"],
+                    "label": row["label"],
+                    "condition": row["condition"] or {},
+                    "sort_order": row["sort_order"],
+                }
+                for row in edge_rows
+            ],
+        )
+    return await _workflow_response(connection, draft_values)
+
+
+PAYMENT_DETAIL_FIELDS = {
+    "transfer_type",
+    "project_name",
+    "project_code",
+    "source_account",
+    "destination_account",
+    "request_priority",
+    "deadline",
+    "comment",
+    "trip_purpose",
+    "trip_start_date",
+    "trip_end_date",
+    "employee_ids",
+    "payment_purpose",
+    "payment_reason",
+    "responsible_user_id",
+}
+
+
+def _payment_payload(model: CreateApprovalRequest | UpdateApprovalRequest) -> dict[str, Any]:
+    return model.model_dump(mode="json", include=PAYMENT_DETAIL_FIELDS)
+
+
+async def _validate_request_people(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    responsible_user_id: str | None,
+    employee_ids: Sequence[str],
+) -> tuple[UUID, list[str]]:
+    responsible_id = (
+        await _active_user_id(connection, responsible_user_id)
+        if responsible_user_id
+        else current_user.id
+    )
+    validated_employees: list[str] = []
+    for value in dict.fromkeys(employee_ids):
+        validated_employees.append(str(await _active_user_id(connection, value)))
+    return responsible_id, validated_employees
 
 
 async def create_approval_request(
@@ -1373,41 +1834,54 @@ async def create_approval_request(
     current_user: AuthenticatedUser,
     payload: CreateApprovalRequest,
 ) -> ApprovalRequestResponse:
-    workflow = await get_workflow(connection)
+    template = await _published_payment_template(connection)
     try:
         source_task_id = UUID(payload.source_task_id) if payload.source_task_id else None
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid source task identifier") from error
     if source_task_id is not None:
-        source_task = (
-            await connection.execute(select(tasks).where(tasks.c.id == source_task_id))
-        ).mappings().first()
-        task_accessible = source_task is not None and (
-            current_user.role in {"manager", "admin", "superadmin"}
-            or source_task["author_user_id"] == current_user.id
-            or source_task["primary_assignee_user_id"] == current_user.id
-        )
-        if not task_accessible:
-            raise WorkspaceRepositoryError(422, "Source task is not accessible")
-    first_edge = next((edge for edge in workflow.edges if edge.source == "start"), None)
-    if first_edge is None:
-        raise WorkspaceRepositoryError(409, "Workflow start is not connected")
+        try:
+            await _task_access_row(connection, current_user, source_task_id)
+        except WorkspaceRepositoryError as error:
+            raise WorkspaceRepositoryError(422, "Source task is not accessible") from error
+    responsible_id, employee_ids = await _validate_request_people(
+        connection,
+        current_user,
+        payload.responsible_user_id,
+        payload.employee_ids,
+    )
     request_id = uuid4()
     now = datetime.now(UTC)
     number = str(int(now.timestamp() * 1000))[-6:]
+    request_payload = {
+        **_payment_payload(payload),
+        "amount": payload.amount,
+        "currency": payload.currency.upper(),
+        "purpose": payload.purpose,
+        "number": number,
+        "responsible_user_id": str(responsible_id),
+        "employee_ids": employee_ids,
+    }
+    targets = await _resolve_workflow_targets(
+        connection,
+        template["id"],
+        "start",
+        "submit",
+        request_payload,
+    )
+    active_node_keys = [key for key, kind in targets if kind != "end"]
+    if not active_node_keys:
+        raise WorkspaceRepositoryError(409, "Workflow start is not connected")
     values = {
         "id": request_id,
-        "template_id": UUID(workflow.id),
+        "template_id": template["id"],
         "requester_user_id": current_user.id,
+        "responsible_user_id": responsible_id,
         "title": payload.title.strip(),
-        "payload": {
-            "amount": payload.amount,
-            "currency": payload.currency.upper(),
-            "purpose": payload.purpose,
-            "number": number,
-        },
+        "payload": request_payload,
         "status": "running",
-        "active_node_keys": [first_edge.target],
+        "active_node_keys": active_node_keys,
+        "actor_overrides": {},
         "source_task_id": source_task_id,
         "current_version": 1,
         "created_at": now,
@@ -1428,7 +1902,7 @@ async def create_approval_request(
         "created_at": now,
     }
     await connection.execute(insert(approval_request_versions).values(**version_values))
-    return _approval_request(values, [_approval_version(version_values)])
+    return await _request_response(connection, request_id, current_user)
 
 
 async def _attachment_ids_for_request(
@@ -1436,15 +1910,19 @@ async def _attachment_ids_for_request(
     request_id: UUID,
 ) -> list[str]:
     values = (
-        await connection.execute(
-            select(attachments.c.id)
-            .where(
-                attachments.c.owner_type == "approval_request",
-                attachments.c.owner_id == request_id,
+        (
+            await connection.execute(
+                select(attachments.c.id)
+                .where(
+                    attachments.c.owner_type == "approval_request",
+                    attachments.c.owner_id == request_id,
+                )
+                .order_by(attachments.c.created_at)
             )
-            .order_by(attachments.c.created_at)
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return [str(value) for value in values]
 
 
@@ -1490,12 +1968,16 @@ async def update_approval_request(
     payload: UpdateApprovalRequest,
 ) -> ApprovalRequestResponse:
     row = (
-        await connection.execute(
-            select(approval_requests)
-            .where(approval_requests.c.id == request_id)
-            .with_for_update()
+        (
+            await connection.execute(
+                select(approval_requests)
+                .where(approval_requests.c.id == request_id)
+                .with_for_update()
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
     if row["requester_user_id"] != current_user.id:
@@ -1503,11 +1985,20 @@ async def update_approval_request(
     if row["status"] != "needs_revision":
         raise WorkspaceRepositoryError(409, "Only a returned request can be edited")
 
+    responsible_id, employee_ids = await _validate_request_people(
+        connection,
+        current_user,
+        payload.responsible_user_id or str(row["responsible_user_id"]),
+        payload.employee_ids,
+    )
     updated_payload = {
         **(row["payload"] or {}),
+        **_payment_payload(payload),
         "amount": payload.amount,
         "currency": payload.currency.upper(),
         "purpose": payload.purpose,
+        "responsible_user_id": str(responsible_id),
+        "employee_ids": employee_ids,
     }
     title = payload.title.strip()
     next_version = await _append_request_version(
@@ -1522,9 +2013,14 @@ async def update_approval_request(
     await connection.execute(
         update(approval_requests)
         .where(approval_requests.c.id == request_id)
-        .values(title=title, payload=updated_payload, current_version=next_version)
+        .values(
+            title=title,
+            payload=updated_payload,
+            responsible_user_id=responsible_id,
+            current_version=next_version,
+        )
     )
-    return await _request_response(connection, request_id)
+    return await _request_response(connection, request_id, current_user)
 
 
 async def validate_attachment_owner(
@@ -1537,18 +2033,22 @@ async def validate_attachment_owner(
 ) -> None:
     if owner_type == "message":
         row = (
-            await connection.execute(
-                select(messages.c.author_user_id, chat_members.c.user_id)
-                .select_from(
-                    messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id)
-                )
-                .where(
-                    messages.c.id == owner_id,
-                    messages.c.deleted_at.is_(None),
-                    chat_members.c.user_id == current_user.id,
+            (
+                await connection.execute(
+                    select(messages.c.author_user_id, chat_members.c.user_id)
+                    .select_from(
+                        messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id)
+                    )
+                    .where(
+                        messages.c.id == owner_id,
+                        messages.c.deleted_at.is_(None),
+                        chat_members.c.user_id == current_user.id,
+                    )
                 )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if row is None or (write and row["author_user_id"] != current_user.id):
             raise WorkspaceRepositoryError(404, "Message was not found")
         return
@@ -1558,13 +2058,27 @@ async def validate_attachment_owner(
         return
 
     row = (
-        await connection.execute(
-            select(approval_requests).where(approval_requests.c.id == owner_id)
+        (
+            await connection.execute(
+                select(approval_requests).where(approval_requests.c.id == owner_id)
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
+    assigned_actor = False
+    if row is not None and not write:
+        assigned_actor = any(
+            [
+                await _can_act_on_node(connection, current_user, row, node_key)
+                for node_key in row["active_node_keys"] or []
+            ]
+        )
     accessible = row is not None and (
         current_user.role in {"manager", "admin", "superadmin"}
         or row["requester_user_id"] == current_user.id
+        or row["responsible_user_id"] == current_user.id
+        or assigned_actor
     )
     writable = (
         row is not None
@@ -1586,6 +2100,7 @@ async def create_attachment(
     byte_size: int,
     sha256: str,
     storage_key: str,
+    document_role: str = "general",
 ) -> AttachmentResponse:
     await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
     now = datetime.now(UTC)
@@ -1599,17 +2114,22 @@ async def create_attachment(
         "sha256": sha256,
         "storage_key": storage_key,
         "uploaded_by_user_id": current_user.id,
+        "document_role": document_role,
         "created_at": now,
     }
     await connection.execute(insert(attachments).values(**values))
     if owner_type == "approval_request":
         request_row = (
-            await connection.execute(
-                select(approval_requests)
-                .where(approval_requests.c.id == owner_id)
-                .with_for_update()
+            (
+                await connection.execute(
+                    select(approval_requests)
+                    .where(approval_requests.c.id == owner_id)
+                    .with_for_update()
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         await _append_request_version(
             connection,
             request_row,
@@ -1628,8 +2148,10 @@ async def get_attachment(
     attachment_id: UUID,
 ) -> tuple[AttachmentResponse, str]:
     row = (
-        await connection.execute(select(attachments).where(attachments.c.id == attachment_id))
-    ).mappings().first()
+        (await connection.execute(select(attachments).where(attachments.c.id == attachment_id)))
+        .mappings()
+        .first()
+    )
     if row is None:
         raise WorkspaceRepositoryError(404, "Attachment was not found")
     await validate_attachment_owner(
@@ -1660,13 +2182,18 @@ def _condition_outcome(condition: Mapping[str, Any], request_payload: Mapping[st
     return actual == expected
 
 
-async def _next_node(
+async def _resolve_workflow_targets(
     connection: AsyncConnection,
     template_id: UUID,
     source: str,
     outcome: str,
     request_payload: Mapping[str, Any],
-) -> tuple[str | None, str | None]:
+    visited: set[str] | None = None,
+) -> list[tuple[str, str]]:
+    seen = set() if visited is None else set(visited)
+    if source in seen:
+        raise WorkspaceRepositoryError(409, "Workflow routing contains an endless cycle")
+    seen.add(source)
     edges = (
         (
             await connection.execute(
@@ -1684,7 +2211,7 @@ async def _next_node(
     )
     if not edges:
         if outcome != "return":
-            return None, None
+            return []
         correction = (
             await connection.execute(
                 select(approval_nodes.c.node_key)
@@ -1695,48 +2222,155 @@ async def _next_node(
                 .limit(1)
             )
         ).scalar_one_or_none()
-        return (correction, "correction") if correction is not None else (None, None)
-    target = edges[0]["target_node_key"]
-    target_kind = await connection.scalar(
-        select(approval_nodes.c.kind).where(
-            approval_nodes.c.template_id == template_id,
-            approval_nodes.c.node_key == target,
+        return [(correction, "correction")] if correction is not None else []
+
+    resolved: list[tuple[str, str]] = []
+    for edge in edges:
+        target = edge["target_node_key"]
+        target_row = (
+            (
+                await connection.execute(
+                    select(approval_nodes).where(
+                        approval_nodes.c.template_id == template_id,
+                        approval_nodes.c.node_key == target,
+                    )
+                )
+            )
+            .mappings()
+            .first()
         )
-    )
-    if target_kind != "condition":
-        return target, target_kind
-    condition_edges = (
+        if target_row is None:
+            continue
+        target_kind = target_row["kind"]
+        if target_kind == "condition":
+            condition_edges = (
+                (
+                    await connection.execute(
+                        select(approval_edges)
+                        .where(
+                            approval_edges.c.template_id == template_id,
+                            approval_edges.c.source_node_key == target,
+                        )
+                        .order_by(approval_edges.c.sort_order)
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            chosen = next(
+                (
+                    candidate
+                    for candidate in condition_edges
+                    if _condition_outcome(candidate["condition"] or {}, request_payload)
+                ),
+                None,
+            )
+            if chosen is not None:
+                resolved.extend(
+                    await _resolve_workflow_targets(
+                        connection,
+                        template_id,
+                        target,
+                        chosen["outcome"],
+                        request_payload,
+                        seen,
+                    )
+                )
+            continue
+        if target_kind == "parallel":
+            branch_edges = (
+                (
+                    await connection.execute(
+                        select(approval_edges)
+                        .where(
+                            approval_edges.c.template_id == template_id,
+                            approval_edges.c.source_node_key == target,
+                        )
+                        .order_by(approval_edges.c.sort_order)
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            for branch in branch_edges:
+                branch_target = branch["target_node_key"]
+                branch_kind = await connection.scalar(
+                    select(approval_nodes.c.kind).where(
+                        approval_nodes.c.template_id == template_id,
+                        approval_nodes.c.node_key == branch_target,
+                    )
+                )
+                if branch_kind is not None:
+                    resolved.append((branch_target, str(branch_kind)))
+            continue
+        if target_kind == "start":
+            resolved.extend(
+                await _resolve_workflow_targets(
+                    connection,
+                    template_id,
+                    target,
+                    "submit",
+                    request_payload,
+                    seen,
+                )
+            )
+            continue
+        resolved.append((target, str(target_kind)))
+    return list(dict.fromkeys(resolved))
+
+
+async def _parallel_context(
+    connection: AsyncConnection,
+    template_id: UUID,
+    node_key: str,
+) -> tuple[str, set[str]] | None:
+    parallel_rows = (
         (
             await connection.execute(
-                select(approval_edges)
-                .where(
-                    approval_edges.c.template_id == template_id,
-                    approval_edges.c.source_node_key == target,
+                select(approval_nodes).where(
+                    approval_nodes.c.template_id == template_id,
+                    approval_nodes.c.kind == "parallel",
                 )
-                .order_by(approval_edges.c.sort_order)
             )
         )
         .mappings()
         .all()
     )
-    chosen = next(
-        (
-            edge
-            for edge in condition_edges
-            if _condition_outcome(edge["condition"] or {}, request_payload)
-        ),
-        None,
-    )
-    if chosen is None:
-        return None, None
-    final_target = chosen["target_node_key"]
-    final_kind = await connection.scalar(
-        select(approval_nodes.c.kind).where(
-            approval_nodes.c.template_id == template_id,
-            approval_nodes.c.node_key == final_target,
+    for parallel in parallel_rows:
+        siblings = set(
+            (
+                await connection.execute(
+                    select(approval_edges.c.target_node_key).where(
+                        approval_edges.c.template_id == template_id,
+                        approval_edges.c.source_node_key == parallel["node_key"],
+                    )
+                )
+            )
+            .scalars()
+            .all()
         )
+        if node_key in siblings:
+            mode = str((parallel["config"] or {}).get("decisionMode", "all"))
+            return mode, siblings
+    return None
+
+
+async def _can_act_on_node(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_row: Record,
+    node_key: str,
+) -> bool:
+    config = (
+        await connection.scalar(
+            select(approval_nodes.c.config).where(
+                approval_nodes.c.template_id == request_row["template_id"],
+                approval_nodes.c.node_key == node_key,
+            )
+        )
+        or {}
     )
-    return final_target, final_kind
+    return _can_act_from_config(current_user, request_row, node_key, config)
 
 
 async def act_on_request(
@@ -1746,28 +2380,53 @@ async def act_on_request(
     payload: ApprovalActionRequest,
 ) -> ApprovalRequestResponse:
     row = (
-        await connection.execute(
-            select(approval_requests)
-            .where(approval_requests.c.id == request_id)
-            .with_for_update()
+        (
+            await connection.execute(
+                select(approval_requests)
+                .where(approval_requests.c.id == request_id)
+                .with_for_update()
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
     if row["status"] not in {"running", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Request is already finished")
-    if payload.action == "return" and not (payload.comment or "").strip():
-        raise WorkspaceRepositoryError(422, "A return comment is required")
+    if payload.action in {"return", "reject"} and not (payload.comment or "").strip():
+        raise WorkspaceRepositoryError(422, "A decision comment is required")
     resubmitting = payload.action == "resubmit"
     if resubmitting:
         if row["status"] != "needs_revision" or row["requester_user_id"] != current_user.id:
             raise WorkspaceRepositoryError(403, "Only the requester can resubmit a correction")
-    elif current_user.role not in {"manager", "admin", "superadmin"}:
-        raise WorkspaceRepositoryError(403, "Only managers can decide on requests")
+    elif (
+        payload.action == "cancel"
+        and row["requester_user_id"] != current_user.id
+        and current_user.role
+        not in {
+            "admin",
+            "superadmin",
+        }
+    ):
+        raise WorkspaceRepositoryError(403, "Only the requester can cancel this request")
     active_nodes: Sequence[str] = row["active_node_keys"] or []
     if not active_nodes:
         raise WorkspaceRepositoryError(409, "Request has no active workflow node")
-    active_node = active_nodes[0]
+    active_node = payload.node_key or active_nodes[0]
+    if active_node not in active_nodes:
+        raise WorkspaceRepositoryError(409, "The selected workflow stage is not active")
+    if (
+        not resubmitting
+        and payload.action != "cancel"
+        and not await _can_act_on_node(connection, current_user, row, active_node)
+    ):
+        raise WorkspaceRepositoryError(403, "This user cannot decide on the selected stage")
+    delegated_to_user_id = None
+    if payload.action == "delegate":
+        if not payload.delegate_to_user_id:
+            raise WorkspaceRepositoryError(422, "A delegation target is required")
+        delegated_to_user_id = await _active_user_id(connection, payload.delegate_to_user_id)
     now = datetime.now(UTC)
     await connection.execute(
         insert(approval_actions).values(
@@ -1775,6 +2434,7 @@ async def act_on_request(
             request_id=request_id,
             node_key=active_node,
             actor_user_id=current_user.id,
+            delegated_to_user_id=delegated_to_user_id,
             action=payload.action,
             comment=payload.comment,
             created_at=now,
@@ -1783,7 +2443,14 @@ async def act_on_request(
     status = row["status"]
     finished_at = None
     next_nodes = list(active_nodes)
-    if payload.action == "reject":
+    actor_overrides = dict(row.get("actor_overrides") or {})
+    if payload.action == "delegate":
+        actor_overrides[active_node] = str(delegated_to_user_id)
+    elif payload.action == "cancel":
+        status = "cancelled"
+        next_nodes = []
+        finished_at = now
+    elif payload.action == "reject":
         status = "rejected"
         next_nodes = []
         finished_at = now
@@ -1797,40 +2464,68 @@ async def act_on_request(
             if payload.action == "return"
             else "approve"
         )
-        target, target_kind = await _next_node(
+        targets = await _resolve_workflow_targets(
             connection,
             row["template_id"],
             active_node,
             outcome,
             row["payload"] or {},
         )
-        if target is None:
+        if not targets:
             raise WorkspaceRepositoryError(409, f"No route for action {payload.action}")
-        if target_kind == "start":
-            target, target_kind = await _next_node(
-                connection,
-                row["template_id"],
-                target,
-                "submit",
-                row["payload"] or {},
-            )
-            if target is None:
-                raise WorkspaceRepositoryError(409, "Workflow start is not connected")
-        if target_kind == "end":
+        next_nodes = [node for node in active_nodes if node != active_node]
+        parallel = await _parallel_context(connection, row["template_id"], active_node)
+        if parallel is not None:
+            mode, siblings = parallel
+            active_siblings = siblings.intersection(active_nodes)
+            if mode == "any":
+                next_nodes = [node for node in next_nodes if node not in siblings]
+                for sibling in siblings:
+                    actor_overrides.pop(sibling, None)
+            elif remaining_siblings := active_siblings - {active_node}:
+                pending_join_targets = set(
+                    (
+                        await connection.execute(
+                            select(approval_edges.c.target_node_key).where(
+                                approval_edges.c.template_id == row["template_id"],
+                                approval_edges.c.source_node_key.in_(remaining_siblings),
+                                approval_edges.c.outcome == "approve",
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                targets = [
+                    target
+                    for target in targets
+                    if target[1] != "end" and target[0] not in pending_join_targets
+                ]
+
+        non_terminal = [target for target in targets if target[1] != "end"]
+        corrections = [target for target in targets if target[1] == "correction"]
+        next_nodes.extend(target[0] for target in non_terminal)
+        next_nodes = list(dict.fromkeys(next_nodes))
+        actor_overrides.pop(active_node, None)
+        if corrections:
+            status = "needs_revision"
+            next_nodes = [corrections[0][0]]
+            actor_overrides = {}
+        elif any(target[1] == "end" for target in targets) and not next_nodes:
             status = "approved"
             next_nodes = []
             finished_at = now
         else:
-            status = "needs_revision" if target_kind == "correction" else "running"
-            next_nodes = [target]
+            status = "running"
     await connection.execute(
         update(approval_requests)
         .where(approval_requests.c.id == request_id)
         .values(
             status=status,
             active_node_keys=next_nodes,
+            actor_overrides=actor_overrides,
             updated_at=now,
             finished_at=finished_at,
         )
     )
-    return await _request_response(connection, request_id)
+    return await _request_response(connection, request_id, current_user)

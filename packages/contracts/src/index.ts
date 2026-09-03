@@ -105,6 +105,7 @@ export interface WorkspaceAttachment {
   readonly byteSize: number;
   readonly sha256: string;
   readonly uploadedByUserId: string;
+  readonly documentRole: "general" | "primary" | "additional";
   readonly createdAt: string;
 }
 
@@ -210,6 +211,7 @@ export interface ApprovalRequestVersion {
   readonly amount: number;
   readonly currency: string;
   readonly purpose: string;
+  readonly details: PaymentRequestDetails;
   readonly attachmentIds: readonly string[];
   readonly editedByUserId: string;
   readonly changeReason: string;
@@ -221,8 +223,34 @@ export interface ApprovalActionHistory {
   readonly action: string;
   readonly comment?: string | null;
   readonly actorUserId: string;
+  readonly delegatedToUserId?: string | null;
   readonly nodeKey: string;
   readonly createdAt: string;
+}
+
+export interface ApprovalStage {
+  readonly key: string;
+  readonly label: string;
+  readonly kind: string;
+  readonly canAct: boolean;
+}
+
+export interface PaymentRequestDetails {
+  readonly transferType?: "Гонорар (с расчетом)" | "Конвертация" | "Другие услуги" | null;
+  readonly projectName: string;
+  readonly projectCode: string;
+  readonly sourceAccount: string;
+  readonly destinationAccount: string;
+  readonly requestPriority: "normal" | "urgent";
+  readonly deadline?: string | null;
+  readonly comment: string;
+  readonly tripPurpose: string;
+  readonly tripStartDate?: string | null;
+  readonly tripEndDate?: string | null;
+  readonly employeeIds: readonly string[];
+  readonly paymentPurpose?: "Мероприятия" | "Гонорары" | "Зарплаты" | "Перелеты" | "Оплата за услуги" | "Другие" | null;
+  readonly paymentReason: string;
+  readonly responsibleUserId?: string | null;
 }
 
 export interface ApprovalRequestSummary {
@@ -234,9 +262,15 @@ export interface ApprovalRequestSummary {
   readonly status: ApprovalStatus;
   readonly statusLabel: string;
   readonly activeNodeKeys: readonly string[];
+  readonly activeStages: readonly ApprovalStage[];
+  readonly stageLabel: string;
   readonly requesterId: string;
+  readonly responsibleUserId: string;
   readonly sourceTaskId?: string | null;
   readonly purpose: string;
+  readonly details: PaymentRequestDetails;
+  readonly createdAt: string;
+  readonly updatedAt: string;
   readonly revision: number;
   readonly versions: readonly ApprovalRequestVersion[];
   readonly actions: readonly ApprovalActionHistory[];
@@ -267,6 +301,8 @@ export interface WorkflowDefinition {
   readonly name: string;
   readonly version: number;
   readonly status: string;
+  readonly publishedVersion?: number | null;
+  readonly formSchema: Readonly<Record<string, unknown>>;
   readonly nodes: readonly WorkflowNodeDefinition[];
   readonly edges: readonly WorkflowEdgeDefinition[];
 }

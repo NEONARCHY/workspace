@@ -4,8 +4,10 @@ import type {
   ApprovalNodeData,
   ApprovalNodeKind,
   ApprovalRequestSummary,
+  PaymentRequestDetails,
   WorkflowDefinition,
   WorkspaceAttachment,
+  WorkspacePerson,
 } from "@yuksalish/contracts";
 import {
   Badge,
@@ -41,6 +43,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
+import type { PaymentRequestInput } from "./workspace-api";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
@@ -54,29 +57,38 @@ type ApprovalEdge = Edge<ApprovalEdgeData>;
 interface ApprovalsViewProps {
   readonly canManage: boolean;
   readonly currentUserId: string;
+  readonly people: readonly WorkspacePerson[];
   readonly requests: readonly ApprovalRequestSummary[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
   readonly onSaveWorkflow: (workflow: WorkflowDefinition) => void | Promise<void>;
+  readonly onPublishWorkflow: (
+    workflow: WorkflowDefinition,
+  ) => WorkflowDefinition | undefined | Promise<WorkflowDefinition | undefined>;
   readonly onCreateRequest: (
-    title: string,
-    amount: number,
-    purpose: string,
-    files: readonly File[],
+    payload: PaymentRequestInput,
+    primaryFiles: readonly File[],
+    additionalFiles: readonly File[],
   ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onAction: (
     requestId: string,
-    action: "approve" | "reject" | "return" | "resubmit",
-    comment?: string,
+    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+    options?: {
+      readonly comment?: string;
+      readonly nodeKey?: string;
+      readonly delegateToUserId?: string;
+    },
   ) => void | Promise<void>;
   readonly onReviseRequest: (
     request: ApprovalRequestSummary,
-    payload: { readonly title: string; readonly amount: number; readonly purpose: string },
-    files: readonly File[],
+    payload: PaymentRequestInput,
+    primaryFiles: readonly File[],
+    additionalFiles: readonly File[],
   ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onUploadAttachments: (
     request: ApprovalRequestSummary,
     files: readonly File[],
+    documentRole?: "general" | "primary" | "additional",
   ) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
@@ -179,12 +191,108 @@ const kindLabels: Readonly<Record<ApprovalNodeKind, string>> = {
   end: "Завершение",
 };
 
+interface PaymentFormState {
+  readonly transferType: NonNullable<PaymentRequestDetails["transferType"]> | "";
+  readonly projectName: string;
+  readonly projectCode: string;
+  readonly sourceAccount: string;
+  readonly destinationAccount: string;
+  readonly requestPriority: "normal" | "urgent";
+  readonly deadline: string;
+  readonly comment: string;
+  readonly tripPurpose: string;
+  readonly tripStartDate: string;
+  readonly tripEndDate: string;
+  readonly employeeIds: readonly string[];
+  readonly paymentPurpose: NonNullable<PaymentRequestDetails["paymentPurpose"]> | "";
+  readonly paymentReason: string;
+  readonly responsibleUserId: string;
+}
+
+function emptyPaymentForm(currentUserId: string): PaymentFormState {
+  return {
+    transferType: "",
+    projectName: "",
+    projectCode: "",
+    sourceAccount: "",
+    destinationAccount: "",
+    requestPriority: "normal",
+    deadline: "",
+    comment: "",
+    tripPurpose: "",
+    tripStartDate: "",
+    tripEndDate: "",
+    employeeIds: [],
+    paymentPurpose: "",
+    paymentReason: "",
+    responsibleUserId: currentUserId,
+  };
+}
+
+function formFromDetails(
+  details: PaymentRequestDetails,
+  responsibleUserId: string,
+): PaymentFormState {
+  return {
+    transferType: details.transferType ?? "",
+    projectName: details.projectName,
+    projectCode: details.projectCode,
+    sourceAccount: details.sourceAccount,
+    destinationAccount: details.destinationAccount,
+    requestPriority: details.requestPriority,
+    deadline: details.deadline?.slice(0, 16) ?? "",
+    comment: details.comment,
+    tripPurpose: details.tripPurpose,
+    tripStartDate: details.tripStartDate ?? "",
+    tripEndDate: details.tripEndDate ?? "",
+    employeeIds: details.employeeIds,
+    paymentPurpose: details.paymentPurpose ?? "",
+    paymentReason: details.paymentReason,
+    responsibleUserId,
+  };
+}
+
+function requestPayload(
+  title: string,
+  amount: number,
+  purpose: string,
+  form: PaymentFormState,
+): PaymentRequestInput {
+  return {
+    title,
+    amount,
+    currency: "UZS",
+    purpose,
+    transferType: form.transferType || null,
+    projectName: form.projectName,
+    projectCode: form.projectCode,
+    sourceAccount: form.sourceAccount,
+    destinationAccount: form.destinationAccount,
+    requestPriority: form.requestPriority,
+    deadline: form.deadline ? new Date(form.deadline).toISOString() : null,
+    comment: form.comment,
+    tripPurpose: form.tripPurpose,
+    tripStartDate: form.tripStartDate || null,
+    tripEndDate: form.tripEndDate || null,
+    employeeIds: form.employeeIds,
+    paymentPurpose: form.paymentPurpose || null,
+    paymentReason: form.paymentReason,
+    responsibleUserId: form.responsibleUserId,
+  };
+}
+
+function workflowNodeConfig(data: ApprovalNodeData): Readonly<Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(data).filter(([key]) => !["label", "kind", "detail"].includes(key)),
+  );
+}
+
 function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
   if (workflow === undefined) return initialNodes;
   return workflow.nodes.map((node) => ({
     id: node.id,
     position: { x: node.positionX, y: node.positionY },
-    data: { label: node.label, kind: node.kind, detail: node.detail },
+    data: { ...node.config, label: node.label, kind: node.kind, detail: node.detail },
     className: `workflow-node node-${node.kind}`,
   }));
 }
@@ -207,13 +315,136 @@ function latestReturnComment(request: ApprovalRequestSummary): string | undefine
   )?.comment ?? undefined;
 }
 
+interface PaymentFieldsProps {
+  readonly form: PaymentFormState;
+  readonly people: readonly WorkspacePerson[];
+  readonly onChange: (form: PaymentFormState) => void;
+  readonly revision?: boolean;
+}
+
+function PaymentFields({ form, people, onChange, revision = false }: PaymentFieldsProps) {
+  const update = <Key extends keyof PaymentFormState>(
+    key: Key,
+    value: PaymentFormState[Key],
+  ) => onChange({ ...form, [key]: value });
+  const prefix = revision ? "Исправленные " : "";
+
+  return (
+    <div className="payment-fields">
+      <label>
+        Тип перевода
+        <select
+          aria-label={`${prefix}тип перевода`}
+          value={form.transferType}
+          onChange={(event) => update("transferType", event.target.value as PaymentFormState["transferType"])}
+        >
+          <option value="">Не выбран</option>
+          <option value="Гонорар (с расчетом)">Гонорар (с расчетом)</option>
+          <option value="Конвертация">Конвертация</option>
+          <option value="Другие услуги">Другие услуги</option>
+        </select>
+      </label>
+      <label>
+        Название проекта
+        <Input aria-label={`${prefix}название проекта`} value={form.projectName} onChange={(_event, data) => update("projectName", data.value)} />
+      </label>
+      <label>
+        Код проекта
+        <Input aria-label={`${prefix}код проекта`} value={form.projectCode} onChange={(_event, data) => update("projectCode", data.value)} />
+      </label>
+      <label>
+        Счёт или карта отправителя
+        <Input aria-label={`${prefix}счёт или карта отправителя`} value={form.sourceAccount} onChange={(_event, data) => update("sourceAccount", data.value)} />
+      </label>
+      <label>
+        Счёт или карта получателя
+        <Input aria-label={`${prefix}счёт или карта получателя`} value={form.destinationAccount} onChange={(_event, data) => update("destinationAccount", data.value)} />
+      </label>
+      <label>
+        Приоритет
+        <select
+          aria-label={`${prefix}приоритет заявки`}
+          value={form.requestPriority}
+          onChange={(event) => update("requestPriority", event.target.value as PaymentFormState["requestPriority"])}
+        >
+          <option value="normal">Обычная</option>
+          <option value="urgent">Срочная</option>
+        </select>
+      </label>
+      <label>
+        Срок оплаты
+        <input aria-label={`${prefix}срок оплаты`} type="datetime-local" value={form.deadline} onChange={(event) => update("deadline", event.target.value)} />
+      </label>
+      <label>
+        Категория платежа
+        <select
+          aria-label={`${prefix}категория платежа`}
+          value={form.paymentPurpose}
+          onChange={(event) => update("paymentPurpose", event.target.value as PaymentFormState["paymentPurpose"])}
+        >
+          <option value="">Не выбрана</option>
+          <option value="Мероприятия">Мероприятия</option>
+          <option value="Гонорары">Гонорары</option>
+          <option value="Зарплаты">Зарплаты</option>
+          <option value="Перелеты">Перелеты</option>
+          <option value="Оплата за услуги">Оплата за услуги</option>
+          <option value="Другие">Другие</option>
+        </select>
+      </label>
+      <label>
+        Основание платежа
+        <Input aria-label={`${prefix}основание платежа`} value={form.paymentReason} onChange={(_event, data) => update("paymentReason", data.value)} />
+      </label>
+      <label>
+        Ответственный
+        <select aria-label={`${prefix}ответственный за заявку`} value={form.responsibleUserId} onChange={(event) => update("responsibleUserId", event.target.value)}>
+          {people.map((person) => (
+            <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
+          ))}
+        </select>
+      </label>
+      <label className="payment-field-wide">
+        Комментарий
+        <Textarea aria-label={`${prefix}комментарий к заявке`} value={form.comment} onChange={(_event, data) => update("comment", data.value)} />
+      </label>
+      <fieldset className="payment-trip-fields payment-field-wide">
+        <legend>Командировка, если относится к оплате</legend>
+        <Input aria-label={`${prefix}цель поездки`} placeholder="Цель поездки" value={form.tripPurpose} onChange={(_event, data) => update("tripPurpose", data.value)} />
+        <label>
+          Начало
+          <input aria-label={`${prefix}дата начала поездки`} type="date" value={form.tripStartDate} onChange={(event) => update("tripStartDate", event.target.value)} />
+        </label>
+        <label>
+          Окончание
+          <input aria-label={`${prefix}дата окончания поездки`} type="date" value={form.tripEndDate} onChange={(event) => update("tripEndDate", event.target.value)} />
+        </label>
+        <label className="payment-trip-employees">
+          Сотрудники поездки
+          <select
+            multiple
+            aria-label={`${prefix}сотрудники поездки`}
+            value={[...form.employeeIds]}
+            onChange={(event) => update("employeeIds", Array.from(event.currentTarget.selectedOptions, (option) => option.value))}
+          >
+            {people.map((person) => (
+              <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
+            ))}
+          </select>
+        </label>
+      </fieldset>
+    </div>
+  );
+}
+
 export function ApprovalsView({
   canManage,
   currentUserId,
+  people,
   requests,
   attachments,
   workflow,
   onSaveWorkflow,
+  onPublishWorkflow,
   onCreateRequest,
   onAction,
   onReviseRequest,
@@ -230,14 +461,30 @@ export function ApprovalsView({
   const [requestTitle, setRequestTitle] = useState("");
   const [requestAmount, setRequestAmount] = useState("");
   const [requestPurpose, setRequestPurpose] = useState("");
+  const [requestDetails, setRequestDetails] = useState<PaymentFormState>(
+    emptyPaymentForm(currentUserId),
+  );
   const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);
+  const [requestAdditionalFiles, setRequestAdditionalFiles] = useState<readonly File[]>([]);
   const [editingRequestId, setEditingRequestId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editPurpose, setEditPurpose] = useState("");
+  const [editDetails, setEditDetails] = useState<PaymentFormState>(
+    emptyPaymentForm(currentUserId),
+  );
   const [editFiles, setEditFiles] = useState<readonly File[]>([]);
+  const [editAdditionalFiles, setEditAdditionalFiles] = useState<readonly File[]>([]);
   const [returnRequestId, setReturnRequestId] = useState("");
+  const [returnNodeKey, setReturnNodeKey] = useState("");
   const [returnComment, setReturnComment] = useState("");
+  const [decision, setDecision] = useState<{
+    readonly requestId: string;
+    readonly nodeKey: string;
+    readonly action: "reject" | "clarify" | "delegate";
+  }>();
+  const [decisionComment, setDecisionComment] = useState("");
+  const [delegateToUserId, setDelegateToUserId] = useState("");
   const [historyRequestId, setHistoryRequestId] = useState("");
 
   const selectedNode = useMemo(
@@ -247,11 +494,18 @@ export function ApprovalsView({
 
   const connect = useCallback(
     (connection: Connection) => {
+      const source = nodes.find((node) => node.id === connection.source);
       setEdges((current) =>
         addEdge(
           {
             ...connection,
-            data: { outcome: "approve", condition: {}, sortOrder: 0 },
+            data: {
+              outcome: source?.data.kind === "parallel" ? "branch" : "approve",
+              condition: {},
+              sortOrder: current.filter(
+                (edge) => edge.source === connection.source,
+              ).length,
+            },
             markerEnd: { type: MarkerType.ArrowClosed },
           },
           current,
@@ -259,7 +513,7 @@ export function ApprovalsView({
       );
       setSaved(false);
     },
-    [setEdges],
+    [nodes, setEdges],
   );
 
   const updateSelected = (data: Partial<ApprovalNodeData>) => {
@@ -319,7 +573,7 @@ export function ApprovalsView({
         detail: node.data.detail,
         positionX: node.position.x,
         positionY: node.position.y,
-        config: {},
+        config: workflowNodeConfig(node.data),
       })),
       edges: edges.map((edge, index) => ({
         id: edge.id,
@@ -344,16 +598,17 @@ export function ApprovalsView({
     const amount = Number(requestAmount.replace(/\s/g, ""));
     if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
     const created = await onCreateRequest(
-      requestTitle.trim(),
-      amount,
-      requestPurpose.trim(),
+      requestPayload(requestTitle.trim(), amount, requestPurpose.trim(), requestDetails),
       requestFiles,
+      requestAdditionalFiles,
     );
     if (created !== undefined) {
       setRequestTitle("");
       setRequestAmount("");
       setRequestPurpose("");
+      setRequestDetails(emptyPaymentForm(currentUserId));
       setRequestFiles([]);
+      setRequestAdditionalFiles([]);
       setCreatingRequest(false);
     }
   };
@@ -363,7 +618,9 @@ export function ApprovalsView({
     setEditTitle(request.title);
     setEditAmount(String(request.amount));
     setEditPurpose(request.purpose);
+    setEditDetails(formFromDetails(request.details, request.responsibleUserId));
     setEditFiles([]);
+    setEditAdditionalFiles([]);
   };
 
   const saveRevision = async (request: ApprovalRequestSummary) => {
@@ -371,17 +628,47 @@ export function ApprovalsView({
     if (!editTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
     const saved = await onReviseRequest(
       request,
-      { title: editTitle.trim(), amount, purpose: editPurpose.trim() },
+      requestPayload(editTitle.trim(), amount, editPurpose.trim(), editDetails),
       editFiles,
+      editAdditionalFiles,
     );
     if (saved !== undefined) setEditingRequestId("");
   };
 
   const returnForRevision = async (requestId: string) => {
     if (!returnComment.trim()) return;
-    await onAction(requestId, "return", returnComment.trim());
+    await onAction(requestId, "return", {
+      comment: returnComment.trim(),
+      nodeKey: returnNodeKey || undefined,
+    });
     setReturnRequestId("");
+    setReturnNodeKey("");
     setReturnComment("");
+  };
+
+  const completeDecision = async () => {
+    if (decision === undefined) return;
+    if (decision.action === "reject" && !decisionComment.trim()) return;
+    if (decision.action === "delegate" && !delegateToUserId) return;
+    await onAction(decision.requestId, decision.action, {
+      comment: decisionComment.trim() || undefined,
+      nodeKey: decision.nodeKey,
+      delegateToUserId: decision.action === "delegate" ? delegateToUserId : undefined,
+    });
+    setDecision(undefined);
+    setDecisionComment("");
+    setDelegateToUserId("");
+  };
+
+  const publish = async () => {
+    if (workflow === undefined || !saved) return;
+    const nextDraft = await onPublishWorkflow(workflow);
+    if (nextDraft !== undefined) {
+      setNodes(flowNodes(nextDraft));
+      setEdges(flowEdges(nextDraft));
+      setSaved(true);
+      setSaveError("");
+    }
   };
 
   return (
@@ -403,6 +690,15 @@ export function ApprovalsView({
           >
             Сохранить
           </Button>
+          {mode === "designer" ? (
+            <Button
+              appearance="secondary"
+              disabled={!canManage || !saved || workflow?.status !== "draft"}
+              onClick={() => void publish()}
+            >
+              Опубликовать v{workflow?.version ?? "—"}
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -468,10 +764,16 @@ export function ApprovalsView({
                 value={requestPurpose}
                 onChange={(_event, data) => setRequestPurpose(data.value)}
               />
+              <PaymentFields form={requestDetails} people={people} onChange={setRequestDetails} />
               <PendingFilePicker
                 files={requestFiles}
                 onChange={setRequestFiles}
                 label="Приложить документы"
+              />
+              <PendingFilePicker
+                files={requestAdditionalFiles}
+                onChange={setRequestAdditionalFiles}
+                label="Приложить дополнительные документы"
               />
               <Button appearance="primary" onClick={() => void createRequest()}>
                 Отправить по маршруту
@@ -494,6 +796,7 @@ export function ApprovalsView({
                     Версия {request.revision}
                     {request.sourceTaskId ? " · создана из задачи" : ""}
                   </small>
+                  <small>Этап: {request.stageLabel}</small>
                 </div>
                 <Badge
                   color={
@@ -509,20 +812,48 @@ export function ApprovalsView({
                 >
                   {request.statusLabel}
                 </Badge>
+                <div className="request-details payment-field-wide">
+                  <span>{request.details.projectName || "Проект не указан"}{request.details.projectCode ? ` · ${request.details.projectCode}` : ""}</span>
+                  <span>{request.details.requestPriority === "urgent" ? "Срочно" : "Обычный приоритет"}{request.details.paymentPurpose ? ` · ${request.details.paymentPurpose}` : ""}</span>
+                  {request.details.paymentReason ? <span>Основание: {request.details.paymentReason}</span> : null}
+                  {request.details.deadline ? <span>Оплатить до {new Date(request.details.deadline).toLocaleString("ru-RU")}</span> : null}
+                  {request.activeStages.length > 1 ? (
+                    <span>Параллельно: {request.activeStages.map((stage) => stage.label).join(" · ")}</span>
+                  ) : null}
+                </div>
                 {request.status === "needs_revision" && latestReturnComment(request) ? (
                   <div className="return-reason">
                     <strong>Причина возврата</strong>
                     <span>{latestReturnComment(request)}</span>
                   </div>
                 ) : null}
-                {request.status === "running" && canManage ? (
-                  <div className="request-actions">
-                    <Button appearance="primary" onClick={() => void onAction(request.id, "approve")}>
-                      Согласовать
-                    </Button>
-                    <Button appearance="subtle" onClick={() => setReturnRequestId(request.id)}>
-                      Вернуть
-                    </Button>
+                {request.status === "running" && request.activeStages.some((stage) => stage.canAct) ? (
+                  <div className="request-stage-actions">
+                    {request.activeStages.filter((stage) => stage.canAct).map((stage) => (
+                      <div key={stage.key}>
+                        <strong>{stage.label}</strong>
+                        <span>
+                          <Button appearance="primary" onClick={() => void onAction(request.id, "approve", { nodeKey: stage.key })}>
+                            Согласовать
+                          </Button>
+                          <Button appearance="subtle" onClick={() => {
+                            setReturnRequestId(request.id);
+                            setReturnNodeKey(stage.key);
+                          }}>
+                            Вернуть
+                          </Button>
+                          <Button appearance="subtle" onClick={() => setDecision({ requestId: request.id, nodeKey: stage.key, action: "reject" })}>
+                            Отклонить
+                          </Button>
+                          <Button appearance="subtle" onClick={() => setDecision({ requestId: request.id, nodeKey: stage.key, action: "clarify" })}>
+                            Уточнить
+                          </Button>
+                          <Button appearance="subtle" onClick={() => setDecision({ requestId: request.id, nodeKey: stage.key, action: "delegate" })}>
+                            Делегировать
+                          </Button>
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 ) : request.status === "needs_revision" && request.requesterId === currentUserId ? (
                   <Button appearance="primary" onClick={() => startRevision(request)}>
@@ -548,6 +879,36 @@ export function ApprovalsView({
                     <Button appearance="subtle" onClick={() => setReturnRequestId("")}>Отмена</Button>
                   </div>
                 ) : null}
+                {decision?.requestId === request.id ? (
+                  <div className="request-inline-editor decision-editor">
+                    {decision.action === "delegate" ? (
+                      <select
+                        aria-label={`Новый согласующий заявки ${request.number}`}
+                        value={delegateToUserId}
+                        onChange={(event) => setDelegateToUserId(event.target.value)}
+                      >
+                        <option value="">Выберите сотрудника</option>
+                        {people.filter((person) => person.id !== currentUserId).map((person) => (
+                          <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <Textarea
+                      aria-label={`Комментарий решения по заявке ${request.number}`}
+                      placeholder={decision.action === "reject" ? "Причина отклонения обязательна" : "Комментарий"}
+                      value={decisionComment}
+                      onChange={(_event, data) => setDecisionComment(data.value)}
+                    />
+                    <Button
+                      appearance="primary"
+                      disabled={(decision.action === "reject" && !decisionComment.trim()) || (decision.action === "delegate" && !delegateToUserId)}
+                      onClick={() => void completeDecision()}
+                    >
+                      Подтвердить
+                    </Button>
+                    <Button appearance="subtle" onClick={() => setDecision(undefined)}>Отмена</Button>
+                  </div>
+                ) : null}
                 {editingRequestId === request.id ? (
                   <div className="request-inline-editor correction-editor" aria-label="Редактирование возвращённой заявки">
                     <Input
@@ -566,10 +927,16 @@ export function ApprovalsView({
                       value={editPurpose}
                       onChange={(_event, data) => setEditPurpose(data.value)}
                     />
+                    <PaymentFields form={editDetails} people={people} onChange={setEditDetails} revision />
                     <PendingFilePicker
                       files={editFiles}
                       onChange={setEditFiles}
                       label="Добавить исправленные документы"
+                    />
+                    <PendingFilePicker
+                      files={editAdditionalFiles}
+                      onChange={setEditAdditionalFiles}
+                      label="Добавить дополнительные исправленные документы"
                     />
                     <Button appearance="primary" onClick={() => void saveRevision(request)}>
                       Сохранить и отправить повторно
@@ -579,18 +946,40 @@ export function ApprovalsView({
                 ) : null}
                 <div className="request-attachments">
                   <AttachmentPanel
-                    title="Документы заявки"
+                    title="Основные документы"
                     attachments={attachments.filter(
                       (attachment) =>
-                        attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
+                        attachment.ownerType === "approval_request"
+                        && attachment.ownerId === request.id
+                        && ["primary", "general"].includes(attachment.documentRole),
                     )}
                     canUpload={
                       request.requesterId === currentUserId
                       && ["running", "needs_revision"].includes(request.status)
                     }
-                    onUpload={(files) => onUploadAttachments(request, files)}
+                    onUpload={(files) => onUploadAttachments(request, files, "primary")}
                     onDownload={onDownloadAttachment}
                   />
+                  <AttachmentPanel
+                    title="Дополнительные документы"
+                    attachments={attachments.filter(
+                      (attachment) =>
+                        attachment.ownerType === "approval_request"
+                        && attachment.ownerId === request.id
+                        && attachment.documentRole === "additional",
+                    )}
+                    canUpload={
+                      request.requesterId === currentUserId
+                      && ["running", "needs_revision"].includes(request.status)
+                    }
+                    onUpload={(files) => onUploadAttachments(request, files, "additional")}
+                    onDownload={onDownloadAttachment}
+                  />
+                  {request.requesterId === currentUserId && ["draft", "running", "needs_revision"].includes(request.status) ? (
+                    <Button appearance="subtle" onClick={() => void onAction(request.id, "cancel", { comment: "Отменено автором" })}>
+                      Отменить заявку
+                    </Button>
+                  ) : null}
                   <Button
                     appearance="subtle"
                     onClick={() => setHistoryRequestId(historyRequestId === request.id ? "" : request.id)}
@@ -633,7 +1022,9 @@ export function ApprovalsView({
             <div>
               <span className="detail-kicker">Шаблон</span>
               <h2>{workflow?.name ?? "Заявка на оплату"}</h2>
-              <p>Версия {workflow?.version ?? 3}, черновик</p>
+              <p>
+                Черновик v{workflow?.version ?? "—"} · опубликована v{workflow?.publishedVersion ?? "—"}
+              </p>
             </div>
             <div className="node-library">
               <strong>Добавить элемент</strong>
@@ -710,6 +1101,48 @@ export function ApprovalsView({
                     ))}
                   </select>
                 </label>
+                {selectedNode.data.kind === "approval" ? (
+                  <>
+                    <label>
+                      Роль согласующего
+                      <select
+                        value={String(selectedNode.data.approverRole ?? "manager")}
+                        onChange={(event) => updateSelected({ approverRole: event.target.value })}
+                      >
+                        <option value="manager">Руководитель</option>
+                        <option value="admin">Администратор</option>
+                        <option value="superadmin">Суперадминистратор</option>
+                        <option value="user">Сотрудник</option>
+                      </select>
+                    </label>
+                    <label>
+                      Конкретный сотрудник
+                      <select
+                        value={String(selectedNode.data.approverUserId ?? "")}
+                        onChange={(event) => updateSelected({
+                          approverUserId: event.target.value || undefined,
+                        })}
+                      >
+                        <option value="">Определяется ролью</option>
+                        {people.map((person) => (
+                          <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                {selectedNode.data.kind === "parallel" ? (
+                  <label>
+                    Завершение параллельных веток
+                    <select
+                      value={String(selectedNode.data.decisionMode ?? "all")}
+                      onChange={(event) => updateSelected({ decisionMode: event.target.value })}
+                    >
+                      <option value="all">Нужны решения всех</option>
+                      <option value="any">Достаточно одного решения</option>
+                    </select>
+                  </label>
+                ) : null}
                 <Tooltip content="Стартовый блок удалить нельзя" relationship="description">
                   <Button
                     appearance="subtle"

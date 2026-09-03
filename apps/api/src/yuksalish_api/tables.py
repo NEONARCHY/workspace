@@ -156,6 +156,7 @@ attachments = sa.Table(
     sa.Column("sha256", sa.String(64)),
     sa.Column("storage_key", sa.String(500)),
     sa.Column("uploaded_by_user_id", uuid_type),
+    sa.Column("document_role", sa.String(24)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
@@ -296,10 +297,12 @@ approval_requests = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("template_id", uuid_type),
     sa.Column("requester_user_id", uuid_type),
+    sa.Column("responsible_user_id", uuid_type),
     sa.Column("title", sa.String(240)),
     sa.Column("payload", postgresql.JSONB()),
     sa.Column("status", sa.String(24)),
     sa.Column("active_node_keys", postgresql.JSONB()),
+    sa.Column("actor_overrides", postgresql.JSONB()),
     sa.Column("source_task_id", uuid_type),
     sa.Column("current_version", sa.Integer()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
@@ -329,6 +332,7 @@ approval_actions = sa.Table(
     sa.Column("request_id", uuid_type),
     sa.Column("node_key", sa.String(96)),
     sa.Column("actor_user_id", uuid_type),
+    sa.Column("delegated_to_user_id", uuid_type),
     sa.Column("action", sa.String(24)),
     sa.Column("comment", sa.Text()),
     sa.Column("created_at", sa.DateTime(timezone=True)),

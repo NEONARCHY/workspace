@@ -211,11 +211,31 @@ async def test_authentication_http_vertical_slice() -> None:
                 "currency": "UZS",
                 "purpose": "Initial purpose",
                 "sourceTaskId": task.json()["id"],
+                "transferType": "Другие услуги",
+                "projectName": "Workspace",
+                "projectCode": "HTTP-BP6",
+                "sourceAccount": "Operating account",
+                "destinationAccount": "Supplier account",
+                "requestPriority": "urgent",
+                "paymentPurpose": "Оплата за услуги",
+                "paymentReason": "Contract HTTP-42",
+                "responsibleUserId": participant_id,
+                "employeeIds": [participant_id],
             },
         )
         assert approval.status_code == 201
         approval_id = approval.json()["id"]
         assert approval.json()["revision"] == 1
+        assert approval.json()["details"]["projectCode"] == "HTTP-BP6"
+        assert approval.json()["responsibleUserId"] == participant_id
+        approval_file = await client.put(
+            f"/api/v1/attachments/approval_request/{approval_id}",
+            headers={**admin_headers, "Content-Type": "application/pdf"},
+            params={"fileName": "contract.pdf", "documentRole": "additional"},
+            content=b"contract-body",
+        )
+        assert approval_file.status_code == 201
+        assert approval_file.json()["documentRole"] == "additional"
         returned = await client.post(
             f"/api/v1/approval-requests/{approval_id}/actions",
             headers=admin_headers,
@@ -237,8 +257,8 @@ async def test_authentication_http_vertical_slice() -> None:
             },
         )
         assert revised.status_code == 200
-        assert revised.json()["revision"] == 2
-        assert len(revised.json()["versions"]) == 2
+        assert revised.json()["revision"] == 3
+        assert len(revised.json()["versions"]) == 3
         resubmitted = await client.post(
             f"/api/v1/approval-requests/{approval_id}/actions",
             headers=admin_headers,

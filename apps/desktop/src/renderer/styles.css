@@ -315,7 +315,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .request-summary span { color: #657789; font-size: 11px; }
 .request-summary > button { margin-right: 16px; }
 .request-create { grid-template-columns: minmax(240px, 1fr) minmax(160px, 240px) auto auto; margin-bottom: 14px; border: 1px solid #c7dff2; border-radius: 8px; }
-.request-create > textarea, .request-create > .pending-file-picker { grid-column: 1 / 3; }
+.request-create > textarea, .request-create > .pending-file-picker, .request-create > .payment-fields { grid-column: 1 / -1; }
+.payment-fields { display: grid !important; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 10px !important; padding: 12px; border: 1px solid #d8e3ec; border-radius: 9px; background: #f9fbfc; }
+.payment-fields > label, .payment-trip-fields > label { display: grid; gap: 5px; color: #52677a; font-size: 10px; font-weight: 600; }
+.payment-fields select, .payment-fields input, .decision-editor select { width: 100%; min-height: 32px; padding: 5px 8px; border: 1px solid #c5d1dc; border-radius: 6px; color: #263d52; background: #fff; }
+.payment-field-wide { grid-column: 1 / -1 !important; }
+.payment-trip-fields { display: grid; grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(130px, .55fr)); gap: 9px; margin: 0; padding: 12px; border: 1px solid #dce6ee; border-radius: 8px; }
+.payment-trip-fields legend { padding: 0 5px; color: #4b657b; font-size: 10px; font-weight: 700; }
+.payment-trip-employees { grid-column: 1 / -1; }
+.payment-trip-employees select { min-height: 76px; }
 .request-list { display: grid; gap: 8px; }
 .request-list article { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 13px; padding: 14px 16px; border: 1px solid #d8dee7; border-radius: 10px; background: #ffffff; }
 .request-list article > svg { color: #0f6cbd; font-size: 23px; }
@@ -326,15 +334,24 @@ button { -webkit-tap-highlight-color: transparent; }
 .request-copy small { color: #557087; font-size: 9px; }
 .request-card > .request-inline-editor,
 .request-card > .request-attachments,
-.request-card > .request-history { grid-column: 1 / -1; }
+.request-card > .request-history,
+.request-card > .request-details,
+.request-card > .request-stage-actions { grid-column: 1 / -1; }
+.request-details { display: flex !important; flex-wrap: wrap; gap: 7px 14px !important; padding: 8px 11px; border-radius: 7px; background: #f4f7fa; }
+.request-details span { color: #4b6277 !important; }
+.request-stage-actions { display: grid !important; gap: 7px !important; }
+.request-stage-actions > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid #d7e4ee; border-radius: 8px; background: #f7fbfe; }
+.request-stage-actions > div > span { display: flex; flex-wrap: wrap; gap: 5px; }
 .request-inline-editor { display: grid !important; grid-template-columns: minmax(180px, 1fr) minmax(140px, .4fr) auto auto; align-items: start; gap: 8px !important; padding: 12px; border: 1px solid #bdd8ed; border-radius: 8px; background: #f4f9fd; }
 .request-inline-editor > textarea, .request-inline-editor > .pending-file-picker { grid-column: 1 / 3; }
 .return-editor { grid-template-columns: minmax(240px, 1fr) auto auto; }
 .return-editor > textarea { grid-column: auto; }
 .return-reason { grid-column: 2 / -1; display: grid !important; gap: 4px !important; padding: 10px 12px; border: 1px solid #eacb78; border-radius: 8px; background: #fff8df; }
 .return-reason span { color: #62512b !important; white-space: pre-wrap; }
-.request-attachments { display: flex !important; align-items: end; justify-content: space-between; gap: 12px !important; padding-top: 10px; border-top: 1px solid #edf0f3; }
-.request-attachments .attachment-panel { flex: 1; }
+.request-attachments { display: grid !important; grid-template-columns: repeat(2, minmax(200px, 1fr)) auto; align-items: end; gap: 12px !important; padding-top: 10px; border-top: 1px solid #edf0f3; }
+.request-attachments .attachment-panel { min-width: 0; }
+.correction-editor > .payment-fields { grid-column: 1 / -1; }
+.decision-editor { grid-template-columns: minmax(180px, .5fr) minmax(240px, 1fr) auto auto; }
 .request-history { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 7px !important; padding: 10px; border-radius: 8px; background: #f5f7fa; }
 .request-history > div { display: grid; gap: 3px; padding: 9px; border: 1px solid #d8dee7; border-radius: 7px; background: #ffffff; }
 
