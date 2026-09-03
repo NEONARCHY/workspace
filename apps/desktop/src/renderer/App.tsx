@@ -6,6 +6,7 @@ import type {
   ChatMessage,
   TaskStatus,
   WorkflowDefinition,
+  WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceSection,
   WorkspaceTask,
@@ -50,6 +51,7 @@ import {
   completePasswordReset,
   createWorkspaceApproval,
   createWorkspaceTask,
+  downloadWorkspaceAttachment,
   loadWorkspace,
   login,
   logout,
@@ -57,6 +59,8 @@ import {
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
   subscribeToWorkspaceEvents,
+  updateWorkspaceApproval,
+  uploadWorkspaceAttachment,
 } from "./workspace-api";
 
 interface NavItem {
@@ -72,6 +76,7 @@ interface WorkspaceState {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
 }
 
@@ -82,6 +87,7 @@ const initialWorkspace: WorkspaceState = {
   messages: initialMessages,
   tasks: initialTasks,
   requests: [],
+  attachments: [],
 };
 
 const navItems: readonly NavItem[] = [
@@ -246,8 +252,46 @@ export function App() {
     setConnectionDetail(error instanceof Error ? error.message : "Ошибка операции");
   };
 
-  const handleSendMessage = async (chatId: string, body: string) => {
+  const uploadFiles = async (
+    ownerType: "message" | "task" | "approval_request",
+    ownerId: string,
+    files: readonly File[],
+  ) => {
+    if (session === undefined || files.length === 0) return [];
+    const uploaded: WorkspaceAttachment[] = [];
+    for (const file of files) {
+      const attachment = await uploadWorkspaceAttachment(
+        session.accessToken,
+        ownerType,
+        ownerId,
+        file,
+      );
+      uploaded.push(attachment);
+      setWorkspace((current) => ({
+        ...current,
+        attachments: [...current.attachments, attachment],
+      }));
+    }
+    return uploaded;
+  };
+
+  const handleDownloadAttachment = async (attachment: WorkspaceAttachment) => {
     if (session === undefined) return;
+    try {
+      const blob = await downloadWorkspaceAttachment(session.accessToken, attachment.id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = attachment.fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const handleSendMessage = async (chatId: string, body: string, files: readonly File[]) => {
+    if (session === undefined) return undefined;
     try {
       const message = await sendWorkspaceMessage(session.accessToken, chatId, body);
       setWorkspace((current) =>
@@ -255,8 +299,11 @@ export function App() {
           ? current
           : { ...current, messages: [...current.messages, message] },
       );
+      await uploadFiles("message", message.id, files);
+      return message;
     } catch (error) {
       reportError(error);
+      return undefined;
     }
   };
 
@@ -268,6 +315,24 @@ export function App() {
         assigneeId: workspace.currentUser.id,
       });
       setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
+      return task;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateTaskFromMessage = async (message: ChatMessage, title: string) => {
+    if (session === undefined) return undefined;
+    try {
+      const task = await createWorkspaceTask(session.accessToken, {
+        title,
+        assigneeId: workspace.currentUser.id,
+        sourceMessageId: message.id,
+      });
+      setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
+      setActiveSection("tasks");
+      setConnectionDetail("Задача создана из сообщения");
       return task;
     } catch (error) {
       reportError(error);
@@ -294,17 +359,93 @@ export function App() {
     setWorkspace((current) => ({ ...current, workflow: saved }));
   };
 
-  const handleCreateApproval = async (title: string, amount: number) => {
+  const handleCreateApproval = async (
+    title: string,
+    amount: number,
+    purpose = title,
+    files: readonly File[] = [],
+    sourceTaskId?: string,
+  ) => {
     if (session === undefined) return undefined;
     try {
       const request = await createWorkspaceApproval(session.accessToken, {
         title,
         amount,
         currency: "UZS",
-        purpose: title,
+        purpose,
+        sourceTaskId,
       });
       setWorkspace((current) => ({ ...current, requests: [request, ...current.requests] }));
+      await uploadFiles("approval_request", request.id, files);
+      if (files.length > 0) await refreshWorkspace(session.accessToken);
       return request;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateApprovalFromTask = async (
+    task: WorkspaceTask,
+    title: string,
+    amount: number,
+  ) => {
+    const request = await handleCreateApproval(title, amount, task.title, [], task.id);
+    if (request !== undefined) {
+      setActiveSection("payment_requests");
+      setConnectionDetail("Заявка создана из задачи");
+    }
+    return request;
+  };
+
+  const handleUploadTaskAttachments = async (task: WorkspaceTask, files: readonly File[]) => {
+    try {
+      await uploadFiles("task", task.id, files);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const handleUploadApprovalAttachments = async (
+    request: ApprovalRequestSummary,
+    files: readonly File[],
+  ) => {
+    if (session === undefined) return;
+    try {
+      await uploadFiles("approval_request", request.id, files);
+      await refreshWorkspace(session.accessToken);
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const handleReviseApproval = async (
+    request: ApprovalRequestSummary,
+    payload: { readonly title: string; readonly amount: number; readonly purpose: string },
+    files: readonly File[],
+  ) => {
+    if (session === undefined) return undefined;
+    try {
+      await uploadFiles("approval_request", request.id, files);
+      await updateWorkspaceApproval(session.accessToken, request.id, {
+        ...payload,
+        currency: request.currency,
+        changeComment: "Исправлено после возврата",
+      });
+      const resubmitted = await actOnWorkspaceApproval(
+        session.accessToken,
+        request.id,
+        "resubmit",
+        "Исправленная версия отправлена повторно",
+      );
+      setWorkspace((current) => ({
+        ...current,
+        requests: current.requests.map((item) =>
+          item.id === resubmitted.id ? resubmitted : item,
+        ),
+      }));
+      setConnectionDetail("Исправленная заявка отправлена повторно");
+      return resubmitted;
     } catch (error) {
       reportError(error);
       return undefined;
@@ -314,10 +455,16 @@ export function App() {
   const handleApprovalAction = async (
     requestId: string,
     action: "approve" | "reject" | "return" | "resubmit",
+    comment?: string,
   ) => {
     if (session === undefined) return;
     try {
-      const request = await actOnWorkspaceApproval(session.accessToken, requestId, action);
+      const request = await actOnWorkspaceApproval(
+        session.accessToken,
+        requestId,
+        action,
+        comment,
+      );
       setWorkspace((current) => ({
         ...current,
         requests: current.requests.map((item) => (item.id === request.id ? request : item)),
@@ -435,17 +582,24 @@ export function App() {
               <MessengerView
                 chats={workspace.chats}
                 messages={workspace.messages}
+                attachments={workspace.attachments}
                 people={workspace.people}
                 onSendMessage={handleSendMessage}
+                onCreateTaskFromMessage={handleCreateTaskFromMessage}
+                onDownloadAttachment={handleDownloadAttachment}
               />
             ) : null}
             {activeSection === "tasks" ? (
               <TasksView
                 tasks={workspace.tasks}
+                attachments={workspace.attachments}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
                 onCreateTask={handleCreateTask}
                 onChangeStatus={handleTaskStatus}
+                onCreateApprovalFromTask={handleCreateApprovalFromTask}
+                onUploadAttachments={handleUploadTaskAttachments}
+                onDownloadAttachment={handleDownloadAttachment}
               />
             ) : null}
             {activeSection === "payment_requests" ? (
@@ -454,10 +608,14 @@ export function App() {
                 canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
                 currentUserId={workspace.currentUser.id}
                 requests={workspace.requests}
+                attachments={workspace.attachments}
                 workflow={workspace.workflow}
                 onSaveWorkflow={handleSaveWorkflow}
                 onCreateRequest={handleCreateApproval}
                 onAction={handleApprovalAction}
+                onReviseRequest={handleReviseApproval}
+                onUploadAttachments={handleUploadApprovalAttachments}
+                onDownloadAttachment={handleDownloadAttachment}
               />
             ) : null}
             {activeSection === "feed" ? (

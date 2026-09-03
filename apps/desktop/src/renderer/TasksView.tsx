@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 
-import type { TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
+import type {
+  ApprovalRequestSummary,
+  TaskStatus,
+  WorkspaceAttachment,
+  WorkspacePerson,
+  WorkspaceTask,
+} from "@yuksalish/contracts";
 import {
   Avatar,
   Badge,
@@ -15,7 +21,10 @@ import {
   Checkmark24Regular,
   Clock24Regular,
   Filter24Regular,
+  Money24Regular,
 } from "@fluentui/react-icons";
+
+import { AttachmentPanel } from "./AttachmentPanel";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
@@ -30,25 +39,43 @@ type TaskFilter = "active" | "mine" | "overdue" | "completed";
 
 interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
+  readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
   readonly onCreateTask: (
     title: string,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
+  readonly onCreateApprovalFromTask: (
+    task: WorkspaceTask,
+    title: string,
+    amount: number,
+  ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
+  readonly onUploadAttachments: (
+    task: WorkspaceTask,
+    files: readonly File[],
+  ) => void | Promise<void>;
+  readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
 
 export function TasksView({
   tasks,
+  attachments,
   people,
   currentUserId,
   onCreateTask,
   onChangeStatus,
+  onCreateApprovalFromTask,
+  onUploadAttachments,
+  onDownloadAttachment,
 }: TasksViewProps) {
   const [filter, setFilter] = useState<TaskFilter>("active");
   const [selectedId, setSelectedId] = useState(tasks[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [creatingApproval, setCreatingApproval] = useState(false);
+  const [approvalTitle, setApprovalTitle] = useState("");
+  const [approvalAmount, setApprovalAmount] = useState("");
 
   const visibleTasks = useMemo(() => {
     if (filter === "mine") return tasks.filter((task) => task.assigneeId === currentUserId);
@@ -77,6 +104,21 @@ export function TasksView({
           ? "awaiting_review"
           : "completed";
     void onChangeStatus(selectedTask.id, nextStatus);
+  };
+
+  const startApproval = () => {
+    if (selectedTask === undefined) return;
+    setApprovalTitle(selectedTask.title);
+    setApprovalAmount("");
+    setCreatingApproval(true);
+  };
+
+  const createApproval = async () => {
+    if (selectedTask === undefined) return;
+    const amount = Number(approvalAmount.replace(/\s/g, ""));
+    if (!approvalTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
+    const created = await onCreateApprovalFromTask(selectedTask, approvalTitle.trim(), amount);
+    if (created !== undefined) setCreatingApproval(false);
   };
 
   const personById = (id: string) => people.find((person) => person.id === id) ?? people[0];
@@ -189,6 +231,9 @@ export function TasksView({
         <aside className="task-detail">
           <div className="detail-kicker">{selectedTask.project}</div>
           <h2>{selectedTask.title}</h2>
+          {selectedTask.sourceMessageId ? (
+            <div className="source-link-note">Создана из сообщения · связь сохранена</div>
+          ) : null}
           <div className="detail-meta">
             <div>
               <Avatar
@@ -211,11 +256,16 @@ export function TasksView({
           </div>
           <div className="detail-section">
             <h3>Описание</h3>
-            <p>
-              Собрать документы, проверить условия и зафиксировать итог в карточке задачи.
-              Обсуждение автоматически доступно в чате задачи.
-            </p>
+            <p>{selectedTask.description || "Описание пока не добавлено."}</p>
           </div>
+          <AttachmentPanel
+            attachments={attachments.filter(
+              (attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id,
+            )}
+            canUpload
+            onUpload={(files) => onUploadAttachments(selectedTask, files)}
+            onDownload={onDownloadAttachment}
+          />
           <div className="detail-section">
             <div className="detail-section-line">
               <h3>Чек-лист</h3>
@@ -241,7 +291,31 @@ export function TasksView({
             <Button appearance="secondary" icon={<Clock24Regular />}>
               Открыть чат
             </Button>
+            <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>
+              Создать заявку на оплату
+            </Button>
           </div>
+          {creatingApproval ? (
+            <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи">
+              <Money24Regular />
+              <Input
+                aria-label="Название заявки из задачи"
+                value={approvalTitle}
+                onChange={(_event, data) => setApprovalTitle(data.value)}
+              />
+              <Input
+                aria-label="Сумма заявки из задачи"
+                inputMode="numeric"
+                placeholder="Сумма в UZS"
+                value={approvalAmount}
+                onChange={(_event, data) => setApprovalAmount(data.value)}
+              />
+              <Button appearance="primary" onClick={() => void createApproval()}>
+                Отправить по маршруту
+              </Button>
+              <Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button>
+            </div>
+          ) : null}
         </aside>
       ) : null}
     </section>

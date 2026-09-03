@@ -52,6 +52,21 @@ class ChatMessageResponse(ApiModel):
     own: bool
 
 
+AttachmentOwnerType = Literal["message", "task", "approval_request"]
+
+
+class AttachmentResponse(ApiModel):
+    id: str
+    owner_type: AttachmentOwnerType
+    owner_id: str
+    file_name: str
+    content_type: str
+    byte_size: int
+    sha256: str
+    uploaded_by_user_id: str
+    created_at: datetime
+
+
 class SendMessageRequest(ApiModel):
     body: str = Field(min_length=1, max_length=20_000)
 
@@ -111,6 +126,14 @@ ApprovalStatus = Literal[
 ]
 
 
+class ApprovalActionHistoryResponse(ApiModel):
+    action: str
+    comment: str | None
+    actor_user_id: str
+    node_key: str
+    created_at: datetime
+
+
 class ApprovalRequestResponse(ApiModel):
     id: str
     number: str
@@ -122,6 +145,23 @@ class ApprovalRequestResponse(ApiModel):
     active_node_keys: list[str]
     requester_id: str
     source_task_id: str | None = None
+    purpose: str = ""
+    revision: int = 1
+    versions: list["ApprovalRequestVersionResponse"] = Field(default_factory=list)
+    actions: list[ApprovalActionHistoryResponse] = Field(default_factory=list)
+
+
+class ApprovalRequestVersionResponse(ApiModel):
+    version: int
+    title: str
+    amount: int
+    currency: str
+    purpose: str
+    attachment_ids: list[str]
+    edited_by_user_id: str
+    change_reason: str
+    change_comment: str | None
+    created_at: datetime
 
 
 class CreateApprovalRequest(ApiModel):
@@ -130,6 +170,22 @@ class CreateApprovalRequest(ApiModel):
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     source_task_id: str | None = None
+
+
+class UpdateApprovalRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    amount: int = Field(gt=0)
+    currency: str = Field(default="UZS", min_length=3, max_length=3)
+    purpose: str = Field(default="", max_length=20_000)
+    change_comment: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Title must not be blank")
+        return stripped
 
 
 class ApprovalActionRequest(ApiModel):
@@ -178,4 +234,5 @@ class WorkspaceBootstrapResponse(ApiModel):
     messages: list[ChatMessageResponse]
     tasks: list[TaskResponse]
     requests: list[ApprovalRequestResponse]
+    attachments: list[AttachmentResponse]
     workflow: WorkflowResponse

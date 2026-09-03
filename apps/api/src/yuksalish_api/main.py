@@ -11,6 +11,7 @@ from . import __version__
 from .database import create_database_engine
 from .events import WorkspaceEventBus
 from .logging import configure_logging
+from .object_storage import InMemoryObjectStorage, MinioObjectStorage
 from .routers import authentication, directory, health, modules, workspace
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
@@ -26,6 +27,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         engine = create_database_engine(runtime_settings)
         lifespan_app.state.database_engine = engine
         lifespan_app.state.event_bus = WorkspaceEventBus()
+        storage = (
+            InMemoryObjectStorage()
+            if runtime_settings.environment == "test"
+            else MinioObjectStorage(runtime_settings)
+        )
+        await storage.ensure_ready()
+        lifespan_app.state.object_storage = storage
         if runtime_settings.seed_demo_data:
             await seed_demo_data(engine, runtime_settings.demo_password)
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)

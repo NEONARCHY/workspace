@@ -1,5 +1,6 @@
 import type {
   ApprovalRequestSummary,
+  AttachmentOwnerType,
   AuthenticationSession,
   ChatMessage,
   DirectoryBootstrap,
@@ -11,6 +12,7 @@ import type {
   TaskStatus,
   WorkflowDefinition,
   WorkspaceBootstrap,
+  WorkspaceAttachment,
   WorkspaceTask,
   TotpSetup,
   WorkspacePosition,
@@ -269,6 +271,61 @@ export function actOnWorkspaceApproval(
     { method: "POST", body: JSON.stringify({ action, comment }) },
     token,
   );
+}
+
+export function updateWorkspaceApproval(
+  token: string,
+  requestId: string,
+  payload: {
+    readonly title: string;
+    readonly amount: number;
+    readonly currency: string;
+    readonly purpose: string;
+    readonly changeComment?: string;
+  },
+): Promise<ApprovalRequestSummary> {
+  return apiRequest<ApprovalRequestSummary>(
+    `/approval-requests/${requestId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export async function uploadWorkspaceAttachment(
+  token: string,
+  ownerType: AttachmentOwnerType,
+  ownerId: string,
+  file: File,
+): Promise<WorkspaceAttachment> {
+  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?fileName=${encodeURIComponent(file.name)}`;
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `File upload failed with HTTP ${response.status}`);
+  }
+  return (await response.json()) as WorkspaceAttachment;
+}
+
+export async function downloadWorkspaceAttachment(
+  token: string,
+  attachmentId: string,
+): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}/api/v1/attachments/${attachmentId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(payload?.detail ?? `File download failed with HTTP ${response.status}`);
+  }
+  return response.blob();
 }
 
 export function subscribeToWorkspaceEvents(

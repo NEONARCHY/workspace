@@ -11,6 +11,7 @@ from .auth_service import hash_password
 from .tables import (
     approval_edges,
     approval_nodes,
+    approval_request_versions,
     approval_requests,
     approval_templates,
     chat_members,
@@ -488,6 +489,7 @@ async def seed_demo_data(
                     "status": "running",
                     "active_node_keys": ["manager"],
                     "source_task_id": demo_uuid("task/104"),
+                    "current_version": 1,
                     "created_at": now,
                     "updated_at": now,
                     "finished_at": None,
@@ -506,6 +508,7 @@ async def seed_demo_data(
                     "status": "running",
                     "active_node_keys": ["finance"],
                     "source_task_id": None,
+                    "current_version": 1,
                     "created_at": now - timedelta(days=1),
                     "updated_at": now,
                     "finished_at": None,
@@ -524,9 +527,66 @@ async def seed_demo_data(
                     "status": "approved",
                     "active_node_keys": [],
                     "source_task_id": None,
+                    "current_version": 1,
                     "created_at": now - timedelta(days=3),
                     "updated_at": now - timedelta(days=2),
                     "finished_at": now - timedelta(days=2),
                 },
+            ],
+        )
+        await _insert_missing(
+            connection,
+            approval_request_versions,
+            [
+                {
+                    "id": demo_uuid(f"approval-request-version/{number}/1"),
+                    "request_id": demo_uuid(f"approval-request/{number}"),
+                    "version": 1,
+                    "title": title,
+                    "payload": payload,
+                    "attachment_ids": [],
+                    "edited_by_user_id": person_ids[requester],
+                    "change_reason": "initial",
+                    "change_comment": None,
+                    "created_at": created_at,
+                }
+                for number, requester, title, payload, created_at in (
+                    (
+                        "148",
+                        "dilshod",
+                        "Оплата ноутбуков для нового офиса",
+                        {
+                            "amount": 84_600_000,
+                            "currency": "UZS",
+                            "purpose": "Ноутбуки для нового офиса",
+                            "number": "148",
+                        },
+                        now,
+                    ),
+                    (
+                        "147",
+                        "aziza",
+                        "Продление лицензий на программное обеспечение",
+                        {
+                            "amount": 12_400_000,
+                            "currency": "UZS",
+                            "purpose": "Продление корпоративных лицензий",
+                            "number": "147",
+                        },
+                        now - timedelta(days=1),
+                    ),
+                    (
+                        "142",
+                        "baxtiyor",
+                        "Аванс на региональное мероприятие",
+                        {
+                            "amount": 6_800_000,
+                            "currency": "UZS",
+                            "purpose": "Организация регионального мероприятия",
+                            "number": "142",
+                        },
+                        now - timedelta(days=3),
+                    ),
+                )
             ],
         )

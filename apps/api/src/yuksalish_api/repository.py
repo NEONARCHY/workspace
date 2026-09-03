@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import and_, delete, func, insert, or_, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -12,8 +12,10 @@ from .tables import (
     approval_actions,
     approval_edges,
     approval_nodes,
+    approval_request_versions,
     approval_requests,
     approval_templates,
+    attachments,
     chat_members,
     chats,
     message_versions,
@@ -22,8 +24,12 @@ from .tables import (
     users,
 )
 from .workspace_schemas import (
+    ApprovalActionHistoryResponse,
     ApprovalActionRequest,
     ApprovalRequestResponse,
+    ApprovalRequestVersionResponse,
+    AttachmentOwnerType,
+    AttachmentResponse,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     ChatSummaryResponse,
@@ -33,6 +39,7 @@ from .workspace_schemas import (
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskResponse,
+    UpdateApprovalRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
     WorkflowResponse,
@@ -107,7 +114,51 @@ def _task(row: Record) -> TaskResponse:
     )
 
 
-def _approval_request(row: Record) -> ApprovalRequestResponse:
+def _approval_version(row: Record) -> ApprovalRequestVersionResponse:
+    payload = row["payload"] or {}
+    return ApprovalRequestVersionResponse(
+        version=row["version"],
+        title=row["title"],
+        amount=int(payload.get("amount", 0)),
+        currency=str(payload.get("currency", "UZS")),
+        purpose=str(payload.get("purpose", "")),
+        attachment_ids=[str(value) for value in row["attachment_ids"] or []],
+        edited_by_user_id=str(row["edited_by_user_id"]),
+        change_reason=row["change_reason"],
+        change_comment=row["change_comment"],
+        created_at=row["created_at"],
+    )
+
+
+def _approval_action(row: Record) -> ApprovalActionHistoryResponse:
+    return ApprovalActionHistoryResponse(
+        action=row["action"],
+        comment=row["comment"],
+        actor_user_id=str(row["actor_user_id"]),
+        node_key=row["node_key"],
+        created_at=row["created_at"],
+    )
+
+
+def _attachment(row: Record) -> AttachmentResponse:
+    return AttachmentResponse(
+        id=str(row["id"]),
+        owner_type=row["owner_type"],
+        owner_id=str(row["owner_id"]),
+        file_name=row["file_name"],
+        content_type=row["content_type"],
+        byte_size=row["byte_size"],
+        sha256=row["sha256"],
+        uploaded_by_user_id=str(row["uploaded_by_user_id"]),
+        created_at=row["created_at"],
+    )
+
+
+def _approval_request(
+    row: Record,
+    versions: Sequence[ApprovalRequestVersionResponse] = (),
+    actions: Sequence[ApprovalActionHistoryResponse] = (),
+) -> ApprovalRequestResponse:
     payload = row["payload"] or {}
     status_value = str(row["status"])
     return ApprovalRequestResponse(
@@ -121,6 +172,71 @@ def _approval_request(row: Record) -> ApprovalRequestResponse:
         active_node_keys=list(row["active_node_keys"] or []),
         requester_id=str(row["requester_user_id"]),
         source_task_id=(str(row["source_task_id"]) if row["source_task_id"] else None),
+        purpose=str(payload.get("purpose", "")),
+        revision=int(row.get("current_version", 1)),
+        versions=list(versions),
+        actions=list(actions),
+    )
+
+
+async def _request_versions(
+    connection: AsyncConnection,
+    request_ids: Sequence[UUID],
+) -> dict[UUID, list[ApprovalRequestVersionResponse]]:
+    if not request_ids:
+        return {}
+    rows = (
+        await connection.execute(
+            select(approval_request_versions)
+            .where(approval_request_versions.c.request_id.in_(request_ids))
+            .order_by(
+                approval_request_versions.c.request_id,
+                approval_request_versions.c.version,
+            )
+        )
+    ).mappings().all()
+    result: dict[UUID, list[ApprovalRequestVersionResponse]] = {}
+    for row in rows:
+        result.setdefault(row["request_id"], []).append(_approval_version(row))
+    return result
+
+
+async def _request_actions(
+    connection: AsyncConnection,
+    request_ids: Sequence[UUID],
+) -> dict[UUID, list[ApprovalActionHistoryResponse]]:
+    if not request_ids:
+        return {}
+    rows = (
+        await connection.execute(
+            select(approval_actions)
+            .where(approval_actions.c.request_id.in_(request_ids))
+            .order_by(approval_actions.c.request_id, approval_actions.c.created_at)
+        )
+    ).mappings().all()
+    result: dict[UUID, list[ApprovalActionHistoryResponse]] = {}
+    for row in rows:
+        result.setdefault(row["request_id"], []).append(_approval_action(row))
+    return result
+
+
+async def _request_response(
+    connection: AsyncConnection,
+    request_id: UUID,
+) -> ApprovalRequestResponse:
+    row = (
+        await connection.execute(
+            select(approval_requests).where(approval_requests.c.id == request_id)
+        )
+    ).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Request was not found")
+    versions = await _request_versions(connection, [request_id])
+    actions = await _request_actions(connection, [request_id])
+    return _approval_request(
+        row,
+        versions.get(request_id, []),
+        actions.get(request_id, []),
     )
 
 
@@ -285,6 +401,37 @@ async def load_workspace(
             approval_requests.c.requester_user_id == current_user.id
         )
     request_rows = (await connection.execute(request_statement)).mappings().all()
+    request_ids = [row["id"] for row in request_rows]
+    versions_by_request = await _request_versions(connection, request_ids)
+    actions_by_request = await _request_actions(connection, request_ids)
+
+    attachment_filters = []
+    message_ids = [row["id"] for row in message_rows]
+    task_ids = [row["id"] for row in task_rows]
+    if message_ids:
+        attachment_filters.append(
+            and_(attachments.c.owner_type == "message", attachments.c.owner_id.in_(message_ids))
+        )
+    if task_ids:
+        attachment_filters.append(
+            and_(attachments.c.owner_type == "task", attachments.c.owner_id.in_(task_ids))
+        )
+    if request_ids:
+        attachment_filters.append(
+            and_(
+                attachments.c.owner_type == "approval_request",
+                attachments.c.owner_id.in_(request_ids),
+            )
+        )
+    attachment_rows: Sequence[RowMapping] = ()
+    if attachment_filters:
+        attachment_rows = (
+            await connection.execute(
+                select(attachments)
+                .where(or_(*attachment_filters))
+                .order_by(attachments.c.created_at)
+            )
+        ).mappings().all()
 
     return WorkspaceBootstrapResponse(
         current_user=current,
@@ -292,7 +439,15 @@ async def load_workspace(
         chats=chat_responses,
         messages=message_responses,
         tasks=[_task(row) for row in task_rows],
-        requests=[_approval_request(row) for row in request_rows],
+        requests=[
+            _approval_request(
+                row,
+                versions_by_request.get(row["id"], []),
+                actions_by_request.get(row["id"], []),
+            )
+            for row in request_rows
+        ],
+        attachments=[_attachment(row) for row in attachment_rows],
         workflow=await get_workflow(connection),
     )
 
@@ -365,10 +520,16 @@ async def create_task(
         raise WorkspaceRepositoryError(422, "Assignee is not active")
     if source_message_id is not None:
         message_exists = await connection.scalar(
-            select(func.count()).select_from(messages).where(messages.c.id == source_message_id)
+            select(func.count())
+            .select_from(messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id))
+            .where(
+                messages.c.id == source_message_id,
+                messages.c.deleted_at.is_(None),
+                chat_members.c.user_id == current_user.id,
+            )
         )
         if not message_exists:
-            raise WorkspaceRepositoryError(422, "Source message was not found")
+            raise WorkspaceRepositoryError(422, "Source message is not accessible")
     task_id = uuid4()
     now = datetime.now(UTC)
     values = {
@@ -518,11 +679,16 @@ async def create_approval_request(
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid source task identifier") from error
     if source_task_id is not None:
-        task_exists = await connection.scalar(
-            select(func.count()).select_from(tasks).where(tasks.c.id == source_task_id)
+        source_task = (
+            await connection.execute(select(tasks).where(tasks.c.id == source_task_id))
+        ).mappings().first()
+        task_accessible = source_task is not None and (
+            current_user.role in {"manager", "admin", "superadmin"}
+            or source_task["author_user_id"] == current_user.id
+            or source_task["primary_assignee_user_id"] == current_user.id
         )
-        if not task_exists:
-            raise WorkspaceRepositoryError(422, "Source task was not found")
+        if not task_accessible:
+            raise WorkspaceRepositoryError(422, "Source task is not accessible")
     first_edge = next((edge for edge in workflow.edges if edge.source == "start"), None)
     if first_edge is None:
         raise WorkspaceRepositoryError(409, "Workflow start is not connected")
@@ -543,12 +709,246 @@ async def create_approval_request(
         "status": "running",
         "active_node_keys": [first_edge.target],
         "source_task_id": source_task_id,
+        "current_version": 1,
         "created_at": now,
         "updated_at": now,
         "finished_at": None,
     }
     await connection.execute(insert(approval_requests).values(**values))
-    return _approval_request(values)
+    version_values = {
+        "id": uuid4(),
+        "request_id": request_id,
+        "version": 1,
+        "title": values["title"],
+        "payload": values["payload"],
+        "attachment_ids": [],
+        "edited_by_user_id": current_user.id,
+        "change_reason": "initial",
+        "change_comment": None,
+        "created_at": now,
+    }
+    await connection.execute(insert(approval_request_versions).values(**version_values))
+    return _approval_request(values, [_approval_version(version_values)])
+
+
+async def _attachment_ids_for_request(
+    connection: AsyncConnection,
+    request_id: UUID,
+) -> list[str]:
+    values = (
+        await connection.execute(
+            select(attachments.c.id)
+            .where(
+                attachments.c.owner_type == "approval_request",
+                attachments.c.owner_id == request_id,
+            )
+            .order_by(attachments.c.created_at)
+        )
+    ).scalars().all()
+    return [str(value) for value in values]
+
+
+async def _append_request_version(
+    connection: AsyncConnection,
+    request_row: Record,
+    editor_id: UUID,
+    *,
+    title: str,
+    payload: Mapping[str, Any],
+    change_reason: str,
+    change_comment: str | None,
+) -> int:
+    request_id = request_row["id"]
+    next_version = int(request_row.get("current_version", 1)) + 1
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(approval_request_versions).values(
+            id=uuid4(),
+            request_id=request_id,
+            version=next_version,
+            title=title,
+            payload=dict(payload),
+            attachment_ids=await _attachment_ids_for_request(connection, request_id),
+            edited_by_user_id=editor_id,
+            change_reason=change_reason,
+            change_comment=change_comment,
+            created_at=now,
+        )
+    )
+    await connection.execute(
+        update(approval_requests)
+        .where(approval_requests.c.id == request_id)
+        .values(current_version=next_version, updated_at=now)
+    )
+    return next_version
+
+
+async def update_approval_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+    payload: UpdateApprovalRequest,
+) -> ApprovalRequestResponse:
+    row = (
+        await connection.execute(
+            select(approval_requests)
+            .where(approval_requests.c.id == request_id)
+            .with_for_update()
+        )
+    ).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Request was not found")
+    if row["requester_user_id"] != current_user.id:
+        raise WorkspaceRepositoryError(403, "Only the requester can edit this request")
+    if row["status"] != "needs_revision":
+        raise WorkspaceRepositoryError(409, "Only a returned request can be edited")
+
+    updated_payload = {
+        **(row["payload"] or {}),
+        "amount": payload.amount,
+        "currency": payload.currency.upper(),
+        "purpose": payload.purpose,
+    }
+    title = payload.title.strip()
+    next_version = await _append_request_version(
+        connection,
+        row,
+        current_user.id,
+        title=title,
+        payload=updated_payload,
+        change_reason="correction",
+        change_comment=payload.change_comment,
+    )
+    await connection.execute(
+        update(approval_requests)
+        .where(approval_requests.c.id == request_id)
+        .values(title=title, payload=updated_payload, current_version=next_version)
+    )
+    return await _request_response(connection, request_id)
+
+
+async def validate_attachment_owner(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    owner_type: AttachmentOwnerType,
+    owner_id: UUID,
+    *,
+    write: bool,
+) -> None:
+    if owner_type == "message":
+        row = (
+            await connection.execute(
+                select(messages.c.author_user_id, chat_members.c.user_id)
+                .select_from(
+                    messages.join(chat_members, chat_members.c.chat_id == messages.c.chat_id)
+                )
+                .where(
+                    messages.c.id == owner_id,
+                    messages.c.deleted_at.is_(None),
+                    chat_members.c.user_id == current_user.id,
+                )
+            )
+        ).mappings().first()
+        if row is None or (write and row["author_user_id"] != current_user.id):
+            raise WorkspaceRepositoryError(404, "Message was not found")
+        return
+
+    if owner_type == "task":
+        row = (
+            await connection.execute(select(tasks).where(tasks.c.id == owner_id))
+        ).mappings().first()
+        accessible = row is not None and (
+            current_user.role in {"manager", "admin", "superadmin"}
+            or row["author_user_id"] == current_user.id
+            or row["primary_assignee_user_id"] == current_user.id
+        )
+        if not accessible:
+            raise WorkspaceRepositoryError(404, "Task was not found")
+        return
+
+    row = (
+        await connection.execute(
+            select(approval_requests).where(approval_requests.c.id == owner_id)
+        )
+    ).mappings().first()
+    accessible = row is not None and (
+        current_user.role in {"manager", "admin", "superadmin"}
+        or row["requester_user_id"] == current_user.id
+    )
+    writable = (
+        row is not None
+        and row["requester_user_id"] == current_user.id
+        and row["status"] in {"running", "needs_revision"}
+    )
+    if not accessible or (write and not writable):
+        raise WorkspaceRepositoryError(404, "Approval request was not found")
+
+
+async def create_attachment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    owner_type: AttachmentOwnerType,
+    owner_id: UUID,
+    *,
+    file_name: str,
+    content_type: str,
+    byte_size: int,
+    sha256: str,
+    storage_key: str,
+) -> AttachmentResponse:
+    await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
+    now = datetime.now(UTC)
+    values = {
+        "id": uuid4(),
+        "owner_type": owner_type,
+        "owner_id": owner_id,
+        "file_name": file_name,
+        "content_type": content_type,
+        "byte_size": byte_size,
+        "sha256": sha256,
+        "storage_key": storage_key,
+        "uploaded_by_user_id": current_user.id,
+        "created_at": now,
+    }
+    await connection.execute(insert(attachments).values(**values))
+    if owner_type == "approval_request":
+        request_row = (
+            await connection.execute(
+                select(approval_requests)
+                .where(approval_requests.c.id == owner_id)
+                .with_for_update()
+            )
+        ).mappings().one()
+        await _append_request_version(
+            connection,
+            request_row,
+            current_user.id,
+            title=request_row["title"],
+            payload=request_row["payload"] or {},
+            change_reason="attachment_added",
+            change_comment=file_name,
+        )
+    return _attachment(values)
+
+
+async def get_attachment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    attachment_id: UUID,
+) -> tuple[AttachmentResponse, str]:
+    row = (
+        await connection.execute(select(attachments).where(attachments.c.id == attachment_id))
+    ).mappings().first()
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Attachment was not found")
+    await validate_attachment_owner(
+        connection,
+        current_user,
+        row["owner_type"],
+        row["owner_id"],
+        write=False,
+    )
+    return _attachment(row), row["storage_key"]
 
 
 def _condition_outcome(condition: Mapping[str, Any], request_payload: Mapping[str, Any]) -> bool:
@@ -665,6 +1065,8 @@ async def act_on_request(
         raise WorkspaceRepositoryError(404, "Request was not found")
     if row["status"] not in {"running", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Request is already finished")
+    if payload.action == "return" and not (payload.comment or "").strip():
+        raise WorkspaceRepositoryError(422, "A return comment is required")
     resubmitting = payload.action == "resubmit"
     if resubmitting:
         if row["status"] != "needs_revision" or row["requester_user_id"] != current_user.id:
@@ -740,12 +1142,4 @@ async def act_on_request(
             finished_at=finished_at,
         )
     )
-    return _approval_request(
-        {
-            **row,
-            "status": status,
-            "active_node_keys": next_nodes,
-            "updated_at": now,
-            "finished_at": finished_at,
-        }
-    )
+    return await _request_response(connection, request_id)

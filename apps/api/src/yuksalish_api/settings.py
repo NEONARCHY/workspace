@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     s3_secret_key: SecretStr = SecretStr("local-only")
     s3_secure: bool = False
     s3_bucket: str = "workspace-files"
+    attachment_max_bytes: int = 25 * 1024 * 1024
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )

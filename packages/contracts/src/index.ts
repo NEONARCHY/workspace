@@ -94,6 +94,20 @@ export interface ChatMessage {
   readonly own?: boolean;
 }
 
+export type AttachmentOwnerType = "message" | "task" | "approval_request";
+
+export interface WorkspaceAttachment {
+  readonly id: string;
+  readonly ownerType: AttachmentOwnerType;
+  readonly ownerId: string;
+  readonly fileName: string;
+  readonly contentType: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+  readonly uploadedByUserId: string;
+  readonly createdAt: string;
+}
+
 export type TaskStatus =
   | "new"
   | "in_progress"
@@ -110,7 +124,7 @@ export interface WorkspaceTask {
   readonly assigneeId: string;
   readonly dueLabel: string;
   readonly status: TaskStatus;
-  readonly priority: "normal" | "high" | "urgent";
+  readonly priority: "low" | "normal" | "high" | "urgent";
   readonly checklistDone: number;
   readonly checklistTotal: number;
   readonly sourceMessageId?: string | null;
@@ -138,6 +152,27 @@ export type ApprovalStatus =
   | "rejected"
   | "cancelled";
 
+export interface ApprovalRequestVersion {
+  readonly version: number;
+  readonly title: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly purpose: string;
+  readonly attachmentIds: readonly string[];
+  readonly editedByUserId: string;
+  readonly changeReason: string;
+  readonly changeComment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface ApprovalActionHistory {
+  readonly action: string;
+  readonly comment?: string | null;
+  readonly actorUserId: string;
+  readonly nodeKey: string;
+  readonly createdAt: string;
+}
+
 export interface ApprovalRequestSummary {
   readonly id: string;
   readonly number: string;
@@ -149,6 +184,10 @@ export interface ApprovalRequestSummary {
   readonly activeNodeKeys: readonly string[];
   readonly requesterId: string;
   readonly sourceTaskId?: string | null;
+  readonly purpose: string;
+  readonly revision: number;
+  readonly versions: readonly ApprovalRequestVersion[];
+  readonly actions: readonly ApprovalActionHistory[];
 }
 
 export interface WorkflowNodeDefinition {
@@ -187,6 +226,7 @@ export interface WorkspaceBootstrap {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow: WorkflowDefinition;
 }
 

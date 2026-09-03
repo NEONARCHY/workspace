@@ -144,6 +144,21 @@ messages = sa.Table(
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
 )
 
+attachments = sa.Table(
+    "workspace_attachments",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("owner_type", sa.String(32)),
+    sa.Column("owner_id", uuid_type),
+    sa.Column("file_name", sa.String(255)),
+    sa.Column("content_type", sa.String(160)),
+    sa.Column("byte_size", sa.BigInteger()),
+    sa.Column("sha256", sa.String(64)),
+    sa.Column("storage_key", sa.String(500)),
+    sa.Column("uploaded_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 message_versions = sa.Table(
     "messenger_message_versions",
     metadata,
@@ -227,9 +242,25 @@ approval_requests = sa.Table(
     sa.Column("status", sa.String(24)),
     sa.Column("active_node_keys", postgresql.JSONB()),
     sa.Column("source_task_id", uuid_type),
+    sa.Column("current_version", sa.Integer()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
     sa.Column("finished_at", sa.DateTime(timezone=True)),
+)
+
+approval_request_versions = sa.Table(
+    "approval_request_versions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("version", sa.Integer()),
+    sa.Column("title", sa.String(240)),
+    sa.Column("payload", postgresql.JSONB()),
+    sa.Column("attachment_ids", postgresql.JSONB()),
+    sa.Column("edited_by_user_id", uuid_type),
+    sa.Column("change_reason", sa.String(48)),
+    sa.Column("change_comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 approval_actions = sa.Table(

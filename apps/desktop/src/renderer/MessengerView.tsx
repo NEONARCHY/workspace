@@ -1,6 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-import type { ChatMessage, ChatSummary, WorkspacePerson } from "@yuksalish/contracts";
+import type {
+  ChatMessage,
+  ChatSummary,
+  WorkspaceAttachment,
+  WorkspacePerson,
+  WorkspaceTask,
+} from "@yuksalish/contracts";
 import {
   Avatar,
   Badge,
@@ -14,19 +20,45 @@ import {
   MoreHorizontal24Regular,
   Search24Regular,
   Send24Filled,
+  TaskListSquareLtr24Regular,
 } from "@fluentui/react-icons";
+
+import { AttachmentChips } from "./AttachmentPanel";
 
 interface MessengerViewProps {
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
+  readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
-  readonly onSendMessage: (chatId: string, body: string) => void | Promise<void>;
+  readonly onSendMessage: (
+    chatId: string,
+    body: string,
+    files: readonly File[],
+  ) => ChatMessage | undefined | Promise<ChatMessage | undefined>;
+  readonly onCreateTaskFromMessage: (
+    message: ChatMessage,
+    title: string,
+  ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
 
-export function MessengerView({ chats, messages, people, onSendMessage }: MessengerViewProps) {
+export function MessengerView({
+  chats,
+  messages,
+  attachments,
+  people,
+  onSendMessage,
+  onCreateTaskFromMessage,
+  onDownloadAttachment,
+}: MessengerViewProps) {
   const [activeChatId, setActiveChatId] = useState(chats[0]?.id ?? "");
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
+  const [taskSource, setTaskSource] = useState<ChatMessage>();
+  const [taskTitle, setTaskTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
   const activeChatKey = activeChat?.id ?? "";
@@ -37,12 +69,37 @@ export function MessengerView({ chats, messages, people, onSendMessage }: Messen
     [chats, query],
   );
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const body = draft.trim();
     if (body.length === 0) return;
     if (activeChat === undefined) return;
-    void onSendMessage(activeChat.id, body);
-    setDraft("");
+    setBusy(true);
+    try {
+      const message = await onSendMessage(activeChat.id, body, pendingFiles);
+      if (message !== undefined) {
+        setDraft("");
+        setPendingFiles([]);
+        if (fileInputRef.current !== null) fileInputRef.current.value = "";
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startTask = (message: ChatMessage) => {
+    setTaskSource(message);
+    setTaskTitle(message.body.slice(0, 160));
+  };
+
+  const createTask = async () => {
+    if (taskSource === undefined || !taskTitle.trim()) return;
+    setBusy(true);
+    try {
+      const task = await onCreateTaskFromMessage(taskSource, taskTitle.trim());
+      if (task !== undefined) setTaskSource(undefined);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const personById = (id: string) => people.find((person) => person.id === id) ?? people[0];
@@ -134,6 +191,22 @@ export function MessengerView({ chats, messages, people, onSendMessage }: Messen
                 <div className="message-body">
                   {!message.own ? <strong>{author?.name ?? "Сотрудник"}</strong> : null}
                   <p>{message.body}</p>
+                  <AttachmentChips
+                    attachments={attachments.filter(
+                      (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
+                    )}
+                    onDownload={onDownloadAttachment}
+                  />
+                  <Button
+                    className="message-task-action"
+                    appearance="subtle"
+                    size="small"
+                    icon={<TaskListSquareLtr24Regular />}
+                    aria-label={`Создать задачу из сообщения: ${message.body.slice(0, 40)}`}
+                    onClick={() => startTask(message)}
+                  >
+                    В задачу
+                  </Button>
                   <time>{message.time}</time>
                 </div>
               </div>
@@ -141,11 +214,44 @@ export function MessengerView({ chats, messages, people, onSendMessage }: Messen
           })}
         </div>
 
+        {taskSource !== undefined ? (
+          <div className="linked-create-panel" role="region" aria-label="Задача из сообщения">
+            <TaskListSquareLtr24Regular />
+            <Input
+              autoFocus
+              aria-label="Название задачи из сообщения"
+              value={taskTitle}
+              onChange={(_event, data) => setTaskTitle(data.value)}
+            />
+            <Button appearance="primary" disabled={busy || !taskTitle.trim()} onClick={() => void createTask()}>
+              Создать задачу
+            </Button>
+            <Button appearance="subtle" onClick={() => setTaskSource(undefined)}>Отмена</Button>
+          </div>
+        ) : null}
+
         <div className="composer">
+          <input
+            ref={fileInputRef}
+            hidden
+            type="file"
+            multiple
+            aria-label="Файлы сообщения"
+            onChange={(event) => setPendingFiles(Array.from(event.target.files ?? []))}
+          />
           <Tooltip content="Прикрепить файл" relationship="label">
-            <Button appearance="subtle" icon={<Attach24Regular />} aria-label="Прикрепить файл" />
+            <Button
+              appearance="subtle"
+              icon={<Attach24Regular />}
+              aria-label="Прикрепить файл"
+              onClick={() => fileInputRef.current?.click()}
+            />
           </Tooltip>
-          <Input
+          <div className="composer-input">
+            {pendingFiles.length > 0 ? (
+              <span className="pending-files">{pendingFiles.map((file) => file.name).join(", ")}</span>
+            ) : null}
+            <Input
             aria-label="Новое сообщение"
             placeholder="Напишите сообщение"
             value={draft}
@@ -153,16 +259,17 @@ export function MessengerView({ chats, messages, people, onSendMessage }: Messen
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                sendMessage();
+                void sendMessage();
               }
             }}
           />
+          </div>
           <Button
             appearance="primary"
             icon={<Send24Filled />}
             aria-label="Отправить сообщение"
-            disabled={draft.trim().length === 0}
-            onClick={sendMessage}
+            disabled={busy || draft.trim().length === 0}
+            onClick={() => void sendMessage()}
           />
         </div>
       </article>

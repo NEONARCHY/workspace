@@ -22,11 +22,14 @@ from yuksalish_api.repository import (
     act_on_request,
     change_task_status,
     create_approval_request,
+    create_attachment,
     create_task,
     find_active_user_by_username,
+    get_attachment,
     load_workspace,
     save_workflow,
     send_message,
+    update_approval_request,
 )
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import audit_events
@@ -37,6 +40,7 @@ from yuksalish_api.workspace_schemas import (
     CreateTaskRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
+    UpdateApprovalRequest,
 )
 
 
@@ -104,6 +108,24 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 UUID(initial.chats[0].id),
                 SendMessageRequest(body="Integration workflow message"),
             )
+            message_attachment = await create_attachment(
+                connection,
+                aziza,
+                "message",
+                UUID(message.id),
+                file_name="invoice.txt",
+                content_type="text/plain",
+                byte_size=7,
+                sha256="a" * 64,
+                storage_key=f"message/{message.id}/invoice",
+            )
+            readable_attachment, storage_key = await get_attachment(
+                connection,
+                aziza,
+                UUID(message_attachment.id),
+            )
+            assert readable_attachment.file_name == "invoice.txt"
+            assert storage_key.endswith("/invoice")
             task = await create_task(
                 connection,
                 aziza,
@@ -146,7 +168,37 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ApprovalActionRequest(action="return", comment="Correct the amount"),
             )
             assert approval.status == "needs_revision"
+            assert approval.actions[-1].action == "return"
+            assert approval.actions[-1].comment == "Correct the amount"
             assert approval.active_node_keys == ["correction"]
+            approval_attachment = await create_attachment(
+                connection,
+                aziza,
+                "approval_request",
+                UUID(approval.id),
+                file_name="corrected-invoice.pdf",
+                content_type="application/pdf",
+                byte_size=11,
+                sha256="b" * 64,
+                storage_key=f"approval_request/{approval.id}/corrected-invoice",
+            )
+            assert approval_attachment.owner_type == "approval_request"
+            approval = await update_approval_request(
+                connection,
+                aziza,
+                UUID(approval.id),
+                UpdateApprovalRequest(
+                    title="Integration payment corrected",
+                    amount=82_400_000,
+                    currency="UZS",
+                    purpose="Corrected integration payment",
+                    change_comment="Amount and invoice corrected",
+                ),
+            )
+            assert approval.amount == 82_400_000
+            assert approval.revision == 3
+            assert len(approval.versions) == 3
+            assert approval.versions[-1].attachment_ids == [approval_attachment.id]
             approval = await act_on_request(
                 connection,
                 aziza,
@@ -155,6 +207,8 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert approval.status == "running"
             assert approval.active_node_keys == ["manager"]
+            assert approval.amount == 82_400_000
+            assert approval.revision == 3
 
             saved = await save_workflow(
                 connection,
@@ -171,6 +225,8 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert message.id in {item.id for item in after.messages}
             assert task.id in {item.id for item in after.tasks}
             assert approval.id in {item.id for item in after.requests}
+            assert message_attachment.id in {item.id for item in after.attachments}
+            assert approval_attachment.id in {item.id for item in after.attachments}
         finally:
             await transaction.rollback()
     await engine.dispose()

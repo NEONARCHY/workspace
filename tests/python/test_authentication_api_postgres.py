@@ -54,6 +54,86 @@ async def test_authentication_http_vertical_slice() -> None:
         assert me.status_code == 200
         assert me.json()["role"] == "admin"
 
+        workspace = await client.get("/api/v1/workspace/bootstrap", headers=admin_headers)
+        chat_id = workspace.json()["chats"][0]["id"]
+        message = await client.post(
+            f"/api/v1/chats/{chat_id}/messages",
+            headers=admin_headers,
+            json={"body": "HTTP cross-workflow source message"},
+        )
+        assert message.status_code == 201
+        message_id = message.json()["id"]
+        uploaded = await client.put(
+            f"/api/v1/attachments/message/{message_id}",
+            headers={**admin_headers, "Content-Type": "text/plain"},
+            params={"fileName": "invoice.txt"},
+            content=b"invoice-body",
+        )
+        assert uploaded.status_code == 201
+        assert uploaded.json()["sha256"]
+        downloaded = await client.get(
+            f"/api/v1/attachments/{uploaded.json()['id']}",
+            headers=admin_headers,
+        )
+        assert downloaded.status_code == 200
+        assert downloaded.content == b"invoice-body"
+
+        task = await client.post(
+            "/api/v1/tasks",
+            headers=admin_headers,
+            json={
+                "title": "HTTP task from message",
+                "assigneeId": admin_session["user"]["id"],
+                "sourceMessageId": message_id,
+            },
+        )
+        assert task.status_code == 201
+        assert task.json()["sourceMessageId"] == message_id
+        approval = await client.post(
+            "/api/v1/approval-requests",
+            headers=admin_headers,
+            json={
+                "title": "HTTP approval from task",
+                "amount": 5_000_000,
+                "currency": "UZS",
+                "purpose": "Initial purpose",
+                "sourceTaskId": task.json()["id"],
+            },
+        )
+        assert approval.status_code == 201
+        approval_id = approval.json()["id"]
+        assert approval.json()["revision"] == 1
+        returned = await client.post(
+            f"/api/v1/approval-requests/{approval_id}/actions",
+            headers=admin_headers,
+            json={"action": "return", "comment": "Correct the amount"},
+        )
+        assert returned.status_code == 200
+        assert returned.json()["status"] == "needs_revision"
+        assert returned.json()["actions"][-1]["action"] == "return"
+        assert returned.json()["actions"][-1]["comment"] == "Correct the amount"
+        revised = await client.patch(
+            f"/api/v1/approval-requests/{approval_id}",
+            headers=admin_headers,
+            json={
+                "title": "HTTP corrected approval",
+                "amount": 4_800_000,
+                "currency": "UZS",
+                "purpose": "Corrected purpose",
+                "changeComment": "Corrected after review",
+            },
+        )
+        assert revised.status_code == 200
+        assert revised.json()["revision"] == 2
+        assert len(revised.json()["versions"]) == 2
+        resubmitted = await client.post(
+            f"/api/v1/approval-requests/{approval_id}/actions",
+            headers=admin_headers,
+            json={"action": "resubmit", "comment": "Ready again"},
+        )
+        assert resubmitted.status_code == 200
+        assert resubmitted.json()["status"] == "running"
+
         directory = await client.get("/api/v1/directory", headers=admin_headers)
         assert directory.status_code == 200
         assert len(directory.json()["positions"]) >= 24

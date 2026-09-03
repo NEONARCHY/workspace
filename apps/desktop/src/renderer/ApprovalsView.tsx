@@ -5,6 +5,7 @@ import type {
   ApprovalNodeKind,
   ApprovalRequestSummary,
   WorkflowDefinition,
+  WorkspaceAttachment,
 } from "@yuksalish/contracts";
 import {
   Badge,
@@ -39,6 +40,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
+import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
+
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
 interface ApprovalEdgeData extends Record<string, unknown> {
@@ -52,16 +55,30 @@ interface ApprovalsViewProps {
   readonly canManage: boolean;
   readonly currentUserId: string;
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
   readonly onSaveWorkflow: (workflow: WorkflowDefinition) => void | Promise<void>;
   readonly onCreateRequest: (
     title: string,
     amount: number,
+    purpose: string,
+    files: readonly File[],
   ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onAction: (
     requestId: string,
     action: "approve" | "reject" | "return" | "resubmit",
+    comment?: string,
   ) => void | Promise<void>;
+  readonly onReviseRequest: (
+    request: ApprovalRequestSummary,
+    payload: { readonly title: string; readonly amount: number; readonly purpose: string },
+    files: readonly File[],
+  ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
+  readonly onUploadAttachments: (
+    request: ApprovalRequestSummary,
+    files: readonly File[],
+  ) => void | Promise<void>;
+  readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
 
 const initialNodes: ApprovalNode[] = [
@@ -184,14 +201,24 @@ function flowEdges(workflow?: WorkflowDefinition): ApprovalEdge[] {
   }));
 }
 
+function latestReturnComment(request: ApprovalRequestSummary): string | undefined {
+  return request.actions.slice().reverse().find(
+    (action) => action.action === "return" && action.comment?.trim(),
+  )?.comment ?? undefined;
+}
+
 export function ApprovalsView({
   canManage,
   currentUserId,
   requests,
+  attachments,
   workflow,
   onSaveWorkflow,
   onCreateRequest,
   onAction,
+  onReviseRequest,
+  onUploadAttachments,
+  onDownloadAttachment,
 }: ApprovalsViewProps) {
   const [mode, setMode] = useState<ApprovalMode>("requests");
   const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
@@ -202,6 +229,16 @@ export function ApprovalsView({
   const [creatingRequest, setCreatingRequest] = useState(false);
   const [requestTitle, setRequestTitle] = useState("");
   const [requestAmount, setRequestAmount] = useState("");
+  const [requestPurpose, setRequestPurpose] = useState("");
+  const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);
+  const [editingRequestId, setEditingRequestId] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editPurpose, setEditPurpose] = useState("");
+  const [editFiles, setEditFiles] = useState<readonly File[]>([]);
+  const [returnRequestId, setReturnRequestId] = useState("");
+  const [returnComment, setReturnComment] = useState("");
+  const [historyRequestId, setHistoryRequestId] = useState("");
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
@@ -306,12 +343,45 @@ export function ApprovalsView({
   const createRequest = async () => {
     const amount = Number(requestAmount.replace(/\s/g, ""));
     if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
-    const created = await onCreateRequest(requestTitle.trim(), amount);
+    const created = await onCreateRequest(
+      requestTitle.trim(),
+      amount,
+      requestPurpose.trim(),
+      requestFiles,
+    );
     if (created !== undefined) {
       setRequestTitle("");
       setRequestAmount("");
+      setRequestPurpose("");
+      setRequestFiles([]);
       setCreatingRequest(false);
     }
+  };
+
+  const startRevision = (request: ApprovalRequestSummary) => {
+    setEditingRequestId(request.id);
+    setEditTitle(request.title);
+    setEditAmount(String(request.amount));
+    setEditPurpose(request.purpose);
+    setEditFiles([]);
+  };
+
+  const saveRevision = async (request: ApprovalRequestSummary) => {
+    const amount = Number(editAmount.replace(/\s/g, ""));
+    if (!editTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
+    const saved = await onReviseRequest(
+      request,
+      { title: editTitle.trim(), amount, purpose: editPurpose.trim() },
+      editFiles,
+    );
+    if (saved !== undefined) setEditingRequestId("");
+  };
+
+  const returnForRevision = async (requestId: string) => {
+    if (!returnComment.trim()) return;
+    await onAction(requestId, "return", returnComment.trim());
+    setReturnRequestId("");
+    setReturnComment("");
   };
 
   return (
@@ -392,6 +462,17 @@ export function ApprovalsView({
                 value={requestAmount}
                 onChange={(_event, data) => setRequestAmount(data.value)}
               />
+              <Textarea
+                aria-label="Назначение платежа"
+                placeholder="Что и почему оплачиваем"
+                value={requestPurpose}
+                onChange={(_event, data) => setRequestPurpose(data.value)}
+              />
+              <PendingFilePicker
+                files={requestFiles}
+                onChange={setRequestFiles}
+                label="Приложить документы"
+              />
               <Button appearance="primary" onClick={() => void createRequest()}>
                 Отправить по маршруту
               </Button>
@@ -402,13 +483,17 @@ export function ApprovalsView({
           ) : null}
           <div className="request-list">
             {requests.map((request) => (
-              <article key={request.id}>
+              <article key={request.id} className="request-card">
                 {request.status === "approved" ? <CheckmarkCircle24Regular /> : <Money24Regular />}
-                <div>
+                <div className="request-copy">
                   <strong>{request.title}</strong>
                   <span>
                     {new Intl.NumberFormat("ru-RU").format(request.amount)} {request.currency}, заявка №{request.number}
                   </span>
+                  <small>
+                    Версия {request.revision}
+                    {request.sourceTaskId ? " · создана из задачи" : ""}
+                  </small>
                 </div>
                 <Badge
                   color={
@@ -424,22 +509,113 @@ export function ApprovalsView({
                 >
                   {request.statusLabel}
                 </Badge>
+                {request.status === "needs_revision" && latestReturnComment(request) ? (
+                  <div className="return-reason">
+                    <strong>Причина возврата</strong>
+                    <span>{latestReturnComment(request)}</span>
+                  </div>
+                ) : null}
                 {request.status === "running" && canManage ? (
                   <div className="request-actions">
                     <Button appearance="primary" onClick={() => void onAction(request.id, "approve")}>
                       Согласовать
                     </Button>
-                    <Button appearance="subtle" onClick={() => void onAction(request.id, "return")}>
+                    <Button appearance="subtle" onClick={() => setReturnRequestId(request.id)}>
                       Вернуть
                     </Button>
                   </div>
                 ) : request.status === "needs_revision" && request.requesterId === currentUserId ? (
-                  <Button appearance="primary" onClick={() => void onAction(request.id, "resubmit")}>
-                    Отправить повторно
+                  <Button appearance="primary" onClick={() => startRevision(request)}>
+                    Исправить заявку
                   </Button>
-                ) : (
-                  <Button appearance="subtle">История</Button>
-                )}
+                ) : null}
+                {returnRequestId === request.id ? (
+                  <div className="request-inline-editor return-editor">
+                    <Textarea
+                      autoFocus
+                      aria-label={`Причина возврата заявки ${request.number}`}
+                      placeholder="Что нужно исправить?"
+                      value={returnComment}
+                      onChange={(_event, data) => setReturnComment(data.value)}
+                    />
+                    <Button
+                      appearance="primary"
+                      disabled={!returnComment.trim()}
+                      onClick={() => void returnForRevision(request.id)}
+                    >
+                      Подтвердить возврат
+                    </Button>
+                    <Button appearance="subtle" onClick={() => setReturnRequestId("")}>Отмена</Button>
+                  </div>
+                ) : null}
+                {editingRequestId === request.id ? (
+                  <div className="request-inline-editor correction-editor" aria-label="Редактирование возвращённой заявки">
+                    <Input
+                      aria-label="Исправленное название заявки"
+                      value={editTitle}
+                      onChange={(_event, data) => setEditTitle(data.value)}
+                    />
+                    <Input
+                      aria-label="Исправленная сумма заявки"
+                      inputMode="numeric"
+                      value={editAmount}
+                      onChange={(_event, data) => setEditAmount(data.value)}
+                    />
+                    <Textarea
+                      aria-label="Исправленное назначение платежа"
+                      value={editPurpose}
+                      onChange={(_event, data) => setEditPurpose(data.value)}
+                    />
+                    <PendingFilePicker
+                      files={editFiles}
+                      onChange={setEditFiles}
+                      label="Добавить исправленные документы"
+                    />
+                    <Button appearance="primary" onClick={() => void saveRevision(request)}>
+                      Сохранить и отправить повторно
+                    </Button>
+                    <Button appearance="subtle" onClick={() => setEditingRequestId("")}>Отмена</Button>
+                  </div>
+                ) : null}
+                <div className="request-attachments">
+                  <AttachmentPanel
+                    title="Документы заявки"
+                    attachments={attachments.filter(
+                      (attachment) =>
+                        attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
+                    )}
+                    canUpload={
+                      request.requesterId === currentUserId
+                      && ["running", "needs_revision"].includes(request.status)
+                    }
+                    onUpload={(files) => onUploadAttachments(request, files)}
+                    onDownload={onDownloadAttachment}
+                  />
+                  <Button
+                    appearance="subtle"
+                    onClick={() => setHistoryRequestId(historyRequestId === request.id ? "" : request.id)}
+                  >
+                    {historyRequestId === request.id ? "Скрыть историю" : "История версий"}
+                  </Button>
+                </div>
+                {historyRequestId === request.id ? (
+                  <div className="request-history" aria-label={`История версий заявки ${request.number}`}>
+                    {request.versions.slice().reverse().map((version) => (
+                      <div key={version.version}>
+                        <strong>Версия {version.version}</strong>
+                        <span>{new Intl.NumberFormat("ru-RU").format(version.amount)} {version.currency}</span>
+                        <small>
+                          {version.changeReason === "initial"
+                            ? "Создание"
+                            : version.changeReason === "attachment_added"
+                              ? "Добавлен файл"
+                              : "Исправление"}
+                          {version.changeComment ? ` · ${version.changeComment}` : ""}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </article>
             ))}
             {requests.length === 0 ? (

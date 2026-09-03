@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ApprovalRequestSummary, WorkspaceAttachment } from "@yuksalish/contracts";
+
 import { App } from "./App";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 
@@ -69,11 +71,57 @@ const directory = {
 };
 
 function response(payload: unknown): Response {
-  return { ok: true, json: async () => payload } as Response;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => payload,
+    blob: async () => new Blob(),
+  } as Response;
 }
 
-function mockServer() {
+function mockServer(options: { readonly withReturnedRequest?: boolean } = {}) {
   let currentUser = people[0]!;
+  let requests: ApprovalRequestSummary[] = options.withReturnedRequest
+    ? [
+        {
+          id: "returned-request",
+          number: "501",
+          title: "Вернувшаяся заявка",
+          amount: 5_000_000,
+          currency: "UZS",
+          purpose: "Требует исправления",
+          status: "needs_revision" as const,
+          statusLabel: "На доработке",
+          activeNodeKeys: ["correction"],
+          requesterId: people[0]!.id,
+          sourceTaskId: initialTasks[0]!.id,
+          revision: 1,
+          versions: [
+            {
+              version: 1,
+              title: "Вернувшаяся заявка",
+              amount: 5_000_000,
+              currency: "UZS",
+              purpose: "Требует исправления",
+              attachmentIds: [],
+              editedByUserId: people[0]!.id,
+              changeReason: "initial",
+              createdAt: "2026-09-03T10:00:00Z",
+            },
+          ],
+          actions: [
+            {
+              action: "return",
+              comment: "Исправьте сумму и приложите новый счёт",
+              actorUserId: people[1]!.id,
+              nodeKey: "manager",
+              createdAt: "2026-09-03T10:15:00Z",
+            },
+          ],
+        },
+      ]
+    : [];
+  const attachments: WorkspaceAttachment[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/login")) {
@@ -94,7 +142,8 @@ function mockServer() {
         chats: initialChats,
         messages: initialMessages,
         tasks: initialTasks,
-        requests: [],
+        requests,
+        attachments: [...attachments],
         workflow,
       });
     }
@@ -112,19 +161,41 @@ function mockServer() {
       });
     }
     if (url.includes("/messages") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { body: string };
       return response({
         id: "server-message",
         chatId: initialChats[0]!.id,
         authorId: people[0]!.id,
-        body: "Заявку подготовила",
+        body: payload.body,
         time: "12:00",
         own: true,
       });
     }
+    if (url.includes("/attachments/") && options?.method === "PUT") {
+      const ownerParts = url.split("/attachments/")[1]!.split("?")[0]!.split("/");
+      const attachment: WorkspaceAttachment = {
+        id: `attachment-${attachments.length + 1}`,
+        ownerType: ownerParts[0] as WorkspaceAttachment["ownerType"],
+        ownerId: ownerParts[1] ?? "",
+        fileName: new URL(url).searchParams.get("fileName") ?? "file.bin",
+        contentType: "text/plain",
+        byteSize: 7,
+        sha256: "a".repeat(64),
+        uploadedByUserId: currentUser.id,
+        createdAt: "2026-09-03T10:00:00Z",
+      };
+      attachments.push(attachment);
+      return response(attachment);
+    }
     if (url.endsWith("/tasks") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as {
+        title: string;
+        sourceMessageId?: string;
+      };
       return response({
         id: "server-task",
-        title: "Проверить новый маршрут оплаты",
+        title: payload.title,
+        description: "",
         project: "Без проекта",
         assigneeId: people[0]!.id,
         dueLabel: "Срок не указан",
@@ -132,7 +203,84 @@ function mockServer() {
         priority: "normal",
         checklistDone: 0,
         checklistTotal: 0,
+        sourceMessageId: payload.sourceMessageId,
       });
+    }
+    if (url.endsWith("/approval-requests") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as {
+        title: string;
+        amount: number;
+        purpose: string;
+        sourceTaskId?: string;
+      };
+      const created = {
+        id: "server-request",
+        number: "502",
+        title: payload.title,
+        amount: payload.amount,
+        currency: "UZS",
+        purpose: payload.purpose,
+        status: "running" as const,
+        statusLabel: "Ожидает решения",
+        activeNodeKeys: ["manager"],
+        requesterId: currentUser.id,
+        sourceTaskId: payload.sourceTaskId,
+        revision: 1,
+        versions: [],
+        actions: [],
+      };
+      requests = [created, ...requests];
+      return response(created);
+    }
+    if (url.includes("/approval-requests/") && options?.method === "PATCH") {
+      const payload = JSON.parse(String(options.body)) as {
+        title: string;
+        amount: number;
+        purpose: string;
+      };
+      const current = requests[0]!;
+      const revised = {
+        ...current,
+        ...payload,
+        revision: current.revision + 1,
+        versions: [
+          ...current.versions,
+          {
+            version: current.revision + 1,
+            title: payload.title,
+            amount: payload.amount,
+            currency: "UZS",
+            purpose: payload.purpose,
+            attachmentIds: [],
+            editedByUserId: currentUser.id,
+            changeReason: "correction",
+            createdAt: "2026-09-03T11:00:00Z",
+          },
+        ],
+      };
+      requests = [revised];
+      return response(revised);
+    }
+    if (url.includes("/approval-requests/") && url.endsWith("/actions")) {
+      const payload = JSON.parse(String(options?.body)) as { action: string; comment?: string };
+      const current = requests[0]!;
+      const changed = {
+        ...current,
+        status: payload.action === "resubmit" ? "running" as const : current.status,
+        statusLabel: payload.action === "resubmit" ? "Ожидает решения" : current.statusLabel,
+        actions: [
+          ...current.actions,
+          {
+            action: payload.action,
+            comment: payload.comment,
+            actorUserId: currentUser.id,
+            nodeKey: current.activeNodeKeys[0] ?? "manager",
+            createdAt: "2026-09-03T12:00:00Z",
+          },
+        ],
+      };
+      requests = [changed];
+      return response(changed);
     }
     return response({});
   });
@@ -184,6 +332,44 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByText("Заявку подготовила")).toBeInTheDocument();
   });
 
+  it("uploads a real attachment with a new message", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    const file = new File(["invoice"], "invoice.txt", { type: "text/plain" });
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), {
+      target: { files: [file] },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), {
+      target: { value: "Счёт приложен" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining("/attachments/message/server-message"),
+        expect.objectContaining({ method: "PUT" }),
+      ),
+    );
+    expect(await screen.findByText("invoice.txt")).toBeInTheDocument();
+  });
+
+  it("creates a linked task directly from a message", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Создать задачу из сообщения:/ })[0]!);
+    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи из сообщения" }), {
+      target: { value: "Проверить счёт из переписки" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Создать задачу" }));
+
+    expect(await screen.findByText("Создана из сообщения · связь сохранена")).toBeInTheDocument();
+    expect(screen.getAllByText("Проверить счёт из переписки").length).toBeGreaterThan(0);
+  });
+
   it("creates a task after authentication", async () => {
     mockServer();
     render(<App />);
@@ -198,6 +384,42 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() =>
       expect(screen.getAllByText("Проверить новый маршрут оплаты").length).toBeGreaterThan(0),
     );
+  });
+
+  it("creates a payment request from the selected task", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать заявку на оплату" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки из задачи" }), {
+      target: { value: "Оплатить поставку по задаче" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки из задачи" }), {
+      target: { value: "4800000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+
+    expect(await screen.findByText("Оплатить поставку по задаче")).toBeInTheDocument();
+    expect(screen.getByText("Версия 1 · создана из задачи")).toBeInTheDocument();
+  });
+
+  it("edits a returned request and resubmits its new version", async () => {
+    mockServer({ withReturnedRequest: true });
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    expect(screen.getByText("Исправьте сумму и приложите новый счёт")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Исправить заявку" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Исправленная сумма заявки" }), {
+      target: { value: "4800000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить и отправить повторно" }));
+
+    expect(await screen.findByText(/4.800.000 UZS/)).toBeInTheDocument();
+    expect(screen.getByText("Версия 2 · создана из задачи")).toBeInTheDocument();
   });
 
   it("opens the workflow designer inside the authenticated shell", async () => {
