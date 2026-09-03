@@ -1,12 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 
-import type { ApprovalNodeData, ApprovalNodeKind } from "@yuksalish/contracts";
+import type {
+  ApprovalNodeData,
+  ApprovalNodeKind,
+  ApprovalRequestSummary,
+  WorkflowDefinition,
+} from "@yuksalish/contracts";
 import {
   Badge,
   Button,
   Input,
-  Tab,
-  TabList,
   Textarea,
   Tooltip,
 } from "@fluentui/react-components";
@@ -38,6 +41,28 @@ import "@xyflow/react/dist/style.css";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
+interface ApprovalEdgeData extends Record<string, unknown> {
+  readonly outcome: string;
+  readonly condition: Readonly<Record<string, unknown>>;
+  readonly sortOrder: number;
+}
+type ApprovalEdge = Edge<ApprovalEdgeData>;
+
+interface ApprovalsViewProps {
+  readonly canManage: boolean;
+  readonly currentUserId: string;
+  readonly requests: readonly ApprovalRequestSummary[];
+  readonly workflow?: WorkflowDefinition;
+  readonly onSaveWorkflow: (workflow: WorkflowDefinition) => void | Promise<void>;
+  readonly onCreateRequest: (
+    title: string,
+    amount: number,
+  ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
+  readonly onAction: (
+    requestId: string,
+    action: "approve" | "reject" | "return" | "resubmit",
+  ) => void | Promise<void>;
+}
 
 const initialNodes: ApprovalNode[] = [
   {
@@ -96,14 +121,15 @@ const initialNodes: ApprovalNode[] = [
   },
 ];
 
-const initialEdges: Edge[] = [
-  { id: "e1", source: "start", target: "manager", markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: "e2", source: "manager", target: "amount", markerEnd: { type: MarkerType.ArrowClosed } },
+const initialEdges: ApprovalEdge[] = [
+  { id: "e1", source: "start", target: "manager", data: { outcome: "submit", condition: {}, sortOrder: 0 }, markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: "e2", source: "manager", target: "amount", data: { outcome: "approve", condition: {}, sortOrder: 0 }, markerEnd: { type: MarkerType.ArrowClosed } },
   {
     id: "e3",
     source: "amount",
     target: "finance",
     label: "Да",
+    data: { outcome: "true", condition: { field: "amount", operator: "gt", value: 50_000_000 }, sortOrder: 0 },
     markerEnd: { type: MarkerType.ArrowClosed },
   },
   {
@@ -111,18 +137,20 @@ const initialEdges: Edge[] = [
     source: "amount",
     target: "director",
     label: "Нет",
+    data: { outcome: "false", condition: { field: "amount", operator: "lte", value: 50_000_000 }, sortOrder: 0 },
     markerEnd: { type: MarkerType.ArrowClosed },
   },
-  { id: "e5", source: "finance", target: "director", markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: "e6", source: "director", target: "approved", markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: "e5", source: "finance", target: "director", data: { outcome: "approve", condition: {}, sortOrder: 0 }, markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: "e6", source: "director", target: "approved", data: { outcome: "approve", condition: {}, sortOrder: 0 }, markerEnd: { type: MarkerType.ArrowClosed } },
   {
     id: "e7",
     source: "manager",
     target: "correction",
     label: "Вернуть",
+    data: { outcome: "return", condition: {}, sortOrder: 0 },
     markerEnd: { type: MarkerType.ArrowClosed },
   },
-  { id: "e8", source: "correction", target: "start", markerEnd: { type: MarkerType.ArrowClosed } },
+  { id: "e8", source: "correction", target: "start", data: { outcome: "resubmit", condition: {}, sortOrder: 0 }, markerEnd: { type: MarkerType.ArrowClosed } },
 ];
 
 const kindLabels: Readonly<Record<ApprovalNodeKind, string>> = {
@@ -134,12 +162,46 @@ const kindLabels: Readonly<Record<ApprovalNodeKind, string>> = {
   end: "Завершение",
 };
 
-export function ApprovalsView() {
-  const [mode, setMode] = useState<ApprovalMode>("designer");
-  const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
+  if (workflow === undefined) return initialNodes;
+  return workflow.nodes.map((node) => ({
+    id: node.id,
+    position: { x: node.positionX, y: node.positionY },
+    data: { label: node.label, kind: node.kind, detail: node.detail },
+    className: `workflow-node node-${node.kind}`,
+  }));
+}
+
+function flowEdges(workflow?: WorkflowDefinition): ApprovalEdge[] {
+  if (workflow === undefined) return initialEdges;
+  return workflow.edges.map((edge) => ({
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    label: edge.label,
+    data: { outcome: edge.outcome, condition: edge.condition, sortOrder: edge.sortOrder },
+    markerEnd: { type: MarkerType.ArrowClosed },
+  }));
+}
+
+export function ApprovalsView({
+  canManage,
+  currentUserId,
+  requests,
+  workflow,
+  onSaveWorkflow,
+  onCreateRequest,
+  onAction,
+}: ApprovalsViewProps) {
+  const [mode, setMode] = useState<ApprovalMode>("requests");
+  const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
+  const [edges, setEdges, onEdgesChange] = useEdgesState<ApprovalEdge>(flowEdges(workflow));
   const [selectedNodeId, setSelectedNodeId] = useState<string>("amount");
   const [saved, setSaved] = useState(true);
+  const [saveError, setSaveError] = useState("");
+  const [creatingRequest, setCreatingRequest] = useState(false);
+  const [requestTitle, setRequestTitle] = useState("");
+  const [requestAmount, setRequestAmount] = useState("");
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
@@ -149,7 +211,14 @@ export function ApprovalsView() {
   const connect = useCallback(
     (connection: Connection) => {
       setEdges((current) =>
-        addEdge({ ...connection, markerEnd: { type: MarkerType.ArrowClosed } }, current),
+        addEdge(
+          {
+            ...connection,
+            data: { outcome: "approve", condition: {}, sortOrder: 0 },
+            markerEnd: { type: MarkerType.ArrowClosed },
+          },
+          current,
+        ),
       );
       setSaved(false);
     },
@@ -199,6 +268,52 @@ export function ApprovalsView() {
     setSaved(false);
   };
 
+  const save = async () => {
+    if (workflow === undefined) {
+      setSaved(true);
+      return;
+    }
+    const definition: WorkflowDefinition = {
+      ...workflow,
+      nodes: nodes.map((node) => ({
+        id: node.id,
+        kind: node.data.kind,
+        label: node.data.label,
+        detail: node.data.detail,
+        positionX: node.position.x,
+        positionY: node.position.y,
+        config: {},
+      })),
+      edges: edges.map((edge, index) => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        outcome: edge.data?.outcome ?? "approve",
+        label: typeof edge.label === "string" ? edge.label : null,
+        condition: edge.data?.condition ?? {},
+        sortOrder: edge.data?.sortOrder ?? index,
+      })),
+    };
+    try {
+      await onSaveWorkflow(definition);
+      setSaved(true);
+      setSaveError("");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Не удалось сохранить маршрут");
+    }
+  };
+
+  const createRequest = async () => {
+    const amount = Number(requestAmount.replace(/\s/g, ""));
+    if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
+    const created = await onCreateRequest(requestTitle.trim(), amount);
+    if (created !== undefined) {
+      setRequestTitle("");
+      setRequestAmount("");
+      setCreatingRequest(false);
+    }
+  };
+
   return (
     <section className="workspace-view approvals-view" aria-label="Согласования">
       <header className="section-toolbar approvals-toolbar">
@@ -207,51 +322,133 @@ export function ApprovalsView() {
           <p>Заявки и маршруты без изменения кода</p>
         </div>
         <div className="toolbar-actions">
-          <Badge appearance="tint" color={saved ? "success" : "warning"}>
-            {saved ? "Черновик сохранён" : "Есть изменения"}
+          <Badge appearance="tint" color={saveError ? "danger" : saved ? "success" : "warning"}>
+            {saveError || (saved ? "Черновик сохранён" : "Есть изменения")}
           </Badge>
-          <Button appearance="primary" icon={<Save24Regular />} onClick={() => setSaved(true)}>
+          <Button
+            appearance="primary"
+            icon={<Save24Regular />}
+            disabled={!canManage}
+            onClick={() => void save()}
+          >
             Сохранить
           </Button>
         </div>
       </header>
 
       <div className="approvals-tabs">
-        <TabList
-          selectedValue={mode}
-          onTabSelect={(_event, data) => setMode(data.value as ApprovalMode)}
-        >
-          <Tab value="requests">Текущие заявки</Tab>
-          <Tab value="designer">Конструктор маршрутов</Tab>
-        </TabList>
+        <div className="approval-mode-switch" aria-label="Разделы согласований">
+          <button
+            type="button"
+            aria-pressed={mode === "requests"}
+            className={mode === "requests" ? "active" : ""}
+            onClick={() => setMode("requests")}
+          >
+            Текущие заявки
+          </button>
+          <button
+            type="button"
+            aria-pressed={mode === "designer"}
+            className={mode === "designer" ? "active" : ""}
+            disabled={!canManage}
+            onClick={() => setMode("designer")}
+          >
+            Конструктор маршрутов
+          </button>
+        </div>
       </div>
 
       {mode === "requests" ? (
         <div className="request-board">
           <div className="request-summary">
-            <div><strong>4</strong><span>Ожидают меня</span></div>
-            <div><strong>7</strong><span>В процессе</span></div>
-            <div><strong>18</strong><span>Завершены за месяц</span></div>
+            <div>
+              <strong>{requests.filter((request) => request.status === "running").length}</strong>
+              <span>В процессе</span>
+            </div>
+            <div>
+              <strong>{requests.filter((request) => request.status === "needs_revision").length}</strong>
+              <span>На доработке</span>
+            </div>
+            <div>
+              <strong>{requests.filter((request) => request.status === "approved").length}</strong>
+              <span>Согласованы</span>
+            </div>
+            <Button appearance="primary" icon={<Add24Regular />} onClick={() => setCreatingRequest(true)}>
+              Новая заявка
+            </Button>
           </div>
+          {creatingRequest ? (
+            <div className="quick-create request-create" role="region" aria-label="Создание заявки">
+              <Input
+                aria-label="Название заявки"
+                placeholder="Назначение оплаты"
+                value={requestTitle}
+                onChange={(_event, data) => setRequestTitle(data.value)}
+              />
+              <Input
+                aria-label="Сумма заявки"
+                inputMode="numeric"
+                placeholder="Сумма в сумах"
+                value={requestAmount}
+                onChange={(_event, data) => setRequestAmount(data.value)}
+              />
+              <Button appearance="primary" onClick={() => void createRequest()}>
+                Отправить по маршруту
+              </Button>
+              <Button appearance="subtle" onClick={() => setCreatingRequest(false)}>
+                Отмена
+              </Button>
+            </div>
+          ) : null}
           <div className="request-list">
-            <article>
-              <Money24Regular />
-              <div><strong>Оплата ноутбуков для нового офиса</strong><span>84 600 000 сум, заявка №148</span></div>
-              <Badge color="warning" appearance="tint">Ожидает решения</Badge>
-              <Button appearance="primary">Рассмотреть</Button>
-            </article>
-            <article>
-              <Money24Regular />
-              <div><strong>Продление лицензий на программное обеспечение</strong><span>12 400 000 сум, заявка №147</span></div>
-              <Badge color="brand" appearance="tint">Финансы</Badge>
-              <Button appearance="secondary">Открыть</Button>
-            </article>
-            <article>
-              <CheckmarkCircle24Regular />
-              <div><strong>Аванс на региональное мероприятие</strong><span>6 800 000 сум, заявка №142</span></div>
-              <Badge color="success" appearance="tint">Согласовано</Badge>
-              <Button appearance="subtle">История</Button>
-            </article>
+            {requests.map((request) => (
+              <article key={request.id}>
+                {request.status === "approved" ? <CheckmarkCircle24Regular /> : <Money24Regular />}
+                <div>
+                  <strong>{request.title}</strong>
+                  <span>
+                    {new Intl.NumberFormat("ru-RU").format(request.amount)} {request.currency}, заявка №{request.number}
+                  </span>
+                </div>
+                <Badge
+                  color={
+                    request.status === "approved"
+                      ? "success"
+                      : request.status === "rejected"
+                        ? "danger"
+                        : request.status === "needs_revision"
+                          ? "warning"
+                          : "brand"
+                  }
+                  appearance="tint"
+                >
+                  {request.statusLabel}
+                </Badge>
+                {request.status === "running" && canManage ? (
+                  <div className="request-actions">
+                    <Button appearance="primary" onClick={() => void onAction(request.id, "approve")}>
+                      Согласовать
+                    </Button>
+                    <Button appearance="subtle" onClick={() => void onAction(request.id, "return")}>
+                      Вернуть
+                    </Button>
+                  </div>
+                ) : request.status === "needs_revision" && request.requesterId === currentUserId ? (
+                  <Button appearance="primary" onClick={() => void onAction(request.id, "resubmit")}>
+                    Отправить повторно
+                  </Button>
+                ) : (
+                  <Button appearance="subtle">История</Button>
+                )}
+              </article>
+            ))}
+            {requests.length === 0 ? (
+              <div className="empty-state">
+                <Money24Regular />
+                <strong>Заявок пока нет</strong>
+                <span>Подключите сервер или создайте первую заявку.</span>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -259,8 +456,8 @@ export function ApprovalsView() {
           <aside className="workflow-library">
             <div>
               <span className="detail-kicker">Шаблон</span>
-              <h2>Заявка на оплату</h2>
-              <p>Версия 3, черновик</p>
+              <h2>{workflow?.name ?? "Заявка на оплату"}</h2>
+              <p>Версия {workflow?.version ?? 3}, черновик</p>
             </div>
             <div className="node-library">
               <strong>Добавить элемент</strong>

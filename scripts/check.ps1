@@ -9,6 +9,7 @@ if (-not (Test-Path -LiteralPath $Python)) {
 
 Push-Location $ProjectRoot
 try {
+    . "$PSScriptRoot\prepare-test-database.ps1"
     & "$PSScriptRoot\validate-environment.ps1" -Environment development -EnvFile ".env.example"
     & "$PSScriptRoot\validate-environment.ps1" -Environment staging -EnvFile ".env.staging.example" -AllowPlaceholders
     & "$PSScriptRoot\validate-environment.ps1" -Environment production -EnvFile ".env.production.example" -AllowPlaceholders

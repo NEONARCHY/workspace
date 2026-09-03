@@ -24,9 +24,11 @@ export type WorkspaceSection = "messenger" | "tasks" | "approvals";
 
 export interface WorkspacePerson {
   readonly id: string;
+  readonly username?: string;
   readonly name: string;
   readonly initials: string;
   readonly role: string;
+  readonly jobTitle?: string | null;
   readonly color: string;
 }
 
@@ -45,6 +47,7 @@ export interface ChatMessage {
   readonly authorId: string;
   readonly body: string;
   readonly time: string;
+  readonly createdAt?: string;
   readonly own?: boolean;
 }
 
@@ -53,11 +56,13 @@ export type TaskStatus =
   | "in_progress"
   | "awaiting_review"
   | "completed"
-  | "overdue";
+  | "overdue"
+  | "cancelled";
 
 export interface WorkspaceTask {
   readonly id: string;
   readonly title: string;
+  readonly description?: string;
   readonly project: string;
   readonly assigneeId: string;
   readonly dueLabel: string;
@@ -65,6 +70,7 @@ export interface WorkspaceTask {
   readonly priority: "normal" | "high" | "urgent";
   readonly checklistDone: number;
   readonly checklistTotal: number;
+  readonly sourceMessageId?: string | null;
 }
 
 export type ApprovalNodeKind =
@@ -79,4 +85,70 @@ export interface ApprovalNodeData extends Record<string, unknown> {
   readonly label: string;
   readonly kind: ApprovalNodeKind;
   readonly detail: string;
+}
+
+export type ApprovalStatus =
+  | "draft"
+  | "running"
+  | "needs_revision"
+  | "approved"
+  | "rejected"
+  | "cancelled";
+
+export interface ApprovalRequestSummary {
+  readonly id: string;
+  readonly number: string;
+  readonly title: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly status: ApprovalStatus;
+  readonly statusLabel: string;
+  readonly activeNodeKeys: readonly string[];
+  readonly requesterId: string;
+  readonly sourceTaskId?: string | null;
+}
+
+export interface WorkflowNodeDefinition {
+  readonly id: string;
+  readonly kind: ApprovalNodeKind;
+  readonly label: string;
+  readonly detail: string;
+  readonly positionX: number;
+  readonly positionY: number;
+  readonly config: Readonly<Record<string, unknown>>;
+}
+
+export interface WorkflowEdgeDefinition {
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
+  readonly outcome: string;
+  readonly label?: string | null;
+  readonly condition: Readonly<Record<string, unknown>>;
+  readonly sortOrder: number;
+}
+
+export interface WorkflowDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly version: number;
+  readonly status: string;
+  readonly nodes: readonly WorkflowNodeDefinition[];
+  readonly edges: readonly WorkflowEdgeDefinition[];
+}
+
+export interface WorkspaceBootstrap {
+  readonly currentUser: WorkspacePerson;
+  readonly people: readonly WorkspacePerson[];
+  readonly chats: readonly ChatSummary[];
+  readonly messages: readonly ChatMessage[];
+  readonly tasks: readonly WorkspaceTask[];
+  readonly requests: readonly ApprovalRequestSummary[];
+  readonly workflow: WorkflowDefinition;
+}
+
+export interface DevelopmentSession {
+  readonly accessToken: string;
+  readonly tokenType: "bearer";
+  readonly user: WorkspacePerson;
 }

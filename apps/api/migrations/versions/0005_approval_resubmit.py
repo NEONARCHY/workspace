@@ -1,0 +1,32 @@
+"""Allow request resubmission after correction.
+
+Revision ID: 0005_approval_resubmit
+Revises: 0004_live_workspace_links
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+
+revision: str = "0005_approval_resubmit"
+down_revision: str | None = "0004_live_workspace_links"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.drop_constraint("ck_approval_actions_action", "approval_actions", type_="check")
+    op.create_check_constraint(
+        "ck_approval_actions_action",
+        "approval_actions",
+        "action IN ('approve', 'reject', 'return', 'clarify', 'delegate', 'resubmit')",
+    )
+
+
+def downgrade() -> None:
+    op.drop_constraint("ck_approval_actions_action", "approval_actions", type_="check")
+    op.create_check_constraint(
+        "ck_approval_actions_action",
+        "approval_actions",
+        "action IN ('approve', 'reject', 'return', 'clarify', 'delegate')",
+    )

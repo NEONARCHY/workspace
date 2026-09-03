@@ -8,8 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
+from .database import create_database_engine
+from .events import WorkspaceEventBus
 from .logging import configure_logging
-from .routers import health, modules
+from .routers import health, modules, workspace
+from .seed import seed_demo_data
 from .settings import Settings, get_settings
 
 
@@ -18,11 +21,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_logging()
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(lifespan_app: FastAPI) -> AsyncIterator[None]:
         logger = structlog.get_logger("yuksalish_api")
+        engine = create_database_engine(runtime_settings)
+        lifespan_app.state.database_engine = engine
+        lifespan_app.state.event_bus = WorkspaceEventBus()
+        if runtime_settings.seed_demo_data:
+            await seed_demo_data(engine)
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)
-        yield
-        logger.info("api_stopped")
+        try:
+            yield
+        finally:
+            await engine.dispose()
+            logger.info("api_stopped")
 
     application = FastAPI(
         title="Yuksalish Workspace API",
@@ -32,9 +43,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     application.state.settings = runtime_settings
+    cors_origins = list(runtime_settings.cors_origins)
+    if runtime_settings.environment == "development" and "null" not in cors_origins:
+        cors_origins.append("null")
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=runtime_settings.cors_origins,
+        allow_origins=cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
@@ -51,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
+    application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     return application
 
 

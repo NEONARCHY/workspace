@@ -32,4 +32,16 @@ describe("corporate workspace alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Создать" }));
     expect(screen.getAllByText("Проверить новый маршрут оплаты").length).toBeGreaterThan(0);
   });
+
+  it("switches between approval requests and the workflow designer", () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Согласования" }));
+    expect(screen.getByRole("button", { name: "Новая заявка" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
+    expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Текущие заявки" }));
+    expect(screen.getByRole("button", { name: "Новая заявка" })).toBeInTheDocument();
+  });
 });

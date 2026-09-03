@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { ChatMessage } from "@yuksalish/contracts";
+import type { ChatMessage, ChatSummary, WorkspacePerson } from "@yuksalish/contracts";
 import {
   Avatar,
   Badge,
@@ -16,41 +16,40 @@ import {
   Send24Filled,
 } from "@fluentui/react-icons";
 
-import { initialChats, initialMessages, personById } from "./demo-data";
+interface MessengerViewProps {
+  readonly chats: readonly ChatSummary[];
+  readonly messages: readonly ChatMessage[];
+  readonly people: readonly WorkspacePerson[];
+  readonly onSendMessage: (chatId: string, body: string) => void | Promise<void>;
+}
 
-export function MessengerView() {
-  const [activeChatId, setActiveChatId] = useState(initialChats[0]!.id);
-  const [messages, setMessages] = useState<readonly ChatMessage[]>(initialMessages);
+export function MessengerView({ chats, messages, people, onSendMessage }: MessengerViewProps) {
+  const [activeChatId, setActiveChatId] = useState(chats[0]?.id ?? "");
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
 
-  const activeChat = initialChats.find((chat) => chat.id === activeChatId) ?? initialChats[0]!;
-  const activeMessages = messages.filter((message) => message.chatId === activeChat.id);
+  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
+  const activeChatKey = activeChat?.id ?? "";
+  const activeMessages = messages.filter((message) => message.chatId === activeChatKey);
   const visibleChats = useMemo(
     () =>
-      initialChats.filter((chat) => chat.title.toLowerCase().includes(query.toLowerCase())),
-    [query],
+      chats.filter((chat) => chat.title.toLowerCase().includes(query.toLowerCase())),
+    [chats, query],
   );
 
   const sendMessage = () => {
     const body = draft.trim();
     if (body.length === 0) return;
-    setMessages((current) => [
-      ...current,
-      {
-        id: `local-${current.length + 1}`,
-        chatId: activeChat.id,
-        authorId: "aziza",
-        body,
-        time: new Intl.DateTimeFormat("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }).format(new Date()),
-        own: true,
-      },
-    ]);
+    if (activeChat === undefined) return;
+    void onSendMessage(activeChat.id, body);
     setDraft("");
   };
+
+  const personById = (id: string) => people.find((person) => person.id === id) ?? people[0];
+
+  if (activeChat === undefined) {
+    return <section className="workspace-view empty-state">Доступных чатов пока нет</section>;
+  }
 
   return (
     <section className="workspace-view messenger-view" aria-label="Мессенджер">
@@ -75,7 +74,7 @@ export function MessengerView() {
         <div className="chat-list" role="list">
           {visibleChats.map((chat) => (
             <button
-              className={`chat-row ${chat.id === activeChat.id ? "selected" : ""}`}
+              className={`chat-row ${chat.id === activeChatKey ? "selected" : ""}`}
               key={chat.id}
               onClick={() => setActiveChatId(chat.id)}
               type="button"
@@ -130,10 +129,10 @@ export function MessengerView() {
             return (
               <div className={`message ${message.own ? "own" : ""}`} key={message.id}>
                 {!message.own ? (
-                  <Avatar name={author.name} size={32} color="colorful" />
+                  <Avatar name={author?.name ?? "Сотрудник"} size={32} color="colorful" />
                 ) : null}
                 <div className="message-body">
-                  {!message.own ? <strong>{author.name}</strong> : null}
+                  {!message.own ? <strong>{author?.name ?? "Сотрудник"}</strong> : null}
                   <p>{message.body}</p>
                   <time>{message.time}</time>
                 </div>

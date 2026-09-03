@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     database_url: str = "postgresql+asyncpg://yuksalish:local@127.0.0.1:5432/yuksalish"
+    auth_signing_key: SecretStr = SecretStr("development-only-change-me")
+    seed_demo_data: bool = False
     redis_url: str = "redis://127.0.0.1:6379/0"
     s3_endpoint: str = "127.0.0.1:9000"
     s3_access_key: str = "local"

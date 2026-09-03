@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { TaskStatus, WorkspaceTask } from "@yuksalish/contracts";
+import type { TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import {
   Avatar,
   Badge,
@@ -17,50 +17,53 @@ import {
   Filter24Regular,
 } from "@fluentui/react-icons";
 
-import { initialTasks, personById } from "./demo-data";
-
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
   in_progress: "В работе",
   awaiting_review: "На проверке",
   completed: "Завершены",
   overdue: "Просрочены",
+  cancelled: "Отменены",
 };
 
 type TaskFilter = "active" | "mine" | "overdue" | "completed";
 
-export function TasksView() {
-  const [tasks, setTasks] = useState<readonly WorkspaceTask[]>(initialTasks);
+interface TasksViewProps {
+  readonly tasks: readonly WorkspaceTask[];
+  readonly people: readonly WorkspacePerson[];
+  readonly currentUserId: string;
+  readonly onCreateTask: (
+    title: string,
+  ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
+}
+
+export function TasksView({
+  tasks,
+  people,
+  currentUserId,
+  onCreateTask,
+  onChangeStatus,
+}: TasksViewProps) {
   const [filter, setFilter] = useState<TaskFilter>("active");
-  const [selectedId, setSelectedId] = useState(initialTasks[0]!.id);
+  const [selectedId, setSelectedId] = useState(tasks[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
 
   const visibleTasks = useMemo(() => {
-    if (filter === "mine") return tasks.filter((task) => task.assigneeId === "aziza");
+    if (filter === "mine") return tasks.filter((task) => task.assigneeId === currentUserId);
     if (filter === "overdue") return tasks.filter((task) => task.status === "overdue");
     if (filter === "completed") return tasks.filter((task) => task.status === "completed");
-    return tasks.filter((task) => task.status !== "completed");
-  }, [filter, tasks]);
+    return tasks.filter((task) => !["completed", "cancelled"].includes(task.status));
+  }, [currentUserId, filter, tasks]);
 
   const selectedTask = tasks.find((task) => task.id === selectedId) ?? visibleTasks[0];
 
-  const createTask = () => {
+  const createTask = async () => {
     const title = newTitle.trim();
     if (title.length === 0) return;
-    const task: WorkspaceTask = {
-      id: `local-task-${tasks.length + 1}`,
-      title,
-      project: "Без проекта",
-      assigneeId: "aziza",
-      dueLabel: "Срок не указан",
-      status: "new",
-      priority: "normal",
-      checklistDone: 0,
-      checklistTotal: 0,
-    };
-    setTasks((current) => [task, ...current]);
-    setSelectedId(task.id);
+    const task = await onCreateTask(title);
+    if (task !== undefined) setSelectedId(task.id);
     setNewTitle("");
     setCreating(false);
   };
@@ -73,12 +76,10 @@ export function TasksView() {
         : selectedTask.status === "in_progress"
           ? "awaiting_review"
           : "completed";
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === selectedTask.id ? { ...task, status: nextStatus } : task,
-      ),
-    );
+    void onChangeStatus(selectedTask.id, nextStatus);
   };
+
+  const personById = (id: string) => people.find((person) => person.id === id) ?? people[0];
 
   return (
     <section className="workspace-view tasks-view" aria-label="Задачи">
@@ -125,11 +126,11 @@ export function TasksView() {
               value={newTitle}
               onChange={(_event, data) => setNewTitle(data.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") createTask();
+                if (event.key === "Enter") void createTask();
                 if (event.key === "Escape") setCreating(false);
               }}
             />
-            <Button appearance="primary" onClick={createTask} disabled={newTitle.trim().length === 0}>
+            <Button appearance="primary" onClick={() => void createTask()} disabled={newTitle.trim().length === 0}>
               Создать
             </Button>
             <Button appearance="subtle" onClick={() => setCreating(false)}>
@@ -159,8 +160,8 @@ export function TasksView() {
                   <small>{task.project}</small>
                 </span>
                 <span className="person-cell">
-                  <Avatar name={assignee.name} size={28} color="colorful" />
-                  <span>{assignee.name.split(" ")[0]}</span>
+                  <Avatar name={assignee?.name ?? "Сотрудник"} size={28} color="colorful" />
+                  <span>{assignee?.name.split(" ")[0] ?? "Сотрудник"}</span>
                 </span>
                 <span className={task.status === "overdue" ? "danger-text" : ""}>
                   {task.dueLabel}
@@ -191,13 +192,13 @@ export function TasksView() {
           <div className="detail-meta">
             <div>
               <Avatar
-                name={personById(selectedTask.assigneeId).name}
+                name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}
                 size={36}
                 color="colorful"
               />
               <span>
                 <small>Ответственный</small>
-                <strong>{personById(selectedTask.assigneeId).name}</strong>
+                <strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong>
               </span>
             </div>
             <div>

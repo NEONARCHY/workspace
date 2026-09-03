@@ -1,0 +1,166 @@
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+metadata = sa.MetaData()
+uuid_type = postgresql.UUID(as_uuid=True)
+
+departments = sa.Table(
+    "core_departments",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("code", sa.String(64)),
+    sa.Column("name", sa.String(200)),
+    sa.Column("parent_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+users = sa.Table(
+    "core_users",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("username", sa.String(64)),
+    sa.Column("full_name", sa.String(200)),
+    sa.Column("job_title", sa.String(160)),
+    sa.Column("password_hash", sa.Text()),
+    sa.Column("role", sa.String(24)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("department_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+chats = sa.Table(
+    "messenger_chats",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("context_type", sa.String(32)),
+    sa.Column("context_id", uuid_type),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+chat_members = sa.Table(
+    "messenger_chat_members",
+    metadata,
+    sa.Column("chat_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("member_role", sa.String(16)),
+    sa.Column("joined_at", sa.DateTime(timezone=True)),
+    sa.Column("muted_until", sa.DateTime(timezone=True)),
+)
+
+messages = sa.Table(
+    "messenger_messages",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("chat_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("reply_to_message_id", uuid_type),
+    sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("edited_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+)
+
+message_versions = sa.Table(
+    "messenger_message_versions",
+    metadata,
+    sa.Column("id", sa.BigInteger(), primary_key=True),
+    sa.Column("message_id", uuid_type),
+    sa.Column("body", sa.Text()),
+    sa.Column("change_reason", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+tasks = sa.Table(
+    "tasks",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("status", sa.String(24)),
+    sa.Column("priority", sa.String(16)),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("primary_assignee_user_id", uuid_type),
+    sa.Column("cycle_id", uuid_type),
+    sa.Column("cycle_occurrence_key", sa.String(96)),
+    sa.Column("project_key", sa.String(96)),
+    sa.Column("starts_at", sa.DateTime(timezone=True)),
+    sa.Column("due_at", sa.DateTime(timezone=True)),
+    sa.Column("result_text", sa.Text()),
+    sa.Column("source_message_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+approval_templates = sa.Table(
+    "approval_templates",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("template_key", sa.String(96)),
+    sa.Column("name", sa.String(240)),
+    sa.Column("request_kind", sa.String(32)),
+    sa.Column("version", sa.Integer()),
+    sa.Column("status", sa.String(16)),
+    sa.Column("form_schema", postgresql.JSONB()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("published_at", sa.DateTime(timezone=True)),
+)
+
+approval_nodes = sa.Table(
+    "approval_nodes",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("template_id", uuid_type),
+    sa.Column("node_key", sa.String(96)),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("config", postgresql.JSONB()),
+    sa.Column("position_x", sa.Float()),
+    sa.Column("position_y", sa.Float()),
+)
+
+approval_edges = sa.Table(
+    "approval_edges",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("template_id", uuid_type),
+    sa.Column("source_node_key", sa.String(96)),
+    sa.Column("target_node_key", sa.String(96)),
+    sa.Column("outcome", sa.String(32)),
+    sa.Column("label", sa.String(160)),
+    sa.Column("condition", postgresql.JSONB()),
+    sa.Column("sort_order", sa.Integer()),
+)
+
+approval_requests = sa.Table(
+    "approval_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("template_id", uuid_type),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("title", sa.String(240)),
+    sa.Column("payload", postgresql.JSONB()),
+    sa.Column("status", sa.String(24)),
+    sa.Column("active_node_keys", postgresql.JSONB()),
+    sa.Column("source_task_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("finished_at", sa.DateTime(timezone=True)),
+)
+
+approval_actions = sa.Table(
+    "approval_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("node_key", sa.String(96)),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
