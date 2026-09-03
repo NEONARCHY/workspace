@@ -2,9 +2,12 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from pydantic import SecretStr
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from .auth_service import hash_password
 from .tables import (
     approval_edges,
     approval_nodes,
@@ -33,7 +36,10 @@ async def _insert_missing(
         await connection.execute(pg_insert(table).values(rows).on_conflict_do_nothing())  # type: ignore[arg-type]
 
 
-async def seed_demo_data(engine: AsyncEngine) -> None:
+async def seed_demo_data(
+    engine: AsyncEngine,
+    demo_password: SecretStr | None = None,
+) -> None:
     now = datetime.now(UTC).replace(microsecond=0)
     department_id = demo_uuid("department/finance")
     person_ids = {
@@ -108,8 +114,7 @@ async def seed_demo_data(engine: AsyncEngine) -> None:
             "author_user_id": person_ids["aziza"],
             "reply_to_message_id": None,
             "body": (
-                "Заявка прошла проверку бюджета и перешла на согласование "
-                "финансовому менеджеру."
+                "Заявка прошла проверку бюджета и перешла на согласование финансовому менеджеру."
             ),
             "created_at": now - timedelta(days=1),
             "edited_at": None,
@@ -236,6 +241,17 @@ async def seed_demo_data(engine: AsyncEngine) -> None:
                 },
             ],
         )
+        if demo_password is not None:
+            for user_id in person_ids.values():
+                await connection.execute(
+                    update(users)
+                    .where(users.c.id == user_id, users.c.password_hash.is_(None))
+                    .values(
+                        password_hash=hash_password(demo_password.get_secret_value()),
+                        password_changed_at=now,
+                        updated_at=now,
+                    )
+                )
         await _insert_missing(
             connection,
             chats,

@@ -27,6 +27,59 @@ users = sa.Table(
     sa.Column("department_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("failed_login_count", sa.Integer()),
+    sa.Column("locked_until", sa.DateTime(timezone=True)),
+    sa.Column("password_changed_at", sa.DateTime(timezone=True)),
+)
+
+auth_invitations = sa.Table(
+    "auth_invitations",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("invited_by_user_id", uuid_type),
+    sa.Column("token_hash", sa.String(64)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("expires_at", sa.DateTime(timezone=True)),
+    sa.Column("accepted_at", sa.DateTime(timezone=True)),
+    sa.Column("revoked_at", sa.DateTime(timezone=True)),
+)
+
+auth_sessions = sa.Table(
+    "auth_sessions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("refresh_token_hash", sa.String(64)),
+    sa.Column("device_label", sa.String(160)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("expires_at", sa.DateTime(timezone=True)),
+    sa.Column("last_seen_at", sa.DateTime(timezone=True)),
+    sa.Column("revoked_at", sa.DateTime(timezone=True)),
+)
+
+auth_totp_factors = sa.Table(
+    "auth_totp_factors",
+    metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("secret_ciphertext", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("confirmed_at", sa.DateTime(timezone=True)),
+    sa.Column("last_used_step", sa.BigInteger()),
+)
+
+auth_password_resets = sa.Table(
+    "auth_password_resets",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("issued_by_user_id", uuid_type),
+    sa.Column("token_hash", sa.String(64)),
+    sa.Column("reset_totp", sa.Boolean()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("expires_at", sa.DateTime(timezone=True)),
+    sa.Column("consumed_at", sa.DateTime(timezone=True)),
+    sa.Column("revoked_at", sa.DateTime(timezone=True)),
 )
 
 chats = sa.Table(

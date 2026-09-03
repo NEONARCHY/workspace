@@ -4,6 +4,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -14,9 +15,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .database import get_connection
-from .tables import users
+from .settings import Settings
+from .tables import auth_sessions, users
 
 bearer = HTTPBearer(auto_error=False)
+
+
+@dataclass(frozen=True)
+class AccessTokenClaims:
+    user_id: UUID
+    session_id: UUID | None
+    expires_at: int
 
 
 @dataclass(frozen=True)
@@ -26,6 +35,7 @@ class AuthenticatedUser:
     full_name: str
     job_title: str | None
     role: str
+    session_id: UUID | None = None
 
 
 class InvalidTokenError(ValueError):
@@ -44,11 +54,19 @@ def issue_access_token(
     user_id: UUID,
     signing_key: SecretStr,
     *,
+    session_id: UUID | None = None,
     ttl_seconds: int = 12 * 60 * 60,
     now: int | None = None,
 ) -> str:
     issued_at = int(time.time()) if now is None else now
-    payload = {"exp": issued_at + ttl_seconds, "iat": issued_at, "sub": str(user_id)}
+    payload: dict[str, str | int] = {
+        "exp": issued_at + ttl_seconds,
+        "iat": issued_at,
+        "sub": str(user_id),
+        "typ": "access",
+    }
+    if session_id is not None:
+        payload["sid"] = str(session_id)
     encoded = _b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
     signature = hmac.new(
         signing_key.get_secret_value().encode(),
@@ -58,12 +76,12 @@ def issue_access_token(
     return f"{encoded}.{_b64encode(signature)}"
 
 
-def verify_access_token(
+def read_access_token(
     token: str,
     signing_key: SecretStr,
     *,
     now: int | None = None,
-) -> UUID:
+) -> AccessTokenClaims:
     try:
         encoded, supplied_signature = token.split(".", maxsplit=1)
         expected_signature = hmac.new(
@@ -75,18 +93,37 @@ def verify_access_token(
             raise InvalidTokenError("Invalid signature")
         payload: dict[str, Any] = json.loads(_b64decode(encoded))
         current_time = int(time.time()) if now is None else now
-        if not isinstance(payload.get("exp"), int) or payload["exp"] <= current_time:
+        expires_at = payload.get("exp")
+        if not isinstance(expires_at, int) or expires_at <= current_time:
             raise InvalidTokenError("Token expired")
-        return UUID(str(payload["sub"]))
+        if payload.get("typ") not in {None, "access"}:
+            raise InvalidTokenError("Invalid token type")
+        session_id = UUID(str(payload["sid"])) if payload.get("sid") is not None else None
+        return AccessTokenClaims(
+            user_id=UUID(str(payload["sub"])),
+            session_id=session_id,
+            expires_at=expires_at,
+        )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
         if isinstance(error, InvalidTokenError):
             raise
         raise InvalidTokenError("Malformed token") from error
 
 
+def verify_access_token(
+    token: str,
+    signing_key: SecretStr,
+    *,
+    now: int | None = None,
+) -> UUID:
+    return read_access_token(token, signing_key, now=now).user_id
+
+
 async def load_authenticated_user(
     connection: AsyncConnection,
     user_id: UUID,
+    *,
+    session_id: UUID | None = None,
 ) -> AuthenticatedUser | None:
     statement = select(
         users.c.id,
@@ -104,7 +141,41 @@ async def load_authenticated_user(
         full_name=row["full_name"],
         job_title=row["job_title"],
         role=row["role"],
+        session_id=session_id,
     )
+
+
+async def authenticate_access_token(
+    connection: AsyncConnection,
+    token: str,
+    settings: Settings,
+) -> AuthenticatedUser:
+    claims = read_access_token(token, settings.auth_signing_key)
+    if claims.session_id is None:
+        if settings.environment not in {"development", "test"}:
+            raise InvalidTokenError("Server session required")
+    else:
+        now = datetime.now(UTC)
+        session_exists = (
+            await connection.execute(
+                select(auth_sessions.c.id).where(
+                    auth_sessions.c.id == claims.session_id,
+                    auth_sessions.c.user_id == claims.user_id,
+                    auth_sessions.c.revoked_at.is_(None),
+                    auth_sessions.c.expires_at > now,
+                )
+            )
+        ).scalar_one_or_none()
+        if session_exists is None:
+            raise InvalidTokenError("Session is no longer active")
+    user = await load_authenticated_user(
+        connection,
+        claims.user_id,
+        session_id=claims.session_id,
+    )
+    if user is None:
+        raise InvalidTokenError("User is not active")
+    return user
 
 
 async def require_user(
@@ -118,13 +189,10 @@ async def require_user(
             detail="Bearer token required",
         )
     try:
-        user_id = verify_access_token(
+        return await authenticate_access_token(
+            connection,
             credentials.credentials,
-            request.app.state.settings.auth_signing_key,
+            request.app.state.settings,
         )
     except InvalidTokenError as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error
-    user = await load_authenticated_user(connection, user_id)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is not active")
-    return user

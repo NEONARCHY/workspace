@@ -46,6 +46,8 @@ For production, use `.env.production` in both places. Do not rely on an implicit
 ## Secret handling
 
 - Generate unique random values of at least 32 characters for PostgreSQL and MinIO.
+- Generate separate random values for `YUKSALISH_AUTH_SIGNING_KEY` and
+  `YUKSALISH_AUTH_ENCRYPTION_KEY`; rotating the encryption key requires a planned TOTP reset.
 - Keep actual `.env`, `.env.staging` and `.env.production` outside Git and cloud chat.
 - Grant filesystem access only to the Windows administrator and service account.
 - Back up secrets separately from database and file backups.
@@ -55,3 +57,16 @@ For production, use `.env.production` in both places. Do not rely on an implicit
 The database password embedded in `YUKSALISH_DATABASE_URL` must be URL-safe. PostgreSQL,
 Redis and MinIO remain on the internal Docker network; only `gateway` may be connected to a
 future Cloudflare Tunnel.
+
+## First production administrator
+
+Keep `YUKSALISH_SEED_DEMO_DATA=false`. After migrations finish, create the first administrator
+from an interactive terminal; the command refuses to run after any user exists:
+
+```powershell
+docker compose --env-file .env.production -f infrastructure\compose.yaml exec api `
+  yuksalish-bootstrap-admin --username admin --full-name "Имя администратора"
+```
+
+The password is read twice without being shown or placed in shell history. All later accounts
+and password-recovery codes are created by an administrator inside the desktop application.

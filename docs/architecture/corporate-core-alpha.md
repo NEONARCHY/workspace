@@ -39,13 +39,15 @@ Edges contain the outcome, optional label, condition and order. Node positions a
 
 The initial form contains purpose, amount, currency, payment date, cost center, counterparty, contract or invoice attachment, requester comment and linked task. The first sample workflow routes small payments to the department manager and larger payments through finance and the director.
 
-## Live alpha 0.2.0
+## Live alpha 0.3.0
 
 The Electron client now uses the FastAPI gateway and PostgreSQL as its source of truth. An idempotent seed creates four test users, sample conversations, tasks and a payment workflow. The same API serves the initial workspace snapshot and all mutations.
 
 The implemented vertical slice includes:
 
-- signed 12-hour development sessions for manager, employee and administrator roles;
+- Argon2id password login, administrator-issued invitations and account recovery;
+- 15-minute access tokens with rotating, revocable per-device refresh sessions;
+- encrypted TOTP secrets with replay protection and login lockout;
 - role-filtered workspace queries and server-side authorization for workflow changes and approval actions;
 - persistent messages, tasks, task status changes, requests and approval history;
 - direct links from a message to a task and from a task to a payment request at the data and API level;
@@ -57,7 +59,9 @@ The event broker is deliberately process-local in this alpha. A Redis-backed bro
 
 ## Security boundary
 
-Development login is enabled only when the API environment is `development` or `test`. It selects one of the seeded users and issues a signed bearer token; it is intended for local product testing, not real employee authentication. Production remains blocked until invitation-based account creation, Argon2id passwords, TOTP, session/device management, rate limiting and audit review are implemented.
+Development login and demo seeding are enabled only in `development` or `test`. The production desktop does not embed demo credentials. A one-time CLI creates the first administrator only when `core_users` is empty; all later accounts use administrator-issued, expiring invitation codes. Recovery codes are also administrator-issued, expire after two hours and revoke every old session when consumed. TOTP secrets are encrypted with a key separate from access-token signing.
+
+External production publication remains blocked until the server, backups, HTTPS/Cloudflare, centralized rate limiting and security audit are ready.
 
 ## Known limits
 

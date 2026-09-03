@@ -152,3 +152,42 @@ export interface DevelopmentSession {
   readonly tokenType: "bearer";
   readonly user: WorkspacePerson;
 }
+
+export interface AuthenticationSession {
+  readonly accessToken: string;
+  readonly refreshToken: string;
+  readonly tokenType: "bearer";
+  readonly expiresIn: number;
+  readonly user: WorkspacePerson;
+}
+
+export interface InvitationResult {
+  readonly id: string;
+  readonly username: string;
+  readonly fullName: string;
+  readonly role: string;
+  readonly inviteToken: string;
+  readonly expiresAt: string;
+}
+
+export interface PasswordResetResult {
+  readonly id: string;
+  readonly username: string;
+  readonly resetToken: string;
+  readonly resetTotp: boolean;
+  readonly expiresAt: string;
+}
+
+export interface TotpSetup {
+  readonly secret: string;
+  readonly otpauthUri: string;
+}
+
+export interface SessionSummary {
+  readonly id: string;
+  readonly deviceLabel: string;
+  readonly createdAt: string;
+  readonly lastSeenAt: string;
+  readonly expiresAt: string;
+  readonly current: boolean;
+}

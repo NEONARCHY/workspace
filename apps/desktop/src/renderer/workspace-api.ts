@@ -1,11 +1,16 @@
 import type {
   ApprovalRequestSummary,
+  AuthenticationSession,
   ChatMessage,
   DevelopmentSession,
+  InvitationResult,
+  PasswordResetResult,
+  SessionSummary,
   TaskStatus,
   WorkflowDefinition,
   WorkspaceBootstrap,
   WorkspaceTask,
+  TotpSetup,
 } from "@yuksalish/contracts";
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
@@ -24,7 +29,105 @@ async function apiRequest<T>(
     const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
     throw new Error(payload?.detail ?? `API request failed with HTTP ${response.status}`);
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+export function login(
+  username: string,
+  password: string,
+  totpCode?: string,
+): Promise<AuthenticationSession> {
+  return apiRequest<AuthenticationSession>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password, totpCode, deviceLabel: "Windows desktop" }),
+  });
+}
+
+export function refreshAuthentication(refreshToken: string): Promise<AuthenticationSession> {
+  return apiRequest<AuthenticationSession>("/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  });
+}
+
+export function logout(token: string): Promise<void> {
+  return apiRequest<void>("/auth/logout", { method: "POST" }, token);
+}
+
+export function acceptInvitation(
+  inviteToken: string,
+  password: string,
+): Promise<AuthenticationSession> {
+  return apiRequest<AuthenticationSession>("/auth/invitations/accept", {
+    method: "POST",
+    body: JSON.stringify({ inviteToken, password, deviceLabel: "Windows desktop" }),
+  });
+}
+
+export function createInvitation(
+  token: string,
+  payload: {
+    readonly username: string;
+    readonly fullName: string;
+    readonly jobTitle?: string;
+    readonly role: "admin" | "manager" | "employee";
+  },
+): Promise<InvitationResult> {
+  return apiRequest<InvitationResult>(
+    "/auth/invitations",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function createPasswordReset(
+  token: string,
+  username: string,
+  resetTotp: boolean,
+): Promise<PasswordResetResult> {
+  return apiRequest<PasswordResetResult>(
+    "/auth/password-resets",
+    { method: "POST", body: JSON.stringify({ username, resetTotp }) },
+    token,
+  );
+}
+
+export function completePasswordReset(
+  resetToken: string,
+  password: string,
+): Promise<AuthenticationSession> {
+  return apiRequest<AuthenticationSession>("/auth/password-resets/complete", {
+    method: "POST",
+    body: JSON.stringify({ resetToken, password, deviceLabel: "Windows desktop" }),
+  });
+}
+
+export function getTotpStatus(token: string): Promise<{ readonly enabled: boolean }> {
+  return apiRequest<{ readonly enabled: boolean }>("/auth/totp", {}, token);
+}
+
+export function setupTotp(token: string): Promise<TotpSetup> {
+  return apiRequest<TotpSetup>("/auth/totp/setup", { method: "POST" }, token);
+}
+
+export function confirmTotp(
+  token: string,
+  code: string,
+): Promise<{ readonly enabled: boolean }> {
+  return apiRequest<{ readonly enabled: boolean }>(
+    "/auth/totp/confirm",
+    { method: "POST", body: JSON.stringify({ code }) },
+    token,
+  );
+}
+
+export function loadSessions(token: string): Promise<readonly SessionSummary[]> {
+  return apiRequest<readonly SessionSummary[]>("/auth/sessions", {}, token);
+}
+
+export function revokeSession(token: string, sessionId: string): Promise<void> {
+  return apiRequest<void>(`/auth/sessions/${sessionId}`, { method: "DELETE" }, token);
 }
 
 export function createDevelopmentSession(username: string): Promise<DevelopmentSession> {

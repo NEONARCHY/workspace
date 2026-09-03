@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     api_port: int = 8000
     database_url: str = "postgresql+asyncpg://yuksalish:local@127.0.0.1:5432/yuksalish"
     auth_signing_key: SecretStr = SecretStr("development-only-change-me")
+    auth_encryption_key: SecretStr = SecretStr("development-encryption-change-me")
+    access_token_ttl_seconds: int = 15 * 60
+    refresh_token_ttl_days: int = 30
+    invitation_ttl_hours: int = 48
+    password_reset_ttl_hours: int = 2
+    login_max_failures: int = 5
+    login_lock_seconds: int = 15 * 60
+    demo_password: SecretStr | None = None
     seed_demo_data: bool = False
     redis_url: str = "redis://127.0.0.1:6379/0"
     s3_endpoint: str = "127.0.0.1:9000"

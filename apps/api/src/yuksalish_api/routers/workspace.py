@@ -9,17 +9,14 @@ from fastapi import (
     Request,
     WebSocket,
     WebSocketDisconnect,
-    status,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from yuksalish_api.auth import (
     AuthenticatedUser,
     InvalidTokenError,
-    issue_access_token,
-    load_authenticated_user,
+    authenticate_access_token,
     require_user,
-    verify_access_token,
 )
 from yuksalish_api.database import get_connection
 from yuksalish_api.events import WorkspaceEventBus
@@ -29,9 +26,7 @@ from yuksalish_api.repository import (
     change_task_status,
     create_approval_request,
     create_task,
-    find_active_user_by_username,
     load_workspace,
-    person_from_record,
     save_workflow,
     send_message,
 )
@@ -42,10 +37,8 @@ from yuksalish_api.workspace_schemas import (
     ChatMessageResponse,
     CreateApprovalRequest,
     CreateTaskRequest,
-    DevelopmentSessionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
-    SessionResponse,
     TaskResponse,
     WorkflowResponse,
     WorkspaceBootstrapResponse,
@@ -60,47 +53,6 @@ def _translate(error: WorkspaceRepositoryError) -> HTTPException:
 
 def _event_bus(request: Request) -> WorkspaceEventBus:
     return cast(WorkspaceEventBus, request.app.state.event_bus)
-
-
-@router.post("/auth/development-session", response_model=SessionResponse)
-async def development_session(
-    payload: DevelopmentSessionRequest,
-    request: Request,
-    connection: Annotated[AsyncConnection, Depends(get_connection)],
-) -> SessionResponse:
-    settings = request.app.state.settings
-    if settings.environment not in {"development", "test"}:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Development session is disabled",
-        )
-    user = await find_active_user_by_username(connection, payload.username)
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User was not found")
-    return SessionResponse(
-        access_token=issue_access_token(user["id"], settings.auth_signing_key),
-        user=person_from_record(user),
-    )
-
-
-@router.get("/auth/me", response_model=SessionResponse)
-async def me(
-    request: Request,
-    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
-) -> SessionResponse:
-    token = issue_access_token(current_user.id, request.app.state.settings.auth_signing_key)
-    return SessionResponse(
-        access_token=token,
-        user=person_from_record(
-            {
-                "id": current_user.id,
-                "username": current_user.username,
-                "full_name": current_user.full_name,
-                "job_title": current_user.job_title,
-                "role": current_user.role,
-            }
-        ),
-    )
 
 
 @router.get("/workspace/bootstrap", response_model=WorkspaceBootstrapResponse)
@@ -222,20 +174,18 @@ async def workspace_events(websocket: WebSocket) -> None:
         if not isinstance(token, str):
             await websocket.close(code=4401, reason="Authentication required")
             return
-        try:
-            user_id = verify_access_token(
-                token,
-                websocket.app.state.settings.auth_signing_key,
-            )
-        except InvalidTokenError:
-            await websocket.close(code=4401, reason="Invalid token")
-            return
         engine: AsyncEngine = websocket.app.state.database_engine
         async with engine.connect() as connection:
-            user = await load_authenticated_user(connection, user_id)
-        if user is None:
-            await websocket.close(code=4401, reason="User is not active")
-            return
+            try:
+                user = await authenticate_access_token(
+                    connection,
+                    token,
+                    websocket.app.state.settings,
+                )
+            except InvalidTokenError:
+                await websocket.close(code=4401, reason="Invalid token")
+                return
+        user_id = user.id
         await event_bus.connect(user_id, websocket)
         await websocket.send_json({"type": "authenticated", "userId": str(user_id)})
         while True:

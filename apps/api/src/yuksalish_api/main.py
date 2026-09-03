@@ -11,7 +11,7 @@ from . import __version__
 from .database import create_database_engine
 from .events import WorkspaceEventBus
 from .logging import configure_logging
-from .routers import health, modules, workspace
+from .routers import authentication, health, modules, workspace
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
 
@@ -27,7 +27,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan_app.state.database_engine = engine
         lifespan_app.state.event_bus = WorkspaceEventBus()
         if runtime_settings.seed_demo_data:
-            await seed_demo_data(engine)
+            await seed_demo_data(engine, runtime_settings.demo_password)
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)
         try:
             yield
@@ -65,6 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
+    application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     return application
 

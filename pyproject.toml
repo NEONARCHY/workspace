@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yuksalish-workspace"
-version = "0.2.0"
+version = "0.3.0"
 description = "Backend foundation and migration tooling for Yuksalish Workspace"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
   "alembic==1.19.1",
+  "argon2-cffi==25.1.0",
   "asyncpg==0.31.0",
+  "cryptography==50.0.1",
   "fastapi==0.141.1",
   "minio==7.2.20",
   "pydantic-settings==2.15.0",
@@ -37,6 +39,7 @@ dev = [
 yuksalish-api = "yuksalish_api.main:run"
 yuksalish-worker = "yuksalish_worker.main:run"
 yuksalish-scheduler = "yuksalish_scheduler.main:run"
+yuksalish-bootstrap-admin = "yuksalish_api.bootstrap_admin:main"
 hisobot-import = "hisobot_import.cli:main"
 
 [tool.setuptools.packages.find]

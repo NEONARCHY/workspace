@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
+  AuthenticationSession,
   ChatMessage,
   TaskStatus,
   WorkflowDefinition,
@@ -29,17 +30,23 @@ import {
   TaskListSquareLtr24Regular,
 } from "@fluentui/react-icons";
 
+import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
+import { LoginView } from "./LoginView";
 import { MessengerView } from "./MessengerView";
 import { TasksView } from "./TasksView";
 import {
+  acceptInvitation,
   actOnWorkspaceApproval,
   changeWorkspaceTaskStatus,
-  createDevelopmentSession,
+  completePasswordReset,
   createWorkspaceApproval,
   createWorkspaceTask,
   loadWorkspace,
+  login,
+  logout,
+  refreshAuthentication,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
   subscribeToWorkspaceEvents,
@@ -96,72 +103,120 @@ const navItems: readonly NavItem[] = [
   },
 ];
 
+function readableAuthError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "Не удалось войти";
+  const messages: Record<string, string> = {
+    "Invalid username or password": "Неверный логин или пароль.",
+    "TOTP code required": "Введите шестизначный код приложения-аутентификатора.",
+    "Invalid or already used TOTP code": "Код неверный или уже использован.",
+    "Account is temporarily locked": "Слишком много попыток. Вход временно заблокирован.",
+    "Invitation was not found": "Приглашение не найдено.",
+    "Invitation is no longer active": "Приглашение уже использовано или отозвано.",
+    "Invitation has expired": "Срок действия приглашения истёк.",
+  };
+  return messages[message] ?? message;
+}
+
 export function App() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection>("messenger");
-  const [online, setOnline] = useState(false);
-  const [connectionDetail, setConnectionDetail] = useState("Демонстрационный режим");
-  const [testUsername, setTestUsername] = useState("aziza");
-  const [token, setToken] = useState<string>();
+  const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
+  const [session, setSession] = useState<AuthenticationSession>();
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string>();
+  const [accountOpen, setAccountOpen] = useState(false);
 
   const refreshWorkspace = useCallback(async (accessToken: string) => {
     const loaded = await loadWorkspace(accessToken);
     setWorkspace(loaded);
   }, []);
 
+  const establishSession = async (authenticated: AuthenticationSession) => {
+    const loaded = await loadWorkspace(authenticated.accessToken);
+    setWorkspace(loaded);
+    setSession(authenticated);
+    setConnectionDetail("Сервер подключён");
+    setAuthError(undefined);
+  };
+
+  const handleLogin = async (username: string, password: string, totpCode?: string) => {
+    setAuthBusy(true);
+    setAuthError(undefined);
+    try {
+      await establishSession(await login(username, password, totpCode));
+    } catch (error) {
+      setAuthError(readableAuthError(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleAcceptInvitation = async (inviteToken: string, password: string) => {
+    setAuthBusy(true);
+    setAuthError(undefined);
+    try {
+      await establishSession(await acceptInvitation(inviteToken, password));
+    } catch (error) {
+      setAuthError(readableAuthError(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleCompletePasswordReset = async (resetToken: string, password: string) => {
+    setAuthBusy(true);
+    setAuthError(undefined);
+    try {
+      await establishSession(await completePasswordReset(resetToken, password));
+    } catch (error) {
+      setAuthError(readableAuthError(error));
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    const current = session;
+    setAccountOpen(false);
+    setSession(undefined);
+    setAuthError(undefined);
+    if (current !== undefined) {
+      await logout(current.accessToken).catch(() => undefined);
+    }
+  };
+
   useEffect(() => {
-    let active = true;
-    let unsubscribe: () => void = () => undefined;
-    void createDevelopmentSession(testUsername)
-      .then(async (session) => {
-        const loaded = await loadWorkspace(session.accessToken);
-        if (!active) return;
-        setToken(session.accessToken);
-        setWorkspace(loaded);
-        setOnline(true);
-        setConnectionDetail("Сервер подключён");
-        unsubscribe = subscribeToWorkspaceEvents(session.accessToken, () => {
-          void refreshWorkspace(session.accessToken);
+    if (session === undefined) return;
+    const refreshAfter = Math.max(60_000, (session.expiresIn - 60) * 1_000);
+    const timer = window.setTimeout(() => {
+      void refreshAuthentication(session.refreshToken)
+        .then(async (renewed) => {
+          await refreshWorkspace(renewed.accessToken);
+          setSession(renewed);
+        })
+        .catch(() => {
+          setSession(undefined);
+          setAuthError("Сессия завершена. Войдите снова.");
         });
-      })
-      .catch(() => {
-        if (!active) return;
-        setToken(undefined);
-        setOnline(false);
-        setWorkspace(initialWorkspace);
-        setConnectionDetail("Демонстрационный режим");
-      });
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [refreshWorkspace, testUsername]);
+    }, refreshAfter);
+    return () => window.clearTimeout(timer);
+  }, [refreshWorkspace, session]);
+
+  useEffect(() => {
+    if (session === undefined) return;
+    return subscribeToWorkspaceEvents(session.accessToken, () => {
+      void refreshWorkspace(session.accessToken);
+    });
+  }, [refreshWorkspace, session]);
 
   const reportError = (error: unknown) => {
     setConnectionDetail(error instanceof Error ? error.message : "Ошибка операции");
   };
 
   const handleSendMessage = async (chatId: string, body: string) => {
-    if (token === undefined) {
-      const localMessage: ChatMessage = {
-        id: `local-${workspace.messages.length + 1}`,
-        chatId,
-        authorId: workspace.currentUser.id,
-        body,
-        time: new Intl.DateTimeFormat("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }).format(new Date()),
-        own: true,
-      };
-      setWorkspace((current) => ({
-        ...current,
-        messages: [...current.messages, localMessage],
-      }));
-      return;
-    }
+    if (session === undefined) return;
     try {
-      const message = await sendWorkspaceMessage(token, chatId, body);
+      const message = await sendWorkspaceMessage(session.accessToken, chatId, body);
       setWorkspace((current) =>
         current.messages.some((item) => item.id === message.id)
           ? current
@@ -173,23 +228,9 @@ export function App() {
   };
 
   const handleCreateTask = async (title: string) => {
-    if (token === undefined) {
-      const localTask: WorkspaceTask = {
-        id: `local-task-${workspace.tasks.length + 1}`,
-        title,
-        project: "Без проекта",
-        assigneeId: workspace.currentUser.id,
-        dueLabel: "Срок не указан",
-        status: "new",
-        priority: "normal",
-        checklistDone: 0,
-        checklistTotal: 0,
-      };
-      setWorkspace((current) => ({ ...current, tasks: [localTask, ...current.tasks] }));
-      return localTask;
-    }
+    if (session === undefined) return undefined;
     try {
-      const task = await createWorkspaceTask(token, {
+      const task = await createWorkspaceTask(session.accessToken, {
         title,
         assigneeId: workspace.currentUser.id,
       });
@@ -202,15 +243,9 @@ export function App() {
   };
 
   const handleTaskStatus = async (taskId: string, status: TaskStatus) => {
-    if (token === undefined) {
-      setWorkspace((current) => ({
-        ...current,
-        tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, status } : task)),
-      }));
-      return;
-    }
+    if (session === undefined) return;
     try {
-      const task = await changeWorkspaceTaskStatus(token, taskId, status);
+      const task = await changeWorkspaceTaskStatus(session.accessToken, taskId, status);
       setWorkspace((current) => ({
         ...current,
         tasks: current.tasks.map((item) => (item.id === task.id ? task : item)),
@@ -221,15 +256,15 @@ export function App() {
   };
 
   const handleSaveWorkflow = async (workflow: WorkflowDefinition) => {
-    if (token === undefined) return;
-    const saved = await saveWorkspaceWorkflow(token, workflow);
+    if (session === undefined) return;
+    const saved = await saveWorkspaceWorkflow(session.accessToken, workflow);
     setWorkspace((current) => ({ ...current, workflow: saved }));
   };
 
   const handleCreateApproval = async (title: string, amount: number) => {
-    if (token === undefined) return undefined;
+    if (session === undefined) return undefined;
     try {
-      const request = await createWorkspaceApproval(token, {
+      const request = await createWorkspaceApproval(session.accessToken, {
         title,
         amount,
         currency: "UZS",
@@ -247,9 +282,9 @@ export function App() {
     requestId: string,
     action: "approve" | "reject" | "return" | "resubmit",
   ) => {
-    if (token === undefined) return;
+    if (session === undefined) return;
     try {
-      const request = await actOnWorkspaceApproval(token, requestId, action);
+      const request = await actOnWorkspaceApproval(session.accessToken, requestId, action);
       setWorkspace((current) => ({
         ...current,
         requests: current.requests.map((item) => (item.id === request.id ? request : item)),
@@ -258,6 +293,20 @@ export function App() {
       reportError(error);
     }
   };
+
+  if (session === undefined) {
+    return (
+      <FluentProvider theme={webLightTheme} className="app-provider">
+        <LoginView
+          busy={authBusy}
+          error={authError}
+          onLogin={handleLogin}
+          onAcceptInvitation={handleAcceptInvitation}
+          onCompletePasswordReset={handleCompletePasswordReset}
+        />
+      </FluentProvider>
+    );
+  }
 
   return (
     <FluentProvider theme={webLightTheme} className="app-provider">
@@ -292,7 +341,12 @@ export function App() {
               </button>
             </Tooltip>
             <Tooltip content="Настройки" relationship="label" positioning="after">
-              <button className="rail-action" type="button" aria-label="Настройки">
+              <button
+                className="rail-action"
+                type="button"
+                aria-label="Настройки"
+                onClick={() => setAccountOpen(true)}
+              >
                 <Settings24Regular />
               </button>
             </Tooltip>
@@ -304,9 +358,7 @@ export function App() {
           <header className="global-bar">
             <div className="global-brand">
               <strong>Yuksalish Workspace</strong>
-              <span className={`connection-state ${online ? "online" : ""}`}>
-                {connectionDetail}
-              </span>
+              <span className="connection-state online">{connectionDetail}</span>
             </div>
             <Input
               aria-label="Глобальный поиск"
@@ -314,22 +366,14 @@ export function App() {
               contentBefore={<Search24Regular />}
               placeholder="Найти сообщение, задачу или заявку"
             />
-            {online ? (
-              <label className="test-user-select">
-                <span>Тестовый вход</span>
-                <select
-                  aria-label="Тестовый пользователь"
-                  value={testUsername}
-                  onChange={(event) => setTestUsername(event.target.value)}
-                >
-                  <option value="aziza">Азиза</option>
-                  <option value="baxtiyor">Бахтиёр</option>
-                  <option value="dilshod">Дилшод</option>
-                  <option value="malika">Малика</option>
-                </select>
-              </label>
-            ) : null}
-            <Button appearance="subtle">Помощь</Button>
+            <button className="account-trigger" type="button" onClick={() => setAccountOpen(true)}>
+              <Avatar name={workspace.currentUser.name} size={28} color="colorful" />
+              <span>
+                <strong>{workspace.currentUser.name}</strong>
+                <small>{workspace.currentUser.jobTitle ?? workspace.currentUser.role}</small>
+              </span>
+            </button>
+            <Button appearance="subtle" onClick={() => void handleLogout()}>Выйти</Button>
           </header>
 
           <main className="app-content">
@@ -365,6 +409,14 @@ export function App() {
           </main>
         </div>
       </div>
+      {accountOpen ? (
+        <AccountPanel
+          token={session.accessToken}
+          user={workspace.currentUser}
+          onClose={() => setAccountOpen(false)}
+          onLogout={() => void handleLogout()}
+        />
+      ) : null}
     </FluentProvider>
   );
 }
