@@ -6,6 +6,7 @@ import type {
   CalendarEvent,
   CalendarEventInput,
   ChatMessage,
+  MessageOptions,
   FeedPost,
   NotificationPreferences,
   ProjectInput,
@@ -51,6 +52,7 @@ import {
 import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
+import type { ChatActions } from "./ChatManagement";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { EmployeesView } from "./EmployeesView";
 import { FeedView } from "./FeedView";
@@ -92,6 +94,14 @@ import {
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
+  createWorkspaceChat,
+  updateWorkspaceChat,
+  addWorkspaceChatMembers,
+  setWorkspaceChatMember,
+  removeWorkspaceChatMember,
+  transferWorkspaceChatOwner,
+  editWorkspaceMessage,
+  deleteWorkspaceMessage,
   setWorkspaceFeedLike,
   setWorkspaceTaskCycle,
   setWorkspaceTaskDependency,
@@ -417,16 +427,20 @@ export function App() {
     }
   };
 
-  const handleSendMessage = async (chatId: string, body: string, files: readonly File[]) => {
+  const handleSendMessage = async (chatId: string, body: string, files: readonly File[], options: MessageOptions) => {
     if (session === undefined) return undefined;
     try {
-      const message = await sendWorkspaceMessage(session.accessToken, chatId, body);
+      const message = await sendWorkspaceMessage(session.accessToken, chatId, body, options);
       setWorkspace((current) =>
         current.messages.some((item) => item.id === message.id)
           ? current
           : { ...current, messages: [...current.messages, message] },
       );
-      await uploadFiles("message", message.id, files);
+      try {
+        await uploadFiles("message", message.id, files);
+      } catch (error) {
+        reportError(new Error(`Сообщение отправлено, но часть файлов не загрузилась: ${error instanceof Error ? error.message : "ошибка загрузки"}`));
+      }
       return message;
     } catch (error) {
       reportError(error);
@@ -445,6 +459,29 @@ export function App() {
     } catch (error) {
       reportError(error);
     }
+  };
+
+  const messengerMutation = async <T,>(operation: (token: string) => Promise<T>): Promise<T> => {
+    if (!session) throw new Error("Войдите в Workspace");
+    const result = await operation(session.accessToken);
+    try {
+      await refreshWorkspace(session.accessToken);
+    } catch {
+      reportError(new Error("Изменения сохранены. Не удалось обновить экран — проверьте подключение."));
+    }
+    return result;
+  };
+  const chatActions: ChatActions = {
+    create: async (input) => {
+      const chat = await messengerMutation((token) => createWorkspaceChat(token, input));
+      setWorkspace((current) => ({ ...current, chats: [chat, ...current.chats.filter((item) => item.id !== chat.id)] }));
+      return chat;
+    },
+    update: (id, title, description) => messengerMutation((token) => updateWorkspaceChat(token, id, title, description)),
+    add: (id, ids) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids)),
+    setMember: (id, member) => messengerMutation((token) => setWorkspaceChatMember(token, id, member)),
+    remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId)),
+    transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
   };
 
   const handleCreateTask = async (title: string) => {
@@ -1067,6 +1104,10 @@ export function App() {
                 attachments={workspace.attachments}
                 people={workspace.people}
                 onSendMessage={handleSendMessage}
+                currentUserId={workspace.currentUser.id}
+                chatActions={chatActions}
+                onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
+                onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onDownloadAttachment={handleDownloadAttachment}
                 onMarkRead={handleMarkChatRead}

@@ -52,13 +52,17 @@ def _translate(error: AuthServiceError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.detail)
 
 
-def _response(result: AuthResult) -> AuthenticationResponse:
-    return AuthenticationResponse(
+async def _response(connection: AsyncConnection, result: AuthResult) -> AuthenticationResponse:
+    response = AuthenticationResponse(
         access_token=result.access_token,
         refresh_token=result.refresh_token,
         expires_in=result.expires_in,
         user=person_from_record(result.user),
     )
+    # Request-scoped yield dependencies finalize after the HTTP response is sent.
+    # Make the new/rotated session visible before a client can use its token.
+    await connection.commit()
+    return response
 
 
 @router.post("/development-session", response_model=SessionResponse)
@@ -86,7 +90,8 @@ async def login(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> AuthenticationResponse:
     try:
-        return _response(
+        return await _response(
+            connection,
             await login_with_password(
                 connection,
                 payload.username,
@@ -94,7 +99,7 @@ async def login(
                 payload.totp_code,
                 payload.device_label,
                 request.app.state.settings,
-            )
+            ),
         )
     except AuthServiceError as error:
         raise _translate(error) from error
@@ -107,8 +112,9 @@ async def refresh(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> AuthenticationResponse:
     try:
-        return _response(
-            await refresh_session(connection, payload.refresh_token, request.app.state.settings)
+        return await _response(
+            connection,
+            await refresh_session(connection, payload.refresh_token, request.app.state.settings),
         )
     except AuthServiceError as error:
         raise _translate(error) from error
@@ -153,14 +159,15 @@ async def activate_invitation(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> AuthenticationResponse:
     try:
-        return _response(
+        return await _response(
+            connection,
             await accept_invitation(
                 connection,
                 payload.invite_token,
                 payload.password,
                 payload.device_label,
                 request.app.state.settings,
-            )
+            ),
         )
     except AuthServiceError as error:
         raise _translate(error) from error
@@ -198,7 +205,7 @@ async def reset_password(
         )
     except AuthServiceError as error:
         raise _translate(error) from error
-    return _response(result)
+    return await _response(connection, result)
 
 
 @router.get("/totp", response_model=TotpStatusResponse)

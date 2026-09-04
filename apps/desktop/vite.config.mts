@@ -29,6 +29,8 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    // Multi-step Fluent UI scenarios can exceed 5s on Windows while packaging runs.
+    testTimeout: 10000,
     setupFiles: "./src/renderer/test-setup.ts",
     server: {
       deps: {

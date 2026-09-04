@@ -1,5 +1,6 @@
 import type {
   ChatMessage,
+  ChatPermissions,
   ChatSummary,
   WorkspacePerson,
   WorkspaceTask,
@@ -48,6 +49,13 @@ export const people: readonly WorkspacePerson[] = [
   },
 ];
 
+const memberPermissions: ChatPermissions = {
+  sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false,
+};
+const ownerPermissions: ChatPermissions = {
+  sendMessages: true, uploadFiles: true, inviteMembers: true, manageMembers: true, editInfo: true,
+};
+
 export const initialChats: readonly ChatSummary[] = [
   {
     id: "finance",
@@ -56,6 +64,10 @@ export const initialChats: readonly ChatSummary[] = [
     preview: "Азиза: Счёт проверен, можно запускать маршрут",
     time: "11:42",
     unread: 3,
+    description: "Рабочая группа финансового отдела",
+    ownerId: "aziza",
+    permissions: ownerPermissions,
+    members: people.map((person) => ({ userId: person.id, role: person.id === "aziza" ? "owner" : "member", permissions: person.id === "aziza" ? ownerPermissions : memberPermissions })),
   },
   {
     id: "baxtiyor",
@@ -64,9 +76,15 @@ export const initialChats: readonly ChatSummary[] = [
     preview: "Возьму задачу в работу сегодня",
     time: "10:18",
     unread: 0,
+    description: "",
+    permissions: memberPermissions,
+    members: people.slice(0, 2).map((person) => ({ userId: person.id, role: "member", permissions: memberPermissions })),
   },
   {
     id: "office",
+    description: "",
+    permissions: memberPermissions,
+    members: people.map((person) => ({ userId: person.id, role: "member", permissions: memberPermissions })),
     title: "Проект: новый офис",
     kind: "project",
     preview: "Дилшод прикрепил коммерческое предложение",
@@ -75,6 +93,9 @@ export const initialChats: readonly ChatSummary[] = [
   },
   {
     id: "payment-148",
+    description: "",
+    permissions: memberPermissions,
+    members: people.map((person) => ({ userId: person.id, role: "member", permissions: memberPermissions })),
     title: "Заявка №148: оргтехника",
     kind: "approval",
     preview: "Ожидает решения финансового менеджера",

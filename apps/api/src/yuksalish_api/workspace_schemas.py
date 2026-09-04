@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -39,6 +40,63 @@ class SessionResponse(ApiModel):
     user: PersonResponse
 
 
+class ChatPermissions(ApiModel):
+    send_messages: bool = True
+    upload_files: bool = True
+    invite_members: bool = False
+    manage_members: bool = False
+    edit_info: bool = False
+
+
+class ChatMemberResponse(ApiModel):
+    user_id: str
+    role: Literal["owner", "moderator", "member"]
+    permissions: ChatPermissions
+
+
+class CreateChatRequest(ApiModel):
+    kind: Literal["direct", "group"]
+    title: str = Field(default="", max_length=240)
+    description: str = Field(default="", max_length=4000)
+    member_ids: list[UUID] = Field(min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def validate_chat(self) -> "CreateChatRequest":
+        self.title = self.title.strip()
+        if len(set(self.member_ids)) != len(self.member_ids):
+            raise ValueError("Duplicate chat members")
+        if self.kind == "group" and not self.title:
+            raise ValueError("Group title is required")
+        if self.kind == "direct" and len(self.member_ids) != 1:
+            raise ValueError("Select exactly one colleague")
+        return self
+
+
+class UpdateChatRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=4000)
+
+    @field_validator("title")
+    @classmethod
+    def nonblank_title(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Group title is required")
+        return value.strip()
+
+
+class AddChatMembersRequest(ApiModel):
+    member_ids: list[UUID] = Field(min_length=1, max_length=200)
+
+
+class SetChatMemberRequest(ApiModel):
+    role: Literal["moderator", "member"]
+    permissions: ChatPermissions
+
+
+class TransferChatOwnerRequest(ApiModel):
+    user_id: UUID
+
+
 class ChatSummaryResponse(ApiModel):
     id: str
     title: str
@@ -46,6 +104,10 @@ class ChatSummaryResponse(ApiModel):
     preview: str
     time: str
     unread: int
+    description: str = ""
+    owner_id: str | None = None
+    members: list[ChatMemberResponse] = Field(default_factory=list)
+    permissions: ChatPermissions = Field(default_factory=ChatPermissions)
 
 
 class ChatMessageResponse(ApiModel):
@@ -56,6 +118,12 @@ class ChatMessageResponse(ApiModel):
     time: str
     created_at: datetime
     own: bool
+    reply_to_message_id: str | None = None
+    mention_user_ids: list[str] = Field(default_factory=list)
+    edited_at: datetime | None = None
+    deleted_at: datetime | None = None
+    revision: int = 1
+    can_edit: bool = False
 
 
 AttachmentOwnerType = Literal["message", "task", "approval_request"]
@@ -76,6 +144,8 @@ class AttachmentResponse(ApiModel):
 
 class SendMessageRequest(ApiModel):
     body: str = Field(min_length=1, max_length=20_000)
+    reply_to_message_id: UUID | None = None
+    mention_user_ids: list[UUID] = Field(default_factory=list, max_length=100)
 
     @field_validator("body")
     @classmethod
@@ -84,6 +154,14 @@ class SendMessageRequest(ApiModel):
         if not stripped:
             raise ValueError("Message must not be blank")
         return stripped
+
+
+class EditMessageRequest(SendMessageRequest):
+    expected_revision: int = Field(ge=1)
+
+
+class DeleteMessageRequest(ApiModel):
+    expected_revision: int = Field(ge=1)
 
 
 TaskStatus = Literal[

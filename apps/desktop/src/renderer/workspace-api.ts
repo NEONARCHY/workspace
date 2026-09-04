@@ -5,6 +5,10 @@ import type {
   CalendarEvent,
   CalendarEventInput,
   ChatMessage,
+  ChatMember,
+  ChatSummary,
+  CreateChatInput,
+  MessageOptions,
   DirectoryBootstrap,
   DirectoryEmployee,
   FeedPost,
@@ -243,12 +247,49 @@ export function sendWorkspaceMessage(
   token: string,
   chatId: string,
   body: string,
+  options?: MessageOptions,
 ): Promise<ChatMessage> {
   return apiRequest<ChatMessage>(
     `/chats/${chatId}/messages`,
-    { method: "POST", body: JSON.stringify({ body }) },
+    { method: "POST", body: JSON.stringify({ body, ...options }) },
     token,
   );
+}
+
+export function createWorkspaceChat(token: string, payload: CreateChatInput): Promise<ChatSummary> {
+  return apiRequest("/chats", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function updateWorkspaceChat(token: string, id: string, title: string, description: string): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title, description }) }, token);
+}
+
+export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[]): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds }) }, token);
+}
+
+export function setWorkspaceChatMember(token: string, id: string, member: ChatMember): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/members/${member.userId}`, { method: "PUT", body: JSON.stringify(member) }, token);
+}
+
+export function removeWorkspaceChatMember(token: string, id: string, userId: string): Promise<void> {
+  return apiRequest(`/chats/${id}/members/${userId}`, { method: "DELETE" }, token);
+}
+
+export function transferWorkspaceChatOwner(token: string, id: string, userId: string): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/owner`, { method: "POST", body: JSON.stringify({ userId }) }, token);
+}
+
+export function editWorkspaceMessage(token: string, message: ChatMessage, body: string): Promise<ChatMessage> {
+  return apiRequest(`/messages/${message.id}`, {
+    method: "PATCH", body: JSON.stringify({ body, expectedRevision: message.revision ?? 1, mentionUserIds: message.mentionUserIds ?? [] }),
+  }, token);
+}
+
+export function deleteWorkspaceMessage(token: string, message: ChatMessage): Promise<ChatMessage> {
+  return apiRequest(`/messages/${message.id}`, {
+    method: "DELETE", body: JSON.stringify({ expectedRevision: message.revision ?? 1 }),
+  }, token);
 }
 
 export function markWorkspaceChatRead(token: string, chatId: string): Promise<void> {

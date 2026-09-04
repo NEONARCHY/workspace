@@ -25,7 +25,7 @@ async def test_live_health_and_security_headers() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "yuksalish-api",
-        "version": "0.11.0",
+        "version": "0.12.0",
         "environment": "test",
     }
     assert response.headers["x-content-type-options"] == "nosniff"

@@ -14,7 +14,7 @@ from .events import WorkspaceEventBus
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
 from .repository import materialize_due_notifications
-from .routers import authentication, directory, health, modules, workspace
+from .routers import authentication, directory, health, messenger, modules, workspace
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
 
@@ -98,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
+    application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     return application
 
 

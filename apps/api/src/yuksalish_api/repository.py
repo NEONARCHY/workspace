@@ -10,7 +10,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from . import messenger_service
 from .auth import AuthenticatedUser
+from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .tables import (
     approval_actions,
     approval_edges,
@@ -27,7 +29,6 @@ from .tables import (
     feed_posts,
     feed_reactions,
     message_receipts,
-    message_versions,
     messages,
     positions,
     project_stage_actions,
@@ -57,7 +58,6 @@ from .workspace_schemas import (
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
-    ChatSummaryResponse,
     CreateApprovalRequest,
     CreateCalendarEventRequest,
     CreateChecklistItemRequest,
@@ -144,13 +144,6 @@ TRIP_STATUS_LABELS = {
 }
 
 Record = Mapping[str, Any] | RowMapping
-
-
-class WorkspaceRepositoryError(RuntimeError):
-    def __init__(self, status_code: int, detail: str) -> None:
-        super().__init__(detail)
-        self.status_code = status_code
-        self.detail = detail
 
 
 def _initials(full_name: str) -> str:
@@ -1206,6 +1199,7 @@ async def _sync_notifications_for_user(
                     messages.c.id,
                     messages.c.chat_id,
                     messages.c.body,
+                    messages.c.mention_user_ids,
                     messages.c.created_at,
                     chats.c.title.label("chat_title"),
                     users.c.full_name.label("author_name"),
@@ -1230,13 +1224,15 @@ async def _sync_notifications_for_user(
         .all()
     )
     for message_row in unread_message_rows:
+        mentioned = str(current_user.id) in (message_row["mention_user_ids"] or [])
+        notice = "Упоминание в чате" if mentioned else "Новое сообщение"
         await _upsert_notification(
             connection,
             user_id=current_user.id,
             event_key=f"message:{message_row['id']}",
             kind="message",
-            priority="normal",
-            title=f"Новое сообщение · {message_row['chat_title'] or 'Чат'}",
+            priority="attention" if mentioned else "normal",
+            title=f"{notice} · {message_row['chat_title'] or message_row['author_name']}",
             body=f"{message_row['author_name']}: {message_row['body']}",
             section="messenger",
             entity_id=message_row["chat_id"],
@@ -1614,7 +1610,6 @@ async def load_workspace(
                 select(messages)
                 .where(
                     messages.c.chat_id.in_(accessible_chat_ids),
-                    messages.c.deleted_at.is_(None),
                 )
                 .order_by(messages.c.created_at)
             )
@@ -1622,50 +1617,14 @@ async def load_workspace(
         .mappings()
         .all()
     )
-    unread_rows = (
-        await connection.execute(
-            select(messages.c.chat_id, func.count(message_receipts.c.message_id))
-            .select_from(
-                message_receipts.join(
-                    messages,
-                    message_receipts.c.message_id == messages.c.id,
-                )
-            )
-            .where(
-                message_receipts.c.user_id == current_user.id,
-                message_receipts.c.read_at.is_(None),
-                messages.c.deleted_at.is_(None),
-                messages.c.chat_id.in_(accessible_chat_ids),
-            )
-            .group_by(messages.c.chat_id)
-        )
-    ).all()
-    unread_by_chat = {chat_id: int(count) for chat_id, count in unread_rows}
-    latest_by_chat: dict[UUID, RowMapping] = {}
-    for row in message_rows:
-        latest_by_chat[row["chat_id"]] = row
-    chat_responses = []
-    for row in chat_rows:
-        latest = latest_by_chat.get(row["id"])
-        chat_responses.append(
-            ChatSummaryResponse(
-                id=str(row["id"]),
-                title=row["title"] or "Чат",
-                kind=row["kind"],
-                preview=latest["body"] if latest is not None else "Сообщений пока нет",
-                time=_time_label(latest["created_at"] if latest is not None else row["created_at"]),
-                unread=unread_by_chat.get(row["id"], 0),
-            )
-        )
+    chat_responses = [
+        await messenger_service.chat_summary(connection, current_user, row["id"])
+        for row in chat_rows
+    ]
+    send_permissions = {chat.id: chat.permissions.send_messages for chat in chat_responses}
     message_responses = [
-        ChatMessageResponse(
-            id=str(row["id"]),
-            chat_id=str(row["chat_id"]),
-            author_id=str(row["author_user_id"]),
-            body=row["body"],
-            time=_time_label(row["created_at"]),
-            created_at=row["created_at"],
-            own=row["author_user_id"] == current_user.id,
+        messenger_service.message_response(
+            row, current_user, can_send=send_permissions.get(str(row["chat_id"]), False),
         )
         for row in message_rows
     ]
@@ -1769,7 +1728,7 @@ async def load_workspace(
     notification_preferences = await get_notification_preferences(connection, current_user)
 
     attachment_filters = []
-    message_ids = [row["id"] for row in message_rows]
+    message_ids = [row["id"] for row in message_rows if row["deleted_at"] is None]
     task_ids = [row["id"] for row in task_rows]
     if message_ids:
         attachment_filters.append(
@@ -1871,69 +1830,7 @@ async def send_message(
     chat_id: UUID,
     payload: SendMessageRequest,
 ) -> ChatMessageResponse:
-    membership = await connection.scalar(
-        select(func.count())
-        .select_from(chat_members)
-        .where(chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id)
-    )
-    if not membership:
-        raise WorkspaceRepositoryError(404, "Chat was not found")
-    message_id = uuid4()
-    created_at = datetime.now(UTC)
-    await connection.execute(
-        insert(messages).values(
-            id=message_id,
-            chat_id=chat_id,
-            author_user_id=current_user.id,
-            reply_to_message_id=None,
-            body=payload.body,
-            created_at=created_at,
-            edited_at=None,
-            deleted_at=None,
-        )
-    )
-    await connection.execute(
-        insert(message_versions).values(
-            message_id=message_id,
-            body=payload.body,
-            change_reason="initial",
-            created_at=created_at,
-        )
-    )
-    member_ids = (
-        (
-            await connection.execute(
-                select(chat_members.c.user_id).where(chat_members.c.chat_id == chat_id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    if member_ids:
-        await connection.execute(
-            insert(message_receipts),
-            [
-                {
-                    "message_id": message_id,
-                    "user_id": user_id,
-                    "delivered_at": created_at,
-                    "read_at": created_at if user_id == current_user.id else None,
-                }
-                for user_id in member_ids
-            ],
-        )
-    await connection.execute(
-        update(chats).where(chats.c.id == chat_id).values(updated_at=created_at)
-    )
-    return ChatMessageResponse(
-        id=str(message_id),
-        chat_id=str(chat_id),
-        author_id=str(current_user.id),
-        body=payload.body,
-        time=_time_label(created_at),
-        created_at=created_at,
-        own=True,
-    )
+    return await messenger_service.send_chat_message(connection, current_user, chat_id, payload)
 
 
 async def mark_chat_read(
@@ -1981,7 +1878,7 @@ async def search_messages(
     rows = (
         (
             await connection.execute(
-                select(messages)
+                select(messages, chat_members.c.member_role, chat_members.c.permissions)
                 .join(
                     chat_members,
                     and_(
@@ -2001,14 +1898,8 @@ async def search_messages(
         .all()
     )
     return [
-        ChatMessageResponse(
-            id=str(row["id"]),
-            chat_id=str(row["chat_id"]),
-            author_id=str(row["author_user_id"]),
-            body=row["body"],
-            time=_time_label(row["created_at"]),
-            created_at=row["created_at"],
-            own=row["author_user_id"] == current_user.id,
+        messenger_service.message_response(
+            row, current_user, can_send=messenger_service.member_permissions(row).send_messages,
         )
         for row in rows
     ]
@@ -3394,6 +3285,18 @@ async def validate_attachment_owner(
     write: bool,
 ) -> None:
     if owner_type == "message":
+        if write:
+            chat_id = await connection.scalar(
+                select(messages.c.chat_id).where(messages.c.id == owner_id)
+            )
+            if chat_id is None:
+                raise WorkspaceRepositoryError(404, "Message was not found")
+            _, member = await messenger_service.chat_access(
+                connection, current_user, chat_id, lock=True
+            )
+            permissions = messenger_service.member_permissions(member)
+            if not permissions.send_messages or not permissions.upload_files:
+                raise WorkspaceRepositoryError(403, "Нет права отправлять файлы в этой группе")
         row = (
             (
                 await connection.execute(

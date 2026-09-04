@@ -81,6 +81,32 @@ export interface WorkflowPosition {
   readonly name: string;
 }
 
+export interface ChatPermissions {
+  readonly sendMessages: boolean;
+  readonly uploadFiles: boolean;
+  readonly inviteMembers: boolean;
+  readonly manageMembers: boolean;
+  readonly editInfo: boolean;
+}
+
+export interface ChatMember {
+  readonly userId: string;
+  readonly role: "owner" | "moderator" | "member";
+  readonly permissions: ChatPermissions;
+}
+
+export interface CreateChatInput {
+  readonly kind: "direct" | "group";
+  readonly title: string;
+  readonly description: string;
+  readonly memberIds: readonly string[];
+}
+
+export interface MessageOptions {
+  readonly replyToMessageId?: string | null;
+  readonly mentionUserIds: readonly string[];
+}
+
 export interface ChatSummary {
   readonly id: string;
   readonly title: string;
@@ -88,6 +114,10 @@ export interface ChatSummary {
   readonly preview: string;
   readonly time: string;
   readonly unread: number;
+  readonly description: string;
+  readonly ownerId?: string | null;
+  readonly members: readonly ChatMember[];
+  readonly permissions: ChatPermissions;
 }
 
 export interface ChatMessage {
@@ -98,6 +128,12 @@ export interface ChatMessage {
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;
+  readonly replyToMessageId?: string | null;
+  readonly mentionUserIds?: readonly string[];
+  readonly editedAt?: string | null;
+  readonly deletedAt?: string | null;
+  readonly revision?: number;
+  readonly canEdit?: boolean;
 }
 
 export interface FeedComment {

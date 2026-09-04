@@ -4,7 +4,7 @@ from itertools import pairwise
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from pydantic import SecretStr
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -414,6 +414,7 @@ async def seed_demo_data(
                         updated_at=now,
                     )
                 )
+        existing_chat_ids = set((await connection.execute(select(chats.c.id))).scalars())
         await _insert_missing(
             connection,
             chats,
@@ -464,15 +465,24 @@ async def seed_demo_data(
             {
                 "chat_id": chat_id,
                 "user_id": user_id,
-                "member_role": "member",
+                "member_role": (
+                    "owner" if chat_id == chat_ids["finance"] and user_id == person_ids["aziza"]
+                    else "member"
+                ),
                 "joined_at": now,
                 "muted_until": None,
             }
             for chat_id in chat_ids.values()
+            if chat_id not in existing_chat_ids
             for user_id in person_ids.values()
+            if chat_id != chat_ids["baxtiyor"]
+            or user_id in {person_ids["aziza"], person_ids["baxtiyor"]}
         ]
         await _insert_missing(connection, chat_members, member_rows)
         await _insert_missing(connection, messages, message_rows)
+        versioned_message_ids = set(
+            (await connection.execute(select(message_versions.c.message_id))).scalars()
+        )
         await _insert_missing(
             connection,
             message_versions,
@@ -481,9 +491,11 @@ async def seed_demo_data(
                     "message_id": row["id"],
                     "body": row["body"],
                     "change_reason": "initial",
+                    "actor_user_id": row["author_user_id"],
                     "created_at": row["created_at"],
                 }
                 for row in message_rows
+                if row["id"] not in versioned_message_ids
             ],
         )
         await _insert_missing(
@@ -504,6 +516,9 @@ async def seed_demo_data(
                 }
                 for row in message_rows
                 for user_id in person_ids.values()
+                if row["chat_id"] not in existing_chat_ids
+                and (row["chat_id"] != chat_ids["baxtiyor"]
+                     or user_id in {person_ids["aziza"], person_ids["baxtiyor"]})
             ],
         )
         feed_post_ids = {

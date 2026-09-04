@@ -221,6 +221,7 @@ async def post_message(
         result = await send_message(connection, current_user, chat_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+    await connection.commit()
     await _event_bus(request).publish({"type": "message.created", "entityId": result.id})
     return result
 
