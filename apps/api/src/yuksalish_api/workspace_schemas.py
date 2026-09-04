@@ -592,6 +592,112 @@ class TripActionRequest(ApiModel):
     comment: str = Field(default="", max_length=4000)
 
 
+class FeedCommentResponse(ApiModel):
+    id: str
+    author_user_id: str
+    body: str
+    created_at: datetime
+
+
+class FeedPostResponse(ApiModel):
+    id: str
+    author_user_id: str
+    title: str
+    body: str
+    is_pinned: bool
+    liked_by_current_user: bool
+    like_count: int
+    can_edit: bool
+    can_pin: bool
+    comments: list[FeedCommentResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateFeedPostRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    body: str = Field(min_length=1, max_length=20_000)
+
+    @field_validator("title", "body")
+    @classmethod
+    def feed_text_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Feed post must not be blank")
+        return stripped
+
+
+class CreateFeedCommentRequest(ApiModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("body")
+    @classmethod
+    def feed_comment_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Feed comment must not be blank")
+        return stripped
+
+
+class PinFeedPostRequest(ApiModel):
+    is_pinned: bool
+
+
+CalendarEventType = Literal["meeting", "deadline", "trip", "task", "general"]
+
+
+class CalendarEventResponse(ApiModel):
+    id: str
+    organizer_user_id: str
+    title: str
+    description: str
+    event_type: CalendarEventType
+    starts_at: datetime
+    ends_at: datetime
+    all_day: bool
+    location: str
+    status: Literal["scheduled", "cancelled"]
+    attendee_ids: list[str]
+    can_edit: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CalendarEventWriteRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=20_000)
+    event_type: CalendarEventType = "general"
+    starts_at: datetime
+    ends_at: datetime
+    all_day: bool = False
+    location: str = Field(default="", max_length=240)
+    attendee_ids: list[str] = Field(default_factory=list, max_length=100)
+
+    @field_validator("title")
+    @classmethod
+    def event_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Calendar event title must not be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_event_period(self) -> "CalendarEventWriteRequest":
+        if self.ends_at <= self.starts_at:
+            raise ValueError("Calendar event end must be after start")
+        if len(set(self.attendee_ids)) != len(self.attendee_ids):
+            raise ValueError("Calendar attendees must be unique")
+        return self
+
+
+class CreateCalendarEventRequest(CalendarEventWriteRequest):
+    pass
+
+
+class UpdateCalendarEventRequest(CalendarEventWriteRequest):
+    pass
+
+
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
     can_create_payment_requests: bool
@@ -603,5 +709,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     requests: list[ApprovalRequestResponse]
     projects: list[ProjectResponse]
     trip_requests: list[TripRequestResponse]
+    feed_posts: list[FeedPostResponse]
+    calendar_events: list[CalendarEventResponse]
     attachments: list[AttachmentResponse]
     workflow: WorkflowResponse

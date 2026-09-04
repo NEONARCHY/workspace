@@ -3,7 +3,10 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type {
   ApprovalRequestSummary,
   AuthenticationSession,
+  CalendarEvent,
+  CalendarEventInput,
   ChatMessage,
+  FeedPost,
   ProjectInput,
   ProjectStage,
   TaskStatus,
@@ -45,8 +48,10 @@ import {
 
 import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
+import { CalendarView } from "./CalendarView";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { EmployeesView } from "./EmployeesView";
+import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
 import { MessengerView } from "./MessengerView";
 import { ProjectsView } from "./ProjectsView";
@@ -60,8 +65,11 @@ import {
   addWorkspaceTaskComment,
   changeWorkspaceTaskStatus,
   changeWorkspaceProjectStage,
+  cancelWorkspaceCalendarEvent,
   completePasswordReset,
   createWorkspaceApproval,
+  createWorkspaceCalendarEvent,
+  createWorkspaceFeedPost,
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
@@ -70,22 +78,27 @@ import {
   loadWorkspace,
   login,
   logout,
+  markWorkspaceChatRead,
+  pinWorkspaceFeedPost,
   refreshAuthentication,
   removeWorkspaceTaskDependency,
   removeWorkspaceTaskParticipant,
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
+  setWorkspaceFeedLike,
   setWorkspaceTaskCycle,
   setWorkspaceTaskDependency,
   setWorkspaceTaskParticipant,
   subscribeToWorkspaceEvents,
   updateWorkspaceApproval,
+  updateWorkspaceCalendarEvent,
   updateWorkspaceProject,
   updateWorkspaceTask,
   updateWorkspaceTripRequest,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
+  addWorkspaceFeedComment,
   type PaymentRequestInput,
 } from "./workspace-api";
 
@@ -106,6 +119,8 @@ interface WorkspaceState {
   readonly requests: readonly ApprovalRequestSummary[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
+  readonly feedPosts: readonly FeedPost[];
+  readonly calendarEvents: readonly CalendarEvent[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
 }
@@ -121,6 +136,8 @@ const initialWorkspace: WorkspaceState = {
   requests: [],
   projects: [],
   tripRequests: [],
+  feedPosts: [],
+  calendarEvents: [],
   attachments: [],
 };
 
@@ -340,6 +357,19 @@ export function App() {
     } catch (error) {
       reportError(error);
       return undefined;
+    }
+  };
+
+  const handleMarkChatRead = async (chatId: string) => {
+    if (session === undefined) return;
+    try {
+      await markWorkspaceChatRead(session.accessToken, chatId);
+      setWorkspace((current) => ({
+        ...current,
+        chats: current.chats.map((chat) => chat.id === chatId ? { ...chat, unread: 0 } : chat),
+      }));
+    } catch (error) {
+      reportError(error);
     }
   };
 
@@ -688,6 +718,66 @@ export function App() {
     runTripMutation((token) =>
       actOnWorkspaceTripRequest(token, tripRequest.id, action, comment));
 
+  const mergeFeedPost = (post: FeedPost) => {
+    setWorkspace((current) => ({
+      ...current,
+      feedPosts: current.feedPosts.some((item) => item.id === post.id)
+        ? current.feedPosts.map((item) => item.id === post.id ? post : item)
+        : [post, ...current.feedPosts],
+    }));
+    return post;
+  };
+
+  const runFeedMutation = async (
+    mutation: (token: string) => Promise<FeedPost>,
+  ): Promise<FeedPost | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeFeedPost(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateFeedPost = (title: string, body: string) =>
+    runFeedMutation((token) => createWorkspaceFeedPost(token, title, body));
+  const handleFeedComment = (post: FeedPost, body: string) =>
+    runFeedMutation((token) => addWorkspaceFeedComment(token, post.id, body));
+  const handleFeedLike = (post: FeedPost, liked: boolean) =>
+    runFeedMutation((token) => setWorkspaceFeedLike(token, post.id, liked));
+  const handleFeedPin = (post: FeedPost, pinned: boolean) =>
+    runFeedMutation((token) => pinWorkspaceFeedPost(token, post.id, pinned));
+
+  const mergeCalendarEvent = (event: CalendarEvent) => {
+    setWorkspace((current) => ({
+      ...current,
+      calendarEvents: current.calendarEvents.some((item) => item.id === event.id)
+        ? current.calendarEvents.map((item) => item.id === event.id ? event : item)
+        : [...current.calendarEvents, event],
+    }));
+    return event;
+  };
+
+  const runCalendarMutation = async (
+    mutation: (token: string) => Promise<CalendarEvent>,
+  ): Promise<CalendarEvent | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeCalendarEvent(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateCalendarEvent = (payload: CalendarEventInput) =>
+    runCalendarMutation((token) => createWorkspaceCalendarEvent(token, payload));
+  const handleUpdateCalendarEvent = (event: CalendarEvent, payload: CalendarEventInput) =>
+    runCalendarMutation((token) => updateWorkspaceCalendarEvent(token, event.id, payload));
+  const handleCancelCalendarEvent = (event: CalendarEvent) =>
+    runCalendarMutation((token) => cancelWorkspaceCalendarEvent(token, event.id));
+
   if (session === undefined) {
     return (
       <FluentProvider theme={webLightTheme} className="app-provider">
@@ -801,6 +891,7 @@ export function App() {
                 onSendMessage={handleSendMessage}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onDownloadAttachment={handleDownloadAttachment}
+                onMarkRead={handleMarkChatRead}
               />
             ) : null}
             {activeSection === "tasks" ? (
@@ -847,11 +938,13 @@ export function App() {
               />
             ) : null}
             {activeSection === "feed" ? (
-              <ModulePreview
-                icon={<News24Regular />}
-                title="Лента"
-                evidence="Текущий webhook не разрешает безопасно прочитать структуру живой ленты. Потребуется отдельный read‑only доступ перед фиксацией точного поведения."
-                packageLabel="Пакет BP‑8 · Лента, календарь и коммуникации"
+              <FeedView
+                posts={workspace.feedPosts}
+                people={workspace.people}
+                onCreate={handleCreateFeedPost}
+                onComment={handleFeedComment}
+                onLike={handleFeedLike}
+                onPin={handleFeedPin}
               />
             ) : null}
             {activeSection === "projects" ? (
@@ -875,11 +968,13 @@ export function App() {
               />
             ) : null}
             {activeSection === "calendar" ? (
-              <ModulePreview
-                icon={<CalendarLtr24Regular />}
-                title="Календарь"
-                evidence="Webhook подтверждает один календарный раздел текущего пользователя. Содержимое событий не выгружалось."
-                packageLabel="Пакет BP‑8 · Лента, календарь и коммуникации"
+              <CalendarView
+                events={workspace.calendarEvents}
+                people={workspace.people}
+                currentUserId={workspace.currentUser.id}
+                onCreate={handleCreateCalendarEvent}
+                onUpdate={handleUpdateCalendarEvent}
+                onCancel={handleCancelCalendarEvent}
               />
             ) : null}
             {activeSection === "employees" ? (

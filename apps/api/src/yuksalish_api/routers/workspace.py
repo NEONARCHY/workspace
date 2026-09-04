@@ -30,27 +30,36 @@ from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
     act_on_trip_request,
+    add_feed_comment,
     add_task_checklist_item,
     add_task_comment,
+    cancel_calendar_event,
     change_project_stage,
     change_task_status,
     create_approval_request,
     create_attachment,
+    create_calendar_event,
+    create_feed_post,
     create_project,
     create_task,
     create_trip_request,
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
+    mark_chat_read,
+    pin_feed_post,
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
     save_workflow,
+    search_messages,
     send_message,
+    set_feed_like,
     set_task_cycle,
     set_task_dependency,
     set_task_participant,
     update_approval_request,
+    update_calendar_event,
     update_project,
     update_task,
     update_task_checklist_item,
@@ -62,15 +71,21 @@ from yuksalish_api.workspace_schemas import (
     ApprovalRequestResponse,
     AttachmentOwnerType,
     AttachmentResponse,
+    CalendarEventResponse,
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     CreateApprovalRequest,
+    CreateCalendarEventRequest,
     CreateChecklistItemRequest,
+    CreateFeedCommentRequest,
+    CreateFeedPostRequest,
     CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    FeedPostResponse,
+    PinFeedPostRequest,
     ProjectResponse,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -81,6 +96,7 @@ from yuksalish_api.workspace_schemas import (
     TripActionRequest,
     TripRequestResponse,
     UpdateApprovalRequest,
+    UpdateCalendarEventRequest,
     UpdateChecklistItemRequest,
     UpdateProjectRequest,
     UpdateTaskRequest,
@@ -140,6 +156,148 @@ async def post_message(
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "message.created", "entityId": result.id})
+    return result
+
+
+@router.post("/chats/{chat_id}/read", status_code=204)
+async def post_chat_read(
+    chat_id: UUID,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await mark_chat_read(connection, current_user, chat_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    return Response(status_code=204)
+
+
+@router.get("/messages/search", response_model=list[ChatMessageResponse])
+async def get_message_search(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    q: Annotated[str, Query(min_length=1, max_length=240)],
+) -> list[ChatMessageResponse]:
+    return await search_messages(connection, current_user, q)
+
+
+@router.post("/feed/posts", response_model=FeedPostResponse, status_code=201)
+async def post_feed_post(
+    payload: CreateFeedPostRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    result = await create_feed_post(connection, current_user, payload)
+    await _event_bus(request).publish({"type": "feed.created", "entityId": result.id})
+    return result
+
+
+@router.post("/feed/posts/{post_id}/comments", response_model=FeedPostResponse, status_code=201)
+async def post_feed_comment(
+    post_id: UUID,
+    payload: CreateFeedCommentRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await add_feed_comment(connection, current_user, post_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/feed/posts/{post_id}/like", response_model=FeedPostResponse)
+async def put_feed_like(
+    post_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await set_feed_like(connection, current_user, post_id, True)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.delete("/feed/posts/{post_id}/like", response_model=FeedPostResponse)
+async def delete_feed_like(
+    post_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await set_feed_like(connection, current_user, post_id, False)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.patch("/feed/posts/{post_id}/pin", response_model=FeedPostResponse)
+async def patch_feed_pin(
+    post_id: UUID,
+    payload: PinFeedPostRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await pin_feed_post(connection, current_user, post_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/calendar/events", response_model=CalendarEventResponse, status_code=201)
+async def post_calendar_event(
+    payload: CreateCalendarEventRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> CalendarEventResponse:
+    try:
+        result = await create_calendar_event(connection, current_user, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "calendar.created", "entityId": result.id})
+    return result
+
+
+@router.patch("/calendar/events/{event_id}", response_model=CalendarEventResponse)
+async def patch_calendar_event(
+    event_id: UUID,
+    payload: UpdateCalendarEventRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> CalendarEventResponse:
+    try:
+        result = await update_calendar_event(connection, current_user, event_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "calendar.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/calendar/events/{event_id}/cancel", response_model=CalendarEventResponse)
+async def post_calendar_cancel(
+    event_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> CalendarEventResponse:
+    try:
+        result = await cancel_calendar_event(connection, current_user, event_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "calendar.updated", "entityId": result.id})
     return result
 
 

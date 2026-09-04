@@ -16,9 +16,15 @@ from .tables import (
     approval_request_versions,
     approval_requests,
     approval_templates,
+    calendar_event_attendees,
+    calendar_events,
     chat_members,
     chats,
     departments,
+    feed_comments,
+    feed_posts,
+    feed_reactions,
+    message_receipts,
     message_versions,
     messages,
     positions,
@@ -478,6 +484,147 @@ async def seed_demo_data(
                     "created_at": row["created_at"],
                 }
                 for row in message_rows
+            ],
+        )
+        await _insert_missing(
+            connection,
+            message_receipts,
+            [
+                {
+                    "message_id": row["id"],
+                    "user_id": user_id,
+                    "delivered_at": row["created_at"],
+                    "read_at": (
+                        None
+                        if user_id == person_ids["aziza"]
+                        and row["chat_id"] == chat_ids["finance"]
+                        and row["author_user_id"] != user_id
+                        else row["created_at"]
+                    ),
+                }
+                for row in message_rows
+                for user_id in person_ids.values()
+            ],
+        )
+        feed_post_ids = {
+            "launch": demo_uuid("feed-post/workspace-launch"),
+            "office": demo_uuid("feed-post/office-update"),
+        }
+        await _insert_missing(
+            connection,
+            feed_posts,
+            [
+                {
+                    "id": feed_post_ids["launch"],
+                    "author_user_id": person_ids["baxtiyor"],
+                    "title": "Рабочая среда Yuksalish",
+                    "body": (
+                        "Задачи, заявки, проекты и рабочие обсуждения теперь собраны "
+                        "в одном защищённом приложении."
+                    ),
+                    "is_pinned": True,
+                    "created_at": now - timedelta(days=1),
+                    "updated_at": now - timedelta(hours=2),
+                },
+                {
+                    "id": feed_post_ids["office"],
+                    "author_user_id": person_ids["aziza"],
+                    "title": "Статус проекта нового офиса",
+                    "body": (
+                        "Проверка бюджета завершена. Команда переходит к согласованию "
+                        "графика поставок."
+                    ),
+                    "is_pinned": False,
+                    "created_at": now - timedelta(hours=5),
+                    "updated_at": now - timedelta(hours=4),
+                },
+            ],
+        )
+        await _insert_missing(
+            connection,
+            feed_comments,
+            [
+                {
+                    "id": demo_uuid("feed-comment/office/1"),
+                    "post_id": feed_post_ids["office"],
+                    "author_user_id": person_ids["dilshod"],
+                    "body": "Договор с поставщиком добавлю в задачу сегодня.",  # noqa: RUF001
+                    "created_at": now - timedelta(hours=4),
+                }
+            ],
+        )
+        await _insert_missing(
+            connection,
+            feed_reactions,
+            [
+                {
+                    "post_id": feed_post_ids["launch"],
+                    "user_id": person_ids["aziza"],
+                    "kind": "like",
+                    "created_at": now - timedelta(hours=2),
+                }
+            ],
+        )
+        calendar_event_ids = {
+            "planning": demo_uuid("calendar-event/weekly-planning"),
+            "deadline": demo_uuid("calendar-event/payment-deadline"),
+            "trip": demo_uuid("calendar-event/tashkent-trip"),
+        }
+        await _insert_missing(
+            connection,
+            calendar_events,
+            [
+                {
+                    "id": calendar_event_ids["planning"],
+                    "organizer_user_id": person_ids["baxtiyor"],
+                    "title": "Еженедельное планирование",
+                    "description": "Сверяем задачи, проекты и блокирующие вопросы.",
+                    "event_type": "meeting",
+                    "starts_at": now + timedelta(days=1),
+                    "ends_at": now + timedelta(days=1, hours=1),
+                    "all_day": False,
+                    "location": "Переговорная",
+                    "status": "scheduled",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                {
+                    "id": calendar_event_ids["deadline"],
+                    "organizer_user_id": person_ids["aziza"],
+                    "title": "Срок оплаты оборудования",
+                    "description": "Завершить маршрут заявки на оплату.",
+                    "event_type": "deadline",
+                    "starts_at": now + timedelta(days=3),
+                    "ends_at": now + timedelta(days=3, hours=1),
+                    "all_day": False,
+                    "location": "",
+                    "status": "scheduled",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+                {
+                    "id": calendar_event_ids["trip"],
+                    "organizer_user_id": person_ids["malika"],
+                    "title": "Командировка проектной команды",
+                    "description": "Рабочая встреча с региональной командой.",  # noqa: RUF001
+                    "event_type": "trip",
+                    "starts_at": now + timedelta(days=7),
+                    "ends_at": now + timedelta(days=9),
+                    "all_day": True,
+                    "location": "Самарканд",
+                    "status": "scheduled",
+                    "created_at": now,
+                    "updated_at": now,
+                },
+            ],
+        )
+        await _insert_missing(
+            connection,
+            calendar_event_attendees,
+            [
+                {"event_id": event_id, "user_id": user_id}
+                for event_id in calendar_event_ids.values()
+                for user_id in person_ids.values()
             ],
         )
         monthly_cycle_id = demo_uuid("task-cycle/monthly-budget")

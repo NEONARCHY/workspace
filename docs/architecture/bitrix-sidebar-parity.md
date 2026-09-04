@@ -149,7 +149,7 @@ The two unresolved IDs are not guessed. Before a production employee import, the
 | BP-5 | Bitrix-equivalent task list/card, filters, participants, checklist, comments, files, dependencies and cycles | BP-4 | Characterisation matrix against selected real tasks |
 | BP-6 | Payment request form, all 13 stages, decisions, correction loop, files and editable graph | BP-4, then task link from BP-5 | Golden requests complete the same routes and permissions |
 | BP-7 | Project list and trip approvals; functional slice delivered in alpha 0.8.0 | BP-4, BP-6 workflow rules | Project lifecycle and trip return/approval scenarios pass; exact trip position IDs remain to verify |
-| BP-8 | Messenger parity, activity feed and calendar | BP-4; expanded read-only Bitrix scope for feed | Two-client realtime and selected reference scenarios |
+| BP-8 | Functional Messenger, activity feed and calendar delivered in alpha 0.9.0; exact feed parity remains unclaimed | BP-4; expanded read-only Bitrix scope for exact feed characterisation | PostgreSQL CRUD, authorization, unread receipts, desktop interactions and two-client realtime |
 | BP-9 | CRM scope chosen from actual business need, then implemented | Product decision after empty baseline review | Agreed CRM scenarios, not generic unused screens |
 
 Hisobot and the other legacy bots remain separate migration packages and do not block this navigation program.

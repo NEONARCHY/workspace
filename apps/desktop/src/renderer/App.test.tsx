@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ApprovalRequestSummary,
+  CalendarEvent,
+  CalendarEventInput,
+  FeedPost,
   PaymentRequestDetails,
   TripRequest,
   WorkspaceAttachment,
@@ -205,6 +208,40 @@ function mockServer(
       updatedAt: "2026-09-03T09:00:00Z",
     },
   ];
+  let feedPosts: FeedPost[] = [
+    {
+      id: "feed-1",
+      authorUserId: people[0]!.id,
+      title: "Новости Workspace",
+      body: "Корпоративная лента подключена.",
+      isPinned: true,
+      likedByCurrentUser: false,
+      likeCount: 1,
+      canEdit: true,
+      canPin: true,
+      comments: [],
+      createdAt: "2026-09-03T09:00:00Z",
+      updatedAt: "2026-09-03T09:00:00Z",
+    },
+  ];
+  let calendarEvents: CalendarEvent[] = [
+    {
+      id: "calendar-1",
+      organizerUserId: people[0]!.id,
+      title: "Планирование недели",
+      description: "Общий статус",
+      eventType: "meeting",
+      startsAt: "2026-09-06T05:00:00Z",
+      endsAt: "2026-09-06T06:00:00Z",
+      allDay: false,
+      location: "Переговорная",
+      status: "scheduled",
+      attendeeIds: [people[0]!.id],
+      canEdit: true,
+      createdAt: "2026-09-03T09:00:00Z",
+      updatedAt: "2026-09-03T09:00:00Z",
+    },
+  ];
   const attachments: WorkspaceAttachment[] = [];
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
@@ -239,6 +276,8 @@ function mockServer(
         requests,
         projects,
         tripRequests,
+        feedPosts,
+        calendarEvents,
         attachments: [...attachments],
         workflow: activeWorkflow,
       });
@@ -269,6 +308,74 @@ function mockServer(
         time: "12:00",
         own: true,
       });
+    }
+    if (url.includes("/chats/") && url.endsWith("/read") && options?.method === "POST") {
+      return { ...response(undefined), status: 204, json: async () => undefined } as Response;
+    }
+    if (url.endsWith("/feed/posts") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { title: string; body: string };
+      const created: FeedPost = {
+        id: "feed-created",
+        authorUserId: currentUser.id,
+        ...payload,
+        isPinned: false,
+        likedByCurrentUser: false,
+        likeCount: 0,
+        canEdit: true,
+        canPin: true,
+        comments: [],
+        createdAt: "2026-09-04T09:00:00Z",
+        updatedAt: "2026-09-04T09:00:00Z",
+      };
+      feedPosts = [created, ...feedPosts];
+      return response(created);
+    }
+    const feedMatch = url.match(/\/feed\/posts\/([^/?]+)/);
+    const feedPost = feedPosts.find((item) => item.id === feedMatch?.[1]);
+    if (feedPost && url.endsWith("/comments") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { body: string };
+      const changed: FeedPost = {
+        ...feedPost,
+        comments: [...feedPost.comments, {
+          id: "feed-comment-created",
+          authorUserId: currentUser.id,
+          body: payload.body,
+          createdAt: "2026-09-04T09:05:00Z",
+        }],
+      };
+      feedPosts = feedPosts.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (feedPost && url.endsWith("/like")) {
+      const liked = options?.method === "PUT";
+      const changed = {
+        ...feedPost,
+        likedByCurrentUser: liked,
+        likeCount: feedPost.likeCount + (liked ? 1 : -1),
+      };
+      feedPosts = feedPosts.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (url.endsWith("/calendar/events") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as CalendarEventInput;
+      const created: CalendarEvent = {
+        id: "calendar-created",
+        organizerUserId: currentUser.id,
+        ...payload,
+        status: "scheduled",
+        canEdit: true,
+        createdAt: "2026-09-04T09:00:00Z",
+        updatedAt: "2026-09-04T09:00:00Z",
+      };
+      calendarEvents = [...calendarEvents, created];
+      return response(created);
+    }
+    const calendarMatch = url.match(/\/calendar\/events\/([^/?]+)/);
+    const calendarEvent = calendarEvents.find((item) => item.id === calendarMatch?.[1]);
+    if (calendarEvent && url.endsWith("/cancel") && options?.method === "POST") {
+      const changed: CalendarEvent = { ...calendarEvent, status: "cancelled" };
+      calendarEvents = calendarEvents.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
     }
     if (url.includes("/attachments/") && options?.method === "PUT") {
       const ownerParts = url.split("/attachments/")[1]!.split("?")[0]!.split("/");
@@ -962,6 +1069,55 @@ describe("corporate workspace authentication alpha", () => {
       expect.objectContaining({ method: "POST" }),
     ));
     expect(await screen.findByText("На согласовании")).toBeInTheDocument();
+  });
+
+  it("publishes and discusses a corporate feed post", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Лента" }));
+    expect(screen.getByText("Корпоративная лента подключена.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Заголовок публикации" }), {
+      target: { value: "Итоги рабочего дня" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Текст публикации" }), {
+      target: { value: "Ключевые задачи выполнены." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Опубликовать" }));
+    expect(await screen.findByRole("heading", { name: "Итоги рабочего дня" })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", {
+      name: "Комментарий к публикации Итоги рабочего дня",
+    }), { target: { value: "Принято" } });
+    const commentButtons = screen.getAllByRole("button", { name: "Отправить комментарий" });
+    fireEvent.click(commentButtons[0]!);
+    expect(await screen.findByText("Принято")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/feed/posts/feed-created/comments"),
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("creates an event in the shared calendar", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Календарь" }));
+    expect(screen.getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), {
+      target: { value: "Встреча BP-8" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByRole("heading", { name: "Встреча BP-8" })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/calendar/events"),
+      expect.objectContaining({ method: "POST" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Отменить событие" }));
+    expect(await screen.findByText("Событие отменено")).toBeInTheDocument();
   });
 
   it("opens the employee directory and creates a position", async () => {

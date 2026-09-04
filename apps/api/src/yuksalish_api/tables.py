@@ -144,6 +144,15 @@ messages = sa.Table(
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
 )
 
+message_receipts = sa.Table(
+    "messenger_message_receipts",
+    metadata,
+    sa.Column("message_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("delivered_at", sa.DateTime(timezone=True)),
+    sa.Column("read_at", sa.DateTime(timezone=True)),
+)
+
 attachments = sa.Table(
     "workspace_attachments",
     metadata,
@@ -405,4 +414,59 @@ trip_request_actions = sa.Table(
     sa.Column("action", sa.String(24)),
     sa.Column("comment", sa.Text()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+feed_posts = sa.Table(
+    "feed_posts",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("title", sa.String(240)),
+    sa.Column("body", sa.Text()),
+    sa.Column("is_pinned", sa.Boolean()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+feed_comments = sa.Table(
+    "feed_comments",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("post_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+feed_reactions = sa.Table(
+    "feed_reactions",
+    metadata,
+    sa.Column("post_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+calendar_events = sa.Table(
+    "calendar_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("organizer_user_id", uuid_type),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("event_type", sa.String(24)),
+    sa.Column("starts_at", sa.DateTime(timezone=True)),
+    sa.Column("ends_at", sa.DateTime(timezone=True)),
+    sa.Column("all_day", sa.Boolean()),
+    sa.Column("location", sa.String(240)),
+    sa.Column("status", sa.String(16)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+calendar_event_attendees = sa.Table(
+    "calendar_event_attendees",
+    metadata,
+    sa.Column("event_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
 )

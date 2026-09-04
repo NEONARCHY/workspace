@@ -23,7 +23,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     key: "feed",
     label: { ru: "Лента", uz_cyrl: "Лента", uz_latn: "Lenta" },
     route: "/feed",
-    status: "placeholder",
+    status: "available",
   },
   {
     key: "projects",
@@ -47,7 +47,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     key: "calendar",
     label: { ru: "Календарь", uz_cyrl: "Тақвим", uz_latn: "Taqvim" },
     route: "/calendar",
-    status: "placeholder",
+    status: "available",
   },
   {
     key: "employees",

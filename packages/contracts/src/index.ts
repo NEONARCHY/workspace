@@ -100,6 +100,58 @@ export interface ChatMessage {
   readonly own?: boolean;
 }
 
+export interface FeedComment {
+  readonly id: string;
+  readonly authorUserId: string;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface FeedPost {
+  readonly id: string;
+  readonly authorUserId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly isPinned: boolean;
+  readonly likedByCurrentUser: boolean;
+  readonly likeCount: number;
+  readonly canEdit: boolean;
+  readonly canPin: boolean;
+  readonly comments: readonly FeedComment[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export type CalendarEventType = "meeting" | "deadline" | "trip" | "task" | "general";
+
+export interface CalendarEvent {
+  readonly id: string;
+  readonly organizerUserId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly eventType: CalendarEventType;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly allDay: boolean;
+  readonly location: string;
+  readonly status: "scheduled" | "cancelled";
+  readonly attendeeIds: readonly string[];
+  readonly canEdit: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CalendarEventInput {
+  readonly title: string;
+  readonly description: string;
+  readonly eventType: CalendarEventType;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly allDay: boolean;
+  readonly location: string;
+  readonly attendeeIds: readonly string[];
+}
+
 export type AttachmentOwnerType = "message" | "task" | "approval_request";
 
 export interface WorkspaceAttachment {
@@ -414,6 +466,8 @@ export interface WorkspaceBootstrap {
   readonly requests: readonly ApprovalRequestSummary[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
+  readonly feedPosts: readonly FeedPost[];
+  readonly calendarEvents: readonly CalendarEvent[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow: WorkflowDefinition;
 }

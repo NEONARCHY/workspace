@@ -30,7 +30,7 @@ MODULE_CATALOG = (
         key="feed",
         label=LocalizedLabel(ru="Лента", uz_cyrl="Лента", uz_latn="Lenta"),
         route="/feed",
-        status="placeholder",
+        status="available",
     ),
     ModuleDescriptor(
         key="projects",
@@ -62,7 +62,7 @@ MODULE_CATALOG = (
         key="calendar",
         label=LocalizedLabel(ru="Календарь", uz_cyrl="Тақвим", uz_latn="Taqvim"),
         route="/calendar",
-        status="placeholder",
+        status="available",
     ),
     ModuleDescriptor(
         key="employees",

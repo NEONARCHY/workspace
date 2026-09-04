@@ -2,9 +2,12 @@ import type {
   ApprovalRequestSummary,
   AttachmentOwnerType,
   AuthenticationSession,
+  CalendarEvent,
+  CalendarEventInput,
   ChatMessage,
   DirectoryBootstrap,
   DirectoryEmployee,
+  FeedPost,
   DevelopmentSession,
   InvitationResult,
   PasswordResetResult,
@@ -205,6 +208,103 @@ export function sendWorkspaceMessage(
   return apiRequest<ChatMessage>(
     `/chats/${chatId}/messages`,
     { method: "POST", body: JSON.stringify({ body }) },
+    token,
+  );
+}
+
+export function markWorkspaceChatRead(token: string, chatId: string): Promise<void> {
+  return apiRequest<void>(`/chats/${chatId}/read`, { method: "POST" }, token);
+}
+
+export function searchWorkspaceMessages(
+  token: string,
+  query: string,
+): Promise<readonly ChatMessage[]> {
+  return apiRequest<readonly ChatMessage[]>(
+    `/messages/search?q=${encodeURIComponent(query)}`,
+    {},
+    token,
+  );
+}
+
+export function createWorkspaceFeedPost(
+  token: string,
+  title: string,
+  body: string,
+): Promise<FeedPost> {
+  return apiRequest<FeedPost>(
+    "/feed/posts",
+    { method: "POST", body: JSON.stringify({ title, body }) },
+    token,
+  );
+}
+
+export function addWorkspaceFeedComment(
+  token: string,
+  postId: string,
+  body: string,
+): Promise<FeedPost> {
+  return apiRequest<FeedPost>(
+    `/feed/posts/${postId}/comments`,
+    { method: "POST", body: JSON.stringify({ body }) },
+    token,
+  );
+}
+
+export function setWorkspaceFeedLike(
+  token: string,
+  postId: string,
+  liked: boolean,
+): Promise<FeedPost> {
+  return apiRequest<FeedPost>(
+    `/feed/posts/${postId}/like`,
+    { method: liked ? "PUT" : "DELETE" },
+    token,
+  );
+}
+
+export function pinWorkspaceFeedPost(
+  token: string,
+  postId: string,
+  isPinned: boolean,
+): Promise<FeedPost> {
+  return apiRequest<FeedPost>(
+    `/feed/posts/${postId}/pin`,
+    { method: "PATCH", body: JSON.stringify({ isPinned }) },
+    token,
+  );
+}
+
+export function createWorkspaceCalendarEvent(
+  token: string,
+  payload: CalendarEventInput,
+): Promise<CalendarEvent> {
+  return apiRequest<CalendarEvent>(
+    "/calendar/events",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateWorkspaceCalendarEvent(
+  token: string,
+  eventId: string,
+  payload: CalendarEventInput,
+): Promise<CalendarEvent> {
+  return apiRequest<CalendarEvent>(
+    `/calendar/events/${eventId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function cancelWorkspaceCalendarEvent(
+  token: string,
+  eventId: string,
+): Promise<CalendarEvent> {
+  return apiRequest<CalendarEvent>(
+    `/calendar/events/${eventId}/cancel`,
+    { method: "POST" },
     token,
   );
 }

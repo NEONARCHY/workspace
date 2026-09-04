@@ -526,6 +526,71 @@ button { -webkit-tap-highlight-color: transparent; }
 .trip-employees { margin: 16px 0; }
 .trip-employees span { display: inline-block; margin: 0 6px 6px 0; padding: 6px 9px; border-radius: 20px; color: #3d566d; background: #eef2f6; font-size: 9px; }
 
+.feed-view { display: grid; grid-template-columns: minmax(0, 760px) 270px; justify-content: center; gap: 18px; padding: 22px; overflow-y: auto; background: #f3f6f9; }
+.feed-main { min-width: 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.section-heading h1, .section-heading p { margin: 0; }
+.section-heading h1 { color: #20364a; font-size: 22px; }
+.section-heading p { margin-top: 4px; color: #718096; font-size: 10px; }
+.feed-composer, .feed-card, .feed-side { border: 1px solid #dbe2e8; border-radius: 11px; background: #fff; box-shadow: 0 3px 12px rgb(28 52 76 / 5%); }
+.feed-composer { display: grid; grid-template-columns: 1fr auto; gap: 9px; padding: 15px; }
+.feed-composer textarea { min-height: 76px; }
+.feed-composer > :nth-child(2) { grid-column: 1 / -1; }
+.feed-composer > button { grid-column: 2; }
+.feed-list { display: grid; gap: 12px; margin-top: 13px; }
+.feed-card { padding: 16px; }
+.feed-card.pinned { border-top: 3px solid #0f6cbd; }
+.feed-card > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 9px; }
+.feed-card > header > span { display: grid; gap: 2px; }
+.feed-card header strong { color: #2d4357; font-size: 11px; }
+.feed-card header small { color: #7a8997; font-size: 8px; }
+.feed-card h2 { margin: 15px 0 7px; color: #20364a; font-size: 15px; }
+.feed-copy { margin: 0; color: #40586d; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }
+.feed-pin { display: flex !important; grid-auto-flow: column; align-items: center; gap: 4px !important; color: #0f6cbd; font-size: 8px; font-weight: 700; }
+.feed-pin svg, .feed-actions svg { width: 15px; }
+.feed-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 9px; border-top: 1px solid #edf0f3; color: #607589; font-size: 9px; }
+.feed-actions > span { display: flex; align-items: center; gap: 4px; }
+.feed-comments { display: grid; gap: 8px; margin-top: 10px; }
+.feed-comment { display: grid; grid-template-columns: auto 1fr; gap: 8px; padding: 9px; border-radius: 8px; background: #f4f7f9; }
+.feed-comment > span { display: grid; gap: 2px; }
+.feed-comment p { margin: 0; color: #40586d; font-size: 9px; line-height: 1.4; }
+.feed-comment small { color: #84919e; font-size: 7px; }
+.feed-comment-composer { display: grid; grid-template-columns: 1fr auto; gap: 5px; margin-top: 10px; }
+.feed-side { align-self: start; padding: 17px; }
+.feed-side strong { color: #20364a; font-size: 12px; }
+.feed-side p { color: #66798b; font-size: 9px; line-height: 1.55; }
+.feed-side span { display: inline-block; padding: 5px 8px; border-radius: 14px; color: #0f6cbd; background: #e7f2fb; font-size: 8px; font-weight: 700; }
+
+.calendar-view { display: grid; grid-template-columns: minmax(650px, 1fr) 330px; min-height: 0; overflow: hidden; background: #fff; }
+.calendar-main { min-width: 0; padding: 18px; }
+.calendar-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+.calendar-toolbar h1, .calendar-toolbar p { margin: 0; }
+.calendar-toolbar h1 { color: #20364a; font-size: 21px; }
+.calendar-toolbar p { margin-top: 3px; color: #0f6cbd; font-size: 10px; text-transform: capitalize; }
+.calendar-toolbar > div:last-child { display: flex; align-items: center; gap: 5px; }
+.calendar-weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { border: 1px solid #dbe2e8; border-bottom: 0; border-radius: 8px 8px 0 0; background: #f5f7f9; }
+.calendar-weekdays span { padding: 8px; color: #607589; font-size: 8px; font-weight: 700; text-align: center; text-transform: uppercase; }
+.calendar-grid { height: calc(100% - 94px); border-top: 1px solid #dbe2e8; border-left: 1px solid #dbe2e8; }
+.calendar-day { min-height: 82px; padding: 6px; overflow: hidden; border: 0; border-right: 1px solid #dbe2e8; border-bottom: 1px solid #dbe2e8; color: #32495e; background: #fff; text-align: left; cursor: default; }
+.calendar-day.muted { color: #abb5be; background: #fafbfc; }
+.calendar-day > strong { display: block; margin-bottom: 5px; font-size: 9px; }
+.calendar-event-pill { display: block; margin-bottom: 3px; padding: 3px 4px; overflow: hidden; border-left: 2px solid #0f6cbd; border-radius: 3px; color: #24506f; background: #e7f2fb; font-size: 7px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.calendar-event-pill.deadline { border-color: #c50f1f; color: #8b1a24; background: #fdecee; }
+.calendar-event-pill.trip { border-color: #6264a7; color: #4c4e91; background: #eeeeff; }
+.calendar-event-pill.task { border-color: #d29200; color: #755500; background: #fff4ce; }
+.calendar-event-pill.cancelled { opacity: .45; text-decoration: line-through; }
+.calendar-side { padding: 20px; overflow-y: auto; border-left: 1px solid #dbe2e8; background: #f7f9fb; }
+.calendar-side h2 { margin: 0 0 16px; color: #20364a; font-size: 17px; }
+.calendar-form { display: grid; gap: 10px; }
+.calendar-form > label { display: grid; gap: 4px; color: #5c7185; font-size: 8px; font-weight: 700; }
+.calendar-form fieldset { display: grid; gap: 5px; max-height: 160px; margin: 3px 0; padding: 10px; overflow-y: auto; border: 1px solid #d5dde5; border-radius: 7px; }
+.calendar-form legend { color: #5c7185; font-size: 8px; font-weight: 700; }
+.calendar-form-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 7px; }
+.calendar-detail p, .calendar-empty p { color: #607589; font-size: 10px; line-height: 1.55; }
+.calendar-type, .calendar-cancelled { display: inline-block; margin-bottom: 9px; padding: 4px 7px; border-radius: 13px; color: #0f6cbd; background: #e7f2fb; font-size: 8px; font-weight: 700; }
+.calendar-cancelled { color: #a4262c; background: #fdecee; }
+
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 204px minmax(0, 1fr); }
   .directory-layout { grid-template-columns: 260px minmax(300px, 1fr) 330px; }
@@ -535,6 +600,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .project-board { padding-right: 330px; }
   .bp7-detail { width: 306px; }
   .trip-layout { grid-template-columns: 300px minmax(0, 1fr); }
+  .feed-view { grid-template-columns: minmax(0, 1fr) 230px; }
+  .calendar-view { grid-template-columns: minmax(580px, 1fr) 300px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

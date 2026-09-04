@@ -24,12 +24,16 @@ from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     act_on_request,
     act_on_trip_request,
+    add_feed_comment,
     add_task_checklist_item,
     add_task_comment,
+    cancel_calendar_event,
     change_project_stage,
     change_task_status,
     create_approval_request,
     create_attachment,
+    create_calendar_event,
+    create_feed_post,
     create_project,
     create_task,
     create_trip_request,
@@ -37,16 +41,21 @@ from yuksalish_api.repository import (
     find_active_user_by_username,
     get_attachment,
     load_workspace,
+    mark_chat_read,
     materialize_due_task_cycles,
+    pin_feed_post,
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
     save_workflow,
+    search_messages,
     send_message,
+    set_feed_like,
     set_task_cycle,
     set_task_dependency,
     set_task_participant,
     update_approval_request,
+    update_calendar_event,
     update_project,
     update_task,
     update_task_checklist_item,
@@ -59,11 +68,15 @@ from yuksalish_api.workspace_schemas import (
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     CreateApprovalRequest,
+    CreateCalendarEventRequest,
     CreateChecklistItemRequest,
+    CreateFeedCommentRequest,
+    CreateFeedPostRequest,
     CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    PinFeedPostRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskCycleRequest,
@@ -71,6 +84,7 @@ from yuksalish_api.workspace_schemas import (
     TaskParticipantRequest,
     TripActionRequest,
     UpdateApprovalRequest,
+    UpdateCalendarEventRequest,
     UpdateChecklistItemRequest,
     UpdateProjectRequest,
     UpdateTaskRequest,
@@ -101,6 +115,10 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert len(initial.chats) == 4
             assert len(initial.projects) == 3
             assert len(initial.trip_requests) == 1
+            assert len(initial.feed_posts) == 2
+            assert initial.feed_posts[0].is_pinned is True
+            assert len(initial.calendar_events) == 3
+            assert sum(chat.unread for chat in initial.chats) >= 2
             assert initial.workflow.nodes
             assert initial.workflow.published_version == 6
             assert {node.label for node in initial.workflow.nodes} == {
@@ -163,6 +181,71 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 UUID(initial.chats[0].id),
                 SendMessageRequest(body="Integration workflow message"),
             )
+            found_messages = await search_messages(connection, aziza, "workflow message")
+            assert found_messages[0].id == message.id
+            finance_chat = next(chat for chat in initial.chats if chat.title == "Финансы и закупки")
+            await mark_chat_read(connection, aziza, UUID(finance_chat.id))
+            after_read = await load_workspace(connection, aziza)
+            assert next(chat for chat in after_read.chats if chat.id == finance_chat.id).unread == 0
+
+            feed_post = await create_feed_post(
+                connection,
+                aziza,
+                CreateFeedPostRequest(
+                    title="Integration announcement",
+                    body="Feed persistence check",
+                ),
+            )
+            feed_post = await add_feed_comment(
+                connection,
+                admin,
+                UUID(feed_post.id),
+                CreateFeedCommentRequest(body="Integration comment"),
+            )
+            assert feed_post.comments[-1].body == "Integration comment"
+            feed_post = await set_feed_like(connection, aziza, UUID(feed_post.id), True)
+            assert feed_post.liked_by_current_user is True
+            assert feed_post.like_count == 1
+            feed_post = await pin_feed_post(
+                connection,
+                admin,
+                UUID(feed_post.id),
+                PinFeedPostRequest(is_pinned=True),
+            )
+            assert feed_post.is_pinned is True
+
+            calendar_event = await create_calendar_event(
+                connection,
+                aziza,
+                CreateCalendarEventRequest(
+                    title="Integration planning",
+                    description="Calendar persistence check",
+                    event_type="meeting",
+                    starts_at=datetime.now(UTC) + timedelta(days=10),
+                    ends_at=datetime.now(UTC) + timedelta(days=10, hours=1),
+                    attendee_ids=[str(aziza.id), str(admin.id)],
+                ),
+            )
+            calendar_event = await update_calendar_event(
+                connection,
+                aziza,
+                UUID(calendar_event.id),
+                UpdateCalendarEventRequest(
+                    title="Integration planning updated",
+                    description="Updated calendar persistence check",
+                    event_type="meeting",
+                    starts_at=datetime.now(UTC) + timedelta(days=11),
+                    ends_at=datetime.now(UTC) + timedelta(days=11, hours=1),
+                    attendee_ids=[str(aziza.id)],
+                ),
+            )
+            assert calendar_event.title.endswith("updated")
+            calendar_event = await cancel_calendar_event(
+                connection,
+                aziza,
+                UUID(calendar_event.id),
+            )
+            assert calendar_event.status == "cancelled"
             message_attachment = await create_attachment(
                 connection,
                 aziza,

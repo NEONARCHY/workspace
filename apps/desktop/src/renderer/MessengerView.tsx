@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   ChatMessage,
@@ -40,6 +40,7 @@ interface MessengerViewProps {
     title: string,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onMarkRead: (chatId: string) => void | Promise<void>;
 }
 
 export function MessengerView({
@@ -50,6 +51,7 @@ export function MessengerView({
   onSendMessage,
   onCreateTaskFromMessage,
   onDownloadAttachment,
+  onMarkRead,
 }: MessengerViewProps) {
   const [activeChatId, setActiveChatId] = useState(chats[0]?.id ?? "");
   const [draft, setDraft] = useState("");
@@ -63,11 +65,22 @@ export function MessengerView({
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
   const activeChatKey = activeChat?.id ?? "";
   const activeMessages = messages.filter((message) => message.chatId === activeChatKey);
-  const visibleChats = useMemo(
-    () =>
-      chats.filter((chat) => chat.title.toLowerCase().includes(query.toLowerCase())),
-    [chats, query],
-  );
+  const visibleChats = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return chats;
+    const matchingChatIds = new Set(
+      messages
+        .filter((message) => message.body.toLowerCase().includes(normalized))
+        .map((message) => message.chatId),
+    );
+    return chats.filter(
+      (chat) => chat.title.toLowerCase().includes(normalized) || matchingChatIds.has(chat.id),
+    );
+  }, [chats, messages, query]);
+
+  useEffect(() => {
+    if (activeChat?.unread) void onMarkRead(activeChat.id);
+  }, [activeChat?.id, activeChat?.unread, onMarkRead]);
 
   const sendMessage = async () => {
     const body = draft.trim();
@@ -121,10 +134,10 @@ export function MessengerView({
           </Tooltip>
         </div>
         <Input
-          aria-label="Поиск чатов"
+          aria-label="Поиск чатов и сообщений"
           className="pane-search"
           contentBefore={<Search24Regular />}
-          placeholder="Поиск"
+          placeholder="Поиск по чатам и сообщениям"
           value={query}
           onChange={(_event, data) => setQuery(data.value)}
         />

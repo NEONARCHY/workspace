@@ -17,8 +17,14 @@ from .tables import (
     approval_requests,
     approval_templates,
     attachments,
+    calendar_event_attendees,
+    calendar_events,
     chat_members,
     chats,
+    feed_comments,
+    feed_posts,
+    feed_reactions,
+    message_receipts,
     message_versions,
     messages,
     positions,
@@ -43,18 +49,25 @@ from .workspace_schemas import (
     ApprovalStageResponse,
     AttachmentOwnerType,
     AttachmentResponse,
+    CalendarEventResponse,
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
     ChatSummaryResponse,
     CreateApprovalRequest,
+    CreateCalendarEventRequest,
     CreateChecklistItemRequest,
+    CreateFeedCommentRequest,
+    CreateFeedPostRequest,
     CreateProjectRequest,
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    FeedCommentResponse,
+    FeedPostResponse,
     PaymentRequestDetails,
     PersonResponse,
+    PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
     SaveWorkflowRequest,
@@ -73,6 +86,7 @@ from .workspace_schemas import (
     TripActionRequest,
     TripRequestResponse,
     UpdateApprovalRequest,
+    UpdateCalendarEventRequest,
     UpdateChecklistItemRequest,
     UpdateProjectRequest,
     UpdateTaskRequest,
@@ -550,6 +564,118 @@ async def _trip_detail_maps(
     return employees, actions
 
 
+def _feed_comment(row: Record) -> FeedCommentResponse:
+    return FeedCommentResponse(
+        id=str(row["id"]),
+        author_user_id=str(row["author_user_id"]),
+        body=row["body"],
+        created_at=row["created_at"],
+    )
+
+
+def _feed_post(
+    row: Record,
+    current_user: AuthenticatedUser,
+    comments: Sequence[FeedCommentResponse] = (),
+    reaction_user_ids: Sequence[UUID] = (),
+) -> FeedPostResponse:
+    return FeedPostResponse(
+        id=str(row["id"]),
+        author_user_id=str(row["author_user_id"]),
+        title=row["title"],
+        body=row["body"],
+        is_pinned=row["is_pinned"],
+        liked_by_current_user=current_user.id in reaction_user_ids,
+        like_count=len(reaction_user_ids),
+        can_edit=row["author_user_id"] == current_user.id or _is_privileged(current_user),
+        can_pin=_is_privileged(current_user),
+        comments=list(comments),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def _feed_detail_maps(
+    connection: AsyncConnection,
+    post_ids: Sequence[UUID],
+) -> tuple[dict[UUID, list[FeedCommentResponse]], dict[UUID, list[UUID]]]:
+    if not post_ids:
+        return {}, {}
+    comment_rows = (
+        (
+            await connection.execute(
+                select(feed_comments)
+                .where(feed_comments.c.post_id.in_(post_ids))
+                .order_by(feed_comments.c.post_id, feed_comments.c.created_at)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    reaction_rows = (
+        (
+            await connection.execute(
+                select(feed_reactions).where(feed_reactions.c.post_id.in_(post_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    comments: dict[UUID, list[FeedCommentResponse]] = {}
+    reactions: dict[UUID, list[UUID]] = {}
+    for row in comment_rows:
+        comments.setdefault(row["post_id"], []).append(_feed_comment(row))
+    for row in reaction_rows:
+        reactions.setdefault(row["post_id"], []).append(row["user_id"])
+    return comments, reactions
+
+
+def _calendar_event(
+    row: Record,
+    current_user: AuthenticatedUser,
+    attendee_ids: Sequence[UUID] = (),
+) -> CalendarEventResponse:
+    return CalendarEventResponse(
+        id=str(row["id"]),
+        organizer_user_id=str(row["organizer_user_id"]),
+        title=row["title"],
+        description=row["description"] or "",
+        event_type=row["event_type"],
+        starts_at=row["starts_at"],
+        ends_at=row["ends_at"],
+        all_day=row["all_day"],
+        location=row["location"] or "",
+        status=row["status"],
+        attendee_ids=[str(value) for value in attendee_ids],
+        can_edit=row["organizer_user_id"] == current_user.id or _is_privileged(current_user),
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+async def _calendar_attendee_map(
+    connection: AsyncConnection,
+    event_ids: Sequence[UUID],
+) -> dict[UUID, list[UUID]]:
+    if not event_ids:
+        return {}
+    rows = (
+        (
+            await connection.execute(
+                select(calendar_event_attendees)
+                .where(calendar_event_attendees.c.event_id.in_(event_ids))
+                .order_by(calendar_event_attendees.c.event_id, calendar_event_attendees.c.user_id)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    result: dict[UUID, list[UUID]] = {}
+    for row in rows:
+        result.setdefault(row["event_id"], []).append(row["user_id"])
+    return result
+
+
 async def _active_stages_for_requests(
     connection: AsyncConnection,
     request_rows: Sequence[Record],
@@ -995,6 +1121,25 @@ async def load_workspace(
         .mappings()
         .all()
     )
+    unread_rows = (
+        await connection.execute(
+            select(messages.c.chat_id, func.count(message_receipts.c.message_id))
+            .select_from(
+                message_receipts.join(
+                    messages,
+                    message_receipts.c.message_id == messages.c.id,
+                )
+            )
+            .where(
+                message_receipts.c.user_id == current_user.id,
+                message_receipts.c.read_at.is_(None),
+                messages.c.deleted_at.is_(None),
+                messages.c.chat_id.in_(accessible_chat_ids),
+            )
+            .group_by(messages.c.chat_id)
+        )
+    ).all()
+    unread_by_chat = {chat_id: int(count) for chat_id, count in unread_rows}
     latest_by_chat: dict[UUID, RowMapping] = {}
     for row in message_rows:
         latest_by_chat[row["chat_id"]] = row
@@ -1008,7 +1153,7 @@ async def load_workspace(
                 kind=row["kind"],
                 preview=latest["body"] if latest is not None else "Сообщений пока нет",
                 time=_time_label(latest["created_at"] if latest is not None else row["created_at"]),
-                unread=0,
+                unread=unread_by_chat.get(row["id"], 0),
             )
         )
     message_responses = [
@@ -1085,6 +1230,32 @@ async def load_workspace(
     trip_employee_ids, trip_actions = await _trip_detail_maps(
         connection,
         [row["id"] for row in trip_rows],
+    )
+
+    feed_rows = (
+        (
+            await connection.execute(
+                select(feed_posts).order_by(
+                    feed_posts.c.is_pinned.desc(),
+                    feed_posts.c.created_at.desc(),
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    feed_comment_map, feed_reaction_map = await _feed_detail_maps(
+        connection,
+        [row["id"] for row in feed_rows],
+    )
+    calendar_rows = (
+        (await connection.execute(select(calendar_events).order_by(calendar_events.c.starts_at)))
+        .mappings()
+        .all()
+    )
+    calendar_attendees = await _calendar_attendee_map(
+        connection,
+        [row["id"] for row in calendar_rows],
     )
 
     attachment_filters = []
@@ -1164,6 +1335,19 @@ async def load_workspace(
             )
             for row in trip_rows
         ],
+        feed_posts=[
+            _feed_post(
+                row,
+                current_user,
+                feed_comment_map.get(row["id"], []),
+                feed_reaction_map.get(row["id"], []),
+            )
+            for row in feed_rows
+        ],
+        calendar_events=[
+            _calendar_event(row, current_user, calendar_attendees.get(row["id"], []))
+            for row in calendar_rows
+        ],
         attachments=[_attachment(row) for row in attachment_rows],
         workflow=await get_workflow(connection),
     )
@@ -1204,6 +1388,28 @@ async def send_message(
             created_at=created_at,
         )
     )
+    member_ids = (
+        (
+            await connection.execute(
+                select(chat_members.c.user_id).where(chat_members.c.chat_id == chat_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if member_ids:
+        await connection.execute(
+            insert(message_receipts),
+            [
+                {
+                    "message_id": message_id,
+                    "user_id": user_id,
+                    "delivered_at": created_at,
+                    "read_at": created_at if user_id == current_user.id else None,
+                }
+                for user_id in member_ids
+            ],
+        )
     await connection.execute(
         update(chats).where(chats.c.id == chat_id).values(updated_at=created_at)
     )
@@ -1216,6 +1422,332 @@ async def send_message(
         created_at=created_at,
         own=True,
     )
+
+
+async def mark_chat_read(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    chat_id: UUID,
+) -> None:
+    membership = await connection.scalar(
+        select(func.count())
+        .select_from(chat_members)
+        .where(chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id)
+    )
+    if not membership:
+        raise WorkspaceRepositoryError(404, "Chat was not found")
+    chat_message_ids = select(messages.c.id).where(messages.c.chat_id == chat_id)
+    await connection.execute(
+        update(message_receipts)
+        .where(
+            message_receipts.c.user_id == current_user.id,
+            message_receipts.c.message_id.in_(chat_message_ids),
+            message_receipts.c.read_at.is_(None),
+        )
+        .values(read_at=datetime.now(UTC))
+    )
+
+
+async def search_messages(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    query: str,
+) -> list[ChatMessageResponse]:
+    normalized = query.strip()
+    if not normalized:
+        return []
+    rows = (
+        (
+            await connection.execute(
+                select(messages)
+                .join(
+                    chat_members,
+                    and_(
+                        chat_members.c.chat_id == messages.c.chat_id,
+                        chat_members.c.user_id == current_user.id,
+                    ),
+                )
+                .where(
+                    messages.c.deleted_at.is_(None),
+                    messages.c.body.ilike(f"%{normalized}%"),
+                )
+                .order_by(messages.c.created_at.desc())
+                .limit(100)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [
+        ChatMessageResponse(
+            id=str(row["id"]),
+            chat_id=str(row["chat_id"]),
+            author_id=str(row["author_user_id"]),
+            body=row["body"],
+            time=_time_label(row["created_at"]),
+            created_at=row["created_at"],
+            own=row["author_user_id"] == current_user.id,
+        )
+        for row in rows
+    ]
+
+
+async def _feed_post_response(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+) -> FeedPostResponse:
+    row = (
+        (await connection.execute(select(feed_posts).where(feed_posts.c.id == post_id)))
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    comments, reactions = await _feed_detail_maps(connection, [post_id])
+    return _feed_post(
+        row,
+        current_user,
+        comments.get(post_id, []),
+        reactions.get(post_id, []),
+    )
+
+
+async def create_feed_post(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: CreateFeedPostRequest,
+) -> FeedPostResponse:
+    post_id = uuid4()
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(feed_posts).values(
+            id=post_id,
+            author_user_id=current_user.id,
+            title=payload.title,
+            body=payload.body,
+            is_pinned=False,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def add_feed_comment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+    payload: CreateFeedCommentRequest,
+) -> FeedPostResponse:
+    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    if exists is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(feed_comments).values(
+            id=uuid4(),
+            post_id=post_id,
+            author_user_id=current_user.id,
+            body=payload.body,
+            created_at=now,
+        )
+    )
+    await connection.execute(
+        update(feed_posts).where(feed_posts.c.id == post_id).values(updated_at=now)
+    )
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def set_feed_like(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+    liked: bool,
+) -> FeedPostResponse:
+    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    if exists is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    await connection.execute(
+        delete(feed_reactions).where(
+            feed_reactions.c.post_id == post_id,
+            feed_reactions.c.user_id == current_user.id,
+        )
+    )
+    if liked:
+        await connection.execute(
+            insert(feed_reactions).values(
+                post_id=post_id,
+                user_id=current_user.id,
+                kind="like",
+                created_at=datetime.now(UTC),
+            )
+        )
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def pin_feed_post(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+    payload: PinFeedPostRequest,
+) -> FeedPostResponse:
+    if not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Only managers can pin feed posts")
+    result = await connection.execute(
+        update(feed_posts)
+        .where(feed_posts.c.id == post_id)
+        .values(is_pinned=payload.is_pinned, updated_at=datetime.now(UTC))
+    )
+    if result.rowcount == 0:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def _calendar_event_response(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    event_id: UUID,
+) -> CalendarEventResponse:
+    row = (
+        (await connection.execute(select(calendar_events).where(calendar_events.c.id == event_id)))
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Calendar event was not found")
+    attendees = await _calendar_attendee_map(connection, [event_id])
+    return _calendar_event(row, current_user, attendees.get(event_id, []))
+
+
+async def _validate_calendar_attendees(
+    connection: AsyncConnection,
+    values: Sequence[str],
+) -> list[UUID]:
+    try:
+        attendee_ids = list(dict.fromkeys(UUID(value) for value in values))
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid calendar attendee identifier") from error
+    if not attendee_ids:
+        return []
+    active_ids = set(
+        (
+            await connection.execute(
+                select(users.c.id).where(
+                    users.c.id.in_(attendee_ids),
+                    users.c.status == "active",
+                )
+            )
+        ).scalars()
+    )
+    if len(active_ids) != len(attendee_ids):
+        raise WorkspaceRepositoryError(422, "Every calendar attendee must be active")
+    return attendee_ids
+
+
+async def _replace_calendar_attendees(
+    connection: AsyncConnection,
+    event_id: UUID,
+    attendee_ids: Sequence[UUID],
+) -> None:
+    await connection.execute(
+        delete(calendar_event_attendees).where(calendar_event_attendees.c.event_id == event_id)
+    )
+    if attendee_ids:
+        await connection.execute(
+            insert(calendar_event_attendees),
+            [{"event_id": event_id, "user_id": user_id} for user_id in attendee_ids],
+        )
+
+
+async def create_calendar_event(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: CreateCalendarEventRequest,
+) -> CalendarEventResponse:
+    attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    event_id = uuid4()
+    now = datetime.now(UTC)
+    await connection.execute(
+        insert(calendar_events).values(
+            id=event_id,
+            organizer_user_id=current_user.id,
+            title=payload.title,
+            description=payload.description,
+            event_type=payload.event_type,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            all_day=payload.all_day,
+            location=payload.location,
+            status="scheduled",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await _replace_calendar_attendees(connection, event_id, attendee_ids)
+    return await _calendar_event_response(connection, current_user, event_id)
+
+
+async def update_calendar_event(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    event_id: UUID,
+    payload: UpdateCalendarEventRequest,
+) -> CalendarEventResponse:
+    row = (
+        (
+            await connection.execute(
+                select(calendar_events).where(calendar_events.c.id == event_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Calendar event was not found")
+    if row["organizer_user_id"] != current_user.id and not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Calendar event cannot be changed by this user")
+    if row["status"] == "cancelled":
+        raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot be edited")
+    attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    await connection.execute(
+        update(calendar_events)
+        .where(calendar_events.c.id == event_id)
+        .values(
+            title=payload.title,
+            description=payload.description,
+            event_type=payload.event_type,
+            starts_at=payload.starts_at,
+            ends_at=payload.ends_at,
+            all_day=payload.all_day,
+            location=payload.location,
+            updated_at=datetime.now(UTC),
+        )
+    )
+    await _replace_calendar_attendees(connection, event_id, attendee_ids)
+    return await _calendar_event_response(connection, current_user, event_id)
+
+
+async def cancel_calendar_event(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    event_id: UUID,
+) -> CalendarEventResponse:
+    row = (
+        (await connection.execute(select(calendar_events).where(calendar_events.c.id == event_id)))
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Calendar event was not found")
+    if row["organizer_user_id"] != current_user.id and not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Calendar event cannot be cancelled by this user")
+    await connection.execute(
+        update(calendar_events)
+        .where(calendar_events.c.id == event_id)
+        .values(status="cancelled", updated_at=datetime.now(UTC))
+    )
+    return await _calendar_event_response(connection, current_user, event_id)
 
 
 async def _task_access_row(
