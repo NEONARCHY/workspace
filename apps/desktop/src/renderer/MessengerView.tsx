@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   ChatMessage,
   ChatSummary,
+  PersonalPreferences,
+  PersonalChatAction,
   MessageOptions,
   WorkspaceAttachment,
   WorkspacePerson,
@@ -9,7 +11,6 @@ import type {
 } from "@yuksalish/contracts";
 import {
   Avatar,
-  Badge,
   Button,
   Checkbox,
   Input,
@@ -26,8 +27,13 @@ import {
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
+import { OrganizedChatList } from "./OrganizedChatList";
+import { defaultPersonalPreferences } from "./personal-organization";
 
 interface MessengerViewProps {
+  readonly personalPreferences?: PersonalPreferences;
+  readonly onPersonalChat?: (id: string, action: PersonalChatAction) => Promise<void>;
+  readonly onPinnedOrder?: (order: readonly string[]) => Promise<void>;
   readonly focusChatId?: string;
   readonly currentUserId: string;
   readonly chats: readonly ChatSummary[];
@@ -66,6 +72,8 @@ function Conversation({
   onDownloadAttachment,
   onManage,
   onBack,
+  personalPreferences,
+  onPersonalChat,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly onManage: () => void;
@@ -187,6 +195,10 @@ function Conversation({
           {chat.kind === "group" ? "Участники и права" : "Участники"}
         </Button>
       </header>
+      {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
+        <span>Этот чат в вашем архиве</span>
+        <Button size="small" appearance="subtle" disabled={busy || !onPersonalChat} onClick={() => void run(() => onPersonalChat!(chat.id, "unarchive"))}>Вернуть из архива</Button>
+      </div>}
       <div className="conversation-search">
         <Input
           aria-label="Поиск в переписке"
@@ -604,30 +616,15 @@ function Conversation({
 export function MessengerView(props: MessengerViewProps) {
   const restoreFocusTarget = useRestoreFocusTarget();
   const { chats, messages, focusChatId, onMarkRead } = props;
+  const preferences = props.personalPreferences ?? defaultPersonalPreferences;
+  const firstActive = chats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? chats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
   const [activeChatId, setActiveChatId] = useState(
-    focusChatId ?? chats[0]?.id ?? "",
+    focusChatId ?? firstActive?.id ?? "",
   );
-  const [query, setQuery] = useState("");
+  const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
-  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
-  const visibleChats = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return chats;
-    const matching = new Set(
-      messages
-        .filter(
-          (message) =>
-            !message.deletedAt &&
-            message.body.toLowerCase().includes(normalized),
-        )
-        .map((message) => message.chatId),
-    );
-    return chats.filter(
-      (chat) =>
-        chat.title.toLowerCase().includes(normalized) || matching.has(chat.id),
-    );
-  }, [chats, messages, query]);
+  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? firstActive;
   useEffect(() => {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
@@ -649,51 +646,9 @@ export function MessengerView(props: MessengerViewProps) {
             />
           </Tooltip>
         </div>
-        <Input
-          aria-label="Поиск чатов и сообщений"
-          className="pane-search"
-          contentBefore={<Search24Regular />}
-          placeholder="Поиск по чатам и сообщениям"
-          value={query}
-          onChange={(_, data) => setQuery(data.value)}
-        />
-        <div className="chat-list" role="list">
-          {visibleChats.map((chat) => (
-            <button
-              className={`chat-row ${chat.id === activeChat?.id ? "selected" : ""}`}
-              key={chat.id}
-              type="button"
-              onClick={() => {
-                setActiveChatId(chat.id);
-                setConversationOpen(true);
-                setPanel(undefined);
-              }}
-            >
-              <Avatar name={chat.title} size={40} color="colorful" />
-              <span className="chat-row-copy">
-                <span className="chat-row-line">
-                  <strong>{chat.title}</strong>
-                  <time>{chat.time}</time>
-                </span>
-                <span className="chat-row-line preview-line">
-                  <span>{chat.preview}</span>
-                  {chat.unread > 0 && (
-                    <Badge appearance="filled" color="brand" size="small">
-                      {chat.unread}
-                    </Badge>
-                  )}
-                </span>
-              </span>
-            </button>
-          ))}
-          {!visibleChats.length && (
-            <div className="empty-compact">
-              {chats.length
-                ? "Чаты не найдены"
-                : "Создайте первый разговор кнопкой +"}
-            </div>
-          )}
-        </div>
+        <OrganizedChatList key={listRevision} chats={chats} messages={messages} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
+          onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
       </aside>
       {activeChat ? (
         <Conversation
@@ -719,7 +674,7 @@ export function MessengerView(props: MessengerViewProps) {
           onCreated={(chat) => {
             setActiveChatId(chat.id);
             setConversationOpen(true);
-            setQuery("");
+            setListRevision((revision) => revision + 1);
             setPanel(undefined);
           }}
         />

@@ -20,9 +20,11 @@ class WorkspaceEventBus:
         if not connections:
             self._connections.pop(user_id, None)
 
-    async def publish(self, event: dict[str, Any]) -> None:
+    async def publish(self, event: dict[str, Any], *, recipient_id: UUID | None = None) -> None:
         stale: list[tuple[UUID, WebSocket]] = []
         for user_id, connections in tuple(self._connections.items()):
+            if recipient_id is not None and user_id != recipient_id:
+                continue
             for websocket in tuple(connections):
                 try:
                     await websocket.send_json(event)

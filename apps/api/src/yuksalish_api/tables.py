@@ -4,6 +4,15 @@ from sqlalchemy.dialects import postgresql
 metadata = sa.MetaData()
 uuid_type = postgresql.UUID(as_uuid=True)
 
+personal_preferences = sa.Table(
+    "workspace_personal_preferences", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("pinned_chat_ids", postgresql.JSONB()),
+    sa.Column("archived_chat_ids", postgresql.JSONB()),
+    sa.Column("navigation_order", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()),
+)
+
 departments = sa.Table(
     "core_departments",
     metadata,

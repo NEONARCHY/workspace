@@ -9,6 +9,8 @@ import type {
   MessageOptions,
   FeedPost,
   NotificationPreferences,
+  NavigationKey,
+  PersonalPreferences,
   ProjectInput,
   ProjectStage,
   TaskStatus,
@@ -45,6 +47,7 @@ import {
   PeopleTeam24Regular,
   Search24Regular,
   Settings24Regular,
+  Edit16Regular,
   TaskListSquareLtr24Filled,
   TaskListSquareLtr24Regular,
 } from "@fluentui/react-icons";
@@ -53,6 +56,8 @@ import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
+import { NavigationEditor } from "./NavigationEditor";
+import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { EmployeesView } from "./EmployeesView";
@@ -68,6 +73,9 @@ import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
+  changePersonalChat,
+  reorderPinnedChats,
+  reorderNavigation,
   actOnWorkspaceTripRequest,
   actOnWorkspaceApproval,
   addWorkspaceTaskChecklistItem,
@@ -124,12 +132,13 @@ import {
 } from "./workspace-api";
 
 interface NavItem {
-  readonly key: WorkspaceSection;
+  readonly key: NavigationKey;
   readonly label: string;
   readonly icon: ReactNode;
 }
 
 interface WorkspaceState {
+  readonly personalPreferences: PersonalPreferences;
   readonly currentUser: WorkspacePerson;
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
@@ -149,6 +158,7 @@ interface WorkspaceState {
 }
 
 const initialWorkspace: WorkspaceState = {
+  personalPreferences: defaultPersonalPreferences,
   currentUser: people[0]!,
   canCreatePaymentRequests: true,
   people,
@@ -200,7 +210,11 @@ const navItems: readonly NavItem[] = [
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
+  { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
+  { key: "settings", label: "Настройки", icon: <Settings24Regular /> },
 ];
+
+const navigationLabels = Object.fromEntries(navItems.map((item) => [item.key, item.label])) as Record<NavigationKey, string>;
 
 interface ModulePreviewProps {
   readonly icon: ReactNode;
@@ -248,6 +262,7 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [navigationEditing, setNavigationEditing] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
   const railCollapsed = railPreference ?? compactWindow;
@@ -261,7 +276,9 @@ export function App() {
   // Factory stores the reader; it is invoked only after an asynchronous response.
   // eslint-disable-next-line react-hooks/refs
   const [refreshWorkspace] = useState(() => createRefreshQueue(loadWorkspace, (loaded) => {
-    setWorkspace(loaded);
+    setWorkspace((current) => ({ ...loaded, personalPreferences: current.currentUser.id === loaded.currentUser.id
+      ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
+      : loaded.personalPreferences ?? defaultPersonalPreferences }));
     setBackgroundError("");
     setConnectionDetail("Сервер подключён");
   }, () => activeToken.current));
@@ -271,7 +288,8 @@ export function App() {
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
-    setWorkspace(loaded);
+    setWorkspace({ ...loaded, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setNavigationEditing(false);
     setSession(authenticated);
     setConnectionDetail("Сервер подключён");
     setAuthError(undefined);
@@ -318,6 +336,7 @@ export function App() {
     const current = session;
     activeToken.current = undefined;
     setAccountOpen(false);
+    setNavigationEditing(false);
     setSession(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
@@ -407,6 +426,19 @@ export function App() {
       void refreshWorkspace(session.accessToken).catch(reportError);
     }, reportError);
   }, [refreshWorkspace, reportError, session]);
+
+  const personalMutation = async (operation: (token: string) => Promise<PersonalPreferences>) => {
+    if (!session) throw new Error("Войдите снова");
+    try {
+      const saved = await operation(session.accessToken);
+      if (!activeToken.current) return;
+      setWorkspace((current) => current.currentUser.id === session.user.id
+        ? { ...current, personalPreferences: latestPreferences(current.personalPreferences, saved) } : current);
+    } catch (error) {
+      void refreshWorkspace(session.accessToken).catch(reportError);
+      throw error;
+    }
+  };
 
   const uploadFiles = async (
     ownerType: "message" | "task" | "approval_request",
@@ -1002,23 +1034,33 @@ export function App() {
     );
   }
 
-  const badgeBySection: Partial<Record<WorkspaceSection, number>> = {
+  const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
+    notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
-  const unreadNotifications = workspace.notifications.filter((item) => !item.readAt).length;
+  const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder).map((key) => navItems.find((item) => item.key === key)!);
 
   return (
     <FluentProvider theme={webLightTheme} className="app-provider">
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
-            <button type="button" className="rail-toggle" aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
+            <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
             <CompanyLogo tone="white" className="rail-brand" />
           </div>
-          <nav className="rail-nav">
-            {navItems.map((item) => {
+          <div className="rail-customize">
+            <span>Меню</span>
+            <button type="button" aria-label="Изменить порядок меню" title="Изменить порядок меню" aria-expanded={navigationEditing}
+              disabled={navigationEditing} onClick={() => { setRailPreference(false); setNavigationEditing(true); }}><Edit16Regular /></button>
+          </div>
+          {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
+            order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
+            onClose={() => setNavigationEditing(false)}
+            onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
+          /> : <nav className="rail-nav personal-rail-nav">
+            {orderedNavItems.map((item) => {
               const badge = badgeBySection[item.key];
               const icon = activeSection === item.key && item.key === "messenger"
                 ? <Chat24Filled />
@@ -1026,14 +1068,14 @@ export function App() {
                   ? <TaskListSquareLtr24Filled />
                   : item.icon;
               return (
-                <button
-                  key={item.key}
+                <div key={item.key} className="rail-slot" data-navigation-key={item.key}><button
                   className={`rail-action ${activeSection === item.key ? "active" : ""}`}
                   type="button"
                   aria-label={item.label}
                   title={item.label}
                   aria-current={activeSection === item.key ? "page" : undefined}
                   onClick={() => {
+                    if (item.key === "settings") { setAccountOpen(true); return; }
                     setFocusTarget(undefined);
                     setActiveSection(item.key);
                   }}
@@ -1041,35 +1083,11 @@ export function App() {
                   <span className="rail-icon">{icon}</span>
                   <span className="rail-label">{item.label}</span>
                   {badge ? <span className="rail-badge">{badge > 99 ? "99+" : badge}</span> : null}
-                </button>
+                </button></div>
               );
             })}
-          </nav>
+          </nav>}
           <div className="rail-bottom">
-            <button
-              className={`rail-action ${activeSection === "notifications" ? "active" : ""}`}
-              type="button"
-              aria-label="Уведомления"
-              aria-current={activeSection === "notifications" ? "page" : undefined}
-              onClick={() => setActiveSection("notifications")}
-            >
-              <span className="rail-icon"><Alert24Regular /></span>
-              <span className="rail-label">Уведомления</span>
-              {unreadNotifications ? (
-                <span className="rail-badge">
-                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
-                </span>
-              ) : null}
-            </button>
-            <button
-              className="rail-action"
-              type="button"
-              aria-label="Настройки"
-              onClick={() => setAccountOpen(true)}
-            >
-              <span className="rail-icon"><Settings24Regular /></span>
-              <span className="rail-label">Настройки</span>
-            </button>
             <button className="rail-profile" type="button" onClick={() => setAccountOpen(true)}>
               <Avatar name={workspace.currentUser.name} size={32} color="colorful" />
               <span>{workspace.currentUser.name}</span>
@@ -1131,6 +1149,9 @@ export function App() {
               <MessengerView
                 key={focusTarget?.revision}
                 chats={workspace.chats}
+                personalPreferences={workspace.personalPreferences}
+                onPersonalChat={(chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action))}
+                onPinnedOrder={(order) => personalMutation((token) => reorderPinnedChats(token, order, workspace.personalPreferences.revision))}
                 messages={workspace.messages}
                 attachments={workspace.attachments}
                 people={workspace.people}

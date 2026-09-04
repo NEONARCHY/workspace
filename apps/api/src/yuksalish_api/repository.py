@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from . import messenger_service
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
+from .personal_preferences import get_preferences as get_personal_preferences
 from .tables import (
     approval_actions,
     approval_edges,
@@ -1819,6 +1820,7 @@ async def load_workspace(
         ],
         notifications=notification_responses,
         notification_preferences=notification_preferences,
+        personal_preferences=await get_personal_preferences(connection, current_user),
         attachments=[_attachment(row) for row in attachment_rows],
         workflow=await get_workflow(connection),
     )

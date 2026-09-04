@@ -11,6 +11,15 @@ export const moduleKeys = [
 ] as const;
 
 export type ModuleKey = (typeof moduleKeys)[number];
+export const navigationKeys = [...moduleKeys, "notifications", "settings"] as const;
+export type NavigationKey = (typeof navigationKeys)[number];
+export type PersonalChatAction = "pin" | "unpin" | "archive" | "unarchive";
+export interface PersonalPreferences {
+  readonly pinnedChatIds: readonly string[];
+  readonly archivedChatIds: readonly string[];
+  readonly navigationOrder: readonly NavigationKey[];
+  readonly revision: number;
+}
 export type ModuleStatus = "placeholder" | "available";
 
 export interface LocalizedLabel {
@@ -525,6 +534,7 @@ export interface WorkflowDefinition {
 }
 
 export interface WorkspaceBootstrap {
+  readonly personalPreferences: PersonalPreferences;
   readonly currentUser: WorkspacePerson;
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];

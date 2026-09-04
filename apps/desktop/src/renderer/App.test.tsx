@@ -1249,6 +1249,8 @@ describe("corporate workspace authentication alpha", () => {
       "Мессенджер",
       "Календарь",
       "Сотрудники",
+      "Уведомления",
+      "Настройки",
     ]);
   });
 

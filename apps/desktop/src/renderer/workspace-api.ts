@@ -1,4 +1,7 @@
 import type {
+  NavigationKey,
+  PersonalChatAction,
+  PersonalPreferences,
   ApprovalRequestSummary,
   AttachmentOwnerType,
   AuthenticationSession,
@@ -37,6 +40,24 @@ import type {
 } from "@yuksalish/contracts";
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+
+export function changePersonalChat(token: string, chatId: string, action: PersonalChatAction) {
+  return apiRequest<PersonalPreferences>(`/personal-preferences/chats/${chatId}`, {
+    method: "PATCH", body: JSON.stringify({ action }),
+  }, token);
+}
+
+export function reorderPinnedChats(token: string, chatIds: readonly string[], revision: number) {
+  return apiRequest<PersonalPreferences>("/personal-preferences/pinned-chats", {
+    method: "PUT", body: JSON.stringify({ chatIds, revision }),
+  }, token);
+}
+
+export function reorderNavigation(token: string, order: readonly NavigationKey[], revision: number) {
+  return apiRequest<PersonalPreferences>("/personal-preferences/navigation", {
+    method: "PUT", body: JSON.stringify({ order, revision }),
+  }, token);
+}
 
 async function boundedRequest<T>(url: string, options: RequestInit, read: (response: Response) => Promise<T>, timeout = 30_000): Promise<T> {
   const controller = new AbortController();

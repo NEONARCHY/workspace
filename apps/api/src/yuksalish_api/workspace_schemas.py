@@ -823,6 +823,54 @@ class NotificationPreferencesUpdate(ApiModel):
     reminders_enabled: bool
 
 
+NavigationKey = Literal[
+    "crm", "tasks", "payment_requests", "feed", "projects", "trip_approvals",
+    "messenger", "calendar", "employees", "notifications", "settings",
+]
+DEFAULT_NAVIGATION: list[NavigationKey] = [
+    "crm", "tasks", "payment_requests", "feed", "projects", "trip_approvals",
+    "messenger", "calendar", "employees", "notifications", "settings",
+]
+
+
+class PersonalPreferencesResponse(ApiModel):
+    pinned_chat_ids: list[str] = Field(default_factory=list)
+    archived_chat_ids: list[str] = Field(default_factory=list)
+    navigation_order: list[NavigationKey] = Field(default_factory=lambda: list(DEFAULT_NAVIGATION))
+    revision: int = 0
+
+
+class PersonalChatAction(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    action: Literal["pin", "unpin", "archive", "unarchive"]
+
+
+class PinnedChatOrder(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    chat_ids: list[UUID] = Field(max_length=100)
+    revision: int = Field(ge=0)
+
+    @field_validator("chat_ids")
+    @classmethod
+    def unique_chats(cls, value: list[UUID]) -> list[UUID]:
+        if len(value) != len(set(value)):
+            raise ValueError("Чаты не должны повторяться")
+        return value
+
+
+class NavigationOrder(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    order: list[NavigationKey] = Field(min_length=11, max_length=11)
+    revision: int = Field(ge=0)
+
+    @field_validator("order")
+    @classmethod
+    def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
+        if set(value) != set(DEFAULT_NAVIGATION):
+            raise ValueError("Меню должно содержать все разделы без повторений")
+        return value
+
+
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
     can_create_payment_requests: bool
@@ -838,5 +886,6 @@ class WorkspaceBootstrapResponse(ApiModel):
     calendar_events: list[CalendarEventResponse]
     notifications: list[NotificationResponse]
     notification_preferences: NotificationPreferencesResponse
+    personal_preferences: PersonalPreferencesResponse
     attachments: list[AttachmentResponse]
     workflow: WorkflowResponse
