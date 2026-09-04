@@ -167,8 +167,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .message-body strong { display: block; margin-bottom: 4px; color: #0f6cbd; font-size: 11px; }
 .message-body p { margin-bottom: 4px; color: #24384b; font-size: 13px; line-height: 1.45; }
 .message-body time { display: block; color: #718096; font-size: 9px; text-align: right; }
-.message-task-action { opacity: .58; }
-.message-body:hover .message-task-action, .message-task-action:focus-visible { opacity: 1; }
 .composer { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 8px; padding: 12px 18px; border-top: 1px solid #d8dee7; background: #ffffff; }
 .composer > span { width: 100%; }
 .composer-input { display: grid; min-width: 0; gap: 5px; }
@@ -179,6 +177,16 @@ button { -webkit-tap-highlight-color: transparent; }
 .conversation-search > span { width: 100%; }
 .message-body p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .message-actions { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 4px; }
+.message-actions > .fui-Button { min-width: 0; min-height: 24px; padding: 2px 6px; font-size: 11px; line-height: 16px; }
+.message-actions .fui-Button__icon { font-size: 14px; width: 14px; height: 14px; }
+/* Keep the row in the layout: revealing actions must not move the message. */
+@media (hover: hover) and (pointer: fine) {
+  .message-actions { opacity: 0; pointer-events: none; transition: opacity 180ms ease; }
+  .message:hover .message-actions, .message:focus-within .message-actions { opacity: 1; pointer-events: auto; }
+}
+@media (hover: none), (pointer: coarse) {
+  .message-actions > .fui-Button { min-height: 36px; padding: 6px 8px; font-size: 12px; }
+}
 .message-quote { display: grid; gap: 2px; max-height: 84px; overflow: hidden; margin: 4px 0 8px; padding: 6px 10px; border-left: 3px solid #0f6cbd; border-radius: 4px; color: #466078; background: rgb(15 108 189 / 6%); font-size: 12px; overflow-wrap: anywhere; }
 .message-mentions { display: flex; flex-wrap: wrap; gap: 5px; margin: 5px 0; color: #0b5a96; font-size: 11px; }
 .message-mentions span { padding: 2px 6px; border-radius: 4px; background: #dbeeff; }

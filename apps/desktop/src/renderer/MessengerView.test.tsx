@@ -179,6 +179,7 @@ describe("Private messenger", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Новое сообщение")).toHaveValue(""),
     );
+    expect(screen.getByLabelText("Новое сообщение")).toHaveFocus();
     fireEvent.change(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Не отправлять другому" },
     });
@@ -230,6 +231,80 @@ describe("Private messenger", () => {
     expect(onDeleteMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
     await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
+  });
+
+  it("opens the last own message with ArrowUp, outside search results, then saves its revision", async () => {
+    const own: ChatMessage = { id: "latest-own", chatId: "finance", authorId: "aziza", body: "Последнее своё", time: "12:00", canEdit: true, revision: 3 };
+    const onEditMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [
+      { ...own, id: "older", body: "Старое своё" },
+      own,
+      { ...own, id: "incoming", authorId: "baxtiyor", body: "Ответ коллеги", canEdit: false },
+      { ...own, id: "removed", deletedAt: "2026-09-04T09:00:00Z", body: "" },
+      { ...own, id: "other-chat", chatId: "other", body: "В другом чате" },
+    ], onEditMessage });
+    fireEvent.change(screen.getByLabelText("Поиск в переписке"), { target: { value: "Старое" } });
+    expect(screen.queryByText("Последнее своё")).not.toBeInTheDocument();
+    const composer = screen.getByLabelText("Новое сообщение");
+    composer.focus();
+    fireEvent.keyDown(composer, { key: "ArrowUp" });
+    const editor = screen.getByLabelText("Изменить текст сообщения");
+    expect(editor).toHaveValue(own.body);
+    expect(editor).toHaveFocus();
+    expect((editor as HTMLTextAreaElement).selectionStart).toBe(own.body.length);
+    fireEvent.change(editor, { target: { value: "Исправленный текст" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить сообщение" }));
+    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст"));
+    await waitFor(() => expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument());
+    expect(composer).toHaveFocus();
+    expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
+  });
+
+  it("preserves the composer draft and current edit; Escape returns focus without saving", () => {
+    const own: ChatMessage = { id: "own", chatId: "finance", authorId: "aziza", body: "Мой текст", time: "12:00", canEdit: true };
+    const { props } = renderMessenger({ messages: [own] });
+    const composer = screen.getByLabelText("Новое сообщение");
+    for (const draft of ["Черновик", " "]) {
+      fireEvent.change(composer, { target: { value: draft } });
+      fireEvent.keyDown(composer, { key: "ArrowUp" });
+      expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+      expect(composer).toHaveValue(draft);
+    }
+    fireEvent.change(composer, { target: { value: "" } });
+    fireEvent.keyDown(composer, { key: "ArrowUp" });
+    const editor = screen.getByLabelText("Изменить текст сообщения");
+    fireEvent.change(editor, { target: { value: "Несохранённое изменение" } });
+    fireEvent.keyDown(composer, { key: "ArrowUp" });
+    expect(editor).toHaveValue("Несохранённое изменение");
+    fireEvent.keyDown(editor, { key: "Escape" });
+    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(composer).toHaveFocus();
+    expect(props.onEditMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(composer, { key: "ArrowUp" });
+    expect(screen.getByLabelText("Изменить текст сообщения")).toHaveValue(own.body);
+  });
+
+  it.each(["ctrlKey", "altKey", "metaKey", "shiftKey", "isComposing"])("ignores ArrowUp with %s", (modifier) => {
+    renderMessenger({ messages: [{ id: "own", chatId: "finance", authorId: "aziza", body: "Мой текст", time: "12:00", canEdit: true }] });
+    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp", [modifier]: true });
+    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+  });
+
+  it("does not fall back to older messages when the latest own message cannot be edited", () => {
+    const own: ChatMessage = { id: "old", chatId: "finance", authorId: "aziza", body: "Старое", time: "12:00", canEdit: true };
+    renderMessenger({ messages: [own, { ...own, id: "last", body: "Новое", canEdit: false }] });
+    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
+    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+  });
+
+  it("does nothing when there are no own messages in the active chat", () => {
+    renderMessenger({ messages: [
+      { id: "incoming", chatId: "finance", authorId: "baxtiyor", body: "Коллега", time: "12:00", canEdit: true },
+      { id: "other", chatId: "other", authorId: "aziza", body: "Другое", time: "12:00", canEdit: true },
+    ] });
+    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
+    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Изменить сообщение:/ })).not.toBeInTheDocument();
   });
 
   it("supports read-only members and does not render deleted text or its actions", () => {

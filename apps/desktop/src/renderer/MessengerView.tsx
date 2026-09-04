@@ -85,6 +85,10 @@ function Conversation({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
+  const wasEditing = useRef(false);
+  const focusAfterSend = useRef(false);
   const restoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
@@ -96,6 +100,7 @@ function Conversation({
   );
   const visibleMessages = activeMessages.filter(
     (message) =>
+      message.id === editing?.id ||
       !query ||
       (!message.deletedAt &&
         message.body.toLowerCase().includes(query.toLowerCase())),
@@ -108,6 +113,29 @@ function Conversation({
       pane.scrollTop = pane.scrollHeight;
     }
   }, [latestMessage?.id, latestMessage?.authorId, currentUserId]);
+  useEffect(() => {
+    if (editing) {
+      const input = editInputRef.current;
+      input?.focus();
+      input?.setSelectionRange(input.value.length, input.value.length);
+      input?.scrollIntoView?.({ block: "nearest" });
+    } else if (wasEditing.current) {
+      composerInputRef.current?.focus();
+    }
+    wasEditing.current = Boolean(editing);
+  }, [editing]);
+  useEffect(() => {
+    if (!busy && focusAfterSend.current) {
+      focusAfterSend.current = false;
+      composerInputRef.current?.focus();
+    }
+  }, [busy, draft]);
+  const startEditing = (message: ChatMessage) => {
+    if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
+    setEditing(message);
+    setEditBody(message.body);
+    setError("");
+  };
   const run = async (operation: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -125,6 +153,7 @@ function Conversation({
   };
   const send = () => {
     if (!canSend || busy || !draft.trim()) return;
+    focusAfterSend.current = true;
     void run(async () => {
       const message = await onSendMessage(chat.id, draft.trim(), pendingFiles, {
         replyToMessageId: reply?.id,
@@ -188,7 +217,7 @@ function Conversation({
             ? new Date(previous).toLocaleDateString("ru-RU")
             : "История переписки";
           const own = message.authorId === currentUserId;
-          const mayEdit = message.canEdit && canSend && !message.deletedAt;
+          const mayEdit = own && message.canEdit && canSend && !message.deletedAt;
           return (
             <div key={message.id}>
               {(index === 0 || date !== previousDate) && (
@@ -223,11 +252,18 @@ function Conversation({
                   {editing?.id === message.id ? (
                     <div className="message-edit-form">
                       <Textarea
+                        textarea={{ ref: editInputRef }}
                         aria-label="Изменить текст сообщения"
                         value={editBody}
                         maxLength={20000}
                         disabled={busy}
                         onChange={(_, data) => setEditBody(data.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape" && !busy && !event.nativeEvent.isComposing) {
+                            event.preventDefault();
+                            setEditing(undefined);
+                          }
+                        }}
                       />
                       <div className="chat-dialog-actions">
                         <Button
@@ -308,10 +344,7 @@ function Conversation({
                               size="small"
                               disabled={busy}
                               aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
-                              onClick={() => {
-                                setEditing(message);
-                                setEditBody(message.body);
-                              }}
+                              onClick={() => startEditing(message)}
                             >
                               Изменить
                             </Button>
@@ -515,7 +548,9 @@ function Conversation({
                 </div>
               )}
               <Input
+                input={{ ref: composerInputRef }}
                 aria-label="Новое сообщение"
+                aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
                 placeholder="Напишите сообщение · @ упомянуть"
                 maxLength={20000}
                 value={draft}
@@ -525,6 +560,22 @@ function Conversation({
                   if (data.value.endsWith("@")) setMentionPicker(true);
                 }}
                 onKeyDown={(event) => {
+                  if (
+                    event.key === "ArrowUp" &&
+                    !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
+                    !event.nativeEvent.isComposing &&
+                    draft.length === 0 && !editing && !deleting && !taskSource && !busy
+                  ) {
+                    // Use the full conversation, not the search results. Do not skip
+                    // a newer non-editable message in favour of an older one.
+                    const lastOwn = activeMessages.filter(
+                      (message) => message.authorId === currentUserId && !message.deletedAt,
+                    ).at(-1);
+                    if (lastOwn?.canEdit && canSend) {
+                      event.preventDefault();
+                      startEditing(lastOwn);
+                    }
+                  }
                   if (
                     event.key === "Enter" &&
                     !event.shiftKey &&
