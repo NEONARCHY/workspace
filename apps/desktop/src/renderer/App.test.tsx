@@ -34,11 +34,29 @@ const workflow = {
       config: {},
     },
     {
+      id: "manager",
+      kind: "approval" as const,
+      label: "Согласование",
+      detail: "",
+      positionX: 240,
+      positionY: 0,
+      config: {},
+    },
+    {
+      id: "correction",
+      kind: "correction" as const,
+      label: "Доработка",
+      detail: "",
+      positionX: 480,
+      positionY: 160,
+      config: {},
+    },
+    {
       id: "end",
       kind: "end" as const,
       label: "Согласовано",
       detail: "",
-      positionX: 240,
+      positionX: 480,
       positionY: 0,
       config: {},
     },
@@ -47,8 +65,32 @@ const workflow = {
     {
       id: "edge",
       source: "start",
-      target: "end",
+      target: "manager",
       outcome: "submit",
+      condition: {},
+      sortOrder: 0,
+    },
+    {
+      id: "approve-edge",
+      source: "manager",
+      target: "end",
+      outcome: "approve",
+      condition: {},
+      sortOrder: 0,
+    },
+    {
+      id: "return-edge",
+      source: "manager",
+      target: "correction",
+      outcome: "return",
+      condition: {},
+      sortOrder: 0,
+    },
+    {
+      id: "resubmit-edge",
+      source: "correction",
+      target: "start",
+      outcome: "resubmit",
       condition: {},
       sortOrder: 0,
     },
@@ -706,8 +748,19 @@ function mockServer(
       const current = requests[0]!;
       const changed = {
         ...current,
-        status: payload.action === "resubmit" ? "running" as const : current.status,
-        statusLabel: payload.action === "resubmit" ? "Ожидает решения" : current.statusLabel,
+        status: payload.action === "resubmit"
+          ? "running" as const
+          : payload.action === "approve"
+            ? "approved" as const
+            : current.status,
+        statusLabel: payload.action === "resubmit"
+          ? "Ожидает решения"
+          : payload.action === "approve"
+            ? "Согласовано"
+            : current.statusLabel,
+        activeNodeKeys: payload.action === "approve" ? [] : current.activeNodeKeys,
+        activeStages: payload.action === "approve" ? [] : current.activeStages,
+        stageLabel: payload.action === "approve" ? "Согласовано" : current.stageLabel,
         actions: [
           ...current.actions,
           {
@@ -968,6 +1021,55 @@ describe("corporate workspace authentication alpha", () => {
     ));
   });
 
+  it("opens a structured payment card and advances it by a protected board drop", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    expect(screen.getByText("Что оплачиваем")).toBeInTheDocument();
+    expect(screen.getByText("Реквизиты платежа")).toBeInTheDocument();
+    expect(screen.getByText("Документы")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+      target: { value: "Заявка для доски" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+      target: { value: "7350000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+
+    const openCard = await screen.findByRole("button", {
+      name: "Открыть заявку №502: Заявка для доски",
+    });
+    fireEvent.click(openCard);
+    expect(screen.getByRole("dialog", { name: "Заявка для доски" })).toBeInTheDocument();
+    expect(screen.getByText("Информация по заявке")).toBeInTheDocument();
+    expect(screen.getByText("Ход согласования")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
+
+    const card = openCard.closest("article");
+    expect(card).not.toBeNull();
+    const dataTransfer = {
+      effectAllowed: "none",
+      dropEffect: "none",
+      setData: vi.fn(),
+    };
+    fireEvent.dragStart(card!, { dataTransfer });
+    const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
+    fireEvent.dragOver(targetColumn, { dataTransfer });
+    fireEvent.drop(targetColumn, { dataTransfer });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/approval-requests/server-request/actions"),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"action":"approve"'),
+      }),
+    ));
+    expect(await screen.findByText(/сервер обработал переход на этап «Согласовано»/)).toBeInTheDocument();
+  });
+
   it("edits a returned request and resubmits its new version", async () => {
     mockServer({ withReturnedRequest: true });
     render(<App />);
@@ -981,7 +1083,7 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить и отправить повторно" }));
 
-    expect(await screen.findByText(/4.800.000 UZS/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/4.800.000 UZS/)).length).toBeGreaterThan(0);
     expect(screen.getByText("Версия 2 · создана из задачи")).toBeInTheDocument();
   });
 
