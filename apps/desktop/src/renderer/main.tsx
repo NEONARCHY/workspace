@@ -5,6 +5,7 @@ import { App } from "./App";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
 import "./responsive.css";
+import "./context-colors.css";
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));

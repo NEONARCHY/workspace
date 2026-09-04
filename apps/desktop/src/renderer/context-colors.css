@@ -1,0 +1,76 @@
+/* Shared semantic accents. Small, bounded shadows only: no blur filters,
+   no looping glow, no extra full-window layers or per-frame shadow animation. */
+:root {
+  --context-brand: #0f6cbd;
+  --context-success: #107c41;
+  --context-warning: #966100;
+  --context-danger: #b42332;
+  --context-secondary: #6b52cc;
+  --context-accent: var(--context-brand);
+  --context-halo: 0 0 0 1px color-mix(in srgb, var(--context-accent) 20%, transparent), 0 3px 12px color-mix(in srgb, var(--context-accent) 13%, transparent);
+  --context-inset: inset 3px 0 0 var(--context-accent), inset 0 0 16px color-mix(in srgb, var(--context-accent) 8%, transparent);
+}
+
+/* Context stays with the component; actual Bitrix header colours are untouched. */
+.approval-column { --context-accent: var(--approval-stage-color, var(--context-brand)); }
+.project-stage-preparation { --context-accent: var(--context-warning); }
+.project-stage-approval, .node-parallel, .calendar-event-pill.trip { --context-accent: var(--context-secondary); }
+.project-stage-success, .node-end, .security-ok { --context-accent: var(--context-success); }
+.project-stage-failure, .node-correction, .calendar-event-pill.deadline { --context-accent: var(--context-danger); }
+.node-condition, .calendar-event-pill.task { --context-accent: var(--context-warning); }
+.notification-row.priority-attention { --context-accent: var(--context-warning); }
+.notification-row.priority-urgent { --context-accent: var(--context-danger); }
+.kanban-column[data-task-status="new"] { --context-accent: #60788b; }
+.kanban-column[data-task-status="awaiting_review"] { --context-accent: var(--context-warning); }
+.kanban-column[data-task-status="completed"] { --context-accent: var(--context-success); }
+.kanban-column > header { border-bottom: 2px solid color-mix(in srgb, var(--context-accent) 48%, transparent); }
+
+/* Keep halo formulas local so nested semantic accents resolve at the element. */
+:is(.approval-column-total, .approval-board-card, .project-card, .kanban-card,
+    .workflow-node, .notification-row, .calendar-event-pill, .fui-Button) {
+  --context-halo: 0 0 0 1px color-mix(in srgb, var(--context-accent) 20%, transparent), 0 3px 12px color-mix(in srgb, var(--context-accent) 13%, transparent);
+  transition-property: background-color, border-color, color, opacity, transform;
+}
+.app-provider .fui-Button:not(:disabled):not([aria-disabled="true"]):is(:hover, :focus-visible) { box-shadow: var(--context-halo); }
+.app-provider :is(.fui-Input, .fui-Textarea):focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--context-brand) 13%, transparent); }
+.app-provider .fui-Badge { box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 14%, transparent); }
+
+/* Selection remains legible without motion, with the existing focus outlines. */
+.rail-action.active { --context-accent: #75c5ff; background: #234b6b; box-shadow: inset 3px 0 0 #9fd7ff, inset 0 0 18px rgb(75 174 250 / 14%); }
+:is(.chat-row.selected, .task-row.selected, .employee-list > button.selected,
+    .position-list > button.selected, .trip-list-item.selected) { box-shadow: var(--context-inset); }
+:is(.approval-board-filters, .task-filters, .view-switch, .auth-mode-switch) > button.active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--context-brand) 22%, transparent), 0 2px 8px color-mix(in srgb, var(--context-brand) 9%, transparent);
+}
+:is(.approval-mode-switch, .notification-metrics) > button.active { box-shadow: inset 0 -5px 10px -7px var(--context-brand); }
+
+.approval-column-total { border-color: color-mix(in srgb, var(--context-accent) 32%, #dce4eb); box-shadow: inset 0 2px 0 color-mix(in srgb, var(--context-accent) 50%, transparent); }
+.approval-column:is(:hover, .drop-allowed, .drop-active) > .approval-column-total { box-shadow: var(--context-halo); }
+.approval-column.drop-active { outline-color: var(--context-brand); }
+:is(.approval-board-card, .project-card, .kanban-card):is(:hover, :focus-within, .selected) { box-shadow: var(--context-halo); border-color: color-mix(in srgb, var(--context-accent) 50%, #d5dee7); }
+.workflow-node:is(:hover, .selected) { box-shadow: var(--context-halo) !important; }
+.notification-row:is(.priority-attention, .priority-urgent) { border-color: color-mix(in srgb, var(--context-accent) 24%, #d9e2e9); }
+.notification-row:is(:hover, :focus-within) { box-shadow: var(--context-halo); }
+.notification-row:is(.priority-attention, .priority-urgent)::before { background: var(--context-accent); box-shadow: 0 0 8px color-mix(in srgb, var(--context-accent) 28%, transparent); }
+.calendar-event-pill:not(.cancelled):is(:hover, :focus-visible) { box-shadow: var(--context-halo); }
+.feed-card:focus-within { box-shadow: 0 0 0 1px #a6cbe7, 0 3px 12px rgb(15 108 189 / 10%); }
+.connection-state.online::before { background: var(--context-success); box-shadow: 0 0 0 3px rgb(16 124 65 / 9%), 0 0 7px rgb(16 124 65 / 22%); }
+:is(.auth-error, .approval-form-error, .messenger-error, .trip-feedback.error) { box-shadow: inset 3px 0 0 var(--context-danger), inset 0 0 14px rgb(180 35 50 / 5%); }
+.security-warning { box-shadow: inset 0 0 0 1px rgb(150 97 0 / 16%), 0 2px 8px rgb(150 97 0 / 9%); }
+.security-ok { box-shadow: inset 0 0 0 1px rgb(16 124 65 / 16%), 0 2px 8px rgb(16 124 65 / 9%); }
+
+/* This bounded overlay animates opacity only and cannot intercept pointer input. */
+.animated-amount { position: relative; display: block; isolation: isolate; font-variant-numeric: tabular-nums; }
+.amount-accessible { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.amount-visual { position: relative; z-index: 1; }
+.animated-amount::before { position: absolute; z-index: 0; inset: -3px -4px; border-radius: 5px; box-shadow: inset 0 0 10px color-mix(in srgb, var(--context-accent) 20%, transparent); opacity: 0; pointer-events: none; content: ""; }
+.animated-amount[data-animating="true"]::before { animation: amount-update-glow 260ms ease-out both; }
+@keyframes amount-update-glow { 0% { opacity: 0; } 20% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .animated-amount::before { display: none; animation: none; }
+}
+@media (forced-colors: active) {
+  .app-provider *, .app-provider *::before, .app-provider *::after { box-shadow: none !important; }
+  .animated-amount::before { display: none; }
+  :is(.rail-action.active, .chat-row.selected, .task-row.selected, .employee-list > button.selected) { outline: 2px solid Highlight; outline-offset: -2px; }
+}

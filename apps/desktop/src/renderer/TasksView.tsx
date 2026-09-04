@@ -272,7 +272,7 @@ export function TasksView(props: TasksViewProps) {
 
         {mode === "list" ? <TaskList tasks={visibleTasks} selectedId={selectedTask?.id} personById={personById} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
-            {kanbanStatuses.map((status) => <section className="kanban-column" key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
+            {kanbanStatuses.map((status) => <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
               <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{tasks.filter((task) => task.status === status).length}</Badge></header>
               <div className="kanban-stack">{tasks.filter((task) => task.status === status).map((task) => <button className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}</div>
             </section>)}

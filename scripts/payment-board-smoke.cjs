@@ -46,7 +46,10 @@ async function main() {
     await route.fulfill({ json: requests[0] });
   });
   const column = (key) => page.locator(`.approval-column[data-stage-key="${key}"]`);
-  const total = async (key) => normalize(await column(key).locator(".approval-column-total").innerText());
+  const total = async (key) => {
+    await page.waitForFunction((key) => !document.querySelector(`.approval-column[data-stage-key="${key}"] [data-animating]`), key);
+    return normalize(`Сумма в колонке ${(await column(key).locator(".amount-visual").allTextContents()).join(" ")}`);
+  };
   try {
     if (!native) await page.goto(origin);
     await page.getByRole("textbox", { name: /Логин/ }).fill("malika");
@@ -65,16 +68,36 @@ async function main() {
     await column("deputy_chair").scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(output, "totals-before.png") });
     const card = page.getByRole("button", { name: "Открыть заявку №QA-1: Тест перевод А", exact: true }).locator("..");
+    await page.evaluate(() => {
+      window.amountFrames = [];
+      new MutationObserver((records) => {
+        for (const record of records) {
+          const node = record.target.nodeType === Node.TEXT_NODE ? record.target.parentElement : record.target;
+          const visual = node?.closest?.(".amount-visual");
+          const column = visual?.closest("[data-stage-key]"), amount = visual?.closest(".animated-amount");
+          if (column && amount) window.amountFrames.push({ key: column.dataset.stageKey, text: visual.textContent, exact: amount.dataset.totalValue });
+        }
+      }).observe(document.querySelector(".approval-kanban"), { subtree: true, characterData: true, childList: true });
+    });
     await card.dragTo(column("chair"));
     await page.getByRole("status").filter({ hasText: "сервер обработал переход" }).waitFor();
     assert.equal(transitions, 1);
     assert.equal(await total("deputy_chair"), "Сумма в колонке 19 UZS 12,50 USD");
     assert.equal(await total("chair"), "Сумма в колонке 25 000 000 UZS");
+    const frames = await page.evaluate(() => window.amountFrames);
+    assert(frames.some((frame) => frame.key === "chair" && normalize(frame.text) !== "0 UZS" && frame.text !== frame.exact), "Visible column must show intermediate animated values");
+    assert.equal(await column("chair").locator(".amount-accessible").textContent(), await column("chair").locator(".amount-visual").textContent());
     await page.getByLabel("Поиск заявок").fill("Тест перевод А");
     assert.equal(await total("deputy_chair"), "Сумма в колонке 0 UZS");
     assert.equal(await total("chair"), "Сумма в колонке 25 000 000 UZS");
     await page.getByLabel("Поиск заявок").fill("");
     assert.equal(await total("deputy_chair"), "Сумма в колонке 19 UZS 12,50 USD");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.getByLabel("Поиск заявок").fill("Тест перевод А");
+    assert.equal(await page.locator(".animated-amount[data-animating]").count(), 0);
+    assert.equal(await total("deputy_chair"), "Сумма в колонке 0 UZS");
+    await page.getByLabel("Поиск заявок").fill("");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     for (const width of [800, 640]) {
       if (native) await app.evaluate(({ BrowserWindow }, width) => BrowserWindow.getAllWindows()[0].setSize(width, 600), width);
       else await page.setViewportSize({ width, height: 600 });
@@ -83,7 +106,7 @@ async function main() {
       await page.screenshot({ path: path.join(output, `${width}-totals.png`) });
     }
     assert.deepEqual(errors, []);
-    console.log(`PASS: 13 exact Bitrix colours, zero/decimal/mixed-currency totals, drag-and-drop recalculation, filters and compact windows${native ? " in packaged Electron" : " in Edge"}; no payment writes to server.`);
+    console.log(`PASS: 13 exact Bitrix colours, precise animated/mixed-currency totals with intermediate frames, reduced motion, drag-and-drop, filters and compact windows${native ? " in packaged Electron" : " in Edge"}; no payment writes to server.`);
   } catch (error) {
     await page.screenshot({ path: path.join(output, "failure.png") }).catch(() => undefined);
     throw error;

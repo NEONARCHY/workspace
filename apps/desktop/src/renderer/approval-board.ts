@@ -28,6 +28,14 @@ export function approvalStagePalette(column: { readonly key: string; readonly ki
 
 const integerFormat = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 });
 
+export function formatMinorUnits(minorUnits: bigint | null, currency: string): string {
+  if (minorUnits === null) return `Проверьте сумму (${currency})`;
+  const absolute = minorUnits < 0n ? -minorUnits : minorUnits;
+  const fraction = absolute % 100n;
+  const amount = `${minorUnits < 0n ? "−" : ""}${integerFormat.format(absolute / 100n)}${fraction ? `,${String(fraction).padStart(2, "0")}` : ""}`;
+  return `${amount} ${currency}`;
+}
+
 /** Sum minor units before formatting; never add different currencies together. */
 export function approvalColumnTotals(requests: readonly Pick<ApprovalRequestSummary, "amount" | "currency">[]) {
   const totals = new Map<string, bigint | null>();
@@ -43,11 +51,5 @@ export function approvalColumnTotals(requests: readonly Pick<ApprovalRequestSumm
   if (!totals.size) totals.set("UZS", 0n);
   return [...totals.entries()]
     .sort(([left], [right]) => left === right ? 0 : left === "UZS" ? -1 : right === "UZS" ? 1 : left.localeCompare(right))
-    .map(([currency, minorUnits]) => {
-      if (minorUnits === null) return { currency, formatted: `Проверьте сумму (${currency})` };
-      const absolute = minorUnits < 0n ? -minorUnits : minorUnits;
-      const fraction = absolute % 100n;
-      const amount = `${minorUnits < 0n ? "−" : ""}${integerFormat.format(absolute / 100n)}${fraction ? `,${String(fraction).padStart(2, "0")}` : ""}`;
-      return { currency, formatted: `${amount} ${currency}` };
-    });
+    .map(([currency, minorUnits]) => ({ currency, minorUnits, formatted: formatMinorUnits(minorUnits, currency) }));
 }

@@ -46,6 +46,7 @@ import "@xyflow/react/dist/style.css";
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
 import type { PaymentRequestInput } from "./workspace-api";
 import { approvalColumnTotals, approvalStagePalette } from "./approval-board";
+import { AnimatedAmount } from "./AnimatedAmount";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
@@ -1168,7 +1169,7 @@ export function ApprovalsView({
                   </header>
                   <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="Сумма заявок, показанных в этой колонке с текущими фильтрами. Разные валюты считаются отдельно.">
                     <span>Сумма в колонке</span>
-                    {totals.map((total) => <strong key={total.currency}>{total.formatted}</strong>)}
+                    {totals.map((total) => <AnimatedAmount key={total.currency} currency={total.currency} minorUnits={total.minorUnits} />)}
                   </div>
                   <div className="approval-column-stack">
                     {columnRequests.map((request) => {
