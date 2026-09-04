@@ -261,6 +261,8 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountInvite, setAccountInvite] = useState(false);
+  const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); };
   const [navigationEditing, setNavigationEditing] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
@@ -335,6 +337,7 @@ export function App() {
     const current = session;
     activeToken.current = undefined;
     setAccountOpen(false);
+    setAccountInvite(false);
     setNavigationEditing(false);
     setSession(undefined);
     setAuthError(undefined);
@@ -561,6 +564,7 @@ export function App() {
       });
       setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
       setActiveSection("tasks");
+      setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 }));
       setConnectionDetail("Задача создана из сообщения");
       return task;
     } catch (error) {
@@ -1252,18 +1256,19 @@ export function App() {
               />
             ) : null}
             {activeSection === "employees" ? (
-              <EmployeesView token={session.accessToken} currentUser={workspace.currentUser} />
+              <EmployeesView token={session.accessToken} currentUser={workspace.currentUser} onInvite={() => { setAccountInvite(true); setAccountOpen(true); }} />
             ) : null}
             </RecoveryBoundary>
           </main>
         </div>
       </div>
       {accountOpen ? (
-        <RecoveryBoundary overlay onHome={() => setAccountOpen(false)}>
+        <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
           token={session.accessToken}
           user={workspace.currentUser}
-          onClose={() => setAccountOpen(false)}
+          onClose={closeAccount}
+          initialSection={accountInvite ? "invite" : undefined}
           onLogout={() => void handleLogout()}
         />
         </RecoveryBoundary>

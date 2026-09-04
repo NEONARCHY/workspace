@@ -1,0 +1,94 @@
+/* Full-width work lists. Same brand tokens and motion; no effects on table geometry. */
+.tasks-view.bp5-tasks { display: flex; flex-direction: column; min-height: 0; }
+.tasks-view.bp5-tasks .tasks-main { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
+.employees-view { display: flex; flex-direction: column; min-height: 0; }
+.tasks-view .section-toolbar, .employees-view .section-toolbar { flex: none; min-height: 94px; }
+.tasks-view .task-filters { flex: none; align-items: center; padding: 12px 24px 16px; }
+.tasks-view .task-search { flex: 1 1 260px; min-width: 160px; max-width: none; margin-left: auto; }
+.task-role-filter { min-height: 36px; padding: 7px 10px; color: var(--ws-text); border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; font-size: 13px; }
+.record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px 24px 18px; }
+.record-list-controls .employee-search { flex: 1 1 280px; width: auto; margin: 0; }
+.record-list-controls > label { display: flex; flex-direction: column; gap: 5px; color: var(--ws-muted); font-size: 12px; }
+.record-list-controls select { min-height: 36px; min-width: 165px; max-width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; color: var(--ws-text); font-size: 13px; }
+.record-table-frame { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; margin: 0 24px 24px; overflow: hidden; border: 1px solid var(--ws-line); border-radius: 14px; background: white; }
+.record-table-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.record-table-scroll:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -3px; }
+.record-table { width: 100%; min-width: 980px; border-spacing: 0; border-collapse: separate; table-layout: fixed; text-align: left; font-size: 13px; color: var(--ws-text); }
+.record-table th { position: sticky; z-index: 2; top: 0; height: 48px; padding: 0 14px; border-bottom: 1px solid var(--ws-line); background: var(--ws-muted-surface); font-size: 12px; font-weight: 500; }
+.record-table th button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 38px; padding: 0; border: 0; background: transparent; color: var(--ws-muted); font-weight: 500; text-align: left; cursor: pointer; }
+.record-table th button:hover, .record-table th[aria-sort] button { color: var(--ws-link); }
+.record-table th button > span { flex: none; font-size: 15px; }
+.record-table td { padding: 17px 14px; border-bottom: 1px solid var(--ws-line); line-height: 1.45; vertical-align: middle; overflow-wrap: anywhere; background: white; transition: background-color var(--ws-motion-fast) var(--ws-ease); }
+.record-table tbody tr:last-child td { border-bottom: 0; }
+.record-table .fui-Badge { max-width: 100%; height: auto; min-height: 20px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.record-table .record-row { display: table-row; width: auto; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; cursor: pointer; }
+.record-table .record-row > :last-child { justify-self: auto; }
+.record-table .record-row:hover td, .record-table .record-row:focus-within td, .record-table .record-row.selected td { background: #eef7f9; }
+.record-table .record-row td:first-child { background: #f5fafb; }
+.record-table .record-row:hover td:first-child, .record-table .record-row:focus-within td:first-child { background: #e5f3f6; }
+.task-record-table th:first-child { width: 30%; }
+.task-record-table th:nth-child(2) { width: 12%; }
+.task-record-table th:nth-child(3) { width: 14%; }
+.task-record-table th:nth-child(4), .task-record-table th:nth-child(5) { width: 15%; }
+.task-record-table th:last-child { width: 14%; }
+.record-open { display: inline; padding: 0; border: 0; background: none; color: var(--ws-link); font-size: 14px; line-height: 1.45; text-align: left; cursor: pointer; }
+.record-open strong { font-size: inherit; font-weight: 600; white-space: normal; }
+.record-open:hover { text-decoration: underline; text-underline-offset: 3px; }
+.record-secondary { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; color: var(--ws-muted); font-size: 11px; }
+.record-secondary:empty { display: none; }
+.record-person { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.record-person > .fui-Avatar { flex: none; }
+.record-person > span { min-width: 0; }
+.record-person small { display: block; margin-top: 3px; font-size: 12px; color: var(--ws-muted); }
+.record-deadline { font-variant-numeric: tabular-nums; }
+.record-deadline.overdue, .record-priority { color: #a02939; }
+.record-priority { display: block; margin-top: 6px; font-size: 11px; }
+.record-project { color: var(--ws-muted); }
+.employee-record-table { min-width: 880px; }
+.employee-record-table th:first-child { width: 26%; }
+.employee-record-table th:nth-child(2) { width: 28%; }
+.employee-record-table th:nth-child(3) { width: 15%; }
+.employee-record-table th:nth-child(4) { width: 19%; }
+.employee-record-table th:last-child { width: 12%; }
+.employee-person small { display: none; }
+.employee-position { font-size: 13px; }
+.record-username { color: var(--ws-muted); }
+.role-mark { display: inline-block; font-size: 12px; color: var(--ws-muted); }
+.role-admin, .role-superadmin { color: var(--ws-link); font-weight: 600; }
+.record-table-footer { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 58px; padding: 10px 14px; border-top: 1px solid var(--ws-line); background: white; color: var(--ws-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.record-table-paging { display: flex; align-items: center; gap: 7px; }
+.record-table-paging label { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
+.record-table-paging select { min-height: 32px; padding: 3px 6px; border: 1px solid var(--ws-control-line); border-radius: 8px; background: white; color: var(--ws-text); }
+.record-table-paging button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--ws-line); border-radius: 8px; color: var(--ws-link); background: white; cursor: pointer; }
+.record-table-paging button:disabled { color: #81909d; background: var(--ws-muted-surface); cursor: default; }
+.record-table-empty { display: grid; gap: 8px; padding: 40px 24px; text-align: center; color: var(--ws-muted); font-size: 14px; }
+.record-table-empty strong { color: var(--ws-text); }
+.fui-DialogSurface.task-record-dialog, .fui-DialogSurface.directory-record-dialog { width: min(840px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow: auto; margin: auto !important; }
+.task-record-dialog .task-detail { overflow: visible; border-left: 0; }
+.task-record-dialog .compact-back { display: inline-flex; align-self: flex-start; margin-bottom: 16px; }
+.record-dialog-close { position: sticky; top: 0; z-index: 1; padding: 10px 18px; background: white; border-bottom: 1px solid var(--ws-line); }
+.directory-record-dialog .employee-detail, .directory-record-dialog .position-catalog { border: 0; min-height: 0; overflow: visible; }
+.directory-record-dialog .position-list { max-height: 280px; overflow: auto; }
+.directory-record-dialog .directory-form-grid { grid-template-columns: minmax(0, 1fr); }
+.directory-record-dialog .directory-heading { align-items: center; }
+.directory-record-dialog .directory-heading h2 { font-size: 24px; }
+.employees-view > .directory-feedback { flex: none; margin: 0 24px 16px; }
+.directory-loading { gap: 16px; }
+.account-section { scroll-margin-top: 104px; }
+@media (max-width: 760px) {
+  .record-table-frame { margin: 0 12px 12px; }
+  .record-list-controls { padding: 4px 14px 14px; gap: 10px; }
+  .record-list-controls .employee-search { flex-basis: 100%; }
+  .record-list-controls > label { flex: 1 1 140px; min-width: 0; }
+  .record-list-controls select { min-width: 0; width: 100%; }
+  .record-table-footer { align-items: start; gap: 8px; padding: 10px; }
+  .record-table-paging { flex-wrap: wrap; }
+  .record-table-paging label { margin-right: 0; }
+}
+@media (max-height: 620px) {
+  .tasks-view.bp5-tasks .tasks-main, .employees-view { overflow-y: auto; }
+  .record-table-frame { flex: 1 0 220px; }
+}
+@media (forced-colors: active) {
+  .record-table .record-row:hover td, .record-table .record-row:focus-within td { outline: 1px solid Highlight; outline-offset: -1px; }
+}

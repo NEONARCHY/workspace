@@ -15,7 +15,9 @@ import {
   Checkbox,
   Input,
   ProgressBar,
+  DialogSurface,
   Textarea,
+  useRestoreFocusTarget,
 } from "@fluentui/react-components";
 import {
   Add24Regular,
@@ -27,6 +29,8 @@ import {
 } from "@fluentui/react-icons";
 
 import { AttachmentPanel } from "./AttachmentPanel";
+import { TaskRecords } from "./TaskRecords";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
@@ -99,9 +103,16 @@ export function TasksView(props: TasksViewProps) {
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [selectedId, updateSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusTaskId));
-  const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
+  const setSelectedId = (id: string) => {
+    if (id !== selectedId) {
+      setEditing(false); setCreatingApproval(false); setCycleEditing(false); setDateError("");
+      setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
+    }
+    updateSelectedId(id); setDetailOpen(true);
+  };
   const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -125,6 +136,7 @@ export function TasksView(props: TasksViewProps) {
   const [creatingApproval, setCreatingApproval] = useState(false);
   const [approvalTitle, setApprovalTitle] = useState("");
   const [approvalAmount, setApprovalAmount] = useState("");
+  const newTaskFocusTarget = useRestoreFocusTarget();
 
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
@@ -134,9 +146,12 @@ export function TasksView(props: TasksViewProps) {
         : filter === "overdue" ? task.status === "overdue"
         : filter === "completed" ? task.status === "completed"
         : !["completed", "cancelled"].includes(task.status);
-      return matchesFilter && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""}`.toLocaleLowerCase("ru").includes(search));
+      const matchesRole = roleFilter === "all" || roleFilter === "author" && task.authorId === currentUserId
+        || roleFilter === "assignee" && task.assigneeId === currentUserId
+        || task.participants.some(item => item.userId === currentUserId && item.role === roleFilter);
+      return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""}`.toLocaleLowerCase("ru").includes(search));
     });
-  }, [currentUserId, filter, tasks, query, people]);
+  }, [currentUserId, filter, tasks, query, people, roleFilter]);
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
@@ -145,7 +160,7 @@ export function TasksView(props: TasksViewProps) {
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;
   const canEdit = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId || selectedTask.assigneeId === currentUserId || coAssignee);
   const canManageParticipants = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId);
-  const personById = (id: string) => people.find((person) => person.id === id) ?? people[0];
+  const personById = (id: string) => people.find((person) => person.id === id);
 
   const createTask = async () => {
     const title = newTitle.trim();
@@ -259,7 +274,7 @@ export function TasksView(props: TasksViewProps) {
               <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
               <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
             </div>
-            <Button appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button>
+            <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button>
           </div>
         </header>
 
@@ -267,6 +282,7 @@ export function TasksView(props: TasksViewProps) {
           {([ ["active", "Активные"], ["mine", "Мои"], ["overdue", "Просроченные"], ["completed", "Завершённые"] ] as const).map(([key, label]) => (
             <button className={filter === key ? "active" : ""} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button">{label}</button>
           ))}
+          <select className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></select>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </div>
 
@@ -276,18 +292,18 @@ export function TasksView(props: TasksViewProps) {
           <Button appearance="subtle" onClick={() => setCreating(false)}>Отмена</Button>
         </div> : null}
 
-        {mode === "list" ? <TaskList tasks={visibleTasks} selectedId={selectedTask?.id} personById={personById} onSelect={setSelectedId} /> : (
+        {mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
               <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{visibleTasks.filter((task) => task.status === status).length}</Badge></header>
-              <div className="kanban-stack">{visibleTasks.filter((task) => task.status === status).map((task) => <button className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}</div>
+              <div className="kanban-stack">{visibleTasks.filter((task) => task.status === status).map((task) => <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}</div>
             </section>)}
           </div>
         )}
-        {visibleTasks.length === 0 && mode === "list" ? <div className="empty-state"><strong>В этом разделе задач нет</strong><span>Переключите фильтр или создайте новую задачу.</span></div> : null}
       </div>
 
-      {selectedTask !== undefined ? <aside className="task-detail task-card-full">
+      {selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
+      <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div>{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div>
@@ -322,18 +338,10 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-footer"><Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button></div>
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
-      </aside> : null}
+      </aside></DialogSurface>
+      </Dialog> : null}
     </section>
   );
-}
-
-function TaskList({ tasks, selectedId, personById, onSelect }: {
-  readonly tasks: readonly WorkspaceTask[];
-  readonly selectedId?: string;
-  readonly personById: (id: string) => WorkspacePerson | undefined;
-  readonly onSelect: (id: string) => void;
-}) {
-  return <div className="task-table" role="region" aria-label="Список задач"><div className="task-table-head" aria-hidden="true"><span>Задача</span><span>Ответственный</span><span>Срок</span><span>Статус</span></div>{tasks.map((task) => { const assignee = personById(task.assigneeId); return <button className={`task-row ${selectedId === task.id ? "selected" : ""}`} key={task.id} onClick={() => onSelect(task.id)} type="button"><span className="task-title-cell"><strong>{task.title}</strong><small>{task.project}{task.cycle ? " · повторяется" : ""}</small></span><span className="person-cell"><Avatar name={assignee?.name ?? "Сотрудник"} size={28} color="colorful" /><span>{assignee?.name.split(" ")[0] ?? "Сотрудник"}</span></span><span className={task.status === "overdue" ? "danger-text" : ""}>{task.dueLabel}</span><Badge appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : "brand"}>{statusLabels[task.status]}</Badge></button>; })}</div>;
 }
 
 function ParticipantChip({ person, label, onRemove }: {

@@ -23,15 +23,25 @@ import {
 } from "./workspace-api";
 
 interface AccountPanelProps {
+  readonly initialSection?: "invite";
   readonly token: string;
   readonly user: WorkspacePerson;
   readonly onClose: () => void;
   readonly onLogout: () => void;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelProps) {
+export function AccountPanel({ token, user, onClose, onLogout, initialSection }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   useModalFocus(panelRef, true, onClose);
+  const inviteRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (initialSection !== "invite") return;
+    const frame = requestAnimationFrame(() => {
+      inviteRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+      inviteRef.current?.scrollIntoView?.({ block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [initialSection]);
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [totpActive, setTotpActive] = useState(false);
   const [totpSetup, setTotpSetup] = useState<TotpSetup>();
@@ -140,18 +150,18 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        aria-label="Безопасность аккаунта"
+        aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Безопасность аккаунта"}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
           <div>
             <span>Настройки</span>
-            <h2>Аккаунт и безопасность</h2>
+            <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Аккаунт и безопасность"}</h2>
           </div>
           <Button appearance="subtle" onClick={onClose}>Закрыть</Button>
         </header>
 
-        <section className="account-profile">
+        {initialSection !== "invite" && <><section className="account-profile">
           <Avatar name={user.name} size={48} color="colorful" />
           <div>
             <strong>{user.name}</strong>
@@ -214,9 +224,10 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
           </div>
         </section>
 
+        </>}
         {["admin", "superadmin"].includes(user.role) ? (
           <>
-            <section className="account-section">
+            <section ref={inviteRef} className="account-section">
             <div className="account-section-title">
               <div>
                 <h3>Пригласить сотрудника</h3>
@@ -266,7 +277,7 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
             ) : null}
             </section>
 
-            <section className="account-section">
+            {initialSection !== "invite" && <section className="account-section">
               <div className="account-section-title">
                 <div>
                   <h3>Восстановить доступ</h3>
@@ -301,7 +312,7 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
                   </Button>
                 </div>
               ) : null}
-            </section>
+            </section>}
           </>
         ) : null}
 

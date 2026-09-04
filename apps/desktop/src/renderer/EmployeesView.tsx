@@ -7,8 +7,10 @@ import type {
   WorkspacePosition,
   WorkspaceRole,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, Field, Input, Select, Spinner } from "@fluentui/react-components";
-import { Add24Regular, PeopleTeam24Regular } from "@fluentui/react-icons";
+import { Avatar, Button, Checkbox, DialogSurface, Field, Input, Select, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Add24Regular, PeopleTeam24Regular, Search20Regular } from "@fluentui/react-icons";
+import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 import {
   createPosition,
@@ -20,14 +22,8 @@ import {
 interface EmployeesViewProps {
   readonly token: string;
   readonly currentUser: WorkspacePerson;
+  readonly onInvite?: () => void;
 }
-
-const roleLabels: Record<WorkspaceRole, string> = {
-  superadmin: "Суперадминистратор",
-  admin: "Администратор",
-  manager: "Руководитель",
-  employee: "Сотрудник",
-};
 
 function replaceEmployee(
   directory: DirectoryBootstrap,
@@ -46,10 +42,11 @@ function replacePosition(
   return {
     ...directory,
     positions: directory.positions.map((item) => (item.id === position.id ? position : item)),
+    employees: directory.employees.map(employee => employee.positionId === position.id ? { ...employee, jobTitle: position.name } : employee),
   };
 }
 
-export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
+export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -61,6 +58,11 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   const [newPositionName, setNewPositionName] = useState("");
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "inactive">("all");
+  const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
+  const positionFocusTarget = useRestoreFocusTarget();
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const canManage = ["admin", "superadmin"].includes(currentUser.role);
 
   useEffect(() => {
@@ -86,7 +88,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, loadAttempt]);
 
   const selectedEmployee = useMemo(
     () => directory?.employees.find((employee) => employee.id === selectedEmployeeId),
@@ -101,6 +103,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
     setSelectedEmployeeId(employee.id);
     if (employee.role !== "superadmin") setEmployeeRole(employee.role);
     setEmployeePositionId(employee.positionId ?? "");
+    setPanel("employee");
   };
 
   const selectPosition = (position: WorkspacePosition) => {
@@ -110,7 +113,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   };
 
   const saveEmployee = async () => {
-    if (directory === undefined || selectedEmployee === undefined) return;
+    if (busy || !canManage || directory === undefined || selectedEmployee === undefined || selectedEmployee.role === "superadmin") return;
     setBusy(true);
     try {
       const saved = await updateEmployeeAccess(
@@ -129,7 +132,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   };
 
   const savePosition = async () => {
-    if (directory === undefined || selectedPosition === undefined || !positionName.trim()) return;
+    if (busy || !canManage || directory === undefined || selectedPosition === undefined || !positionName.trim()) return;
     setBusy(true);
     try {
       const saved = await updatePosition(token, selectedPosition.id, {
@@ -146,7 +149,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   };
 
   const addPosition = async () => {
-    if (directory === undefined || !newPositionName.trim()) return;
+    if (busy || !canManage || directory === undefined || !newPositionName.trim()) return;
     setBusy(true);
     try {
       const created = await createPosition(token, newPositionName.trim(), directory.positions.length * 10);
@@ -164,15 +167,20 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   if (directory === undefined) {
     return (
       <section className="workspace-view directory-loading" aria-label="Сотрудники">
-        <Spinner label="Загружаем сотрудников и должности" />
+        {!feedback && <Spinner label="Загружаем сотрудников и должности" />}
         {feedback ? <div className="directory-feedback" role="alert">{feedback}</div> : null}
+        {feedback && <Button onClick={() => { setFeedback(""); setLoadAttempt(value => value + 1); }}>Повторить загрузку</Button>}
       </section>
     );
   }
 
   const search = employeeQuery.trim().toLocaleLowerCase("ru");
   const visibleEmployees = directory.employees.filter((employee) =>
-    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(search));
+    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(search)
+      && (roleFilter === "all" || employee.role === roleFilter)
+      && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
+        || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
+        || statusFilter === "inactive" && !["active", "pending", "invited"].includes(employee.status)));
 
   return (
     <section className="workspace-view employees-view" aria-label="Сотрудники">
@@ -181,31 +189,21 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
           <h1>Сотрудники</h1>
           <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
         </div>
-        <div className="directory-scope-note">Роль определяет права · должность — место в организации</div>
+        <div className="toolbar-actions"><Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>{canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}</div>
       </header>
 
-      <div className="directory-layout">
-        <aside className="employee-list" aria-label="Список сотрудников">
-          <Input className="employee-search" aria-label="Поиск сотрудников" placeholder="Имя, логин или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
-          {!visibleEmployees.length && <p className="empty-state-compact" role="status">Сотрудники не найдены</p>}
-          {visibleEmployees.map((employee) => (
-            <button
-              key={employee.id}
-              type="button"
-              className={employee.id === selectedEmployeeId ? "selected" : ""}
-              onClick={() => selectEmployee(employee)}
-            >
-              <Avatar name={employee.name} size={36} color="colorful" />
-              <span>
-                <strong>{employee.name}</strong>
-                <small>{employee.jobTitle ?? "Должность не назначена"}</small>
-              </span>
-              <em>{roleLabels[employee.role]}</em>
-            </button>
-          ))}
-        </aside>
-
-        <main className="employee-detail">
+      <div className="record-list-controls">
+        <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
+        <label>Роль<select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+        <label>Состояние<select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></select></label>
+        {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
+      </div>
+      <EmployeeRecords employees={visibleEmployees} filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}`} onSelect={selectEmployee} />
+      <Dialog open={panel !== null} onOpenChange={(_, data) => { if (!data.open && !busy) setPanel(null); }}>
+        <DialogSurface className="directory-record-dialog" aria-label={panel === "employee" ? "Карточка сотрудника" : "Справочник должностей"}>
+        <div className="record-dialog-close"><Button disabled={busy} appearance="subtle" onClick={() => setPanel(null)}>К списку сотрудников</Button></div>
+        {feedback && <div className="directory-feedback" role="status">{feedback}</div>}
+        {panel === "employee" ? <div className="employee-detail">
           {selectedEmployee ? (
             <>
               <div className="directory-heading">
@@ -213,16 +211,17 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
                 <div>
                   <span>Карточка сотрудника</span>
                   <h2>{selectedEmployee.name}</h2>
-                  <p>@{selectedEmployee.username} · {selectedEmployee.status}</p>
+                  <p>@{selectedEmployee.username} · {employeeStatusLabel(selectedEmployee.status)}</p>
                 </div>
               </div>
               <div className="directory-form-grid">
                 <Field label="Роль доступа" hint="Влияет на разрешённые действия в системе.">
                   <Select
-                    disabled={!canManage || selectedEmployee.role === "superadmin" || selectedEmployee.id === currentUser.id}
-                    value={selectedEmployee.role === "superadmin" ? "admin" : employeeRole}
+                    disabled={busy || !canManage || selectedEmployee.role === "superadmin" || selectedEmployee.id === currentUser.id}
+                    value={selectedEmployee.role === "superadmin" ? "superadmin" : employeeRole}
                     onChange={(event) => setEmployeeRole(event.target.value as typeof employeeRole)}
                   >
+                    {selectedEmployee.role === "superadmin" && <option value="superadmin">Суперадминистратор</option>}
                     {directory.roles.map((role) => (
                       <option key={role.key} value={role.key}>{role.label}</option>
                     ))}
@@ -230,7 +229,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
                 </Field>
                 <Field label="Должность" hint="Выбирается из редактируемого справочника.">
                   <Select
-                    disabled={!canManage || selectedEmployee.role === "superadmin"}
+                    disabled={busy || !canManage || selectedEmployee.role === "superadmin"}
                     value={employeePositionId}
                     onChange={(event) => setEmployeePositionId(event.target.value)}
                   >
@@ -254,9 +253,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
               ) : null}
             </>
           ) : null}
-        </main>
-
-        <aside className="position-catalog" aria-label="Справочник должностей">
+        </div> : <aside className="position-catalog" aria-label="Справочник должностей">
           <div className="position-title">
             <PeopleTeam24Regular />
             <div>
@@ -270,6 +267,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
                 aria-label="Название новой должности"
                 placeholder="Yangi lavozim"
                 value={newPositionName}
+                disabled={busy}
                 onChange={(_, data) => setNewPositionName(data.value)}
               />
               <Button
@@ -288,6 +286,7 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
                 key={position.id}
                 type="button"
                 className={position.id === selectedPositionId ? "selected" : ""}
+                disabled={busy}
                 onClick={() => selectPosition(position)}
               >
                 <span>{position.name}</span>
@@ -298,10 +297,11 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
           {canManage && selectedPosition ? (
             <div className="position-editor">
               <Field label="Название должности">
-                <Input value={positionName} onChange={(_, data) => setPositionName(data.value)} />
+                <Input disabled={busy} value={positionName} onChange={(_, data) => setPositionName(data.value)} />
               </Field>
               <Checkbox
                 checked={positionActive}
+                disabled={busy}
                 label="Доступна для новых назначений"
                 onChange={(_, data) => setPositionActive(data.checked === true)}
               />
@@ -310,9 +310,10 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
               </Button>
             </div>
           ) : null}
-        </aside>
-      </div>
-      {feedback ? <div className="directory-feedback" role="status">{feedback}</div> : null}
+        </aside>}
+        </DialogSurface>
+      </Dialog>
+      {feedback && !panel ? <div className="directory-feedback" role="status">{feedback}</div> : null}
     </section>
   );
 }

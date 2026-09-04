@@ -10,6 +10,7 @@ import "./personal-organization.css";
 import "./design-system.css";
 import "./record-composer.css";
 import "./motion.css";
+import "./record-lists.css";
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));
