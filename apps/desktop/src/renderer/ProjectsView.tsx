@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 
 import type {
@@ -112,6 +113,8 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  useModalFocus(formRef, formMode !== null, () => setFormMode(null));
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
@@ -226,7 +229,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
 
       {formMode !== null ? (
         <div className="bp7-modal-backdrop" role="presentation">
-          <form className="bp7-modal" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+          <form ref={formRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={formMode === "create" ? "Создать проект" : "Изменить проект"} className="bp7-modal" onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <header><div><span>{formMode === "create" ? "Новая карточка" : "Редактирование"}</span><h2>{formMode === "create" ? "Создать проект" : selected?.title}</h2></div><Button appearance="subtle" onClick={() => setFormMode(null)}>Закрыть</Button></header>
             <div className="bp7-form-grid">
               <label>Код<Input value={form.code} onChange={(_, data) => setForm({ ...form, code: data.value })} /></label>

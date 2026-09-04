@@ -192,20 +192,20 @@ export function CalendarView({
         </div>
         <div className="calendar-grid">
           {days.map((day) => (
-            <button
-              className={`calendar-day ${day.getMonth() !== month.getMonth() ? "muted" : ""}`}
+            <div
+              className={`calendar-day ${day.getMonth() !== month.getMonth() ? "muted" : ""} ${day.toDateString() === new Date().toDateString() ? "today" : ""}`}
               key={day.toISOString()}
-              type="button"
               onDoubleClick={() => {
                 setSelected(undefined);
                 setDraft(emptyDraft(currentUserId, day));
               }}
             >
-              <strong>{day.getDate()}</strong>
+              <button className="calendar-day-number" type="button" aria-label={`Создать событие на ${day.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}`} onClick={() => { setSelected(undefined); setDraft(emptyDraft(currentUserId, day)); }}>{day.getDate()}</button>
               {eventsForDay(day).slice(0, 3).map((event) => (
-                <span
+                <button
                   className={`calendar-event-pill ${event.eventType} ${event.status}`}
                   key={event.id}
+                  type="button"
                   onClick={(clickEvent) => {
                     clickEvent.stopPropagation();
                     setSelected(event);
@@ -214,9 +214,9 @@ export function CalendarView({
                 >
                   {event.allDay ? "" : `${new Date(event.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} `}
                   {event.title}
-                </span>
+                </button>
               ))}
-            </button>
+            </div>
           ))}
         </div>
       </div>
@@ -274,7 +274,7 @@ export function CalendarView({
         ) : (
           <div className="calendar-empty">
             <h2>Выберите событие</h2>
-            <p>Двойной щелчок по дню создаёт событие сразу на выбранную дату.</p>
+            <p>Нажмите на дату, чтобы создать событие, или выберите событие в календаре. Также можно использовать Tab и Enter.</p>
           </div>
         )}
       </aside>

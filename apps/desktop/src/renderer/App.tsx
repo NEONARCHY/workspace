@@ -30,8 +30,6 @@ import {
   Avatar,
   Button,
   FluentProvider,
-  Input,
-  webLightTheme,
 } from "@fluentui/react-components";
 import {
   Alert24Regular,
@@ -45,7 +43,6 @@ import {
   Navigation24Regular,
   News24Regular,
   PeopleTeam24Regular,
-  Search24Regular,
   Settings24Regular,
   Edit16Regular,
   TaskListSquareLtr24Filled,
@@ -53,6 +50,8 @@ import {
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
+import { workspaceTheme } from "./workspace-theme";
+import { SectionJump } from "./SectionJump";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
@@ -233,7 +232,7 @@ function ModulePreview({ icon, title, evidence, packageLabel }: ModulePreviewPro
         <p>{evidence}</p>
         <div>
           <strong>{packageLabel}</strong>
-          <span>Функции будут подключаться вертикальным срезом по зафиксированной Bitrix‑спецификации.</span>
+          <span>Назначение CRM определим отдельно, когда она понадобится команде.</span>
         </div>
       </div>
     </section>
@@ -1022,7 +1021,7 @@ export function App() {
 
   if (session === undefined) {
     return (
-      <FluentProvider theme={webLightTheme} className="app-provider">
+      <FluentProvider theme={workspaceTheme} className="app-provider">
         <LoginView
           busy={authBusy}
           error={authError}
@@ -1043,12 +1042,13 @@ export function App() {
   const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder).map((key) => navItems.find((item) => item.key === key)!);
 
   return (
-    <FluentProvider theme={webLightTheme} className="app-provider">
+    <FluentProvider theme={workspaceTheme} className="app-provider">
+      <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
-            <CompanyLogo tone="white" className="rail-brand" />
+            <CompanyLogo tone="color" className="rail-brand" />
           </div>
           <div className="rail-customize">
             <span>Меню</span>
@@ -1100,14 +1100,10 @@ export function App() {
             <div className="global-brand">
               <span className={`connection-state ${backgroundError ? "" : "online"}`} title={connectionDetail}>{connectionDetail}</span>
             </div>
-            <Input
-              aria-label="Глобальный поиск"
-              className="global-search"
-              contentBefore={<Search24Regular />}
-              placeholder="Найти сообщение, задачу или заявку"
-              disabled
-              title="Поиск доступен внутри разделов"
-            />
+            <SectionJump items={orderedNavItems} onNavigate={(key) => {
+              if (key === "settings") { setAccountOpen(true); return; }
+              setFocusTarget(undefined); setActiveSection(key);
+            }} />
             <button className="account-trigger" type="button" onClick={() => setAccountOpen(true)}>
               <Avatar name={workspace.currentUser.name} size={28} color="colorful" />
               <span>
@@ -1124,7 +1120,7 @@ export function App() {
             <Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button>
           </div> : null}
 
-          <main className="app-content">
+          <main className="app-content" id="workspace-content" tabIndex={-1}>
             <RecoveryBoundary key={`${session.user.id}:${activeSection}`} onHome={() => setActiveSection("messenger")}>
             {activeSection === "notifications" ? (
               <NotificationCenter
@@ -1140,8 +1136,8 @@ export function App() {
               <ModulePreview
                 icon={<Building24Regular />}
                 title="CRM"
-                evidence="В действующем Bitrix стандартные лиды, сделки, контакты и компании пусты. До реализации уточним, какие CRM‑сценарии действительно нужны Workspace."
-                packageLabel="Пакет BP‑9 · CRM"
+                evidence="CRM пока не используется. Этот раздел сохранён в меню; рабочие задачи, проекты и согласования доступны в своих разделах."
+                packageLabel="Раздел отложен"
               />
             ) : null}
             {activeSection === "messenger" ? (

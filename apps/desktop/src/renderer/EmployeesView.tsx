@@ -52,6 +52,7 @@ function replacePosition(
 export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [employeeQuery, setEmployeeQuery] = useState("");
   const [selectedPositionId, setSelectedPositionId] = useState("");
   const [employeeRole, setEmployeeRole] = useState<Exclude<WorkspaceRole, "superadmin">>("employee");
   const [employeePositionId, setEmployeePositionId] = useState("");
@@ -169,6 +170,10 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
     );
   }
 
+  const search = employeeQuery.trim().toLocaleLowerCase("ru");
+  const visibleEmployees = directory.employees.filter((employee) =>
+    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(search));
+
   return (
     <section className="workspace-view employees-view" aria-label="Сотрудники">
       <header className="section-toolbar">
@@ -181,7 +186,9 @@ export function EmployeesView({ token, currentUser }: EmployeesViewProps) {
 
       <div className="directory-layout">
         <aside className="employee-list" aria-label="Список сотрудников">
-          {directory.employees.map((employee) => (
+          <Input className="employee-search" aria-label="Поиск сотрудников" placeholder="Имя, логин или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
+          {!visibleEmployees.length && <p className="empty-state-compact" role="status">Сотрудники не найдены</p>}
+          {visibleEmployees.map((employee) => (
             <button
               key={employee.id}
               type="button"

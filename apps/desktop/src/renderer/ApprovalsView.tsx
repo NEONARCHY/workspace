@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { useModalFocus } from "./useModalFocus";
 
 import type {
   ApprovalNodeData,
@@ -720,6 +721,10 @@ export function ApprovalsView({
   const [requestAdditionalFiles, setRequestAdditionalFiles] = useState<readonly File[]>([]);
   const [createError, setCreateError] = useState("");
   const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
+  const createPanelRef = useRef<HTMLElement>(null);
+  const detailPanelRef = useRef<HTMLElement>(null);
+  useModalFocus(createPanelRef, creatingRequest, () => setCreatingRequest(false));
+  useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), () => setSelectedRequestId(""));
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
   const [requestQuery, setRequestQuery] = useState("");
   const [draggedRequest, setDraggedRequest] = useState<{
@@ -1274,7 +1279,7 @@ export function ApprovalsView({
                 if (event.target === event.currentTarget) setCreatingRequest(false);
               }}
             >
-              <section className="approval-create-panel" role="dialog" aria-modal="true" aria-labelledby="approval-create-title">
+              <section ref={createPanelRef} tabIndex={-1} className="approval-create-panel" role="dialog" aria-modal="true" aria-labelledby="approval-create-title">
                 <header>
                   <div>
                     <span>Новая заявка</span>
@@ -1355,7 +1360,7 @@ export function ApprovalsView({
                 if (event.target === event.currentTarget) setSelectedRequestId("");
               }}
             >
-              <article className="approval-detail-panel" role="dialog" aria-modal="true" aria-labelledby="approval-detail-title">
+              <article ref={detailPanelRef} tabIndex={-1} className="approval-detail-panel" role="dialog" aria-modal="true" aria-labelledby="approval-detail-title">
                 <header className="approval-detail-header">
                   <div>
                     <span>Заявка №{selectedRequest.number} · версия {selectedRequest.revision}</span>
@@ -1370,7 +1375,7 @@ export function ApprovalsView({
                   <button type="button" aria-label="Закрыть карточку заявки" onClick={() => setSelectedRequestId("")}>×</button>
                 </header>
 
-                <div className="approval-stage-ribbon" aria-label="Стадии заявки">
+                <div className="approval-stage-ribbon" role="region" tabIndex={0} aria-label="Стадии заявки">
                   {boardColumns.map((column, index) => (
                     <span
                       key={column.key}

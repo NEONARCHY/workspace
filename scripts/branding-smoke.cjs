@@ -114,7 +114,7 @@ async function main() {
         if (isCollapsed !== collapsed) await page.locator(".rail-toggle").click();
         await stable();
         assert.equal(await page.locator(".rail-brand").isVisible(), !collapsed);
-        if (!collapsed) await inspectLogo(".rail-brand", "white");
+        if (!collapsed) await inspectLogo(".rail-brand", "color");
         await inspectHeader();
         await inspectLayout();
         checks.push(`${width} app/${collapsed ? "collapsed" : "expanded"}`);

@@ -34,7 +34,7 @@ async function main() {
       if (label === "Задачи") {
         await page.getByRole("button", { name: "Kanban", exact: true }).click();
         const tones = await page.locator(".kanban-column").evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).getPropertyValue("--context-accent").trim()));
-        assert.deepEqual(tones, ["#60788b", "#0f6cbd", "#966100", "#107c41"]);
+        assert.deepEqual(tones, ["#60788b", "#006779", "#966100", "#b42332", "#107c41"]);
       }
       if (label === "Список проектов") {
         const tones = await page.locator(".project-stage-success,.project-stage-failure").evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).getPropertyValue("--context-accent").trim()));

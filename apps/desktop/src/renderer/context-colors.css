@@ -23,6 +23,7 @@
 .kanban-column[data-task-status="new"] { --context-accent: #60788b; }
 .kanban-column[data-task-status="awaiting_review"] { --context-accent: var(--context-warning); }
 .kanban-column[data-task-status="completed"] { --context-accent: var(--context-success); }
+.kanban-column[data-task-status="overdue"] { --context-accent: var(--context-danger); }
 .kanban-column > header { border-bottom: 2px solid color-mix(in srgb, var(--context-accent) 48%, transparent); }
 
 /* Keep halo formulas local so nested semantic accents resolve at the element. */

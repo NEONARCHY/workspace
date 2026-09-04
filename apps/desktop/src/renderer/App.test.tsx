@@ -1015,6 +1015,39 @@ describe("corporate workspace authentication alpha", () => {
     );
   });
 
+  it("filters tasks by text in both list and Kanban without modifying records", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "__no_task_matches__" } });
+    expect(document.querySelectorAll(".task-row")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
+    expect(document.querySelectorAll(".kanban-card")).toHaveLength(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "" } });
+    expect(document.querySelectorAll(".kanban-card").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Просроченные" }));
+    const cards = [...document.querySelectorAll(".kanban-card")];
+    expect(cards.length).toBe(initialTasks.filter((task) => task.status === "overdue").length);
+    expect(cards.every((card) => card.closest('[data-task-status="overdue"]'))).toBe(true);
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
+  });
+
+  it("finds employees without changing their roles or selected record", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("malika");
+    fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
+    const search = await screen.findByRole("textbox", { name: "Поиск сотрудников" });
+    const selectedName = document.querySelector(".directory-heading h2")?.textContent;
+    fireEvent.change(search, { target: { value: "__no_employee_matches__" } });
+    expect(screen.getByText("Сотрудники не найдены")).toBeInTheDocument();
+    expect(document.querySelectorAll(".employee-list > button")).toHaveLength(0);
+    expect(document.querySelector(".directory-heading h2")?.textContent).toBe(selectedName);
+    fireEvent.change(search, { target: { value: "" } });
+    expect(document.querySelectorAll(".employee-list > button").length).toBeGreaterThan(0);
+  });
+
   it("opens the Kanban board and manages a full task card", async () => {
     const fetchMock = mockServer();
     render(<App />);

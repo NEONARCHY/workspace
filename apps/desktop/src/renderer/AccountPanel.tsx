@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
   InvitationResult,
@@ -9,6 +9,7 @@ import type {
   WorkspacePosition,
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-components";
+import { useModalFocus } from "./useModalFocus";
 
 import {
   confirmTotp,
@@ -29,6 +30,8 @@ interface AccountPanelProps {
 }
 
 export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelProps) {
+  const panelRef = useRef<HTMLElement>(null);
+  useModalFocus(panelRef, true, onClose);
   const [sessions, setSessions] = useState<readonly SessionSummary[]>([]);
   const [totpActive, setTotpActive] = useState(false);
   const [totpSetup, setTotpSetup] = useState<TotpSetup>();
@@ -133,6 +136,10 @@ export function AccountPanel({ token, user, onClose, onLogout }: AccountPanelPro
     <div className="account-scrim" role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
         aria-label="Безопасность аккаунта"
         onMouseDown={(event) => event.stopPropagation()}
       >
