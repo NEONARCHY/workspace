@@ -18,7 +18,7 @@ The order is fixed from the supplied screenshot and is already represented in th
 
 | Order | Tab | Confirmed Bitrix baseline | Workspace package |
 |---:|---|---|---|
-| 1 | CRM | Standard leads, deals, contacts and companies are all empty | BP-9 |
+| 1 | CRM | Standard leads, deals, contacts and companies are all empty | No active package; navigation placeholder only |
 | 2 | Задачи | 181 tasks; task API is available | BP-5 |
 | 3 | Заявки на оплату | Smart process 1038, category 15; 71 items, 13 stages | BP-6 |
 | 4 | Лента | Exact structure is not readable with the current webhook scope | BP-8 |
@@ -150,7 +150,7 @@ The two unresolved IDs are not guessed. Before a production employee import, the
 | BP-6 | Payment request form, all 13 stages, decisions, correction loop, files, editable graph and workflow-driven Kanban delivered through alpha 0.10.0 | BP-4, then task link from BP-5 | Golden requests complete the same routes and permissions; a board drop uses the protected action API rather than changing stage directly |
 | BP-7 | Project list and trip approvals; functional slice delivered in alpha 0.8.0 | BP-4, BP-6 workflow rules | Project lifecycle and trip return/approval scenarios pass; exact trip position IDs remain to verify |
 | BP-8 | Functional Messenger, activity feed and calendar delivered in alpha 0.9.0; exact feed parity remains unclaimed | BP-4; expanded read-only Bitrix scope for exact feed characterisation | PostgreSQL CRUD, authorization, unread receipts, desktop interactions and two-client realtime |
-| BP-9 | CRM scope chosen from actual business need, then implemented | Product decision after empty baseline review | Agreed CRM scenarios, not generic unused screens |
+| BP-9 | Skipped by product-owner decision; CRM remains a navigation placeholder | None | Not part of the current roadmap or first release |
 
 Hisobot and the other legacy bots remain separate migration packages and do not block this navigation program.
 
@@ -159,6 +159,5 @@ Hisobot and the other legacy bots remain separate migration packages and do not 
 1. A read-only webhook scope that can inspect activity feed and department structure. The current calls return `insufficient_scope`.
 2. Five to ten representative tasks covering normal, overdue, checklist, comments, observers and recurring behavior.
 3. Representative approved, rejected and returned payment requests with owners confirming the actual actor rules.
-4. A decision on what CRM must do, because all four standard CRM object types are currently empty.
 
 No expanded access is required to continue BP-4 or to build the schema and UI for BP-5/BP-6. It becomes mandatory only before claiming exact parity for the blocked areas.
