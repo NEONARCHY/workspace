@@ -1,0 +1,77 @@
+/* Shared project/payment/trip creation canvas. No styles leak into read-only detail cards. */
+.record-composer-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; place-items: stretch; padding: 16px 16px 16px clamp(16px, 3vw, 48px); overflow: hidden; background: rgb(41 58 85 / 32%); }
+.record-composer-backdrop > .record-composer,
+.fui-DialogSurface.record-composer-dialog { width: 100%; max-width: none; height: 100%; max-height: none; margin: 0; padding: 0; border: 1px solid var(--ws-line); border-radius: 20px; overflow: hidden; background: var(--ws-canvas); box-shadow: 0 20px 64px rgb(41 58 85 / 22%); }
+.fui-DialogSurface.record-composer-dialog { width: calc(100vw - 48px); height: calc(100dvh - 32px); margin: auto; }
+.record-composer, .trip-dialog .record-composer { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: 100%; height: 100%; min-height: 0; max-height: none; padding: 0; overflow: hidden; color: var(--ws-text); background: var(--ws-canvas); border-radius: 20px; }
+.record-composer > .record-composer-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0; padding: 22px 28px; background: var(--ws-surface); border-bottom: 1px solid var(--ws-line); }
+.record-composer-header > div { min-width: 0; }
+.record-composer-header .record-eyebrow { display: block; color: var(--ws-link); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.record-composer .record-composer-header h2 { margin: 4px 0 0; color: var(--ws-navy); font-size: 26px; line-height: 1.2; overflow-wrap: anywhere; }
+.record-composer .record-composer-header > button { display: inline-flex; width: auto; height: auto; flex: none; padding: 6px 12px; color: var(--ws-muted); background: transparent; font-size: 13px; }
+.record-composer-body { min-height: 0; overflow: auto; padding: 24px 28px 32px; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.record-composer-columns { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr); gap: 24px; max-width: 1380px; margin: 0 auto; align-items: start; }
+.record-composer-fields { display: grid; min-width: 0; gap: 16px; margin: 0; padding: 0; border: 0; }
+.record-composer .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.record-composer-summary { position: sticky; top: 0; display: grid; min-width: 0; gap: 16px; }
+.record-section, .record-summary-card { min-width: 0; padding: 22px; border: 1px solid var(--ws-line); border-radius: 16px; background: var(--ws-surface); }
+.record-section > header { display: block; padding: 0 0 16px; margin-bottom: 18px; border-bottom: 1px solid var(--ws-line); }
+.record-section h3, .record-summary-card h3 { margin: 0; color: var(--ws-navy); font-size: 16px; line-height: 1.35; }
+.record-section header p, .record-summary-card p { margin: 6px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+.record-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 16px; align-items: start; }
+.record-field-grid > label { display: grid; min-width: 0; gap: 7px; color: var(--ws-text); font-size: 13px; font-weight: 500; }
+.record-field-wide { grid-column: 1 / -1; }
+.record-field-grid :is(input, select, textarea) { width: 100%; min-width: 0; }
+.record-field-grid select { min-height: 36px; padding: 7px 10px; color: var(--ws-text); background: white; border: 1px solid var(--ws-control-line); border-radius: 10px; }
+.record-field-grid .fui-Textarea textarea { min-height: 100px; }
+.record-field-grid label small { color: var(--ws-muted); font-size: 12px; font-weight: 400; }
+.record-field-grid output { display: block; min-height: 36px; padding: 7px 10px; background: var(--ws-muted-surface); border-radius: 10px; font-variant-numeric: tabular-nums; }
+.record-summary-title { margin: 16px 0 0; color: var(--ws-navy); font-size: 21px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+.record-summary-amount { display: block; margin: 12px 0 0; color: var(--ws-link); font-size: 25px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.record-summary-facts { display: grid; gap: 12px; margin: 20px 0 0; }
+.record-summary-facts > div { display: grid; grid-template-columns: minmax(90px, .7fr) minmax(0, 1fr); gap: 12px; padding-top: 12px; border-top: 1px solid var(--ws-line); }
+.record-summary-facts dt { color: var(--ws-muted); font-size: 12px; }
+.record-summary-facts dd { margin: 0; color: var(--ws-text); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.record-summary-note { border-left: 3px solid var(--ws-turquoise); }
+.record-summary-people { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
+.record-summary-people li { padding: 8px 10px; color: var(--ws-text); background: var(--ws-muted-surface); border-radius: 8px; font-size: 13px; overflow-wrap: anywhere; }
+.record-stages { display: flex; gap: 8px; max-width: 1380px; margin: 0 auto 24px; padding: 2px 0 8px; overflow-x: auto; }
+.record-stages:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.record-stages > span { flex: 1 0 150px; min-height: 48px; padding: 10px 12px; border-top: 4px solid var(--record-stage-color, var(--ws-line)); border-radius: 8px; color: var(--ws-muted); background: var(--ws-surface); font-size: 12px; line-height: 1.3; }
+.record-stages > span[aria-current=step] { border-color: var(--record-stage-color, var(--ws-turquoise)); color: var(--ws-navy); background: var(--ws-selected); font-weight: 700; }
+.record-composer .employee-picker { display: grid; gap: 8px; margin: 14px 0 0; padding: 0; border: 0; max-height: 300px; overflow-y: auto; }
+.record-composer .employee-picker .fui-Checkbox { flex-shrink: 0; }
+.record-composer .employee-picker label { font-size: 13px; }
+.record-composer .record-composer-footer { position: static; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 24px; margin: 0; padding: 16px 28px; border-top: 1px solid var(--ws-line); background: var(--ws-surface); }
+.record-composer-footer > span { min-width: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.4; }
+.record-composer-footer > div { display: flex; gap: 8px; }
+.record-composer .record-composer-error { grid-column: 1 / -1; margin: 0; padding: 10px 12px; border-radius: 8px; color: #8d1526; background: #fff1f3; font-size: 13px; }
+.record-composer .payment-field-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.record-composer .payment-field-grid > label { font-size: 13px; }
+.record-composer .payment-field-grid label > b { margin: 0; font-size: 11px; }
+.record-composer .payment-form-section { padding: 22px; }
+.record-composer .payment-form-section > header strong { font-size: 16px; }
+.record-composer .payment-fields { gap: 16px; }
+.record-composer .payment-trip-grid { grid-template-columns: minmax(0, 1fr); }
+.record-composer .payment-trip-employees { grid-column: auto; }
+@media (max-width: 900px) {
+  .record-composer-columns { grid-template-columns: minmax(0, 1fr); }
+  .record-composer-summary { position: static; }
+}
+@media (max-width: 640px), (max-height: 520px) {
+  .record-composer-backdrop { padding: 6px; }
+  .fui-DialogSurface.record-composer-dialog { width: calc(100vw - 12px); height: calc(100dvh - 12px); }
+  .record-composer > .record-composer-header { padding: 12px 16px; }
+  .record-composer .record-composer-header h2 { font-size: 20px; }
+  .record-composer-body { padding: 16px; }
+  .record-section, .record-summary-card, .record-composer .payment-form-section { padding: 16px; }
+  .record-composer .record-composer-footer { gap: 8px; padding: 10px 16px; }
+  .record-composer-footer > span { display: none; }
+  .record-composer-footer > div { grid-column: 1 / -1; justify-content: flex-end; flex-wrap: wrap; }
+}
+@media (max-width: 540px) {
+  .record-field-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (forced-colors: active) {
+  .record-stages > span[aria-current=step] { outline: 2px solid Highlight; outline-offset: -2px; }
+}

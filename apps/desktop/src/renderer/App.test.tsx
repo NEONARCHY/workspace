@@ -1169,7 +1169,7 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
-    expect(await screen.findByText("Полная заявка BP-6")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Открыть заявку №502: Полная заявка BP-6" })).toBeInTheDocument();
     const createCall = fetchMock.mock.calls.find(([url, options]) =>
       String(url).endsWith("/approval-requests") && options?.method === "POST",
     );
@@ -1199,7 +1199,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
     expect(screen.getByText("Что оплачиваем")).toBeInTheDocument();
     expect(screen.getByText("Реквизиты платежа")).toBeInTheDocument();
-    expect(screen.getByText("Документы")).toBeInTheDocument();
+    expect(screen.getByText("Документы", { selector: "strong" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Заявка для доски" },
     });
@@ -1317,9 +1317,9 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Список проектов" }));
     expect(screen.getByLabelText("Стадии проектов")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
-    fireEvent.change(screen.getByLabelText("Код"), { target: { value: "BP7-TEST" } });
-    fireEvent.change(screen.getByLabelText("Название"), { target: { value: "Тестовый проект BP-7" } });
-    fireEvent.change(screen.getByLabelText("Бюджет"), { target: { value: "50000000" } });
+    fireEvent.change(screen.getByLabelText("Код проекта"), { target: { value: "BP7-TEST" } });
+    fireEvent.change(screen.getByLabelText("Название проекта"), { target: { value: "Тестовый проект BP-7" } });
+    fireEvent.change(screen.getByLabelText("Бюджет проекта"), { target: { value: "50000000" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 

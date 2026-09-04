@@ -8,6 +8,7 @@ import "./responsive.css";
 import "./context-colors.css";
 import "./personal-organization.css";
 import "./design-system.css";
+import "./record-composer.css";
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));

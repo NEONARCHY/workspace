@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { useModalFocus } from "./useModalFocus";
+import { RecordComposer, RecordSummary } from "./RecordComposer";
 
 import type {
   ApprovalNodeData,
@@ -720,10 +721,13 @@ export function ApprovalsView({
   const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);
   const [requestAdditionalFiles, setRequestAdditionalFiles] = useState<readonly File[]>([]);
   const [createError, setCreateError] = useState("");
+  const [creatingBusy, setCreatingBusy] = useState(false);
+  const creatingBusyRef = useRef(false);
   const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
-  const createPanelRef = useRef<HTMLElement>(null);
+  const createPanelRef = useRef<HTMLFormElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
-  useModalFocus(createPanelRef, creatingRequest, () => setCreatingRequest(false));
+  const closeCreate = () => { if (!creatingBusyRef.current) setCreatingRequest(false); };
+  useModalFocus(createPanelRef, creatingRequest, closeCreate);
   useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), () => setSelectedRequestId(""));
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
   const [requestQuery, setRequestQuery] = useState("");
@@ -902,28 +906,32 @@ export function ApprovalsView({
   };
 
   const createRequest = async () => {
+    if (creatingBusyRef.current) return;
     const amount = Number(requestAmount.replace(/\s/g, ""));
     if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) {
       setCreateError("Укажите название и положительную сумму заявки");
       return;
     }
-    setCreateError("");
-    const created = await onCreateRequest(
-      requestPayload(requestTitle.trim(), amount, requestPurpose.trim(), requestDetails),
-      requestFiles,
-      requestAdditionalFiles,
-    );
-    if (created !== undefined) {
-      setRequestTitle("");
-      setRequestAmount("");
-      setRequestPurpose("");
-      setRequestDetails(emptyPaymentForm(currentUserId));
-      setRequestFiles([]);
-      setRequestAdditionalFiles([]);
-      setCreatingRequest(false);
-    } else {
-      setCreateError("Сервер не подтвердил создание заявки");
-    }
+    setCreateError(""); creatingBusyRef.current = true; setCreatingBusy(true);
+    try {
+      const created = await onCreateRequest(
+        requestPayload(requestTitle.trim(), amount, requestPurpose.trim(), requestDetails),
+        requestFiles,
+        requestAdditionalFiles,
+      );
+      if (created !== undefined) {
+        setRequestTitle("");
+        setRequestAmount("");
+        setRequestPurpose("");
+        setRequestDetails(emptyPaymentForm(currentUserId));
+        setRequestFiles([]);
+        setRequestAdditionalFiles([]);
+        setCreatingRequest(false);
+      } else {
+        setCreateError("Сервер не подтвердил создание заявки");
+      }
+    } catch { setCreateError("Не удалось отправить заявку. Введённые данные сохранены в форме."); }
+    finally { creatingBusyRef.current = false; setCreatingBusy(false); }
   };
 
   const startRevision = (request: ApprovalRequestSummary) => {
@@ -1274,21 +1282,22 @@ export function ApprovalsView({
 
           {creatingRequest ? (
             <div
-              className="approval-overlay"
+              className="approval-overlay record-composer-backdrop"
               onMouseDown={(event) => {
-                if (event.target === event.currentTarget) setCreatingRequest(false);
+                if (event.target === event.currentTarget) closeCreate();
               }}
             >
-              <section ref={createPanelRef} tabIndex={-1} className="approval-create-panel" role="dialog" aria-modal="true" aria-labelledby="approval-create-title">
-                <header>
-                  <div>
-                    <span>Новая заявка</span>
-                    <h2 id="approval-create-title">Подготовить оплату</h2>
-                    <p>Заполните известные реквизиты. История начнётся после отправки.</p>
-                  </div>
-                  <button type="button" aria-label="Закрыть форму создания" onClick={() => setCreatingRequest(false)}>×</button>
-                </header>
-                <div className="approval-create-scroll">
+              <form ref={createPanelRef} noValidate tabIndex={-1} className="approval-create-panel record-composer" role="dialog" aria-modal="true" aria-labelledby="approval-create-title" aria-busy={creatingBusy} onSubmit={(event) => { event.preventDefault(); void createRequest(); }}>
+                <RecordComposer title="Подготовить оплату" titleId="approval-create-title" eyebrow="Заявки на оплату" busy={creatingBusy} error={createError} submitLabel="Отправить по маршруту" onClose={closeCreate}
+                  hint="После отправки заявку увидит исполнитель первой стадии."
+                  stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии процесса оплаты">{boardColumns.map((column) => <span key={column.key} style={{ "--record-stage-color": approvalStagePalette(column).background } as CSSProperties}>{column.label}</span>)}</div>}
+                  aside={<>
+                    <RecordSummary title="Сводка заявки"><div className="record-summary-title">{requestTitle.trim() || "Новая заявка"}</div>
+                      <strong className="record-summary-amount">{requestAmount.trim() && Number.isFinite(Number(requestAmount.replace(/\s/g, ""))) && Number(requestAmount.replace(/\s/g, "")) > 0 ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(requestAmount.replace(/\s/g, "")))} UZS` : "Укажите сумму"}</strong>
+                      <dl className="record-summary-facts"><div><dt>Проект</dt><dd>{requestDetails.projectName || "Не указан"}</dd></div><div><dt>Ответственный</dt><dd>{people.find((person) => person.id === requestDetails.responsibleUserId)?.name || "Не указан"}</dd></div><div><dt>Документы</dt><dd>{requestFiles.length + requestAdditionalFiles.length}</dd></div><div><dt>Приоритет</dt><dd>{requestDetails.requestPriority === "urgent" ? "Срочная" : "Обычная"}</dd></div></dl>
+                    </RecordSummary>
+                    <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
+                  </>}>
                   <section className="payment-form-section payment-form-lead">
                     <header>
                       <span>00</span>
@@ -1342,14 +1351,8 @@ export function ApprovalsView({
                     <PendingFilePicker files={requestFiles} onChange={setRequestFiles} label="Основные документы" />
                     <PendingFilePicker files={requestAdditionalFiles} onChange={setRequestAdditionalFiles} label="Дополнительные документы" />
                   </section>
-                  {createError ? <div className="approval-form-error" role="alert">{createError}</div> : null}
-                </div>
-                <footer>
-                  <span>После отправки заявку увидит исполнитель первой стадии</span>
-                  <Button appearance="subtle" onClick={() => setCreatingRequest(false)}>Отмена</Button>
-                  <Button appearance="primary" onClick={() => void createRequest()}>Отправить по маршруту</Button>
-                </footer>
-              </section>
+                </RecordComposer>
+              </form>
             </div>
           ) : null}
 

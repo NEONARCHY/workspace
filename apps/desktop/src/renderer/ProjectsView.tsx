@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
+import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 
 import type {
   ProjectInput,
@@ -113,23 +114,38 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
-  useModalFocus(formRef, formMode !== null, () => setFormMode(null));
+  const closeForm = () => { if (!savingRef.current) setFormMode(null); };
+  useModalFocus(formRef, formMode !== null, closeForm);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const activeCount = projects.filter((project) => project.status !== "completed").length;
+  const validBudget = form.budget.trim() !== "" && form.spentBudget.trim() !== ""
+    && Number.isSafeInteger(Number(form.budget)) && Number.isSafeInteger(Number(form.spentBudget))
+    && Number(form.budget) >= 0 && Number(form.spentBudget) >= 0 && Number(form.spentBudget) <= Number(form.budget);
+  const remaining = validBudget ? money(Number(form.budget) - Number(form.spentBudget), form.currency) : "Проверьте суммы";
+  const formStage = formMode === "edit" && selected ? selected.stage : "start";
 
   const save = async () => {
+    if (savingRef.current) return;
     const payload = payloadFromForm(form);
-    if (payload === undefined) return;
-    const saved = formMode === "edit" && selected !== undefined
-      ? await onUpdate(selected, payload)
-      : await onCreate(payload);
-    if (saved !== undefined) {
-      setSelectedId(saved.id);
-      setFormMode(null);
+    if (payload === undefined || !validBudget) {
+      setFormError("Укажите код, название, руководителя и целые неотрицательные суммы. Потрачено не может превышать бюджет."); return;
     }
+    if (form.startDate && form.endDate && form.endDate < form.startDate) {
+      setFormError("Дата окончания не может быть раньше даты начала."); return;
+    }
+    savingRef.current = true; setSaving(true); setFormError("");
+    try {
+      const saved = formMode === "edit" && selected !== undefined ? await onUpdate(selected, payload) : await onCreate(payload);
+      if (saved !== undefined) { setSelectedId(saved.id); setFormMode(null); }
+      else setFormError("Не удалось сохранить проект. Проверьте подключение и повторите попытку.");
+    } catch { setFormError("Не удалось сохранить проект. Введённые данные сохранены в форме."); }
+    finally { savingRef.current = false; setSaving(false); }
   };
 
   const move = async (project: WorkspaceProject, stage: ProjectStage) => {
@@ -148,6 +164,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         {canCreate ? (
           <Button appearance="primary" icon={<Add24Regular />} onClick={() => {
             setForm(emptyForm(currentUser.id));
+            setFormError("");
             setFormMode("create");
           }}>Новый проект</Button>
         ) : null}
@@ -198,6 +215,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             <div><span>{selected.code}</span><h2>{selected.title}</h2></div>
             {selected.canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={() => {
               setForm(projectForm(selected));
+              setFormError("");
               setFormMode("edit");
             }}>Изменить</Button> : null}
           </header>
@@ -228,21 +246,37 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       ) : null}
 
       {formMode !== null ? (
-        <div className="bp7-modal-backdrop" role="presentation">
-          <form ref={formRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={formMode === "create" ? "Создать проект" : "Изменить проект"} className="bp7-modal" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-            <header><div><span>{formMode === "create" ? "Новая карточка" : "Редактирование"}</span><h2>{formMode === "create" ? "Создать проект" : selected?.title}</h2></div><Button appearance="subtle" onClick={() => setFormMode(null)}>Закрыть</Button></header>
-            <div className="bp7-form-grid">
-              <label>Код<Input value={form.code} onChange={(_, data) => setForm({ ...form, code: data.value })} /></label>
-              <label>Название<Input value={form.title} onChange={(_, data) => setForm({ ...form, title: data.value })} /></label>
-              <label>Руководитель<select value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
-              <label>Валюта<select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as ProjectFormState["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></select></label>
-              <label>Начало<Input type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
-              <label>Окончание<Input type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
-              <label>Бюджет<Input type="number" min="0" value={form.budget} onChange={(_, data) => setForm({ ...form, budget: data.value })} /></label>
-              <label>Потрачено<Input type="number" min="0" value={form.spentBudget} onChange={(_, data) => setForm({ ...form, spentBudget: data.value })} /></label>
-              <label className="span-two">Описание<Textarea resize="vertical" value={form.description} onChange={(_, data) => setForm({ ...form, description: data.value })} /></label>
-            </div>
-            <footer><Button onClick={() => setFormMode(null)}>Отмена</Button><Button appearance="primary" type="submit">Сохранить</Button></footer>
+        <div className="bp7-modal-backdrop record-composer-backdrop" role="presentation">
+          <form ref={formRef} noValidate tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="project-composer-title" aria-busy={saving} className="bp7-modal record-composer" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            <RecordComposer title={formMode === "create" ? "Создать проект" : "Изменить проект"} titleId="project-composer-title" eyebrow="Список проектов" busy={saving} error={formError} onClose={closeForm} submitLabel="Сохранить"
+              hint={formMode === "create" ? "Проект появится в колонке «Начало» после сохранения." : "Изменение полей не меняет стадию проекта."}
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии проекта">{stages.map((stage) => <span key={stage} aria-current={stage === formStage ? "step" : undefined}>{stageLabels[stage]}</span>)}</div>}
+              aside={<>
+                <RecordSummary title="Сводка проекта"><div className="record-summary-title">{form.title.trim() || "Новый проект"}</div><p>{form.code.trim() || "Код ещё не указан"}</p><strong className="record-summary-amount">{remaining}</strong><p>Оставшийся бюджет</p>
+                  <dl className="record-summary-facts"><div><dt>Руководитель</dt><dd>{personName(form.managerUserId)}</dd></div><div><dt>Период</dt><dd>{form.startDate || "Не указан"} — {form.endDate || "Не указан"}</dd></div><div><dt>Стадия</dt><dd>{stageLabels[formStage]}</dd></div></dl>
+                </RecordSummary>
+                <section className="record-summary-card record-summary-note"><h3>{formMode === "create" ? "Карточка ещё не сохранена" : "Редактирование карточки"}</h3><p>{formMode === "create" ? "После сохранения появится история проекта. Стадиями можно управлять на доске и в карточке проекта." : "История проекта и текущая стадия сохранятся. Бюджет и ответственного можно уточнить здесь."}</p></section>
+              </>}>
+              <RecordSection title="Общее" description="Код и название обязательны. Описание поможет команде понять задачу проекта.">
+                <div className="record-field-grid">
+                  <label className="record-field-wide">Название проекта<Input aria-label="Название проекта" aria-required value={form.title} placeholder="Например, развитие региональных инициатив" onChange={(_, data) => setForm({ ...form, title: data.value })} /></label>
+                  <label className="record-field-wide">Описание проекта<Textarea aria-label="Описание проекта" resize="vertical" value={form.description} onChange={(_, data) => setForm({ ...form, description: data.value })} /></label>
+                  <label>Код проекта<Input aria-label="Код проекта" aria-required value={form.code} placeholder="Например, YUK-2026" onChange={(_, data) => setForm({ ...form, code: data.value })} /></label>
+                  <label>Статус проекта<output>{stageLabels[formStage]}</output><small>Стадия изменяется отдельно от полей.</small></label>
+                </div>
+              </RecordSection>
+              <RecordSection title="Сроки и ответственность"><div className="record-field-grid">
+                <label className="record-field-wide">Руководитель<select aria-label="Руководитель проекта" value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                <label>Начало<Input aria-label="Начало проекта" type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
+                <label>Окончание<Input aria-label="Окончание проекта" type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
+              </div></RecordSection>
+              <RecordSection title="Бюджет" description="Все суммы — в валюте проекта, целыми единицами."><div className="record-field-grid">
+                <label className="record-field-wide">Валюта проекта<select aria-label="Валюта проекта" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as ProjectFormState["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></select></label>
+                <label>Бюджет проекта<Input aria-label="Бюджет проекта" type="number" min="0" value={form.budget} onChange={(_, data) => setForm({ ...form, budget: data.value })} /></label>
+                <label>Потрачено<Input aria-label="Потрачено" type="number" min="0" value={form.spentBudget} onChange={(_, data) => setForm({ ...form, spentBudget: data.value })} /></label>
+                <label className="record-field-wide">Оставшийся бюджет<output aria-label="Оставшийся бюджет">{remaining}</output><small>Рассчитывается автоматически: бюджет минус потрачено.</small></label>
+              </div></RecordSection>
+            </RecordComposer>
           </form>
         </div>
       ) : null}

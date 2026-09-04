@@ -1,8 +1,9 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { DecisionReason } from "./DecisionReason";
+import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
-import { Badge, Button, Checkbox, Dialog, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
+import { Badge, Button, Checkbox, Dialog, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, Edit24Regular } from "@fluentui/react-icons";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
@@ -34,6 +35,7 @@ function emptyForm(currentUserId: string): TripFormState {
 }
 
 export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
+  const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
@@ -42,6 +44,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
   const [query, setQuery] = useState("");
+  const [employeeQuery, setEmployeeQuery] = useState("");
   const [draggedId, setDraggedId] = useState("");
   const [dropTarget, setDropTarget] = useState<TripStage>();
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const resetDrag = () => { setDraggedId(""); setDropTarget(undefined); };
   const openRequest = (id: string) => { setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
   const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
-  const create = () => { setForm(emptyForm(currentUser.id)); setFormMode("create"); setError(""); };
+  const create = () => { setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setError(""); };
 
   const save = async () => {
     if (busyRef.current) return;
@@ -108,7 +111,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     <section className="workspace-view bp7-view trips-view trip-view" aria-label="Согласование поездок">
       <header className="bp7-header">
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p></div>
-        <Button appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
+        <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
       <div className="trip-commandbar">
         <div className="approval-board-filters" role="group" aria-label="Вид поездок">
@@ -137,7 +140,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
               <header><strong title={column.label}>{column.label}</strong><span className="approval-column-count" aria-label={`${items.length} поездок`}>{items.length}</span></header>
               <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="В заявках на поездку пока нет поля суммы. Бюджет не задан, это не означает бесплатную поездку."><span>Сумма в колонке</span><strong>{tripColumnTotal(items)}</strong></div>
               <div className="approval-column-stack">
-                <div className="trip-column-command">{column.key === "launch" ? <Button size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : dropAction ? moveLabels[dropAction] : null}</div>
+                <div className="trip-column-command">{column.key === "launch" ? <Button {...restoreFocusTarget} size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : dropAction ? moveLabels[dropAction] : null}</div>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
                   const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key));
@@ -170,7 +173,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
           else closeDetail();
         }
       }}>
-        <DialogSurface className="trip-dialog">
+        <DialogSurface className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : ""}`} aria-labelledby={formMode !== null ? "trip-composer-title" : undefined}>
           {formMode === null && selected ? <article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle></div><Button autoFocus appearance="subtle" disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки">Закрыть</Button></header>
             <Badge appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
@@ -181,22 +184,36 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personName(selected.requesterUserId)}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personName(id)}</span>)}</div>
             <div className="bp7-actions">
-              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.allowedActions.map((action) => <Button disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
             </div>
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article> : formMode !== null ? (
-          <form className="bp7-modal trip-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-            <header><div><span>{formMode === "create" ? "Новая заявка" : "Исправление заявки"}</span><DialogTitle>Командировка</DialogTitle></div><Button appearance="subtle" disabled={busy} onClick={() => { setFormMode(null); setError(""); }}>Закрыть</Button></header>
-            {feedback}
-            <div className="bp7-form-grid">
-              <label className="span-two">Цель поездки<Textarea aria-label="Цель поездки" autoFocus resize="vertical" disabled={busy} value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
-              <label className="span-two">Куда едем<Input aria-label="Куда едем" disabled={busy} value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
-              <label>Дата начала<Input aria-label="Дата начала" type="date" disabled={busy} value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
-              <label>Дата окончания<Input aria-label="Дата окончания" type="date" disabled={busy} value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
-              <fieldset className="span-two employee-picker"><legend>Участники поездки</legend>{people.filter((person) => canChooseOthers || person.id === currentUser.id).map((person) => <Checkbox disabled={busy} checked={form.employeeIds.includes(person.id)} key={person.id} label={`${person.name}${person.jobTitle ? ` · ${person.jobTitle}` : ""}`} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
-            </div>
-            <footer><Button disabled={busy} onClick={() => { setFormMode(null); setError(""); }}>Отмена</Button><Button disabled={busy} appearance="primary" type="submit">{busy ? "Сохраняем…" : "Сохранить"}</Button></footer>
+          <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={() => { if (!busyRef.current) { setFormMode(null); setError(""); } }}
+              hint="Сохранение не отправляет поездку на согласование. Отправить её можно из карточки."
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
+              aside={<>
+                <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div><p>{form.purpose.trim() || "Добавьте цель поездки"}</p>
+                  <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personName(selected.requesterUserId) : currentUser.name}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
+                  <ul className="record-summary-people">{form.employeeIds.map((id) => <li key={id}>{personName(id)}</li>)}</ul>
+                </RecordSummary>
+                <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Сначала сохраните карточку, затем отправьте её руководителю. После его согласования заявка поступит в кадровую службу.</p><p>История решений будет доступна в карточке поездки.</p></section>
+              </>}>
+              <RecordSection title="Общее" description="Укажите цель и место поездки — их увидят согласующие."><div className="record-field-grid">
+                <label className="record-field-wide">Цель поездки<Textarea aria-label="Цель поездки" aria-required autoFocus resize="vertical" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
+                <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
+              </div></RecordSection>
+              <RecordSection title="Даты поездки"><div className="record-field-grid">
+                <label>Дата начала<Input aria-label="Дата начала" aria-required type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
+                <label>Дата окончания<Input aria-label="Дата окончания" aria-required type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
+              </div></RecordSection>
+              <RecordSection title="Участники поездки" description={canChooseOthers ? "Отметьте сотрудников, которые отправятся в поездку. Поиск не сбрасывает выбор." : "Вы можете создать поездку для себя."}>
+                {canChooseOthers ? <Input aria-label="Найти участника поездки" placeholder="Имя или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} /> : null}
+                <fieldset className="employee-picker"><legend className="sr-only">Выбор участников</legend>{people.filter((person) => (canChooseOthers || person.id === currentUser.id) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={`${person.name}${person.jobTitle ? ` · ${person.jobTitle}` : ""}`} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
+                {canChooseOthers && !people.some((person) => `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))) ? <p role="status">Сотрудники не найдены. Измените поиск.</p> : null}
+              </RecordSection>
+            </RecordComposer>
           </form>) : null}
         </DialogSurface>
       </Dialog>

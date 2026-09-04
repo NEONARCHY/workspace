@@ -25,6 +25,17 @@ function drop(target: string) {
 }
 afterEach(cleanup);
 describe("Trip approvals interaction", () => {
+  it("keeps selected employees while searching and previews the trip without sending it", () => {
+    const { onCreate } = setup();
+    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    fireEvent.change(screen.getByLabelText("Куда едем"), { target: { value: "Самарканд" } });
+    fireEvent.change(screen.getByLabelText("Найти участника поездки"), { target: { value: "нет совпадений" } });
+    expect(screen.getByRole("status")).toHaveTextContent("Сотрудники не найдены");
+    expect(within(screen.getByLabelText("Сводка карточки")).getByText(people[0]!.name, { selector: "li" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Найти участника поездки"), { target: { value: "" } });
+    expect(screen.getByRole("checkbox", { name: new RegExp(people[0]!.name) })).toBeChecked();
+    expect(onCreate).not.toHaveBeenCalled();
+  });
   it("starts on the coloured board and filters the same cards in list view", () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();
