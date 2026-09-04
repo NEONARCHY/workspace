@@ -206,6 +206,11 @@ describe("Private messenger", () => {
       .mockRejectedValueOnce(new Error("Сообщение уже изменилось"));
     const onDeleteMessage = vi.fn().mockResolvedValue(undefined);
     renderMessenger({ messages: [message], onEditMessage, onDeleteMessage });
+    const bubble = screen.getByText("Мой текст").closest(".message-body")!;
+    const controls = screen.getByRole("group", { name: "Действия с сообщением" });
+    expect(bubble).not.toContainElement(controls);
+    expect(bubble.parentElement).toContainElement(controls);
+    expect(bubble.querySelector("time")).toHaveTextContent("12:00");
     fireEvent.click(
       screen.getByRole("button", { name: "Изменить сообщение: Мой текст" }),
     );

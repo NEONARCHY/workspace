@@ -248,141 +248,145 @@ function Conversation({
                     color="colorful"
                   />
                 )}
-                <div className="message-body">
-                  {!own && <strong>{personName(message.authorId)}</strong>}
-                  {message.replyToMessageId && (
-                    <blockquote className="message-quote">
-                      <strong>
-                        {parent
-                          ? personName(parent.authorId)
-                          : "Ответ на сообщение"}
-                      </strong>
-                      <span>
-                        {parent?.deletedAt
-                          ? "Сообщение удалено"
-                          : (parent?.body ?? "Сообщение недоступно")}
-                      </span>
-                    </blockquote>
-                  )}
-                  {editing?.id === message.id ? (
-                    <div className="message-edit-form">
-                      <Textarea
-                        textarea={{ ref: editInputRef }}
-                        aria-label="Изменить текст сообщения"
-                        value={editBody}
-                        maxLength={20000}
-                        disabled={busy}
-                        onChange={(_, data) => setEditBody(data.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape" && !busy && !event.nativeEvent.isComposing) {
-                            event.preventDefault();
-                            setEditing(undefined);
-                          }
-                        }}
-                      />
-                      <div className="chat-dialog-actions">
-                        <Button
-                          size="small"
-                          appearance="primary"
-                          disabled={busy || !editBody.trim()}
-                          onClick={() =>
-                            void run(async () => {
-                              await onEditMessage(editing, editBody.trim());
-                              setEditing(undefined);
-                            })
-                          }
-                        >
-                          Сохранить сообщение
-                        </Button>
-                        <Button
-                          size="small"
+                <div className="message-content">
+                  <div className="message-body">
+                    {!own && <strong>{personName(message.authorId)}</strong>}
+                    {message.replyToMessageId && (
+                      <blockquote className="message-quote">
+                        <strong>
+                          {parent
+                            ? personName(parent.authorId)
+                            : "Ответ на сообщение"}
+                        </strong>
+                        <span>
+                          {parent?.deletedAt
+                            ? "Сообщение удалено"
+                            : (parent?.body ?? "Сообщение недоступно")}
+                        </span>
+                      </blockquote>
+                    )}
+                    {editing?.id === message.id ? (
+                      <div className="message-edit-form">
+                        <Textarea
+                          textarea={{ ref: editInputRef }}
+                          aria-label="Изменить текст сообщения"
+                          value={editBody}
+                          maxLength={20000}
                           disabled={busy}
-                          onClick={() => setEditing(undefined)}
-                        >
-                          Отмена
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p
-                      className={
-                        message.deletedAt ? "message-deleted" : undefined
-                      }
-                    >
-                      {message.deletedAt ? "Сообщение удалено" : message.body}
-                    </p>
-                  )}
-                  {!message.deletedAt && (
-                    <>
-                      {!!message.mentionUserIds?.length && (
-                        <div className="message-mentions">
-                          {message.mentionUserIds.map((id) => (
-                            <span key={id}>@{personName(id)}</span>
-                          ))}
-                        </div>
-                      )}
-                      <AttachmentChips
-                        attachments={attachments.filter(
-                          (attachment) =>
-                            attachment.ownerType === "message" &&
-                            attachment.ownerId === message.id,
-                        )}
-                        onDownload={onDownloadAttachment}
-                      />
-                      <div className="message-actions">
-                        <Button
-                          appearance="subtle"
-                          size="small"
-                          disabled={!canSend || busy}
-                          aria-label={`Ответить: ${message.body.slice(0, 40)}`}
-                          onClick={() => setReply(message)}
-                        >
-                          Ответить
-                        </Button>
-                        <Button
-                          className="message-task-action"
-                          appearance="subtle"
-                          size="small"
-                          icon={<TaskListSquareLtr24Regular />}
-                          aria-label={`Создать задачу из сообщения: ${message.body.slice(0, 40)}`}
-                          onClick={() => {
-                            setTaskSource(message);
-                            setTaskTitle(message.body.slice(0, 160));
+                          onChange={(_, data) => setEditBody(data.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape" && !busy && !event.nativeEvent.isComposing) {
+                              event.preventDefault();
+                              setEditing(undefined);
+                            }
                           }}
-                        >
-                          В задачу
-                        </Button>
-                        {mayEdit && (
-                          <>
-                            <Button
-                              appearance="subtle"
-                              size="small"
-                              disabled={busy}
-                              aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
-                              onClick={() => startEditing(message)}
-                            >
-                              Изменить
-                            </Button>
-                            <Button
-                              appearance="subtle"
-                              size="small"
-                              disabled={busy}
-                              aria-label={`Удалить сообщение: ${message.body.slice(0, 40)}`}
-                              onClick={() => setDeleting(message)}
-                            >
-                              Удалить
-                            </Button>
-                          </>
-                        )}
+                        />
+                        <div className="chat-dialog-actions">
+                          <Button
+                            size="small"
+                            appearance="primary"
+                            disabled={busy || !editBody.trim()}
+                            onClick={() =>
+                              void run(async () => {
+                                await onEditMessage(editing, editBody.trim());
+                                setEditing(undefined);
+                              })
+                            }
+                          >
+                            Сохранить сообщение
+                          </Button>
+                          <Button
+                            size="small"
+                            disabled={busy}
+                            onClick={() => setEditing(undefined)}
+                          >
+                            Отмена
+                          </Button>
+                        </div>
                       </div>
-                    </>
+                    ) : (
+                      <p
+                        className={
+                          message.deletedAt ? "message-deleted" : undefined
+                        }
+                      >
+                        {message.deletedAt ? "Сообщение удалено" : message.body}
+                      </p>
+                    )}
+                    {!message.deletedAt && (
+                      <>
+                        {!!message.mentionUserIds?.length && (
+                          <div className="message-mentions">
+                            {message.mentionUserIds.map((id) => (
+                              <span key={id}>@{personName(id)}</span>
+                            ))}
+                          </div>
+                        )}
+                        <AttachmentChips
+                          attachments={attachments.filter(
+                            (attachment) =>
+                              attachment.ownerType === "message" &&
+                              attachment.ownerId === message.id,
+                          )}
+                          onDownload={onDownloadAttachment}
+                        />
+                      </>
+                    )}
+                    <time>
+                      {message.editedAt && !message.deletedAt
+                        ? "изменено · "
+                        : ""}
+                      {message.time}
+                    </time>
+                  </div>
+                  {!message.deletedAt && (
+                    <div className="message-actions" role="group" aria-label="Действия с сообщением">
+                      <Button
+                        appearance="subtle"
+                        size="small"
+                        disabled={!canSend || busy}
+                        aria-label={`Ответить: ${message.body.slice(0, 40)}`}
+                        onClick={() => setReply(message)}
+                      >
+                        Ответить
+                      </Button>
+                      <Button
+                        className="message-task-action"
+                        appearance="subtle"
+                        size="small"
+                        icon={<TaskListSquareLtr24Regular />}
+                        aria-label={`Создать задачу из сообщения: ${message.body.slice(0, 40)}`}
+                        onClick={() => {
+                          setTaskSource(message);
+                          setTaskTitle(message.body.slice(0, 160));
+                        }}
+                      >
+                        В задачу
+                      </Button>
+                      {mayEdit && (
+                        <>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            disabled={busy}
+                            aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
+                            onClick={() => startEditing(message)}
+                          >
+                            Изменить
+                          </Button>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            disabled={busy}
+                            aria-label={`Удалить сообщение: ${message.body.slice(0, 40)}`}
+                            onClick={() => setDeleting(message)}
+                          >
+                            Удалить
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   )}
-                  <time>
-                    {message.editedAt && !message.deletedAt
-                      ? "изменено · "
-                      : ""}
-                    {message.time}
-                  </time>
                 </div>
               </div>
             </div>
