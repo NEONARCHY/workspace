@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { scrollToLatest } from "./message-scroll";
 import type {
   ChatMessage,
   ChatSummary,
@@ -100,6 +101,7 @@ function Conversation({
   const restoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
+  const scrollInitialized = useRef(false);
   const canSend = chat.permissions.sendMessages;
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
@@ -115,11 +117,12 @@ function Conversation({
   );
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
   const latestMessage = activeMessages.at(-1);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const pane = scrollRef.current;
     if (pane && (followLatest.current || latestMessage?.authorId === currentUserId)) {
-      pane.scrollTop = pane.scrollHeight;
+      scrollToLatest(pane, scrollInitialized.current);
     }
+    scrollInitialized.current = true;
   }, [latestMessage?.id, latestMessage?.authorId, currentUserId]);
   useEffect(() => {
     if (editing) {

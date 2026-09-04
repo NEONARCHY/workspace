@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { NavigationKey } from "@yuksalish/contracts";
-import { Button, Dialog, DialogBody, DialogContent, DialogSurface, DialogTitle, Input } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Input } from "@fluentui/react-components";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { Dismiss20Regular, Search20Regular } from "@fluentui/react-icons";
 
 export function SectionJump({ items, onNavigate }: {

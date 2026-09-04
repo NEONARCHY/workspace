@@ -10,7 +10,6 @@ import {
   Avatar,
   Button,
   Checkbox,
-  Dialog,
   DialogBody,
   DialogContent,
   DialogSurface,
@@ -20,6 +19,7 @@ import {
   Select,
   Textarea,
 } from "@fluentui/react-components";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 export interface ChatActions {
   readonly create: (input: CreateChatInput) => Promise<ChatSummary>;

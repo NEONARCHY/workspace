@@ -1,0 +1,48 @@
+/* Motion is feedback, not a delay before work. No layout/size/blur animations,
+   no persistent compositing layers, no transforms on parents of fixed dialogs. */
+:root {
+  --ws-motion-fast: 160ms;
+  --ws-motion-normal: 220ms;
+  --ws-motion-enter: 240ms;
+  --ws-ease: cubic-bezier(.2, 0, 0, 1);
+}
+
+/* Override legacy 80ms presses and instantaneous custom controls. Shadows stay
+   static: interpolating blurred shadows is particularly costly without a GPU. */
+.app-provider :is(button, .fui-Input, .fui-Textarea, .fui-Select,
+  .chat-row, .task-row, .approval-board-card, .approval-column,
+  .project-card, .kanban-card, .notification-row, .calendar-event-pill) {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: var(--ws-motion-fast);
+  transition-timing-function: var(--ws-ease);
+}
+.app-provider :is(.rail-action, .rail-toggle, .section-jump-trigger,
+  .chat-row, .view-switch button, .chat-buckets button, .approval-board-filters button) {
+  transition-duration: var(--ws-motion-normal);
+}
+/* A press changes colour immediately; text does not jump by a pixel. */
+.app-provider :is(.rail-action, .chat-row, .approval-board-filters button,
+  .approval-create-panel > header > button, .approval-detail-header > button):active { transform: none; }
+.app-provider :is(.approval-board-card, .notification-row):hover,
+.app-provider .approval-column.drop-allowed { transform: none; }
+.message-actions, .chat-list-item .chat-more {
+  transition: opacity var(--ws-motion-normal) var(--ws-ease);
+}
+
+/* Only mounted content fades. Polling, text input and filtering never replay it.
+   No forwards fill: after entrance, the browser can release the opacity layer. */
+.app-content > .workspace-view { animation: ws-view-enter var(--ws-motion-normal) var(--ws-ease); }
+:is(.approval-create-panel, .approval-detail-panel, .bp7-modal, .account-panel) {
+  animation: ws-panel-enter var(--ws-motion-enter) var(--ws-ease);
+}
+/* Fluent dialogs use WorkspaceDialog's native presence animation, not a second CSS animation. */
+.fui-DialogSurface { animation: none; }
+@keyframes ws-view-enter { from { opacity: .84; } to { opacity: 1; } }
+@keyframes ws-panel-enter { from { opacity: .35; } to { opacity: 1; } }
+
+/* Respect system preferences; never smooth wheel/drag/keyboard scrolling globally. */
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .app-provider *, .app-provider *::before, .app-provider *::after {
+    animation: none !important; transition: none !important; scroll-behavior: auto !important;
+  }
+}

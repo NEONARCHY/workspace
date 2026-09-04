@@ -103,6 +103,19 @@ void app.whenReady().then(() => {
     const previous: unknown = JSON.parse(readFileSync(join(app.getPath("userData"), "diagnostics.json"), "utf8"));
     if (Array.isArray(previous)) diagnostics.push(...previous.slice(-49));
   } catch { /* no previous diagnostic file */ }
+  // Local capability snapshot, not hardware identifiers or employee data. Never
+  // bypass Chromium's driver blocklist: software rendering may be a safety fallback.
+  let previousGraphics = "";
+  const recordGraphics = () => {
+    const status = app.getGPUFeatureStatus();
+    const snapshot = JSON.stringify({ compositing: status.gpu_compositing, rasterization: status.rasterization });
+    if (snapshot !== previousGraphics) {
+      previousGraphics = snapshot;
+      recordDiagnostic("graphics-status", "Capabilities", snapshot);
+    }
+  };
+  app.on("gpu-info-update", recordGraphics);
+  void app.getGPUInfo("basic").then(recordGraphics).catch(() => undefined);
   ipcMain.handle("diagnostics:record", (event, payload: unknown) => {
     if (!isAllowedNavigation(event.sender.getURL()) || !payload || typeof payload !== "object") return;
     const value = payload as { category?: unknown; name?: unknown; frames?: unknown };

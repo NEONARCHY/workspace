@@ -3,7 +3,8 @@ import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
-import { Badge, Button, Checkbox, Dialog, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { Add24Regular, Edit24Regular } from "@fluentui/react-icons";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
