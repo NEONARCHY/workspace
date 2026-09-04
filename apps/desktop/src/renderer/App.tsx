@@ -52,6 +52,7 @@ import {
 import { AccountPanel } from "./AccountPanel";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
+import { CompanyLogo } from "./CompanyLogo";
 import type { ChatActions } from "./ChatManagement";
 import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { EmployeesView } from "./EmployeesView";
@@ -1014,7 +1015,7 @@ export function App() {
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
-            <strong>Yuksalish</strong>
+            <CompanyLogo tone="white" className="rail-brand" />
           </div>
           <nav className="rail-nav">
             {navItems.map((item) => {
@@ -1079,7 +1080,7 @@ export function App() {
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
             <div className="global-brand">
-              <strong>Yuksalish Workspace</strong>
+              <div className="brand-lockup"><CompanyLogo tone="color" className="header-brand" /><span>Workspace</span></div>
               <span className={`connection-state ${backgroundError ? "" : "online"}`} title={connectionDetail}>{connectionDetail}</span>
             </div>
             <Input

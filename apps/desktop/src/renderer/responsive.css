@@ -17,14 +17,17 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
 .rail-toggle:focus-visible { outline-color: #fff; }
 .workspace-logo { padding-inline: 0; gap: 8px; }
 .rail-collapsed .workspace-logo { margin-inline: 0; justify-content: center; }
-.rail-collapsed .workspace-logo strong, .rail-collapsed .rail-label, .rail-collapsed .rail-profile > span:last-child { display: none; }
+.rail-collapsed .rail-brand, .rail-collapsed .rail-label, .rail-collapsed .rail-profile > span:last-child { display: none; }
 .rail-collapsed .rail-action { position: relative; grid-template-columns: 1fr; padding-inline: 5px; }
 .rail-collapsed .rail-badge { position: absolute; top: 0; right: 0; font-size: 8px; }
 .rail-collapsed .rail-profile { padding: 5px; justify-content: center; }
 .app-stage { min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .app-stage.has-feedback { grid-template-rows: auto auto minmax(0, 1fr); }
 .global-bar { min-height: 56px; grid-template-columns: minmax(100px, 1fr) minmax(120px, 280px) minmax(32px, 180px) auto; gap: 12px; padding: 8px 16px; }
-.global-brand { display: grid; gap: 2px; }
+.global-brand { display: grid; gap: 2px; container: brand / inline-size; }
+@container brand (max-width: 185px) {
+  .brand-lockup > span { display: none; }
+}
 .global-brand strong, .connection-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-trigger { min-width: 0; max-width: 100%; }
 .account-trigger > span { min-width: 0; }
@@ -261,7 +264,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
   .auth-intro { padding: 24px; }
   .auth-intro h1 { font-size: 28px; }
   .auth-intro > p:not(.auth-kicker), .auth-security-note { display: none; }
-  .auth-mark { margin-bottom: 16px; }
+  .auth-brand { width: min(260px, 100%); margin-bottom: 16px; }
   .auth-card { padding: 24px; }
   .auth-mode-switch { margin-bottom: 24px; }
   .global-bar { padding-inline: 8px; gap: 4px; }

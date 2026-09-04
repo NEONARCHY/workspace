@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Button, Field, Input } from "@fluentui/react-components";
+import { CompanyLogo } from "./CompanyLogo";
 
 interface LoginViewProps {
   readonly busy: boolean;
@@ -43,13 +44,9 @@ export function LoginView({
   return (
     <main className="auth-screen">
       <section className="auth-intro">
-        <div className="auth-mark">Y</div>
+        <CompanyLogo tone="white" className="auth-brand" />
         <p className="auth-kicker">Yuksalish Workspace</p>
         <h1>Работа компании в одном защищённом пространстве</h1>
-        <p>
-          Сообщения, задачи и согласования доступны только после входа. Каждое устройство
-          получает отдельную отзываемую сессию.
-        </p>
         {showDemoCredentials ? (
           <div className="auth-security-note">
             <strong>Локальная alpha</strong>
