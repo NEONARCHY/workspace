@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type DragEvent as ReactDragEvent } from "react";
+import { useCallback, useMemo, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 
 import type {
   ApprovalNodeData,
@@ -45,6 +45,7 @@ import "@xyflow/react/dist/style.css";
 
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
 import type { PaymentRequestInput } from "./workspace-api";
+import { approvalColumnTotals, approvalStagePalette } from "./approval-board";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
@@ -1139,15 +1140,19 @@ export function ApprovalsView({
           {boardNotice ? <div className="approval-board-notice" role="status">{boardNotice}</div> : null}
 
           <div className="approval-kanban" aria-label="Доска заявок по стадиям">
-            {boardColumns.map((column, columnIndex) => {
+            {boardColumns.map((column) => {
               const columnRequests = filteredRequests.filter((request) =>
                 requestBoardColumn(request, boardColumns) === column.key,
               );
               const isAllowedDrop = draggedRequest?.plan.targetKeys.includes(column.key) ?? false;
+              const palette = approvalStagePalette(column);
+              const totals = approvalColumnTotals(columnRequests);
               return (
                 <section
                   key={column.key}
+                  data-stage-key={column.key}
                   className={`approval-column column-${column.kind}${isAllowedDrop ? " drop-allowed" : ""}${dropColumnKey === column.key ? " drop-active" : ""}`}
+                  style={{ "--approval-stage-color": palette.background, "--approval-stage-ink": palette.foreground } as CSSProperties}
                   aria-label={`${column.label}: ${columnRequests.length} заявок`}
                   onDragEnter={(event) => allowColumnDrop(event, column.key)}
                   onDragOver={(event) => allowColumnDrop(event, column.key)}
@@ -1158,12 +1163,13 @@ export function ApprovalsView({
                   }}
                 >
                   <header>
-                    <span className="approval-column-index">{String(columnIndex + 1).padStart(2, "0")}</span>
-                    <div>
-                      <strong>{column.label}</strong>
-                      <small>{columnRequests.length} · {formatMoney(columnRequests.reduce((sum, request) => sum + request.amount, 0), "UZS")}</small>
-                    </div>
+                    <strong title={column.label}>{column.label}</strong>
+                    <span className="approval-column-count" aria-label={`${columnRequests.length} заявок`}>{columnRequests.length}</span>
                   </header>
+                  <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="Сумма заявок, показанных в этой колонке с текущими фильтрами. Разные валюты считаются отдельно.">
+                    <span>Сумма в колонке</span>
+                    {totals.map((total) => <strong key={total.currency}>{total.formatted}</strong>)}
+                  </div>
                   <div className="approval-column-stack">
                     {columnRequests.map((request) => {
                       const plan = approvalAdvancePlan(request, workflow, currentUserId);

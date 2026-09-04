@@ -1182,6 +1182,12 @@ describe("corporate workspace authentication alpha", () => {
       }),
     ));
     expect(await screen.findByText(/сервер обработал переход на этап «Согласовано»/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Сумма в колонке «Согласование»")).toHaveTextContent("0 UZS");
+    expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
+    fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "Нет такого названия" } });
+    expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
+    fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
+    expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
   });
 
   it("edits a returned request and resubmits its new version", async () => {
