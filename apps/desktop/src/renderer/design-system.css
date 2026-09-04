@@ -41,7 +41,8 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .app-shell.rail-collapsed { --rail-width: 72px; }
 .app-rail { gap: 8px; padding: 20px 12px 12px; color: var(--ws-text); background: var(--ws-surface); border-right: 1px solid var(--ws-line); }
 .workspace-logo { min-height: 56px; margin: 0 0 8px; padding-block: 6px; border: 0; gap: 8px; }
-.rail-brand { width: 166px; }
+/* Optical alignment: move only the artwork, keeping the menu button and rail layout stable. */
+.rail-brand { width: 166px; transform: translateY(-5px); }
 .workspace-logo svg, .rail-toggle { color: var(--ws-muted); }
 .rail-toggle { border-radius: 10px; }
 .rail-toggle:hover, .rail-customize button:hover { color: var(--ws-link); background: var(--ws-selected); }

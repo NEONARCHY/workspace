@@ -1,4 +1,4 @@
-// Read-only local branding/layout checks; no messages, invitations or decisions are sent.
+// Local branding/layout checks; no business writes. Each owned QA session is revoked in finally.
 const { chromium, _electron: electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -20,6 +20,19 @@ async function main() {
     page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   }
   const errors = [], checks = [];
+  const ownedSessions = new Map(), sessionResponses = [], sessionCaptureErrors = [];
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (!["localhost", "127.0.0.1"].includes(url.hostname)
+      || !/^\/api\/v1\/auth\/(login|refresh)$/.test(url.pathname)
+      || !response.ok()) return;
+    // Capture only tokens issued to this isolated QA page, never existing user sessions.
+    sessionResponses.push(response.json().then((session) => {
+      assert.equal(typeof session.accessToken, "string");
+      // One login per page; refresh replaces the token of that same session.
+      ownedSessions.set(url.origin, { origin: url.origin, token: session.accessToken });
+    }).catch(() => { sessionCaptureErrors.push("Could not capture the owned QA session for cleanup"); }));
+  });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.route("**/api/v1/chats/*/read", (route) => route.fulfill({ status: 204 }));
   const stable = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -85,6 +98,19 @@ async function main() {
     });
     assert(centered, "status vertically centered in header");
   };
+  const inspectRailAlignment = async () => {
+    const alignment = await page.locator(".rail-brand").evaluate((img) => {
+      const logo = img.getBoundingClientRect();
+      const header = img.closest(".workspace-logo");
+      const button = header.querySelector(".rail-toggle").getBoundingClientRect();
+      return {
+        offset: logo.top + logo.height / 2 - button.top - button.height / 2,
+        clearance: logo.top - header.getBoundingClientRect().top,
+      };
+    });
+    assert(Math.abs(alignment.offset + 5) < 0.5, "rail logo raised 5 px relative to unchanged menu button");
+    assert(alignment.clearance >= 0, "rail logo remains inside its header");
+  };
   try {
     if (!native) await page.goto(origin);
     await page.locator(".auth-brand").waitFor();
@@ -114,7 +140,10 @@ async function main() {
         if (isCollapsed !== collapsed) await page.locator(".rail-toggle").click();
         await stable();
         assert.equal(await page.locator(".rail-brand").isVisible(), !collapsed);
-        if (!collapsed) await inspectLogo(".rail-brand", "color");
+        if (!collapsed) {
+          await inspectLogo(".rail-brand", "color");
+          await inspectRailAlignment();
+        }
         await inspectHeader();
         await inspectLayout();
         checks.push(`${width} app/${collapsed ? "collapsed" : "expanded"}`);
@@ -129,6 +158,26 @@ async function main() {
     assert.deepEqual(errors, []);
     console.log(`PASS: ${checks.length} branding layouts, pixel-measured logo alignment, all login modes, original local artwork, preserved proportions, status-only header, menu collapse/expand and navigation${native ? " in packaged Electron" : " in Edge"}.`);
   } catch (error) { await page.screenshot({ path: path.join(output, "failure.png"), fullPage: true }).catch(() => undefined); throw error; }
-  finally { if (app) await app.close(); if (browser) await browser.close(); }
+  finally {
+    try {
+      await Promise.all(sessionResponses);
+      for (const { origin: apiOrigin, token } of ownedSessions.values()) {
+        const headers = { Authorization: `Bearer ${token}` };
+        const response = await fetch(`${apiOrigin}/api/v1/auth/logout`, {
+          method: "POST", headers, signal: AbortSignal.timeout(10_000),
+        });
+        assert.equal(response.status, 204, "owned branding QA session revoked");
+        const denied = await fetch(`${apiOrigin}/api/v1/auth/sessions`, {
+          headers, signal: AbortSignal.timeout(10_000),
+        });
+        assert.equal(denied.status, 401, "revoked QA token can no longer access sessions");
+      }
+      assert.deepEqual(sessionCaptureErrors, [], "QA session capture succeeded");
+      if (ownedSessions.size) console.log(`PASS: ${ownedSessions.size} owned QA session(s) revoked; existing sessions untouched.`);
+    } finally {
+      if (app) await app.close();
+      if (browser) await browser.close();
+    }
+  }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
