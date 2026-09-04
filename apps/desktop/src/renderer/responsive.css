@@ -95,7 +95,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
 .project-board { min-width: 0; min-height: 0; height: auto; padding: 14px 16px 24px; grid-template-columns: repeat(5, minmax(210px, 1fr)); }
 .bp7-detail { position: static; width: auto; min-height: 0; }
 .projects-view:not(:has(.bp7-detail)) { grid-template-columns: minmax(0, 1fr); }
-.trips-view { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+.trips-view { display: flex; flex-direction: column; min-height: 0; }
 .trip-layout { min-width: 0; height: auto; }
 .bp7-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .trip-route { flex-wrap: wrap; }

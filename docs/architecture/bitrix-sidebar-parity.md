@@ -84,6 +84,8 @@ Bitrix entity type `1038`, category `17` (`Согласование поездо
 
 Trip purpose, start/end dates and employee selection are shared fields of entity type 1038. Alpha 0.8.0 implements these fields, the five-stage route, correction cycle and immutable history. Until the process owner confirms position IDs, the safe provisional policy is requester → manager → administrator/HR; the workflow is functional but is not yet declared actor-equivalent to Bitrix.
 
+Desktop alpha 0.13.4 adds a payment-style Kanban with exact Bitrix stage colours, protected drag-and-drop, search/list filters and responsive detail/edit dialogs. Trip amounts are not stored yet: occupied columns explicitly show an unknown amount, not a zero cost. See [trip approvals](trip-approvals.md).
+
 ## Smart process: project list
 
 Bitrix entity type `1042`, category `21` (`Общая воронка`).

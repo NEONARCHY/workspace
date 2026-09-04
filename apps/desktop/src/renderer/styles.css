@@ -672,6 +672,42 @@ button { -webkit-tap-highlight-color: transparent; }
 .trip-employees { margin: 16px 0; }
 .trip-employees span { display: inline-block; margin: 0 6px 6px 0; padding: 6px 9px; border-radius: 20px; color: #3d566d; background: #eef2f6; font-size: 9px; }
 
+/* Trip approvals share payment board surfaces, but keep their own Bitrix palette. */
+.trip-view > .bp7-header { flex: none; }
+.trip-commandbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 18px; border-bottom: 1px solid #d5dee7; background: #fff; }
+.trip-commandbar .approval-board-filters { flex-wrap: wrap; justify-content: flex-start; }
+.trip-search { flex: 1 1 240px; min-width: 0; max-width: 420px; }
+.trip-feedback, .trip-board-help { flex: none; margin: 0; padding: 8px 18px; color: #24506f; background: #edf6fc; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.trip-feedback.error { color: #8b1a24; background: #fdecee; }
+.trip-board-help { color: #566d80; background: #f5f8fa; }
+.trip-kanban { grid-auto-columns: minmax(272px, 1fr); }
+.trip-column-command { display: flex; align-items: center; justify-content: center; min-height: 30px; color: #52697d; font-size: 11px; }
+.trip-column-command > button { width: 100%; }
+.trip-card-destination { color: #38566f; font-size: 12px; }
+.trip-board-card .approval-card-meta { align-items: start; font-size: 10px; }
+.trip-board-card .approval-card-meta > span:last-child { flex: none; }
+.trip-board-card .approval-card-open > strong, .trip-board-card .approval-card-meta > span, .trip-card-destination { overflow-wrap: anywhere; }
+.trip-board-card > footer { flex-wrap: wrap; font-size: 9px; }
+.trips-view > .trip-list { flex: 1; min-height: 0; }
+.trip-list-item p { white-space: normal; overflow-wrap: anywhere; }
+.fui-DialogSurface.trip-dialog { width: min(800px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow-y: auto; }
+.trip-dialog .trip-detail { padding: 22px; overflow: visible; }
+.trip-dialog .trip-detail > header { margin-bottom: 12px; }
+.trip-dialog h2, .trip-dialog p, .trip-dialog dd, .trip-dialog span { overflow-wrap: anywhere; }
+.trip-dialog header > div { min-width: 0; }
+.trip-dialog header > button { flex: none; }
+.trip-dialog .trip-form { width: 100%; max-height: none; border-radius: 0; box-shadow: none; overflow: visible; }
+.trip-dialog .trip-form > footer { position: static; }
+.trip-detail-stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 18px 0; }
+.trip-detail-stages > span { display: grid; align-content: center; min-height: 48px; padding: 8px; border-top: 5px solid var(--approval-stage-color); border-radius: 6px; color: #536a7f; background: #f4f7fa; font-size: 10px; }
+.trip-detail-stages > span[aria-current="step"] { color: #111111; background: var(--approval-stage-color); font-weight: 650; }
+@media (max-width: 600px) {
+  .trip-dialog .trip-detail, .trip-dialog .trip-form { padding: 14px; }
+  .trip-dialog .bp7-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .trip-dialog .span-two { grid-column: 1; }
+  .trip-detail-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .feed-view { display: grid; grid-template-columns: minmax(0, 760px) 270px; justify-content: center; gap: 18px; padding: 22px; overflow-y: auto; background: #f3f6f9; }
 .feed-main { min-width: 0; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }

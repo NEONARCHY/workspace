@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { DecisionReason } from "./DecisionReason";
-
-import type { TripAction, TripRequest, TripRequestInput, WorkspacePerson } from "@yuksalish/contracts";
-import { Badge, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, Checkmark24Regular, Edit24Regular } from "@fluentui/react-icons";
+import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
+import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
+import { Badge, Button, Checkbox, Dialog, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
+import { Add24Regular, Edit24Regular } from "@fluentui/react-icons";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
-  submit: "Отправить руководителю",
-  resubmit: "Отправить повторно",
-  approve: "Согласовать",
-  return: "Вернуть на доработку",
-  reject: "Отклонить",
+  submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
+  return: "Вернуть на доработку", reject: "Отклонить",
 };
+const moveLabels: Readonly<Record<TripAction, string>> = {
+  submit: "Руководителю →", resubmit: "Повторно →", approve: "Согласовать →",
+  return: "На доработку", reject: "Отклонить",
+};
+const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
 
 interface TripApprovalsViewProps {
   readonly focusRequestId?: string;
@@ -22,107 +25,181 @@ interface TripApprovalsViewProps {
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string) => Promise<TripRequest | undefined>;
 }
-
 interface TripFormState {
-  purpose: string;
-  destination: string;
-  startDate: string;
-  endDate: string;
-  employeeIds: readonly string[];
+  purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
 }
-
 function emptyForm(currentUserId: string): TripFormState {
   const today = new Date().toISOString().slice(0, 10);
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
 export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
-  const [selectedId, updateSelectedId] = useState(focusRequestId ?? requests[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
-  const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
-  const selected = requests.find((request) => request.id === selectedId)
-    ?? requests[0];
+  const [view, setView] = useState<"kanban" | "list">("kanban");
+  const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
+  const [query, setQuery] = useState("");
+  const [draggedId, setDraggedId] = useState("");
+  const [dropTarget, setDropTarget] = useState<TripStage>();
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const selected = requests.find((request) => request.id === selectedId);
+  const dragged = requests.find((request) => request.id === draggedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const visibleRequests = requests.filter((request) => {
+    if (filter === "running" && isFinished(request)) return false;
+    if (filter === "finished" && !isFinished(request)) return false;
+    return [request.number, request.purpose, request.destination, request.stageLabel, ...request.employeeIds.map(personName)]
+      .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
+  });
+  const resetDrag = () => { setDraggedId(""); setDropTarget(undefined); };
+  const openRequest = (id: string) => { setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
+  const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
+  const create = () => { setForm(emptyForm(currentUser.id)); setFormMode("create"); setError(""); };
 
   const save = async () => {
-    if (!form.purpose.trim() || !form.destination.trim() || !form.startDate || !form.endDate || form.employeeIds.length === 0) return;
-    const payload: TripRequestInput = { ...form, purpose: form.purpose.trim(), destination: form.destination.trim() };
-    const saved = formMode === "edit" && selected !== undefined
-      ? await onUpdate(selected, payload)
-      : await onCreate(payload);
-    if (saved !== undefined) {
-      setSelectedId(saved.id);
-      setFormMode(null);
+    if (busyRef.current) return;
+    if (!form.purpose.trim() || !form.destination.trim() || !form.startDate || !form.endDate || !form.employeeIds.length) {
+      setError("Укажите цель, место, даты и хотя бы одного участника поездки."); return;
     }
+    if (form.endDate < form.startDate) { setError("Дата окончания не может быть раньше даты начала."); return; }
+    busyRef.current = true; setBusy(true); setError("");
+    try {
+      const payload: TripRequestInput = { ...form, purpose: form.purpose.trim(), destination: form.destination.trim() };
+      const saved = formMode === "edit" && selected ? await onUpdate(selected, payload) : await onCreate(payload);
+      if (saved) { setSelectedId(saved.id); setDetailOpen(true); setFormMode(null); }
+      else setError("Не удалось сохранить поездку. Проверьте данные и подключение к серверу.");
+    } catch { setError("Не удалось сохранить поездку. Попробуйте ещё раз."); }
+    finally { busyRef.current = false; setBusy(false); }
   };
 
-  const act = async (request: TripRequest, action: TripAction) => {
-    if (action === "return" || action === "reject") { setPendingDecision({ id: request.id, action }); return; }
-    await onAction(request, action);
+  const commitAction = async (request: TripRequest, action: TripAction, comment?: string) => {
+    if (busyRef.current || !request.allowedActions.includes(action)) return false;
+    busyRef.current = true; setBusy(true); setError(""); setNotice("");
+    try {
+      const updated = await onAction(request, action, comment);
+      if (!updated) { setError("Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
+      setNotice(`${request.number}: ${updated.stageLabel}.${isFinished(updated) && filter === "running" ? " Поездка доступна в фильтре «Завершённые»." : ""}`);
+      return true;
+    } catch { setError("Не удалось изменить стадию. Карточка остаётся на прежнем месте."); return false; }
+    finally { busyRef.current = false; setBusy(false); }
   };
+  const act = async (request: TripRequest, action: TripAction) => {
+    if (busyRef.current || !request.allowedActions.includes(action)) return;
+    if (action === "return" || action === "reject") {
+      openRequest(request.id); setPendingDecision({ id: request.id, action }); return;
+    }
+    await commitAction(request, action);
+  };
+  const drop = (target: TripStage) => {
+    const action = dragged && tripDropAction(dragged, target);
+    resetDrag();
+    if (dragged && action) void act(dragged, action);
+  };
+  const feedback = error ? <p className="trip-feedback error" role="alert">{error}</p> : null;
 
   return (
-    <section className={`workspace-view bp7-view trips-view trip-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Согласование поездок">
+    <section className="workspace-view bp7-view trips-view trip-view" aria-label="Согласование поездок">
       <header className="bp7-header">
-        <div><span className="view-kicker">BP‑7 · Согласование поездок</span><h1>Командировки</h1><p>Маршрут: запуск → руководитель → кадровая служба → решение</p></div>
-        <Button appearance="primary" icon={<Add24Regular />} onClick={() => { setForm(emptyForm(currentUser.id)); setFormMode("create"); }}>Новая командировка</Button>
+        <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p></div>
+        <Button appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
-      <div className="trip-layout">
-        <div className="trip-list">
-          {requests.map((request) => (
-            <button className={`trip-list-item ${request.id === selected?.id ? "selected" : ""}`} key={request.id} onClick={() => setSelectedId(request.id)} type="button">
-              <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span>
-              <b>{request.destination}</b>
-              <p>{request.purpose}</p>
-              <small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд.</small>
-            </button>
-          ))}
-          {requests.length === 0 ? <div className="bp7-empty"><h2>Заявок пока нет</h2><p>Создайте первую командировку и отправьте её руководителю.</p></div> : null}
+      <div className="trip-commandbar">
+        <div className="approval-board-filters" role="group" aria-label="Вид поездок">
+          <button type="button" className={view === "kanban" ? "active" : ""} aria-pressed={view === "kanban"} onClick={() => setView("kanban")}>Канбан</button>
+          <button type="button" className={view === "list" ? "active" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>Список</button>
         </div>
-        {selected !== undefined ? (
-          <article className="trip-detail">
-            <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку поездок</Button>
-            {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={async (reason) => Boolean(await onAction(selected, pendingDecision.action, reason))} /> : null}
-            <header><div><span>{selected.number}</span><h2>{selected.destination}</h2></div><Badge appearance="filled" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge></header>
-            <section className="trip-route" aria-label="Маршрут согласования">
-              {["Запуск", "Руководитель", "Кадровая служба", selected.stage === "rejected" ? "Отклонено" : "Утверждено"].map((label, index) => {
-                const stageIndex = ["launch", "manager_approval", "hr", selected.stage].indexOf(selected.stage);
-                return <span className={index <= stageIndex ? "done" : ""} key={`${label}-${index}`}><i>{index < stageIndex ? <Checkmark24Regular /> : index + 1}</i>{label}</span>;
-              })}
-            </section>
+        <Input className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
+        <div className="approval-board-filters" role="group" aria-label="Фильтр поездок">
+          {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}
+        </div>
+      </div>
+      {feedback}
+      {notice ? <p className="trip-feedback" role="status">{notice}</p> : null}
+      {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
+      {view === "kanban" ? (
+        <div className="approval-kanban trip-kanban" aria-label="Стадии поездок" aria-busy={busy}>
+          {tripColumns.map((column) => {
+            const items = visibleRequests.filter((request) => request.stage === column.key);
+            const dropAction = !busy && dragged ? tripDropAction(dragged, column.key) : undefined;
+            return <section key={column.key} data-stage-key={column.key} className={`approval-column trip-column ${dropAction ? "drop-allowed" : ""} ${dropAction && dropTarget === column.key ? "drop-active" : ""}`}
+              style={{ "--approval-stage-color": column.color, "--approval-stage-ink": "#111111" } as CSSProperties}
+              aria-label={`${column.label}: ${items.length} поездок`}
+              onDragOver={(event) => { if (dropAction) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget(column.key); } }}
+              onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTarget(undefined); }}
+              onDrop={(event) => { event.preventDefault(); drop(column.key); }}>
+              <header><strong title={column.label}>{column.label}</strong><span className="approval-column-count" aria-label={`${items.length} поездок`}>{items.length}</span></header>
+              <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="В заявках на поездку пока нет поля суммы. Бюджет не задан, это не означает бесплатную поездку."><span>Сумма в колонке</span><strong>{tripColumnTotal(items)}</strong></div>
+              <div className="approval-column-stack">
+                <div className="trip-column-command">{column.key === "launch" ? <Button size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : dropAction ? moveLabels[dropAction] : null}</div>
+                {items.map((request) => {
+                  const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
+                  const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key));
+                  return <article key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""} ${draggedId === request.id ? "moving" : ""}`} draggable={movable}
+                    onDragStart={(event) => { if (!movable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-yuksalish-trip", request.id); event.dataTransfer.effectAllowed = "move"; setDraggedId(request.id); }}
+                    onDragEnd={resetDrag}>
+                    <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
+                      <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
+                      <strong>{request.purpose}</strong>
+                      <span className="trip-card-destination">{request.destination}</span>
+                      <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
+                      <span className="approval-card-meta"><span>{personName(request.requesterUserId)}</span><span>{request.employeeIds.length} участн.</span></span>
+                    </button>
+                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
+                  </article>;
+                })}
+                {!items.length ? <div className="approval-column-empty">{dropAction ? moveLabels[dropAction] : "Нет поездок"}</div> : null}
+              </div>
+            </section>;
+          })}
+        </div>
+      ) : (
+        <div className="trip-list" aria-label="Список поездок">{visibleRequests.map((request) => <button className="trip-list-item" key={request.id} onClick={() => openRequest(request.id)} type="button">
+          <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b><p>{request.purpose}</p><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
+        </button>)}</div>
+      )}
+      <Dialog open={(detailOpen && Boolean(selected)) || formMode !== null} onOpenChange={(_, data) => {
+        if (!data.open && !busyRef.current) {
+          if (formMode !== null) { setFormMode(null); setError(""); }
+          else closeDetail();
+        }
+      }}>
+        <DialogSurface className="trip-dialog">
+          {formMode === null && selected ? <article className="trip-detail">
+            <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle></div><Button autoFocus appearance="subtle" disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки">Закрыть</Button></header>
+            <Badge appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
+            <div className="trip-detail-stages" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
+            {feedback}
+            {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
-            <dl className="bp7-facts">
-              <div><dt>Инициатор</dt><dd>{personName(selected.requesterUserId)}</dd></div>
-              <div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div>
-            </dl>
+            <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personName(selected.requesterUserId)}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personName(id)}</span>)}</div>
             <div className="bp7-actions">
-              {selected.canEdit ? <Button icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setFormMode("edit"); }}>Изменить</Button> : null}
-              {selected.allowedActions.map((action) => <Button appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
+              {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
+              {selected.allowedActions.map((action) => <Button disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
             </div>
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
-          </article>
-        ) : null}
-      </div>
-      {formMode !== null ? (
-        <div className="bp7-modal-backdrop" role="presentation">
-          <form className="bp7-modal" onSubmit={(event) => { event.preventDefault(); void save(); }}>
-            <header><div><span>{formMode === "create" ? "Новая заявка" : "Исправление заявки"}</span><h2>Командировка</h2></div><Button appearance="subtle" onClick={() => setFormMode(null)}>Закрыть</Button></header>
+          </article> : formMode !== null ? (
+          <form className="bp7-modal trip-form" onSubmit={(event) => { event.preventDefault(); void save(); }}>
+            <header><div><span>{formMode === "create" ? "Новая заявка" : "Исправление заявки"}</span><DialogTitle>Командировка</DialogTitle></div><Button appearance="subtle" disabled={busy} onClick={() => { setFormMode(null); setError(""); }}>Закрыть</Button></header>
+            {feedback}
             <div className="bp7-form-grid">
-              <label className="span-two">Цель поездки<Textarea resize="vertical" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
-              <label className="span-two">Куда едем<Input value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
-              <label>Дата начала<Input type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
-              <label>Дата окончания<Input type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
-              <fieldset className="span-two employee-picker"><legend>Участники поездки</legend>{people.filter((person) => canChooseOthers || person.id === currentUser.id).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={`${person.name}${person.jobTitle ? ` · ${person.jobTitle}` : ""}`} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
+              <label className="span-two">Цель поездки<Textarea aria-label="Цель поездки" autoFocus resize="vertical" disabled={busy} value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
+              <label className="span-two">Куда едем<Input aria-label="Куда едем" disabled={busy} value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
+              <label>Дата начала<Input aria-label="Дата начала" type="date" disabled={busy} value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
+              <label>Дата окончания<Input aria-label="Дата окончания" type="date" disabled={busy} value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
+              <fieldset className="span-two employee-picker"><legend>Участники поездки</legend>{people.filter((person) => canChooseOthers || person.id === currentUser.id).map((person) => <Checkbox disabled={busy} checked={form.employeeIds.includes(person.id)} key={person.id} label={`${person.name}${person.jobTitle ? ` · ${person.jobTitle}` : ""}`} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
             </div>
-            <footer><Button onClick={() => setFormMode(null)}>Отмена</Button><Button appearance="primary" type="submit">Сохранить</Button></footer>
-          </form>
-        </div>
-      ) : null}
+            <footer><Button disabled={busy} onClick={() => { setFormMode(null); setError(""); }}>Отмена</Button><Button disabled={busy} appearance="primary" type="submit">{busy ? "Сохраняем…" : "Сохранить"}</Button></footer>
+          </form>) : null}
+        </DialogSurface>
+      </Dialog>
     </section>
   );
 }
