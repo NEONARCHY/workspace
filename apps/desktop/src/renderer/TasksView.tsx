@@ -59,6 +59,7 @@ interface CyclePayload {
 }
 
 interface TasksViewProps {
+  readonly focusTaskId?: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
@@ -89,14 +90,14 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, currentUserId, onCreateTask, onChangeStatus, onUpdateTask,
+    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onChangeStatus, onUpdateTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment,
   } = props;
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
-  const [selectedId, setSelectedId] = useState(tasks[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [editing, setEditing] = useState(false);
@@ -127,7 +128,8 @@ export function TasksView(props: TasksViewProps) {
     return tasks.filter((task) => !["completed", "cancelled"].includes(task.status));
   }, [currentUserId, filter, tasks]);
 
-  const selectedTask = tasks.find((task) => task.id === selectedId) ?? visibleTasks[0];
+  const selectedTask = tasks.find((task) => task.id === selectedId)
+    ?? visibleTasks[0];
   const currentUser = people.find((person) => person.id === currentUserId);
   const privileged = ["manager", "admin", "superadmin"].includes(currentUser?.role ?? "");
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;

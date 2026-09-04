@@ -152,6 +152,39 @@ export interface CalendarEventInput {
   readonly attendeeIds: readonly string[];
 }
 
+export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar";
+export type NotificationPriority = "normal" | "attention" | "urgent";
+export type NotificationSection = Extract<
+  WorkspaceSection,
+  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar"
+>;
+
+export interface WorkspaceNotification {
+  readonly id: string;
+  readonly kind: NotificationKind;
+  readonly priority: NotificationPriority;
+  readonly title: string;
+  readonly body: string;
+  readonly section: NotificationSection;
+  readonly entityId?: string | null;
+  readonly requiresAction: boolean;
+  readonly isReminder: boolean;
+  readonly occurredAt: string;
+  readonly readAt?: string | null;
+  readonly resolvedAt?: string | null;
+  readonly desktopDeliveredAt?: string | null;
+}
+
+export interface NotificationPreferences {
+  readonly desktopEnabled: boolean;
+  readonly messagesEnabled: boolean;
+  readonly tasksEnabled: boolean;
+  readonly approvalsEnabled: boolean;
+  readonly tripsEnabled: boolean;
+  readonly calendarEnabled: boolean;
+  readonly remindersEnabled: boolean;
+}
+
 export type AttachmentOwnerType = "message" | "task" | "approval_request";
 
 export interface WorkspaceAttachment {
@@ -468,6 +501,8 @@ export interface WorkspaceBootstrap {
   readonly tripRequests: readonly TripRequest[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
+  readonly notifications: readonly WorkspaceNotification[];
+  readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow: WorkflowDefinition;
 }

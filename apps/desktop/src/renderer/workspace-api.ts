@@ -10,6 +10,7 @@ import type {
   FeedPost,
   DevelopmentSession,
   InvitationResult,
+  NotificationPreferences,
   PasswordResetResult,
   PaymentRequestDetails,
   ProjectInput,
@@ -27,6 +28,7 @@ import type {
   TotpSetup,
   WorkspacePosition,
   WorkspaceProject,
+  WorkspaceNotification,
   WorkspaceRole,
 } from "@yuksalish/contracts";
 
@@ -198,6 +200,43 @@ export function createDevelopmentSession(username: string): Promise<DevelopmentS
 
 export function loadWorkspace(token: string): Promise<WorkspaceBootstrap> {
   return apiRequest<WorkspaceBootstrap>("/workspace/bootstrap", {}, token);
+}
+
+export function markWorkspaceNotificationRead(
+  token: string,
+  notificationId: string,
+): Promise<WorkspaceNotification> {
+  return apiRequest<WorkspaceNotification>(
+    `/notifications/${notificationId}/read`,
+    { method: "PATCH" },
+    token,
+  );
+}
+
+export function markAllWorkspaceNotificationsRead(token: string): Promise<void> {
+  return apiRequest<void>("/notifications/read-all", { method: "POST" }, token);
+}
+
+export function markWorkspaceNotificationDesktopDelivered(
+  token: string,
+  notificationId: string,
+): Promise<WorkspaceNotification> {
+  return apiRequest<WorkspaceNotification>(
+    `/notifications/${notificationId}/desktop-delivered`,
+    { method: "PATCH" },
+    token,
+  );
+}
+
+export function updateWorkspaceNotificationPreferences(
+  token: string,
+  preferences: NotificationPreferences,
+): Promise<NotificationPreferences> {
+  return apiRequest<NotificationPreferences>(
+    "/notification-preferences",
+    { method: "PUT", body: JSON.stringify(preferences) },
+    token,
+  );
 }
 
 export function sendWorkspaceMessage(

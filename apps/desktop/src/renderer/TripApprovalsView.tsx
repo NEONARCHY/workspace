@@ -13,6 +13,7 @@ const actionLabels: Readonly<Record<TripAction, string>> = {
 };
 
 interface TripApprovalsViewProps {
+  readonly focusRequestId?: string;
   readonly requests: readonly TripRequest[];
   readonly people: readonly WorkspacePerson[];
   readonly currentUser: WorkspacePerson;
@@ -34,11 +35,12 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
-  const [selectedId, setSelectedId] = useState(requests[0]?.id ?? "");
+export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
+  const [selectedId, setSelectedId] = useState(focusRequestId ?? requests[0]?.id ?? "");
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
-  const selected = requests.find((request) => request.id === selectedId) ?? requests[0];
+  const selected = requests.find((request) => request.id === selectedId)
+    ?? requests[0];
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
 

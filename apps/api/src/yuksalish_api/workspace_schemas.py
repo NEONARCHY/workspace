@@ -698,6 +698,53 @@ class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
 
 
+NotificationKind = Literal["message", "task", "approval", "trip", "calendar"]
+NotificationPriority = Literal["normal", "attention", "urgent"]
+NotificationSection = Literal[
+    "messenger",
+    "tasks",
+    "payment_requests",
+    "trip_approvals",
+    "calendar",
+]
+
+
+class NotificationResponse(ApiModel):
+    id: str
+    kind: NotificationKind
+    priority: NotificationPriority
+    title: str
+    body: str
+    section: NotificationSection
+    entity_id: str | None
+    requires_action: bool
+    is_reminder: bool
+    occurred_at: datetime
+    read_at: datetime | None
+    resolved_at: datetime | None
+    desktop_delivered_at: datetime | None
+
+
+class NotificationPreferencesResponse(ApiModel):
+    desktop_enabled: bool = True
+    messages_enabled: bool = True
+    tasks_enabled: bool = True
+    approvals_enabled: bool = True
+    trips_enabled: bool = True
+    calendar_enabled: bool = True
+    reminders_enabled: bool = True
+
+
+class NotificationPreferencesUpdate(ApiModel):
+    desktop_enabled: bool
+    messages_enabled: bool
+    tasks_enabled: bool
+    approvals_enabled: bool
+    trips_enabled: bool
+    calendar_enabled: bool
+    reminders_enabled: bool
+
+
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
     can_create_payment_requests: bool
@@ -711,5 +758,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     trip_requests: list[TripRequestResponse]
     feed_posts: list[FeedPostResponse]
     calendar_events: list[CalendarEventResponse]
+    notifications: list[NotificationResponse]
+    notification_preferences: NotificationPreferencesResponse
     attachments: list[AttachmentResponse]
     workflow: WorkflowResponse

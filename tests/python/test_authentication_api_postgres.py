@@ -55,6 +55,35 @@ async def test_authentication_http_vertical_slice() -> None:
         assert me.json()["role"] == "admin"
 
         workspace = await client.get("/api/v1/workspace/bootstrap", headers=admin_headers)
+        assert workspace.status_code == 200
+        assert workspace.json()["notifications"]
+        notification_id = workspace.json()["notifications"][0]["id"]
+        marked = await client.patch(
+            f"/api/v1/notifications/{notification_id}/read",
+            headers=admin_headers,
+        )
+        assert marked.status_code == 200
+        assert marked.json()["readAt"] is not None
+        preferences = await client.put(
+            "/api/v1/notification-preferences",
+            headers=admin_headers,
+            json={
+                "desktopEnabled": False,
+                "messagesEnabled": True,
+                "tasksEnabled": True,
+                "approvalsEnabled": True,
+                "tripsEnabled": True,
+                "calendarEnabled": True,
+                "remindersEnabled": True,
+            },
+        )
+        assert preferences.status_code == 200
+        assert preferences.json()["desktopEnabled"] is False
+        read_all = await client.post(
+            "/api/v1/notifications/read-all",
+            headers=admin_headers,
+        )
+        assert read_all.status_code == 204
         chat_id = workspace.json()["chats"][0]["id"]
         message = await client.post(
             f"/api/v1/chats/{chat_id}/messages",

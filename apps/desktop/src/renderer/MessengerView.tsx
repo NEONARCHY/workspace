@@ -26,6 +26,7 @@ import {
 import { AttachmentChips } from "./AttachmentPanel";
 
 interface MessengerViewProps {
+  readonly focusChatId?: string;
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly attachments: readonly WorkspaceAttachment[];
@@ -44,6 +45,7 @@ interface MessengerViewProps {
 }
 
 export function MessengerView({
+  focusChatId,
   chats,
   messages,
   attachments,
@@ -53,7 +55,7 @@ export function MessengerView({
   onDownloadAttachment,
   onMarkRead,
 }: MessengerViewProps) {
-  const [activeChatId, setActiveChatId] = useState(chats[0]?.id ?? "");
+  const [activeChatId, setActiveChatId] = useState(focusChatId ?? chats[0]?.id ?? "");
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
   const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);

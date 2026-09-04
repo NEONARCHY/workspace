@@ -470,3 +470,37 @@ calendar_event_attendees = sa.Table(
     sa.Column("event_id", uuid_type, primary_key=True),
     sa.Column("user_id", uuid_type, primary_key=True),
 )
+
+workspace_notifications = sa.Table(
+    "workspace_notifications",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("event_key", sa.String(320)),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("priority", sa.String(16)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("body", sa.Text()),
+    sa.Column("section", sa.String(32)),
+    sa.Column("entity_id", uuid_type),
+    sa.Column("requires_action", sa.Boolean()),
+    sa.Column("is_reminder", sa.Boolean()),
+    sa.Column("occurred_at", sa.DateTime(timezone=True)),
+    sa.Column("read_at", sa.DateTime(timezone=True)),
+    sa.Column("resolved_at", sa.DateTime(timezone=True)),
+    sa.Column("desktop_delivered_at", sa.DateTime(timezone=True)),
+)
+
+workspace_notification_preferences = sa.Table(
+    "workspace_notification_preferences",
+    metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("desktop_enabled", sa.Boolean()),
+    sa.Column("messages_enabled", sa.Boolean()),
+    sa.Column("tasks_enabled", sa.Boolean()),
+    sa.Column("approvals_enabled", sa.Boolean()),
+    sa.Column("trips_enabled", sa.Boolean()),
+    sa.Column("calendar_enabled", sa.Boolean()),
+    sa.Column("reminders_enabled", sa.Boolean()),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)

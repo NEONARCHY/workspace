@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
@@ -7,6 +7,7 @@ import type {
   CalendarEventInput,
   ChatMessage,
   FeedPost,
+  NotificationPreferences,
   ProjectInput,
   ProjectStage,
   TaskStatus,
@@ -17,6 +18,7 @@ import type {
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceProject,
+  WorkspaceNotification,
   WorkflowPosition,
   WorkspaceSection,
   WorkspaceTask,
@@ -54,6 +56,7 @@ import { EmployeesView } from "./EmployeesView";
 import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
 import { MessengerView } from "./MessengerView";
+import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
@@ -78,6 +81,9 @@ import {
   loadWorkspace,
   login,
   logout,
+  markAllWorkspaceNotificationsRead,
+  markWorkspaceNotificationDesktopDelivered,
+  markWorkspaceNotificationRead,
   markWorkspaceChatRead,
   pinWorkspaceFeedPost,
   refreshAuthentication,
@@ -96,6 +102,7 @@ import {
   updateWorkspaceProject,
   updateWorkspaceTask,
   updateWorkspaceTripRequest,
+  updateWorkspaceNotificationPreferences,
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
   addWorkspaceFeedComment,
@@ -121,6 +128,8 @@ interface WorkspaceState {
   readonly tripRequests: readonly TripRequest[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
+  readonly notifications: readonly WorkspaceNotification[];
+  readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
 }
@@ -138,6 +147,16 @@ const initialWorkspace: WorkspaceState = {
   tripRequests: [],
   feedPosts: [],
   calendarEvents: [],
+  notifications: [],
+  notificationPreferences: {
+    desktopEnabled: true,
+    messagesEnabled: true,
+    tasksEnabled: true,
+    approvalsEnabled: true,
+    tripsEnabled: true,
+    calendarEnabled: true,
+    remindersEnabled: true,
+  },
   attachments: [],
 };
 
@@ -208,13 +227,17 @@ function readableAuthError(error: unknown): string {
 }
 
 export function App() {
-  const [activeSection, setActiveSection] = useState<WorkspaceSection>("messenger");
+  const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [focusTarget, setFocusTarget] = useState<{
+    section: WorkspaceSection; entityId?: string; revision: number;
+  }>();
+  const knownNotificationIds = useRef<Set<string> | null>(null);
 
   const refreshWorkspace = useCallback(async (accessToken: string) => {
     const loaded = await loadWorkspace(accessToken);
@@ -223,6 +246,8 @@ export function App() {
 
   const establishSession = async (authenticated: AuthenticationSession) => {
     const loaded = await loadWorkspace(authenticated.accessToken);
+    knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
+    setFocusTarget(undefined);
     setWorkspace(loaded);
     setSession(authenticated);
     setConnectionDetail("Сервер подключён");
@@ -270,9 +295,14 @@ export function App() {
     setAccountOpen(false);
     setSession(undefined);
     setAuthError(undefined);
+    knownNotificationIds.current = null;
     if (current !== undefined) {
       await logout(current.accessToken).catch(() => undefined);
     }
+  };
+
+  const reportError = (error: unknown) => {
+    setConnectionDetail(error instanceof Error ? error.message : "Ошибка операции");
   };
 
   useEffect(() => {
@@ -294,14 +324,58 @@ export function App() {
 
   useEffect(() => {
     if (session === undefined) return;
+    const known = knownNotificationIds.current;
+    if (known === null) {
+      knownNotificationIds.current = new Set(workspace.notifications.map((item) => item.id));
+      return;
+    }
+    const preferences = workspace.notificationPreferences;
+    const kindEnabled: Record<WorkspaceNotification["kind"], boolean> = {
+      message: preferences.messagesEnabled,
+      task: preferences.tasksEnabled,
+      approval: preferences.approvalsEnabled,
+      trip: preferences.tripsEnabled,
+      calendar: preferences.calendarEnabled,
+    };
+    for (const notification of workspace.notifications) {
+      if (known.has(notification.id)) continue;
+      known.add(notification.id);
+      if (
+        !preferences.desktopEnabled
+        || !kindEnabled[notification.kind]
+        || (notification.isReminder && !preferences.remindersEnabled)
+        || notification.desktopDeliveredAt
+        || notification.readAt
+      ) continue;
+      void window.yuksalish?.showNotification({
+        id: notification.id,
+        title: notification.title,
+        body: notification.body,
+        section: notification.section,
+        entityId: notification.entityId ?? undefined,
+      }).then((shown) => {
+        if (!shown) return;
+        void markWorkspaceNotificationDesktopDelivered(
+          session.accessToken,
+          notification.id,
+        ).then((delivered) => {
+          setWorkspace((current) => ({
+            ...current,
+            notifications: current.notifications.map((item) =>
+              item.id === delivered.id ? delivered : item,
+            ),
+          }));
+        }).catch(reportError);
+      }).catch(reportError);
+    }
+  }, [session, workspace.notificationPreferences, workspace.notifications]);
+
+  useEffect(() => {
+    if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
       void refreshWorkspace(session.accessToken);
     });
   }, [refreshWorkspace, session]);
-
-  const reportError = (error: unknown) => {
-    setConnectionDetail(error instanceof Error ? error.message : "Ошибка операции");
-  };
 
   const uploadFiles = async (
     ownerType: "message" | "task" | "approval_request",
@@ -778,6 +852,84 @@ export function App() {
   const handleCancelCalendarEvent = (event: CalendarEvent) =>
     runCalendarMutation((token) => cancelWorkspaceCalendarEvent(token, event.id));
 
+  const mergeNotification = (notification: WorkspaceNotification) => {
+    setWorkspace((current) => ({
+      ...current,
+      notifications: current.notifications.map((item) =>
+        item.id === notification.id ? notification : item,
+      ),
+    }));
+  };
+
+  const handleMarkNotificationRead = async (notification: WorkspaceNotification) => {
+    if (session === undefined || notification.readAt) return;
+    try {
+      mergeNotification(
+        await markWorkspaceNotificationRead(session.accessToken, notification.id),
+      );
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    if (session === undefined) return;
+    try {
+      await markAllWorkspaceNotificationsRead(session.accessToken);
+      const readAt = new Date().toISOString();
+      setWorkspace((current) => ({
+        ...current,
+        notifications: current.notifications.map((item) => ({
+          ...item,
+          readAt: item.readAt ?? readAt,
+        })),
+      }));
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const handleNotificationPreferences = async (preferences: NotificationPreferences) => {
+    if (session === undefined) return;
+    try {
+      const saved = await updateWorkspaceNotificationPreferences(
+        session.accessToken,
+        preferences,
+      );
+      setWorkspace((current) => ({ ...current, notificationPreferences: saved }));
+    } catch (error) {
+      reportError(error);
+    }
+  };
+
+  const openNotification = (notification: WorkspaceNotification) => {
+    void handleMarkNotificationRead(notification);
+    setFocusTarget((current) => ({
+      section: notification.section,
+      entityId: notification.entityId ?? undefined,
+      revision: (current?.revision ?? 0) + 1,
+    }));
+    setActiveSection(notification.section);
+  };
+
+  useEffect(() => {
+    return window.yuksalish?.onNotificationOpen((payload) => {
+      const notification = workspace.notifications.find((item) => item.id === payload.id);
+      if (session === undefined || notification === undefined) return;
+      if (!notification.readAt) {
+        void markWorkspaceNotificationRead(session.accessToken, notification.id)
+          .then(mergeNotification)
+          .catch(reportError);
+      }
+      setFocusTarget((current) => ({
+        section: notification.section,
+        entityId: notification.entityId ?? undefined,
+        revision: (current?.revision ?? 0) + 1,
+      }));
+      setActiveSection(notification.section);
+    });
+  }, [session, workspace.notifications]);
+
   if (session === undefined) {
     return (
       <FluentProvider theme={webLightTheme} className="app-provider">
@@ -797,6 +949,7 @@ export function App() {
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
   };
+  const unreadNotifications = workspace.notifications.filter((item) => !item.readAt).length;
 
   return (
     <FluentProvider theme={webLightTheme} className="app-provider">
@@ -821,7 +974,10 @@ export function App() {
                   type="button"
                   aria-label={item.label}
                   aria-current={activeSection === item.key ? "page" : undefined}
-                  onClick={() => setActiveSection(item.key)}
+                  onClick={() => {
+                    setFocusTarget(undefined);
+                    setActiveSection(item.key);
+                  }}
                 >
                   <span className="rail-icon">{icon}</span>
                   <span className="rail-label">{item.label}</span>
@@ -831,9 +987,20 @@ export function App() {
             })}
           </nav>
           <div className="rail-bottom">
-            <button className="rail-action" type="button" aria-label="Уведомления">
+            <button
+              className={`rail-action ${activeSection === "notifications" ? "active" : ""}`}
+              type="button"
+              aria-label="Уведомления"
+              aria-current={activeSection === "notifications" ? "page" : undefined}
+              onClick={() => setActiveSection("notifications")}
+            >
               <span className="rail-icon"><Alert24Regular /></span>
               <span className="rail-label">Уведомления</span>
+              {unreadNotifications ? (
+                <span className="rail-badge">
+                  {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                </span>
+              ) : null}
             </button>
             <button
               className="rail-action"
@@ -874,6 +1041,16 @@ export function App() {
           </header>
 
           <main className="app-content">
+            {activeSection === "notifications" ? (
+              <NotificationCenter
+                notifications={workspace.notifications}
+                preferences={workspace.notificationPreferences}
+                onOpen={openNotification}
+                onMarkRead={handleMarkNotificationRead}
+                onMarkAllRead={handleMarkAllNotificationsRead}
+                onUpdatePreferences={handleNotificationPreferences}
+              />
+            ) : null}
             {activeSection === "crm" ? (
               <ModulePreview
                 icon={<Building24Regular />}
@@ -884,6 +1061,7 @@ export function App() {
             ) : null}
             {activeSection === "messenger" ? (
               <MessengerView
+                key={focusTarget?.revision}
                 chats={workspace.chats}
                 messages={workspace.messages}
                 attachments={workspace.attachments}
@@ -892,10 +1070,12 @@ export function App() {
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onDownloadAttachment={handleDownloadAttachment}
                 onMarkRead={handleMarkChatRead}
+                focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {activeSection === "tasks" ? (
               <TasksView
+                key={focusTarget?.revision}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
@@ -915,11 +1095,12 @@ export function App() {
                 onCreateApprovalFromTask={handleCreateApprovalFromTask}
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
+                focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {activeSection === "payment_requests" ? (
               <ApprovalsView
-                key={workspace.workflow === undefined ? "offline" : JSON.stringify(workspace.workflow)}
+                key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
                 canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
@@ -935,6 +1116,7 @@ export function App() {
                 onReviseRequest={handleReviseApproval}
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
+                focusRequestId={focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {activeSection === "feed" ? (
@@ -959,22 +1141,26 @@ export function App() {
             ) : null}
             {activeSection === "trip_approvals" ? (
               <TripApprovalsView
+                key={focusTarget?.revision}
                 requests={workspace.tripRequests}
                 people={workspace.people}
                 currentUser={workspace.currentUser}
                 onCreate={handleCreateTrip}
                 onUpdate={handleUpdateTrip}
                 onAction={handleTripAction}
+                focusRequestId={focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {activeSection === "calendar" ? (
               <CalendarView
+                key={focusTarget?.revision}
                 events={workspace.calendarEvents}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateCalendarEvent}
                 onUpdate={handleUpdateCalendarEvent}
                 onCancel={handleCancelCalendarEvent}
+                focusEventId={focusTarget?.section === "calendar" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {activeSection === "employees" ? (

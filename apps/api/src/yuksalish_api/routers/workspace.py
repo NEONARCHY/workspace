@@ -46,7 +46,10 @@ from yuksalish_api.repository import (
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
+    mark_all_notifications_read,
     mark_chat_read,
+    mark_notification_desktop_delivered,
+    mark_notification_read,
     pin_feed_post,
     publish_workflow,
     remove_task_dependency,
@@ -60,6 +63,7 @@ from yuksalish_api.repository import (
     set_task_participant,
     update_approval_request,
     update_calendar_event,
+    update_notification_preferences,
     update_project,
     update_task,
     update_task_checklist_item,
@@ -85,6 +89,9 @@ from yuksalish_api.workspace_schemas import (
     CreateTaskRequest,
     CreateTripRequest,
     FeedPostResponse,
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+    NotificationResponse,
     PinFeedPostRequest,
     ProjectResponse,
     SaveWorkflowRequest,
@@ -141,6 +148,65 @@ async def workspace_bootstrap(
         return await load_workspace(connection, current_user)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+
+
+@router.patch("/notifications/{notification_id}/read", response_model=NotificationResponse)
+async def patch_notification_read(
+    notification_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> NotificationResponse:
+    try:
+        result = await mark_notification_read(connection, current_user, notification_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish(
+        {"type": "notification.read", "entityId": result.id, "userId": str(current_user.id)}
+    )
+    return result
+
+
+@router.post("/notifications/read-all", status_code=204)
+async def post_notifications_read_all(
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    await mark_all_notifications_read(connection, current_user)
+    await _event_bus(request).publish(
+        {"type": "notifications.read", "userId": str(current_user.id)}
+    )
+    return Response(status_code=204)
+
+
+@router.patch(
+    "/notifications/{notification_id}/desktop-delivered",
+    response_model=NotificationResponse,
+)
+async def patch_notification_desktop_delivered(
+    notification_id: UUID,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> NotificationResponse:
+    try:
+        return await mark_notification_desktop_delivered(connection, current_user, notification_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+
+
+@router.put("/notification-preferences", response_model=NotificationPreferencesResponse)
+async def put_notification_preferences(
+    payload: NotificationPreferencesUpdate,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> NotificationPreferencesResponse:
+    result = await update_notification_preferences(connection, current_user, payload)
+    await _event_bus(request).publish(
+        {"type": "notification.preferences", "userId": str(current_user.id)}
+    )
+    return result
 
 
 @router.post("/chats/{chat_id}/messages", response_model=ChatMessageResponse, status_code=201)

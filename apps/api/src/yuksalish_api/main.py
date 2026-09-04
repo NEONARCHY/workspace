@@ -1,5 +1,6 @@
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 import structlog
 import uvicorn
@@ -12,6 +13,7 @@ from .database import create_database_engine
 from .events import WorkspaceEventBus
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
+from .repository import materialize_due_notifications
 from .routers import authentication, directory, health, modules, workspace
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
@@ -36,10 +38,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan_app.state.object_storage = storage
         if runtime_settings.seed_demo_data:
             await seed_demo_data(engine, runtime_settings.demo_password)
+
+        async def notification_scheduler() -> None:
+            while True:
+                try:
+                    async with engine.begin() as connection:
+                        created = await materialize_due_notifications(connection)
+                    if created:
+                        await lifespan_app.state.event_bus.publish(
+                            {"type": "notifications.created", "count": created}
+                        )
+                except Exception:
+                    logger.exception("notification_scheduler_failed")
+                await asyncio.sleep(60)
+
+        scheduler_task = asyncio.create_task(
+            notification_scheduler(), name="workspace-notification-scheduler"
+        )
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)
         try:
             yield
         finally:
+            scheduler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
             await engine.dispose()
             logger.info("api_stopped")
 

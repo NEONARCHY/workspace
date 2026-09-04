@@ -42,6 +42,8 @@ from yuksalish_api.repository import (
     get_attachment,
     load_workspace,
     mark_chat_read,
+    mark_notification_read,
+    materialize_due_notifications,
     materialize_due_task_cycles,
     pin_feed_post,
     publish_workflow,
@@ -56,6 +58,7 @@ from yuksalish_api.repository import (
     set_task_participant,
     update_approval_request,
     update_calendar_event,
+    update_notification_preferences,
     update_project,
     update_task,
     update_task_checklist_item,
@@ -76,6 +79,7 @@ from yuksalish_api.workspace_schemas import (
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    NotificationPreferencesUpdate,
     PinFeedPostRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -121,6 +125,43 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert sum(chat.unread for chat in initial.chats) >= 2
             assert initial.workflow.nodes
             assert initial.workflow.published_version == 6
+            assert initial.notifications
+            assert len({item.id for item in initial.notifications}) == len(initial.notifications)
+            assert any(
+                item.requires_action and item.resolved_at is None for item in initial.notifications
+            )
+            first_notification = initial.notifications[0]
+            marked_notification = await mark_notification_read(
+                connection,
+                aziza,
+                UUID(first_notification.id),
+            )
+            assert marked_notification.read_at is not None
+            repeated_workspace = await load_workspace(connection, aziza)
+            assert (
+                next(
+                    item
+                    for item in repeated_workspace.notifications
+                    if item.id == first_notification.id
+                ).read_at
+                == marked_notification.read_at
+            )
+            saved_preferences = await update_notification_preferences(
+                connection,
+                aziza,
+                NotificationPreferencesUpdate(
+                    desktop_enabled=False,
+                    messages_enabled=True,
+                    tasks_enabled=True,
+                    approvals_enabled=True,
+                    trips_enabled=True,
+                    calendar_enabled=True,
+                    reminders_enabled=True,
+                ),
+            )
+            assert saved_preferences.desktop_enabled is False
+            await materialize_due_notifications(connection)
+            assert await materialize_due_notifications(connection) == 0
             assert {node.label for node in initial.workflow.nodes} == {
                 "Запуск",
                 "Утверждение финансистом проекта",

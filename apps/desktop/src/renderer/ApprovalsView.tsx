@@ -57,6 +57,7 @@ interface ApprovalEdgeData extends Record<string, unknown> {
 type ApprovalEdge = Edge<ApprovalEdgeData>;
 
 interface ApprovalsViewProps {
+  readonly focusRequestId?: string;
   readonly canManage: boolean;
   readonly canCreateRequest: boolean;
   readonly currentUserId: string;
@@ -683,6 +684,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
 }
 
 export function ApprovalsView({
+  focusRequestId,
   canManage,
   canCreateRequest,
   currentUserId,
@@ -715,7 +717,7 @@ export function ApprovalsView({
   const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);
   const [requestAdditionalFiles, setRequestAdditionalFiles] = useState<readonly File[]>([]);
   const [createError, setCreateError] = useState("");
-  const [selectedRequestId, setSelectedRequestId] = useState("");
+  const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
   const [requestQuery, setRequestQuery] = useState("");
   const [draggedRequest, setDraggedRequest] = useState<{

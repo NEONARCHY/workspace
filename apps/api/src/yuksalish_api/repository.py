@@ -3,8 +3,10 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, delete, func, insert, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -39,6 +41,8 @@ from .tables import (
     trip_request_employees,
     trip_requests,
     users,
+    workspace_notification_preferences,
+    workspace_notifications,
     workspace_projects,
 )
 from .workspace_schemas import (
@@ -65,6 +69,9 @@ from .workspace_schemas import (
     CreateTripRequest,
     FeedCommentResponse,
     FeedPostResponse,
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+    NotificationResponse,
     PaymentRequestDetails,
     PersonResponse,
     PinFeedPostRequest,
@@ -1065,6 +1072,500 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
     )
 
 
+def _notification(row: Record) -> NotificationResponse:
+    return NotificationResponse(
+        id=str(row["id"]),
+        kind=row["kind"],
+        priority=row["priority"],
+        title=row["title"],
+        body=row["body"] or "",
+        section=row["section"],
+        entity_id=str(row["entity_id"]) if row["entity_id"] else None,
+        requires_action=bool(row["requires_action"]),
+        is_reminder=bool(row["is_reminder"]),
+        occurred_at=row["occurred_at"],
+        read_at=row["read_at"],
+        resolved_at=row["resolved_at"],
+        desktop_delivered_at=row["desktop_delivered_at"],
+    )
+
+
+async def get_notification_preferences(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+) -> NotificationPreferencesResponse:
+    now = datetime.now(UTC)
+    await connection.execute(
+        pg_insert(workspace_notification_preferences)
+        .values(user_id=current_user.id, updated_at=now)
+        .on_conflict_do_nothing(index_elements=[workspace_notification_preferences.c.user_id])
+    )
+    row = (
+        (
+            await connection.execute(
+                select(workspace_notification_preferences).where(
+                    workspace_notification_preferences.c.user_id == current_user.id
+                )
+            )
+        )
+        .mappings()
+        .one()
+    )
+    return NotificationPreferencesResponse(
+        desktop_enabled=bool(row["desktop_enabled"]),
+        messages_enabled=bool(row["messages_enabled"]),
+        tasks_enabled=bool(row["tasks_enabled"]),
+        approvals_enabled=bool(row["approvals_enabled"]),
+        trips_enabled=bool(row["trips_enabled"]),
+        calendar_enabled=bool(row["calendar_enabled"]),
+        reminders_enabled=bool(row["reminders_enabled"]),
+    )
+
+
+async def update_notification_preferences(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: NotificationPreferencesUpdate,
+) -> NotificationPreferencesResponse:
+    values = payload.model_dump()
+    values["updated_at"] = datetime.now(UTC)
+    await connection.execute(
+        pg_insert(workspace_notification_preferences)
+        .values(user_id=current_user.id, **values)
+        .on_conflict_do_update(
+            index_elements=[workspace_notification_preferences.c.user_id],
+            set_=values,
+        )
+    )
+    return await get_notification_preferences(connection, current_user)
+
+
+async def _upsert_notification(
+    connection: AsyncConnection,
+    *,
+    user_id: UUID,
+    event_key: str,
+    kind: str,
+    priority: str,
+    title: str,
+    body: str,
+    section: str,
+    entity_id: UUID | None,
+    requires_action: bool,
+    occurred_at: datetime,
+    is_reminder: bool = False,
+) -> None:
+    statement = pg_insert(workspace_notifications).values(
+        id=uuid4(),
+        user_id=user_id,
+        event_key=event_key,
+        kind=kind,
+        priority=priority,
+        title=title[:240],
+        body=body[:4000],
+        section=section,
+        entity_id=entity_id,
+        requires_action=requires_action,
+        is_reminder=is_reminder,
+        occurred_at=occurred_at,
+        read_at=None,
+        resolved_at=None,
+        desktop_delivered_at=None,
+    )
+    await connection.execute(
+        statement.on_conflict_do_update(
+            index_elements=[workspace_notifications.c.user_id, workspace_notifications.c.event_key],
+            set_={
+                "priority": statement.excluded.priority,
+                "title": statement.excluded.title,
+                "body": statement.excluded.body,
+            },
+        )
+    )
+
+
+async def _sync_notifications_for_user(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    *,
+    task_rows: Sequence[Record],
+    request_rows: Sequence[Record],
+    stages_by_request: Mapping[UUID, Sequence[ApprovalStageResponse]],
+    trip_rows: Sequence[Record],
+) -> list[NotificationResponse]:
+    now = datetime.now(UTC)
+    active_attention_keys: set[str] = set()
+    accessible_chat_ids = select(chat_members.c.chat_id).where(
+        chat_members.c.user_id == current_user.id
+    )
+
+    unread_message_rows = (
+        (
+            await connection.execute(
+                select(
+                    messages.c.id,
+                    messages.c.chat_id,
+                    messages.c.body,
+                    messages.c.created_at,
+                    chats.c.title.label("chat_title"),
+                    users.c.full_name.label("author_name"),
+                )
+                .select_from(
+                    message_receipts.join(messages, message_receipts.c.message_id == messages.c.id)
+                    .join(chats, chats.c.id == messages.c.chat_id)
+                    .join(users, users.c.id == messages.c.author_user_id)
+                )
+                .where(
+                    message_receipts.c.user_id == current_user.id,
+                    message_receipts.c.read_at.is_(None),
+                    messages.c.deleted_at.is_(None),
+                    messages.c.author_user_id != current_user.id,
+                    messages.c.chat_id.in_(accessible_chat_ids),
+                )
+                .order_by(messages.c.created_at.desc())
+                .limit(200)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    for message_row in unread_message_rows:
+        await _upsert_notification(
+            connection,
+            user_id=current_user.id,
+            event_key=f"message:{message_row['id']}",
+            kind="message",
+            priority="normal",
+            title=f"Новое сообщение · {message_row['chat_title'] or 'Чат'}",
+            body=f"{message_row['author_name']}: {message_row['body']}",
+            section="messenger",
+            entity_id=message_row["chat_id"],
+            requires_action=False,
+            occurred_at=message_row["created_at"],
+        )
+
+    for task_row in task_rows:
+        if task_row["primary_assignee_user_id"] != current_user.id or task_row["status"] in {
+            "completed",
+            "cancelled",
+        }:
+            continue
+        event_key = (
+            f"task:{task_row['id']}:{task_row['status']}:{task_row['updated_at'].isoformat()}"
+        )
+        active_attention_keys.add(event_key)
+        overdue = task_row["due_at"] is not None and task_row["due_at"] <= now
+        await _upsert_notification(
+            connection,
+            user_id=current_user.id,
+            event_key=event_key,
+            kind="task",
+            priority="urgent" if overdue or task_row["priority"] == "urgent" else "attention",
+            title="Просроченная задача" if overdue else "Задача требует внимания",
+            body=task_row["title"],
+            section="tasks",
+            entity_id=task_row["id"],
+            requires_action=True,
+            occurred_at=task_row["updated_at"],
+        )
+
+    for request_row in request_rows:
+        for stage in stages_by_request.get(request_row["id"], []):
+            if not stage.can_act:
+                continue
+            event_key = (
+                f"approval:{request_row['id']}:{stage.key}:{request_row['updated_at'].isoformat()}"
+            )
+            active_attention_keys.add(event_key)
+            await _upsert_notification(
+                connection,
+                user_id=current_user.id,
+                event_key=event_key,
+                kind="approval",
+                priority=(
+                    "urgent"
+                    if (request_row["payload"] or {}).get("request_priority") == "urgent"
+                    else "attention"
+                ),
+                title="Нужно решение по заявке",
+                body=f"{request_row['title']} · {stage.label}",
+                section="payment_requests",
+                entity_id=request_row["id"],
+                requires_action=True,
+                occurred_at=request_row["updated_at"],
+            )
+
+    for trip_row in trip_rows:
+        allowed_actions = _trip_allowed_actions(trip_row, current_user)
+        if not allowed_actions:
+            continue
+        event_key = (
+            f"trip:{trip_row['id']}:{trip_row['stage']}:{trip_row['updated_at'].isoformat()}"
+        )
+        active_attention_keys.add(event_key)
+        await _upsert_notification(
+            connection,
+            user_id=current_user.id,
+            event_key=event_key,
+            kind="trip",
+            priority="attention",
+            title="Командировка требует действия",
+            body=f"{trip_row['destination']} · {TRIP_STAGE_LABELS[trip_row['stage']]}",
+            section="trip_approvals",
+            entity_id=trip_row["id"],
+            requires_action=True,
+            occurred_at=trip_row["updated_at"],
+        )
+
+    unresolved_rows = (
+        (
+            await connection.execute(
+                select(workspace_notifications.c.id, workspace_notifications.c.event_key).where(
+                    workspace_notifications.c.user_id == current_user.id,
+                    workspace_notifications.c.requires_action.is_(True),
+                    workspace_notifications.c.resolved_at.is_(None),
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    stale_ids = [
+        item["id"] for item in unresolved_rows if item["event_key"] not in active_attention_keys
+    ]
+    if stale_ids:
+        await connection.execute(
+            update(workspace_notifications)
+            .where(workspace_notifications.c.id.in_(stale_ids))
+            .values(resolved_at=now)
+        )
+
+    rows = (
+        (
+            await connection.execute(
+                select(workspace_notifications)
+                .where(
+                    workspace_notifications.c.user_id == current_user.id,
+                    or_(
+                        and_(
+                            workspace_notifications.c.section == "messenger",
+                            workspace_notifications.c.entity_id.in_(accessible_chat_ids),
+                        ),
+                        and_(
+                            workspace_notifications.c.section == "tasks",
+                            workspace_notifications.c.entity_id.in_(
+                                [row["id"] for row in task_rows]
+                            ),
+                        ),
+                        and_(
+                            workspace_notifications.c.section == "payment_requests",
+                            workspace_notifications.c.entity_id.in_(
+                                [row["id"] for row in request_rows]
+                            ),
+                        ),
+                        and_(
+                            workspace_notifications.c.section == "trip_approvals",
+                            workspace_notifications.c.entity_id.in_(
+                                [row["id"] for row in trip_rows]
+                            ),
+                        ),
+                        workspace_notifications.c.section == "calendar",
+                    ),
+                )
+                .order_by(workspace_notifications.c.occurred_at.desc())
+                .limit(300)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return [_notification(row) for row in rows]
+
+
+async def mark_notification_read(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    notification_id: UUID,
+) -> NotificationResponse:
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.id == notification_id,
+            workspace_notifications.c.user_id == current_user.id,
+        )
+        .values(read_at=func.coalesce(workspace_notifications.c.read_at, datetime.now(UTC)))
+    )
+    row = (
+        (
+            await connection.execute(
+                select(workspace_notifications).where(
+                    workspace_notifications.c.id == notification_id,
+                    workspace_notifications.c.user_id == current_user.id,
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Notification was not found")
+    return _notification(row)
+
+
+async def mark_all_notifications_read(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+) -> None:
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.user_id == current_user.id,
+            workspace_notifications.c.read_at.is_(None),
+        )
+        .values(read_at=datetime.now(UTC))
+    )
+
+
+async def mark_notification_desktop_delivered(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    notification_id: UUID,
+) -> NotificationResponse:
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.id == notification_id,
+            workspace_notifications.c.user_id == current_user.id,
+        )
+        .values(
+            desktop_delivered_at=func.coalesce(
+                workspace_notifications.c.desktop_delivered_at, datetime.now(UTC)
+            )
+        )
+    )
+    row = (
+        (
+            await connection.execute(
+                select(workspace_notifications).where(
+                    workspace_notifications.c.id == notification_id,
+                    workspace_notifications.c.user_id == current_user.id,
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Notification was not found")
+    return _notification(row)
+
+
+async def materialize_due_notifications(connection: AsyncConnection) -> int:
+    """Create deadline reminders once; the unique event key makes every run idempotent."""
+    now = datetime.now(UTC)
+    reminder_limit = now + timedelta(hours=24)
+    created = 0
+    due_tasks = (
+        (
+            await connection.execute(
+                select(tasks).where(
+                    tasks.c.status.not_in({"completed", "cancelled"}),
+                    tasks.c.due_at.is_not(None),
+                    tasks.c.due_at >= now,
+                    tasks.c.due_at <= reminder_limit,
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    for row in due_tasks:
+        statement = (
+            pg_insert(workspace_notifications)
+            .values(
+                id=uuid4(),
+                user_id=row["primary_assignee_user_id"],
+                event_key=f"task:{row['id']}:deadline:24h:{row['due_at'].isoformat()}",
+                kind="task",
+                priority="urgent" if row["due_at"] <= now + timedelta(hours=2) else "attention",
+                title="Срок задачи приближается",
+                body=(
+                    f"{row['title']} · до "
+                    f"{row['due_at'].astimezone(ZoneInfo('Asia/Tashkent')):%d.%m %H:%M} (Ташкент)"
+                ),
+                section="tasks",
+                entity_id=row["id"],
+                requires_action=False,
+                is_reminder=True,
+                occurred_at=now,
+                read_at=None,
+                resolved_at=None,
+                desktop_delivered_at=None,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[
+                    workspace_notifications.c.user_id,
+                    workspace_notifications.c.event_key,
+                ]
+            )
+            .returning(workspace_notifications.c.id)
+        )
+        created += int((await connection.scalar(statement)) is not None)
+
+    due_events = (
+        (
+            await connection.execute(
+                select(calendar_events).where(
+                    calendar_events.c.status == "scheduled",
+                    calendar_events.c.starts_at >= now,
+                    calendar_events.c.starts_at <= reminder_limit,
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    attendee_map = await _calendar_attendee_map(connection, [row["id"] for row in due_events])
+    for row in due_events:
+        recipient_ids = set(attendee_map.get(row["id"], [])) | {row["organizer_user_id"]}
+        for user_id in recipient_ids:
+            statement = (
+                pg_insert(workspace_notifications)
+                .values(
+                    id=uuid4(),
+                    user_id=user_id,
+                    event_key=f"calendar:{row['id']}:24h:{row['starts_at'].isoformat()}",
+                    kind="calendar",
+                    priority=(
+                        "attention" if row["starts_at"] <= now + timedelta(hours=1) else "normal"
+                    ),
+                    title="Событие скоро начнётся",
+                    body=(
+                        f"{row['title']} · "
+                        f"{row['starts_at'].astimezone(ZoneInfo('Asia/Tashkent')):%d.%m %H:%M} "
+                        "(Ташкент)"
+                    ),
+                    section="calendar",
+                    entity_id=row["id"],
+                    requires_action=False,
+                    is_reminder=True,
+                    occurred_at=now,
+                    read_at=None,
+                    resolved_at=None,
+                    desktop_delivered_at=None,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        workspace_notifications.c.user_id,
+                        workspace_notifications.c.event_key,
+                    ]
+                )
+                .returning(workspace_notifications.c.id)
+            )
+            created += int((await connection.scalar(statement)) is not None)
+    return created
+
+
 async def load_workspace(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -1257,6 +1758,15 @@ async def load_workspace(
         connection,
         [row["id"] for row in calendar_rows],
     )
+    notification_responses = await _sync_notifications_for_user(
+        connection,
+        current_user,
+        task_rows=task_rows,
+        request_rows=request_rows,
+        stages_by_request=stages_by_request,
+        trip_rows=trip_rows,
+    )
+    notification_preferences = await get_notification_preferences(connection, current_user)
 
     attachment_filters = []
     message_ids = [row["id"] for row in message_rows]
@@ -1348,6 +1858,8 @@ async def load_workspace(
             _calendar_event(row, current_user, calendar_attendees.get(row["id"], []))
             for row in calendar_rows
         ],
+        notifications=notification_responses,
+        notification_preferences=notification_preferences,
         attachments=[_attachment(row) for row in attachment_rows],
         workflow=await get_workflow(connection),
     )
@@ -1443,6 +1955,16 @@ async def mark_chat_read(
             message_receipts.c.user_id == current_user.id,
             message_receipts.c.message_id.in_(chat_message_ids),
             message_receipts.c.read_at.is_(None),
+        )
+        .values(read_at=datetime.now(UTC))
+    )
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.user_id == current_user.id,
+            workspace_notifications.c.section == "messenger",
+            workspace_notifications.c.entity_id == chat_id,
+            workspace_notifications.c.read_at.is_(None),
         )
         .values(read_at=datetime.now(UTC))
     )

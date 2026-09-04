@@ -6,10 +6,12 @@ import type {
   CalendarEvent,
   CalendarEventInput,
   FeedPost,
+  NotificationPreferences,
   PaymentRequestDetails,
   TripRequest,
   WorkspaceAttachment,
   WorkspaceProject,
+  WorkspaceNotification,
   WorkspaceTask,
 } from "@yuksalish/contracts";
 
@@ -155,6 +157,7 @@ function mockServer(
   serverOptions: {
     readonly withReturnedRequest?: boolean;
     readonly restrictPaymentCreators?: boolean;
+    readonly extraNotifications?: readonly WorkspaceNotification[];
   } = {},
 ) {
   let currentUser = people[0]!;
@@ -285,6 +288,42 @@ function mockServer(
     },
   ];
   const attachments: WorkspaceAttachment[] = [];
+  let notifications: WorkspaceNotification[] = [
+    {
+      id: "notification-task",
+      kind: "task",
+      priority: "attention",
+      title: "Задача требует внимания",
+      body: initialTasks[0]!.title,
+      section: "tasks",
+      entityId: initialTasks[0]!.id,
+      requiresAction: true,
+      isReminder: false,
+      occurredAt: "2026-09-04T09:30:00Z",
+    },
+    {
+      id: "notification-message",
+      kind: "message",
+      priority: "normal",
+      title: "Новое сообщение · Финансы и закупки",
+      body: "Дилшод: Счёт готов",
+      section: "messenger",
+      entityId: "finance",
+      requiresAction: false,
+      isReminder: false,
+      occurredAt: "2026-09-04T09:20:00Z",
+    },
+    ...(serverOptions.extraNotifications ?? []),
+  ];
+  let notificationPreferences: NotificationPreferences = {
+    desktopEnabled: true,
+    messagesEnabled: true,
+    tasksEnabled: true,
+    approvalsEnabled: true,
+    tripsEnabled: true,
+    calendarEnabled: true,
+    remindersEnabled: true,
+  };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/login")) {
@@ -320,12 +359,32 @@ function mockServer(
         tripRequests,
         feedPosts,
         calendarEvents,
+        notifications,
+        notificationPreferences,
         attachments: [...attachments],
         workflow: activeWorkflow,
       });
     }
     if (url.endsWith("/directory") && options?.method === undefined) {
       return response(directory);
+    }
+    if (url.endsWith("/notifications/read-all") && options?.method === "POST") {
+      notifications = notifications.map((item) => ({
+        ...item,
+        readAt: item.readAt ?? "2026-09-04T10:00:00Z",
+      }));
+      return { ...response(undefined), status: 204, json: async () => undefined } as Response;
+    }
+    const notificationReadMatch = url.match(/\/notifications\/([^/]+)\/read$/);
+    if (notificationReadMatch && options?.method === "PATCH") {
+      const notification = notifications.find((item) => item.id === notificationReadMatch[1])!;
+      const changed = { ...notification, readAt: "2026-09-04T10:00:00Z" };
+      notifications = notifications.map((item) => item.id === changed.id ? changed : item);
+      return response(changed);
+    }
+    if (url.endsWith("/notification-preferences") && options?.method === "PUT") {
+      notificationPreferences = JSON.parse(String(options.body)) as NotificationPreferences;
+      return response(notificationPreferences);
     }
     if (url.endsWith("/approval-templates/workflow/publish") && options?.method === "POST") {
       return response({ ...workflow, id: "workflow-v2", version: 2, publishedVersion: 1 });
@@ -823,6 +882,61 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(composer, { target: { value: "Заявку подготовила" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     expect(await screen.findByText("Заявку подготовила")).toBeInTheDocument();
+  });
+
+  it("opens the attention queue, marks an item read and follows its deep link", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    expect(screen.getByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
+    expect(screen.getByText("2", { selector: ".rail-badge" })).toBeInTheDocument();
+    expect(screen.getByText("1", { selector: ".notification-metrics strong" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Задача требует внимания").closest("button")!);
+    expect(await screen.findByRole("heading", { name: initialTasks[0]!.title })).toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/notification-task/read"),
+      expect.objectContaining({ method: "PATCH" }),
+    ));
+    fireEvent.click(screen.getByText(initialTasks[1]!.title, { selector: ".task-row strong" }));
+    expect(screen.getByRole("heading", { name: initialTasks[1]!.title })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/read-all"),
+      expect.objectContaining({ method: "POST" }),
+    ));
+  });
+
+  it("allows closing and reopening a request reached through a notification", async () => {
+    mockServer({
+      withReturnedRequest: true,
+      extraNotifications: [{
+        id: "notification-approval",
+        kind: "approval",
+        priority: "attention",
+        title: "Исправить заявку",
+        body: "Вернувшаяся заявка",
+        section: "payment_requests",
+        entityId: "returned-request",
+        requiresAction: true,
+        isReminder: false,
+        occurredAt: "2026-09-04T09:30:00Z",
+      }],
+    });
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
+    expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
+    expect(screen.queryByRole("dialog", { name: "Вернувшаяся заявка" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
+    expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
   });
 
   it("uploads a real attachment with a new message", async () => {

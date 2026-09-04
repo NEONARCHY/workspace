@@ -10,6 +10,7 @@ import { Button, Checkbox, Input, Select, Textarea } from "@fluentui/react-compo
 import { Add24Regular, ChevronLeft24Regular, ChevronRight24Regular } from "@fluentui/react-icons";
 
 interface CalendarViewProps {
+  readonly focusEventId?: string;
   readonly events: readonly CalendarEvent[];
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
@@ -64,6 +65,7 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
 }
 
 export function CalendarView({
+  focusEventId,
   events,
   people,
   currentUserId,
@@ -72,13 +74,18 @@ export function CalendarView({
   onCancel,
 }: CalendarViewProps) {
   const [month, setMonth] = useState(() => {
-    const value = new Date();
+    const focused = events.find((event) => event.id === focusEventId);
+    const value = focused ? new Date(focused.startsAt) : new Date();
     return new Date(value.getFullYear(), value.getMonth(), 1);
   });
-  const [selected, setSelected] = useState<CalendarEvent>();
+  const [selectedState, setSelected] = useState<CalendarEvent | undefined>(
+    () => events.find((event) => event.id === focusEventId),
+  );
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [busy, setBusy] = useState(false);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
+
+  const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
 
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
