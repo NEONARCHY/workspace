@@ -47,11 +47,43 @@ async function main() {
     assert(logo.left >= 0 && logo.right <= logo.viewport + 1, `${selector}: inside window`);
   };
   const inspectLayout = async () => {
-    const issues = await page.evaluate(() => [...document.querySelectorAll(".auth-screen,.auth-card,.auth-mode-switch,.global-bar,.brand-lockup")].filter((el) => el.getClientRects().length).flatMap((el) => {
+    const issues = await page.evaluate(() => [...document.querySelectorAll(".auth-screen,.auth-card,.auth-mode-switch,.global-bar,.global-brand")].filter((el) => el.getClientRects().length).flatMap((el) => {
       const rect = el.getBoundingClientRect();
       return el.scrollWidth > el.clientWidth + 2 || rect.left < -1 || rect.right > innerWidth + 2 ? [el.className] : [];
     }));
     assert.deepEqual(issues, [], "no branding/header/form overflow");
+  };
+  const inspectAlignment = async () => {
+    const offsets = await page.locator(".auth-brand").evaluate((img) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const context = canvas.getContext("2d");
+      context.drawImage(img, 0, 0);
+      const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+      let left = canvas.width;
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < left; x++) {
+          if (data[(y * canvas.width + x) * 4 + 3] > 127) { left = x; break; }
+        }
+      }
+      const rect = img.getBoundingClientRect();
+      const visibleLeft = rect.left + rect.width * left / canvas.width;
+      return [".auth-kicker", ".auth-intro h1"].map((selector) => visibleLeft - document.querySelector(selector).getBoundingClientRect().left);
+    });
+    assert(offsets.every((offset) => Math.abs(offset) < 1), `visible logo edge aligns with text: ${offsets}`);
+  };
+  const inspectHeader = async () => {
+    assert.equal(await page.locator(".global-bar img,.brand-lockup,.header-brand").count(), 0, "no duplicate header branding");
+    const status = page.locator(".global-bar .connection-state");
+    assert(await status.isVisible(), "connection status remains visible");
+    assert.equal(await status.textContent(), "Сервер подключён");
+    assert(await status.evaluate((node) => node.classList.contains("online")));
+    const centered = await status.evaluate((node) => {
+      const rect = node.getBoundingClientRect(), bar = node.closest(".global-bar").getBoundingClientRect();
+      return Math.abs(rect.top + rect.height / 2 - bar.top - bar.height / 2) < 2;
+    });
+    assert(centered, "status vertically centered in header");
   };
   try {
     if (!native) await page.goto(origin);
@@ -63,6 +95,7 @@ async function main() {
         assert.equal(await page.getByText(/Сообщения, задачи и согласования доступны только после входа/).count(), 0);
         assert.equal(await page.getByText(/получает отдельную отзываемую сессию/).count(), 0);
         await inspectLogo(".auth-brand", "white");
+        await inspectAlignment();
         await inspectLayout();
         checks.push(`${width} login/${mode}`);
       }
@@ -82,7 +115,7 @@ async function main() {
         await stable();
         assert.equal(await page.locator(".rail-brand").isVisible(), !collapsed);
         if (!collapsed) await inspectLogo(".rail-brand", "white");
-        await inspectLogo(".header-brand", "color");
+        await inspectHeader();
         await inspectLayout();
         checks.push(`${width} app/${collapsed ? "collapsed" : "expanded"}`);
         await page.screenshot({ path: path.join(output, `app-${width}-${collapsed ? "collapsed" : "expanded"}.png`) });
@@ -91,10 +124,10 @@ async function main() {
     await resize(1440);
     for (const label of ["Задачи", "Заявки на оплату", "Согласование поездок", "Сотрудники"]) {
       await page.locator(`.rail-action[aria-label="${label}"]`).click();
-      await inspectLogo(".header-brand", "color");
+      await inspectHeader();
     }
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${checks.length} branding layouts, all login modes, original local artwork, preserved proportions, menu collapse/expand and navigation${native ? " in packaged Electron" : " in Edge"}.`);
+    console.log(`PASS: ${checks.length} branding layouts, pixel-measured logo alignment, all login modes, original local artwork, preserved proportions, status-only header, menu collapse/expand and navigation${native ? " in packaged Electron" : " in Edge"}.`);
   } catch (error) { await page.screenshot({ path: path.join(output, "failure.png"), fullPage: true }).catch(() => undefined); throw error; }
   finally { if (app) await app.close(); if (browser) await browser.close(); }
 }

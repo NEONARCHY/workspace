@@ -24,11 +24,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
 .app-stage { min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .app-stage.has-feedback { grid-template-rows: auto auto minmax(0, 1fr); }
 .global-bar { min-height: 56px; grid-template-columns: minmax(100px, 1fr) minmax(120px, 280px) minmax(32px, 180px) auto; gap: 12px; padding: 8px 16px; }
-.global-brand { display: grid; gap: 2px; container: brand / inline-size; }
-@container brand (max-width: 185px) {
-  .brand-lockup > span { display: none; }
-}
-.global-brand strong, .connection-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.connection-state { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-trigger { min-width: 0; max-width: 100%; }
 .account-trigger > span { min-width: 0; }
 .account-trigger strong, .account-trigger small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -268,7 +264,6 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
   .auth-card { padding: 24px; }
   .auth-mode-switch { margin-bottom: 24px; }
   .global-bar { padding-inline: 8px; gap: 4px; }
-  .global-brand strong { font-size: 12px; }
   .connection-state { font-size: 10px; }
   .workspace-feedback { padding-inline: 8px; gap: 4px; flex-wrap: wrap; }
   .workspace-feedback > span { flex-basis: 100%; }

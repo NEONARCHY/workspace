@@ -884,6 +884,28 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByText("Заявку подготовила")).toBeInTheDocument();
   });
 
+  it("keeps branding in the rail and a live status without a duplicate header logo", async () => {
+    const fetchMock = mockServer();
+    const server = fetchMock.getMockImplementation()!;
+    render(<App />);
+    await loginToWorkspace();
+    expect(screen.getAllByRole("img", { name: "Yuksalish" })).toHaveLength(1);
+    expect(screen.getByRole("img", { name: "Yuksalish" })).toHaveClass("rail-brand");
+    expect(document.querySelector(".global-bar img")).toBeNull();
+    expect(screen.getByText("Сервер подключён")).toHaveClass("online");
+
+    fetchMock.mockImplementation((input, options) => {
+      if (String(input).includes("/messages") && options?.method === "POST") return Promise.reject(new Error("Test connection failure"));
+      return server(input, options);
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Не отправлено" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    const failedStatus = await screen.findByText("Не удалось выполнить операцию");
+    expect(failedStatus).toHaveClass("connection-state");
+    expect(failedStatus).not.toHaveClass("online");
+    expect(screen.queryByText("Сервер подключён")).not.toBeInTheDocument();
+  });
+
   it("opens the attention queue, marks an item read and follows its deep link", async () => {
     const fetchMock = mockServer();
     render(<App />);

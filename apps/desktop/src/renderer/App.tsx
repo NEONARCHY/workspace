@@ -1098,7 +1098,6 @@ export function App() {
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
             <div className="global-brand">
-              <div className="brand-lockup"><CompanyLogo tone="color" className="header-brand" /><span>Workspace</span></div>
               <span className={`connection-state ${backgroundError ? "" : "online"}`} title={connectionDetail}>{connectionDetail}</span>
             </div>
             <Input
