@@ -2,6 +2,7 @@ interface Window {
   readonly yuksalish?: {
     readonly platform: string;
     readonly version: string;
+    readonly reportDiagnostic?: (payload: { category: string; name: string; frames: string }) => Promise<void>;
     readonly showNotification: (payload: {
       readonly id: string;
       readonly title: string;

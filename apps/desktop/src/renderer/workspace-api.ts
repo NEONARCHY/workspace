@@ -38,6 +38,28 @@ import type {
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
 
+async function boundedRequest<T>(url: string, options: RequestInit, read: (response: Response) => Promise<T>, timeout = 30_000): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) controller.abort();
+  const timer = window.setTimeout(abort, timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
+      throw new Error(typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
+    }
+    return await read(response);
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error("Сервер не ответил вовремя. Обновите данные перед повтором операции: изменения могли сохраниться.", { cause: error });
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+    options.signal?.removeEventListener("abort", abort);
+  }
+}
+
 async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -47,13 +69,8 @@ async function apiRequest<T>(
   headers.set("Accept", "application/json");
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
-  const response = await fetch(`${apiBaseUrl}/api/v1${path}`, { ...options, headers });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `API request failed with HTTP ${response.status}`);
-  }
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
+    response.status === 204 ? undefined as T : await response.json() as T);
 }
 
 export function login(
@@ -711,7 +728,7 @@ export async function uploadWorkspaceAttachment(
   documentRole: "general" | "primary" | "additional" = "general",
 ): Promise<WorkspaceAttachment> {
   const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?fileName=${encodeURIComponent(file.name)}&documentRole=${documentRole}`;
-  const response = await fetch(url, {
+  return boundedRequest(url, {
     method: "PUT",
     headers: {
       Accept: "application/json",
@@ -719,40 +736,66 @@ export async function uploadWorkspaceAttachment(
       "Content-Type": file.type || "application/octet-stream",
     },
     body: file,
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `File upload failed with HTTP ${response.status}`);
-  }
-  return (await response.json()) as WorkspaceAttachment;
+  }, async (response) => await response.json() as WorkspaceAttachment, 120_000);
 }
 
 export async function downloadWorkspaceAttachment(
   token: string,
   attachmentId: string,
 ): Promise<Blob> {
-  const response = await fetch(`${apiBaseUrl}/api/v1/attachments/${attachmentId}`, {
+  return boundedRequest(`${apiBaseUrl}/api/v1/attachments/${attachmentId}`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `File download failed with HTTP ${response.status}`);
-  }
-  return response.blob();
+  }, (response) => response.blob(), 120_000);
 }
 
 export function subscribeToWorkspaceEvents(
   token: string,
   onEvent: () => void,
+  onError: (error: unknown) => void = () => undefined,
 ): () => void {
   const websocketUrl = apiBaseUrl.replace(/^http/, "ws") + "/api/v1/events";
-  const socket = new WebSocket(websocketUrl);
-  socket.addEventListener("open", () => {
-    socket.send(JSON.stringify({ type: "authenticate", token }));
-  });
-  socket.addEventListener("message", (event) => {
-    const payload = JSON.parse(String(event.data)) as { type?: string };
-    if (payload.type !== "authenticated" && payload.type !== "pong") onEvent();
-  });
-  return () => socket.close();
+  let socket: WebSocket;
+  let stopped = false;
+  let retry = 1_000;
+  let reconnectTimer: number | undefined;
+  let eventTimer: number | undefined;
+  const scheduleRefresh = () => {
+    if (eventTimer !== undefined || stopped) return;
+    eventTimer = window.setTimeout(() => {
+      eventTimer = undefined;
+      try { onEvent(); } catch (error) { onError(error); }
+    }, 200);
+  };
+  const connect = () => {
+    if (stopped) return;
+    socket = new WebSocket(websocketUrl);
+    socket.addEventListener("open", () => {
+      if (!stopped) socket.send(JSON.stringify({ type: "authenticate", token }));
+    });
+    socket.addEventListener("message", (event) => {
+      if (stopped) return;
+      try {
+        const payload: unknown = JSON.parse(String(event.data));
+        if (!payload || typeof payload !== "object" || !("type" in payload)) return;
+        if (payload.type === "authenticated") {
+          retry = 1_000;
+          scheduleRefresh(); // catch changes missed while disconnected
+        } else if (payload.type !== "pong") scheduleRefresh();
+      } catch { onError(new Error("Не удалось прочитать обновление. Данные можно обновить вручную.")); }
+    });
+    socket.addEventListener("close", (event) => {
+      if (stopped) return;
+      onError(new Error("Связь с сервером прервана. Переподключаемся; несохранённый ввод остаётся на экране."));
+      if ([1008, 4401, 4403].includes(event.code)) return;
+      reconnectTimer = window.setTimeout(connect, retry);
+      retry = Math.min(retry * 2, 30_000);
+    });
+  };
+  connect();
+  return () => {
+    stopped = true;
+    window.clearTimeout(reconnectTimer);
+    window.clearTimeout(eventTimer);
+    socket?.close();
+  };
 }

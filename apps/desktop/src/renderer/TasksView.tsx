@@ -84,6 +84,7 @@ interface TasksViewProps {
 function localDateTime(value?: string | null): string {
   if (!value) return "";
   const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60_000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
@@ -97,7 +98,10 @@ export function TasksView(props: TasksViewProps) {
   } = props;
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
-  const [selectedId, setSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
+  const [selectedId, updateSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
+  const [detailOpen, setDetailOpen] = useState(Boolean(focusTaskId));
+  const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
+  const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [editing, setEditing] = useState(false);
@@ -159,6 +163,8 @@ export function TasksView(props: TasksViewProps) {
 
   const saveTask = async () => {
     if (selectedTask === undefined || !editTitle.trim() || !editAssigneeId) return;
+    if (editDueAt && !Number.isFinite(new Date(editDueAt).getTime())) { setDateError("Проверьте срок задачи."); return; }
+    setDateError("");
     const updated = await onUpdateTask(selectedTask, {
       title: editTitle.trim(), description: editDescription.trim(), project: editProject.trim() || "Без проекта",
       assigneeId: editAssigneeId, priority: editPriority,
@@ -202,6 +208,8 @@ export function TasksView(props: TasksViewProps) {
 
   const saveCycle = async () => {
     if (selectedTask === undefined) return;
+    if (cycleNextRun && !Number.isFinite(new Date(cycleNextRun).getTime())) { setDateError("Проверьте дату следующего повторения."); return; }
+    setDateError("");
     const interval = Number(cycleInterval);
     if (!Number.isInteger(interval) || interval < 1) return;
     if (await onSetCycle(selectedTask, {
@@ -236,7 +244,7 @@ export function TasksView(props: TasksViewProps) {
   };
 
   return (
-    <section className="workspace-view tasks-view bp5-tasks" aria-label="Задачи">
+    <section className={`workspace-view tasks-view bp5-tasks ${detailOpen && selectedTask ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
         <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
@@ -274,6 +282,8 @@ export function TasksView(props: TasksViewProps) {
       </div>
 
       {selectedTask !== undefined ? <aside className="task-detail task-card-full">
+        <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
+        {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div>{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div>
         {selectedTask.sourceMessageId ? <div className="source-link-note">Создана из сообщения · связь сохранена</div> : null}
         <div className="detail-meta"><div><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></div><div><Calendar24Regular /><span><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>

@@ -62,6 +62,9 @@ import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
+import { RecoveryBoundary } from "./RecoveryBoundary";
+import { createRefreshQueue } from "./refresh-queue";
+import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
   actOnWorkspaceTripRequest,
@@ -244,24 +247,34 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
+  const compactWindow = useCompactWindow();
+  const [railPreference, setRailPreference] = useState<boolean>();
+  const railCollapsed = railPreference ?? compactWindow;
+  const [backgroundError, setBackgroundError] = useState("");
+  const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
   }>();
   const knownNotificationIds = useRef<Set<string> | null>(null);
 
-  const refreshWorkspace = useCallback(async (accessToken: string) => {
-    const loaded = await loadWorkspace(accessToken);
+  // Factory stores the reader; it is invoked only after an asynchronous response.
+  // eslint-disable-next-line react-hooks/refs
+  const [refreshWorkspace] = useState(() => createRefreshQueue(loadWorkspace, (loaded) => {
     setWorkspace(loaded);
-  }, []);
+    setBackgroundError("");
+    setConnectionDetail("Сервер подключён");
+  }, () => activeToken.current));
 
   const establishSession = async (authenticated: AuthenticationSession) => {
     const loaded = await loadWorkspace(authenticated.accessToken);
+    activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
     setWorkspace(loaded);
     setSession(authenticated);
     setConnectionDetail("Сервер подключён");
     setAuthError(undefined);
+    setBackgroundError("");
   };
 
   const handleLogin = async (username: string, password: string, totpCode?: string) => {
@@ -302,6 +315,7 @@ export function App() {
 
   const handleLogout = async () => {
     const current = session;
+    activeToken.current = undefined;
     setAccountOpen(false);
     setSession(undefined);
     setAuthError(undefined);
@@ -311,26 +325,32 @@ export function App() {
     }
   };
 
-  const reportError = (error: unknown) => {
-    setConnectionDetail(error instanceof Error ? error.message : "Ошибка операции");
-  };
+  const reportError = useCallback((error: unknown) => {
+    setConnectionDetail("Не удалось выполнить операцию");
+    setBackgroundError(error instanceof Error ? error.message : "Ошибка операции");
+  }, []);
 
   useEffect(() => {
     if (session === undefined) return;
+    let cancelled = false;
     const refreshAfter = Math.max(60_000, (session.expiresIn - 60) * 1_000);
     const timer = window.setTimeout(() => {
       void refreshAuthentication(session.refreshToken)
         .then(async (renewed) => {
-          await refreshWorkspace(renewed.accessToken);
+          if (cancelled) return;
+          activeToken.current = renewed.accessToken;
           setSession(renewed);
+          await refreshWorkspace(renewed.accessToken).catch(reportError);
         })
         .catch(() => {
+          if (cancelled) return;
+          activeToken.current = undefined;
           setSession(undefined);
           setAuthError("Сессия завершена. Войдите снова.");
         });
     }, refreshAfter);
-    return () => window.clearTimeout(timer);
-  }, [refreshWorkspace, session]);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [refreshWorkspace, reportError, session]);
 
   useEffect(() => {
     if (session === undefined) return;
@@ -378,14 +398,14 @@ export function App() {
         }).catch(reportError);
       }).catch(reportError);
     }
-  }, [session, workspace.notificationPreferences, workspace.notifications]);
+  }, [reportError, session, workspace.notificationPreferences, workspace.notifications]);
 
   useEffect(() => {
     if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
-      void refreshWorkspace(session.accessToken);
-    });
-  }, [refreshWorkspace, session]);
+      void refreshWorkspace(session.accessToken).catch(reportError);
+    }, reportError);
+  }, [refreshWorkspace, reportError, session]);
 
   const uploadFiles = async (
     ownerType: "message" | "task" | "approval_request",
@@ -965,7 +985,7 @@ export function App() {
       }));
       setActiveSection(notification.section);
     });
-  }, [session, workspace.notifications]);
+  }, [reportError, session, workspace.notifications]);
 
   if (session === undefined) {
     return (
@@ -990,10 +1010,10 @@ export function App() {
 
   return (
     <FluentProvider theme={webLightTheme} className="app-provider">
-      <div className="app-shell">
+      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
-            <Navigation24Regular />
+            <button type="button" className="rail-toggle" aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
             <strong>Yuksalish</strong>
           </div>
           <nav className="rail-nav">
@@ -1010,6 +1030,7 @@ export function App() {
                   className={`rail-action ${activeSection === item.key ? "active" : ""}`}
                   type="button"
                   aria-label={item.label}
+                  title={item.label}
                   aria-current={activeSection === item.key ? "page" : undefined}
                   onClick={() => {
                     setFocusTarget(undefined);
@@ -1055,17 +1076,19 @@ export function App() {
           </div>
         </aside>
 
-        <div className="app-stage">
+        <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
             <div className="global-brand">
               <strong>Yuksalish Workspace</strong>
-              <span className="connection-state online">{connectionDetail}</span>
+              <span className={`connection-state ${backgroundError ? "" : "online"}`} title={connectionDetail}>{connectionDetail}</span>
             </div>
             <Input
               aria-label="Глобальный поиск"
               className="global-search"
               contentBefore={<Search24Regular />}
               placeholder="Найти сообщение, задачу или заявку"
+              disabled
+              title="Поиск доступен внутри разделов"
             />
             <button className="account-trigger" type="button" onClick={() => setAccountOpen(true)}>
               <Avatar name={workspace.currentUser.name} size={28} color="colorful" />
@@ -1077,7 +1100,14 @@ export function App() {
             <Button appearance="subtle" onClick={() => void handleLogout()}>Выйти</Button>
           </header>
 
+          {backgroundError ? <div className="workspace-feedback" role="alert">
+            <span>{backgroundError}</span>
+            <Button size="small" onClick={() => void refreshWorkspace(session.accessToken).catch(reportError)}>Обновить данные</Button>
+            <Button size="small" appearance="subtle" aria-label="Закрыть сообщение об ошибке" onClick={() => setBackgroundError("")}>×</Button>
+          </div> : null}
+
           <main className="app-content">
+            <RecoveryBoundary key={`${session.user.id}:${activeSection}`} onHome={() => setActiveSection("messenger")}>
             {activeSection === "notifications" ? (
               <NotificationCenter
                 notifications={workspace.notifications}
@@ -1207,16 +1237,19 @@ export function App() {
             {activeSection === "employees" ? (
               <EmployeesView token={session.accessToken} currentUser={workspace.currentUser} />
             ) : null}
+            </RecoveryBoundary>
           </main>
         </div>
       </div>
       {accountOpen ? (
+        <RecoveryBoundary overlay onHome={() => setAccountOpen(false)}>
         <AccountPanel
           token={session.accessToken}
           user={workspace.currentUser}
           onClose={() => setAccountOpen(false)}
           onLogout={() => void handleLogout()}
         />
+        </RecoveryBoundary>
       ) : null}
     </FluentProvider>
   );

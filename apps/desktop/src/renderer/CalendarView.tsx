@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   CalendarEvent,
@@ -31,6 +31,7 @@ const typeLabels: Record<CalendarEventType, string> = {
 };
 
 function localInput(value: Date): string {
+  if (!Number.isFinite(value.getTime())) return "";
   const adjusted = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
   return adjusted.toISOString().slice(0, 16);
 }
@@ -75,7 +76,8 @@ export function CalendarView({
 }: CalendarViewProps) {
   const [month, setMonth] = useState(() => {
     const focused = events.find((event) => event.id === focusEventId);
-    const value = focused ? new Date(focused.startsAt) : new Date();
+    const candidate = focused ? new Date(focused.startsAt) : new Date();
+    const value = Number.isFinite(candidate.getTime()) ? candidate : new Date();
     return new Date(value.getFullYear(), value.getMonth(), 1);
   });
   const [selectedState, setSelected] = useState<CalendarEvent | undefined>(
@@ -83,9 +85,15 @@ export function CalendarView({
   );
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const sideRef = useRef<HTMLElement>(null);
+  const editing = Boolean(draft);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
 
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
+  useEffect(() => {
+    if (editing || selected?.id) sideRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [editing, selected?.id]);
 
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
@@ -103,13 +111,20 @@ export function CalendarView({
   });
 
   const save = async () => {
-    if (!draft?.title.trim() || new Date(draft.endsAt) <= new Date(draft.startsAt)) return;
+    if (!draft?.title.trim()) return;
+    const start = new Date(draft.startsAt);
+    const end = new Date(draft.endsAt);
+    if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) {
+      setError("Укажите корректные начало и окончание. Окончание должно быть позже начала.");
+      return;
+    }
+    setError("");
     setBusy(true);
     const payload = {
       ...draft,
       title: draft.title.trim(),
-      startsAt: new Date(draft.startsAt).toISOString(),
-      endsAt: new Date(draft.endsAt).toISOString(),
+      startsAt: start.toISOString(),
+      endsAt: end.toISOString(),
     };
     try {
       const saved = selected ? await onUpdate(selected, payload) : await onCreate(payload);
@@ -117,6 +132,8 @@ export function CalendarView({
         setSelected(saved);
         setDraft(undefined);
       }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Не удалось сохранить событие.");
     } finally {
       setBusy(false);
     }
@@ -127,6 +144,8 @@ export function CalendarView({
     try {
       const changed = await onCancel(event);
       if (changed) setSelected(changed);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Не удалось отменить событие.");
     } finally {
       setBusy(false);
     }
@@ -201,7 +220,8 @@ export function CalendarView({
           ))}
         </div>
       </div>
-      <aside className="calendar-side">
+      <aside className="calendar-side" ref={sideRef}>
+        {error ? <div className="auth-error" role="alert">{error}</div> : null}
         {draft ? (
           <div className="calendar-form">
             <h2>{selected ? "Изменить событие" : "Новое событие"}</h2>

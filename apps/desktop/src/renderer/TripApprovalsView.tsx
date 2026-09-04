@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DecisionReason } from "./DecisionReason";
 
 import type { TripAction, TripRequest, TripRequestInput, WorkspacePerson } from "@yuksalish/contracts";
 import { Badge, Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
@@ -36,7 +37,10 @@ function emptyForm(currentUserId: string): TripFormState {
 }
 
 export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
-  const [selectedId, setSelectedId] = useState(focusRequestId ?? requests[0]?.id ?? "");
+  const [selectedId, updateSelectedId] = useState(focusRequestId ?? requests[0]?.id ?? "");
+  const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
+  const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
+  const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
   const selected = requests.find((request) => request.id === selectedId)
@@ -57,15 +61,12 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   };
 
   const act = async (request: TripRequest, action: TripAction) => {
-    const comment = action === "return" || action === "reject"
-      ? window.prompt(action === "return" ? "Что нужно исправить?" : "Укажите причину отклонения")?.trim()
-      : undefined;
-    if ((action === "return" || action === "reject") && !comment) return;
-    await onAction(request, action, comment);
+    if (action === "return" || action === "reject") { setPendingDecision({ id: request.id, action }); return; }
+    await onAction(request, action);
   };
 
   return (
-    <section className="workspace-view bp7-view trips-view" aria-label="Согласование поездок">
+    <section className={`workspace-view bp7-view trips-view trip-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Согласование поездок">
       <header className="bp7-header">
         <div><span className="view-kicker">BP‑7 · Согласование поездок</span><h1>Командировки</h1><p>Маршрут: запуск → руководитель → кадровая служба → решение</p></div>
         <Button appearance="primary" icon={<Add24Regular />} onClick={() => { setForm(emptyForm(currentUser.id)); setFormMode("create"); }}>Новая командировка</Button>
@@ -84,6 +85,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
         </div>
         {selected !== undefined ? (
           <article className="trip-detail">
+            <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку поездок</Button>
+            {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={async (reason) => Boolean(await onAction(selected, pendingDecision.action, reason))} /> : null}
             <header><div><span>{selected.number}</span><h2>{selected.destination}</h2></div><Badge appearance="filled" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge></header>
             <section className="trip-route" aria-label="Маршрут согласования">
               {["Запуск", "Руководитель", "Кадровая служба", selected.stage === "rejected" ? "Отклонено" : "Утверждено"].map((label, index) => {

@@ -1,9 +1,23 @@
-import { app, BrowserWindow, ipcMain, Notification, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Notification, screen, session } from "electron";
 import { join } from "node:path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { fitWindowBounds, type WindowBounds } from "./window-state";
 
 app.enableSandbox();
 
 const developmentUrl = process.env.VITE_DEV_SERVER_URL;
+const rendererFile = join(__dirname, "../../dist/index.html");
+const diagnostics: object[] = [];
+let diagnosticWrite = Promise.resolve();
+
+function recordDiagnostic(category: string, name: string, frames = "") {
+  diagnostics.push({ at: new Date().toISOString(), version: app.getVersion(), category, name, frames });
+  if (diagnostics.length > 50) diagnostics.shift();
+  const data = JSON.stringify(diagnostics, null, 2);
+  diagnosticWrite = diagnosticWrite.then(() => writeFile(join(app.getPath("userData"), "diagnostics.json"), data)).catch(() => undefined);
+}
 
 interface DesktopNotificationPayload {
   readonly id: string;
@@ -14,18 +28,25 @@ interface DesktopNotificationPayload {
 }
 
 function isAllowedNavigation(target: string): boolean {
-  if (developmentUrl !== undefined) {
-    return new URL(target).origin === new URL(developmentUrl).origin;
-  }
-  return target.startsWith("file://");
+  try {
+    if (developmentUrl !== undefined) return new URL(target).origin === new URL(developmentUrl).origin;
+    return target.split(/[?#]/)[0] === pathToFileURL(rendererFile).href;
+  } catch { return false; }
 }
 
 function createWindow(): BrowserWindow {
+  let saved: Partial<WindowBounds> & { maximized?: boolean } = {};
+  try { saved = JSON.parse(readFileSync(join(app.getPath("userData"), "window-state.json"), "utf8")) as typeof saved; } catch { /* first launch */ }
+  if (!saved || typeof saved !== "object") saved = {};
+  const validBounds = [saved.x, saved.y, saved.width, saved.height].every((value) => typeof value === "number" && Number.isFinite(value));
+  const area = validBounds ? screen.getDisplayMatching(saved as WindowBounds).workArea : screen.getPrimaryDisplay().workArea;
   const window = new BrowserWindow({
-    width: 1240,
-    height: 780,
-    minWidth: 960,
-    minHeight: 640,
+    ...fitWindowBounds(saved, area),
+    minWidth: Math.min(640, area.width),
+    minHeight: Math.min(480, area.height),
+    title: "Yuksalish Workspace",
+    resizable: true,
+    movable: true,
     show: false,
     backgroundColor: "#f5f7fa",
     webPreferences: {
@@ -37,7 +58,35 @@ function createWindow(): BrowserWindow {
     },
   });
 
-  window.once("ready-to-show", () => window.show());
+  window.once("ready-to-show", () => { if (saved.maximized) window.maximize(); window.show(); });
+  const load = () => developmentUrl !== undefined ? window.loadURL(developmentUrl) : window.loadFile(rendererFile);
+  let recoveryOpen = false;
+  const recover = async (reason: string, unresponsive = false) => {
+    if (recoveryOpen || window.isDestroyed()) return;
+    recoveryOpen = true;
+    recordDiagnostic(unresponsive ? "renderer-unresponsive" : "renderer-stopped", reason);
+    window.show();
+    try {
+      const result = await dialog.showMessageBox(window, {
+        type: "warning", title: "Yuksalish Workspace",
+        message: unresponsive ? "Окно временно не отвечает" : "Не удалось открыть интерфейс",
+        detail: "Можно подождать или перезапустить окно. Данные на сервере сохранятся; несохранённый ввод будет потерян. При повторении сообщите, что вы делали перед сбоем.",
+        buttons: [unresponsive ? "Подождать" : "Закрыть приложение", "Перезапустить окно"], defaultId: 0, cancelId: 0,
+      });
+      if (window.isDestroyed()) return;
+      if (result.response === 1) {
+        recoveryOpen = false;
+        // A reload can recover a hung renderer without reissuing user mutations.
+        if (unresponsive) window.webContents.reload();
+        else void load().catch(() => recover("load-failed"));
+      } else if (!unresponsive) window.close();
+    } finally { recoveryOpen = false; }
+  };
+  window.on("unresponsive", () => { void recover("event", true); });
+  window.webContents.on("render-process-gone", (_event, details) => { void recover(details.reason); });
+  window.on("close", () => {
+    try { writeFileSync(join(app.getPath("userData"), "window-state.json"), JSON.stringify({ ...window.getNormalBounds(), maximized: window.isMaximized() })); } catch { /* geometry must not block close */ }
+  });
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   window.webContents.on("will-navigate", (event, target) => {
     if (!isAllowedNavigation(target)) {
@@ -45,15 +94,21 @@ function createWindow(): BrowserWindow {
     }
   });
 
-  if (developmentUrl !== undefined) {
-    void window.loadURL(developmentUrl);
-  } else {
-    void window.loadFile(join(__dirname, "../../dist/index.html"));
-  }
+  void load().catch(() => recover("initial-load-failed"));
   return window;
 }
 
 void app.whenReady().then(() => {
+  try {
+    const previous: unknown = JSON.parse(readFileSync(join(app.getPath("userData"), "diagnostics.json"), "utf8"));
+    if (Array.isArray(previous)) diagnostics.push(...previous.slice(-49));
+  } catch { /* no previous diagnostic file */ }
+  ipcMain.handle("diagnostics:record", (event, payload: unknown) => {
+    if (!isAllowedNavigation(event.sender.getURL()) || !payload || typeof payload !== "object") return;
+    const value = payload as { category?: unknown; name?: unknown; frames?: unknown };
+    if (typeof value.category !== "string" || typeof value.name !== "string" || typeof value.frames !== "string") return;
+    recordDiagnostic(value.category.replace(/[^a-z-]/gi, "").slice(0, 48), value.name.replace(/[^a-z]/gi, "").slice(0, 48), value.frames.slice(0, 1500));
+  });
   if (process.platform === "win32") app.setAppUserModelId("uz.yuksalish.workspace");
   ipcMain.handle("notifications:show", (event, payload: DesktopNotificationPayload) => {
     const window = BrowserWindow.fromWebContents(event.sender);

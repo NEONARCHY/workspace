@@ -17,6 +17,7 @@ export interface DesktopNotificationNavigation {
 export interface DesktopBridge {
   readonly platform: NodeJS.Platform;
   readonly version: string;
+  readonly reportDiagnostic: (payload: { category: string; name: string; frames: string }) => Promise<void>;
   readonly showNotification: (payload: DesktopNotificationPayload) => Promise<boolean>;
   readonly onNotificationOpen: (
     listener: (payload: DesktopNotificationNavigation) => void,
@@ -25,7 +26,8 @@ export interface DesktopBridge {
 
 const bridge: DesktopBridge = Object.freeze({
   platform: process.platform,
-  version: process.env.npm_package_version ?? "0.12.0",
+  version: process.env.npm_package_version ?? "0.13.0",
+  reportDiagnostic: (payload: { category: string; name: string; frames: string }) => ipcRenderer.invoke("diagnostics:record", payload) as Promise<void>,
   showNotification: (payload: DesktopNotificationPayload) =>
     ipcRenderer.invoke("notifications:show", payload) as Promise<boolean>,
   onNotificationOpen: (listener: (payload: DesktopNotificationNavigation) => void) => {

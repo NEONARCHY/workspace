@@ -2,7 +2,12 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
+import "./responsive.css";
+
+window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
+window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));
 
 const root = document.getElementById("root");
 if (root === null) {
@@ -11,6 +16,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <App />
+    <RecoveryBoundary><App /></RecoveryBoundary>
   </StrictMode>,
 );

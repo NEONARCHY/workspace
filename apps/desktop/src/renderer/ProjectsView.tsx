@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { DecisionReason } from "./DecisionReason";
 
 import type {
   ProjectInput,
@@ -105,7 +106,10 @@ function money(value: number, currency: string): string {
 }
 
 export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove }: ProjectsViewProps) {
-  const [selectedId, setSelectedId] = useState(projects[0]?.id ?? "");
+  const [selectedId, updateSelectedId] = useState(projects[0]?.id ?? "");
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [failureId, setFailureId] = useState<string>();
+  const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
@@ -126,15 +130,12 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   };
 
   const move = async (project: WorkspaceProject, stage: ProjectStage) => {
-    const comment = stage === "failure"
-      ? window.prompt("Укажите причину провала проекта")?.trim()
-      : undefined;
-    if (stage === "failure" && !comment) return;
-    await onMove(project, stage, comment);
+    if (stage === "failure") { setSelectedId(project.id); setFailureId(project.id); return; }
+    await onMove(project, stage);
   };
 
   return (
-    <section className="workspace-view bp7-view projects-view" aria-label="Список проектов">
+    <section className={`workspace-view bp7-view projects-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Список проектов">
       <header className="bp7-header">
         <div>
           <span className="view-kicker">BP‑7 · Общая воронка</span>
@@ -189,6 +190,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
 
       {selected !== undefined ? (
         <aside className="bp7-detail">
+          <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К проектам</Button>
           <header>
             <div><span>{selected.code}</span><h2>{selected.title}</h2></div>
             {selected.canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={() => {
@@ -197,6 +199,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             }}>Изменить</Button> : null}
           </header>
           <p>{selected.description || "Описание пока не добавлено."}</p>
+          {failureId === selected.id ? <DecisionReason title="Причина провала проекта" onCancel={() => setFailureId(undefined)} onConfirm={async (reason) => Boolean(await onMove(selected, "failure", reason))} /> : null}
           <dl className="bp7-facts">
             <div><dt>Руководитель</dt><dd>{personName(selected.managerUserId)}</dd></div>
             <div><dt>Период</dt><dd>{selected.startDate || "—"} — {selected.endDate || "—"}</dd></div>

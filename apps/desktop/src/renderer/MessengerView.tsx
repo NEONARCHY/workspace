@@ -65,9 +65,11 @@ function Conversation({
   onCreateTaskFromMessage,
   onDownloadAttachment,
   onManage,
+  onBack,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly onManage: () => void;
+  readonly onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [reply, setReply] = useState<ChatMessage>();
@@ -143,6 +145,7 @@ function Conversation({
   return (
     <article className="conversation-pane">
       <header className="conversation-header">
+        <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button>
         <div>
           <h2>{chat.title}</h2>
           <p>
@@ -555,6 +558,7 @@ export function MessengerView(props: MessengerViewProps) {
   );
   const [query, setQuery] = useState("");
   const [panel, setPanel] = useState<"create" | "manage">();
+  const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
   const activeChat = chats.find((chat) => chat.id === activeChatId) ?? chats[0];
   const visibleChats = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -577,7 +581,7 @@ export function MessengerView(props: MessengerViewProps) {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
   return (
-    <section className="workspace-view messenger-view" aria-label="Мессенджер">
+    <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane">
         <div className="pane-heading">
           <div>
@@ -610,6 +614,7 @@ export function MessengerView(props: MessengerViewProps) {
               type="button"
               onClick={() => {
                 setActiveChatId(chat.id);
+                setConversationOpen(true);
                 setPanel(undefined);
               }}
             >
@@ -645,6 +650,7 @@ export function MessengerView(props: MessengerViewProps) {
           {...props}
           chat={activeChat}
           onManage={() => setPanel("manage")}
+          onBack={() => setConversationOpen(false)}
         />
       ) : (
         <div className="empty-state">
@@ -661,6 +667,7 @@ export function MessengerView(props: MessengerViewProps) {
           onClose={() => setPanel(undefined)}
           onCreated={(chat) => {
             setActiveChatId(chat.id);
+            setConversationOpen(true);
             setQuery("");
             setPanel(undefined);
           }}

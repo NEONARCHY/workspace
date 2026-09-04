@@ -1,0 +1,133 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { RecoveryBoundary } from "./RecoveryBoundary";
+import { CalendarView } from "./CalendarView";
+import { DecisionReason } from "./DecisionReason";
+import { createRefreshQueue } from "./refresh-queue";
+import { fitWindowBounds } from "../main/window-state";
+import { loadWorkspace, subscribeToWorkspaceEvents } from "./workspace-api";
+
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+describe("Window and UI recovery", () => {
+  it("uses a nonblocking reason form and keeps the entered reason on failure", async () => {
+    const confirm = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const cancel = vi.fn();
+    render(<DecisionReason title="Причина решения" onConfirm={confirm} onCancel={cancel} />);
+    expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Причина решения" }), { target: { value: "Нужен документ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось сохранить");
+    expect(screen.getByRole("textbox")).toHaveValue("Нужен документ");
+    expect(cancel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
+    await vi.waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+  });
+  it("recovers an erroring section without removing the navigation", () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let broken = true;
+    function Broken() { if (broken) throw new Error("synthetic render failure"); return <p>Рабочий экран</p>; }
+    render(<><nav>Навигация</nav><RecoveryBoundary><Broken /></RecoveryBoundary></>);
+    expect(screen.getByText("Навигация")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось показать экран");
+    broken = false;
+    fireEvent.click(screen.getByRole("button", { name: "Открыть заново" }));
+    expect(screen.getByText("Рабочий экран")).toBeInTheDocument();
+  });
+
+  it("clamps a moved window after a monitor disappears", () => {
+    expect(fitWindowBounds({ x: 2400, y: -400, width: 1800, height: 1100 }, { x: 0, y: 0, width: 1366, height: 728 }))
+      .toEqual({ x: 0, y: 0, width: 1366, height: 728 });
+    expect(fitWindowBounds({ width: 100, height: 10 }, { x: -1280, y: 0, width: 1280, height: 720 }))
+      .toEqual({ x: -960, y: 120, width: 640, height: 480 });
+  });
+
+  it("rejects empty calendar dates without leaving Save busy", async () => {
+    const create = vi.fn();
+    render(<CalendarView events={[]} people={[]} currentUserId="tester" onCreate={create} onUpdate={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Проверка" } });
+    fireEvent.change(screen.getByLabelText("Начало"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("корректные начало и окончание");
+    expect(create).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
+  });
+});
+
+describe("Background refresh", () => {
+  it("coalesces a burst and performs a trailing refresh", async () => {
+    const first = deferred<number>();
+    const load = vi.fn().mockReturnValueOnce(first.promise).mockResolvedValue(2);
+    const apply = vi.fn();
+    const refresh = createRefreshQueue(load, apply, () => "token");
+    const pending = refresh("token");
+    for (let i = 0; i < 50; i++) void refresh("token");
+    expect(load).toHaveBeenCalledTimes(1);
+    first.resolve(1);
+    await pending;
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(apply.mock.calls).toEqual([[1], [2]]);
+  });
+
+  it("ignores a response from a signed-out account and allows retry after failure", async () => {
+    let token: string | undefined = "old";
+    const old = deferred<number>();
+    const apply = vi.fn();
+    const load = vi.fn().mockReturnValueOnce(old.promise).mockRejectedValueOnce(new Error("offline")).mockResolvedValue(3);
+    const refresh = createRefreshQueue(load, apply, () => token);
+    const pending = refresh("old");
+    token = "new";
+    old.resolve(1);
+    await pending;
+    expect(apply).not.toHaveBeenCalled();
+    await expect(refresh("new")).rejects.toThrow("offline");
+    await refresh("new");
+    expect(apply).toHaveBeenCalledWith(3);
+    token = undefined;
+  });
+
+  it("aborts a stalled API call instead of keeping the interface busy", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      options.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+    })));
+    const pending = expect(loadWorkspace("test-token")).rejects.toThrow("не ответил вовремя");
+    await vi.advanceTimersByTimeAsync(30_000);
+    await pending;
+  });
+
+  it("contains malformed websocket events, batches updates and reconnects only while mounted", async () => {
+    vi.useFakeTimers();
+    class Socket extends EventTarget {
+      static instances: Socket[] = [];
+      send = vi.fn();
+      close = vi.fn();
+      constructor() { super(); Socket.instances.push(this); }
+    }
+    vi.stubGlobal("WebSocket", Socket);
+    const update = vi.fn();
+    const error = vi.fn();
+    const stop = subscribeToWorkspaceEvents("test-token", update, error);
+    const socket = Socket.instances[0]!;
+    socket.dispatchEvent(new MessageEvent("message", { data: "invalid" }));
+    expect(error).toHaveBeenCalledTimes(1);
+    for (let i = 0; i < 30; i++) socket.dispatchEvent(new MessageEvent("message", { data: '{"type":"changed"}' }));
+    await vi.advanceTimersByTimeAsync(200);
+    expect(update).toHaveBeenCalledTimes(1);
+    socket.dispatchEvent(new CloseEvent("close", { code: 1006 }));
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(Socket.instances).toHaveLength(2);
+    stop();
+    Socket.instances[1]!.dispatchEvent(new CloseEvent("close", { code: 1006 }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(Socket.instances).toHaveLength(2);
+  });
+});
