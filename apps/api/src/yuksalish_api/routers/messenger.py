@@ -16,6 +16,8 @@ from yuksalish_api.workspace_schemas import (
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    MessageReactionRequest,
+    PinMessageRequest,
     SetChatMemberRequest,
     TransferChatOwnerRequest,
     UpdateChatRequest,
@@ -145,6 +147,38 @@ async def delete_message(
 ) -> ChatMessageResponse:
     try:
         result = await service.change_message(connection, user, message_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return result
+
+
+@router.post("/messages/{message_id}/reactions", response_model=ChatMessageResponse)
+async def toggle_message_reaction(
+    message_id: UUID,
+    payload: MessageReactionRequest,
+    user: User,
+    connection: Connection,
+    request: Request,
+) -> ChatMessageResponse:
+    try:
+        result = await service.toggle_message_reaction(connection, user, message_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return result
+
+
+@router.put("/messages/{message_id}/pin", response_model=ChatMessageResponse)
+async def set_message_pin(
+    message_id: UUID,
+    payload: PinMessageRequest,
+    user: User,
+    connection: Connection,
+    request: Request,
+) -> ChatMessageResponse:
+    try:
+        result = await service.set_message_pin(connection, user, message_id, payload)
     except WorkspaceRepositoryError as error:
         raise HTTPException(error.status_code, error.detail) from error
     await changed(connection, request)

@@ -10,6 +10,7 @@ import type {
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-components";
 import { useModalFocus } from "./useModalFocus";
+import { AudioDeviceSettings } from "./AudioDeviceSettings";
 
 import {
   confirmTotp,
@@ -169,6 +170,8 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
             <small>@{user.username}</small>
           </div>
         </section>
+
+        <AudioDeviceSettings />
 
         <section className="account-section">
           <div className="account-section-title">

@@ -3,6 +3,7 @@ import { scrollToLatest } from "./message-scroll";
 import type {
   ChatMessage,
   ChatSummary,
+  MessageReactionEmoji,
   PersonalPreferences,
   PersonalChatAction,
   MessageOptions,
@@ -15,6 +16,11 @@ import {
   Button,
   Checkbox,
   Input,
+  Menu,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
   Textarea,
   Tooltip,
   useRestoreFocusTarget,
@@ -22,6 +28,10 @@ import {
 import {
   Add24Regular,
   Attach24Regular,
+  EmojiAdd24Regular,
+  Mic24Regular,
+  Pin24Regular,
+  PinOff24Regular,
   Search24Regular,
   Send24Filled,
   TaskListSquareLtr24Regular,
@@ -30,6 +40,16 @@ import { AttachmentChips } from "./AttachmentPanel";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
 import { defaultPersonalPreferences } from "./personal-organization";
+import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
+
+const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
+  { emoji: "👍", label: "Нравится" },
+  { emoji: "❤️", label: "Сердце" },
+  { emoji: "👏", label: "Аплодисменты" },
+  { emoji: "🎉", label: "Праздник" },
+  { emoji: "👀", label: "Смотрю" },
+  { emoji: "✅", label: "Готово" },
+];
 
 interface MessengerViewProps {
   readonly personalPreferences?: PersonalPreferences;
@@ -48,6 +68,14 @@ interface MessengerViewProps {
     files: readonly File[],
     options: MessageOptions,
   ) => ChatMessage | undefined | Promise<ChatMessage | undefined>;
+  readonly onSendVoiceMessage: (
+    chatId: string,
+    file: File,
+    durationMs: number,
+    options: MessageOptions,
+  ) => Promise<ChatMessage | undefined>;
+  readonly onReactMessage: (message: ChatMessage, emoji: MessageReactionEmoji) => Promise<void>;
+  readonly onPinMessage: (message: ChatMessage, pinned: boolean) => Promise<void>;
   readonly onEditMessage: (message: ChatMessage, body: string) => Promise<void>;
   readonly onDeleteMessage: (message: ChatMessage) => Promise<void>;
   readonly onCreateTaskFromMessage: (
@@ -57,6 +85,7 @@ interface MessengerViewProps {
   readonly onDownloadAttachment: (
     attachment: WorkspaceAttachment,
   ) => void | Promise<void>;
+  readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
 }
 
@@ -67,10 +96,14 @@ function Conversation({
   people,
   currentUserId,
   onSendMessage,
+  onSendVoiceMessage,
+  onReactMessage,
+  onPinMessage,
   onEditMessage,
   onDeleteMessage,
   onCreateTaskFromMessage,
   onDownloadAttachment,
+  onLoadAttachment,
   onManage,
   onBack,
   personalPreferences,
@@ -93,6 +126,8 @@ function Conversation({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
@@ -117,6 +152,14 @@ function Conversation({
   );
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
   const latestMessage = activeMessages.at(-1);
+  const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
+  const latestPinned = pinnedMessages.at(-1);
+  const revealMessage = (messageId: string) => {
+    setQuery("");
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  };
   useLayoutEffect(() => {
     const pane = scrollRef.current;
     if (pane && (followLatest.current || latestMessage?.authorId === currentUserId)) {
@@ -210,7 +253,35 @@ function Conversation({
           value={query}
           onChange={(_, data) => setQuery(data.value)}
         />
+        {latestPinned ? (
+          <Button
+            className="pinned-message-trigger"
+            appearance="subtle"
+            icon={<Pin24Regular />}
+            aria-expanded={pinnedOpen}
+            onClick={() => setPinnedOpen((value) => !value)}
+          >
+            Закреплено: {pinnedMessages.length}
+          </Button>
+        ) : null}
       </div>
+      {pinnedOpen && latestPinned ? (
+        <div className="pinned-message-panel" role="region" aria-label="Закреплённые сообщения">
+          <header>
+            <strong>Закреплённые сообщения</strong>
+            <Button size="small" appearance="subtle" onClick={() => setPinnedOpen(false)}>Скрыть</Button>
+          </header>
+          <div>
+            {pinnedMessages.map((message) => (
+              <button key={message.id} type="button" onClick={() => revealMessage(message.id)}>
+                <span>{personName(message.authorId)}</span>
+                <strong>{message.body.slice(0, 140)}</strong>
+                <time>{message.time}</time>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="message-scroll" aria-label="Переписка" aria-live="polite" ref={scrollRef}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
         {!visibleMessages.length && (
@@ -232,14 +303,20 @@ function Conversation({
             ? new Date(previous).toLocaleDateString("ru-RU")
             : "История переписки";
           const own = message.authorId === currentUserId;
-          const mayEdit = own && message.canEdit && canSend && !message.deletedAt;
+          const messageAttachments = attachments.filter(
+            (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
+          );
+          const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
+          const mayModify = own && message.canEdit && canSend && !message.deletedAt;
+          const mayEdit = mayModify && voiceAttachments.length === 0;
           return (
             <div key={message.id}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
               <div
-                className={`message ${own ? "own" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
+                data-message-id={message.id}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
               >
                 {!own && (
                   <Avatar
@@ -304,7 +381,7 @@ function Conversation({
                           </Button>
                         </div>
                       </div>
-                    ) : (
+                    ) : message.deletedAt || voiceAttachments.length === 0 ? (
                       <p
                         className={
                           message.deletedAt ? "message-deleted" : undefined
@@ -312,7 +389,7 @@ function Conversation({
                       >
                         {message.deletedAt ? "Сообщение удалено" : message.body}
                       </p>
-                    )}
+                    ) : null}
                     {!message.deletedAt && (
                       <>
                         {!!message.mentionUserIds?.length && (
@@ -322,12 +399,11 @@ function Conversation({
                             ))}
                           </div>
                         )}
+                        {voiceAttachments.map((attachment) => (
+                          <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
+                        ))}
                         <AttachmentChips
-                          attachments={attachments.filter(
-                            (attachment) =>
-                              attachment.ownerType === "message" &&
-                              attachment.ownerId === message.id,
-                          )}
+                          attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
                           onDownload={onDownloadAttachment}
                         />
                       </>
@@ -339,8 +415,47 @@ function Conversation({
                       {message.time}
                     </time>
                   </div>
+                  {!!message.reactions?.length && (
+                    <div className="message-reactions" aria-label="Реакции на сообщение">
+                      {message.reactions.map((reaction) => (
+                        <Button
+                          key={reaction.emoji}
+                          size="small"
+                          appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"}
+                          disabled={!canSend || busy}
+                          aria-label={`${reactionOptions.find((item) => item.emoji === reaction.emoji)?.label ?? "Реакция"}: ${reaction.count}`}
+                          onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
+                        >
+                          {reaction.emoji} {reaction.count}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                   {!message.deletedAt && (
                     <div className="message-actions" role="group" aria-label="Действия с сообщением">
+                      <Menu>
+                        <MenuTrigger disableButtonEnhancement>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={<EmojiAdd24Regular />}
+                            disabled={!canSend || busy}
+                            aria-label="Добавить реакцию"
+                          />
+                        </MenuTrigger>
+                        <MenuPopover>
+                          <MenuList>
+                            {reactionOptions.map((reaction) => (
+                              <MenuItem
+                                key={reaction.emoji}
+                                onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
+                              >
+                                {reaction.emoji} {reaction.label}
+                              </MenuItem>
+                            ))}
+                          </MenuList>
+                        </MenuPopover>
+                      </Menu>
                       <Button
                         appearance="subtle"
                         size="small"
@@ -350,6 +465,18 @@ function Conversation({
                       >
                         Ответить
                       </Button>
+                      {message.canPin ? (
+                        <Button
+                          appearance="subtle"
+                          size="small"
+                          icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />}
+                          disabled={busy}
+                          aria-label={message.isPinned ? "Открепить сообщение" : "Закрепить сообщение"}
+                          onClick={() => void run(() => onPinMessage(message, !message.isPinned))}
+                        >
+                          {message.isPinned ? "Открепить" : "Закрепить"}
+                        </Button>
+                      ) : null}
                       <Button
                         className="message-task-action"
                         appearance="subtle"
@@ -363,17 +490,19 @@ function Conversation({
                       >
                         В задачу
                       </Button>
-                      {mayEdit && (
+                      {mayModify && (
                         <>
-                          <Button
-                            appearance="subtle"
-                            size="small"
-                            disabled={busy}
-                            aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
-                            onClick={() => startEditing(message)}
-                          >
-                            Изменить
-                          </Button>
+                          {mayEdit ? (
+                            <Button
+                              appearance="subtle"
+                              size="small"
+                              disabled={busy}
+                              aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
+                              onClick={() => startEditing(message)}
+                            >
+                              Изменить
+                            </Button>
+                          ) : null}
                           <Button
                             appearance="subtle"
                             size="small"
@@ -506,7 +635,23 @@ function Conversation({
                 ))}
             </div>
           )}
-          <div className="composer">
+          {voiceOpen ? (
+            <VoiceRecorder
+              disabled={busy}
+              onClose={() => setVoiceOpen(false)}
+              onSend={async (file, durationMs) => {
+                const message = await onSendVoiceMessage(chat.id, file, durationMs, {
+                  replyToMessageId: reply?.id,
+                  mentionUserIds: mentions.filter((id) => activeMemberIds.has(id)),
+                });
+                if (!message) return false;
+                setReply(undefined);
+                setMentions([]);
+                setMentionPicker(false);
+                return true;
+              }}
+            />
+          ) : <div className="composer">
             <input
               ref={fileInputRef}
               hidden
@@ -543,6 +688,15 @@ function Conversation({
             >
               @{mentions.length || ""}
             </Button>
+            <Tooltip content="Записать голосовое сообщение · Opus" relationship="label">
+              <Button
+                appearance="subtle"
+                icon={<Mic24Regular />}
+                aria-label="Записать голосовое сообщение"
+                disabled={busy || Boolean(draft.trim()) || pendingFiles.length > 0}
+                onClick={() => setVoiceOpen(true)}
+              />
+            </Tooltip>
             <div className="composer-input">
               {!!pendingFiles.length && (
                 <div className="pending-files">
@@ -590,7 +744,10 @@ function Conversation({
                     const lastOwn = activeMessages.filter(
                       (message) => message.authorId === currentUserId && !message.deletedAt,
                     ).at(-1);
-                    if (lastOwn?.canEdit && canSend) {
+                    const hasVoice = attachments.some(
+                      (attachment) => attachment.ownerType === "message" && attachment.ownerId === lastOwn?.id && attachment.mediaKind === "voice",
+                    );
+                    if (lastOwn?.canEdit && canSend && !hasVoice) {
                       event.preventDefault();
                       startEditing(lastOwn);
                     }
@@ -613,7 +770,7 @@ function Conversation({
               disabled={busy || !draft.trim()}
               onClick={send}
             />
-          </div>
+          </div>}
         </>
       )}
     </article>

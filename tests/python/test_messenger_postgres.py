@@ -24,13 +24,21 @@ from yuksalish_api.repository import (
 )
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.settings import Settings
-from yuksalish_api.tables import message_versions, messages, workspace_notifications
+from yuksalish_api.tables import (
+    message_reactions,
+    message_versions,
+    messages,
+    pinned_messages,
+    workspace_notifications,
+)
 from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
     ChatPermissions,
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    MessageReactionRequest,
+    PinMessageRequest,
     SendMessageRequest,
     SetChatMemberRequest,
     TransferChatOwnerRequest,
@@ -88,6 +96,7 @@ async def exercise_permissions(url: str) -> None:
                 )
                 group_id = UUID(group.id)
                 assert group.owner_id == str(owner.id) and group.permissions.manage_members
+                assert group.permissions.manage_messages
                 assert len(group.members) == 2 and group.preview == "Сообщений пока нет"
                 with pytest.raises(WorkspaceRepositoryError) as denied:
                     await service.chat_summary(connection, admin, group_id)
@@ -340,6 +349,39 @@ async def exercise_messages(url: str) -> None:
                     ),
                 )
                 assert reply.reply_to_message_id == parent.id and reply.can_edit
+                reacted = await service.toggle_message_reaction(
+                    connection,
+                    owner,
+                    UUID(parent.id),
+                    MessageReactionRequest(emoji="👍"),
+                )
+                assert reacted.reactions[0].count == 1
+                assert reacted.reactions[0].reacted_by_current_user
+                reacted_by_peer = await service.toggle_message_reaction(
+                    connection,
+                    peer,
+                    UUID(parent.id),
+                    MessageReactionRequest(emoji="👍"),
+                )
+                assert reacted_by_peer.reactions[0].count == 2
+                with pytest.raises(WorkspaceRepositoryError):
+                    await service.set_message_pin(
+                        connection,
+                        peer,
+                        UUID(parent.id),
+                        PinMessageRequest(pinned=True),
+                    )
+                pinned = await service.set_message_pin(
+                    connection,
+                    owner,
+                    UUID(parent.id),
+                    PinMessageRequest(pinned=True),
+                )
+                assert pinned.is_pinned and pinned.pinned_by_user_id == str(owner.id)
+                peer_snapshot = await load_workspace(connection, peer)
+                peer_parent = next(item for item in peer_snapshot.messages if item.id == parent.id)
+                assert peer_parent.is_pinned
+                assert peer_parent.reactions[0].count == 2
                 notifications = (
                     (
                         await connection.execute(
@@ -415,6 +457,22 @@ async def exercise_messages(url: str) -> None:
                 )
                 assert removed.revision == 3 and removed.deleted_at and not removed.body
                 assert not removed.can_edit
+                assert (
+                    await connection.scalar(
+                        select(func.count())
+                        .select_from(message_reactions)
+                        .where(message_reactions.c.message_id == UUID(parent.id))
+                    )
+                    == 0
+                )
+                assert (
+                    await connection.scalar(
+                        select(func.count())
+                        .select_from(pinned_messages)
+                        .where(pinned_messages.c.message_id == UUID(parent.id))
+                    )
+                    == 0
+                )
                 history = list(
                     (
                         await connection.execute(
@@ -542,6 +600,16 @@ async def exercise_http(url: str) -> None:
         )
         assert message.status_code == 201, message.text
         path = f"/api/v1/messages/{message.json()['id']}"
+        reaction = await client.post(path + "/reactions", headers=headers, json={"emoji": "🎉"})
+        assert reaction.status_code == 200
+        assert reaction.json()["reactions"] == [
+            {"emoji": "🎉", "count": 1, "reactedByCurrentUser": True}
+        ]
+        assert (
+            await client.post(path + "/reactions", headers=headers, json={"emoji": "🚀"})
+        ).status_code == 422
+        pinned = await client.put(path + "/pin", headers=headers, json={"pinned": True})
+        assert pinned.status_code == 200 and pinned.json()["isPinned"]
         edited = await client.patch(
             path, headers=headers, json={"body": "HTTP edited", "expectedRevision": 1}
         )
@@ -553,6 +621,30 @@ async def exercise_http(url: str) -> None:
             "DELETE", path, headers=headers, json={"expectedRevision": 2}
         )
         assert deleted.status_code == 200 and deleted.json()["deletedAt"]
+        voice_message = await client.post(
+            f"{base}/messages", headers=headers, json={"body": "Голосовое сообщение"}
+        )
+        assert voice_message.status_code == 201
+        voice_path = f"/api/v1/attachments/message/{voice_message.json()['id']}"
+        voice_query = (
+            "?fileName=voice.webm&documentRole=general&mediaKind=voice"
+            "&mediaDurationMs=1000&mediaCodec=opus"
+        )
+        voice_bytes = b"\x1a\x45\xdf\xa3" + b"\x00" * 20 + b"OpusHead" + b"\x00" * 200
+        uploaded = await client.put(
+            voice_path + voice_query,
+            headers={**headers, "Content-Type": "audio/webm;codecs=opus"},
+            content=voice_bytes,
+        )
+        assert uploaded.status_code == 201, uploaded.text
+        assert uploaded.json()["mediaKind"] == "voice"
+        assert uploaded.json()["mediaDurationMs"] == 1000
+        invalid_voice = await client.put(
+            voice_path + voice_query.replace("voice.webm", "bad.webm"),
+            headers={**headers, "Content-Type": "audio/webm"},
+            content=b"not-webm-or-opus",
+        )
+        assert invalid_voice.status_code == 422
         assert (
             await client.post(f"{base}/owner", headers=headers, json={"userId": peer_id})
         ).status_code == 200

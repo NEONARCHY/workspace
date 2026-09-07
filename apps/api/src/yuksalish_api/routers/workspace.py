@@ -801,6 +801,18 @@ async def put_attachment(
         Literal["general", "primary", "additional"],
         Query(alias="documentRole"),
     ] = "general",
+    media_kind: Annotated[
+        Literal["file", "voice"],
+        Query(alias="mediaKind"),
+    ] = "file",
+    media_duration_ms: Annotated[
+        int | None,
+        Query(alias="mediaDurationMs", ge=500, le=600_000),
+    ] = None,
+    media_codec: Annotated[
+        Literal["opus"] | None,
+        Query(alias="mediaCodec"),
+    ] = None,
 ) -> AttachmentResponse:
     safe_name = _safe_file_name(file_name)
     try:
@@ -814,7 +826,29 @@ async def put_attachment(
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
 
-    limit = request.app.state.settings.attachment_max_bytes
+    settings = request.app.state.settings
+    if media_kind == "voice":
+        if owner_type != "message" or document_role != "general":
+            raise HTTPException(
+                status_code=422,
+                detail="Голосовая запись доступна только в сообщении",
+            )
+        if media_duration_ms is None or media_codec != "opus":
+            raise HTTPException(
+                status_code=422,
+                detail="Не указаны параметры голосовой записи Opus",  # noqa: RUF001
+            )
+        voice_duration_ms = media_duration_ms
+        if media_duration_ms > settings.voice_message_max_duration_ms:
+            raise HTTPException(status_code=413, detail="Голосовое сообщение длиннее 10 минут")
+        limit = settings.voice_message_max_bytes
+    else:
+        if media_duration_ms is not None or media_codec is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Медиапараметры допустимы только для голоса",
+            )
+        limit = settings.attachment_max_bytes
     content = bytearray()
     async for chunk in request.stream():
         content.extend(chunk)
@@ -827,6 +861,18 @@ async def put_attachment(
         raise HTTPException(status_code=422, detail="Attachment must not be empty")
 
     content_type = request.headers.get("content-type", "application/octet-stream")[:160]
+    if media_kind == "voice":
+        base_content_type = content_type.split(";", 1)[0].strip().lower()
+        if base_content_type != "audio/webm":
+            raise HTTPException(status_code=415, detail="Голос отправляется только как WebM/Opus")
+        if bytes(content[:4]) != b"\x1a\x45\xdf\xa3" or b"OpusHead" not in content[:65536]:
+            raise HTTPException(
+                status_code=422,
+                detail="Файл не является корректной записью WebM/Opus",
+            )
+        duration_limit = max(64 * 1024, voice_duration_ms * 8)
+        if len(content) > duration_limit:
+            raise HTTPException(status_code=413, detail="Запись имеет слишком высокий битрейт")
     storage_key = f"{owner_type}/{owner_id}/{uuid4()}"
     storage = _object_storage(request)
     try:
@@ -842,6 +888,9 @@ async def put_attachment(
             sha256=hashlib.sha256(content).hexdigest(),
             storage_key=storage_key,
             document_role=document_role,
+            media_kind=media_kind,
+            media_duration_ms=media_duration_ms,
+            media_codec=media_codec,
         )
     except WorkspaceRepositoryError as error:
         await storage.delete(storage_key)

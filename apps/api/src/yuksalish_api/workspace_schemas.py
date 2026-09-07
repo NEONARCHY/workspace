@@ -46,6 +46,7 @@ class ChatPermissions(ApiModel):
     invite_members: bool = False
     manage_members: bool = False
     edit_info: bool = False
+    manage_messages: bool = False
 
 
 class ChatMemberResponse(ApiModel):
@@ -110,6 +111,12 @@ class ChatSummaryResponse(ApiModel):
     permissions: ChatPermissions = Field(default_factory=ChatPermissions)
 
 
+class MessageReactionResponse(ApiModel):
+    emoji: Literal["👍", "❤️", "👏", "🎉", "👀", "✅"]
+    count: int = Field(ge=1)
+    reacted_by_current_user: bool = False
+
+
 class ChatMessageResponse(ApiModel):
     id: str
     chat_id: str
@@ -124,6 +131,11 @@ class ChatMessageResponse(ApiModel):
     deleted_at: datetime | None = None
     revision: int = 1
     can_edit: bool = False
+    reactions: list[MessageReactionResponse] = Field(default_factory=list)
+    is_pinned: bool = False
+    pinned_at: datetime | None = None
+    pinned_by_user_id: str | None = None
+    can_pin: bool = False
 
 
 AttachmentOwnerType = Literal["message", "task", "approval_request"]
@@ -139,6 +151,9 @@ class AttachmentResponse(ApiModel):
     sha256: str
     uploaded_by_user_id: str
     document_role: Literal["general", "primary", "additional"] = "general"
+    media_kind: Literal["file", "voice"] = "file"
+    media_duration_ms: int | None = Field(default=None, ge=500, le=600_000)
+    media_codec: Literal["opus"] | None = None
     created_at: datetime
 
 
@@ -162,6 +177,14 @@ class EditMessageRequest(SendMessageRequest):
 
 class DeleteMessageRequest(ApiModel):
     expected_revision: int = Field(ge=1)
+
+
+class MessageReactionRequest(ApiModel):
+    emoji: Literal["👍", "❤️", "👏", "🎉", "👀", "✅"]
+
+
+class PinMessageRequest(ApiModel):
+    pinned: bool
 
 
 TaskStatus = Literal[

@@ -167,6 +167,24 @@ message_receipts = sa.Table(
     sa.Column("read_at", sa.DateTime(timezone=True)),
 )
 
+message_reactions = sa.Table(
+    "messenger_message_reactions",
+    metadata,
+    sa.Column("message_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("emoji", sa.String(8), primary_key=True),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+pinned_messages = sa.Table(
+    "messenger_pinned_messages",
+    metadata,
+    sa.Column("message_id", uuid_type, primary_key=True),
+    sa.Column("chat_id", uuid_type),
+    sa.Column("pinned_by_user_id", uuid_type),
+    sa.Column("pinned_at", sa.DateTime(timezone=True)),
+)
+
 attachments = sa.Table(
     "workspace_attachments",
     metadata,
@@ -180,6 +198,9 @@ attachments = sa.Table(
     sa.Column("storage_key", sa.String(500)),
     sa.Column("uploaded_by_user_id", uuid_type),
     sa.Column("document_role", sa.String(24)),
+    sa.Column("media_kind", sa.String(16)),
+    sa.Column("media_duration_ms", sa.Integer()),
+    sa.Column("media_codec", sa.String(32)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 

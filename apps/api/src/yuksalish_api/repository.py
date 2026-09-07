@@ -306,6 +306,9 @@ def _attachment(row: Record) -> AttachmentResponse:
         sha256=row["sha256"],
         uploaded_by_user_id=str(row["uploaded_by_user_id"]),
         document_role=row.get("document_role") or "general",
+        media_kind=row.get("media_kind") or "file",
+        media_duration_ms=row.get("media_duration_ms"),
+        media_codec=row.get("media_codec"),
         created_at=row["created_at"],
     )
 
@@ -1637,9 +1640,22 @@ async def load_workspace(
         for row in chat_rows
     ]
     send_permissions = {chat.id: chat.permissions.send_messages for chat in chat_responses}
+    pin_permissions = {
+        chat.id: bool(chat.permissions.manage_messages)
+        or (chat.kind == "direct" and chat.permissions.send_messages)
+        for chat in chat_responses
+    }
+    reaction_map, pin_map = await messenger_service.message_detail_maps(
+        connection, current_user, [row["id"] for row in message_rows]
+    )
     message_responses = [
         messenger_service.message_response(
-            row, current_user, can_send=send_permissions.get(str(row["chat_id"]), False),
+            row,
+            current_user,
+            can_send=send_permissions.get(str(row["chat_id"]), False),
+            can_pin=pin_permissions.get(str(row["chat_id"]), False),
+            reactions=reaction_map.get(row["id"]),
+            pin=pin_map.get(row["id"]),
         )
         for row in message_rows
     ]
@@ -1894,7 +1910,12 @@ async def search_messages(
     rows = (
         (
             await connection.execute(
-                select(messages, chat_members.c.member_role, chat_members.c.permissions)
+                select(
+                    messages,
+                    chat_members.c.member_role,
+                    chat_members.c.permissions,
+                    chats.c.kind,
+                )
                 .join(
                     chat_members,
                     and_(
@@ -1902,6 +1923,7 @@ async def search_messages(
                         chat_members.c.user_id == current_user.id,
                     ),
                 )
+                .join(chats, chats.c.id == messages.c.chat_id)
                 .where(
                     messages.c.deleted_at.is_(None),
                     messages.c.body.ilike(f"%{normalized}%"),
@@ -1913,9 +1935,17 @@ async def search_messages(
         .mappings()
         .all()
     )
+    reaction_map, pin_map = await messenger_service.message_detail_maps(
+        connection, current_user, [row["id"] for row in rows]
+    )
     return [
         messenger_service.message_response(
-            row, current_user, can_send=messenger_service.member_permissions(row).send_messages,
+            row,
+            current_user,
+            can_send=messenger_service.member_permissions(row).send_messages,
+            can_pin=messenger_service.can_manage_messages(row, row),
+            reactions=reaction_map.get(row["id"]),
+            pin=pin_map.get(row["id"]),
         )
         for row in rows
     ]
@@ -3563,6 +3593,9 @@ async def create_attachment(
     sha256: str,
     storage_key: str,
     document_role: str = "general",
+    media_kind: str = "file",
+    media_duration_ms: int | None = None,
+    media_codec: str | None = None,
 ) -> AttachmentResponse:
     await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
     now = datetime.now(UTC)
@@ -3577,6 +3610,9 @@ async def create_attachment(
         "storage_key": storage_key,
         "uploaded_by_user_id": current_user.id,
         "document_role": document_role,
+        "media_kind": media_kind,
+        "media_duration_ms": media_duration_ms,
+        "media_codec": media_codec,
         "created_at": now,
     }
     await connection.execute(insert(attachments).values(**values))

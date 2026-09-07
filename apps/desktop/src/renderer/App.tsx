@@ -8,6 +8,7 @@ import type {
   ChatMessage,
   EfficiencyOverview,
   MessageOptions,
+  MessageReactionEmoji,
   FeedPost,
   NotificationPreferences,
   NavigationKey,
@@ -118,6 +119,8 @@ import {
   transferWorkspaceChatOwner,
   editWorkspaceMessage,
   deleteWorkspaceMessage,
+  setWorkspaceMessagePinned,
+  toggleWorkspaceMessageReaction,
   setWorkspaceFeedLike,
   setWorkspaceTaskCycle,
   setWorkspaceTaskDependency,
@@ -493,15 +496,25 @@ export function App() {
     }
   };
 
+  const handleLoadAttachment = async (attachment: WorkspaceAttachment) => {
+    if (session === undefined) throw new Error("Войдите снова");
+    return await downloadWorkspaceAttachment(session.accessToken, attachment.id);
+  };
+
+  const storeMessage = (message: ChatMessage) => {
+    setWorkspace((current) => ({
+      ...current,
+      messages: current.messages.some((item) => item.id === message.id)
+        ? current.messages.map((item) => item.id === message.id ? message : item)
+        : [...current.messages, message],
+    }));
+  };
+
   const handleSendMessage = async (chatId: string, body: string, files: readonly File[], options: MessageOptions) => {
     if (session === undefined) return undefined;
     try {
       const message = await sendWorkspaceMessage(session.accessToken, chatId, body, options);
-      setWorkspace((current) =>
-        current.messages.some((item) => item.id === message.id)
-          ? current
-          : { ...current, messages: [...current.messages, message] },
-      );
+      storeMessage(message);
       try {
         await uploadFiles("message", message.id, files);
       } catch (error) {
@@ -512,6 +525,51 @@ export function App() {
       reportError(error);
       return undefined;
     }
+  };
+
+  const handleSendVoiceMessage = async (
+    chatId: string,
+    file: File,
+    durationMs: number,
+    options: MessageOptions,
+  ) => {
+    if (session === undefined) return undefined;
+    let message: ChatMessage | undefined;
+    try {
+      message = await sendWorkspaceMessage(session.accessToken, chatId, "Голосовое сообщение", options);
+      const attachment = await uploadWorkspaceAttachment(
+        session.accessToken,
+        "message",
+        message.id,
+        file,
+        "general",
+        { mediaKind: "voice", mediaDurationMs: durationMs, mediaCodec: "opus" },
+      );
+      storeMessage(message);
+      setWorkspace((current) => ({ ...current, attachments: [...current.attachments, attachment] }));
+      return message;
+    } catch (error) {
+      if (message) {
+        try {
+          await deleteWorkspaceMessage(session.accessToken, message);
+        } catch {
+          // A failed cleanup is reconciled by the refresh below.
+        }
+        void refreshWorkspace(session.accessToken).catch(reportError);
+      }
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleMessageReaction = async (message: ChatMessage, emoji: MessageReactionEmoji) => {
+    if (!session) throw new Error("Войдите снова");
+    storeMessage(await toggleWorkspaceMessageReaction(session.accessToken, message.id, emoji));
+  };
+
+  const handleMessagePin = async (message: ChatMessage, pinned: boolean) => {
+    if (!session) throw new Error("Войдите снова");
+    storeMessage(await setWorkspaceMessagePinned(session.accessToken, message.id, pinned));
   };
 
   const handleMarkChatRead = async (chatId: string) => {
@@ -1199,12 +1257,16 @@ export function App() {
                 attachments={workspace.attachments}
                 people={workspace.people}
                 onSendMessage={handleSendMessage}
+                onSendVoiceMessage={handleSendVoiceMessage}
+                onReactMessage={handleMessageReaction}
+                onPinMessage={handleMessagePin}
                 currentUserId={workspace.currentUser.id}
                 chatActions={chatActions}
                 onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onDownloadAttachment={handleDownloadAttachment}
+                onLoadAttachment={handleLoadAttachment}
                 onMarkRead={handleMarkChatRead}
                 focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
               />

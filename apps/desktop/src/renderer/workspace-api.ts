@@ -12,6 +12,7 @@ import type {
   ChatSummary,
   CreateChatInput,
   MessageOptions,
+  MessageReactionEmoji,
   DirectoryBootstrap,
   DirectoryEmployee,
   EfficiencyOverview,
@@ -330,6 +331,28 @@ export function editWorkspaceMessage(token: string, message: ChatMessage, body: 
 export function deleteWorkspaceMessage(token: string, message: ChatMessage): Promise<ChatMessage> {
   return apiRequest(`/messages/${message.id}`, {
     method: "DELETE", body: JSON.stringify({ expectedRevision: message.revision ?? 1 }),
+  }, token);
+}
+
+export function toggleWorkspaceMessageReaction(
+  token: string,
+  messageId: string,
+  emoji: MessageReactionEmoji,
+): Promise<ChatMessage> {
+  return apiRequest(`/messages/${messageId}/reactions`, {
+    method: "POST",
+    body: JSON.stringify({ emoji }),
+  }, token);
+}
+
+export function setWorkspaceMessagePinned(
+  token: string,
+  messageId: string,
+  pinned: boolean,
+): Promise<ChatMessage> {
+  return apiRequest(`/messages/${messageId}/pin`, {
+    method: "PUT",
+    body: JSON.stringify({ pinned }),
   }, token);
 }
 
@@ -785,8 +808,19 @@ export async function uploadWorkspaceAttachment(
   ownerId: string,
   file: File,
   documentRole: "general" | "primary" | "additional" = "general",
+  media?: {
+    readonly mediaKind: "voice";
+    readonly mediaDurationMs: number;
+    readonly mediaCodec: "opus";
+  },
 ): Promise<WorkspaceAttachment> {
-  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?fileName=${encodeURIComponent(file.name)}&documentRole=${documentRole}`;
+  const query = new URLSearchParams({ fileName: file.name, documentRole });
+  if (media) {
+    query.set("mediaKind", media.mediaKind);
+    query.set("mediaDurationMs", String(media.mediaDurationMs));
+    query.set("mediaCodec", media.mediaCodec);
+  }
+  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?${query.toString()}`;
   return boundedRequest(url, {
     method: "PUT",
     headers: {

@@ -40,6 +40,7 @@ const permissionLabels: Record<keyof ChatPermissions, string> = {
   inviteMembers: "Добавлять сотрудников",
   manageMembers: "Исключать участников",
   editInfo: "Менять название и описание",
+  manageMessages: "Закреплять сообщения",
 };
 const adminPermissions: ChatPermissions = {
   sendMessages: true,
@@ -47,6 +48,7 @@ const adminPermissions: ChatPermissions = {
   inviteMembers: true,
   manageMembers: true,
   editInfo: true,
+  manageMessages: true,
 };
 const memberPermissions: ChatPermissions = {
   ...adminPermissions,

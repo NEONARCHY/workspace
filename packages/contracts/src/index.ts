@@ -96,6 +96,7 @@ export interface ChatPermissions {
   readonly inviteMembers: boolean;
   readonly manageMembers: boolean;
   readonly editInfo: boolean;
+  readonly manageMessages?: boolean;
 }
 
 export interface ChatMember {
@@ -143,6 +144,19 @@ export interface ChatMessage {
   readonly deletedAt?: string | null;
   readonly revision?: number;
   readonly canEdit?: boolean;
+  readonly reactions?: readonly MessageReaction[];
+  readonly isPinned?: boolean;
+  readonly pinnedAt?: string | null;
+  readonly pinnedByUserId?: string | null;
+  readonly canPin?: boolean;
+}
+
+export type MessageReactionEmoji = "👍" | "❤️" | "👏" | "🎉" | "👀" | "✅";
+
+export interface MessageReaction {
+  readonly emoji: MessageReactionEmoji;
+  readonly count: number;
+  readonly reactedByCurrentUser: boolean;
 }
 
 export interface FeedComment {
@@ -242,6 +256,9 @@ export interface WorkspaceAttachment {
   readonly sha256: string;
   readonly uploadedByUserId: string;
   readonly documentRole: "general" | "primary" | "additional";
+  readonly mediaKind?: "file" | "voice";
+  readonly mediaDurationMs?: number | null;
+  readonly mediaCodec?: "opus" | null;
   readonly createdAt: string;
 }
 

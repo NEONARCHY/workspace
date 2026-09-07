@@ -34,10 +34,14 @@ function renderMessenger(
     attachments: [],
     chatActions: actions(),
     onSendMessage: vi.fn(),
+    onSendVoiceMessage: vi.fn(),
+    onReactMessage: vi.fn(),
+    onPinMessage: vi.fn(),
     onEditMessage: vi.fn(),
     onDeleteMessage: vi.fn(),
     onCreateTaskFromMessage: vi.fn(),
     onDownloadAttachment: vi.fn(),
+    onLoadAttachment: vi.fn(),
     onMarkRead: vi.fn(),
     ...overrides,
   };
@@ -111,6 +115,7 @@ describe("Private messenger", () => {
           inviteMembers: true,
           manageMembers: true,
           editInfo: true,
+          manageMessages: true,
         },
       }),
     );
@@ -340,6 +345,64 @@ describe("Private messenger", () => {
     expect(
       screen.queryByRole("button", { name: /^Ответить:/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows reactions and a pinned-message list, and delegates both actions", async () => {
+    const message: ChatMessage = {
+      id: "pinned",
+      chatId: "finance",
+      authorId: "baxtiyor",
+      body: "Важное решение по бюджету",
+      time: "14:20",
+      reactions: [{ emoji: "👍", count: 3, reactedByCurrentUser: true }],
+      isPinned: true,
+      canPin: true,
+    };
+    const onReactMessage = vi.fn().mockResolvedValue(undefined);
+    const onPinMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [message], onReactMessage, onPinMessage });
+
+    fireEvent.click(screen.getByRole("button", { name: "Нравится: 3" }));
+    await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(message, "👍"));
+    fireEvent.click(screen.getByRole("button", { name: "Открепить сообщение" }));
+    await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false));
+
+    fireEvent.click(screen.getByRole("button", { name: /Закреплено: 1/ }));
+    const panel = screen.getByRole("region", { name: "Закреплённые сообщения" });
+    expect(panel).toHaveTextContent("Важное решение по бюджету");
+    expect(within(panel).getByText("Бахтиёр Самугов")).toBeInTheDocument();
+  });
+
+  it("loads compressed voice data only when playback is requested", async () => {
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:voice");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const onLoadAttachment = vi.fn().mockResolvedValue(new Blob(["voice"], { type: "audio/webm" }));
+    renderMessenger({
+      messages: [{ id: "voice", chatId: "finance", authorId: "aziza", body: "Голосовое сообщение", time: "09:00", canEdit: true }],
+      attachments: [{
+        id: "voice-file",
+        ownerType: "message",
+        ownerId: "voice",
+        fileName: "voice.webm",
+        contentType: "audio/webm;codecs=opus",
+        byteSize: 29_000,
+        sha256: "a".repeat(64),
+        uploadedByUserId: "aziza",
+        documentRole: "general",
+        mediaKind: "voice",
+        mediaDurationMs: 7_000,
+        mediaCodec: "opus",
+        createdAt: "2026-09-07T09:00:00Z",
+      }],
+      onLoadAttachment,
+    });
+    expect(screen.queryByText("Голосовое сообщение")).not.toBeInTheDocument();
+    expect(onLoadAttachment).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Прослушать" }));
+    await waitFor(() => expect(onLoadAttachment).toHaveBeenCalled());
+    expect(await screen.findByLabelText("Голосовое сообщение")).toHaveAttribute("src", "blob:voice");
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
   });
 
   it("restricts direct creation to one colleague and preserves failed forms", async () => {

@@ -14,9 +14,11 @@ from .tables import (
     audit_events,
     chat_members,
     chats,
+    message_reactions,
     message_receipts,
     message_versions,
     messages,
+    pinned_messages,
     users,
     workspace_notifications,
 )
@@ -29,6 +31,9 @@ from .workspace_schemas import (
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    MessageReactionRequest,
+    MessageReactionResponse,
+    PinMessageRequest,
     SendMessageRequest,
     SetChatMemberRequest,
     TransferChatOwnerRequest,
@@ -42,13 +47,20 @@ FULL_PERMISSIONS = ChatPermissions(
     invite_members=True,
     manage_members=True,
     edit_info=True,
+    manage_messages=True,
 )
+REACTION_EMOJIS = ("👍", "❤️", "👏", "🎉", "👀", "✅")
 
 
 def member_permissions(member: Record) -> ChatPermissions:
     if member["member_role"] == "owner":
         return FULL_PERMISSIONS
     return ChatPermissions.model_validate(member["permissions"] or {})
+
+
+def can_manage_messages(chat: Record, member: Record) -> bool:
+    permissions = member_permissions(member)
+    return permissions.manage_messages or (chat["kind"] == "direct" and permissions.send_messages)
 
 
 async def chat_access(
@@ -492,8 +504,59 @@ async def transfer_chat_owner(
     return await chat_summary(connection, user, chat_id)
 
 
+async def message_detail_maps(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    message_ids: list[UUID],
+) -> tuple[dict[UUID, list[MessageReactionResponse]], dict[UUID, Record]]:
+    if not message_ids:
+        return {}, {}
+    reaction_rows = (
+        (
+            await connection.execute(
+                select(message_reactions).where(message_reactions.c.message_id.in_(message_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    grouped: dict[UUID, dict[str, set[UUID]]] = {}
+    for reaction in reaction_rows:
+        grouped.setdefault(reaction["message_id"], {}).setdefault(
+            reaction["emoji"], set()
+        ).add(reaction["user_id"])
+    reactions = {
+        message_id: [
+            MessageReactionResponse(
+                emoji=emoji,  # type: ignore[arg-type]
+                count=len(users_for_emoji),
+                reacted_by_current_user=user.id in users_for_emoji,
+            )
+            for emoji in REACTION_EMOJIS
+            if (users_for_emoji := values.get(emoji))
+        ]
+        for message_id, values in grouped.items()
+    }
+    pin_rows = (
+        (
+            await connection.execute(
+                select(pinned_messages).where(pinned_messages.c.message_id.in_(message_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return reactions, {row["message_id"]: row for row in pin_rows}
+
+
 def message_response(
-    row: Record, user: AuthenticatedUser, *, can_send: bool = True
+    row: Record,
+    user: AuthenticatedUser,
+    *,
+    can_send: bool = True,
+    can_pin: bool = False,
+    reactions: list[MessageReactionResponse] | None = None,
+    pin: Record | None = None,
 ) -> ChatMessageResponse:
     own = row["author_user_id"] == user.id
     deleted = row["deleted_at"] is not None
@@ -514,6 +577,31 @@ def message_response(
         and not deleted
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
+        reactions=[] if deleted else (reactions or []),
+        is_pinned=not deleted and pin is not None,
+        pinned_at=None if deleted or pin is None else pin["pinned_at"],
+        pinned_by_user_id=(
+            None if deleted or pin is None else str(pin["pinned_by_user_id"])
+        ),
+        can_pin=not deleted and can_pin,
+    )
+
+
+async def message_with_details(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    row: Record,
+    chat: Record,
+    member: Record,
+) -> ChatMessageResponse:
+    reactions, pins = await message_detail_maps(connection, user, [row["id"]])
+    return message_response(
+        row,
+        user,
+        can_send=member_permissions(member).send_messages,
+        can_pin=can_manage_messages(chat, member),
+        reactions=reactions.get(row["id"]),
+        pin=pins.get(row["id"]),
     )
 
 
@@ -663,7 +751,112 @@ async def send_chat_message(
     )
     await connection.execute(update(chats).where(chats.c.id == chat_id).values(updated_at=now))
     await notify_message(connection, chat, user, row, recipients)
-    return message_response(row, user)
+    return await message_with_details(connection, user, row, chat, member)
+
+
+async def toggle_message_reaction(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    message_id: UUID,
+    payload: MessageReactionRequest,
+) -> ChatMessageResponse:
+    row = (
+        (await connection.execute(select(messages).where(messages.c.id == message_id)))
+        .mappings()
+        .first()
+    )
+    if row is None or row["deleted_at"] is not None:
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
+    chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
+    if not member_permissions(member).send_messages:
+        raise WorkspaceRepositoryError(403, "Доступно только чтение сообщений")
+    existing = await connection.scalar(
+        select(message_reactions.c.message_id).where(
+            message_reactions.c.message_id == message_id,
+            message_reactions.c.user_id == user.id,
+            message_reactions.c.emoji == payload.emoji,
+        )
+    )
+    if existing is None:
+        await connection.execute(
+            insert(message_reactions).values(
+                message_id=message_id,
+                user_id=user.id,
+                emoji=payload.emoji,
+                created_at=datetime.now(UTC),
+            )
+        )
+    else:
+        await connection.execute(
+            delete(message_reactions).where(
+                message_reactions.c.message_id == message_id,
+                message_reactions.c.user_id == user.id,
+                message_reactions.c.emoji == payload.emoji,
+            )
+        )
+    return await message_with_details(connection, user, row, chat, member)
+
+
+async def set_message_pin(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    message_id: UUID,
+    payload: PinMessageRequest,
+) -> ChatMessageResponse:
+    row = (
+        (await connection.execute(select(messages).where(messages.c.id == message_id)))
+        .mappings()
+        .first()
+    )
+    if row is None or row["deleted_at"] is not None:
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
+    chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
+    if not can_manage_messages(chat, member):
+        raise WorkspaceRepositoryError(403, "Нет права закреплять сообщения")
+    if payload.pinned:
+        count = await connection.scalar(
+            select(func.count())
+            .select_from(pinned_messages)
+            .where(pinned_messages.c.chat_id == row["chat_id"])
+        )
+        existing = await connection.scalar(
+            select(pinned_messages.c.message_id).where(
+                pinned_messages.c.message_id == message_id
+            )
+        )
+        if existing is None and int(count or 0) >= 50:
+            raise WorkspaceRepositoryError(
+                409, "В чате можно закрепить не более 50 сообщений"  # noqa: RUF001
+            )
+        await connection.execute(
+            pg_insert(pinned_messages)
+            .values(
+                message_id=message_id,
+                chat_id=row["chat_id"],
+                pinned_by_user_id=user.id,
+                pinned_at=datetime.now(UTC),
+            )
+            .on_conflict_do_update(
+                index_elements=[pinned_messages.c.message_id],
+                set_={
+                    "pinned_by_user_id": user.id,
+                    "pinned_at": datetime.now(UTC),
+                },
+            )
+        )
+    else:
+        await connection.execute(
+            delete(pinned_messages).where(pinned_messages.c.message_id == message_id)
+        )
+    await audit(
+        connection,
+        user,
+        "message.pinned" if payload.pinned else "message.unpinned",
+        message_id,
+        {"chat_id": str(row["chat_id"])},
+        target_type="message",
+    )
+    return await message_with_details(connection, user, row, chat, member)
 
 
 async def change_message(
@@ -740,6 +933,12 @@ async def change_message(
     # Never expose removed text through the notification preview.
     values: dict[str, Any] = {"body": "Сообщение удалено" if deleted else body[:4000]}
     if deleted:
+        await connection.execute(
+            delete(message_reactions).where(message_reactions.c.message_id == message_id)
+        )
+        await connection.execute(
+            delete(pinned_messages).where(pinned_messages.c.message_id == message_id)
+        )
         values.update(title="Сообщение удалено", read_at=now, resolved_at=now)
     await connection.execute(
         update(workspace_notifications)
@@ -752,4 +951,4 @@ async def change_message(
     if not deleted:
         new_mentions = [UUID(item) for item in mentions if item not in row["mention_user_ids"]]
         await notify_message(connection, chat, user, changed, new_mentions, edited_mention=True)
-    return message_response(changed, user)
+    return await message_with_details(connection, user, changed, chat, member)

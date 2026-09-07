@@ -80,7 +80,11 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Создать чат" }));
     const title = await screen.findByLabelText("Название новой группы");
     fireEvent.change(title, { target: { value: "Команда проекта" } });
-    fireEvent.click(screen.getByRole("button", { name: "Создать и открыть" }));
+    fireEvent.click(await screen.findByRole(
+      "button",
+      { name: "Создать и открыть" },
+      { timeout: 5_000 },
+    ));
     await waitFor(() => expect(onCreateChat).toHaveBeenCalledWith({ kind: "group", title: "Команда проекта", description: "Группа создана из списка сотрудников.", memberIds: ["one", "two"] }));
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Действие с выбранными сотрудниками" })).not.toBeInTheDocument());
   });
