@@ -39,7 +39,8 @@ describe("Employee list and retained access controls", () => {
     expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
     expect(screen.getByLabelText("Должность")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Сохранить сотрудника" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "К списку сотрудников" }));
+    expect(screen.queryByRole("button", { name: "К списку сотрудников" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку сотрудника" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
   it("keeps the selected access draft visible after a server error", async () => {
@@ -104,11 +105,11 @@ describe("Employee list and retained access controls", () => {
   it("renames a position and updates its visible name on employee rows", async () => {
     vi.mocked(updatePosition).mockResolvedValue({ ...data.positions[0]!, name: "Yetakchi mutaxassis" });
     mount(); await screen.findByRole("table"); fireEvent.click(screen.getByRole("button", { name: "Должности" }));
-    screen.getByRole("button", { name: "К списку сотрудников" }).focus();
+    screen.getByRole("button", { name: "Закрыть справочник должностей" }).focus();
     fireEvent.change(screen.getByLabelText("Название должности"), { target: { value: "Yetakchi mutaxassis" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить должность" }));
     await screen.findByText(/Должность обновлена/);
-    fireEvent.click(screen.getByRole("button", { name: "К списку сотрудников" }));
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть справочник должностей" }));
     await waitFor(() => expect(document.querySelector(".employee-position")).toHaveTextContent("Yetakchi mutaxassis"));
   });
   it("retries a failed directory load without a permanently spinning screen", async () => {

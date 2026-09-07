@@ -59,7 +59,7 @@
 .employee-record-table .employee-row.selected:hover td, .employee-record-table .employee-row.selected:focus-within td { background: #ebf6cd; }
 .employee-selection-bar { display: flex; flex: none; align-items: center; gap: 18px; min-height: 72px; margin: -10px 24px 20px; padding: 11px 14px; border: 1px solid #b9d9df; border-radius: 14px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 30px rgb(21 62 82 / 15%); animation: employee-bar-in var(--ws-motion-medium) var(--ws-ease) both; }
 .employee-selection-summary { display: flex; align-items: center; gap: 10px; min-width: 210px; }
-.employee-selection-summary > span { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; color: white; background: var(--ws-brand); font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; box-shadow: 0 5px 14px rgb(0 164 181 / 22%); }
+.employee-selection-summary > span { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; color: white; background: var(--ws-turquoise); font-size: 16px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; box-shadow: 0 5px 14px rgb(0 145 168 / 22%); }
 .employee-selection-summary div { display: grid; gap: 2px; }
 .employee-selection-summary strong { font-size: 13px; }
 .employee-selection-summary small, .employee-selection-scope small { color: var(--ws-muted); font-size: 11px; }
@@ -82,10 +82,12 @@
 .record-table-paging button:disabled { color: #81909d; background: var(--ws-muted-surface); cursor: default; }
 .record-table-empty { display: grid; gap: 8px; padding: 40px 24px; text-align: center; color: var(--ws-muted); font-size: 14px; }
 .record-table-empty strong { color: var(--ws-text); }
-.fui-DialogSurface.task-record-dialog, .fui-DialogSurface.directory-record-dialog { width: min(840px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow: auto; margin: auto !important; }
+.fui-DialogSurface.task-record-dialog, .fui-DialogSurface.directory-record-dialog { width: min(840px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; margin: auto !important; }
 .task-record-dialog .task-detail { overflow: visible; border-left: 0; }
 .task-record-dialog .compact-back { display: inline-flex; align-self: flex-start; margin-bottom: 16px; }
-.record-dialog-close { position: sticky; top: 0; z-index: 1; padding: 10px 18px; background: white; border-bottom: 1px solid var(--ws-line); }
+.record-dialog-close { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; min-height: 54px; padding: 10px 14px; background: white; border-bottom: 1px solid var(--ws-line); }
+.record-dialog-close .record-dialog-close-button { width: 34px; min-width: 34px; height: 34px; padding: 0; border-radius: 50%; color: var(--ws-muted); }
+.record-dialog-close .record-dialog-close-button:hover { color: var(--ws-navy); background: var(--ws-muted-surface); }
 .directory-record-dialog .employee-detail, .directory-record-dialog .position-catalog { border: 0; min-height: 0; overflow: visible; }
 .directory-record-dialog .position-list { max-height: 280px; overflow: auto; }
 .directory-record-dialog .directory-form-grid { grid-template-columns: minmax(0, 1fr); }
@@ -94,6 +96,10 @@
 .employees-view > .directory-feedback { flex: none; margin: 0 24px 16px; }
 .directory-loading { gap: 16px; }
 .account-section { scroll-margin-top: 104px; }
+.tasks-view.bp5-tasks .task-kanban { flex: 1; min-height: 0; grid-template-columns: repeat(5, minmax(220px, 1fr)); align-items: stretch; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; }
+.tasks-view.bp5-tasks .kanban-column { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; height: 100%; overflow: hidden; }
+.tasks-view.bp5-tasks .kanban-stack { min-height: 0; padding: 2px 3px 8px 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.tasks-view.bp5-tasks .kanban-stack:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; border-radius: 9px; }
 @media (max-width: 760px) {
   .record-table-frame { margin: 0 12px 12px; }
   .record-list-controls { padding: 4px 14px 14px; gap: 10px; }

@@ -47,6 +47,7 @@ function createWindow(): BrowserWindow {
     title: "Yuksalish Workspace",
     resizable: true,
     movable: true,
+    autoHideMenuBar: true,
     show: false,
     backgroundColor: "#f5f7fa",
     webPreferences: {
@@ -57,6 +58,11 @@ function createWindow(): BrowserWindow {
       webSecurity: true,
     },
   });
+
+  // The application has its own navigation. Removing the native Electron menu
+  // keeps a bare Alt press from changing the viewport and creating phantom
+  // scrollbars inside full-height dialogs on Windows.
+  window.removeMenu();
 
   window.once("ready-to-show", () => { if (saved.maximized) window.maximize(); window.show(); });
   const load = () => developmentUrl !== undefined ? window.loadURL(developmentUrl) : window.loadFile(rendererFile);
@@ -151,8 +157,19 @@ void app.whenReady().then(() => {
     notification.show();
     return true;
   });
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    const target = webContents?.getURL() || details.requestingUrl || requestingOrigin;
+    if (!isAllowedNavigation(target) || !details.isMainFrame) return false;
+    if (permission === "speaker-selection") return true;
+    return permission === "media" && details.mediaType === "audio";
+  });
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
+    const trustedMainFrame = isAllowedNavigation(webContents.getURL()) && details.isMainFrame;
+    const audioOnly = permission === "media"
+      && mediaTypes?.length === 1
+      && mediaTypes[0] === "audio";
+    callback(trustedMainFrame && (permission === "speaker-selection" || audioOnly));
   });
   createWindow();
   app.on("activate", () => {

@@ -21,6 +21,13 @@
 button, input, textarea, select { font-family: inherit; }
 button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
 ::selection { color: var(--ws-navy); background: #c7e9ee; }
+/* One compact scrollbar language for every deliberate overflow region. Browsers
+   only render these controls where overflow-* enables scrolling. */
+.app-provider * { scrollbar-width: thin; scrollbar-color: #9eb0bd transparent; }
+.app-provider *::-webkit-scrollbar { width: 6px; height: 6px; }
+.app-provider *::-webkit-scrollbar-track, .app-provider *::-webkit-scrollbar-corner { background: transparent; }
+.app-provider *::-webkit-scrollbar-thumb { border: 1px solid transparent; border-radius: 999px; background: #9eb0bd; background-clip: padding-box; }
+.app-provider *::-webkit-scrollbar-thumb:hover { background: #718999; background-clip: padding-box; }
 .app-provider :is(.fui-Button, .fui-Input, .fui-Textarea, .fui-Select) { border-radius: var(--ws-radius-control); }
 .app-provider .fui-Input, .app-provider .fui-Select { min-height: 36px; }
 .app-provider .fui-Button { font-weight: 600; }

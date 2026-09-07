@@ -1065,7 +1065,10 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
-    expect(screen.getByLabelText("Kanban задач")).toBeInTheDocument();
+    const board = screen.getByLabelText("Kanban задач");
+    expect(board).toBeInTheDocument();
+    expect(board.querySelectorAll(".kanban-column")).toHaveLength(5);
+    expect(screen.getByLabelText("Новые: задачи")).toHaveAttribute("tabindex", "0");
     expect(screen.getAllByText("Новые").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
 

@@ -322,10 +322,15 @@ export function TasksView(props: TasksViewProps) {
 
         {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
-            {kanbanStatuses.map((status) => <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
-              <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{visibleTasks.filter((task) => task.status === status).length}</Badge></header>
-              <div className="kanban-stack">{visibleTasks.filter((task) => task.status === status).map((task) => <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}</div>
-            </section>)}
+            {kanbanStatuses.map((status) => {
+              const columnTasks = visibleTasks.filter((task) => task.status === status);
+              return <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
+                <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
+                <div className="kanban-stack" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>
+                  {columnTasks.map((task) => <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}
+                </div>
+              </section>;
+            })}
           </div>
         )}
       </div>

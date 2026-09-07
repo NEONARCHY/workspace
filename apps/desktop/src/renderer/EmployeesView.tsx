@@ -338,7 +338,17 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
       ) : null}
       <Dialog open={panel !== null} onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setPanel(null); }}>
         <DialogSurface className="directory-record-dialog" aria-label={panel === "employee" ? "Карточка сотрудника" : "Справочник должностей"}>
-        <div className="record-dialog-close"><Button disabled={busy} appearance="subtle" onClick={() => setPanel(null)}>К списку сотрудников</Button></div>
+        <div className="record-dialog-close">
+          <Button
+            className="record-dialog-close-button"
+            disabled={busy}
+            appearance="subtle"
+            icon={<Dismiss20Regular />}
+            aria-label={panel === "employee" ? "Закрыть карточку сотрудника" : "Закрыть справочник должностей"}
+            title="Закрыть"
+            onClick={() => setPanel(null)}
+          />
+        </div>
         {feedback && <div className="directory-feedback" role="status">{feedback}</div>}
         {panel === "employee" ? <div className="employee-detail">
           {selectedEmployee ? (
