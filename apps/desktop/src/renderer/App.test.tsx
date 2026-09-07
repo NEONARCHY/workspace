@@ -1290,6 +1290,48 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
   });
 
+  it("undoes, redoes and cancels workflow edits from shortcuts and toolbar controls", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
+
+    const undoButton = screen.getByRole("button", { name: "Назад (Ctrl+Z)" });
+    const redoButton = screen.getByRole("button", { name: "Вперёд (Ctrl+Shift+Z)" });
+    const cancelButton = screen.getByRole("button", { name: "Отменить все изменения маршрута" });
+    expect(undoButton).toBeDisabled();
+    expect(redoButton).toBeDisabled();
+    expect(cancelButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Условие" }));
+    const nameInput = screen.getByLabelText("Название");
+    fireEvent.change(nameInput, { target: { value: "Порог суммы" } });
+    expect(nameInput).toHaveValue("Порог суммы");
+    expect(undoButton).toBeEnabled();
+    expect(cancelButton).toBeEnabled();
+
+    fireEvent.keyDown(nameInput, { key: "z", ctrlKey: true });
+    expect(nameInput).toHaveValue("Условие");
+    expect(redoButton).toBeEnabled();
+
+    fireEvent.keyDown(nameInput, { key: "z", ctrlKey: true, shiftKey: true });
+    expect(nameInput).toHaveValue("Порог суммы");
+
+    fireEvent.click(undoButton);
+    expect(nameInput).toHaveValue("Условие");
+    fireEvent.click(redoButton);
+    expect(nameInput).toHaveValue("Порог суммы");
+
+    fireEvent.click(cancelButton);
+    expect(screen.queryByDisplayValue("Порог суммы")).not.toBeInTheDocument();
+    expect(screen.getByText("Черновик сохранён")).toBeInTheDocument();
+    expect(undoButton).toBeDisabled();
+    expect(redoButton).toBeDisabled();
+    expect(cancelButton).toBeDisabled();
+  });
+
   it("disables payment creation for a position outside the workflow policy", async () => {
     mockServer({ restrictPaymentCreators: true });
     render(<App />);

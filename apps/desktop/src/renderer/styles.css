@@ -412,6 +412,8 @@ button { -webkit-tap-highlight-color: transparent; }
 
 .approvals-view { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; }
 .approvals-toolbar { position: relative; z-index: 3; min-height: 76px; }
+.workflow-history-actions { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--ws-line, #d8dee7); border-radius: 10px; background: var(--ws-muted-surface, #f2f5f7); }
+.workflow-history-actions .fui-Button { width: 32px; min-width: 32px; padding: 0; }
 .approvals-tabs { position: relative; z-index: 3; padding: 0 18px; border-bottom: 1px solid #d8dee7; background: #ffffff; }
 .approval-mode-switch { display: flex; gap: 4px; height: 100%; }
 .approval-mode-switch button { padding: 0 12px; border: 0; border-bottom: 2px solid transparent; color: #52677a; background: transparent; cursor: pointer; }

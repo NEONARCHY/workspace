@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
 
@@ -22,6 +22,8 @@ import {
 import {
   Add24Regular,
   ArrowDownload24Regular,
+  ArrowRedo24Regular,
+  ArrowUndo24Regular,
   BranchFork24Regular,
   CheckmarkCircle24Regular,
   CircleEdit24Regular,
@@ -41,7 +43,9 @@ import {
   useNodesState,
   type Connection,
   type Edge,
+  type EdgeChange,
   type Node,
+  type NodeChange,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -59,6 +63,14 @@ interface ApprovalEdgeData extends Record<string, unknown> {
   readonly sortOrder: number;
 }
 type ApprovalEdge = Edge<ApprovalEdgeData>;
+
+interface WorkflowSnapshot {
+  readonly nodes: readonly ApprovalNode[];
+  readonly edges: readonly ApprovalEdge[];
+  readonly selectedNodeId: string;
+}
+
+const workflowHistoryLimit = 100;
 
 interface ApprovalsViewProps {
   readonly focusRequestId?: string;
@@ -316,6 +328,52 @@ function flowEdges(workflow?: WorkflowDefinition): ApprovalEdge[] {
     data: { outcome: edge.outcome, condition: edge.condition, sortOrder: edge.sortOrder },
     markerEnd: { type: MarkerType.ArrowClosed },
   }));
+}
+
+function cloneWorkflowNodes(nodes: readonly ApprovalNode[]): ApprovalNode[] {
+  return nodes.map((node) => ({
+    ...node,
+    position: { ...node.position },
+    data: { ...node.data },
+  }));
+}
+
+function cloneWorkflowEdges(edges: readonly ApprovalEdge[]): ApprovalEdge[] {
+  return edges.map((edge) => ({
+    ...edge,
+    data: edge.data === undefined
+      ? undefined
+      : { ...edge.data, condition: { ...edge.data.condition } },
+  }));
+}
+
+function workflowSnapshot(
+  nodes: readonly ApprovalNode[],
+  edges: readonly ApprovalEdge[],
+  selectedNodeId: string,
+): WorkflowSnapshot {
+  return {
+    nodes: cloneWorkflowNodes(nodes),
+    edges: cloneWorkflowEdges(edges),
+    selectedNodeId,
+  };
+}
+
+function workflowSnapshotKey(snapshot: WorkflowSnapshot): string {
+  return JSON.stringify({
+    nodes: snapshot.nodes.map((node) => ({
+      id: node.id,
+      position: node.position,
+      data: node.data,
+    })),
+    edges: snapshot.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      label: typeof edge.label === "string" ? edge.label : null,
+      data: edge.data,
+    })),
+  });
 }
 
 function latestReturnComment(request: ApprovalRequestSummary): string | undefined {
@@ -711,6 +769,20 @@ export function ApprovalsView({
   const [selectedNodeId, setSelectedNodeId] = useState<string>("amount");
   const [saved, setSaved] = useState(true);
   const [saveError, setSaveError] = useState("");
+  const baselineSnapshotRef = useRef<WorkflowSnapshot>(
+    workflowSnapshot(nodes, edges, selectedNodeId),
+  );
+  const editorStateRef = useRef({ nodes, edges, selectedNodeId });
+  const undoStackRef = useRef<WorkflowSnapshot[]>([]);
+  const redoStackRef = useRef<WorkflowSnapshot[]>([]);
+  const dragStartSnapshotRef = useRef<WorkflowSnapshot | undefined>(undefined);
+  const [historyAvailability, setHistoryAvailability] = useState({
+    undo: false,
+    redo: false,
+  });
+  useEffect(() => {
+    editorStateRef.current = { nodes, edges, selectedNodeId };
+  }, [edges, nodes, selectedNodeId]);
   const [creatingRequest, setCreatingRequest] = useState(false);
   const [requestTitle, setRequestTitle] = useState("");
   const [requestAmount, setRequestAmount] = useState("");
@@ -803,8 +875,112 @@ export function ApprovalsView({
     [people],
   );
 
+  const captureWorkflowSnapshot = useCallback(() => {
+    const current = editorStateRef.current;
+    return workflowSnapshot(current.nodes, current.edges, current.selectedNodeId);
+  }, []);
+
+  const syncHistoryAvailability = useCallback(() => {
+    setHistoryAvailability({
+      undo: undoStackRef.current.length > 0,
+      redo: redoStackRef.current.length > 0,
+    });
+  }, []);
+
+  const clearWorkflowHistory = useCallback(() => {
+    undoStackRef.current = [];
+    redoStackRef.current = [];
+    syncHistoryAvailability();
+  }, [syncHistoryAvailability]);
+
+  const restoreWorkflowSnapshot = useCallback((snapshot: WorkflowSnapshot) => {
+    const restoredNodes = cloneWorkflowNodes(snapshot.nodes);
+    const restoredEdges = cloneWorkflowEdges(snapshot.edges);
+    const restoredSelection = restoredNodes.some((node) => node.id === snapshot.selectedNodeId)
+      ? snapshot.selectedNodeId
+      : restoredNodes[0]?.id ?? "";
+    editorStateRef.current = {
+      nodes: restoredNodes,
+      edges: restoredEdges,
+      selectedNodeId: restoredSelection,
+    };
+    setNodes(restoredNodes);
+    setEdges(restoredEdges);
+    setSelectedNodeId(restoredSelection);
+    setSaved(
+      workflowSnapshotKey(snapshot)
+        === workflowSnapshotKey(baselineSnapshotRef.current),
+    );
+    setSaveError("");
+  }, [setEdges, setNodes]);
+
+  const pushUndoSnapshot = useCallback((snapshot?: WorkflowSnapshot) => {
+    const entry = snapshot ?? captureWorkflowSnapshot();
+    const previous = undoStackRef.current.at(-1);
+    if (previous === undefined || workflowSnapshotKey(previous) !== workflowSnapshotKey(entry)) {
+      undoStackRef.current = [
+        ...undoStackRef.current.slice(-(workflowHistoryLimit - 1)),
+        entry,
+      ];
+    }
+    redoStackRef.current = [];
+    syncHistoryAvailability();
+  }, [captureWorkflowSnapshot, syncHistoryAvailability]);
+
+  const undoWorkflowChange = useCallback(() => {
+    const previous = undoStackRef.current.at(-1);
+    if (previous === undefined) return;
+    redoStackRef.current = [
+      captureWorkflowSnapshot(),
+      ...redoStackRef.current,
+    ].slice(0, workflowHistoryLimit);
+    undoStackRef.current = undoStackRef.current.slice(0, -1);
+    restoreWorkflowSnapshot(previous);
+    syncHistoryAvailability();
+  }, [captureWorkflowSnapshot, restoreWorkflowSnapshot, syncHistoryAvailability]);
+
+  const redoWorkflowChange = useCallback(() => {
+    const [next, ...remaining] = redoStackRef.current;
+    if (next === undefined) return;
+    undoStackRef.current = [
+      ...undoStackRef.current.slice(-(workflowHistoryLimit - 1)),
+      captureWorkflowSnapshot(),
+    ];
+    redoStackRef.current = remaining;
+    restoreWorkflowSnapshot(next);
+    syncHistoryAvailability();
+  }, [captureWorkflowSnapshot, restoreWorkflowSnapshot, syncHistoryAvailability]);
+
+  const cancelWorkflowChanges = useCallback(() => {
+    restoreWorkflowSnapshot(baselineSnapshotRef.current);
+    clearWorkflowHistory();
+    setSaved(true);
+  }, [clearWorkflowHistory, restoreWorkflowSnapshot]);
+
+  const handleNodesChange = useCallback((changes: NodeChange<ApprovalNode>[]) => {
+    const mutatesWorkflow = changes.some((change) =>
+      change.type === "add"
+      || change.type === "remove"
+      || change.type === "replace",
+    );
+    if (mutatesWorkflow) {
+      pushUndoSnapshot();
+      setSaved(false);
+    }
+    onNodesChange(changes);
+  }, [onNodesChange, pushUndoSnapshot]);
+
+  const handleEdgesChange = useCallback((changes: EdgeChange<ApprovalEdge>[]) => {
+    if (changes.some((change) => change.type === "add" || change.type === "remove" || change.type === "replace")) {
+      pushUndoSnapshot();
+      setSaved(false);
+    }
+    onEdgesChange(changes);
+  }, [onEdgesChange, pushUndoSnapshot]);
+
   const connect = useCallback(
     (connection: Connection) => {
+      pushUndoSnapshot();
       const source = nodes.find((node) => node.id === connection.source);
       setEdges((current) =>
         addEdge(
@@ -824,10 +1000,11 @@ export function ApprovalsView({
       );
       setSaved(false);
     },
-    [nodes, setEdges],
+    [nodes, pushUndoSnapshot, setEdges],
   );
 
   const updateSelected = (data: Partial<ApprovalNodeData>) => {
+    pushUndoSnapshot();
     setNodes((current) =>
       current.map((node) =>
         node.id === selectedNodeId
@@ -839,6 +1016,7 @@ export function ApprovalsView({
   };
 
   const addNode = (kind: ApprovalNodeKind) => {
+    pushUndoSnapshot();
     const id = `${kind}-${nodes.length + 1}`;
     const data: ApprovalNodeData = {
       label: kindLabels[kind],
@@ -860,6 +1038,7 @@ export function ApprovalsView({
 
   const removeSelected = () => {
     if (selectedNode === undefined || selectedNode.data.kind === "start") return;
+    pushUndoSnapshot();
     setNodes((current) => current.filter((node) => node.id !== selectedNode.id));
     setEdges((current) =>
       current.filter(
@@ -871,7 +1050,10 @@ export function ApprovalsView({
   };
 
   const save = async () => {
+    const snapshotToSave = captureWorkflowSnapshot();
     if (workflow === undefined) {
+      baselineSnapshotRef.current = snapshotToSave;
+      clearWorkflowHistory();
       setSaved(true);
       return;
     }
@@ -898,7 +1080,11 @@ export function ApprovalsView({
     };
     try {
       await onSaveWorkflow(definition);
-      setSaved(true);
+      baselineSnapshotRef.current = snapshotToSave;
+      setSaved(
+        workflowSnapshotKey(captureWorkflowSnapshot())
+          === workflowSnapshotKey(snapshotToSave),
+      );
       setSaveError("");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Не удалось сохранить маршрут");
@@ -1036,12 +1222,43 @@ export function ApprovalsView({
     if (workflow === undefined || !saved) return;
     const nextDraft = await onPublishWorkflow(workflow);
     if (nextDraft !== undefined) {
-      setNodes(flowNodes(nextDraft));
-      setEdges(flowEdges(nextDraft));
+      const publishedNodes = flowNodes(nextDraft);
+      const publishedEdges = flowEdges(nextDraft);
+      const publishedSnapshot = workflowSnapshot(
+        publishedNodes,
+        publishedEdges,
+        publishedNodes.some((node) => node.id === selectedNodeId)
+          ? selectedNodeId
+          : publishedNodes[0]?.id ?? "",
+      );
+      baselineSnapshotRef.current = publishedSnapshot;
+      setNodes(publishedNodes);
+      setEdges(publishedEdges);
+      setSelectedNodeId(publishedSnapshot.selectedNodeId);
+      clearWorkflowHistory();
       setSaved(true);
       setSaveError("");
     }
   };
+
+  useEffect(() => {
+    if (mode !== "designer" || !canManage) return undefined;
+    const handleHistoryShortcut = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented
+        || event.isComposing
+        || !event.ctrlKey
+        || event.altKey
+        || event.metaKey
+        || event.key.toLocaleLowerCase("ru-RU") !== "z"
+      ) return;
+      event.preventDefault();
+      if (event.shiftKey) redoWorkflowChange();
+      else undoWorkflowChange();
+    };
+    window.addEventListener("keydown", handleHistoryShortcut, true);
+    return () => window.removeEventListener("keydown", handleHistoryShortcut, true);
+  }, [canManage, mode, redoWorkflowChange, undoWorkflowChange]);
 
   return (
     <section className="workspace-view approvals-view" aria-label="Согласования">
@@ -1072,6 +1289,34 @@ export function ApprovalsView({
               <Badge appearance="tint" color={saveError ? "danger" : saved ? "success" : "warning"}>
                 {saveError || (saved ? "Черновик сохранён" : "Есть изменения")}
               </Badge>
+              <div className="workflow-history-actions" role="group" aria-label="История изменений маршрута">
+                <Tooltip content="Назад · Ctrl+Z" relationship="label">
+                  <Button
+                    appearance="subtle"
+                    icon={<ArrowUndo24Regular />}
+                    aria-label="Назад (Ctrl+Z)"
+                    disabled={!canManage || !historyAvailability.undo}
+                    onClick={undoWorkflowChange}
+                  />
+                </Tooltip>
+                <Tooltip content="Вперёд · Ctrl+Shift+Z" relationship="label">
+                  <Button
+                    appearance="subtle"
+                    icon={<ArrowRedo24Regular />}
+                    aria-label="Вперёд (Ctrl+Shift+Z)"
+                    disabled={!canManage || !historyAvailability.redo}
+                    onClick={redoWorkflowChange}
+                  />
+                </Tooltip>
+              </div>
+              <Button
+                appearance="subtle"
+                aria-label="Отменить все изменения маршрута"
+                disabled={!canManage || saved}
+                onClick={cancelWorkflowChanges}
+              >
+                Отменить
+              </Button>
               <Button
                 appearance="primary"
                 icon={<Save24Regular />}
@@ -1586,9 +1831,27 @@ export function ApprovalsView({
             <ReactFlow
               nodes={nodes}
               edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onNodeDragStop={() => setSaved(false)}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onNodeDragStart={() => {
+                dragStartSnapshotRef.current = captureWorkflowSnapshot();
+              }}
+              onNodeDragStop={(_event, node) => {
+                const beforeDrag = dragStartSnapshotRef.current;
+                dragStartSnapshotRef.current = undefined;
+                const previousNode = beforeDrag?.nodes.find((candidate) => candidate.id === node.id);
+                if (
+                  beforeDrag !== undefined
+                  && previousNode !== undefined
+                  && (
+                    previousNode.position.x !== node.position.x
+                    || previousNode.position.y !== node.position.y
+                  )
+                ) {
+                  pushUndoSnapshot(beforeDrag);
+                  setSaved(false);
+                }
+              }}
               onConnect={connect}
               onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
               fitView
