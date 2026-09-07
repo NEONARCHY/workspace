@@ -24,6 +24,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .app-provider :is(.fui-Button, .fui-Input, .fui-Textarea, .fui-Select) { border-radius: var(--ws-radius-control); }
 .app-provider .fui-Input, .app-provider .fui-Select { min-height: 36px; }
 .app-provider .fui-Button { font-weight: 600; }
+.app-provider .fui-Badge { font-size: 11px; }
 .app-provider .fui-Button:not(.message-actions .fui-Button):not(.chat-more) { min-height: 34px; }
 .app-provider .fui-DialogSurface { border-color: var(--ws-line); border-radius: 20px; box-shadow: 0 20px 64px rgb(41 58 85 / 22%); }
 .app-provider .fui-DialogTitle { color: var(--ws-navy); font-size: 22px; font-weight: 700; }

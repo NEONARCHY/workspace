@@ -37,19 +37,28 @@ const { _electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
   try {
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1440, 960));
     report.graphics = await app.evaluate(async ({ app }) => {
-      await app.getGPUInfo("basic");
-      return { version: app.getVersion(), hardwareAccelerationEnabled: app.isHardwareAccelerationEnabled(), features: app.getGPUFeatureStatus() };
+      let features;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        await app.getGPUInfo("basic");
+        features = app.getGPUFeatureStatus();
+        if (features.gpu_compositing !== "disabled_software") break;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return { version: app.getVersion(), hardwareAccelerationEnabled: app.isHardwareAccelerationEnabled(), features };
     });
     await page.locator(".auth-card").waitFor();
     report.fonts = await page.evaluate(async () => {
       await Promise.all([400, 500, 600, 700].map(weight => document.fonts.load(`${weight} 16px Gilroy`)));
+      const bodyStyle = getComputedStyle(document.body);
       return { faces: [...document.fonts].map(f => ({ family: f.family, weight: f.weight, status: f.status })),
         preloads: [...document.querySelectorAll('link[rel="preload"][as="font"]')].map(link => link.getAttribute("href")),
-        synthesis: getComputedStyle(document.body).fontSynthesis };
+        synthesis: bodyStyle.fontSynthesis, kerning: bodyStyle.fontKerning, textRendering: bodyStyle.textRendering };
     });
     assert.equal(report.fonts.preloads.length, 4);
     assert(report.fonts.faces.every(f => f.status === "loaded" && ["400", "500", "600", "700"].includes(f.weight)));
     assert.equal(report.fonts.synthesis, "none");
+    assert.equal(report.fonts.kerning, "normal");
+    assert.equal(report.fonts.textRendering, "optimizelegibility");
     await page.getByRole("textbox", { name: /Логин/ }).fill(process.env.QA_LOGIN || "malika");
     await page.getByLabel(/Пароль/).fill(process.env.QA_PASSWORD);
     await page.getByRole("button", { name: "Войти", exact: true }).click();
@@ -74,13 +83,19 @@ const { _electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
       window.motionQA.observer.observe({ type: "longtask", buffered: false });
     });
     report.sections = [];
-    for (const name of ["Задачи", "Заявки на оплату", "Список проектов", "Согласование поездок", "Календарь", "Сотрудники", "Мессенджер"]) {
+    for (const name of ["CRM", "Задачи", "Заявки на оплату", "Список проектов", "Согласование поездок", "Календарь", "Сотрудники", "Мессенджер"]) {
       await page.locator(`.rail-action[aria-label="${name}"]`).click();
-      const animation = await page.locator(".app-content > .workspace-view").evaluate(node => ({
-        name: getComputedStyle(node).animationName, duration: getComputedStyle(node).animationDuration,
-        transform: getComputedStyle(node).transform,
-      }));
+      const animation = await page.locator(".app-content > .workspace-view").evaluate(node => {
+        const offenders = [...node.querySelectorAll("*")].filter(element =>
+          [...element.childNodes].some(child => child.nodeType === Node.TEXT_NODE && child.textContent.trim()) &&
+          element.getClientRects().length > 0 && getComputedStyle(element).visibility !== "hidden"
+        ).map(element => ({ tag: element.tagName, className: element.className, text: element.textContent.trim().slice(0, 40), size: parseFloat(getComputedStyle(element).fontSize) }))
+          .filter(item => item.size < 11);
+        const style = getComputedStyle(node);
+        return { name: style.animationName, duration: style.animationDuration, transform: style.transform, typographyOffenders: offenders };
+      });
       assert.equal(animation.name, "ws-view-enter"); assert.equal(animation.transform, "none");
+      assert.deepEqual(animation.typographyOffenders, [], `${name}: visible text must be at least 11px`);
       await settle(); report.sections.push({ section: name, ...animation });
     }
     // Trigger all dialogs via their normal UI; native motion must not enlarge text.
@@ -133,7 +148,7 @@ const { _electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     });
     assert.deepEqual(errors, []);
     assert.equal(report.timing.remainingAnimations, 0);
-    report.checks = "7 section entrances, Fluent no-scale motion, creation form, input, Escape, reduced motion, forced colours, font preloads, no idle animations, no page errors";
+    report.checks = "8 section entrances, 11px typography floor, kerning, Fluent no-scale motion, creation form, input, Escape, reduced motion, forced colours, font preloads, no idle animations, no page errors";
     await fs.writeFile(path.join(output, "report.json"), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
   } finally {
