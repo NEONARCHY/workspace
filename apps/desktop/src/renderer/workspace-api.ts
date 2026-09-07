@@ -14,6 +14,7 @@ import type {
   MessageOptions,
   DirectoryBootstrap,
   DirectoryEmployee,
+  EfficiencyOverview,
   FeedPost,
   DevelopmentSession,
   InvitationResult,
@@ -24,6 +25,8 @@ import type {
   ProjectStage,
   SessionSummary,
   TaskParticipantRole,
+  TaskEfficiencyExclusionReason,
+  TaskReturnReason,
   TaskStatus,
   TripAction,
   TripRequest,
@@ -473,6 +476,41 @@ export function changeWorkspaceTaskStatus(
   return apiRequest<WorkspaceTask>(
     `/tasks/${taskId}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
+    token,
+  );
+}
+
+export function loadWorkspaceEfficiency(
+  token: string,
+  period?: string,
+): Promise<EfficiencyOverview> {
+  const suffix = period ? `?period=${encodeURIComponent(period)}` : "";
+  return apiRequest<EfficiencyOverview>(`/efficiency${suffix}`, {}, token);
+}
+
+export function returnWorkspaceTaskForRevision(
+  token: string,
+  taskId: string,
+  reasonCode: TaskReturnReason,
+  reasonText: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/return-for-revision`,
+    { method: "POST", body: JSON.stringify({ reasonCode, reasonText }) },
+    token,
+  );
+}
+
+export function setWorkspaceTaskEfficiencyExclusion(
+  token: string,
+  taskId: string,
+  excluded: boolean,
+  reasonCode?: TaskEfficiencyExclusionReason,
+  reasonText = "",
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/efficiency-exclusion`,
+    { method: "PUT", body: JSON.stringify({ excluded, reasonCode, reasonText }) },
     token,
   );
 }

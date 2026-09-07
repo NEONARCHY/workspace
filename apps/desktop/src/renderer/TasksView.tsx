@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 
 import type {
   ApprovalRequestSummary,
+  EfficiencyOverview,
   TaskParticipantRole,
+  TaskEfficiencyExclusionReason,
+  TaskReturnReason,
   TaskStatus,
   WorkspaceAttachment,
   WorkspacePerson,
@@ -29,6 +32,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { AttachmentPanel } from "./AttachmentPanel";
+import { EfficiencyView } from "./EfficiencyView";
 import { TaskRecords } from "./TaskRecords";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
@@ -43,7 +47,7 @@ const statusLabels: Readonly<Record<TaskStatus, string>> = {
 
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "overdue" | "completed";
-type TaskMode = "list" | "kanban";
+type TaskMode = "list" | "kanban" | "efficiency";
 
 interface TaskEditPayload {
   readonly title: string;
@@ -68,6 +72,10 @@ interface TasksViewProps {
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
+  readonly efficiency?: EfficiencyOverview;
+  readonly efficiencyLoading: boolean;
+  readonly efficiencyError?: string;
+  readonly onLoadEfficiency: (period?: string) => void | Promise<void>;
   readonly onCreateTask: (title: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readonly onUpdateTask: (task: WorkspaceTask, payload: TaskEditPayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -80,6 +88,8 @@ interface TasksViewProps {
   readonly onSetDependency: (task: WorkspaceTask, dependsOnTaskId: string, dependencyKind: "blocks" | "relates") => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveDependency: (task: WorkspaceTask, dependsOnTaskId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onReturnForRevision: (task: WorkspaceTask, reasonCode: TaskReturnReason, reasonText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onCreateApprovalFromTask: (task: WorkspaceTask, title: string, amount: number) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
@@ -98,7 +108,9 @@ export function TasksView(props: TasksViewProps) {
     tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onChangeStatus, onUpdateTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle,
-    onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment,
+    onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
+    efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
+    onSetEfficiencyExclusion,
   } = props;
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
@@ -110,6 +122,7 @@ export function TasksView(props: TasksViewProps) {
     if (id !== selectedId) {
       setEditing(false); setCreatingApproval(false); setCycleEditing(false); setDateError("");
       setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
+      setEfficiencyAction(""); setEfficiencyReasonText("");
     }
     updateSelectedId(id); setDetailOpen(true);
   };
@@ -134,6 +147,9 @@ export function TasksView(props: TasksViewProps) {
   const [cycleInterval, setCycleInterval] = useState("1");
   const [cycleNextRun, setCycleNextRun] = useState("");
   const [creatingApproval, setCreatingApproval] = useState(false);
+  const [efficiencyAction, setEfficiencyAction] = useState<"return" | "exclude" | "include" | "">("");
+  const [efficiencyReason, setEfficiencyReason] = useState<TaskReturnReason | TaskEfficiencyExclusionReason>("corrections_required");
+  const [efficiencyReasonText, setEfficiencyReasonText] = useState("");
   const [approvalTitle, setApprovalTitle] = useState("");
   const [approvalAmount, setApprovalAmount] = useState("");
   const newTaskFocusTarget = useRestoreFocusTarget();
@@ -264,8 +280,19 @@ export function TasksView(props: TasksViewProps) {
     if (await onCreateApprovalFromTask(selectedTask, approvalTitle.trim(), amount)) setCreatingApproval(false);
   };
 
+  const submitEfficiencyAction = async () => {
+    if (selectedTask === undefined || !efficiencyAction) return;
+    const needsText = efficiencyReason === "other";
+    if (needsText && !efficiencyReasonText.trim()) { setDateError("Для другой причины добавьте пояснение."); return; }
+    setDateError("");
+    const result = efficiencyAction === "return"
+      ? await onReturnForRevision(selectedTask, efficiencyReason as TaskReturnReason, efficiencyReasonText.trim())
+      : await onSetEfficiencyExclusion(selectedTask, efficiencyAction === "exclude", efficiencyAction === "exclude" ? efficiencyReason as TaskEfficiencyExclusionReason : undefined, efficiencyReasonText.trim());
+    if (result) { setEfficiencyAction(""); setEfficiencyReasonText(""); }
+  };
+
   return (
-    <section className={`workspace-view tasks-view bp5-tasks ${detailOpen && selectedTask ? "detail-open" : ""}`} aria-label="Задачи">
+    <section className={`workspace-view tasks-view bp5-tasks ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
         <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
@@ -273,18 +300,19 @@ export function TasksView(props: TasksViewProps) {
             <div className="view-switch" aria-label="Представление задач">
               <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
               <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
+              <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
             </div>
-            <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button>
+            {mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
           </div>
         </header>
 
-        <div className="task-filters" aria-label="Фильтры задач">
+        {mode !== "efficiency" ? <div className="task-filters" aria-label="Фильтры задач">
           {([ ["active", "Активные"], ["mine", "Мои"], ["overdue", "Просроченные"], ["completed", "Завершённые"] ] as const).map(([key, label]) => (
             <button className={filter === key ? "active" : ""} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button">{label}</button>
           ))}
           <select className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></select>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
-        </div>
+        </div> : null}
 
         {creating ? <div className="quick-create" role="region" aria-label="Создание задачи">
           <Input autoFocus aria-label="Название задачи" placeholder="Что нужно сделать?" value={newTitle} onChange={(_event, data) => setNewTitle(data.value)} onKeyDown={(event) => { if (event.key === "Enter") void createTask(); if (event.key === "Escape") setCreating(false); }} />
@@ -292,7 +320,7 @@ export function TasksView(props: TasksViewProps) {
           <Button appearance="subtle" onClick={() => setCreating(false)}>Отмена</Button>
         </div> : null}
 
-        {mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : (
+        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
               <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{visibleTasks.filter((task) => task.status === status).length}</Badge></header>
@@ -302,7 +330,7 @@ export function TasksView(props: TasksViewProps) {
         )}
       </div>
 
-      {selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
+      {mode !== "efficiency" && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
@@ -336,6 +364,8 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-section task-comments-section"><div className="detail-section-line"><h3>Комментарии</h3><span>{selectedTask.comments.length}</span></div><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /><span><strong>{personById(comment.authorUserId)?.name}</strong><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p></span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
 
+        <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Обычный комментарий или смена статуса не считается мотивированным возвратом и не исключает задачу из расчёта.</p>{canManageParticipants ? <div className="task-editor-actions">{["awaiting_review", "completed"].includes(selectedTask.status) ? <Button appearance="secondary" onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button> : null}<Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
+        {efficiencyAction ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "return" ? "Мотивированный возврат" : efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><select aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}>{efficiencyAction === "return" ? <><option value="corrections_required">Нужны исправления</option><option value="incomplete_result">Результат неполный</option><option value="requirements_not_met">Требования не выполнены</option><option value="other">Другая причина</option></> : <><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></>}</select></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
         <div className="detail-footer"><Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button></div>
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
       </aside></DialogSurface>

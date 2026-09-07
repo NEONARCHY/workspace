@@ -26,7 +26,7 @@ export interface DesktopBridge {
 
 const bridge: DesktopBridge = Object.freeze({
   platform: process.platform,
-  version: process.env.npm_package_version ?? "0.17.3",
+  version: process.env.npm_package_version ?? "0.18.0",
   reportDiagnostic: (payload: { category: string; name: string; frames: string }) => ipcRenderer.invoke("diagnostics:record", payload) as Promise<void>,
   showNotification: (payload: DesktopNotificationPayload) =>
     ipcRenderer.invoke("notifications:show", payload) as Promise<boolean>,

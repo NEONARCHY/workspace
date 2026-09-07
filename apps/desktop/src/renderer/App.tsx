@@ -6,6 +6,7 @@ import type {
   CalendarEvent,
   CalendarEventInput,
   ChatMessage,
+  EfficiencyOverview,
   MessageOptions,
   FeedPost,
   NotificationPreferences,
@@ -14,6 +15,8 @@ import type {
   ProjectInput,
   ProjectStage,
   TaskStatus,
+  TaskEfficiencyExclusionReason,
+  TaskReturnReason,
   TripAction,
   TripRequest,
   TripRequestInput,
@@ -92,6 +95,7 @@ import {
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
+  loadWorkspaceEfficiency,
   login,
   logout,
   markAllWorkspaceNotificationsRead,
@@ -102,6 +106,7 @@ import {
   refreshAuthentication,
   removeWorkspaceTaskDependency,
   removeWorkspaceTaskParticipant,
+  returnWorkspaceTaskForRevision,
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
@@ -117,6 +122,7 @@ import {
   setWorkspaceTaskCycle,
   setWorkspaceTaskDependency,
   setWorkspaceTaskParticipant,
+  setWorkspaceTaskEfficiencyExclusion,
   subscribeToWorkspaceEvents,
   updateWorkspaceApproval,
   updateWorkspaceCalendarEvent,
@@ -258,6 +264,9 @@ export function App() {
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
+  const [efficiencyLoading, setEfficiencyLoading] = useState(false);
+  const [efficiencyError, setEfficiencyError] = useState<string>();
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -290,6 +299,8 @@ export function App() {
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
     setWorkspace({ ...loaded, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setEfficiency(undefined);
+    setEfficiencyError(undefined);
     setNavigationEditing(false);
     setSession(authenticated);
     setConnectionDetail("Сервер подключён");
@@ -581,6 +592,7 @@ export function App() {
         ...current,
         tasks: current.tasks.map((item) => (item.id === task.id ? task : item)),
       }));
+      if (efficiency !== undefined) void loadWorkspaceEfficiency(session.accessToken, efficiency.period).then(setEfficiency).catch(() => undefined);
     } catch (error) {
       reportError(error);
     }
@@ -599,12 +611,27 @@ export function App() {
   ): Promise<WorkspaceTask | undefined> => {
     if (session === undefined) return undefined;
     try {
-      return mergeTask(await mutation(session.accessToken));
+      const task = mergeTask(await mutation(session.accessToken));
+      if (efficiency !== undefined) void loadWorkspaceEfficiency(session.accessToken, efficiency.period).then(setEfficiency).catch(() => undefined);
+      return task;
     } catch (error) {
       reportError(error);
       return undefined;
     }
   };
+
+  const handleLoadEfficiency = useCallback(async (period?: string) => {
+    if (session === undefined) return;
+    setEfficiencyLoading(true);
+    setEfficiencyError(undefined);
+    try {
+      setEfficiency(await loadWorkspaceEfficiency(session.accessToken, period));
+    } catch (error) {
+      setEfficiencyError(error instanceof Error ? error.message : "Не удалось загрузить данные");
+    } finally {
+      setEfficiencyLoading(false);
+    }
+  }, [session]);
 
   const handleUpdateTask = (
     task: WorkspaceTask,
@@ -664,6 +691,23 @@ export function App() {
       readonly isEnabled: boolean;
     },
   ) => runTaskMutation((token) => setWorkspaceTaskCycle(token, task.id, payload));
+
+  const handleReturnTaskForRevision = (
+    task: WorkspaceTask,
+    reasonCode: TaskReturnReason,
+    reasonText: string,
+  ) => runTaskMutation((token) => returnWorkspaceTaskForRevision(
+    token, task.id, reasonCode, reasonText,
+  ));
+
+  const handleTaskEfficiencyExclusion = (
+    task: WorkspaceTask,
+    excluded: boolean,
+    reasonCode?: TaskEfficiencyExclusionReason,
+    reasonText = "",
+  ) => runTaskMutation((token) => setWorkspaceTaskEfficiencyExclusion(
+    token, task.id, excluded, reasonCode, reasonText,
+  ));
 
   const handleSaveWorkflow = async (workflow: WorkflowDefinition) => {
     if (session === undefined) return;
@@ -1172,6 +1216,10 @@ export function App() {
                 attachments={workspace.attachments}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
+                efficiency={efficiency}
+                efficiencyLoading={efficiencyLoading}
+                efficiencyError={efficiencyError}
+                onLoadEfficiency={handleLoadEfficiency}
                 onCreateTask={handleCreateTask}
                 onChangeStatus={handleTaskStatus}
                 onUpdateTask={handleUpdateTask}
@@ -1184,6 +1232,8 @@ export function App() {
                 onSetDependency={handleSetTaskDependency}
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
+                onReturnForRevision={handleReturnTaskForRevision}
+                onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onCreateApprovalFromTask={handleCreateApprovalFromTask}
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDownloadAttachment={handleDownloadAttachment}

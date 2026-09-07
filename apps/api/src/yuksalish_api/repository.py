@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
 from .auth import AuthenticatedUser
+from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
 from .tables import (
@@ -37,6 +38,7 @@ from .tables import (
     task_comments,
     task_cycles,
     task_dependencies,
+    task_efficiency_events,
     task_participants,
     tasks,
     trip_request_actions,
@@ -78,6 +80,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskChecklistItemResponse,
@@ -86,6 +89,7 @@ from .workspace_schemas import (
     TaskCycleResponse,
     TaskDependencyRequest,
     TaskDependencyResponse,
+    TaskEfficiencyExclusionRequest,
     TaskParticipantRequest,
     TaskParticipantResponse,
     TaskResponse,
@@ -1247,11 +1251,13 @@ async def _sync_notifications_for_user(
             "cancelled",
         }:
             continue
+        overdue = task_row["due_at"] is not None and task_row["due_at"] <= now
         event_key = (
-            f"task:{task_row['id']}:{task_row['status']}:{task_row['updated_at'].isoformat()}"
+            f"task:{task_row['id']}:overdue:{task_row['due_at'].isoformat()}"
+            if overdue
+            else f"task:{task_row['id']}:{task_row['status']}:{task_row['updated_at'].isoformat()}"
         )
         active_attention_keys.add(event_key)
-        overdue = task_row["due_at"] is not None and task_row["due_at"] <= now
         await _upsert_notification(
             connection,
             user_id=current_user.id,
@@ -1350,8 +1356,16 @@ async def _sync_notifications_for_user(
                         ),
                         and_(
                             workspace_notifications.c.section == "tasks",
-                            workspace_notifications.c.entity_id.in_(
-                                [row["id"] for row in task_rows]
+                            or_(
+                                workspace_notifications.c.entity_id.in_(
+                                    [row["id"] for row in task_rows]
+                                ),
+                                and_(
+                                    workspace_notifications.c.entity_id.is_(None),
+                                    workspace_notifications.c.event_key.like(
+                                        "efficiency:daily:%"
+                                    ),
+                                ),
                             ),
                         ),
                         and_(
@@ -2274,6 +2288,20 @@ async def create_task(
         "updated_at": now,
     }
     await connection.execute(insert(tasks).values(**values))
+    await record_task_event(
+        connection,
+        task_id=task_id,
+        event_type="task_created",
+        occurred_at=now,
+        actor_user_id=current_user.id,
+        assignee_user_id=assignee_id,
+        due_at=payload.due_at,
+        new_value={
+            "status": "new",
+            "assigneeId": str(assignee_id),
+            "dueAt": payload.due_at.isoformat() if payload.due_at else None,
+        },
+    )
     return _task(values)
 
 
@@ -2283,7 +2311,7 @@ async def update_task(
     task_id: UUID,
     payload: UpdateTaskRequest,
 ) -> TaskResponse:
-    await _task_access_row(connection, current_user, task_id, edit=True)
+    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
     assignee_id = await _active_user_id(connection, payload.assignee_id)
     now = datetime.now(UTC)
     await connection.execute(
@@ -2299,6 +2327,32 @@ async def update_task(
             updated_at=now,
         )
     )
+    if task_row["primary_assignee_user_id"] != assignee_id:
+        await record_task_event(
+            connection,
+            task_id=task_id,
+            event_type="assignee_changed",
+            occurred_at=now,
+            actor_user_id=current_user.id,
+            assignee_user_id=assignee_id,
+            due_at=payload.due_at,
+            old_value={"assigneeId": str(task_row["primary_assignee_user_id"])},
+            new_value={"assigneeId": str(assignee_id)},
+        )
+    if task_row["due_at"] != payload.due_at:
+        await record_task_event(
+            connection,
+            task_id=task_id,
+            event_type="deadline_changed",
+            occurred_at=now,
+            actor_user_id=current_user.id,
+            assignee_user_id=assignee_id,
+            due_at=payload.due_at,
+            old_value={
+                "dueAt": task_row["due_at"].isoformat() if task_row["due_at"] else None
+            },
+            new_value={"dueAt": payload.due_at.isoformat() if payload.due_at else None},
+        )
     await connection.execute(
         delete(task_participants).where(
             task_participants.c.task_id == task_id,
@@ -2314,7 +2368,7 @@ async def change_task_status(
     task_id: UUID,
     payload: ChangeTaskStatusRequest,
 ) -> TaskResponse:
-    await _task_access_row(connection, current_user, task_id, edit=True)
+    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
     if payload.status == "completed":
         incomplete_blockers = await connection.scalar(
             select(func.count())
@@ -2340,6 +2394,128 @@ async def change_task_status(
         update(tasks)
         .where(tasks.c.id == task_id)
         .values(status=payload.status, updated_at=updated_at)
+    )
+    if payload.status != task_row["status"]:
+        base_event = {
+            "connection": connection,
+            "task_id": task_id,
+            "occurred_at": updated_at,
+            "actor_user_id": current_user.id,
+            "assignee_user_id": task_row["primary_assignee_user_id"],
+            "due_at": task_row["due_at"],
+            "old_value": {"status": task_row["status"]},
+            "new_value": {"status": payload.status},
+        }
+        if payload.status == "awaiting_review":
+            await record_task_event(event_type="result_submitted_for_review", **base_event)
+        elif payload.status == "completed":
+            if task_row["status"] == "awaiting_review":
+                await record_task_event(event_type="result_accepted", **base_event)
+            await record_task_event(event_type="task_completed", **base_event)
+        elif payload.status == "cancelled":
+            await record_task_event(
+                event_type="task_cancelled", reason_code="cancelled", **base_event
+            )
+        else:
+            await record_task_event(event_type="task_status_changed", **base_event)
+    return await _task_response(connection, task_id)
+
+
+async def return_task_for_revision(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: ReturnTaskForRevisionRequest,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    if task_row["status"] not in {"awaiting_review", "completed"}:
+        raise WorkspaceRepositoryError(409, "Only a submitted result can be returned for revision")
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(tasks).where(tasks.c.id == task_id).values(status="in_progress", updated_at=now)
+    )
+    event_id = await record_task_event(
+        connection,
+        task_id=task_id,
+        event_type="result_returned_for_revision",
+        occurred_at=now,
+        actor_user_id=current_user.id,
+        assignee_user_id=task_row["primary_assignee_user_id"],
+        due_at=task_row["due_at"],
+        old_value={"status": task_row["status"]},
+        new_value={"status": "in_progress"},
+        reason_code=payload.reason_code,
+        reason_text=payload.reason_text.strip() or None,
+    )
+    reason_labels = {
+        "incomplete_result": "результат неполный",
+        "requirements_not_met": "требования не выполнены",
+        "corrections_required": "нужны исправления",
+        "other": "указана другая причина",
+    }
+    await _upsert_notification(
+        connection,
+        user_id=task_row["primary_assignee_user_id"],
+        event_key=f"efficiency:return:{event_id}:{METHODOLOGY_VERSION}",
+        kind="task",
+        priority="attention",
+        title="Задача возвращена на доработку",
+        body=f"{task_row['title']} · {reason_labels[payload.reason_code]}",
+        section="tasks",
+        entity_id=task_id,
+        requires_action=True,
+        occurred_at=now,
+    )
+    return await _task_response(connection, task_id)
+
+
+async def set_task_efficiency_exclusion(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: TaskEfficiencyExclusionRequest,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    latest = (
+        (
+            await connection.execute(
+                select(task_efficiency_events)
+                .where(
+                    task_efficiency_events.c.task_id == task_id,
+                    task_efficiency_events.c.event_type.in_(
+                        {"efficiency_excluded", "efficiency_exclusion_changed"}
+                    ),
+                )
+                .order_by(task_efficiency_events.c.occurred_at.desc())
+                .limit(1)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    previously_excluded = bool((latest["new_value"] or {}).get("excluded")) if latest else False
+    if previously_excluded == payload.excluded and (
+        not payload.excluded
+        or (
+            latest
+            and latest["reason_code"] == payload.reason_code
+            and (latest["reason_text"] or "") == payload.reason_text.strip()
+        )
+    ):
+        return await _task_response(connection, task_id)
+    now = datetime.now(UTC)
+    await record_task_event(
+        connection,
+        task_id=task_id,
+        event_type="efficiency_exclusion_changed" if latest else "efficiency_excluded",
+        occurred_at=now,
+        actor_user_id=current_user.id,
+        assignee_user_id=task_row["primary_assignee_user_id"],
+        due_at=task_row["due_at"],
+        old_value={"excluded": previously_excluded},
+        new_value={"excluded": payload.excluded},
+        reason_code=payload.reason_code if payload.excluded else None,
+        reason_text=payload.reason_text.strip() or None,
     )
     return await _task_response(connection, task_id)
 
@@ -2693,6 +2869,22 @@ async def materialize_due_task_cycles(
                     created_at=current_time,
                     updated_at=current_time,
                 )
+            )
+            generated_due_at = scheduled_at + duration if duration is not None else None
+            await record_task_event(
+                connection,
+                task_id=task_id,
+                event_type="task_created",
+                occurred_at=current_time,
+                actor_user_id=cycle["created_by_user_id"],
+                assignee_user_id=template["primary_assignee_user_id"],
+                due_at=generated_due_at,
+                new_value={
+                    "status": "new",
+                    "assigneeId": str(template["primary_assignee_user_id"]),
+                    "dueAt": generated_due_at.isoformat() if generated_due_at else None,
+                    "source": "task_cycle",
+                },
             )
             participant_rows = (
                 (

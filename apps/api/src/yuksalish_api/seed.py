@@ -33,6 +33,7 @@ from .tables import (
     task_comments,
     task_cycles,
     task_dependencies,
+    task_efficiency_events,
     task_participants,
     tasks,
     trip_request_actions,
@@ -719,6 +720,65 @@ async def seed_demo_data(
                     "created_at": now,
                     "updated_at": now,
                 },
+            ],
+        )
+        demo_task_states = [
+            (demo_uuid("task/104"), "in_progress", person_ids["dilshod"], now + timedelta(hours=5)),
+            (
+                demo_uuid("task/105"),
+                "awaiting_review",
+                person_ids["aziza"],
+                now + timedelta(days=1),
+            ),
+            (demo_uuid("task/106"), "new", person_ids["baxtiyor"], now + timedelta(days=2)),
+        ]
+        await _insert_missing(
+            connection,
+            task_efficiency_events,
+            [
+                {
+                    "id": demo_uuid(f"task-event/{task_id}/created"),
+                    "task_id": task_id,
+                    "event_type": "task_created",
+                    "occurred_at": now,
+                    "actor_user_id": person_ids["baxtiyor"],
+                    "assignee_user_id": assignee_id,
+                    "due_at": due_at,
+                    "old_value": {},
+                    "new_value": {
+                        "status": status,
+                        "assigneeId": str(assignee_id),
+                        "dueAt": due_at.isoformat(),
+                    },
+                    "reason_code": None,
+                    "reason_text": None,
+                    "metadata": {"source": "demo_seed"},
+                    "methodology_version": "EFF-1.0",
+                    "created_at": now,
+                }
+                for task_id, status, assignee_id, due_at in demo_task_states
+            ],
+        )
+        await _insert_missing(
+            connection,
+            task_efficiency_events,
+            [
+                {
+                    "id": demo_uuid("task-event/105/submitted"),
+                    "task_id": demo_uuid("task/105"),
+                    "event_type": "result_submitted_for_review",
+                    "occurred_at": now,
+                    "actor_user_id": person_ids["aziza"],
+                    "assignee_user_id": person_ids["aziza"],
+                    "due_at": now + timedelta(days=1),
+                    "old_value": {"status": "in_progress"},
+                    "new_value": {"status": "awaiting_review"},
+                    "reason_code": None,
+                    "reason_text": None,
+                    "metadata": {"source": "demo_seed"},
+                    "methodology_version": "EFF-1.0",
+                    "created_at": now,
+                }
             ],
         )
         await connection.execute(

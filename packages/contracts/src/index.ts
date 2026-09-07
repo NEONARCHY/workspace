@@ -319,6 +319,60 @@ export interface WorkspaceTask {
   readonly cycle?: TaskCycle | null;
 }
 
+export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";
+
+export interface EfficiencyHistoryPoint {
+  readonly period: string;
+  readonly percentage?: number | null;
+  readonly onTimeCount: number;
+  readonly eligibleCount: number;
+  readonly historyCompleteness: EfficiencyHistoryCompleteness;
+}
+
+export interface EmployeeEfficiency {
+  readonly userId: string;
+  readonly name: string;
+  readonly jobTitle: string;
+  readonly period: string;
+  readonly timezone: string;
+  readonly percentage?: number | null;
+  readonly onTimeCount: number;
+  readonly eligibleCount: number;
+  readonly overdueCount: number;
+  readonly awaitingReviewCount: number;
+  readonly noDueDateCount: number;
+  readonly returnedForRevisionCount: number;
+  readonly excludedCount: number;
+  readonly sampleSize: number;
+  readonly methodologyVersion: string;
+  readonly trackingStartedAt: string;
+  readonly historyCompleteness: EfficiencyHistoryCompleteness;
+  readonly smallSample: boolean;
+  readonly history: readonly EfficiencyHistoryPoint[];
+}
+
+export interface EfficiencyOverview {
+  readonly period: string;
+  readonly timezone: string;
+  readonly methodologyVersion: string;
+  readonly trackingStartedAt: string;
+  readonly currentUserId: string;
+  readonly employees: readonly EmployeeEfficiency[];
+}
+
+export type TaskReturnReason =
+  | "incomplete_result"
+  | "requirements_not_met"
+  | "corrections_required"
+  | "other";
+
+export type TaskEfficiencyExclusionReason =
+  | "cancelled"
+  | "external_dependency"
+  | "requirements_changed"
+  | "duplicate"
+  | "other";
+
 export type ProjectStage = "start" | "preparation" | "approval" | "success" | "failure";
 export type ProjectStatus = "new" | "in_progress" | "completed";
 

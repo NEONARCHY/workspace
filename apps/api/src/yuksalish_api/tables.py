@@ -216,6 +216,50 @@ tasks = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+employee_efficiency_methodologies = sa.Table(
+    "employee_efficiency_methodologies",
+    metadata,
+    sa.Column("version", sa.String(32), primary_key=True),
+    sa.Column("timezone", sa.String(64)),
+    sa.Column("tracking_started_at", sa.DateTime(timezone=True)),
+    sa.Column("rules", postgresql.JSONB()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+task_efficiency_events = sa.Table(
+    "task_efficiency_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("task_id", uuid_type),
+    sa.Column("event_type", sa.String(48)),
+    sa.Column("occurred_at", sa.DateTime(timezone=True)),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("assignee_user_id", uuid_type),
+    sa.Column("due_at", sa.DateTime(timezone=True)),
+    sa.Column("old_value", postgresql.JSONB()),
+    sa.Column("new_value", postgresql.JSONB()),
+    sa.Column("reason_code", sa.String(48)),
+    sa.Column("reason_text", sa.Text()),
+    sa.Column("metadata", postgresql.JSONB()),
+    sa.Column("methodology_version", sa.String(32)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+employee_efficiency_snapshots = sa.Table(
+    "employee_efficiency_snapshots",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("snapshot_date", sa.Date()),
+    sa.Column("period", sa.String(7)),
+    sa.Column("percentage", sa.Numeric(7, 3)),
+    sa.Column("on_time_count", sa.Integer()),
+    sa.Column("eligible_count", sa.Integer()),
+    sa.Column("overdue_count", sa.Integer()),
+    sa.Column("methodology_version", sa.String(32)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 task_cycles = sa.Table(
     "tasks_cycles",
     metadata,

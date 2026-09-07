@@ -10,6 +10,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
 from .database import create_database_engine
+from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
@@ -44,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 try:
                     async with engine.begin() as connection:
                         created = await materialize_due_notifications(connection)
+                        created += await materialize_efficiency_digest_notifications(connection)
                     if created:
                         await lifespan_app.state.event_bus.publish(
                             {"type": "notifications.created", "count": created}

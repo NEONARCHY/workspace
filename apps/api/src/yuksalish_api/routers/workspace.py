@@ -24,6 +24,7 @@ from yuksalish_api.auth import (
     require_user,
 )
 from yuksalish_api.database import get_connection
+from yuksalish_api.efficiency_service import load_efficiency_overview
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
@@ -54,12 +55,14 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    return_task_for_revision,
     save_workflow,
     search_messages,
     send_message,
     set_feed_like,
     set_task_cycle,
     set_task_dependency,
+    set_task_efficiency_exclusion,
     set_task_participant,
     update_approval_request,
     update_calendar_event,
@@ -88,16 +91,19 @@ from yuksalish_api.workspace_schemas import (
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    EfficiencyOverviewResponse,
     FeedPostResponse,
     NotificationPreferencesResponse,
     NotificationPreferencesUpdate,
     NotificationResponse,
     PinFeedPostRequest,
     ProjectResponse,
+    ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
+    TaskEfficiencyExclusionRequest,
     TaskParticipantRequest,
     TaskResponse,
     TripActionRequest,
@@ -148,6 +154,19 @@ async def workspace_bootstrap(
         return await load_workspace(connection, current_user)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+
+
+@router.get("/efficiency", response_model=EfficiencyOverviewResponse)
+async def efficiency_overview(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    period: Annotated[str | None, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")] = None,
+) -> EfficiencyOverviewResponse:
+    try:
+        result = await load_efficiency_overview(connection, current_user, period)
+        return EfficiencyOverviewResponse.model_validate(result)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @router.patch("/notifications/{notification_id}/read", response_model=NotificationResponse)
@@ -393,6 +412,38 @@ async def patch_task_status(
 ) -> TaskResponse:
     try:
         result = await change_task_status(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/return-for-revision", response_model=TaskResponse)
+async def post_task_return_for_revision(
+    task_id: UUID,
+    payload: ReturnTaskForRevisionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await return_task_for_revision(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/tasks/{task_id}/efficiency-exclusion", response_model=TaskResponse)
+async def put_task_efficiency_exclusion(
+    task_id: UUID,
+    payload: TaskEfficiencyExclusionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await set_task_efficiency_exclusion(connection, current_user, task_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})

@@ -280,6 +280,88 @@ class ChangeTaskStatusRequest(ApiModel):
     status: TaskStatus
 
 
+TaskReturnReason = Literal[
+    "incomplete_result",
+    "requirements_not_met",
+    "corrections_required",
+    "other",
+]
+TaskEfficiencyExclusionReason = Literal[
+    "cancelled",
+    "external_dependency",
+    "requirements_changed",
+    "duplicate",
+    "other",
+]
+
+
+class ReturnTaskForRevisionRequest(ApiModel):
+    reason_code: TaskReturnReason
+    reason_text: str = Field(default="", max_length=2_000)
+
+    @model_validator(mode="after")
+    def require_return_reason_text(self) -> "ReturnTaskForRevisionRequest":
+        if self.reason_code == "other" and not self.reason_text.strip():
+            raise ValueError("A text explanation is required for another return reason")
+        return self
+
+
+class TaskEfficiencyExclusionRequest(ApiModel):
+    excluded: bool
+    reason_code: TaskEfficiencyExclusionReason | None = None
+    reason_text: str = Field(default="", max_length=2_000)
+
+    @model_validator(mode="after")
+    def require_exclusion_reason(self) -> "TaskEfficiencyExclusionRequest":
+        if self.excluded and self.reason_code is None:
+            raise ValueError("An exclusion reason is required")
+        if self.excluded and self.reason_code == "other" and not self.reason_text.strip():
+            raise ValueError("A text explanation is required for another exclusion reason")
+        return self
+
+
+HistoryCompleteness = Literal["complete", "partial", "unavailable"]
+
+
+class EfficiencyHistoryPointResponse(ApiModel):
+    period: str
+    percentage: float | None
+    on_time_count: int
+    eligible_count: int
+    history_completeness: HistoryCompleteness
+
+
+class EmployeeEfficiencyResponse(ApiModel):
+    user_id: str
+    name: str
+    job_title: str
+    period: str
+    timezone: str
+    percentage: float | None
+    on_time_count: int
+    eligible_count: int
+    overdue_count: int
+    awaiting_review_count: int
+    no_due_date_count: int
+    returned_for_revision_count: int
+    excluded_count: int
+    sample_size: int
+    methodology_version: str
+    tracking_started_at: datetime
+    history_completeness: HistoryCompleteness
+    small_sample: bool
+    history: list[EfficiencyHistoryPointResponse]
+
+
+class EfficiencyOverviewResponse(ApiModel):
+    period: str
+    timezone: str
+    methodology_version: str
+    tracking_started_at: datetime
+    current_user_id: str
+    employees: list[EmployeeEfficiencyResponse]
+
+
 class TaskParticipantRequest(ApiModel):
     user_id: str
     role: TaskParticipantRole

@@ -25,7 +25,7 @@ async def test_live_health_and_security_headers() -> None:
     assert response.json() == {
         "status": "ok",
         "service": "yuksalish-api",
-        "version": "0.14.0",
+        "version": "0.15.0",
         "environment": "test",
     }
     assert response.headers["x-content-type-options"] == "nosniff"
@@ -64,3 +64,13 @@ async def test_module_catalog_has_all_locales() -> None:
 @pytest.mark.anyio
 async def test_openapi_is_hidden_in_production() -> None:
     assert (await get("/docs", environment="production")).status_code == 404
+
+
+@pytest.mark.anyio
+async def test_efficiency_aggregate_is_present_in_api_contract() -> None:
+    response = await get("/openapi.json")
+    operation = response.json()["paths"]["/api/v1/efficiency"]["get"]
+
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].endswith(
+        "EfficiencyOverviewResponse"
+    )
