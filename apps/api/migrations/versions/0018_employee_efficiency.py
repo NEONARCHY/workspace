@@ -153,8 +153,8 @@ def upgrade() -> None:
                 "due_at, old_value, new_value, reason_code, reason_text, metadata, "
                 "methodology_version, created_at) VALUES "
                 "(:id, :task_id, 'initial_snapshot', :occurred_at, NULL, :assignee_id, "
-                ":due_at, '{}'::jsonb, CAST(:new_value AS jsonb), NULL, NULL, "
-                "'{\"historyBeforeSnapshotKnown\":false}'::jsonb, :version, :created_at)"
+                ":due_at, CAST(:old_value AS jsonb), CAST(:new_value AS jsonb), NULL, NULL, "
+                "CAST(:metadata AS jsonb), :version, :created_at)"
             ),
             {
                 "id": uuid4(),
@@ -162,6 +162,7 @@ def upgrade() -> None:
                 "occurred_at": tracking_started_at,
                 "assignee_id": task["primary_assignee_user_id"],
                 "due_at": task["due_at"],
+                "old_value": json.dumps({}),
                 "new_value": json.dumps(
                     {
                         "status": task["status"],
@@ -170,6 +171,7 @@ def upgrade() -> None:
                         "createdAt": task["created_at"].isoformat(),
                     }
                 ),
+                "metadata": json.dumps({"historyBeforeSnapshotKnown": False}),
                 "version": METHODOLOGY_VERSION,
                 "created_at": tracking_started_at,
             },
