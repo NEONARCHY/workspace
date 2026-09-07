@@ -1256,7 +1256,16 @@ export function App() {
               />
             ) : null}
             {activeSection === "employees" ? (
-              <EmployeesView token={session.accessToken} currentUser={workspace.currentUser} onInvite={() => { setAccountInvite(true); setAccountOpen(true); }} />
+              <EmployeesView
+                token={session.accessToken}
+                currentUser={workspace.currentUser}
+                onInvite={() => { setAccountInvite(true); setAccountOpen(true); }}
+                onCreateChat={chatActions.create}
+                onChatCreated={(chatId) => {
+                  setFocusTarget((current) => ({ section: "messenger", entityId: chatId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("messenger");
+                }}
+              />
             ) : null}
             </RecoveryBoundary>
           </main>

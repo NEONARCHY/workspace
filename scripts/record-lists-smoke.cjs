@@ -113,6 +113,20 @@ const fs = require("node:fs/promises"), path = require("node:path"), assert = re
         assert(inviteFocus.focused && inviteFocus.top >= 100 && inviteFocus.bottom <= inviteFocus.height, `invitation entry point: ${JSON.stringify(inviteFocus)}`);
         await axeScan(); await capture("invitation-entry");
         await page.keyboard.press("Escape"); await page.getByRole("dialog").waitFor({ state: "hidden" });
+        const employeeCheckbox = page.getByRole("checkbox", { name: /^Выбрать сотрудника:/ }).first();
+        await employeeCheckbox.click();
+        const selectionBar = page.getByRole("complementary", { name: "Действия с выбранными сотрудниками" });
+        await selectionBar.waitFor(); await settle();
+        assert(await page.getByRole("button", { name: "Открыть чат", exact: true }).isVisible());
+        await axeScan(); await capture("employees-selection-wide");
+        await resize(640, 520);
+        const selectionGeometry = await selectionBar.evaluate(bar => {
+          const r = bar.getBoundingClientRect();
+          return { left: r.left, right: r.right, width: innerWidth, overflow: document.documentElement.scrollWidth - innerWidth };
+        });
+        assert(selectionGeometry.left >= 0 && selectionGeometry.right <= selectionGeometry.width + 1 && selectionGeometry.overflow <= 1, `employee selection: ${JSON.stringify(selectionGeometry)}`);
+        await axeScan(); await capture("employees-selection-640");
+        await resize(1600, 1000); await employeeCheckbox.click();
       }
     }
     assert.deepEqual(errors, []);

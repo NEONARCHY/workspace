@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type {
+  ChatSummary,
+  CreateChatInput,
   DirectoryBootstrap,
   DirectoryEmployee,
   WorkspacePerson,
   WorkspacePosition,
   WorkspaceRole,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, Field, Input, Select, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
-import { Add24Regular, PeopleTeam24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Add24Regular, Chat24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
@@ -23,6 +25,8 @@ interface EmployeesViewProps {
   readonly token: string;
   readonly currentUser: WorkspacePerson;
   readonly onInvite?: () => void;
+  readonly onCreateChat?: (input: CreateChatInput) => Promise<ChatSummary>;
+  readonly onChatCreated?: (chatId: string) => void;
 }
 
 function replaceEmployee(
@@ -46,7 +50,7 @@ function replacePosition(
   };
 }
 
-export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewProps) {
+export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -61,6 +65,11 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
   const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "inactive">("all");
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<ReadonlySet<string>>(new Set());
+  const [bulkPanel, setBulkPanel] = useState<"position" | "role" | "chat" | null>(null);
+  const [bulkPositionId, setBulkPositionId] = useState("__choose__");
+  const [bulkRole, setBulkRole] = useState<Exclude<WorkspaceRole, "superadmin"> | "">("");
+  const [chatTitle, setChatTitle] = useState("");
   const positionFocusTarget = useRestoreFocusTarget();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const canManage = ["admin", "superadmin"].includes(currentUser.role);
@@ -99,11 +108,35 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
     [directory, selectedPositionId],
   );
 
+  const selectedEmployees = useMemo(
+    () => directory?.employees.filter((employee) => selectedEmployeeIds.has(employee.id)) ?? [],
+    [directory, selectedEmployeeIds],
+  );
+  const selectedColleagues = selectedEmployees.filter((employee) => employee.id !== currentUser.id && employee.status === "active");
+  const editableSelectedEmployees = selectedEmployees.filter((employee) => employee.role !== "superadmin");
+  const roleEditableSelectedEmployees = editableSelectedEmployees.filter((employee) => employee.id !== currentUser.id);
+
   const selectEmployee = (employee: DirectoryEmployee) => {
     setSelectedEmployeeId(employee.id);
     if (employee.role !== "superadmin") setEmployeeRole(employee.role);
     setEmployeePositionId(employee.positionId ?? "");
     setPanel("employee");
+  };
+
+  const toggleEmployee = (employeeId: string, selected: boolean) => {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(employeeId); else next.delete(employeeId);
+      return next;
+    });
+  };
+
+  const toggleEmployees = (employeeIds: readonly string[], selected: boolean) => {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      employeeIds.forEach((employeeId) => selected ? next.add(employeeId) : next.delete(employeeId));
+      return next;
+    });
   };
 
   const selectPosition = (position: WorkspacePosition) => {
@@ -164,6 +197,52 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
     }
   };
 
+  const saveBulkAccess = async (kind: "position" | "role") => {
+    const targets = kind === "role" ? roleEditableSelectedEmployees : editableSelectedEmployees;
+    if (busy || !canManage || directory === undefined || !targets.length
+      || kind === "position" && bulkPositionId === "__choose__" || kind === "role" && !bulkRole) return;
+    setBusy(true);
+    const results = await Promise.allSettled(targets.map((employee) => updateEmployeeAccess(
+      token,
+      employee.id,
+      kind === "role" ? bulkRole as Exclude<WorkspaceRole, "superadmin"> : employee.role as Exclude<WorkspaceRole, "superadmin">,
+      kind === "position" ? bulkPositionId || undefined : employee.positionId ?? undefined,
+    )));
+    const saved = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+    const failedIds = new Set(targets.filter((_, index) => results[index]?.status === "rejected").map((employee) => employee.id));
+    setDirectory((current) => saved.reduce((next, employee) => replaceEmployee(next, employee), current ?? directory));
+    setSelectedEmployeeIds((current) => new Set([...current].filter((id) => failedIds.has(id))));
+    setBulkPanel(null);
+    setFeedback(failedIds.size
+      ? `Обновлено: ${saved.length}. Не удалось обновить: ${failedIds.size}. Повторите операцию для оставшихся сотрудников.`
+      : `${kind === "position" ? "Должность" : "Роль"} обновлена для ${saved.length} сотрудников.`);
+    setBusy(false);
+  };
+
+  const createSelectedChat = async () => {
+    if (busy || onCreateChat === undefined || !selectedColleagues.length) return;
+    if (selectedColleagues.length > 1 && !chatTitle.trim()) {
+      setChatTitle(`Рабочая группа · ${selectedColleagues.slice(0, 2).map((employee) => employee.name.split(" ")[0]).join(", ")}`);
+      setBulkPanel("chat");
+      return;
+    }
+    setBusy(true);
+    try {
+      const input: CreateChatInput = selectedColleagues.length === 1
+        ? { kind: "direct", title: "", description: "", memberIds: [selectedColleagues[0]!.id] }
+        : { kind: "group", title: chatTitle.trim(), description: "Группа создана из списка сотрудников.", memberIds: selectedColleagues.map((employee) => employee.id) };
+      const chat = await onCreateChat(input);
+      setSelectedEmployeeIds(new Set());
+      setBulkPanel(null);
+      setChatTitle("");
+      onChatCreated?.(chat.id);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось создать чат");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (directory === undefined) {
     return (
       <section className="workspace-view directory-loading" aria-label="Сотрудники">
@@ -181,9 +260,11 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
       && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
         || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
         || statusFilter === "inactive" && !["active", "pending", "invited"].includes(employee.status)));
+  const selectedVisibleCount = visibleEmployees.filter((employee) => selectedEmployeeIds.has(employee.id)).length;
+  const visibleSelection = selectedVisibleCount === 0 ? false : selectedVisibleCount === visibleEmployees.length ? true : "mixed";
 
   return (
-    <section className="workspace-view employees-view" aria-label="Сотрудники">
+    <section className={`workspace-view employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
       <header className="section-toolbar">
         <div>
           <h1>Сотрудники</h1>
@@ -198,8 +279,64 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
         <label>Состояние<select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></select></label>
         {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
       </div>
-      <EmployeeRecords employees={visibleEmployees} filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}`} onSelect={selectEmployee} />
-      <Dialog open={panel !== null} onOpenChange={(_, data) => { if (!data.open && !busy) setPanel(null); }}>
+      <EmployeeRecords
+        employees={visibleEmployees}
+        filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}`}
+        selectedIds={selectedEmployeeIds}
+        onOpen={selectEmployee}
+        onToggle={toggleEmployee}
+        onTogglePage={toggleEmployees}
+      />
+      {selectedEmployeeIds.size ? (
+        <aside className="employee-selection-bar" aria-label="Действия с выбранными сотрудниками">
+          <div className="employee-selection-summary" role="status" aria-live="polite">
+            <span>{selectedEmployeeIds.size}</span>
+            <div><strong>Выбрано сотрудников</strong><small>Действия применятся только к отмеченным строкам</small></div>
+          </div>
+          <div className="employee-selection-actions">
+            {canManage ? (
+              <Button
+                icon={<PersonEdit24Regular />}
+                disabled={!editableSelectedEmployees.length || busy}
+                onClick={() => { setBulkPositionId("__choose__"); setBulkPanel("position"); }}
+              >
+                Изменить должность
+              </Button>
+            ) : null}
+            <Button
+              appearance="primary"
+              icon={<Chat24Regular />}
+              disabled={!selectedColleagues.length || busy || onCreateChat === undefined}
+              title={!selectedColleagues.length ? "Выберите хотя бы одного активного коллегу" : undefined}
+              onClick={() => void createSelectedChat()}
+            >
+              {selectedColleagues.length === 1 ? "Открыть чат" : "Создать чат"}
+            </Button>
+            <Menu>
+              <MenuTrigger disableButtonEnhancement>
+                <Button icon={<MoreHorizontal20Regular />}>Действия</Button>
+              </MenuTrigger>
+              <MenuPopover>
+                <MenuList>
+                  {canManage ? <MenuItem disabled={!roleEditableSelectedEmployees.length} onClick={() => { setBulkRole(""); setBulkPanel("role"); }}>Изменить роль доступа</MenuItem> : null}
+                  <MenuItem disabled={selectedEmployees.length !== 1} onClick={() => selectedEmployees[0] && selectEmployee(selectedEmployees[0])}>Открыть карточку сотрудника</MenuItem>
+                  <MenuItem icon={<Dismiss20Regular />} onClick={() => setSelectedEmployeeIds(new Set())}>Снять выделение</MenuItem>
+                </MenuList>
+              </MenuPopover>
+            </Menu>
+          </div>
+          <div className="employee-selection-scope">
+            <Checkbox
+              checked={visibleSelection}
+              disabled={!visibleEmployees.length}
+              label={`Выбрать всех (${visibleEmployees.length})`}
+              onChange={(_, data) => toggleEmployees(visibleEmployees.map((employee) => employee.id), data.checked === true)}
+            />
+            <small>Показано: {selectedVisibleCount} из {visibleEmployees.length}</small>
+          </div>
+        </aside>
+      ) : null}
+      <Dialog open={panel !== null} onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setPanel(null); }}>
         <DialogSurface className="directory-record-dialog" aria-label={panel === "employee" ? "Карточка сотрудника" : "Справочник должностей"}>
         <div className="record-dialog-close"><Button disabled={busy} appearance="subtle" onClick={() => setPanel(null)}>К списку сотрудников</Button></div>
         {feedback && <div className="directory-feedback" role="status">{feedback}</div>}
@@ -313,6 +450,54 @@ export function EmployeesView({ token, currentUser, onInvite }: EmployeesViewPro
         </aside>}
         </DialogSurface>
       </Dialog>
+      {bulkPanel ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setBulkPanel(null); }}>
+        <DialogSurface className="employee-bulk-dialog" aria-label="Действие с выбранными сотрудниками">
+          <DialogBody>
+            <DialogTitle>
+              {bulkPanel === "position" ? "Изменить должность" : bulkPanel === "role" ? "Изменить роль доступа" : "Создать группу"}
+            </DialogTitle>
+            <DialogContent>
+              <p className="employee-bulk-lead">
+                {bulkPanel === "chat"
+                  ? `В группу войдут ${selectedColleagues.length} коллег и вы станете её владельцем.`
+                  : `Изменение будет применено к ${bulkPanel === "role" ? roleEditableSelectedEmployees.length : editableSelectedEmployees.length} сотрудникам.`}
+              </p>
+              {bulkPanel === "position" ? (
+                <Field label="Новая должность">
+                  <Select aria-label="Новая должность для выбранных сотрудников" value={bulkPositionId} disabled={busy} onChange={(event) => setBulkPositionId(event.target.value)}>
+                    <option value="__choose__" disabled>Выберите должность</option>
+                    <option value="">Не назначена</option>
+                    {directory.positions.filter((position) => position.isActive).map((position) => <option key={position.id} value={position.id}>{position.name}</option>)}
+                  </Select>
+                </Field>
+              ) : null}
+              {bulkPanel === "role" ? (
+                <Field label="Новая роль">
+                  <Select aria-label="Новая роль для выбранных сотрудников" value={bulkRole} disabled={busy} onChange={(event) => setBulkRole(event.target.value as typeof bulkRole)}>
+                    <option value="" disabled>Выберите роль</option>
+                    {directory.roles.map((role) => <option key={role.key} value={role.key}>{role.label}</option>)}
+                  </Select>
+                </Field>
+              ) : null}
+              {bulkPanel === "chat" ? (
+                <Field label="Название группы" required>
+                  <Input aria-label="Название новой группы" maxLength={240} value={chatTitle} disabled={busy} onChange={(_, data) => setChatTitle(data.value)} />
+                </Field>
+              ) : null}
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="primary"
+                disabled={busy || bulkPanel === "chat" && !chatTitle.trim() || bulkPanel === "position" && bulkPositionId === "__choose__" || bulkPanel === "role" && !bulkRole}
+                onClick={() => bulkPanel === "chat" ? void createSelectedChat() : bulkPanel && void saveBulkAccess(bulkPanel)}
+              >
+                {busy ? "Сохраняем…" : bulkPanel === "chat" ? "Создать и открыть" : "Применить"}
+              </Button>
+              <Button disabled={busy} onClick={() => setBulkPanel(null)}>Отмена</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog> : null}
       {feedback && !panel ? <div className="directory-feedback" role="status">{feedback}</div> : null}
     </section>
   );

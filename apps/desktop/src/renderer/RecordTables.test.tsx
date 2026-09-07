@@ -12,6 +12,9 @@ const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
 }));
 const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `t-${i}`, title: `Задача ${i + 1}`, dueAt: i === 30 ? null : new Date(2026, 8, i + 1).toISOString() }));
 const wrap = (node: React.ReactNode) => <FluentProvider theme={workspaceTheme}>{node}</FluentProvider>;
+const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
+  selectedIds: new Set<string>(), onOpen, onToggle, onTogglePage: vi.fn(),
+});
 afterEach(cleanup);
 
 describe("Corporate record tables", () => {
@@ -31,13 +34,13 @@ describe("Corporate record tables", () => {
     expect(screen.getByRole("status")).toHaveTextContent("1–2 из 2");
   });
   it("resets pagination for a changed filter and keeps the chosen page size", () => {
-    const view = render(wrap(<EmployeeRecords employees={employees} filterKey="all" onSelect={vi.fn()} />));
+    const view = render(wrap(<EmployeeRecords employees={employees} filterKey="all" {...employeeRecordProps()} />));
     fireEvent.change(screen.getByLabelText("Строк на странице: сотрудники"), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: "Следующая страница: сотрудники" }));
     expect(screen.getByRole("status")).toHaveTextContent("11–20 из 31");
-    view.rerender(wrap(<EmployeeRecords employees={employees} filterKey="active" onSelect={vi.fn()} />));
+    view.rerender(wrap(<EmployeeRecords employees={employees} filterKey="active" {...employeeRecordProps()} />));
     expect(screen.getByRole("status")).toHaveTextContent("1–10 из 31");
-    view.rerender(wrap(<EmployeeRecords employees={employees} filterKey="all" onSelect={vi.fn()} />));
+    view.rerender(wrap(<EmployeeRecords employees={employees} filterKey="all" {...employeeRecordProps()} />));
     expect(screen.getByRole("status")).toHaveTextContent("1–10 из 31");
   });
   it("sorts task names naturally and exposes sort direction", () => {
@@ -56,16 +59,17 @@ describe("Corporate record tables", () => {
     fireEvent.click(sort);
     expect(screen.getAllByRole("button", { name: /^Открыть задачу:/ }).at(-1)).toHaveTextContent("Задача 31");
   });
-  it("opens the exact employee once from a keyboard-accessible button or a row cell", () => {
-    const onSelect = vi.fn(); render(wrap(<EmployeeRecords employees={employees.slice(0, 1)} filterKey="all" onSelect={onSelect} />));
+  it("opens an employee from the name and selects it from the rest of the row", () => {
+    const onOpen = vi.fn(); const onToggle = vi.fn();
+    render(wrap(<EmployeeRecords employees={employees.slice(0, 1)} filterKey="all" {...employeeRecordProps(onOpen, onToggle)} />));
     fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Сотрудник 1" }));
-    expect(onSelect).toHaveBeenCalledTimes(1); expect(onSelect).toHaveBeenLastCalledWith(employees[0]);
-    fireEvent.click(screen.getByText("Mutaxassis")); expect(onSelect).toHaveBeenCalledTimes(2);
+    expect(onOpen).toHaveBeenCalledTimes(1); expect(onOpen).toHaveBeenLastCalledWith(employees[0]);
+    fireEvent.click(screen.getByText("Mutaxassis")); expect(onToggle).toHaveBeenCalledWith("e-0", true);
   });
   it("translates pending activation and handles empty results without a fake page", () => {
-    const view = render(wrap(<EmployeeRecords employees={employees.slice(30)} filterKey="pending" onSelect={vi.fn()} />));
+    const view = render(wrap(<EmployeeRecords employees={employees.slice(30)} filterKey="pending" {...employeeRecordProps()} />));
     expect(screen.getByText("Ожидает активации")).toBeInTheDocument();
-    view.rerender(wrap(<EmployeeRecords employees={[]} filterKey="empty" onSelect={vi.fn()} />));
+    view.rerender(wrap(<EmployeeRecords employees={[]} filterKey="empty" {...employeeRecordProps()} />));
     expect(screen.getByText("Сотрудники не найдены")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Следующая страница: сотрудники" })).toBeDisabled();
     expect(screen.getByRole("status")).toHaveTextContent("Найдено: 0");
