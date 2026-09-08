@@ -429,6 +429,20 @@ approval_actions = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+approval_deadline_events = sa.Table(
+    "approval_deadline_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("recipient_user_id", uuid_type),
+    sa.Column("node_key", sa.String(96)),
+    sa.Column("event_type", sa.String(32)),
+    sa.Column("recipient_role", sa.String(32)),
+    sa.Column("threshold_hours", sa.Integer()),
+    sa.Column("deadline_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 workspace_projects = sa.Table(
     "workspace_projects",
     metadata,

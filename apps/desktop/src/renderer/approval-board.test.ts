@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { approvalColumnTotals, approvalStagePalette, paymentStageColors } from "./approval-board";
+import {
+  approvalColumnTotals,
+  approvalDeadlinePresentation,
+  approvalStagePalette,
+  paymentStageColors,
+} from "./approval-board";
 
 const text = (value: string) => value.replace(/\u00a0|\u202f/g, " ");
 const totals = (items: readonly { amount: number; currency: string }[]) => approvalColumnTotals(items).map((item) => text(item.formatted));
@@ -48,5 +53,32 @@ describe("Payment board colours and totals", () => {
   it("flags invalid data without crashing or silently showing a partial total", () => {
     expect(totals([{ amount: 100, currency: "UZS" }, { amount: Number.NaN, currency: "UZS" }, { amount: 5, currency: "UZS" }]))
       .toEqual(["Проверьте сумму (UZS)"]);
+  });
+});
+
+describe("Payment request deadline presentation", () => {
+  const request = (deadline: string) => ({
+    status: "running" as const,
+    details: { deadline },
+  });
+
+  it("distinguishes normal, approaching and urgent deadlines", () => {
+    const now = new Date("2026-09-08T08:00:00Z");
+    expect(approvalDeadlinePresentation(request("2026-09-10T08:00:00Z"), now).tone)
+      .toBe("neutral");
+    expect(approvalDeadlinePresentation(request("2026-09-09T07:00:00Z"), now).tone)
+      .toBe("attention");
+    expect(approvalDeadlinePresentation(request("2026-09-08T09:00:00Z"), now).tone)
+      .toBe("urgent");
+  });
+
+  it("shows overdue duration and stops control for a finished request", () => {
+    const now = new Date("2026-09-08T08:00:00Z");
+    expect(approvalDeadlinePresentation(request("2026-09-07T08:00:00Z"), now).label)
+      .toContain("Просрочено");
+    expect(approvalDeadlinePresentation({
+      status: "approved",
+      details: { deadline: "2026-09-07T08:00:00Z" },
+    }, now)).toMatchObject({ tone: "success", label: "Завершена" });
   });
 });

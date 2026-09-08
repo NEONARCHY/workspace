@@ -1,7 +1,7 @@
 from calendar import monthrange
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -17,6 +17,7 @@ from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
 from .tables import (
     approval_actions,
+    approval_deadline_events,
     approval_edges,
     approval_nodes,
     approval_request_versions,
@@ -52,6 +53,8 @@ from .tables import (
 from .workspace_schemas import (
     ApprovalActionHistoryResponse,
     ApprovalActionRequest,
+    ApprovalDeadlineControlResponse,
+    ApprovalDeadlineEventResponse,
     ApprovalRequestResponse,
     ApprovalRequestVersionResponse,
     ApprovalStageResponse,
@@ -122,6 +125,8 @@ STATUS_LABELS = {
     "rejected": "Отклонено",
     "cancelled": "Отменено",
 }
+DEFAULT_APPROVAL_REMINDER_HOURS = (24, 2)
+DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS = 4
 PROJECT_STAGE_STATUS = {
     "start": "new",
     "preparation": "in_progress",
@@ -358,6 +363,7 @@ def _approval_request(
     versions: Sequence[ApprovalRequestVersionResponse] = (),
     actions: Sequence[ApprovalActionHistoryResponse] = (),
     active_stages: Sequence[ApprovalStageResponse] = (),
+    deadline_control: ApprovalDeadlineControlResponse | None = None,
 ) -> ApprovalRequestResponse:
     payload = row["payload"] or {}
     status_value = str(row["status"])
@@ -393,6 +399,119 @@ def _approval_request(
         revision=int(row.get("current_version", 1)),
         versions=list(versions),
         actions=list(actions),
+        deadline_control=deadline_control or _approval_deadline_control(row),
+    )
+
+
+def _approval_deadline(row: Record) -> datetime | None:
+    raw_value = (row.get("payload") or {}).get("deadline")
+    if not raw_value:
+        return None
+    if isinstance(raw_value, datetime):
+        return raw_value if raw_value.tzinfo is not None else raw_value.replace(tzinfo=UTC)
+    try:
+        parsed = datetime.fromisoformat(str(raw_value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def _approval_reminder_hours(configs: Sequence[Mapping[str, Any]]) -> list[int]:
+    configured: set[int] = set()
+    for config in configs:
+        values = config.get("reminderHoursBefore")
+        if not isinstance(values, list):
+            values = list(DEFAULT_APPROVAL_REMINDER_HOURS)
+        for value in values:
+            try:
+                hour = int(value)
+            except (TypeError, ValueError):
+                continue
+            if 1 <= hour <= 24 * 30:
+                configured.add(hour)
+    return sorted(configured or DEFAULT_APPROVAL_REMINDER_HOURS, reverse=True)
+
+
+def _approval_escalation_hours(configs: Sequence[Mapping[str, Any]]) -> int | None:
+    values: list[int] = []
+    for config in configs:
+        if config.get("escalationEnabled", True) is False:
+            continue
+        try:
+            value = int(
+                config.get("escalationAfterHours", DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS)
+            )
+        except (TypeError, ValueError):
+            value = DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS
+        if 1 <= value <= 24 * 30:
+            values.append(value)
+    return min(values) if values else None
+
+
+def _deadline_event(row: Record) -> ApprovalDeadlineEventResponse:
+    return ApprovalDeadlineEventResponse(
+        id=str(row["id"]),
+        event_type=row["event_type"],
+        recipient_user_id=str(row["recipient_user_id"]),
+        recipient_role=row["recipient_role"],
+        node_key=row["node_key"],
+        threshold_hours=int(row["threshold_hours"]),
+        deadline_at=row["deadline_at"],
+        created_at=row["created_at"],
+    )
+
+
+def _approval_deadline_control(
+    row: Record,
+    configs: Sequence[Mapping[str, Any]] = (),
+    events: Sequence[ApprovalDeadlineEventResponse] = (),
+    *,
+    now: datetime | None = None,
+) -> ApprovalDeadlineControlResponse:
+    current_time = now or datetime.now(UTC)
+    deadline = _approval_deadline(row)
+    reminder_hours = _approval_reminder_hours(configs)
+    escalation_hours = _approval_escalation_hours(configs)
+    if deadline is None:
+        return ApprovalDeadlineControlResponse(
+            status="not_set",
+            reminder_hours_before=reminder_hours,
+            escalation_after_hours=escalation_hours,
+            events=list(events),
+        )
+    remaining_seconds = int((deadline - current_time).total_seconds())
+    finished = row["status"] in {"approved", "rejected", "cancelled"}
+    status: Literal["not_set", "on_track", "due_soon", "overdue", "finished"]
+    if finished:
+        status = "finished"
+    elif remaining_seconds < 0:
+        status = "overdue"
+    elif remaining_seconds <= max(reminder_hours, default=24) * 3600:
+        status = "due_soon"
+    else:
+        status = "on_track"
+    escalation_at = (
+        deadline + timedelta(hours=escalation_hours)
+        if escalation_hours is not None and not finished
+        else None
+    )
+    candidates = [] if finished else [
+        candidate
+        for candidate in [
+            *(deadline - timedelta(hours=hours) for hours in reminder_hours),
+            deadline,
+            escalation_at,
+        ]
+        if candidate is not None and candidate > current_time
+    ]
+    return ApprovalDeadlineControlResponse(
+        status=status,
+        remaining_seconds=remaining_seconds,
+        reminder_hours_before=reminder_hours,
+        escalation_after_hours=escalation_hours,
+        next_event_at=min(candidates) if candidates else None,
+        escalation_at=escalation_at,
+        events=list(events),
     )
 
 
@@ -788,6 +907,63 @@ async def _request_actions(
     return result
 
 
+async def _request_deadline_controls(
+    connection: AsyncConnection,
+    request_rows: Sequence[Record],
+) -> dict[UUID, ApprovalDeadlineControlResponse]:
+    if not request_rows:
+        return {}
+    request_ids = [row["id"] for row in request_rows]
+    template_ids = list({row["template_id"] for row in request_rows})
+    node_rows = (
+        (
+            await connection.execute(
+                select(
+                    approval_nodes.c.template_id,
+                    approval_nodes.c.node_key,
+                    approval_nodes.c.config,
+                )
+                .where(approval_nodes.c.template_id.in_(template_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    configs_by_node = {
+        (row["template_id"], row["node_key"]): row["config"] or {} for row in node_rows
+    }
+    event_rows = (
+        (
+            await connection.execute(
+                select(approval_deadline_events)
+                .where(approval_deadline_events.c.request_id.in_(request_ids))
+                .order_by(
+                    approval_deadline_events.c.request_id,
+                    approval_deadline_events.c.created_at,
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    events_by_request: dict[UUID, list[ApprovalDeadlineEventResponse]] = {}
+    for event_row in event_rows:
+        events_by_request.setdefault(event_row["request_id"], []).append(
+            _deadline_event(event_row)
+        )
+    return {
+        row["id"]: _approval_deadline_control(
+            row,
+            [
+                configs_by_node.get((row["template_id"], node_key), {})
+                for node_key in row["active_node_keys"] or []
+            ],
+            events_by_request.get(row["id"], []),
+        )
+        for row in request_rows
+    }
+
+
 async def _request_response(
     connection: AsyncConnection,
     request_id: UUID,
@@ -807,11 +983,13 @@ async def _request_response(
     versions = await _request_versions(connection, [request_id])
     actions = await _request_actions(connection, [request_id])
     stages = await _active_stages_for_requests(connection, [row], current_user)
+    deadline_controls = await _request_deadline_controls(connection, [row])
     return _approval_request(
         row,
         versions.get(request_id, []),
         actions.get(request_id, []),
         stages.get(request_id, []),
+        deadline_controls.get(request_id),
     )
 
 
@@ -1563,9 +1741,271 @@ async def mark_notification_desktop_delivered(
     return _notification(row)
 
 
-async def materialize_due_notifications(connection: AsyncConnection) -> int:
+def _authenticated_user_from_row(row: Record) -> AuthenticatedUser:
+    return AuthenticatedUser(
+        id=row["id"],
+        username=row["username"],
+        full_name=row["full_name"],
+        position_id=row["position_id"],
+        job_title=row["job_title"],
+        role=row["role"],
+    )
+
+
+def _approval_actor_ids(
+    request_row: Record,
+    node_key: str,
+    config: Mapping[str, Any],
+    user_rows: Sequence[Record],
+) -> set[UUID]:
+    if request_row["status"] == "needs_revision":
+        return {request_row["requester_user_id"]}
+    return {
+        row["id"]
+        for row in user_rows
+        if _can_act_from_config(
+            _authenticated_user_from_row(row),
+            request_row,
+            node_key,
+            config,
+        )
+    }
+
+
+def _approval_escalation_recipient_ids(
+    config: Mapping[str, Any],
+    user_rows: Sequence[Record],
+    template_owner_id: UUID,
+) -> set[UUID]:
+    by_id = config.get("escalationUserId")
+    if by_id:
+        return {row["id"] for row in user_rows if str(row["id"]) == str(by_id)}
+    by_position = config.get("escalationPositionId")
+    if by_position:
+        return {
+            row["id"]
+            for row in user_rows
+            if row["position_id"] is not None and str(row["position_id"]) == str(by_position)
+        }
+    by_role = config.get("escalationRole")
+    if by_role:
+        return {row["id"] for row in user_rows if row["role"] == by_role}
+    return {row["id"] for row in user_rows if row["id"] == template_owner_id}
+
+
+async def _create_approval_deadline_delivery(
+    connection: AsyncConnection,
+    *,
+    request_row: Record,
+    recipient_user_id: UUID,
+    node_key: str,
+    node_title: str,
+    event_type: str,
+    recipient_role: str,
+    threshold_hours: int,
+    deadline: datetime,
+    occurred_at: datetime,
+) -> int:
+    inserted_id = await connection.scalar(
+        pg_insert(approval_deadline_events)
+        .values(
+            id=uuid4(),
+            request_id=request_row["id"],
+            recipient_user_id=recipient_user_id,
+            node_key=node_key,
+            event_type=event_type,
+            recipient_role=recipient_role,
+            threshold_hours=threshold_hours,
+            deadline_at=deadline,
+            created_at=occurred_at,
+        )
+        .on_conflict_do_nothing(constraint="uq_approval_deadline_delivery")
+        .returning(approval_deadline_events.c.id)
+    )
+    if inserted_id is None:
+        return 0
+    local_deadline = deadline.astimezone(ZoneInfo("Asia/Tashkent"))
+    if event_type == "reminder":
+        title = "Срок заявки приближается"
+        body = (
+            f"{request_row['title']} · {node_title} · осталось менее {threshold_hours} ч. · "
+            f"до {local_deadline:%d.%m %H:%M} (Ташкент)"
+        )
+        priority = "urgent" if threshold_hours <= 2 else "attention"
+    elif event_type == "overdue":
+        title = "Срок заявки истёк"
+        body = (
+            f"{request_row['title']} · {node_title} · срок был "
+            f"{local_deadline:%d.%m %H:%M} (Ташкент)"
+        )
+        priority = "urgent"
+    else:
+        title = "Эскалация просроченной заявки"
+        body = (
+            f"{request_row['title']} · {node_title} · просрочка более "
+            f"{threshold_hours} ч."
+        )
+        priority = "urgent"
+    await _upsert_notification(
+        connection,
+        user_id=recipient_user_id,
+        event_key=(
+            f"approval-deadline:{request_row['id']}:{deadline.isoformat()}:"
+            f"{node_key}:{event_type}:{threshold_hours}"
+        ),
+        kind="approval",
+        priority=priority,
+        title=title,
+        body=body,
+        section="payment_requests",
+        entity_id=request_row["id"],
+        requires_action=False,
+        occurred_at=occurred_at,
+        is_reminder=True,
+    )
+    return 1
+
+
+async def _materialize_approval_deadline_notifications(
+    connection: AsyncConnection,
+    now: datetime,
+) -> int:
+    request_rows = (
+        (
+            await connection.execute(
+                select(
+                    approval_requests,
+                    approval_templates.c.created_by_user_id.label("template_owner_user_id"),
+                )
+                .join(
+                    approval_templates,
+                    approval_templates.c.id == approval_requests.c.template_id,
+                )
+                .where(approval_requests.c.status.in_({"running", "needs_revision"}))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    due_rows = [row for row in request_rows if _approval_deadline(row) is not None]
+    if not due_rows:
+        return 0
+    template_ids = list({row["template_id"] for row in due_rows})
+    node_rows = (
+        (
+            await connection.execute(
+                select(approval_nodes).where(approval_nodes.c.template_id.in_(template_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    node_by_key = {(row["template_id"], row["node_key"]): row for row in node_rows}
+    user_rows = (
+        (
+            await connection.execute(select(users).where(users.c.status == "active"))
+        )
+        .mappings()
+        .all()
+    )
+    created = 0
+    for request_row in due_rows:
+        deadline = _approval_deadline(request_row)
+        if deadline is None:
+            continue
+        active_keys = request_row["active_node_keys"] or ["request"]
+        requester_notified = False
+        for node_key in active_keys:
+            node = node_by_key.get((request_row["template_id"], node_key))
+            config = node["config"] or {} if node is not None else {}
+            node_title = str(node["title"] if node is not None else "Текущий этап")
+            actor_ids = _approval_actor_ids(request_row, node_key, config, user_rows)
+            actor_role = "requester" if request_row["status"] == "needs_revision" else "approver"
+            if request_row["requester_user_id"] in actor_ids:
+                requester_notified = True
+            reminder_hours = _approval_reminder_hours([config])
+            if now < deadline:
+                reached = [
+                    hours
+                    for hours in reminder_hours
+                    if now >= deadline - timedelta(hours=hours)
+                ]
+                if reached:
+                    threshold = min(reached)
+                    for recipient_id in actor_ids:
+                        created += await _create_approval_deadline_delivery(
+                            connection,
+                            request_row=request_row,
+                            recipient_user_id=recipient_id,
+                            node_key=node_key,
+                            node_title=node_title,
+                            event_type="reminder",
+                            recipient_role=actor_role,
+                            threshold_hours=threshold,
+                            deadline=deadline,
+                            occurred_at=now,
+                        )
+                continue
+            for recipient_id in actor_ids:
+                created += await _create_approval_deadline_delivery(
+                    connection,
+                    request_row=request_row,
+                    recipient_user_id=recipient_id,
+                    node_key=node_key,
+                    node_title=node_title,
+                    event_type="overdue",
+                    recipient_role=(
+                        "requester"
+                        if recipient_id == request_row["requester_user_id"]
+                        else actor_role
+                    ),
+                    threshold_hours=0,
+                    deadline=deadline,
+                    occurred_at=now,
+                )
+            escalation_hours = _approval_escalation_hours([config])
+            if escalation_hours is not None and now >= deadline + timedelta(hours=escalation_hours):
+                for recipient_id in _approval_escalation_recipient_ids(
+                    config,
+                    user_rows,
+                    request_row["template_owner_user_id"],
+                ):
+                    created += await _create_approval_deadline_delivery(
+                        connection,
+                        request_row=request_row,
+                        recipient_user_id=recipient_id,
+                        node_key=node_key,
+                        node_title=node_title,
+                        event_type="escalation",
+                        recipient_role="process_owner",
+                        threshold_hours=escalation_hours,
+                        deadline=deadline,
+                        occurred_at=now,
+                    )
+        if now >= deadline and not requester_notified:
+            created += await _create_approval_deadline_delivery(
+                connection,
+                request_row=request_row,
+                recipient_user_id=request_row["requester_user_id"],
+                node_key="request",
+                node_title="Заявка целиком",
+                event_type="overdue",
+                recipient_role="requester",
+                threshold_hours=0,
+                deadline=deadline,
+                occurred_at=now,
+            )
+    return created
+
+
+async def materialize_due_notifications(
+    connection: AsyncConnection,
+    current_time: datetime | None = None,
+) -> int:
     """Create deadline reminders once; the unique event key makes every run idempotent."""
-    now = datetime.now(UTC)
+    now = current_time or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
     reminder_limit = now + timedelta(hours=24)
     created = 0
     due_tasks = (
@@ -1666,6 +2106,7 @@ async def materialize_due_notifications(connection: AsyncConnection) -> int:
                 .returning(workspace_notifications.c.id)
             )
             created += int((await connection.scalar(statement)) is not None)
+    created += await _materialize_approval_deadline_notifications(connection, now)
     return created
 
 
@@ -1785,6 +2226,7 @@ async def load_workspace(
     request_ids = [row["id"] for row in request_rows]
     versions_by_request = await _request_versions(connection, request_ids)
     actions_by_request = await _request_actions(connection, request_ids)
+    deadline_controls_by_request = await _request_deadline_controls(connection, request_rows)
 
     project_rows = (
         (
@@ -1915,6 +2357,7 @@ async def load_workspace(
                 versions_by_request.get(row["id"], []),
                 actions_by_request.get(row["id"], []),
                 stages_by_request.get(row["id"], []),
+                deadline_controls_by_request.get(row["id"]),
             )
             for row in request_rows
         ],

@@ -1330,6 +1330,9 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(openCard);
     expect(screen.getByRole("dialog", { name: "Заявка для доски" })).toBeInTheDocument();
+    expect(screen.getByText("Контроль срока")).toBeInTheDocument();
+    expect(screen.getByText("Укажите срок в заявке, чтобы включить напоминания и эскалацию."))
+      .toBeInTheDocument();
     expect(screen.getByText("Информация по заявке")).toBeInTheDocument();
     expect(screen.getByText("Ход согласования")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
@@ -1388,6 +1391,49 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByRole("button", { name: "Новая заявка" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
     expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
+  });
+
+  it("stores deadline reminders and escalation rules on an approval stage", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
+    const approvalNode = screen.getAllByText("Согласование").find(
+      (element) => element.closest(".react-flow__node"),
+    );
+    expect(approvalNode).toBeDefined();
+    fireEvent.click(approvalNode!);
+    fireEvent.change(screen.getByLabelText("Первое напоминание, ч."), {
+      target: { value: "12" },
+    });
+    fireEvent.change(screen.getByLabelText("Повторное, ч."), {
+      target: { value: "1" },
+    });
+    fireEvent.change(screen.getByLabelText("Эскалировать после просрочки, ч."), {
+      target: { value: "3" },
+    });
+    fireEvent.change(screen.getByLabelText("Получатель эскалации"), {
+      target: { value: people[1]!.id },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/approval-templates/workflow/graph"),
+      expect.objectContaining({ method: "PUT" }),
+    ));
+    const saveCall = fetchMock.mock.calls.find(([url, options]) =>
+      String(url).includes("/approval-templates/workflow/graph") && options?.method === "PUT",
+    );
+    const savedWorkflow = JSON.parse(String(saveCall?.[1]?.body)) as {
+      nodes: { id: string; config: Record<string, unknown> }[];
+    };
+    expect(savedWorkflow.nodes.find((node) => node.id === "manager")?.config).toMatchObject({
+      reminderHoursBefore: [12, 1],
+      escalationAfterHours: 3,
+      escalationUserId: people[1]!.id,
+    });
   });
 
   it("undoes, redoes and cancels workflow edits from shortcuts and toolbar controls", async () => {

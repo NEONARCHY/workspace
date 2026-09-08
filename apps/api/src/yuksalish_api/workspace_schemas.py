@@ -509,6 +509,27 @@ class ApprovalStageResponse(ApiModel):
     can_act: bool = False
 
 
+class ApprovalDeadlineEventResponse(ApiModel):
+    id: str
+    event_type: Literal["reminder", "overdue", "escalation"]
+    recipient_user_id: str
+    recipient_role: Literal["approver", "requester", "process_owner"]
+    node_key: str
+    threshold_hours: int
+    deadline_at: datetime
+    created_at: datetime
+
+
+class ApprovalDeadlineControlResponse(ApiModel):
+    status: Literal["not_set", "on_track", "due_soon", "overdue", "finished"]
+    remaining_seconds: int | None = None
+    reminder_hours_before: list[int] = Field(default_factory=list)
+    escalation_after_hours: int | None = None
+    next_event_at: datetime | None = None
+    escalation_at: datetime | None = None
+    events: list[ApprovalDeadlineEventResponse] = Field(default_factory=list)
+
+
 class PaymentRequestDetails(ApiModel):
     transfer_type: (
         Literal[
@@ -573,6 +594,7 @@ class ApprovalRequestResponse(ApiModel):
     revision: int = 1
     versions: list["ApprovalRequestVersionResponse"] = Field(default_factory=list)
     actions: list[ApprovalActionHistoryResponse] = Field(default_factory=list)
+    deadline_control: ApprovalDeadlineControlResponse
 
 
 class ApprovalRequestVersionResponse(ApiModel):

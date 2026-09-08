@@ -4,12 +4,13 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
+    create_approval_request,
     create_calendar_event,
     create_task,
     find_active_user_by_username,
@@ -21,8 +22,15 @@ from yuksalish_api.repository import (
     update_notification_preferences,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import chat_members
+from yuksalish_api.tables import (
+    approval_deadline_events,
+    approval_nodes,
+    approval_requests,
+    chat_members,
+    workspace_notifications,
+)
 from yuksalish_api.workspace_schemas import (
+    CreateApprovalRequest,
     CreateCalendarEventRequest,
     CreateTaskRequest,
     NotificationPreferencesUpdate,
@@ -104,6 +112,118 @@ async def _exercise_notifications(database_url: str) -> None:
                 assert persisted.occurred_at == reminders[0].occurred_at
                 assert persisted.desktop_delivered_at == first_delivery.desktop_delivered_at
                 assert any(item.kind == "message" for item in reloaded.notifications)
+
+                control_deadline = datetime.now(UTC).replace(microsecond=0) + timedelta(hours=25)
+                approval = await create_approval_request(
+                    connection,
+                    owner,
+                    CreateApprovalRequest(
+                        title="Deadline control approval",
+                        amount=1_250_000,
+                        deadline=control_deadline,
+                    ),
+                )
+                template_id = await connection.scalar(
+                    select(approval_requests.c.template_id).where(
+                        approval_requests.c.id == UUID(approval.id)
+                    )
+                )
+                node_key = approval.active_node_keys[0]
+                node_config = await connection.scalar(
+                    select(approval_nodes.c.config).where(
+                        approval_nodes.c.template_id == template_id,
+                        approval_nodes.c.node_key == node_key,
+                    )
+                )
+                await connection.execute(
+                    update(approval_nodes)
+                    .where(
+                        approval_nodes.c.template_id == template_id,
+                        approval_nodes.c.node_key == node_key,
+                    )
+                    .values(
+                        config={
+                            **(node_config or {}),
+                            "reminderHoursBefore": [12, 1],
+                            "escalationAfterHours": 3,
+                            "escalationUserId": str(other.id),
+                        }
+                    )
+                )
+                await materialize_due_notifications(
+                    connection,
+                    control_deadline - timedelta(hours=11),
+                )
+                await materialize_due_notifications(
+                    connection,
+                    control_deadline - timedelta(minutes=30),
+                )
+                await materialize_due_notifications(
+                    connection,
+                    control_deadline + timedelta(minutes=1),
+                )
+                await materialize_due_notifications(
+                    connection,
+                    control_deadline + timedelta(hours=5),
+                )
+                event_rows = (
+                    (
+                        await connection.execute(
+                            select(approval_deadline_events).where(
+                                approval_deadline_events.c.request_id == UUID(approval.id)
+                            )
+                        )
+                    )
+                    .mappings()
+                    .all()
+                )
+                assert {row["event_type"] for row in event_rows} == {
+                    "reminder",
+                    "overdue",
+                    "escalation",
+                }
+                assert {
+                    row["threshold_hours"]
+                    for row in event_rows
+                    if row["event_type"] == "reminder"
+                } == {12, 1}
+                assert any(
+                    row["recipient_role"] == "requester"
+                    and row["recipient_user_id"] == owner.id
+                    for row in event_rows
+                )
+                assert any(
+                    row["recipient_role"] == "process_owner"
+                    and row["recipient_user_id"] == other.id
+                    and row["threshold_hours"] == 3
+                    for row in event_rows
+                )
+                event_count = len(event_rows)
+                await materialize_due_notifications(
+                    connection,
+                    control_deadline + timedelta(hours=5),
+                )
+                assert await connection.scalar(
+                    select(func.count())
+                    .select_from(approval_deadline_events)
+                    .where(approval_deadline_events.c.request_id == UUID(approval.id))
+                ) == event_count
+                assert await connection.scalar(
+                    select(func.count())
+                    .select_from(workspace_notifications)
+                    .where(
+                        workspace_notifications.c.entity_id == UUID(approval.id),
+                        workspace_notifications.c.is_reminder.is_(True),
+                    )
+                ) == event_count
+                approval_snapshot = await load_workspace(connection, owner)
+                controlled = next(
+                    item for item in approval_snapshot.requests if item.id == approval.id
+                )
+                assert controlled.deadline_control.status == "on_track"
+                assert controlled.deadline_control.reminder_hours_before == [12, 1]
+                assert controlled.deadline_control.escalation_after_hours == 3
+                assert len(controlled.deadline_control.events) >= 1
                 await connection.execute(
                     delete(chat_members).where(chat_members.c.user_id == owner.id)
                 )

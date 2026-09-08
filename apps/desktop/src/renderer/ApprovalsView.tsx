@@ -51,7 +51,11 @@ import "@xyflow/react/dist/style.css";
 
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
 import type { PaymentRequestInput } from "./workspace-api";
-import { approvalColumnTotals, approvalStagePalette } from "./approval-board";
+import {
+  approvalColumnTotals,
+  approvalDeadlinePresentation,
+  approvalStagePalette,
+} from "./approval-board";
 import { AnimatedAmount } from "./AnimatedAmount";
 
 type ApprovalNode = Node<ApprovalNodeData>;
@@ -578,6 +582,12 @@ const approvalActionLabels: Readonly<Record<string, string>> = {
   cancel: "Отменено",
 };
 
+const deadlineEventLabels = {
+  reminder: "Напоминание отправлено",
+  overdue: "Зафиксирована просрочка",
+  escalation: "Эскалация отправлена",
+} as const;
+
 function formatMoney(amount: number, currency: string): string {
   return `${new Intl.NumberFormat("ru-RU").format(amount)} ${currency}`;
 }
@@ -835,6 +845,12 @@ export function ApprovalsView({
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId],
   );
+  const selectedNodeReminderHours = useMemo(() => {
+    const value = selectedNode?.data.reminderHoursBefore;
+    if (!Array.isArray(value)) return [24, 2];
+    const normalized = value.map(Number).filter((hours) => Number.isFinite(hours) && hours >= 1);
+    return normalized.length ? normalized : [24, 2];
+  }, [selectedNode]);
   const boardColumns = useMemo(
     () => approvalBoardColumns(workflow, requests),
     [requests, workflow],
@@ -870,6 +886,9 @@ export function ApprovalsView({
   const selectedRequestColumnIndex = boardColumns.findIndex(
     (column) => column.key === selectedRequestColumn,
   );
+  const selectedDeadline = selectedRequest === undefined
+    ? undefined
+    : approvalDeadlinePresentation(selectedRequest);
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
     [people],
@@ -1456,7 +1475,10 @@ export function ApprovalsView({
                           >
                             <span className="approval-card-topline">
                               <span>№{request.number}</span>
-                              {request.details.requestPriority === "urgent" ? <em>Срочно</em> : null}
+                              <span className="approval-card-flags">
+                                {request.details.requestPriority === "urgent" ? <em>Срочно</em> : null}
+                                {request.details.deadline ? <em className={`deadline-${approvalDeadlinePresentation(request).tone}`}>{approvalDeadlinePresentation(request).label}</em> : null}
+                              </span>
                             </span>
                             <strong>{request.title}</strong>
                             <span className="approval-card-amount">{formatMoney(request.amount, request.currency)}</span>
@@ -1653,6 +1675,31 @@ export function ApprovalsView({
                         <span>{latestReturnComment(selectedRequest)}</span>
                       </div>
                     ) : null}
+                    <section className={`approval-deadline-control deadline-${selectedDeadline?.tone ?? "neutral"}`}>
+                      <header>
+                        <div><span>Контроль срока</span><strong>{selectedDeadline?.label ?? "Без срока"}</strong></div>
+                        <small>{selectedDeadline?.detail}</small>
+                      </header>
+                      {selectedRequest.details.deadline ? (
+                        <dl>
+                          <div><dt>Срок</dt><dd>{formatDateTime(selectedRequest.details.deadline)}</dd></div>
+                          <div><dt>Следующее событие</dt><dd>{formatDateTime(selectedRequest.deadlineControl?.nextEventAt)}</dd></div>
+                          <div><dt>Эскалация</dt><dd>{formatDateTime(selectedRequest.deadlineControl?.escalationAt)}</dd></div>
+                          <div><dt>Правило</dt><dd>за {(selectedRequest.deadlineControl?.reminderHoursBefore ?? [24, 2]).join(" и ")} ч.; эскалация через {selectedRequest.deadlineControl?.escalationAfterHours ?? 4} ч.</dd></div>
+                        </dl>
+                      ) : <p>Укажите срок в заявке, чтобы включить напоминания и эскалацию.</p>}
+                      {selectedRequest.deadlineControl?.events.length ? (
+                        <div className="approval-deadline-events" aria-label="Журнал контроля срока">
+                          {selectedRequest.deadlineControl.events.slice(-5).reverse().map((event) => (
+                            <div key={event.id}>
+                              <span>{deadlineEventLabels[event.eventType]}</span>
+                              <strong>{peopleById.get(event.recipientUserId)?.name ?? "Сотрудник"}</strong>
+                              <time>{formatDateTime(event.createdAt)}</time>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </section>
                     <section className="approval-fact-section">
                       <h3>Информация по заявке</h3>
                       <dl>
@@ -1944,6 +1991,27 @@ export function ApprovalsView({
                         ))}
                       </select>
                     </label>
+                    <fieldset className="workflow-deadline-settings">
+                      <legend>Сроки и эскалация</legend>
+                      <div>
+                        <label>Первое напоминание, ч.
+                          <input type="number" min={1} max={720} value={selectedNodeReminderHours[0] ?? 24} onChange={(event) => updateSelected({ reminderHoursBefore: [Math.max(1, Number(event.target.value) || 24), selectedNodeReminderHours[1] ?? 2] })} />
+                        </label>
+                        <label>Повторное, ч.
+                          <input type="number" min={1} max={720} value={selectedNodeReminderHours[1] ?? 2} onChange={(event) => updateSelected({ reminderHoursBefore: [selectedNodeReminderHours[0] ?? 24, Math.max(1, Number(event.target.value) || 2)] })} />
+                        </label>
+                      </div>
+                      <label>Эскалировать после просрочки, ч.
+                        <input type="number" min={1} max={720} value={Number(selectedNode.data.escalationAfterHours ?? 4)} onChange={(event) => updateSelected({ escalationAfterHours: Math.max(1, Number(event.target.value) || 4) })} />
+                      </label>
+                      <label>Получатель эскалации
+                        <select value={String(selectedNode.data.escalationUserId ?? "")} onChange={(event) => updateSelected({ escalationUserId: event.target.value || undefined })}>
+                          <option value="">Владелец маршрута</option>
+                          {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                        </select>
+                      </label>
+                      <small>Напоминания получают согласующие этапа. Инициатор видит просрочку отдельно.</small>
+                    </fieldset>
                   </>
                 ) : null}
                 {selectedNode.data.kind === "start" || selectedNode.data.kind === "correction" ? (

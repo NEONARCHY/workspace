@@ -53,3 +53,59 @@ export function approvalColumnTotals(requests: readonly Pick<ApprovalRequestSumm
     .sort(([left], [right]) => left === right ? 0 : left === "UZS" ? -1 : right === "UZS" ? 1 : left.localeCompare(right))
     .map(([currency, minorUnits]) => ({ currency, minorUnits, formatted: formatMinorUnits(minorUnits, currency) }));
 }
+
+export interface ApprovalDeadlinePresentation {
+  readonly tone: "neutral" | "attention" | "urgent" | "success";
+  readonly label: string;
+  readonly detail: string;
+}
+
+export function formatDeadlineDistance(seconds: number): string {
+  const absolute = Math.abs(seconds);
+  if (absolute < 3600) return `${Math.max(1, Math.ceil(absolute / 60))} мин.`;
+  if (absolute < 86400) return `${Math.ceil(absolute / 3600)} ч.`;
+  return `${Math.ceil(absolute / 86400)} дн.`;
+}
+
+export function approvalDeadlinePresentation(
+  request: Pick<ApprovalRequestSummary, "status" | "deadlineControl"> & {
+    readonly details: { readonly deadline?: string | null };
+  },
+  now = new Date(),
+): ApprovalDeadlinePresentation {
+  const deadline = request.details.deadline ? new Date(request.details.deadline) : undefined;
+  if (deadline === undefined || !Number.isFinite(deadline.getTime())) {
+    return { tone: "neutral", label: "Без срока", detail: "Контроль срока не запущен" };
+  }
+  if (["approved", "rejected", "cancelled"].includes(request.status)) {
+    return { tone: "success", label: "Завершена", detail: "Контроль срока остановлен" };
+  }
+  const remaining = request.deadlineControl?.remainingSeconds
+    ?? Math.floor((deadline.getTime() - now.getTime()) / 1000);
+  if (remaining < 0) {
+    return {
+      tone: "urgent",
+      label: `Просрочено на ${formatDeadlineDistance(remaining)}`,
+      detail: "Инициатор уведомлён; действует правило эскалации",
+    };
+  }
+  if (remaining <= 2 * 3600) {
+    return {
+      tone: "urgent",
+      label: `Осталось ${formatDeadlineDistance(remaining)}`,
+      detail: "Срок требует немедленного внимания",
+    };
+  }
+  if (remaining <= 24 * 3600) {
+    return {
+      tone: "attention",
+      label: `Осталось ${formatDeadlineDistance(remaining)}`,
+      detail: "Срок приближается",
+    };
+  }
+  return {
+    tone: "neutral",
+    label: `Осталось ${formatDeadlineDistance(remaining)}`,
+    detail: "Заявка идёт по графику",
+  };
+}

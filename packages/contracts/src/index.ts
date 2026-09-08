@@ -546,6 +546,27 @@ export interface ApprovalStage {
   readonly canAct: boolean;
 }
 
+export interface ApprovalDeadlineEvent {
+  readonly id: string;
+  readonly eventType: "reminder" | "overdue" | "escalation";
+  readonly recipientUserId: string;
+  readonly recipientRole: "approver" | "requester" | "process_owner";
+  readonly nodeKey: string;
+  readonly thresholdHours: number;
+  readonly deadlineAt: string;
+  readonly createdAt: string;
+}
+
+export interface ApprovalDeadlineControl {
+  readonly status: "not_set" | "on_track" | "due_soon" | "overdue" | "finished";
+  readonly remainingSeconds?: number | null;
+  readonly reminderHoursBefore: readonly number[];
+  readonly escalationAfterHours?: number | null;
+  readonly nextEventAt?: string | null;
+  readonly escalationAt?: string | null;
+  readonly events: readonly ApprovalDeadlineEvent[];
+}
+
 export interface PaymentRequestDetails {
   readonly transferType?: "Гонорар (с расчетом)" | "Конвертация" | "Другие услуги" | null;
   readonly projectName: string;
@@ -585,6 +606,7 @@ export interface ApprovalRequestSummary {
   readonly revision: number;
   readonly versions: readonly ApprovalRequestVersion[];
   readonly actions: readonly ApprovalActionHistory[];
+  readonly deadlineControl?: ApprovalDeadlineControl;
 }
 
 export interface WorkflowNodeDefinition {
