@@ -13,7 +13,7 @@ const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
 const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `t-${i}`, title: `Задача ${i + 1}`, dueAt: i === 30 ? null : new Date(2026, 8, i + 1).toISOString() }));
 const wrap = (node: React.ReactNode) => <FluentProvider theme={workspaceTheme}>{node}</FluentProvider>;
 const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
-  selectedIds: new Set<string>(), onOpen, onToggle, onTogglePage: vi.fn(),
+  departments: [], selectedIds: new Set<string>(), onOpen, onToggle, onTogglePage: vi.fn(),
 });
 afterEach(cleanup);
 
@@ -65,6 +65,21 @@ describe("Corporate record tables", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Сотрудник 1" }));
     expect(onOpen).toHaveBeenCalledTimes(1); expect(onOpen).toHaveBeenLastCalledWith(employees[0]);
     fireEvent.click(screen.getByText("Mutaxassis")); expect(onToggle).toHaveBeenCalledWith("e-0", true);
+  });
+  it("shows and sorts the assigned department", () => {
+    const assigned = employees.slice(0, 2).map((employee, index) => ({ ...employee, departmentId: `d-${index}` }));
+    render(wrap(<EmployeeRecords
+      employees={assigned}
+      filterKey="all"
+      {...employeeRecordProps()}
+      departments={[
+        { id: "d-0", code: "z", name: "Zeta", parentId: null, assignedUsersCount: 1 },
+        { id: "d-1", code: "a", name: "Alpha", parentId: null, assignedUsersCount: 1 },
+      ]}
+    />));
+    expect(screen.getByText("Zeta")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Подразделение/ }));
+    expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })[0]).toHaveTextContent("Сотрудник 2");
   });
   it("translates pending activation and handles empty results without a fake page", () => {
     const view = render(wrap(<EmployeeRecords employees={employees.slice(30)} filterKey="pending" {...employeeRecordProps()} />));

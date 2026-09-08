@@ -2,20 +2,31 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .access_control import MODULE_KEYS, normalize_permissions
 from .auth import AuthenticatedUser
+from .catalog import MODULE_CATALOG
 from .directory_schemas import (
+    DepartmentCreateRequest,
+    DepartmentResponse,
+    DepartmentUpdateRequest,
     DirectoryBootstrapResponse,
     DirectoryEmployeeResponse,
     EmployeeAccessUpdateRequest,
+    ModuleAccessDescriptorResponse,
+    ModuleAccessRuleResponse,
+    ModuleAccessRuleUpdateRequest,
     PositionCreateRequest,
     PositionResponse,
     PositionUpdateRequest,
     RoleDescriptorResponse,
 )
-from .tables import audit_events, positions, users
+from .tables import audit_events, departments, module_access_rules, positions, users
+from .workspace_schemas import ModulePermissionSet
 
 
 class DirectoryServiceError(ValueError):
@@ -97,7 +108,59 @@ async def _position_response(
     )
 
 
-async def load_directory(connection: AsyncConnection) -> DirectoryBootstrapResponse:
+async def _department_response(
+    connection: AsyncConnection,
+    department_id: UUID,
+) -> DepartmentResponse:
+    row = (
+        await connection.execute(
+            select(
+                departments,
+                func.count(users.c.id).label("assigned_users_count"),
+            )
+            .outerjoin(users, users.c.department_id == departments.c.id)
+            .where(departments.c.id == department_id)
+            .group_by(departments.c.id)
+        )
+    ).mappings().first()
+    if row is None:
+        raise DirectoryServiceError(404, "Department was not found")
+    return DepartmentResponse(
+        id=str(row["id"]),
+        code=row["code"],
+        name=row["name"],
+        parent_id=str(row["parent_id"]) if row["parent_id"] else None,
+        assigned_users_count=row["assigned_users_count"],
+    )
+
+
+def _module_access_rule(row: Any) -> ModuleAccessRuleResponse:
+    return ModuleAccessRuleResponse(
+        id=str(row["id"]),
+        subject_type=row["subject_type"],
+        subject_key=row["subject_key"],
+        module_key=row["module_key"],
+        permissions=ModulePermissionSet.model_validate(
+            normalize_permissions(row["permissions"] or {})
+        ),
+    )
+
+
+async def load_directory(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser | None = None,
+) -> DirectoryBootstrapResponse:
+    department_rows = (
+        await connection.execute(
+            select(
+                departments,
+                func.count(users.c.id).label("assigned_users_count"),
+            )
+            .outerjoin(users, users.c.department_id == departments.c.id)
+            .group_by(departments.c.id)
+            .order_by(departments.c.name)
+        )
+    ).mappings().all()
     position_rows = (
         await connection.execute(
             select(
@@ -116,6 +179,7 @@ async def load_directory(connection: AsyncConnection) -> DirectoryBootstrapRespo
                 users.c.username,
                 users.c.full_name,
                 users.c.role,
+                users.c.department_id,
                 users.c.position_id,
                 func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
                 users.c.status,
@@ -124,8 +188,31 @@ async def load_directory(connection: AsyncConnection) -> DirectoryBootstrapRespo
             .order_by(users.c.full_name)
         )
     ).mappings().all()
+    access_rule_rows: list[RowMapping] = []
+    if actor is None or actor.role in {"admin", "superadmin"}:
+        access_rule_rows = list(
+            (
+                await connection.execute(
+                select(module_access_rules).order_by(
+                    module_access_rules.c.subject_type,
+                    module_access_rules.c.subject_key,
+                    module_access_rules.c.module_key,
+                )
+            )
+            ).mappings().all()
+        )
     return DirectoryBootstrapResponse(
         roles=ROLE_DESCRIPTORS,
+        departments=[
+            DepartmentResponse(
+                id=str(row["id"]),
+                code=row["code"],
+                name=row["name"],
+                parent_id=str(row["parent_id"]) if row["parent_id"] else None,
+                assigned_users_count=row["assigned_users_count"],
+            )
+            for row in department_rows
+        ],
         positions=[
             PositionResponse(
                 id=str(row["id"]),
@@ -143,12 +230,256 @@ async def load_directory(connection: AsyncConnection) -> DirectoryBootstrapRespo
                 username=row["username"],
                 name=row["full_name"],
                 role=row["role"],
+                department_id=(
+                    str(row["department_id"]) if row["department_id"] else None
+                ),
                 position_id=str(row["position_id"]) if row["position_id"] else None,
                 job_title=row["job_title"],
                 status=row["status"],
             )
             for row in employee_rows
         ],
+        modules=[
+            ModuleAccessDescriptorResponse(
+                key=module.key,
+                label=module.label.ru,
+                status=module.status,
+            )
+            for module in MODULE_CATALOG
+        ],
+        access_rules=[_module_access_rule(row) for row in access_rule_rows],
+    )
+
+
+async def create_department(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    payload: DepartmentCreateRequest,
+) -> DepartmentResponse:
+    _require_admin(actor)
+    duplicate = await connection.scalar(
+        select(departments.c.id).where(func.lower(departments.c.code) == payload.code.lower())
+    )
+    if duplicate is not None:
+        raise DirectoryServiceError(409, "Department code already exists")
+    if payload.parent_id is not None:
+        parent_exists = await connection.scalar(
+            select(departments.c.id).where(departments.c.id == payload.parent_id)
+        )
+        if parent_exists is None:
+            raise DirectoryServiceError(422, "Parent department does not exist")
+    department_id = uuid4()
+    await connection.execute(
+        insert(departments).values(
+            id=department_id,
+            code=payload.code,
+            name=payload.name,
+            parent_id=payload.parent_id,
+            created_at=datetime.now(UTC),
+        )
+    )
+    await _audit(
+        connection,
+        actor,
+        "department.created",
+        "department",
+        department_id,
+        {
+            "code": payload.code,
+            "name": payload.name,
+            "parentId": str(payload.parent_id) if payload.parent_id else None,
+        },
+    )
+    return await _department_response(connection, department_id)
+
+
+async def update_department(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    department_id: UUID,
+    payload: DepartmentUpdateRequest,
+) -> DepartmentResponse:
+    _require_admin(actor)
+    existing = (
+        await connection.execute(
+            select(departments).where(departments.c.id == department_id).with_for_update()
+        )
+    ).mappings().first()
+    if existing is None:
+        raise DirectoryServiceError(404, "Department was not found")
+    values: dict[str, Any] = {}
+    if payload.code is not None and payload.code.lower() != existing["code"].lower():
+        duplicate = await connection.scalar(
+            select(departments.c.id).where(
+                func.lower(departments.c.code) == payload.code.lower(),
+                departments.c.id != department_id,
+            )
+        )
+        if duplicate is not None:
+            raise DirectoryServiceError(409, "Department code already exists")
+        values["code"] = payload.code
+    if payload.name is not None:
+        values["name"] = payload.name
+    if "parent_id" in payload.model_fields_set:
+        parent_id = payload.parent_id
+        current = parent_id
+        visited: set[UUID] = set()
+        while current is not None:
+            if current == department_id:
+                raise DirectoryServiceError(409, "Department hierarchy cannot contain a cycle")
+            if current in visited:
+                raise DirectoryServiceError(409, "Department hierarchy already contains a cycle")
+            visited.add(current)
+            parent = (
+                await connection.execute(
+                    select(departments.c.parent_id).where(departments.c.id == current)
+                )
+            ).scalar_one_or_none()
+            if parent is None:
+                exists = await connection.scalar(
+                    select(departments.c.id).where(departments.c.id == current)
+                )
+                if exists is None:
+                    raise DirectoryServiceError(422, "Parent department does not exist")
+            current = parent
+        values["parent_id"] = parent_id
+    if values:
+        await connection.execute(
+            update(departments).where(departments.c.id == department_id).values(**values)
+        )
+    await _audit(
+        connection,
+        actor,
+        "department.updated",
+        "department",
+        department_id,
+        {
+            "before": {
+                "code": existing["code"],
+                "name": existing["name"],
+                "parentId": (
+                    str(existing["parent_id"]) if existing["parent_id"] else None
+                ),
+            },
+            "after": {
+                "code": values.get("code", existing["code"]),
+                "name": values.get("name", existing["name"]),
+                "parentId": (
+                    str(values.get("parent_id", existing["parent_id"]))
+                    if values.get("parent_id", existing["parent_id"])
+                    else None
+                ),
+            },
+        },
+    )
+    return await _department_response(connection, department_id)
+
+
+async def _validate_access_subject(
+    connection: AsyncConnection,
+    subject_type: str,
+    subject_key: str,
+) -> None:
+    if subject_type == "role":
+        if subject_key not in {"admin", "manager", "employee"}:
+            raise DirectoryServiceError(422, "Role cannot be configured")
+        return
+    try:
+        subject_id = UUID(subject_key)
+    except ValueError as error:
+        raise DirectoryServiceError(422, "Access subject is invalid") from error
+    table = departments if subject_type == "department" else users
+    if await connection.scalar(select(table.c.id).where(table.c.id == subject_id)) is None:
+        raise DirectoryServiceError(404, "Access subject was not found")
+
+
+async def set_module_access_rule(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    subject_type: str,
+    subject_key: str,
+    module_key: str,
+    payload: ModuleAccessRuleUpdateRequest,
+) -> ModuleAccessRuleResponse:
+    _require_admin(actor)
+    if subject_type not in {"role", "department", "user"}:
+        raise DirectoryServiceError(422, "Access subject type is invalid")
+    if module_key not in MODULE_KEYS:
+        raise DirectoryServiceError(422, "Module is invalid")
+    await _validate_access_subject(connection, subject_type, subject_key)
+    now = datetime.now(UTC)
+    values = {
+        "permissions": normalize_permissions(payload.permissions.model_dump()),
+        "created_by_user_id": actor.id,
+        "updated_at": now,
+    }
+    row = (
+        (
+            await connection.execute(
+                pg_insert(module_access_rules)
+                .values(
+                    id=uuid4(),
+                    subject_type=subject_type,
+                    subject_key=subject_key,
+                    module_key=module_key,
+                    created_at=now,
+                    **values,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_core_module_access_rule_subject_module",
+                    set_=values,
+                )
+                .returning(module_access_rules)
+            )
+        )
+        .mappings()
+        .one()
+    )
+    await _audit(
+        connection,
+        actor,
+        "module_access_rule.updated",
+        "module_access_rule",
+        row["id"],
+        {
+            "subjectType": subject_type,
+            "subjectKey": subject_key,
+            "moduleKey": module_key,
+            "permissions": values["permissions"],
+        },
+    )
+    return _module_access_rule(row)
+
+
+async def delete_module_access_rule(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    subject_type: str,
+    subject_key: str,
+    module_key: str,
+) -> None:
+    _require_admin(actor)
+    existing = (
+        await connection.execute(
+            select(module_access_rules).where(
+                module_access_rules.c.subject_type == subject_type,
+                module_access_rules.c.subject_key == subject_key,
+                module_access_rules.c.module_key == module_key,
+            )
+        )
+    ).mappings().first()
+    if existing is None:
+        return
+    await connection.execute(
+        delete(module_access_rules).where(module_access_rules.c.id == existing["id"])
+    )
+    await _audit(
+        connection,
+        actor,
+        "module_access_rule.deleted",
+        "module_access_rule",
+        existing["id"],
+        {"subjectType": subject_type, "subjectKey": subject_key, "moduleKey": module_key},
     )
 
 
@@ -280,12 +611,19 @@ async def update_employee_access(
         if position is None:
             raise DirectoryServiceError(422, "Position is not active or does not exist")
         position_name = position["name"]
+    if payload.department_id is not None:
+        department_exists = await connection.scalar(
+            select(departments.c.id).where(departments.c.id == payload.department_id)
+        )
+        if department_exists is None:
+            raise DirectoryServiceError(422, "Department does not exist")
     now = datetime.now(UTC)
     await connection.execute(
         update(users)
         .where(users.c.id == employee_id)
         .values(
             role=payload.role,
+            department_id=payload.department_id,
             position_id=payload.position_id,
             job_title=position_name,
             updated_at=now,
@@ -300,10 +638,16 @@ async def update_employee_access(
         {
             "before": {
                 "role": employee["role"],
+                "departmentId": (
+                    str(employee["department_id"]) if employee["department_id"] else None
+                ),
                 "positionId": str(employee["position_id"]) if employee["position_id"] else None,
             },
             "after": {
                 "role": payload.role,
+                "departmentId": (
+                    str(payload.department_id) if payload.department_id else None
+                ),
                 "positionId": str(payload.position_id) if payload.position_id else None,
             },
         },
@@ -313,6 +657,7 @@ async def update_employee_access(
         username=employee["username"],
         name=employee["full_name"],
         role=payload.role,
+        department_id=str(payload.department_id) if payload.department_id else None,
         position_id=str(payload.position_id) if payload.position_id else None,
         job_title=position_name,
         status=employee["status"],

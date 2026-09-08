@@ -14,6 +14,7 @@ from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .access_control import ensure_request_module_access
 from .database import get_connection
 from .settings import Settings
 from .tables import auth_sessions, users
@@ -36,6 +37,7 @@ class AuthenticatedUser:
     position_id: UUID | None
     job_title: str | None
     role: str
+    department_id: UUID | None = None
     session_id: UUID | None = None
 
 
@@ -133,6 +135,7 @@ async def load_authenticated_user(
         users.c.position_id,
         users.c.job_title,
         users.c.role,
+        users.c.department_id,
     ).where(users.c.id == user_id, users.c.status == "active")
     row = (await connection.execute(statement)).mappings().first()
     if row is None:
@@ -144,6 +147,7 @@ async def load_authenticated_user(
         position_id=row["position_id"],
         job_title=row["job_title"],
         role=row["role"],
+        department_id=row["department_id"],
         session_id=session_id,
     )
 
@@ -192,10 +196,12 @@ async def require_user(
             detail="Bearer token required",
         )
     try:
-        return await authenticate_access_token(
+        user = await authenticate_access_token(
             connection,
             credentials.credentials,
             request.app.state.settings,
         )
+        await ensure_request_module_access(connection, user, request.url.path, request.method)
+        return user
     except InvalidTokenError as error:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(error)) from error

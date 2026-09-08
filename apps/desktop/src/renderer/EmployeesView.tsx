@@ -5,13 +5,18 @@ import type {
   CreateChatInput,
   DirectoryBootstrap,
   DirectoryEmployee,
+  ModuleAccessRule,
+  ModuleAccessSubject,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspacePosition,
   WorkspaceRole,
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
+import { DepartmentManagement } from "./DepartmentManagement";
+import { ModuleAccessManagement } from "./ModuleAccessManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 import {
@@ -24,6 +29,7 @@ import {
 interface EmployeesViewProps {
   readonly token: string;
   readonly currentUser: WorkspacePerson;
+  readonly allowAdministration?: boolean;
   readonly onInvite?: () => void;
   readonly onCreateChat?: (input: CreateChatInput) => Promise<ChatSummary>;
   readonly onChatCreated?: (chatId: string) => void;
@@ -33,9 +39,16 @@ function replaceEmployee(
   directory: DirectoryBootstrap,
   employee: DirectoryEmployee,
 ): DirectoryBootstrap {
+  const previous = directory.employees.find((item) => item.id === employee.id);
   return {
     ...directory,
     employees: directory.employees.map((item) => (item.id === employee.id ? employee : item)),
+    departments: directory.departments.map((department) => ({
+      ...department,
+      assignedUsersCount: department.assignedUsersCount
+        - (previous?.departmentId === department.id ? 1 : 0)
+        + (employee.departmentId === department.id ? 1 : 0),
+    })),
   };
 }
 
@@ -50,13 +63,27 @@ function replacePosition(
   };
 }
 
-export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
+function replaceDepartment(
+  directory: DirectoryBootstrap,
+  department: WorkspaceDepartment,
+): DirectoryBootstrap {
+  const exists = directory.departments.some((item) => item.id === department.id);
+  return {
+    ...directory,
+    departments: exists
+      ? directory.departments.map((item) => item.id === department.id ? department : item)
+      : [...directory.departments, department],
+  };
+}
+
+export function EmployeesView({ token, currentUser, allowAdministration, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
   const [selectedPositionId, setSelectedPositionId] = useState("");
   const [employeeRole, setEmployeeRole] = useState<Exclude<WorkspaceRole, "superadmin">>("employee");
   const [employeePositionId, setEmployeePositionId] = useState("");
+  const [employeeDepartmentId, setEmployeeDepartmentId] = useState("");
   const [positionName, setPositionName] = useState("");
   const [positionActive, setPositionActive] = useState(true);
   const [newPositionName, setNewPositionName] = useState("");
@@ -65,6 +92,8 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
   const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "inactive">("all");
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
+  const [departmentsOpen, setDepartmentsOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<ReadonlySet<string>>(new Set());
   const [bulkPanel, setBulkPanel] = useState<"position" | "role" | "chat" | null>(null);
   const [bulkPositionId, setBulkPositionId] = useState("__choose__");
@@ -72,20 +101,27 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
   const [chatTitle, setChatTitle] = useState("");
   const positionFocusTarget = useRestoreFocusTarget();
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const canManage = ["admin", "superadmin"].includes(currentUser.role);
+  const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
 
   useEffect(() => {
     let active = true;
     void loadDirectory(token)
       .then((loaded) => {
         if (!active) return;
-        setDirectory(loaded);
-        const firstEmployee = loaded.employees[0];
-        const firstPosition = loaded.positions[0];
+        const normalized: DirectoryBootstrap = {
+          ...loaded,
+          departments: loaded.departments ?? [],
+          modules: loaded.modules ?? [],
+          accessRules: loaded.accessRules ?? [],
+        };
+        setDirectory(normalized);
+        const firstEmployee = normalized.employees[0];
+        const firstPosition = normalized.positions[0];
         setSelectedEmployeeId(firstEmployee?.id ?? "");
         if (firstEmployee !== undefined && firstEmployee.role !== "superadmin") {
           setEmployeeRole(firstEmployee.role);
           setEmployeePositionId(firstEmployee.positionId ?? "");
+          setEmployeeDepartmentId(firstEmployee.departmentId ?? "");
         }
         setSelectedPositionId(firstPosition?.id ?? "");
         setPositionName(firstPosition?.name ?? "");
@@ -120,6 +156,7 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
     setSelectedEmployeeId(employee.id);
     if (employee.role !== "superadmin") setEmployeeRole(employee.role);
     setEmployeePositionId(employee.positionId ?? "");
+    setEmployeeDepartmentId(employee.departmentId ?? "");
     setPanel("employee");
   };
 
@@ -154,9 +191,10 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
         selectedEmployee.id,
         employeeRole,
         employeePositionId || undefined,
+        employeeDepartmentId || undefined,
       );
       setDirectory(replaceEmployee(directory, saved));
-      setFeedback("Роль и должность сотрудника сохранены. Изменение записано в аудит.");
+      setFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника");
     } finally {
@@ -207,6 +245,7 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
       employee.id,
       kind === "role" ? bulkRole as Exclude<WorkspaceRole, "superadmin"> : employee.role as Exclude<WorkspaceRole, "superadmin">,
       kind === "position" ? bulkPositionId || undefined : employee.positionId ?? undefined,
+      employee.departmentId ?? undefined,
     )));
     const saved = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     const failedIds = new Set(targets.filter((_, index) => results[index]?.status === "rejected").map((employee) => employee.id));
@@ -255,13 +294,30 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
 
   const search = employeeQuery.trim().toLocaleLowerCase("ru");
   const visibleEmployees = directory.employees.filter((employee) =>
-    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(search)
+    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${directory.departments.find((department) => department.id === employee.departmentId)?.name ?? ""}`.toLocaleLowerCase("ru").includes(search)
       && (roleFilter === "all" || employee.role === roleFilter)
       && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
         || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
         || statusFilter === "inactive" && !["active", "pending", "invited"].includes(employee.status)));
   const selectedVisibleCount = visibleEmployees.filter((employee) => selectedEmployeeIds.has(employee.id)).length;
   const visibleSelection = selectedVisibleCount === 0 ? false : selectedVisibleCount === visibleEmployees.length ? true : "mixed";
+
+  const mergeAccessRule = (rule: ModuleAccessRule) => {
+    setDirectory((current) => current === undefined ? current : {
+      ...current,
+      accessRules: [
+        ...current.accessRules.filter((item) => !(item.subjectType === rule.subjectType && item.subjectKey === rule.subjectKey && item.moduleKey === rule.moduleKey)),
+        rule,
+      ],
+    });
+  };
+
+  const removeAccessRule = (subjectType: ModuleAccessSubject, subjectKey: string, moduleKey: string) => {
+    setDirectory((current) => current === undefined ? current : {
+      ...current,
+      accessRules: current.accessRules.filter((item) => !(item.subjectType === subjectType && item.subjectKey === subjectKey && item.moduleKey === moduleKey)),
+    });
+  };
 
   return (
     <section className={`workspace-view employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
@@ -270,17 +326,23 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
           <h1>Сотрудники</h1>
           <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
         </div>
-        <div className="toolbar-actions"><Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>{canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}</div>
+        <div className="toolbar-actions">
+          {canManage ? <Button onClick={() => setDepartmentsOpen(true)}>Подразделения</Button> : null}
+          {canManage ? <Button onClick={() => setAccessOpen(true)}>Права модулей</Button> : null}
+          <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
+          {canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
+        </div>
       </header>
 
       <div className="record-list-controls">
-        <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
+        <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин, должность или подразделение" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
         <label>Роль<select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         <label>Состояние<select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></select></label>
         {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
       </div>
       <EmployeeRecords
         employees={visibleEmployees}
+        departments={directory.departments}
         filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}`}
         selectedIds={selectedEmployeeIds}
         onOpen={selectEmployee}
@@ -388,6 +450,17 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
                       ))}
                   </Select>
                 </Field>
+                <Field label="Подразделение" hint="Определяет структуру команды и наследуемые права.">
+                  <Select
+                    aria-label="Подразделение"
+                    disabled={busy || !canManage || selectedEmployee.role === "superadmin"}
+                    value={employeeDepartmentId}
+                    onChange={(event) => setEmployeeDepartmentId(event.target.value)}
+                  >
+                    <option value="">Не назначено</option>
+                    {directory.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  </Select>
+                </Field>
               </div>
               {canManage ? (
                 <Button
@@ -460,6 +533,18 @@ export function EmployeesView({ token, currentUser, onInvite, onCreateChat, onCh
         </aside>}
         </DialogSurface>
       </Dialog>
+      {departmentsOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setDepartmentsOpen(false); }}>
+        <DialogSurface className="directory-management-dialog" aria-label="Подразделения">
+          <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть подразделения" onClick={() => setDepartmentsOpen(false)} /></div>
+          <DepartmentManagement token={token} departments={directory.departments} onChanged={(department) => setDirectory((current) => current ? replaceDepartment(current, department) : current)} />
+        </DialogSurface>
+      </Dialog> : null}
+      {accessOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setAccessOpen(false); }}>
+        <DialogSurface className="directory-management-dialog access-dialog" aria-label="Права модулей">
+          <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть права модулей" onClick={() => setAccessOpen(false)} /></div>
+          <ModuleAccessManagement token={token} directory={directory} onRuleChanged={mergeAccessRule} onRuleDeleted={removeAccessRule} />
+        </DialogSurface>
+      </Dialog> : null}
       {bulkPanel ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setBulkPanel(null); }}>
         <DialogSurface className="employee-bulk-dialog" aria-label="Действие с выбранными сотрудниками">
           <DialogBody>

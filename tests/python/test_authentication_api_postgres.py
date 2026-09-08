@@ -448,6 +448,139 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert changed.status_code == 200
         assert changed.json()["role"] == "manager"
+
+        parent_department = await client.post(
+            "/api/v1/directory/departments",
+            headers=admin_headers,
+            json={
+                "code": f"api-{uuid4().hex[:8]}",
+                "name": "API Directorate",
+            },
+        )
+        assert parent_department.status_code == 201
+        department = await client.post(
+            "/api/v1/directory/departments",
+            headers=admin_headers,
+            json={
+                "code": f"api-{uuid4().hex[:8]}",
+                "name": "API Department",
+                "parentId": parent_department.json()["id"],
+            },
+        )
+        assert department.status_code == 201
+        cycle = await client.patch(
+            f"/api/v1/directory/departments/{parent_department.json()['id']}",
+            headers=admin_headers,
+            json={"parentId": department.json()["id"]},
+        )
+        assert cycle.status_code == 409
+        changed = await client.patch(
+            f"/api/v1/directory/employees/{employee['id']}",
+            headers=admin_headers,
+            json={
+                "role": "manager",
+                "positionId": position_id,
+                "departmentId": department.json()["id"],
+            },
+        )
+        assert changed.status_code == 200
+        assert changed.json()["departmentId"] == department.json()["id"]
+
+        denied_rule = await client.put(
+            f"/api/v1/directory/access-rules/user/{employee['id']}/tasks",
+            headers=admin_headers,
+            json={
+                "permissions": {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "approve": False,
+                    "admin": False,
+                }
+            },
+        )
+        assert denied_rule.status_code == 200
+        denied_workspace = await client.get(
+            "/api/v1/workspace/bootstrap",
+            headers=employee_headers,
+        )
+        assert denied_workspace.status_code == 200
+        assert denied_workspace.json()["tasks"] == []
+        task_access = next(
+            item
+            for item in denied_workspace.json()["moduleAccess"]
+            if item["moduleKey"] == "tasks"
+        )
+        assert task_access["permissions"]["view"] is False
+        denied_task = await client.post(
+            "/api/v1/tasks",
+            headers=employee_headers,
+            json={"title": "Must be denied"},
+        )
+        assert denied_task.status_code == 403
+        inherited_again = await client.delete(
+            f"/api/v1/directory/access-rules/user/{employee['id']}/tasks",
+            headers=admin_headers,
+        )
+        assert inherited_again.status_code == 204
+        restored_workspace = await client.get(
+            "/api/v1/workspace/bootstrap",
+            headers=employee_headers,
+        )
+        restored_access = next(
+            item
+            for item in restored_workspace.json()["moduleAccess"]
+            if item["moduleKey"] == "tasks"
+        )
+        assert restored_access["permissions"]["view"] is True
+
+        department_deny = await client.put(
+            f"/api/v1/directory/access-rules/department/{department.json()['id']}/tasks",
+            headers=admin_headers,
+            json={
+                "permissions": {
+                    "view": False,
+                    "create": False,
+                    "edit": False,
+                    "approve": False,
+                    "admin": False,
+                }
+            },
+        )
+        assert department_deny.status_code == 200
+        department_workspace = await client.get(
+            "/api/v1/workspace/bootstrap",
+            headers=employee_headers,
+        )
+        assert next(
+            item
+            for item in department_workspace.json()["moduleAccess"]
+            if item["moduleKey"] == "tasks"
+        )["permissions"]["view"] is False
+        personal_allow = await client.put(
+            f"/api/v1/directory/access-rules/user/{employee['id']}/tasks",
+            headers=admin_headers,
+            json={
+                "permissions": {
+                    "view": True,
+                    "create": True,
+                    "edit": True,
+                    "approve": True,
+                    "admin": False,
+                }
+            },
+        )
+        assert personal_allow.status_code == 200
+        personal_workspace = await client.get(
+            "/api/v1/workspace/bootstrap",
+            headers=employee_headers,
+        )
+        assert next(
+            item
+            for item in personal_workspace.json()["moduleAccess"]
+            if item["moduleKey"] == "tasks"
+        )["permissions"]["view"] is True
+
         deactivated = await client.patch(
             f"/api/v1/directory/positions/{position_id}",
             headers=admin_headers,

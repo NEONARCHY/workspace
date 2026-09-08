@@ -8,6 +8,7 @@ import type {
   ChatMessage,
   EfficiencyOverview,
   MessageOptions,
+  EffectiveModuleAccess,
   MessageReactionEmoji,
   FeedPost,
   NotificationPreferences,
@@ -30,6 +31,7 @@ import type {
   WorkspaceSection,
   WorkspaceTask,
 } from "@yuksalish/contracts";
+import { moduleKeys } from "@yuksalish/contracts";
 import {
   Avatar,
   Button,
@@ -150,6 +152,7 @@ interface NavItem {
 interface WorkspaceState {
   readonly personalPreferences: PersonalPreferences;
   readonly currentUser: WorkspacePerson;
+  readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly positions: readonly WorkflowPosition[];
@@ -164,12 +167,18 @@ interface WorkspaceState {
   readonly notifications: readonly WorkspaceNotification[];
   readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
-  readonly workflow?: WorkflowDefinition;
+  readonly workflow?: WorkflowDefinition | null;
 }
+
+const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((moduleKey) => ({
+  moduleKey,
+  permissions: { view: true, create: true, edit: true, approve: true, admin: true },
+}));
 
 const initialWorkspace: WorkspaceState = {
   personalPreferences: defaultPersonalPreferences,
   currentUser: people[0]!,
+  moduleAccess: defaultModuleAccess,
   canCreatePaymentRequests: true,
   people,
   positions: [],
@@ -291,7 +300,7 @@ export function App() {
   // Factory stores the reader; it is invoked only after an asynchronous response.
   // eslint-disable-next-line react-hooks/refs
   const [refreshWorkspace] = useState(() => createRefreshQueue(loadWorkspace, (loaded) => {
-    setWorkspace((current) => ({ ...loaded, personalPreferences: current.currentUser.id === loaded.currentUser.id
+    setWorkspace((current) => ({ ...loaded, moduleAccess: loaded.moduleAccess ?? defaultModuleAccess, personalPreferences: current.currentUser.id === loaded.currentUser.id
       ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
       : loaded.personalPreferences ?? defaultPersonalPreferences }));
     setBackgroundError("");
@@ -303,7 +312,7 @@ export function App() {
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
-    setWorkspace({ ...loaded, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? defaultModuleAccess, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setEfficiency(undefined);
     setEfficiencyError(undefined);
     setNavigationEditing(false);
@@ -1188,13 +1197,20 @@ export function App() {
     );
   }
 
+  const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));
+  const canView = (key: NavigationKey) => key === "notifications" || key === "settings" || modulePermissions[key]?.view !== false;
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
-  const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder).map((key) => navItems.find((item) => item.key === key)!);
+  const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
+    .filter(canView)
+    .map((key) => navItems.find((item) => item.key === key)!);
+  const activeSectionDenied = activeSection !== "notifications" && modulePermissions[activeSection]?.view === false;
+  const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
+  const displayedSection = activeSectionDenied && fallbackSection !== "settings" ? fallbackSection : activeSection;
 
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -1217,18 +1233,18 @@ export function App() {
           /> : <nav className="rail-nav personal-rail-nav">
             {orderedNavItems.map((item) => {
               const badge = badgeBySection[item.key];
-              const icon = activeSection === item.key && item.key === "messenger"
+              const icon = displayedSection === item.key && item.key === "messenger"
                 ? <Chat24Filled />
-                : activeSection === item.key && item.key === "tasks"
+                : displayedSection === item.key && item.key === "tasks"
                   ? <TaskListSquareLtr24Filled />
                   : item.icon;
               return (
                 <div key={item.key} className="rail-slot" data-navigation-key={item.key}><button
-                  className={`rail-action ${activeSection === item.key ? "active" : ""}`}
+                  className={`rail-action ${displayedSection === item.key ? "active" : ""}`}
                   type="button"
                   aria-label={item.label}
                   title={item.label}
-                  aria-current={activeSection === item.key ? "page" : undefined}
+                  aria-current={displayedSection === item.key ? "page" : undefined}
                   onClick={() => {
                     if (item.key === "settings") { setAccountOpen(true); return; }
                     setFocusTarget(undefined);
@@ -1276,8 +1292,8 @@ export function App() {
           </div> : null}
 
           <main className="app-content" id="workspace-content" tabIndex={-1}>
-            <RecoveryBoundary key={`${session.user.id}:${activeSection}`} onHome={() => setActiveSection("messenger")}>
-            {activeSection === "notifications" ? (
+            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("messenger")}>
+            {displayedSection === "notifications" ? (
               <NotificationCenter
                 notifications={workspace.notifications}
                 preferences={workspace.notificationPreferences}
@@ -1287,7 +1303,7 @@ export function App() {
                 onUpdatePreferences={handleNotificationPreferences}
               />
             ) : null}
-            {activeSection === "crm" ? (
+            {displayedSection === "crm" ? (
               <ModulePreview
                 icon={<Building24Regular />}
                 title="CRM"
@@ -1295,7 +1311,7 @@ export function App() {
                 packageLabel="Раздел отложен"
               />
             ) : null}
-            {activeSection === "messenger" ? (
+            {displayedSection === "messenger" ? (
               <MessengerView
                 key={focusTarget?.revision}
                 chats={workspace.chats}
@@ -1320,7 +1336,7 @@ export function App() {
                 focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
               />
             ) : null}
-            {activeSection === "tasks" ? (
+            {displayedSection === "tasks" ? (
               <TasksView
                 key={focusTarget?.revision}
                 tasks={workspace.tasks}
@@ -1356,10 +1372,10 @@ export function App() {
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />
             ) : null}
-            {activeSection === "payment_requests" ? (
+            {displayedSection === "payment_requests" && workspace.workflow ? (
               <ApprovalsView
                 key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
-                canManage={["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
+                canManage={modulePermissions.payment_requests?.admin ?? ["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
@@ -1377,7 +1393,7 @@ export function App() {
                 focusRequestId={focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
               />
             ) : null}
-            {activeSection === "feed" ? (
+            {displayedSection === "feed" ? (
               <FeedView
                 posts={workspace.feedPosts}
                 people={workspace.people}
@@ -1387,7 +1403,7 @@ export function App() {
                 onPin={handleFeedPin}
               />
             ) : null}
-            {activeSection === "projects" ? (
+            {displayedSection === "projects" ? (
               <ProjectsView
                 projects={workspace.projects}
                 people={workspace.people}
@@ -1397,7 +1413,7 @@ export function App() {
                 onMove={handleMoveProject}
               />
             ) : null}
-            {activeSection === "trip_approvals" ? (
+            {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
                 requests={workspace.tripRequests}
@@ -1409,7 +1425,7 @@ export function App() {
                 focusRequestId={focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
               />
             ) : null}
-            {activeSection === "calendar" ? (
+            {displayedSection === "calendar" ? (
               <CalendarView
                 key={focusTarget?.revision}
                 events={workspace.calendarEvents}
@@ -1421,10 +1437,11 @@ export function App() {
                 focusEventId={focusTarget?.section === "calendar" ? focusTarget.entityId : undefined}
               />
             ) : null}
-            {activeSection === "employees" ? (
+            {displayedSection === "employees" ? (
               <EmployeesView
                 token={session.accessToken}
                 currentUser={workspace.currentUser}
+                allowAdministration={modulePermissions.employees?.admin ?? ["admin", "superadmin"].includes(workspace.currentUser.role)}
                 onInvite={() => { setAccountInvite(true); setAccountOpen(true); }}
                 onCreateChat={chatActions.create}
                 onChatCreated={(chatId) => {

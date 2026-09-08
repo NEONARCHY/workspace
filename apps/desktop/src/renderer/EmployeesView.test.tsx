@@ -4,17 +4,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeesView } from "./EmployeesView";
 import { workspaceTheme } from "./workspace-theme";
-import { loadDirectory, updateEmployeeAccess, updatePosition } from "./workspace-api";
+import { loadDirectory, setModuleAccessRule, updateEmployeeAccess, updatePosition } from "./workspace-api";
 
-vi.mock("./workspace-api", () => ({ loadDirectory: vi.fn(), updateEmployeeAccess: vi.fn(), updatePosition: vi.fn(), createPosition: vi.fn() }));
+vi.mock("./workspace-api", () => ({
+  loadDirectory: vi.fn(),
+  updateEmployeeAccess: vi.fn(),
+  updatePosition: vi.fn(),
+  createPosition: vi.fn(),
+  createDepartment: vi.fn(),
+  updateDepartment: vi.fn(),
+  setModuleAccessRule: vi.fn(),
+  deleteModuleAccessRule: vi.fn(),
+}));
 const user: WorkspacePerson = { id: "me", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "brand" };
 const data: DirectoryBootstrap = {
   roles: [{ key: "employee", label: "Сотрудник", description: "" }, { key: "manager", label: "Руководитель", description: "" }],
+  departments: [{ id: "d1", code: "finance", name: "Бухгалтерия", assignedUsersCount: 1 }],
   positions: [{ id: "p1", name: "Mutaxassis", isActive: true, sortOrder: 0, source: "manual", assignedUsersCount: 1 }],
   employees: [
-    { id: "one", name: "Азиза Каримова", username: "aziza", role: "employee", jobTitle: "Mutaxassis", positionId: "p1", status: "active" },
+    { id: "one", name: "Азиза Каримова", username: "aziza", role: "employee", departmentId: "d1", jobTitle: "Mutaxassis", positionId: "p1", status: "active" },
     { id: "two", name: "Бахтиёр Самугов", username: "baxtiyor", role: "manager", status: "pending" },
   ],
+  modules: [{ key: "tasks", label: "Задачи", status: "available" }],
+  accessRules: [],
 };
 const createdChat: ChatSummary = { id: "chat-one", title: "Азиза Каримова", kind: "direct", preview: "", time: "", unread: 0, description: "", members: [], permissions: { sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false } };
 const mount = (currentUser = user, props: Partial<React.ComponentProps<typeof EmployeesView>> = {}) => render(<FluentProvider theme={workspaceTheme}><EmployeesView token="test-token" currentUser={currentUser} onInvite={vi.fn()} {...props} /></FluentProvider>);
@@ -51,7 +63,7 @@ describe("Employee list and retained access controls", () => {
     fireEvent.change(screen.getByLabelText("Роль доступа"), { target: { value: "manager" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить сотрудника" }));
     await screen.findByText("Нет связи"); expect(screen.getByLabelText("Роль доступа")).toHaveValue("manager");
-    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "manager", "p1");
+    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "manager", "p1", "d1");
   });
   it("selects a row and reveals a persistent action bar with an accurate count", async () => {
     mount(); await screen.findByRole("table");
@@ -99,8 +111,8 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Применить" }));
     await screen.findByText("Должность обновлена для 2 сотрудников.");
     expect(updateEmployeeAccess).toHaveBeenCalledTimes(2);
-    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "employee", "p1");
-    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "two", "manager", "p1");
+    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "employee", "p1", "d1");
+    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "two", "manager", "p1", undefined);
   });
   it("renames a position and updates its visible name on employee rows", async () => {
     vi.mocked(updatePosition).mockResolvedValue({ ...data.positions[0]!, name: "Yetakchi mutaxassis" });
@@ -117,5 +129,26 @@ describe("Employee list and retained access controls", () => {
     mount(); await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: "Повторить загрузку" }));
     expect(await screen.findByRole("table")).toBeInTheDocument(); expect(loadDirectory).toHaveBeenCalledTimes(2);
+  });
+  it("edits module permissions at role level", async () => {
+    vi.mocked(setModuleAccessRule).mockResolvedValue({
+      id: "rule-one",
+      subjectType: "role",
+      subjectKey: "employee",
+      moduleKey: "tasks",
+      permissions: { view: false, create: false, edit: false, approve: false, admin: false },
+    });
+    mount();
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Права модулей" }));
+    fireEvent.click(screen.getByLabelText("Задачи: Просмотр"));
+    await waitFor(() => expect(setModuleAccessRule).toHaveBeenCalledWith(
+      "test-token",
+      "role",
+      "employee",
+      "tasks",
+      { view: false, create: true, edit: true, approve: true, admin: false },
+    ));
+    expect(await screen.findByText("Права сохранены и уже применяются сервером.")).toBeInTheDocument();
   });
 });

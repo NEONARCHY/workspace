@@ -42,6 +42,43 @@ export interface ModuleCatalogResponse {
 export type WorkspaceSection = ModuleKey;
 
 export type WorkspaceRole = "superadmin" | "admin" | "manager" | "employee";
+export type ModuleAccessAction = "view" | "create" | "edit" | "approve" | "admin";
+export type ModuleAccessSubject = "role" | "department" | "user";
+
+export interface ModulePermissionSet {
+  readonly view: boolean;
+  readonly create: boolean;
+  readonly edit: boolean;
+  readonly approve: boolean;
+  readonly admin: boolean;
+}
+
+export interface EffectiveModuleAccess {
+  readonly moduleKey: ModuleKey;
+  readonly permissions: ModulePermissionSet;
+}
+
+export interface ModuleAccessRule {
+  readonly id: string;
+  readonly subjectType: ModuleAccessSubject;
+  readonly subjectKey: string;
+  readonly moduleKey: ModuleKey;
+  readonly permissions: ModulePermissionSet;
+}
+
+export interface ModuleAccessDescriptor {
+  readonly key: ModuleKey;
+  readonly label: string;
+  readonly status: ModuleStatus;
+}
+
+export interface WorkspaceDepartment {
+  readonly id: string;
+  readonly code: string;
+  readonly name: string;
+  readonly parentId?: string | null;
+  readonly assignedUsersCount: number;
+}
 
 export interface RoleDescriptor {
   readonly key: WorkspaceRole;
@@ -63,6 +100,7 @@ export interface DirectoryEmployee {
   readonly username: string;
   readonly name: string;
   readonly role: WorkspaceRole;
+  readonly departmentId?: string | null;
   readonly positionId?: string | null;
   readonly jobTitle?: string | null;
   readonly status: string;
@@ -70,8 +108,11 @@ export interface DirectoryEmployee {
 
 export interface DirectoryBootstrap {
   readonly roles: readonly RoleDescriptor[];
+  readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkspacePosition[];
   readonly employees: readonly DirectoryEmployee[];
+  readonly modules: readonly ModuleAccessDescriptor[];
+  readonly accessRules: readonly ModuleAccessRule[];
 }
 
 export interface WorkspacePerson {
@@ -80,6 +121,7 @@ export interface WorkspacePerson {
   readonly name: string;
   readonly initials: string;
   readonly role: string;
+  readonly departmentId?: string | null;
   readonly positionId?: string | null;
   readonly jobTitle?: string | null;
   readonly color: string;
@@ -643,6 +685,7 @@ export interface WorkflowDefinition {
 export interface WorkspaceBootstrap {
   readonly personalPreferences: PersonalPreferences;
   readonly currentUser: WorkspacePerson;
+  readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly positions: readonly WorkflowPosition[];
@@ -657,7 +700,7 @@ export interface WorkspaceBootstrap {
   readonly notifications: readonly WorkspaceNotification[];
   readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
-  readonly workflow: WorkflowDefinition;
+  readonly workflow?: WorkflowDefinition | null;
 }
 
 export interface DevelopmentSession {

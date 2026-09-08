@@ -129,6 +129,7 @@ async def me(
             "id": current_user.id,
             "username": current_user.username,
             "full_name": current_user.full_name,
+            "department_id": current_user.department_id,
             "position_id": current_user.position_id,
             "job_title": current_user.job_title,
             "role": current_user.role,

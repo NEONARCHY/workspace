@@ -13,6 +13,9 @@ import type {
   CreateChatInput,
   MessageOptions,
   MessageReactionEmoji,
+  ModuleAccessRule,
+  ModuleAccessSubject,
+  ModulePermissionSet,
   DirectoryBootstrap,
   DirectoryEmployee,
   EfficiencyOverview,
@@ -38,6 +41,7 @@ import type {
   WorkspaceTask,
   TotpSetup,
   WorkspacePosition,
+  WorkspaceDepartment,
   WorkspaceProject,
   WorkspaceNotification,
   WorkspaceRole,
@@ -180,10 +184,68 @@ export function updateEmployeeAccess(
   employeeId: string,
   role: Exclude<WorkspaceRole, "superadmin">,
   positionId?: string,
+  departmentId?: string,
 ): Promise<DirectoryEmployee> {
   return apiRequest<DirectoryEmployee>(
     `/directory/employees/${employeeId}`,
-    { method: "PATCH", body: JSON.stringify({ role, positionId: positionId || null }) },
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        role,
+        positionId: positionId || null,
+        departmentId: departmentId || null,
+      }),
+    },
+    token,
+  );
+}
+
+export function createDepartment(
+  token: string,
+  payload: { readonly code: string; readonly name: string; readonly parentId?: string },
+): Promise<WorkspaceDepartment> {
+  return apiRequest<WorkspaceDepartment>(
+    "/directory/departments",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateDepartment(
+  token: string,
+  departmentId: string,
+  payload: { readonly code?: string; readonly name?: string; readonly parentId?: string | null },
+): Promise<WorkspaceDepartment> {
+  return apiRequest<WorkspaceDepartment>(
+    `/directory/departments/${departmentId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function setModuleAccessRule(
+  token: string,
+  subjectType: ModuleAccessSubject,
+  subjectKey: string,
+  moduleKey: string,
+  permissions: ModulePermissionSet,
+): Promise<ModuleAccessRule> {
+  return apiRequest<ModuleAccessRule>(
+    `/directory/access-rules/${subjectType}/${subjectKey}/${moduleKey}`,
+    { method: "PUT", body: JSON.stringify({ permissions }) },
+    token,
+  );
+}
+
+export function deleteModuleAccessRule(
+  token: string,
+  subjectType: ModuleAccessSubject,
+  subjectKey: string,
+  moduleKey: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/directory/access-rules/${subjectType}/${subjectKey}/${moduleKey}`,
+    { method: "DELETE" },
     token,
   );
 }

@@ -20,9 +20,23 @@ class PersonResponse(ApiModel):
     name: str
     initials: str
     role: str
+    department_id: str | None
     position_id: str | None
     job_title: str | None
     color: str
+
+
+class ModulePermissionSet(ApiModel):
+    view: bool
+    create: bool
+    edit: bool
+    approve: bool
+    admin: bool
+
+
+class EffectiveModuleAccessResponse(ApiModel):
+    module_key: str
+    permissions: ModulePermissionSet
 
 
 class WorkflowPositionResponse(ApiModel):
@@ -1051,6 +1065,7 @@ class NavigationOrder(ApiModel):
 
 class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
+    module_access: list[EffectiveModuleAccessResponse]
     can_create_payment_requests: bool
     people: list[PersonResponse]
     positions: list[WorkflowPositionResponse]
@@ -1066,4 +1081,4 @@ class WorkspaceBootstrapResponse(ApiModel):
     notification_preferences: NotificationPreferencesResponse
     personal_preferences: PersonalPreferencesResponse
     attachments: list[AttachmentResponse]
-    workflow: WorkflowResponse
+    workflow: WorkflowResponse | None

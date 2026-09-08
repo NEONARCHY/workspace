@@ -11,6 +11,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
+from .access_control import ModuleAction, module_permissions_for_user
 from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
@@ -74,8 +75,10 @@ from .workspace_schemas import (
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    EffectiveModuleAccessResponse,
     FeedCommentResponse,
     FeedPostResponse,
+    ModulePermissionSet,
     NotificationPreferencesResponse,
     NotificationPreferencesUpdate,
     NotificationResponse,
@@ -170,6 +173,7 @@ def person_from_record(row: Record, color_index: int = 0) -> PersonResponse:
         name=row["full_name"],
         initials=_initials(row["full_name"]),
         role=row["role"],
+        department_id=(str(row["department_id"]) if row.get("department_id") else None),
         position_id=(str(row["position_id"]) if row.get("position_id") else None),
         job_title=row["job_title"],
         color=PERSON_COLORS[color_index % len(PERSON_COLORS)],
@@ -2114,6 +2118,11 @@ async def load_workspace(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
 ) -> WorkspaceBootstrapResponse:
+    module_access = await module_permissions_for_user(connection, current_user)
+
+    def can(module_key: str, action: ModuleAction = "view") -> bool:
+        return bool(module_access.get(module_key, {}).get(action, False))
+
     people_rows = (
         (
             await connection.execute(
@@ -2293,8 +2302,10 @@ async def load_workspace(
     notification_preferences = await get_notification_preferences(connection, current_user)
 
     attachment_filters = []
-    message_ids = [row["id"] for row in message_rows if row["deleted_at"] is None]
-    task_ids = [row["id"] for row in task_rows]
+    message_ids = [
+        row["id"] for row in message_rows if row["deleted_at"] is None and can("messenger")
+    ]
+    task_ids = [row["id"] for row in task_rows] if can("tasks") else []
     if message_ids:
         attachment_filters.append(
             and_(attachments.c.owner_type == "message", attachments.c.owner_id.in_(message_ids))
@@ -2303,7 +2314,7 @@ async def load_workspace(
         attachment_filters.append(
             and_(attachments.c.owner_type == "task", attachments.c.owner_id.in_(task_ids))
         )
-    if request_ids:
+    if request_ids and can("payment_requests"):
         attachment_filters.append(
             and_(
                 attachments.c.owner_type == "approval_request",
@@ -2326,17 +2337,27 @@ async def load_workspace(
 
     return WorkspaceBootstrapResponse(
         current_user=current,
-        can_create_payment_requests=await _can_create_payment_request(
-            connection,
-            current_user,
-            published_payment_template["id"],
+        module_access=[
+            EffectiveModuleAccessResponse(
+                module_key=key,
+                permissions=ModulePermissionSet.model_validate(permissions),
+            )
+            for key, permissions in module_access.items()
+        ],
+        can_create_payment_requests=(
+            can("payment_requests", "create")
+            and await _can_create_payment_request(
+                connection,
+                current_user,
+                published_payment_template["id"],
+            )
         ),
         people=people,
         positions=[
             WorkflowPositionResponse(id=str(row["id"]), name=row["name"]) for row in position_rows
         ],
-        chats=chat_responses,
-        messages=message_responses,
+        chats=chat_responses if can("messenger") else [],
+        messages=message_responses if can("messenger") else [],
         tasks=[
             _task(
                 row,
@@ -2350,7 +2371,7 @@ async def load_workspace(
                 latest_return=task_latest_returns.get(row["id"]),
             )
             for row in task_rows
-        ],
+        ] if can("tasks") else [],
         requests=[
             _approval_request(
                 row,
@@ -2360,10 +2381,10 @@ async def load_workspace(
                 deadline_controls_by_request.get(row["id"]),
             )
             for row in request_rows
-        ],
+        ] if can("payment_requests") else [],
         projects=[
             _project(row, current_user, project_history.get(row["id"], [])) for row in project_rows
-        ],
+        ] if can("projects") else [],
         trip_requests=[
             _trip_request(
                 row,
@@ -2372,7 +2393,7 @@ async def load_workspace(
                 trip_actions.get(row["id"], []),
             )
             for row in trip_rows
-        ],
+        ] if can("trip_approvals") else [],
         feed_posts=[
             _feed_post(
                 row,
@@ -2381,16 +2402,20 @@ async def load_workspace(
                 feed_reaction_map.get(row["id"], []),
             )
             for row in feed_rows
-        ],
+        ] if can("feed") else [],
         calendar_events=[
             _calendar_event(row, current_user, calendar_attendees.get(row["id"], []))
             for row in calendar_rows
+        ] if can("calendar") else [],
+        notifications=[
+            notification
+            for notification in notification_responses
+            if can(notification.section)
         ],
-        notifications=notification_responses,
         notification_preferences=notification_preferences,
         personal_preferences=await get_personal_preferences(connection, current_user),
         attachments=[_attachment(row) for row in attachment_rows],
-        workflow=await get_workflow(connection),
+        workflow=await get_workflow(connection) if can("payment_requests") else None,
     )
 
 

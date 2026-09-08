@@ -17,6 +17,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from yuksalish_api.access_control import ModuleAction, ensure_module_action
 from yuksalish_api.auth import (
     AuthenticatedUser,
     InvalidTokenError,
@@ -717,6 +718,10 @@ async def post_approval_action(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> ApprovalRequestResponse:
+    permission_action: ModuleAction = (
+        "edit" if payload.action in {"resubmit", "cancel"} else "approve"
+    )
+    await ensure_module_action(connection, current_user, "payment_requests", permission_action)
     try:
         result = await act_on_request(connection, current_user, request_id, payload)
     except WorkspaceRepositoryError as error:
@@ -811,6 +816,10 @@ async def post_trip_action(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TripRequestResponse:
+    permission_action: ModuleAction = (
+        "edit" if payload.action in {"submit", "resubmit"} else "approve"
+    )
+    await ensure_module_action(connection, current_user, "trip_approvals", permission_action)
     try:
         result = await act_on_trip_request(connection, current_user, request_id, payload)
     except WorkspaceRepositoryError as error:
@@ -848,6 +857,12 @@ async def put_attachment(
         Query(alias="mediaCodec"),
     ] = None,
 ) -> AttachmentResponse:
+    attachment_module = {
+        "message": "messenger",
+        "task": "tasks",
+        "approval_request": "payment_requests",
+    }[owner_type]
+    await ensure_module_action(connection, current_user, attachment_module, "edit")
     safe_name = _safe_file_name(file_name)
     try:
         await validate_attachment_owner(
@@ -948,6 +963,12 @@ async def download_attachment(
             current_user,
             attachment_id,
         )
+        attachment_module = {
+            "message": "messenger",
+            "task": "tasks",
+            "approval_request": "payment_requests",
+        }[metadata.owner_type]
+        await ensure_module_action(connection, current_user, attachment_module, "view")
         content = await _object_storage(request).get(storage_key)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error

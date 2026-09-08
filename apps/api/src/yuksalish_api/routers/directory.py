@@ -7,17 +7,26 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.directory_schemas import (
+    DepartmentCreateRequest,
+    DepartmentResponse,
+    DepartmentUpdateRequest,
     DirectoryBootstrapResponse,
     DirectoryEmployeeResponse,
     EmployeeAccessUpdateRequest,
+    ModuleAccessRuleResponse,
+    ModuleAccessRuleUpdateRequest,
     PositionCreateRequest,
     PositionResponse,
     PositionUpdateRequest,
 )
 from yuksalish_api.directory_service import (
     DirectoryServiceError,
+    create_department,
     create_position,
+    delete_module_access_rule,
     load_directory,
+    set_module_access_rule,
+    update_department,
     update_employee_access,
     update_position,
 )
@@ -35,8 +44,102 @@ async def directory_bootstrap(
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> DirectoryBootstrapResponse:
-    del current_user
-    return await load_directory(connection)
+    return await load_directory(connection, current_user)
+
+
+@router.post("/departments", response_model=DepartmentResponse, status_code=201)
+async def post_department(
+    payload: DepartmentCreateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> DepartmentResponse:
+    try:
+        result = await create_department(connection, current_user, payload)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.department_created", "entityId": result.id}
+    )
+    return result
+
+
+@router.patch("/departments/{department_id}", response_model=DepartmentResponse)
+async def patch_department(
+    department_id: UUID,
+    payload: DepartmentUpdateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> DepartmentResponse:
+    try:
+        result = await update_department(connection, current_user, department_id, payload)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.department_updated", "entityId": result.id}
+    )
+    return result
+
+
+@router.put(
+    "/access-rules/{subject_type}/{subject_key}/{module_key}",
+    response_model=ModuleAccessRuleResponse,
+)
+async def put_access_rule(
+    subject_type: str,
+    subject_key: str,
+    module_key: str,
+    payload: ModuleAccessRuleUpdateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ModuleAccessRuleResponse:
+    try:
+        result = await set_module_access_rule(
+            connection,
+            current_user,
+            subject_type,
+            subject_key,
+            module_key,
+            payload,
+        )
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.access_updated", "entityId": result.id}
+    )
+    return result
+
+
+@router.delete(
+    "/access-rules/{subject_type}/{subject_key}/{module_key}",
+    status_code=204,
+)
+async def delete_access_rule(
+    subject_type: str,
+    subject_key: str,
+    module_key: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    try:
+        await delete_module_access_rule(
+            connection,
+            current_user,
+            subject_type,
+            subject_key,
+            module_key,
+        )
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {
+            "type": "directory.access_updated",
+            "entityId": f"{subject_type}:{subject_key}:{module_key}",
+        }
+    )
 
 
 @router.post("/positions", response_model=PositionResponse, status_code=201)

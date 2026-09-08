@@ -23,6 +23,19 @@ departments = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+module_access_rules = sa.Table(
+    "core_module_access_rules",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("subject_type", sa.String(16)),
+    sa.Column("subject_key", sa.String(96)),
+    sa.Column("module_key", sa.String(64)),
+    sa.Column("permissions", postgresql.JSONB()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 positions = sa.Table(
     "core_positions",
     metadata,
