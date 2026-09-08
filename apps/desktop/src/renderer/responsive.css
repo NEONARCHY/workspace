@@ -124,13 +124,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
 .approval-create-panel > footer { flex-wrap: wrap; }
 .approval-stage-ribbon > span { flex-shrink: 0; }
 
-.calendar-view { grid-template-columns: minmax(0, 1fr) 310px; }
-.calendar-main { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
-.calendar-toolbar, .calendar-weekdays { flex-shrink: 0; }
-.calendar-grid { height: auto; flex: 1; grid-auto-rows: minmax(90px, 1fr); }
-.calendar-event-pill { font-size: 10px; }
-.calendar-day > strong, .calendar-weekdays span { font-size: 11px; }
-.calendar-form > label { font-size: 12px; }
+.calendar-view { grid-template-columns: minmax(0, 1fr) 360px; }
+.calendar-main { min-height: 0; overflow: hidden; }
+.calendar-grid { min-height: 0; }
 .approval-fact-section dt, .approval-column > header small, .approval-card-project,
 .approval-card-meta, .approval-timeline-event span, .approval-timeline-event time,
 .bp7-facts dt, .bp7-history span, .bp7-history small, .position-title p,
@@ -177,8 +173,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
   .employee-list { max-height: 420px; overflow-y: auto; }
   .calendar-view { grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; overflow-y: auto; align-content: start; }
   .calendar-main, .calendar-side { overflow: visible; }
+  .calendar-main { min-height: 720px; }
   .calendar-side { border-left: 0; border-top: 1px solid #d8dee7; }
-  .calendar-grid { min-height: 540px; }
+  .calendar-board { min-height: 590px; }
 }
 @container workspace (max-width: 1000px) {
   .tasks-view, .bp5-tasks { grid-template-columns: minmax(0, 1fr); }
@@ -238,6 +235,12 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
   .notification-metrics button { padding-inline: 8px; }
   .notification-metrics span { font-size: 10px; }
   .node-library { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .calendar-main { min-height: 680px; padding: 14px; }
+  .calendar-toolbar, .calendar-toolbar-actions { align-items: stretch; }
+  .calendar-toolbar-actions { width: 100%; justify-content: space-between; }
+  .calendar-day { padding: 5px; }
+  .calendar-today-label, .calendar-event-pill > span { display: none; }
+  .calendar-event-pill { grid-template-columns: minmax(0, 1fr); padding-inline: 5px; }
   .calendar-main { padding: 12px; }
   .calendar-day { padding: 3px; }
   .trip-route span { flex: 1 1 100px; }

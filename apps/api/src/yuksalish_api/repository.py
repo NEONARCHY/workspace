@@ -2687,6 +2687,17 @@ async def create_calendar_event(
     current_user: AuthenticatedUser,
     payload: CreateCalendarEventRequest,
 ) -> CalendarEventResponse:
+    calendar_zone = ZoneInfo("Asia/Tashkent")
+    requested_start = payload.starts_at
+    if requested_start.tzinfo is None:
+        requested_start = requested_start.replace(tzinfo=UTC)
+    requested_date = requested_start.astimezone(calendar_zone).date()
+    current_date = datetime.now(UTC).astimezone(calendar_zone).date()
+    if requested_date < current_date:
+        raise WorkspaceRepositoryError(
+            422,
+            "New calendar events cannot be created for a past date",
+        )
     attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
     event_id = uuid4()
     now = datetime.now(UTC)

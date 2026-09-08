@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { CalendarEvent } from "@yuksalish/contracts";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { CalendarView } from "./CalendarView";
 import { DecisionReason } from "./DecisionReason";
@@ -59,6 +60,72 @@ describe("Window and UI recovery", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("корректные начало и окончание");
     expect(create).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
+  });
+
+  it("opens the complete agenda for a day instead of hiding events after the third item", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-08T08:00:00+05:00"));
+    const events = Array.from({ length: 4 }, (_unused, index): CalendarEvent => ({
+      id: `event-${index}`,
+      organizerUserId: "tester",
+      title: `Событие ${index + 1}`,
+      description: "",
+      eventType: "meeting",
+      startsAt: `2026-09-10T0${index + 4}:00:00Z`,
+      endsAt: `2026-09-10T0${index + 5}:00:00Z`,
+      allDay: false,
+      location: "",
+      status: "scheduled",
+      attendeeIds: ["tester"],
+      canEdit: true,
+      createdAt: "2026-09-08T03:00:00Z",
+      updatedAt: "2026-09-08T03:00:00Z",
+    }));
+    render(<CalendarView events={events} people={[]} currentUserId="tester" onCreate={vi.fn()} onUpdate={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByRole("gridcell", { name: /событий: 4/i }));
+    const dayPanel = screen.getByLabelText("События выбранного дня");
+    expect(within(dayPanel).getByText("Событие 4")).toBeInTheDocument();
+    expect(within(dayPanel).getByText("4")).toBeInTheDocument();
+  });
+
+  it("blocks backdated creation but keeps past events editable", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-08T08:00:00+05:00"));
+    const pastEvent: CalendarEvent = {
+      id: "past-event",
+      organizerUserId: "tester",
+      title: "Архивная встреча",
+      description: "Итоги уже состоявшейся встречи",
+      eventType: "meeting",
+      startsAt: "2026-09-07T05:00:00Z",
+      endsAt: "2026-09-07T06:00:00Z",
+      allDay: false,
+      location: "Переговорная",
+      status: "scheduled",
+      attendeeIds: ["tester"],
+      canEdit: true,
+      createdAt: "2026-09-06T05:00:00Z",
+      updatedAt: "2026-09-06T05:00:00Z",
+    };
+    const update = vi.fn();
+    render(<CalendarView events={[pastEvent]} people={[]} currentUserId="tester" onCreate={vi.fn()} onUpdate={update} onCancel={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("gridcell", { name: /событий: 1/i }));
+    const dayPanel = screen.getByLabelText("События выбранного дня");
+    expect(within(dayPanel).getByText(/задним числом недоступны/i)).toBeInTheDocument();
+    expect(within(dayPanel).queryByRole("button", { name: "Добавить" })).not.toBeInTheDocument();
+    fireEvent.click(within(dayPanel).getByRole("button", { name: /Архивная встреча/i }));
+    fireEvent.click(within(dayPanel).getByRole("button", { name: "Изменить" }));
+    expect(within(dayPanel).getByRole("textbox", { name: "Название события" })).toHaveValue("Архивная встреча");
+    expect(within(dayPanel).getByLabelText("Начало")).not.toHaveAttribute("min");
+
+    fireEvent.click(within(dayPanel).getByRole("button", { name: "Закрыть форму" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Задним числом" } });
+    fireEvent.change(screen.getByLabelText("Начало"), { target: { value: "2026-09-07T10:00" } });
+    fireEvent.change(screen.getByLabelText("Окончание"), { target: { value: "2026-09-07T11:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Нельзя создавать новые события на прошедшие дни");
   });
 });
 

@@ -261,6 +261,17 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert feed_post.is_pinned is True
 
+            with pytest.raises(WorkspaceRepositoryError, match="past date"):
+                await create_calendar_event(
+                    connection,
+                    aziza,
+                    CreateCalendarEventRequest(
+                        title="Backdated calendar event",
+                        starts_at=datetime.now(UTC) - timedelta(days=2),
+                        ends_at=datetime.now(UTC) - timedelta(days=2) + timedelta(hours=1),
+                    ),
+                )
+
             calendar_event = await create_calendar_event(
                 connection,
                 aziza,
@@ -287,6 +298,18 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert calendar_event.title.endswith("updated")
+            calendar_event = await update_calendar_event(
+                connection,
+                aziza,
+                UUID(calendar_event.id),
+                UpdateCalendarEventRequest(
+                    title="Past event correction",
+                    starts_at=datetime.now(UTC) - timedelta(days=2),
+                    ends_at=datetime.now(UTC) - timedelta(days=2) + timedelta(hours=1),
+                    attendee_ids=[str(aziza.id)],
+                ),
+            )
+            assert calendar_event.title == "Past event correction"
             calendar_event = await cancel_calendar_event(
                 connection,
                 aziza,
