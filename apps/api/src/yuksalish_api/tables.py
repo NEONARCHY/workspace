@@ -226,6 +226,7 @@ tasks = sa.Table(
     sa.Column("priority", sa.String(16)),
     sa.Column("author_user_id", uuid_type),
     sa.Column("primary_assignee_user_id", uuid_type),
+    sa.Column("parent_task_id", uuid_type),
     sa.Column("cycle_id", uuid_type),
     sa.Column("cycle_occurrence_key", sa.String(96)),
     sa.Column("project_key", sa.String(96)),

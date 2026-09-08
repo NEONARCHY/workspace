@@ -499,19 +499,27 @@ function mockServer(
       const payload = JSON.parse(String(options.body)) as {
         title: string;
         sourceMessageId?: string;
+        parentTaskId?: string;
+        assigneeId?: string;
+        project?: string;
+        dueAt?: string;
       };
+      const parent = tasks.find((item) => item.id === payload.parentTaskId);
       const created: WorkspaceTask = {
-        id: "server-task",
+        id: payload.parentTaskId ? `server-subtask-${tasks.length}` : "server-task",
         title: payload.title,
         description: "",
-        project: "Без проекта",
-        assigneeId: people[0]!.id,
-        dueLabel: "Срок не указан",
+        project: payload.project ?? "Без проекта",
+        assigneeId: payload.assigneeId ?? people[0]!.id,
+        dueLabel: payload.dueAt ? "20 сент., 14:00" : "Срок не указан",
+        dueAt: payload.dueAt,
         status: "new",
         priority: "normal",
         checklistDone: 0,
         checklistTotal: 0,
         sourceMessageId: payload.sourceMessageId,
+        parentTaskId: payload.parentTaskId,
+        parentTaskTitle: parent?.title,
         authorId: currentUser.id,
         participants: [],
         checklist: [],
@@ -531,6 +539,26 @@ function mockServer(
     if (currentTask && url.endsWith("/status") && options?.method === "PATCH") {
       const payload = JSON.parse(String(options.body)) as { status: WorkspaceTask["status"] };
       return replaceTask({ ...currentTask, status: payload.status });
+    }
+    if (currentTask && url.endsWith("/submit-result") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { resultText: string };
+      return replaceTask({ ...currentTask, status: "awaiting_review", resultText: payload.resultText });
+    }
+    if (currentTask && url.endsWith("/accept-result") && options?.method === "POST") {
+      return replaceTask({ ...currentTask, status: "completed" });
+    }
+    if (currentTask && url.endsWith("/return-for-revision") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { reasonCode: string; reasonText: string };
+      return replaceTask({
+        ...currentTask,
+        status: "in_progress",
+        latestReturn: {
+          reasonCode: payload.reasonCode,
+          reasonText: payload.reasonText,
+          actorUserId: currentUser.id,
+          createdAt: "2026-09-08T12:00:00Z",
+        },
+      });
     }
     if (currentTask && options?.method === "PATCH" && /\/tasks\/[^/]+$/.test(url)) {
       const payload = JSON.parse(String(options.body)) as Partial<WorkspaceTask>;
@@ -1131,6 +1159,48 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
     expect(await screen.findByText("Карточка готова к проверке")).toBeInTheDocument();
+  });
+
+  it("creates a subtask and runs result review with a motivated return", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Добавить подзадачу" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название подзадачи" }), {
+      target: { value: "Сверить итоговые цифры" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Создать подзадачу" }));
+    expect((await screen.findAllByText("Сверить итоговые цифры")).length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
+      target: { value: "Договор и расчёты приложены" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    expect(await screen.findByText("Договор и расчёты приложены", { selector: "p" })).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Принять результат" });
+    expect(screen.getByText("Ожидает решения")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Пояснение причины" }), {
+      target: { value: "Добавьте номер договора" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть исполнителю" }));
+    await waitFor(() => expect(screen.getByText("Добавьте номер договора", { selector: "p" })).toBeInTheDocument());
+    expect(screen.getByText("Нужны исправления")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
+      target: { value: "Номер договора добавлен" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Принять результат" }));
+    expect(await screen.findByText("Принято")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/accept-result"),
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("creates a payment request from the selected task", async () => {

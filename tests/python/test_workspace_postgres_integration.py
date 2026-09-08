@@ -22,6 +22,7 @@ from yuksalish_api.directory_service import (
 from yuksalish_api.position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
+    accept_task_result,
     act_on_request,
     act_on_trip_request,
     add_feed_comment,
@@ -49,6 +50,7 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    return_task_for_revision,
     save_workflow,
     search_messages,
     send_message,
@@ -56,6 +58,7 @@ from yuksalish_api.repository import (
     set_task_cycle,
     set_task_dependency,
     set_task_participant,
+    submit_task_result,
     update_approval_request,
     update_calendar_event,
     update_notification_preferences,
@@ -81,8 +84,10 @@ from yuksalish_api.workspace_schemas import (
     CreateTripRequest,
     NotificationPreferencesUpdate,
     PinFeedPostRequest,
+    ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
+    SubmitTaskResultRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskParticipantRequest,
@@ -418,11 +423,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert task.dependencies[0].depends_on_task_id == blocker.id
             with pytest.raises(WorkspaceRepositoryError, match="blocking dependencies"):
-                await change_task_status(
+                await submit_task_result(
                     connection,
                     aziza,
                     UUID(task.id),
-                    ChangeTaskStatusRequest(status="completed"),
+                    SubmitTaskResultRequest(result_text="Ready for review"),
                 )
             with pytest.raises(WorkspaceRepositoryError, match="create a cycle"):
                 await set_task_dependency(
@@ -431,18 +436,61 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     UUID(blocker.id),
                     TaskDependencyRequest(depends_on_task_id=task.id),
                 )
-            await change_task_status(
+            await submit_task_result(
                 connection,
                 aziza,
                 UUID(blocker.id),
-                ChangeTaskStatusRequest(status="completed"),
+                SubmitTaskResultRequest(result_text="Blocking work is done"),
             )
-            task = await change_task_status(
+            await accept_task_result(connection, aziza, UUID(blocker.id))
+            subtask = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Integration subtask",
+                    assignee_id=str(dilshod_auth.id),
+                    parent_task_id=task.id,
+                    project=task.project,
+                ),
+            )
+            assert subtask.parent_task_id == task.id
+            assert subtask.parent_task_title == task.title
+            task = await submit_task_result(
+                connection,
+                dilshod_auth,
+                UUID(task.id),
+                SubmitTaskResultRequest(result_text="Parent result for review"),
+            )
+            assert task.status == "awaiting_review"
+            with pytest.raises(WorkspaceRepositoryError, match="every subtask"):
+                await accept_task_result(connection, aziza, UUID(task.id))
+            subtask = await submit_task_result(
+                connection,
+                dilshod_auth,
+                UUID(subtask.id),
+                SubmitTaskResultRequest(result_text="Subtask result"),
+            )
+            assert subtask.status == "awaiting_review"
+            await accept_task_result(connection, aziza, UUID(subtask.id))
+            task = await return_task_for_revision(
                 connection,
                 aziza,
                 UUID(task.id),
-                ChangeTaskStatusRequest(status="completed"),
+                ReturnTaskForRevisionRequest(
+                    reason_code="corrections_required",
+                    reason_text="Add the final figures",
+                ),
             )
+            assert task.status == "in_progress"
+            assert task.latest_return is not None
+            assert task.latest_return.reason_text == "Add the final figures"
+            await submit_task_result(
+                connection,
+                aziza,
+                UUID(task.id),
+                SubmitTaskResultRequest(result_text="Corrected parent result"),
+            )
+            task = await accept_task_result(connection, aziza, UUID(task.id))
             assert task.status == "completed"
             task = await remove_task_dependency(
                 connection,

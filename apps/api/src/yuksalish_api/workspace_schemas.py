@@ -241,6 +241,13 @@ class TaskCycleResponse(ApiModel):
     is_enabled: bool
 
 
+class TaskReturnResponse(ApiModel):
+    reason_code: str
+    reason_text: str | None = None
+    actor_user_id: str
+    created_at: datetime
+
+
 class TaskResponse(ApiModel):
     id: str
     title: str
@@ -257,6 +264,9 @@ class TaskResponse(ApiModel):
     checklist_total: int = 0
     source_message_id: str | None = None
     result_text: str | None = None
+    parent_task_id: str | None = None
+    parent_task_title: str | None = None
+    latest_return: TaskReturnResponse | None = None
     participants: list[TaskParticipantResponse] = Field(default_factory=list)
     checklist: list[TaskChecklistItemResponse] = Field(default_factory=list)
     comments: list[TaskCommentResponse] = Field(default_factory=list)
@@ -270,6 +280,7 @@ class CreateTaskRequest(ApiModel):
     project: str = Field(default="Без проекта", max_length=96)
     assignee_id: str | None = None
     source_message_id: str | None = None
+    parent_task_id: str | None = None
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     due_at: datetime | None = None
 
@@ -301,6 +312,18 @@ class UpdateTaskRequest(ApiModel):
 
 class ChangeTaskStatusRequest(ApiModel):
     status: TaskStatus
+
+
+class SubmitTaskResultRequest(ApiModel):
+    result_text: str = Field(min_length=1, max_length=20_000)
+
+    @field_validator("result_text")
+    @classmethod
+    def result_text_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Task result must not be blank")
+        return stripped
 
 
 TaskReturnReason = Literal[

@@ -45,6 +45,20 @@ const statusLabels: Readonly<Record<TaskStatus, string>> = {
   cancelled: "Отменены",
 };
 
+const returnReasonLabels: Readonly<Record<string, string>> = {
+  incomplete_result: "Результат неполный",
+  requirements_not_met: "Требования не выполнены",
+  corrections_required: "Нужны исправления",
+  other: "Другая причина",
+};
+
+function reviewStatusLabel(status: TaskStatus): string {
+  if (status === "awaiting_review") return "Ожидает решения";
+  if (status === "completed") return "Принято";
+  if (status === "cancelled") return "Закрыто";
+  return "Готовится исполнителем";
+}
+
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "overdue" | "completed";
 type TaskMode = "list" | "kanban" | "efficiency";
@@ -77,6 +91,7 @@ interface TasksViewProps {
   readonly efficiencyError?: string;
   readonly onLoadEfficiency: (period?: string) => void | Promise<void>;
   readonly onCreateTask: (title: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onCreateSubtask: (parent: WorkspaceTask, payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string }) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readonly onUpdateTask: (task: WorkspaceTask, payload: TaskEditPayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetParticipant: (task: WorkspaceTask, userId: string, role: TaskParticipantRole) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -89,6 +104,8 @@ interface TasksViewProps {
   readonly onRemoveDependency: (task: WorkspaceTask, dependsOnTaskId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onReturnForRevision: (task: WorkspaceTask, reasonCode: TaskReturnReason, reasonText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onSubmitResult: (task: WorkspaceTask, resultText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onCreateApprovalFromTask: (task: WorkspaceTask, title: string, amount: number) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
@@ -105,11 +122,12 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onChangeStatus, onUpdateTask,
+    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
+    onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
   } = props;
   const [mode, setMode] = useState<TaskMode>("list");
@@ -123,6 +141,7 @@ export function TasksView(props: TasksViewProps) {
       setEditing(false); setCreatingApproval(false); setCycleEditing(false); setDateError("");
       setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
       setEfficiencyAction(""); setEfficiencyReasonText("");
+      setResultText(""); setCreatingSubtask(false); setSubtaskTitle(""); setSubtaskDueAt("");
     }
     updateSelectedId(id); setDetailOpen(true);
   };
@@ -152,6 +171,11 @@ export function TasksView(props: TasksViewProps) {
   const [efficiencyReasonText, setEfficiencyReasonText] = useState("");
   const [approvalTitle, setApprovalTitle] = useState("");
   const [approvalAmount, setApprovalAmount] = useState("");
+  const [resultText, setResultText] = useState("");
+  const [creatingSubtask, setCreatingSubtask] = useState(false);
+  const [subtaskTitle, setSubtaskTitle] = useState("");
+  const [subtaskAssigneeId, setSubtaskAssigneeId] = useState(currentUserId);
+  const [subtaskDueAt, setSubtaskDueAt] = useState("");
   const newTaskFocusTarget = useRestoreFocusTarget();
 
   const visibleTasks = useMemo(() => {
@@ -176,7 +200,17 @@ export function TasksView(props: TasksViewProps) {
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;
   const canEdit = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId || selectedTask.assigneeId === currentUserId || coAssignee);
   const canManageParticipants = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId);
+  const canSubmitResult = selectedTask !== undefined
+    && (privileged || selectedTask.assigneeId === currentUserId || coAssignee)
+    && ["new", "in_progress", "overdue"].includes(selectedTask.status);
+  const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
+  const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
+  const selectedParent = selectedTask?.parentTaskId ? tasks.find((task) => task.id === selectedTask.parentTaskId) : undefined;
   const personById = (id: string) => people.find((person) => person.id === id);
+  const canEditTask = (task: WorkspaceTask) => privileged
+    || task.authorId === currentUserId
+    || task.assigneeId === currentUserId
+    || task.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee");
 
   const createTask = async () => {
     const title = newTitle.trim();
@@ -291,6 +325,32 @@ export function TasksView(props: TasksViewProps) {
     if (result) { setEfficiencyAction(""); setEfficiencyReasonText(""); }
   };
 
+  const createSubtask = async () => {
+    if (selectedTask === undefined || !subtaskTitle.trim() || !subtaskAssigneeId) return;
+    if (subtaskDueAt && !Number.isFinite(new Date(subtaskDueAt).getTime())) {
+      setDateError("Проверьте срок подзадачи.");
+      return;
+    }
+    const created = await onCreateSubtask(selectedTask, {
+      title: subtaskTitle.trim(),
+      assigneeId: subtaskAssigneeId,
+      dueAt: subtaskDueAt ? new Date(subtaskDueAt).toISOString() : undefined,
+    });
+    if (created) {
+      setSubtaskTitle(""); setSubtaskDueAt(""); setCreatingSubtask(false); setDateError("");
+    }
+  };
+
+  const submitResult = async () => {
+    if (selectedTask === undefined || !resultText.trim()) return;
+    if (await onSubmitResult(selectedTask, resultText.trim())) setResultText("");
+  };
+
+  const acceptResult = async () => {
+    if (selectedTask === undefined) return;
+    await onAcceptResult(selectedTask);
+  };
+
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
@@ -324,10 +384,11 @@ export function TasksView(props: TasksViewProps) {
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
-              return <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
+              const acceptsDrop = ["new", "in_progress"].includes(status);
+              return <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => { if (acceptsDrop) event.preventDefault(); }} onDrop={(event) => { if (!acceptsDrop) return; const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>
-                  {columnTasks.map((task) => <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => event.dataTransfer.setData("text/task-id", task.id)} type="button"><strong>{task.title}</strong><span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>)}
+                  {columnTasks.map((task) => { const draggable = canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status); return <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable={draggable} key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => { if (draggable) event.dataTransfer.setData("text/task-id", task.id); }} type="button"><strong>{task.title}</strong>{task.parentTaskId ? <span className="subtask-marker">Подзадача</span> : null}<span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>; })}
                 </div>
               </section>;
             })}
@@ -342,7 +403,8 @@ export function TasksView(props: TasksViewProps) {
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div>{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div>
         {selectedTask.sourceMessageId ? <div className="source-link-note">Создана из сообщения · связь сохранена</div> : null}
         <div className="detail-meta"><div><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></div><div><Calendar24Regular /><span><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
-        <label className="task-status-field"><span>Статус</span><select aria-label="Статус задачи" value={selectedTask.status} onChange={(event) => void onChangeStatus(selectedTask.id, event.target.value as TaskStatus)} disabled={!canEdit}>{Object.entries(statusLabels).map(([status, label]) => <option key={status} value={status}>{label}</option>)}</select></label>
+        <div className="task-lifecycle-summary"><span>Статус</span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
+        {selectedTask.parentTaskId ? <div className="task-parent-link"><span>Подзадача для</span><button type="button" disabled={!selectedParent} onClick={() => { if (selectedParent) setSelectedId(selectedParent.id); }}>{selectedTask.parentTaskTitle ?? selectedParent?.title ?? "родительской задачи"}</button></div> : null}
 
         {editing ? <div className="task-card-editor" aria-label="Редактирование карточки задачи">
           <Input aria-label="Название в карточке" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} />
@@ -354,12 +416,25 @@ export function TasksView(props: TasksViewProps) {
           <div className="task-editor-actions"><Button appearance="primary" onClick={() => void saveTask()}>Сохранить карточку</Button><Button appearance="subtle" onClick={() => setEditing(false)}>Отмена</Button></div>
         </div> : <div className="detail-section"><h3>Описание</h3><p>{selectedTask.description || "Описание пока не добавлено."}</p></div>}
 
+        <div className={`detail-section task-review-section status-${selectedTask.status}`}><div className="detail-section-line"><h3>Результат и проверка</h3><span>{reviewStatusLabel(selectedTask.status)}</span></div>
+          {selectedTask.latestReturn && selectedTask.status !== "completed" ? <div className="task-return-note"><strong>{returnReasonLabels[selectedTask.latestReturn.reasonCode] ?? "Возвращено на доработку"}</strong>{selectedTask.latestReturn.reasonText ? <p>{selectedTask.latestReturn.reasonText}</p> : null}<small>{new Date(selectedTask.latestReturn.createdAt).toLocaleString("ru-RU")}</small></div> : null}
+          {selectedTask.resultText ? <div className="task-submitted-result"><small>Переданный результат</small><p>{selectedTask.resultText}</p></div> : null}
+          {canSubmitResult ? <div className="task-result-composer"><Textarea aria-label="Результат задачи" placeholder="Опишите выполненную работу и добавьте всё, что нужно проверить" value={resultText} onChange={(_, data) => setResultText(data.value)} /><Button appearance="primary" onClick={() => void submitResult()} disabled={!resultText.trim()}>Отправить на проверку</Button><small>После отправки постановщик примет результат или вернёт его с причиной.</small></div> : null}
+          {canReviewResult ? <div className="task-review-actions"><Button appearance="primary" onClick={() => void acceptResult()}>Принять результат</Button><Button appearance="secondary" onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button></div> : null}
+          {efficiencyAction === "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label="Мотивированный возврат"><label><span>Причина возврата</span><select aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="corrections_required">Нужны исправления</option><option value="incomplete_result">Результат неполный</option><option value="requirements_not_met">Требования не выполнены</option><option value="other">Другая причина</option></select></label><Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Что именно нужно исправить"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /><div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Вернуть исполнителю</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}
+        </div>
+
         <div className="detail-section task-participants-section"><div className="detail-section-line"><h3>Участники</h3><span>{selectedTask.participants.length + 1}</span></div><div className="participant-list">
           <ParticipantChip person={personById(selectedTask.assigneeId)} label="Ответственный" />
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form"><select aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select><select aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></select><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
         <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment} />
+
+        <div className="detail-section task-subtasks-section"><div className="detail-section-line"><h3>Подзадачи</h3><span>{selectedSubtasks.filter((task) => task.status === "completed").length}/{selectedSubtasks.length}</span></div>
+          <div className="task-subtask-list">{selectedSubtasks.map((task) => <button type="button" className="task-subtask-row" key={task.id} onClick={() => setSelectedId(task.id)}><span><strong>{task.title}</strong><small>{personById(task.assigneeId)?.name ?? "Сотрудник"} · {task.dueLabel}</small></span><Badge appearance="tint" color={task.status === "completed" ? "success" : task.status === "overdue" ? "danger" : "informative"}>{statusLabels[task.status]}</Badge></button>)}</div>
+          {canEdit && selectedTask.status !== "completed" && selectedTask.status !== "cancelled" ? creatingSubtask ? <div className="task-card-editor subtask-create-form" role="region" aria-label="Новая подзадача"><Input autoFocus aria-label="Название подзадачи" placeholder="Что нужно сделать?" value={subtaskTitle} onChange={(_, data) => setSubtaskTitle(data.value)} /><label><span>Исполнитель</span><select aria-label="Исполнитель подзадачи" value={subtaskAssigneeId} onChange={(event) => setSubtaskAssigneeId(event.target.value)}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label><span>Срок</span><input aria-label="Срок подзадачи" type="datetime-local" value={subtaskDueAt} onChange={(event) => setSubtaskDueAt(event.target.value)} /></label><div className="task-editor-actions"><Button appearance="primary" onClick={() => void createSubtask()} disabled={!subtaskTitle.trim()}>Создать подзадачу</Button><Button appearance="subtle" onClick={() => setCreatingSubtask(false)}>Отмена</Button></div></div> : <Button appearance="subtle" icon={<Add24Regular />} onClick={() => { setSubtaskAssigneeId(selectedTask.assigneeId); setCreatingSubtask(true); }}>Добавить подзадачу</Button> : null}
+        </div>
 
         <div className="detail-section task-checklist-section"><div className="detail-section-line"><h3>Чек-лист</h3><span>{selectedTask.checklistDone}/{selectedTask.checklistTotal}</span></div><ProgressBar aria-label="Выполнено пунктов чек-листа" value={selectedTask.checklistTotal ? selectedTask.checklistDone / selectedTask.checklistTotal : 0} /><div className="checklist-items">{selectedTask.checklist.map((item) => <div className="checklist-row" key={item.id}><Checkbox checked={item.isCompleted} disabled={!canEdit} label={item.title} onChange={(_event, data) => void onToggleChecklistItem(selectedTask, item.id, data.checked === true)} />{canEdit ? <button aria-label={`Удалить пункт ${item.title}`} onClick={() => void onDeleteChecklistItem(selectedTask, item.id)} type="button"><Delete24Regular /></button> : null}</div>)}</div>{canEdit ? <div className="inline-task-form"><Input aria-label="Новый пункт чек-листа" placeholder="Добавить пункт" value={checklistTitle} onChange={(_event, data) => setChecklistTitle(data.value)} /><Button appearance="secondary" onClick={() => void addChecklistItem()} disabled={!checklistTitle.trim()}>Добавить</Button></div> : null}</div>
 
@@ -369,8 +444,8 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-section task-comments-section"><div className="detail-section-line"><h3>Комментарии</h3><span>{selectedTask.comments.length}</span></div><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /><span><strong>{personById(comment.authorUserId)?.name}</strong><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p></span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
 
-        <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Обычный комментарий или смена статуса не считается мотивированным возвратом и не исключает задачу из расчёта.</p>{canManageParticipants ? <div className="task-editor-actions">{["awaiting_review", "completed"].includes(selectedTask.status) ? <Button appearance="secondary" onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button> : null}<Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
-        {efficiencyAction ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "return" ? "Мотивированный возврат" : efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><select aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}>{efficiencyAction === "return" ? <><option value="corrections_required">Нужны исправления</option><option value="incomplete_result">Результат неполный</option><option value="requirements_not_met">Требования не выполнены</option><option value="other">Другая причина</option></> : <><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></>}</select></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
+        <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Мотивированный возврат фиксируется в истории отдельно и не уменьшает процент выполнения в срок.</p>{canManageParticipants ? <div className="task-editor-actions"><Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
+        {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><select aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></select></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
         <div className="detail-footer"><Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button></div>
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
       </aside></DialogSurface>

@@ -313,6 +313,13 @@ export interface TaskCycle {
   readonly isEnabled: boolean;
 }
 
+export interface TaskReturn {
+  readonly reasonCode: string;
+  readonly reasonText?: string | null;
+  readonly actorUserId: string;
+  readonly createdAt: string;
+}
+
 export interface WorkspaceTask {
   readonly id: string;
   readonly title: string;
@@ -329,6 +336,9 @@ export interface WorkspaceTask {
   readonly checklistTotal: number;
   readonly sourceMessageId?: string | null;
   readonly resultText?: string | null;
+  readonly parentTaskId?: string | null;
+  readonly parentTaskTitle?: string | null;
+  readonly latestReturn?: TaskReturn | null;
   readonly participants: readonly TaskParticipant[];
   readonly checklist: readonly TaskChecklistItem[];
   readonly comments: readonly TaskComment[];

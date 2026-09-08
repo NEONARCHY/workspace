@@ -13,12 +13,12 @@ from yuksalish_api.efficiency_service import (
     materialize_efficiency_digest_notifications,
 )
 from yuksalish_api.repository import (
-    change_task_status,
     create_task,
     find_active_user_by_username,
     load_workspace,
     return_task_for_revision,
     set_task_efficiency_exclusion,
+    submit_task_result,
     update_task,
 )
 from yuksalish_api.seed import seed_demo_data
@@ -28,9 +28,9 @@ from yuksalish_api.tables import (
     workspace_notifications,
 )
 from yuksalish_api.workspace_schemas import (
-    ChangeTaskStatusRequest,
     CreateTaskRequest,
     ReturnTaskForRevisionRequest,
+    SubmitTaskResultRequest,
     TaskEfficiencyExclusionRequest,
     UpdateTaskRequest,
 )
@@ -59,11 +59,11 @@ async def _exercise_efficiency(database_url: str) -> None:
                         due_at=due_at,
                     ),
                 )
-                await change_task_status(
+                await submit_task_result(
                     connection,
                     employee,
                     UUID(task.id),
-                    ChangeTaskStatusRequest(status="awaiting_review"),
+                    SubmitTaskResultRequest(result_text="Result for manager review"),
                 )
                 await return_task_for_revision(
                     connection,
@@ -134,7 +134,10 @@ async def _exercise_efficiency(database_url: str) -> None:
                 return_notices = await connection.scalar(
                     select(func.count())
                     .select_from(workspace_notifications)
-                    .where(workspace_notifications.c.event_key.like("efficiency:return:%"))
+                    .where(
+                        workspace_notifications.c.event_key.like("efficiency:return:%"),
+                        workspace_notifications.c.entity_id == UUID(task.id),
+                    )
                 )
                 assert return_notices == 1
                 digest_time = datetime.now(UTC).replace(hour=14, minute=0, second=0, microsecond=0)

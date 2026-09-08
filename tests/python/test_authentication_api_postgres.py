@@ -190,18 +190,75 @@ async def test_authentication_http_vertical_slice() -> None:
             json={"dependsOnTaskId": blocker_id, "dependencyKind": "blocks"},
         )
         assert dependency.status_code == 200
-        blocked_completion = await client.patch(
-            f"/api/v1/tasks/{task_id}/status",
+        blocked_completion = await client.post(
+            f"/api/v1/tasks/{task_id}/submit-result",
             headers=admin_headers,
-            json={"status": "completed"},
+            json={"resultText": "Parent result"},
         )
         assert blocked_completion.status_code == 409
-        blocker_completed = await client.patch(
-            f"/api/v1/tasks/{blocker_id}/status",
+        blocker_submitted = await client.post(
+            f"/api/v1/tasks/{blocker_id}/submit-result",
             headers=admin_headers,
-            json={"status": "completed"},
+            json={"resultText": "Blocking result"},
+        )
+        assert blocker_submitted.status_code == 200
+        blocker_completed = await client.post(
+            f"/api/v1/tasks/{blocker_id}/accept-result",
+            headers=admin_headers,
         )
         assert blocker_completed.status_code == 200
+        subtask = await client.post(
+            "/api/v1/tasks",
+            headers=admin_headers,
+            json={
+                "title": "HTTP child task",
+                "assigneeId": admin_session["user"]["id"],
+                "parentTaskId": task_id,
+                "project": "Workspace BP-5",
+            },
+        )
+        assert subtask.status_code == 201
+        assert subtask.json()["parentTaskId"] == task_id
+        subtask_id = subtask.json()["id"]
+        assert (
+            await client.post(
+                f"/api/v1/tasks/{subtask_id}/submit-result",
+                headers=admin_headers,
+                json={"resultText": "Child result"},
+            )
+        ).status_code == 200
+        assert (
+            await client.post(
+                f"/api/v1/tasks/{subtask_id}/accept-result",
+                headers=admin_headers,
+            )
+        ).status_code == 200
+        submitted = await client.post(
+            f"/api/v1/tasks/{task_id}/submit-result",
+            headers=admin_headers,
+            json={"resultText": "Parent result"},
+        )
+        assert submitted.status_code == 200
+        returned = await client.post(
+            f"/api/v1/tasks/{task_id}/return-for-revision",
+            headers=admin_headers,
+            json={"reasonCode": "corrections_required", "reasonText": "Clarify totals"},
+        )
+        assert returned.status_code == 200
+        assert returned.json()["latestReturn"]["reasonText"] == "Clarify totals"
+        assert (
+            await client.post(
+                f"/api/v1/tasks/{task_id}/submit-result",
+                headers=admin_headers,
+                json={"resultText": "Corrected parent result"},
+            )
+        ).status_code == 200
+        accepted = await client.post(
+            f"/api/v1/tasks/{task_id}/accept-result",
+            headers=admin_headers,
+        )
+        assert accepted.status_code == 200
+        assert accepted.json()["status"] == "completed"
         dependency_removed = await client.delete(
             f"/api/v1/tasks/{task_id}/dependencies/{blocker_id}",
             headers=admin_headers,

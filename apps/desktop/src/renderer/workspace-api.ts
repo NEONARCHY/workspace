@@ -460,6 +460,7 @@ export function createWorkspaceTask(
     readonly assigneeId: string;
     readonly project?: string;
     readonly sourceMessageId?: string;
+    readonly parentTaskId?: string;
     readonly description?: string;
     readonly priority?: WorkspaceTask["priority"];
     readonly dueAt?: string;
@@ -499,6 +500,29 @@ export function changeWorkspaceTaskStatus(
   return apiRequest<WorkspaceTask>(
     `/tasks/${taskId}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
+    token,
+  );
+}
+
+export function submitWorkspaceTaskResult(
+  token: string,
+  taskId: string,
+  resultText: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/submit-result`,
+    { method: "POST", body: JSON.stringify({ resultText }) },
+    token,
+  );
+}
+
+export function acceptWorkspaceTaskResult(
+  token: string,
+  taskId: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/accept-result`,
+    { method: "POST" },
     token,
   );
 }

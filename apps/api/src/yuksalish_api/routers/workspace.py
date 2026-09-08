@@ -29,6 +29,7 @@ from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
+    accept_task_result,
     act_on_request,
     act_on_trip_request,
     add_feed_comment,
@@ -64,6 +65,7 @@ from yuksalish_api.repository import (
     set_task_dependency,
     set_task_efficiency_exclusion,
     set_task_participant,
+    submit_task_result,
     update_approval_request,
     update_calendar_event,
     update_notification_preferences,
@@ -101,6 +103,7 @@ from yuksalish_api.workspace_schemas import (
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
+    SubmitTaskResultRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskEfficiencyExclusionRequest,
@@ -412,6 +415,37 @@ async def patch_task_status(
 ) -> TaskResponse:
     try:
         result = await change_task_status(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/submit-result", response_model=TaskResponse)
+async def post_task_submit_result(
+    task_id: UUID,
+    payload: SubmitTaskResultRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await submit_task_result(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/accept-result", response_model=TaskResponse)
+async def post_task_accept_result(
+    task_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await accept_task_result(connection, current_user, task_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})

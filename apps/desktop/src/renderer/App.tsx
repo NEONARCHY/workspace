@@ -76,6 +76,7 @@ import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
+  acceptWorkspaceTaskResult,
   changePersonalChat,
   reorderPinnedChats,
   reorderNavigation,
@@ -127,6 +128,7 @@ import {
   setWorkspaceTaskParticipant,
   setWorkspaceTaskEfficiencyExclusion,
   subscribeToWorkspaceEvents,
+  submitWorkspaceTaskResult,
   updateWorkspaceApproval,
   updateWorkspaceCalendarEvent,
   updateWorkspaceProject,
@@ -642,6 +644,25 @@ export function App() {
     }
   };
 
+  const handleCreateSubtask = async (
+    parent: WorkspaceTask,
+    payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string },
+  ) => {
+    if (session === undefined) return undefined;
+    try {
+      const task = await createWorkspaceTask(session.accessToken, {
+        ...payload,
+        parentTaskId: parent.id,
+        project: parent.project,
+      });
+      setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
+      return task;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
   const handleTaskStatus = async (taskId: string, status: TaskStatus) => {
     if (session === undefined) return;
     try {
@@ -757,6 +778,12 @@ export function App() {
   ) => runTaskMutation((token) => returnWorkspaceTaskForRevision(
     token, task.id, reasonCode, reasonText,
   ));
+
+  const handleSubmitTaskResult = (task: WorkspaceTask, resultText: string) =>
+    runTaskMutation((token) => submitWorkspaceTaskResult(token, task.id, resultText));
+
+  const handleAcceptTaskResult = (task: WorkspaceTask) =>
+    runTaskMutation((token) => acceptWorkspaceTaskResult(token, task.id));
 
   const handleTaskEfficiencyExclusion = (
     task: WorkspaceTask,
@@ -1283,6 +1310,7 @@ export function App() {
                 efficiencyError={efficiencyError}
                 onLoadEfficiency={handleLoadEfficiency}
                 onCreateTask={handleCreateTask}
+                onCreateSubtask={handleCreateSubtask}
                 onChangeStatus={handleTaskStatus}
                 onUpdateTask={handleUpdateTask}
                 onSetParticipant={handleSetTaskParticipant}
@@ -1295,6 +1323,8 @@ export function App() {
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
                 onReturnForRevision={handleReturnTaskForRevision}
+                onSubmitResult={handleSubmitTaskResult}
+                onAcceptResult={handleAcceptTaskResult}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onCreateApprovalFromTask={handleCreateApprovalFromTask}
                 onUploadAttachments={handleUploadTaskAttachments}

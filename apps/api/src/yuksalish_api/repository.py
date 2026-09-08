@@ -83,6 +83,7 @@ from .workspace_schemas import (
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
+    SubmitTaskResultRequest,
     TaskChecklistItemResponse,
     TaskCommentResponse,
     TaskCycleRequest,
@@ -93,6 +94,7 @@ from .workspace_schemas import (
     TaskParticipantRequest,
     TaskParticipantResponse,
     TaskResponse,
+    TaskReturnResponse,
     TripAction,
     TripActionHistoryResponse,
     TripActionRequest,
@@ -239,6 +241,8 @@ def _task(
     comments: Sequence[TaskCommentResponse] = (),
     dependencies: Sequence[TaskDependencyResponse] = (),
     cycle: TaskCycleResponse | None = None,
+    parent_task_title: str | None = None,
+    latest_return: TaskReturnResponse | None = None,
 ) -> TaskResponse:
     checklist_done = sum(item.is_completed for item in checklist)
     return TaskResponse(
@@ -257,6 +261,9 @@ def _task(
         checklist_total=len(checklist),
         source_message_id=(str(row["source_message_id"]) if row["source_message_id"] else None),
         result_text=row["result_text"],
+        parent_task_id=(str(row["parent_task_id"]) if row.get("parent_task_id") else None),
+        parent_task_title=parent_task_title,
+        latest_return=latest_return,
         participants=list(participants),
         checklist=list(checklist),
         comments=list(comments),
@@ -959,10 +966,12 @@ async def _task_detail_maps(
     dict[UUID, list[TaskCommentResponse]],
     dict[UUID, list[TaskDependencyResponse]],
     dict[UUID, TaskCycleResponse],
+    dict[UUID, str],
+    dict[UUID, TaskReturnResponse],
 ]:
     task_ids = [row["id"] for row in task_rows]
     if not task_ids:
-        return {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}
 
     participant_rows = (
         (
@@ -1053,16 +1062,71 @@ async def _task_detail_maps(
         else []
     )
     cycles = {row["id"]: _task_cycle(row) for row in cycle_rows}
-    return participants, checklist, comments, dependencies, cycles
+    parent_ids = list({row["parent_task_id"] for row in task_rows if row.get("parent_task_id")})
+    parent_rows = (
+        (
+            await connection.execute(
+                select(tasks.c.id, tasks.c.title).where(tasks.c.id.in_(parent_ids))
+            )
+        )
+        .mappings()
+        .all()
+        if parent_ids
+        else []
+    )
+    parent_titles = {row["id"]: row["title"] for row in parent_rows}
+    return_rows = (
+        (
+            await connection.execute(
+                select(task_efficiency_events)
+                .where(
+                    task_efficiency_events.c.task_id.in_(task_ids),
+                    task_efficiency_events.c.event_type == "result_returned_for_revision",
+                )
+                .order_by(
+                    task_efficiency_events.c.task_id,
+                    task_efficiency_events.c.occurred_at.desc(),
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    latest_returns: dict[UUID, TaskReturnResponse] = {}
+    for row in return_rows:
+        latest_returns.setdefault(
+            row["task_id"],
+            TaskReturnResponse(
+                reason_code=row["reason_code"] or "other",
+                reason_text=row["reason_text"],
+                actor_user_id=str(row["actor_user_id"]),
+                created_at=row["occurred_at"],
+            ),
+        )
+    return (
+        participants,
+        checklist,
+        comments,
+        dependencies,
+        cycles,
+        parent_titles,
+        latest_returns,
+    )
 
 
 async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResponse:
     row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
-    participants, checklist, comments, dependencies, cycles = await _task_detail_maps(
-        connection, [row]
-    )
+    (
+        participants,
+        checklist,
+        comments,
+        dependencies,
+        cycles,
+        parent_titles,
+        latest_returns,
+    ) = await _task_detail_maps(connection, [row])
     return _task(
         row,
         participants=participants.get(task_id, []),
@@ -1070,6 +1134,8 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
         comments=comments.get(task_id, []),
         dependencies=dependencies.get(task_id, []),
         cycle=cycles.get(row["cycle_id"]),
+        parent_task_title=parent_titles.get(row["parent_task_id"]),
+        latest_return=latest_returns.get(task_id),
     )
 
 
@@ -1677,6 +1743,8 @@ async def load_workspace(
         task_comments_by_task,
         task_dependencies_by_task,
         task_cycles_by_id,
+        task_parent_titles,
+        task_latest_returns,
     ) = await _task_detail_maps(connection, task_rows)
 
     request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
@@ -1811,6 +1879,8 @@ async def load_workspace(
                 comments=task_comments_by_task.get(row["id"], []),
                 dependencies=task_dependencies_by_task.get(row["id"], []),
                 cycle=task_cycles_by_id.get(row["cycle_id"]),
+                parent_task_title=task_parent_titles.get(row["parent_task_id"]),
+                latest_return=task_latest_returns.get(row["id"]),
             )
             for row in task_rows
         ],
@@ -2273,6 +2343,7 @@ async def create_task(
     try:
         assignee_id = UUID(payload.assignee_id) if payload.assignee_id else current_user.id
         source_message_id = UUID(payload.source_message_id) if payload.source_message_id else None
+        parent_task_id = UUID(payload.parent_task_id) if payload.parent_task_id else None
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
     assignee_exists = await connection.scalar(
@@ -2297,6 +2368,13 @@ async def create_task(
         )
         if not message_exists:
             raise WorkspaceRepositoryError(422, "Source message is not accessible")
+    parent_row: Record | None = None
+    if parent_task_id is not None:
+        parent_row = await _task_access_row(
+            connection, current_user, parent_task_id, edit=True
+        )
+        if parent_row["status"] in {"completed", "cancelled"}:
+            raise WorkspaceRepositoryError(409, "A closed task cannot receive new subtasks")
     task_id = uuid4()
     now = datetime.now(UTC)
     values = {
@@ -2307,6 +2385,7 @@ async def create_task(
         "priority": payload.priority,
         "author_user_id": current_user.id,
         "primary_assignee_user_id": assignee_id,
+        "parent_task_id": parent_task_id,
         "cycle_id": None,
         "cycle_occurrence_key": None,
         "project_key": payload.project,
@@ -2330,9 +2409,13 @@ async def create_task(
             "status": "new",
             "assigneeId": str(assignee_id),
             "dueAt": payload.due_at.isoformat() if payload.due_at else None,
+            "parentTaskId": str(parent_task_id) if parent_task_id else None,
         },
     )
-    return _task(values)
+    return _task(
+        values,
+        parent_task_title=parent_row["title"] if parent_row is not None else None,
+    )
 
 
 async def update_task(
@@ -2399,26 +2482,24 @@ async def change_task_status(
     payload: ChangeTaskStatusRequest,
 ) -> TaskResponse:
     task_row = await _task_access_row(connection, current_user, task_id, edit=True)
-    if payload.status == "completed":
-        incomplete_blockers = await connection.scalar(
-            select(func.count())
-            .select_from(
-                task_dependencies.join(
-                    tasks,
-                    tasks.c.id == task_dependencies.c.depends_on_task_id,
-                )
-            )
-            .where(
-                task_dependencies.c.task_id == task_id,
-                task_dependencies.c.dependency_kind == "blocks",
-                tasks.c.status != "completed",
-            )
+    if payload.status in {"awaiting_review", "completed"}:
+        raise WorkspaceRepositoryError(
+            409,
+            "Use result submission or result acceptance for this status",
         )
-        if incomplete_blockers:
-            raise WorkspaceRepositoryError(
-                409,
-                "Task cannot be completed until its blocking dependencies are completed",
-            )
+    if payload.status == task_row["status"]:
+        return await _task_response(connection, task_id)
+    allowed_transitions = {
+        "new": {"in_progress", "cancelled"},
+        "in_progress": {"new", "cancelled"},
+        "overdue": {"in_progress", "cancelled"},
+    }
+    if payload.status not in allowed_transitions.get(task_row["status"], set()):
+        raise WorkspaceRepositoryError(409, "This task status transition is not allowed")
+    if payload.status == "cancelled":
+        is_author = task_row["author_user_id"] == current_user.id
+        if not is_author and not _is_privileged(current_user):
+            raise WorkspaceRepositoryError(403, "Only the task author can cancel it")
     updated_at = datetime.now(UTC)
     await connection.execute(
         update(tasks)
@@ -2436,18 +2517,165 @@ async def change_task_status(
             "old_value": {"status": task_row["status"]},
             "new_value": {"status": payload.status},
         }
-        if payload.status == "awaiting_review":
-            await record_task_event(event_type="result_submitted_for_review", **base_event)
-        elif payload.status == "completed":
-            if task_row["status"] == "awaiting_review":
-                await record_task_event(event_type="result_accepted", **base_event)
-            await record_task_event(event_type="task_completed", **base_event)
-        elif payload.status == "cancelled":
+        if payload.status == "cancelled":
             await record_task_event(
                 event_type="task_cancelled", reason_code="cancelled", **base_event
             )
         else:
             await record_task_event(event_type="task_status_changed", **base_event)
+    return await _task_response(connection, task_id)
+
+
+async def _ensure_task_can_be_submitted(
+    connection: AsyncConnection,
+    task_id: UUID,
+) -> None:
+    incomplete_blockers = await connection.scalar(
+        select(func.count())
+        .select_from(
+            task_dependencies.join(
+                tasks,
+                tasks.c.id == task_dependencies.c.depends_on_task_id,
+            )
+        )
+        .where(
+            task_dependencies.c.task_id == task_id,
+            task_dependencies.c.dependency_kind == "blocks",
+            tasks.c.status != "completed",
+        )
+    )
+    if incomplete_blockers:
+        raise WorkspaceRepositoryError(
+            409,
+            "Task cannot be submitted until its blocking dependencies are completed",
+        )
+
+
+async def _ensure_subtasks_are_closed(
+    connection: AsyncConnection,
+    task_id: UUID,
+) -> None:
+    incomplete_subtasks = await connection.scalar(
+        select(func.count())
+        .select_from(tasks)
+        .where(
+            tasks.c.parent_task_id == task_id,
+            tasks.c.status.not_in({"completed", "cancelled"}),
+        )
+    )
+    if incomplete_subtasks:
+        raise WorkspaceRepositoryError(
+            409,
+            "Complete or cancel every subtask before accepting the parent task",
+        )
+
+
+async def submit_task_result(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: SubmitTaskResultRequest,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
+    participant_roles = set(
+        (
+            await connection.execute(
+                select(task_participants.c.participant_role).where(
+                    task_participants.c.task_id == task_id,
+                    task_participants.c.user_id == current_user.id,
+                )
+            )
+        ).scalars()
+    )
+    can_submit = (
+        task_row["primary_assignee_user_id"] == current_user.id
+        or "co_assignee" in participant_roles
+        or _is_privileged(current_user)
+    )
+    if not can_submit:
+        raise WorkspaceRepositoryError(403, "Only an assignee can submit the result")
+    if task_row["status"] not in {"new", "in_progress", "overdue"}:
+        raise WorkspaceRepositoryError(409, "This task cannot be submitted for review")
+    await _ensure_task_can_be_submitted(connection, task_id)
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(tasks)
+        .where(tasks.c.id == task_id)
+        .values(
+            status="awaiting_review",
+            result_text=payload.result_text,
+            updated_at=now,
+        )
+    )
+    event_id = await record_task_event(
+        connection,
+        task_id=task_id,
+        event_type="result_submitted_for_review",
+        occurred_at=now,
+        actor_user_id=current_user.id,
+        assignee_user_id=task_row["primary_assignee_user_id"],
+        due_at=task_row["due_at"],
+        old_value={"status": task_row["status"]},
+        new_value={"status": "awaiting_review"},
+        metadata={"resultLength": len(payload.result_text)},
+    )
+    if task_row["author_user_id"] != current_user.id:
+        await _upsert_notification(
+            connection,
+            user_id=task_row["author_user_id"],
+            event_key=f"task:review:{event_id}",
+            kind="task",
+            priority="attention",
+            title="Результат ожидает проверки",
+            body=task_row["title"],
+            section="tasks",
+            entity_id=task_id,
+            requires_action=True,
+            occurred_at=now,
+        )
+    return await _task_response(connection, task_id)
+
+
+async def accept_task_result(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+) -> TaskResponse:
+    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    if task_row["status"] != "awaiting_review":
+        raise WorkspaceRepositoryError(409, "Only a submitted result can be accepted")
+    await _ensure_task_can_be_submitted(connection, task_id)
+    await _ensure_subtasks_are_closed(connection, task_id)
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(tasks).where(tasks.c.id == task_id).values(status="completed", updated_at=now)
+    )
+    event_values = {
+        "connection": connection,
+        "task_id": task_id,
+        "occurred_at": now,
+        "actor_user_id": current_user.id,
+        "assignee_user_id": task_row["primary_assignee_user_id"],
+        "due_at": task_row["due_at"],
+        "old_value": {"status": "awaiting_review"},
+        "new_value": {"status": "completed"},
+    }
+    event_id = await record_task_event(event_type="result_accepted", **event_values)
+    await record_task_event(event_type="task_completed", **event_values)
+    if task_row["primary_assignee_user_id"] != current_user.id:
+        await _upsert_notification(
+            connection,
+            user_id=task_row["primary_assignee_user_id"],
+            event_key=f"task:accepted:{event_id}",
+            kind="task",
+            priority="normal",
+            title="Результат принят",
+            body=task_row["title"],
+            section="tasks",
+            entity_id=task_id,
+            requires_action=False,
+            occurred_at=now,
+        )
     return await _task_response(connection, task_id)
 
 
@@ -2458,7 +2686,7 @@ async def return_task_for_revision(
     payload: ReturnTaskForRevisionRequest,
 ) -> TaskResponse:
     task_row = await _task_access_row(connection, current_user, task_id, manage=True)
-    if task_row["status"] not in {"awaiting_review", "completed"}:
+    if task_row["status"] != "awaiting_review":
         raise WorkspaceRepositoryError(409, "Only a submitted result can be returned for revision")
     now = datetime.now(UTC)
     await connection.execute(
