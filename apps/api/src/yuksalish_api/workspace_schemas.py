@@ -234,8 +234,11 @@ class TaskDependencyResponse(ApiModel):
 class TaskCycleResponse(ApiModel):
     id: str
     title: str
-    schedule_kind: Literal["daily", "weekly", "monthly"]
+    schedule_kind: Literal["daily", "weekly", "monthly", "calendar"]
     interval: int
+    calendar_rule: Literal["weekdays", "month_days"] | None = None
+    weekdays: list[int] = Field(default_factory=list)
+    month_days: list[int] = Field(default_factory=list)
     timezone: str
     next_run_at: datetime | None
     is_enabled: bool
@@ -266,6 +269,7 @@ class TaskResponse(ApiModel):
     result_text: str | None = None
     parent_task_id: str | None = None
     parent_task_title: str | None = None
+    chat_id: str | None = None
     latest_return: TaskReturnResponse | None = None
     participants: list[TaskParticipantResponse] = Field(default_factory=list)
     checklist: list[TaskChecklistItemResponse] = Field(default_factory=list)
@@ -448,11 +452,35 @@ class TaskDependencyRequest(ApiModel):
 
 class TaskCycleRequest(ApiModel):
     title: str = Field(min_length=1, max_length=240)
-    schedule_kind: Literal["daily", "weekly", "monthly"]
+    schedule_kind: Literal["daily", "weekly", "monthly", "calendar"]
     interval: int = Field(default=1, ge=1, le=365)
+    calendar_rule: Literal["weekdays", "month_days"] | None = None
+    weekdays: list[int] = Field(default_factory=list, max_length=7)
+    month_days: list[int] = Field(default_factory=list, max_length=31)
     timezone: str = Field(default="Asia/Tashkent", min_length=1, max_length=64)
     next_run_at: datetime | None = None
     is_enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_calendar_rule(self) -> "TaskCycleRequest":
+        self.weekdays = sorted(set(self.weekdays))
+        self.month_days = sorted(set(self.month_days))
+        if any(day < 0 or day > 6 for day in self.weekdays):
+            raise ValueError("Weekdays must be between 0 and 6")
+        if any(day < 1 or day > 31 for day in self.month_days):
+            raise ValueError("Month days must be between 1 and 31")
+        if self.schedule_kind != "calendar":
+            self.calendar_rule = None
+            self.weekdays = []
+            self.month_days = []
+            return self
+        if self.calendar_rule == "weekdays" and self.weekdays:
+            self.month_days = []
+            return self
+        if self.calendar_rule == "month_days" and self.month_days:
+            self.weekdays = []
+            return self
+        raise ValueError("Select at least one calendar day")
 
 
 ApprovalStatus = Literal[

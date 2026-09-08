@@ -1,56 +1,76 @@
 # Task management
 
-**Status:** implemented in alpha 0.6.0 (BP-5 functional slice)
+**Status:** implemented through desktop 0.22.0 / API 0.18.0
 
 ## Product flow
 
 A task is a persistent PostgreSQL object with an author, primary assignee, project,
-priority, deadline and lifecycle status. The desktop client presents the same data as
-an operational list or a Kanban board. Dropping a card into a column uses the normal
-status API, so server-side access checks and dependency rules cannot be bypassed by
-the UI.
+priority, deadline and lifecycle status. The desktop client presents one filtered
+dataset as a table, a Kanban board or a monthly task calendar. Selecting a task in
+any view opens the same full card; changing a Kanban column uses the normal status
+API, so server-side access and dependency rules cannot be bypassed by the UI.
+
+The calendar shows tasks on their local due date, preserves the active state/role
+filters and text search, and keeps tasks without a deadline in a separate visible
+queue. Month navigation never changes task data.
 
 Each task card contains:
 
 - a primary assignee plus `co_assignee` and `observer` participants;
 - an ordered checklist with completion actor and time;
-- append-only comments;
-- private attachments through the shared MinIO/PostgreSQL attachment model;
+- append-only comments and private attachments;
 - blocking or informational links to other visible tasks;
-- an optional daily, weekly or monthly recurrence definition.
+- subtasks and a protected result review/return flow;
+- an optional standard or calendar recurrence definition;
+- a direct action to its automatically managed task chat.
 
-## Access rules
+## Access and automatic chats
 
 - Managers and administrators can read and edit all tasks.
 - The author and primary assignee can read and edit their task.
-- A co-assignee can read and work on the card, checklist, files and status.
-- An observer can read the card, download its files and add comments, but cannot
-  change execution data.
-- Only the author, manager or administrator can change the participant list.
-- Assigning a participant as the new primary assignee removes the duplicate
-  participant record.
+- A co-assignee can work on the card; an observer can read and comment.
+- Only the author, manager or administrator can change participants.
+- Chat membership consists of the author, current assignee, co-assignees and
+  observers. Managerial task visibility alone does not reveal the conversation.
 
-Task existence is hidden with `404` from users who have no access. A known but
-forbidden mutation returns `403`.
+Task creation and each generated recurrence create exactly one `kind=task` chat in
+the same transaction. The partial unique index on `(context_type, context_id)` makes
+that operation safe under retries. A card title/description change updates the chat;
+assignee and participant changes reconcile its members. Migration
+`0021_task_calendar_chats` backfills existing tasks, while the deterministic demo
+seed creates the same links on a clean installation.
 
-## Integrity rules
+## Recurrence rules
+
+Daily, weekly and monthly rules retain an integer interval. A calendar rule can run:
+
+- on any selected combination of weekdays; or
+- on any selected combination of month days from 1 through 31.
+
+The user chooses the local time of the next occurrence. The server validates the
+IANA timezone and calculates later occurrences in local time before converting them
+to UTC. A selected day such as 31 is skipped in months where it does not exist.
+
+The scheduler locks due rows with `FOR UPDATE SKIP LOCKED`. Every generated task has
+a unique `(cycle_id, cycle_occurrence_key)`, making concurrent or repeated runs
+idempotent. A new occurrence copies description, assignee, project, priority,
+participants and checklist titles; completion state, comments, files and other
+cross-workflow links start clean.
+
+## Integrity and API
 
 Blocking dependencies form a directed acyclic graph. The API rejects self-links and
-any edge that would create a blocking cycle. A task cannot enter `completed` while an
-incomplete blocking dependency exists. Informational `relates` links do not block
-completion.
+an edge that would create a cycle. A task cannot be submitted while a blocking task
+is incomplete, and a parent cannot be accepted while a subtask remains open.
 
-The recurrence scheduler locks due rows with `FOR UPDATE SKIP LOCKED`. Every generated
-task has a unique `(cycle_id, cycle_occurrence_key)`, making concurrent or repeated
-scheduler runs idempotent. A new occurrence copies the current card description,
-assignee, project, priority, participants and checklist titles; completion state,
-comments, files and cross-workflow links start clean.
-
-## API surface
+Relevant endpoints:
 
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/{task_id}`
 - `PATCH /api/v1/tasks/{task_id}/status`
+- `POST /api/v1/tasks/{task_id}/submit-result`
+- `POST /api/v1/tasks/{task_id}/accept-result`
+- `POST /api/v1/tasks/{task_id}/return-for-revision`
 - `PUT|DELETE /api/v1/tasks/{task_id}/participants[...]`
 - `POST|PATCH|DELETE /api/v1/tasks/{task_id}/checklist[...]`
 - `POST /api/v1/tasks/{task_id}/comments`
@@ -58,10 +78,10 @@ comments, files and cross-workflow links start clean.
 - `PUT /api/v1/tasks/{task_id}/cycle`
 - `PUT /api/v1/attachments/task/{task_id}`
 
-## Deliberate follow-ups
+## Verification boundary
 
-Calendar presentation, subtasks, automatic task chats, author-only result acceptance
-and management workload dashboards are separate increments. Exact Bitrix behavioural
-characterisation also remains evidence-dependent: representative production tasks
-must be selected and inspected safely before claiming one-to-one parity for details
-that were not exposed by the existing read-only baseline.
+Automated checks cover calendar navigation/selection, the custom-cycle contract,
+idempotent materialisation, migration from an empty database, one-chat-per-task and
+membership reconciliation. A short user check of real task density and a two-client
+conversation remains useful before expanding the pilot. Exact Bitrix behavioural
+characterisation still requires safely selected representative production tasks.

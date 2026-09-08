@@ -118,7 +118,15 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert task.status_code == 201
         assert task.json()["sourceMessageId"] == message_id
+        assert task.json()["chatId"]
         task_id = task.json()["id"]
+        task_chat_id = task.json()["chatId"]
+        task_workspace = await client.get("/api/v1/workspace/bootstrap", headers=admin_headers)
+        assert task_workspace.status_code == 200
+        assert any(
+            chat["id"] == task_chat_id and chat["kind"] == "task"
+            for chat in task_workspace.json()["chats"]
+        )
         participant_id = next(
             person["id"]
             for person in workspace.json()["people"]
@@ -278,16 +286,21 @@ async def test_authentication_http_vertical_slice() -> None:
             f"/api/v1/tasks/{task_id}/cycle",
             headers=admin_headers,
             json={
-                "title": "HTTP weekly cycle",
-                "scheduleKind": "weekly",
-                "interval": 2,
+                "title": "HTTP calendar cycle",
+                "scheduleKind": "calendar",
+                "interval": 1,
+                "calendarRule": "month_days",
+                "monthDays": [1, 15, 28],
                 "timezone": "Asia/Tashkent",
                 "nextRunAt": "2026-09-21T06:00:00Z",
                 "isEnabled": True,
             },
         )
         assert cycle.status_code == 200
-        assert cycle.json()["cycle"]["scheduleKind"] == "weekly"
+        assert cycle.json()["cycle"]["scheduleKind"] == "calendar"
+        assert cycle.json()["cycle"]["calendarRule"] == "month_days"
+        assert cycle.json()["cycle"]["monthDays"] == [1, 15, 28]
+        assert cycle.json()["cycle"]["nextRunAt"] == "2026-09-28T06:00:00Z"
         finance_login = await client.post(
             "/api/v1/auth/login",
             json={

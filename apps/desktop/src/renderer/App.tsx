@@ -764,12 +764,34 @@ export function App() {
     task: WorkspaceTask,
     payload: {
       readonly title: string;
-      readonly scheduleKind: "daily" | "weekly" | "monthly";
+      readonly scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
       readonly interval: number;
+      readonly calendarRule?: "weekdays" | "month_days" | null;
+      readonly weekdays?: readonly number[];
+      readonly monthDays?: readonly number[];
       readonly nextRunAt?: string | null;
       readonly isEnabled: boolean;
     },
   ) => runTaskMutation((token) => setWorkspaceTaskCycle(token, task.id, payload));
+
+  const handleOpenTaskChat = async (task: WorkspaceTask) => {
+    const chatId = task.chatId;
+    if (!chatId) return;
+    if (session && !workspace.chats.some((chat) => chat.id === chatId)) {
+      try {
+        await refreshWorkspace(session.accessToken);
+      } catch (error) {
+        reportError(error);
+        return;
+      }
+    }
+    setActiveSection("messenger");
+    setFocusTarget((current) => ({
+      section: "messenger",
+      entityId: chatId,
+      revision: (current?.revision ?? 0) + 1,
+    }));
+  };
 
   const handleReturnTaskForRevision = (
     task: WorkspaceTask,
@@ -1304,6 +1326,7 @@ export function App() {
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
+                accessibleChatIds={workspace.chats.map((chat) => chat.id)}
                 currentUserId={workspace.currentUser.id}
                 efficiency={efficiency}
                 efficiencyLoading={efficiencyLoading}
@@ -1322,6 +1345,7 @@ export function App() {
                 onSetDependency={handleSetTaskDependency}
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
+                onOpenTaskChat={handleOpenTaskChat}
                 onReturnForRevision={handleReturnTaskForRevision}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}

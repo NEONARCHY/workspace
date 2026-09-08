@@ -306,8 +306,11 @@ export interface TaskDependency {
 export interface TaskCycle {
   readonly id: string;
   readonly title: string;
-  readonly scheduleKind: "daily" | "weekly" | "monthly";
+  readonly scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
   readonly interval: number;
+  readonly calendarRule?: "weekdays" | "month_days" | null;
+  readonly weekdays?: readonly number[];
+  readonly monthDays?: readonly number[];
   readonly timezone: string;
   readonly nextRunAt?: string | null;
   readonly isEnabled: boolean;
@@ -338,6 +341,7 @@ export interface WorkspaceTask {
   readonly resultText?: string | null;
   readonly parentTaskId?: string | null;
   readonly parentTaskTitle?: string | null;
+  readonly chatId?: string | null;
   readonly latestReturn?: TaskReturn | null;
   readonly participants: readonly TaskParticipant[];
   readonly checklist: readonly TaskChecklistItem[];

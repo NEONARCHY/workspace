@@ -1061,6 +1061,30 @@ describe("corporate workspace authentication alpha", () => {
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
   });
 
+  it("shows filtered tasks in the calendar and opens their automatic chat", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(document.querySelector<HTMLButtonElement>(".view-switch button:nth-child(3)")!);
+    expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
+    expect(document.querySelectorAll(".task-calendar-item")).toHaveLength(initialTasks.length);
+
+    fireEvent.click(screen.getByRole("button", {
+      name: `Открыть задачу: ${initialTasks[0]!.title}`,
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть чат задачи" }));
+    await waitFor(() => {
+      expect(screen.getAllByText("Задача · Договор на поставку ноутбуков").length)
+        .toBeGreaterThan(0);
+    });
+    expect(screen.getByRole("button", { name: "Мессенджер" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("finds employees without changing their roles or selected record", async () => {
     mockServer();
     render(<App />);
@@ -1144,15 +1168,21 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Добавить цикл" }));
     fireEvent.change(screen.getByLabelText("Период повторения"), {
-      target: { value: "weekly" },
+      target: { value: "calendar" },
     });
-    fireEvent.change(screen.getByLabelText("Интервал повторения"), {
-      target: { value: "2" },
-    });
+    expect(screen.getByRole("checkbox", { name: "Пн" })).toBeChecked();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Ср" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить цикл" }));
-    expect(await screen.findByText(/Каждую неделю · интервал 2/)).toBeInTheDocument();
+    expect(await screen.findByText(/По дням недели: пн, ср/)).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/cycle"),
+      expect.objectContaining({
+        method: "PUT",
+        body: expect.stringContaining('"weekdays":[0,2]'),
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Отключить" }));
-    expect(await screen.findByText(/Отключено · Каждую неделю/)).toBeInTheDocument();
+    expect(await screen.findByText(/Отключено · По дням недели: пн, ср/)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("textbox", { name: "Новый комментарий" }), {
       target: { value: "Карточка готова к проверке" },

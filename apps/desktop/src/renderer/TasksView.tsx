@@ -25,6 +25,7 @@ import {
 import {
   Add24Regular,
   Calendar24Regular,
+  Chat24Regular,
   Delete24Regular,
   Edit24Regular,
   Search20Regular,
@@ -33,6 +34,7 @@ import {
 
 import { AttachmentPanel } from "./AttachmentPanel";
 import { EfficiencyView } from "./EfficiencyView";
+import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskRecords } from "./TaskRecords";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
@@ -59,9 +61,25 @@ function reviewStatusLabel(status: TaskStatus): string {
   return "Готовится исполнителем";
 }
 
+function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
+  if (cycle.scheduleKind === "calendar") {
+    if (cycle.calendarRule === "month_days") {
+      return `По числам месяца: ${cycle.monthDays?.join(", ") ?? "—"}`;
+    }
+    const labels = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+    return `По дням недели: ${cycle.weekdays?.map((day) => labels[day]).join(", ") ?? "—"}`;
+  }
+  const base = cycle.scheduleKind === "daily"
+    ? "Каждый день"
+    : cycle.scheduleKind === "weekly"
+      ? "Каждую неделю"
+      : "Каждый месяц";
+  return cycle.interval > 1 ? `${base} · интервал ${cycle.interval}` : base;
+}
+
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "overdue" | "completed";
-type TaskMode = "list" | "kanban" | "efficiency";
+type TaskMode = "list" | "kanban" | "calendar" | "efficiency";
 
 interface TaskEditPayload {
   readonly title: string;
@@ -74,8 +92,11 @@ interface TaskEditPayload {
 
 interface CyclePayload {
   readonly title: string;
-  readonly scheduleKind: "daily" | "weekly" | "monthly";
+  readonly scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
   readonly interval: number;
+  readonly calendarRule?: "weekdays" | "month_days" | null;
+  readonly weekdays?: readonly number[];
+  readonly monthDays?: readonly number[];
   readonly nextRunAt?: string | null;
   readonly isEnabled: boolean;
 }
@@ -85,6 +106,7 @@ interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
+  readonly accessibleChatIds: readonly string[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
   readonly efficiencyLoading: boolean;
@@ -103,6 +125,7 @@ interface TasksViewProps {
   readonly onSetDependency: (task: WorkspaceTask, dependsOnTaskId: string, dependencyKind: "blocks" | "relates") => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveDependency: (task: WorkspaceTask, dependsOnTaskId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onOpenTaskChat: (task: WorkspaceTask) => void | Promise<void>;
   readonly onReturnForRevision: (task: WorkspaceTask, reasonCode: TaskReturnReason, reasonText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSubmitResult: (task: WorkspaceTask, resultText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -122,9 +145,9 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask,
+    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
-    onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle,
+    onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
     onSubmitResult, onAcceptResult,
@@ -162,9 +185,12 @@ export function TasksView(props: TasksViewProps) {
   const [dependencyId, setDependencyId] = useState("");
   const [dependencyKind, setDependencyKind] = useState<"blocks" | "relates">("blocks");
   const [cycleEditing, setCycleEditing] = useState(false);
-  const [cycleKind, setCycleKind] = useState<"daily" | "weekly" | "monthly">("monthly");
+  const [cycleKind, setCycleKind] = useState<"daily" | "weekly" | "monthly" | "calendar">("monthly");
   const [cycleInterval, setCycleInterval] = useState("1");
   const [cycleNextRun, setCycleNextRun] = useState("");
+  const [cycleCalendarRule, setCycleCalendarRule] = useState<"weekdays" | "month_days">("weekdays");
+  const [cycleWeekdays, setCycleWeekdays] = useState<readonly number[]>([0]);
+  const [cycleMonthDays, setCycleMonthDays] = useState("1");
   const [creatingApproval, setCreatingApproval] = useState(false);
   const [efficiencyAction, setEfficiencyAction] = useState<"return" | "exclude" | "include" | "">("");
   const [efficiencyReason, setEfficiencyReason] = useState<TaskReturnReason | TaskEfficiencyExclusionReason>("corrections_required");
@@ -204,6 +230,12 @@ export function TasksView(props: TasksViewProps) {
     && (privileged || selectedTask.assigneeId === currentUserId || coAssignee)
     && ["new", "in_progress", "overdue"].includes(selectedTask.status);
   const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
+  const canOpenTaskChat = selectedTask !== undefined && Boolean(selectedTask.chatId) && (
+    accessibleChatIds.includes(selectedTask.chatId ?? "")
+    || selectedTask.authorId === currentUserId
+    || selectedTask.assigneeId === currentUserId
+    || selectedTask.participants.some((item) => item.userId === currentUserId)
+  );
   const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
   const selectedParent = selectedTask?.parentTaskId ? tasks.find((task) => task.id === selectedTask.parentTaskId) : undefined;
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -271,6 +303,9 @@ export function TasksView(props: TasksViewProps) {
     defaultNextRun.setHours(9, 0, 0, 0);
     setCycleKind(selectedTask.cycle?.scheduleKind ?? "monthly");
     setCycleInterval(String(selectedTask.cycle?.interval ?? 1));
+    setCycleCalendarRule(selectedTask.cycle?.calendarRule ?? "weekdays");
+    setCycleWeekdays(selectedTask.cycle?.weekdays?.length ? selectedTask.cycle.weekdays : [0]);
+    setCycleMonthDays((selectedTask.cycle?.monthDays?.length ? selectedTask.cycle.monthDays : [1]).join(", "));
     setCycleNextRun(
       localDateTime(selectedTask.cycle?.nextRunAt ?? defaultNextRun.toISOString()),
     );
@@ -283,8 +318,19 @@ export function TasksView(props: TasksViewProps) {
     setDateError("");
     const interval = Number(cycleInterval);
     if (!Number.isInteger(interval) || interval < 1) return;
+    const monthDays = [...new Set(cycleMonthDays.split(/[\s,;]+/).filter(Boolean).map(Number))]
+      .filter((day) => Number.isInteger(day) && day >= 1 && day <= 31)
+      .sort((left, right) => left - right);
+    if (cycleKind === "calendar"
+      && (cycleCalendarRule === "weekdays" ? cycleWeekdays.length === 0 : monthDays.length === 0)) {
+      setDateError("Выберите хотя бы один день календарного правила.");
+      return;
+    }
     if (await onSetCycle(selectedTask, {
       title: selectedTask.title, scheduleKind: cycleKind, interval,
+      calendarRule: cycleKind === "calendar" ? cycleCalendarRule : null,
+      weekdays: cycleKind === "calendar" && cycleCalendarRule === "weekdays" ? cycleWeekdays : [],
+      monthDays: cycleKind === "calendar" && cycleCalendarRule === "month_days" ? monthDays : [],
       nextRunAt: cycleNextRun ? new Date(cycleNextRun).toISOString() : null, isEnabled: true,
     })) setCycleEditing(false);
   };
@@ -295,6 +341,9 @@ export function TasksView(props: TasksViewProps) {
       title: selectedTask.cycle.title,
       scheduleKind: selectedTask.cycle.scheduleKind,
       interval: selectedTask.cycle.interval,
+      calendarRule: selectedTask.cycle.calendarRule,
+      weekdays: selectedTask.cycle.weekdays,
+      monthDays: selectedTask.cycle.monthDays,
       nextRunAt: selectedTask.cycle.nextRunAt,
       isEnabled: !selectedTask.cycle.isEnabled,
     });
@@ -360,6 +409,7 @@ export function TasksView(props: TasksViewProps) {
             <div className="view-switch" aria-label="Представление задач">
               <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
               <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
+              <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
               <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
             </div>
             {mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
@@ -380,7 +430,7 @@ export function TasksView(props: TasksViewProps) {
           <Button appearance="subtle" onClick={() => setCreating(false)}>Отмена</Button>
         </div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : (
+        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
@@ -440,13 +490,31 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-section task-dependencies-section"><div className="detail-section-line"><h3>Зависимости</h3><span>{selectedTask.dependencies.length}</span></div>{selectedTask.dependencies.map((dependency) => <div className="dependency-row" key={dependency.dependsOnTaskId}><span><strong>{dependency.title}</strong><small>{dependency.dependencyKind === "blocks" ? "Блокирует выполнение" : "Связанная задача"}</small></span><Badge appearance="tint" color={dependency.status === "completed" ? "success" : "warning"}>{statusLabels[dependency.status]}</Badge>{canEdit ? <button aria-label={`Убрать зависимость ${dependency.title}`} onClick={() => void onRemoveDependency(selectedTask, dependency.dependsOnTaskId)} type="button">×</button> : null}</div>)}{canEdit ? <div className="inline-task-form"><select aria-label="Зависимая задача" value={dependencyId} onChange={(event) => setDependencyId(event.target.value)}><option value="">Выберите задачу</option>{tasks.filter((task) => task.id !== selectedTask.id && !selectedTask.dependencies.some((item) => item.dependsOnTaskId === task.id)).map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select><select aria-label="Тип зависимости" value={dependencyKind} onChange={(event) => setDependencyKind(event.target.value as "blocks" | "relates")}><option value="blocks">Блокирует</option><option value="relates">Связана</option></select><Button appearance="secondary" onClick={() => void addDependency()} disabled={!dependencyId}>Связать</Button></div> : null}</div>
 
-        <div className="detail-section task-cycle-section"><div className="detail-section-line"><h3>Повторение</h3>{canEdit ? <span className="cycle-actions"><Button appearance="subtle" onClick={startCycleEditing}>{selectedTask.cycle ? "Настроить" : "Добавить цикл"}</Button>{selectedTask.cycle ? <Button appearance="subtle" onClick={() => void toggleCycle()}>{selectedTask.cycle.isEnabled ? "Отключить" : "Включить"}</Button> : null}</span> : null}</div>{selectedTask.cycle ? <div className={`cycle-summary ${selectedTask.cycle.isEnabled ? "" : "disabled"}`}><span><strong>{selectedTask.cycle.isEnabled ? "" : "Отключено · "}{selectedTask.cycle.scheduleKind === "daily" ? "Каждый день" : selectedTask.cycle.scheduleKind === "weekly" ? "Каждую неделю" : "Каждый месяц"}{selectedTask.cycle.interval > 1 ? ` · интервал ${selectedTask.cycle.interval}` : ""}</strong><small>Следующая задача: {selectedTask.cycle.nextRunAt ? new Date(selectedTask.cycle.nextRunAt).toLocaleString("ru-RU") : "не запланирована"}</small></span></div> : <p>Задача не повторяется.</p>}{cycleEditing ? <div className="inline-task-form cycle-form"><select aria-label="Период повторения" value={cycleKind} onChange={(event) => setCycleKind(event.target.value as typeof cycleKind)}><option value="daily">Дни</option><option value="weekly">Недели</option><option value="monthly">Месяцы</option></select><Input aria-label="Интервал повторения" type="number" min={1} value={cycleInterval} onChange={(_event, data) => setCycleInterval(data.value)} /><input aria-label="Следующее повторение" type="datetime-local" value={cycleNextRun} onChange={(event) => setCycleNextRun(event.target.value)} /><Button appearance="primary" onClick={() => void saveCycle()}>Сохранить цикл</Button><Button appearance="subtle" onClick={() => setCycleEditing(false)}>Отмена</Button></div> : null}</div>
+        <div className="detail-section task-cycle-section">
+          <div className="detail-section-line">
+            <h3>Повторение</h3>
+            {canEdit ? <span className="cycle-actions"><Button appearance="subtle" onClick={startCycleEditing}>{selectedTask.cycle ? "Настроить" : "Добавить цикл"}</Button>{selectedTask.cycle ? <Button appearance="subtle" onClick={() => void toggleCycle()}>{selectedTask.cycle.isEnabled ? "Отключить" : "Включить"}</Button> : null}</span> : null}
+          </div>
+          {selectedTask.cycle ? <div className={`cycle-summary ${selectedTask.cycle.isEnabled ? "" : "disabled"}`}><span><strong>{selectedTask.cycle.isEnabled ? "" : "Отключено · "}{cycleLabel(selectedTask.cycle)}</strong><small>Следующая задача: {selectedTask.cycle.nextRunAt ? new Date(selectedTask.cycle.nextRunAt).toLocaleString("ru-RU") : "не запланирована"}</small></span></div> : <p>Задача не повторяется.</p>}
+          {cycleEditing ? <div className="cycle-form">
+            <div className="cycle-form-main">
+              <label><span>Правило</span><select aria-label="Период повторения" value={cycleKind} onChange={(event) => setCycleKind(event.target.value as typeof cycleKind)}><option value="daily">Каждые несколько дней</option><option value="weekly">Каждые несколько недель</option><option value="monthly">Каждые несколько месяцев</option><option value="calendar">Выбранные дни календаря</option></select></label>
+              {cycleKind !== "calendar" ? <label><span>Интервал</span><Input aria-label="Интервал повторения" type="number" min={1} value={cycleInterval} onChange={(_event, data) => setCycleInterval(data.value)} /></label> : null}
+              <label><span>Время ближайшего запуска</span><input aria-label="Следующее повторение" type="datetime-local" value={cycleNextRun} onChange={(event) => setCycleNextRun(event.target.value)} /></label>
+            </div>
+            {cycleKind === "calendar" ? <fieldset className="cycle-calendar-rule"><legend>Календарное правило</legend><select aria-label="Тип календарного правила" value={cycleCalendarRule} onChange={(event) => setCycleCalendarRule(event.target.value as typeof cycleCalendarRule)}><option value="weekdays">Дни недели</option><option value="month_days">Числа месяца</option></select>{cycleCalendarRule === "weekdays" ? <div className="cycle-weekday-picker">{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"].map((label, day) => <label key={label}><input type="checkbox" checked={cycleWeekdays.includes(day)} onChange={() => setCycleWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day].sort())} /><span>{label}</span></label>)}</div> : <label className="cycle-month-days"><span>Числа через запятую</span><Input aria-label="Числа месяца" placeholder="Например: 1, 10, 25" value={cycleMonthDays} onChange={(_event, data) => setCycleMonthDays(data.value)} /></label>}</fieldset> : null}
+            <div className="task-editor-actions"><Button appearance="primary" onClick={() => void saveCycle()}>Сохранить цикл</Button><Button appearance="subtle" onClick={() => setCycleEditing(false)}>Отмена</Button></div>
+          </div> : null}
+        </div>
 
         <div className="detail-section task-comments-section"><div className="detail-section-line"><h3>Комментарии</h3><span>{selectedTask.comments.length}</span></div><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /><span><strong>{personById(comment.authorUserId)?.name}</strong><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p></span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
 
         <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Мотивированный возврат фиксируется в истории отдельно и не уменьшает процент выполнения в срок.</p>{canManageParticipants ? <div className="task-editor-actions"><Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
         {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><select aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></select></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
-        <div className="detail-footer"><Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button></div>
+        <div className="detail-footer">
+          <Button appearance="primary" icon={<Chat24Regular />} disabled={!canOpenTaskChat} title={canOpenTaskChat ? "Перейти в связанный чат" : "Чат доступен участникам задачи"} onClick={() => void onOpenTaskChat(selectedTask)}>Открыть чат задачи</Button>
+          <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button>
+        </div>
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
       </aside></DialogSurface>
       </Dialog> : null}

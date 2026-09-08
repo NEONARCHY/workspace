@@ -666,8 +666,11 @@ export function setWorkspaceTaskCycle(
   taskId: string,
   payload: {
     readonly title: string;
-    readonly scheduleKind: "daily" | "weekly" | "monthly";
+    readonly scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
     readonly interval: number;
+    readonly calendarRule?: "weekdays" | "month_days" | null;
+    readonly weekdays?: readonly number[];
+    readonly monthDays?: readonly number[];
     readonly nextRunAt?: string | null;
     readonly isEnabled: boolean;
     readonly timezone?: string;

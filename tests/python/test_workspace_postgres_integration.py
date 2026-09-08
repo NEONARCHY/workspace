@@ -68,7 +68,7 @@ from yuksalish_api.repository import (
     update_trip_request,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import audit_events
+from yuksalish_api.tables import audit_events, chat_members, chats, task_cycles, tasks
 from yuksalish_api.workspace_schemas import (
     ApprovalActionRequest,
     ChangeProjectStageRequest,
@@ -121,7 +121,8 @@ async def _exercise_live_workspace(database_url: str) -> None:
 
             initial = await load_workspace(connection, aziza)
             assert len(initial.people) == 4
-            assert len(initial.chats) == 4
+            assert len(initial.chats) == 7
+            assert len([chat for chat in initial.chats if chat.kind == "task"]) == 3
             assert len(initial.projects) == 3
             assert len(initial.trip_requests) == 1
             assert len(initial.feed_posts) == 2
@@ -319,6 +320,14 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     source_message_id=message.id,
                 ),
             )
+            assert task.chat_id is not None
+            task_chat_id = UUID(task.chat_id)
+            assert await connection.scalar(
+                select(func.count()).select_from(chat_members).where(
+                    chat_members.c.chat_id == task_chat_id,
+                    chat_members.c.user_id == aziza.id,
+                )
+            ) == 1
             task = await change_task_status(
                 connection,
                 aziza,
@@ -342,6 +351,9 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert task.title == "Integration task card"
             assert task.priority == "urgent"
+            assert await connection.scalar(
+                select(chats.c.title).where(chats.c.id == task_chat_id)
+            ) == "Задача · Integration task card"
             dilshod_row = await find_active_user_by_username(connection, "dilshod")
             assert dilshod_row is not None
             dilshod_auth = await load_authenticated_user(connection, dilshod_row["id"])
@@ -356,6 +368,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert task.participants[0].role == "observer"
+            assert await connection.scalar(
+                select(func.count()).select_from(chat_members).where(
+                    chat_members.c.chat_id == task_chat_id,
+                )
+            ) == 2
             task = await add_task_comment(
                 connection,
                 dilshod_auth,
@@ -506,6 +523,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 dilshod_auth.id,
             )
             assert task.participants == []
+            assert await connection.scalar(
+                select(func.count()).select_from(chat_members).where(
+                    chat_members.c.chat_id == task_chat_id,
+                )
+            ) == 1
 
             task = await set_task_cycle(
                 connection,
@@ -537,6 +559,38 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert task.cycle is not None
             assert task.cycle.is_enabled is False
             assert await materialize_due_task_cycles(connection) == 0
+
+            calendar_start = datetime(2026, 9, 7, 4, tzinfo=UTC)
+            task = await set_task_cycle(
+                connection,
+                aziza,
+                UUID(task.id),
+                TaskCycleRequest(
+                    title="Calendar integration task",
+                    schedule_kind="calendar",
+                    calendar_rule="weekdays",
+                    weekdays=[0, 2],
+                    timezone="Asia/Tashkent",
+                    next_run_at=calendar_start,
+                ),
+            )
+            assert task.cycle is not None
+            assert task.cycle.schedule_kind == "calendar"
+            assert task.cycle.calendar_rule == "weekdays"
+            assert task.cycle.weekdays == [0, 2]
+            assert task.cycle.next_run_at == calendar_start
+            assert await materialize_due_task_cycles(connection, calendar_start) == 1
+            assert await connection.scalar(
+                select(func.count())
+                .select_from(tasks.join(chats, chats.c.context_id == tasks.c.id))
+                .where(
+                    tasks.c.title == "Calendar integration task",
+                    chats.c.context_type == "task",
+                )
+            ) == 1
+            assert await connection.scalar(
+                select(task_cycles.c.next_run_at).where(task_cycles.c.id == UUID(task.cycle.id))
+            ) == datetime(2026, 9, 9, 4, tzinfo=UTC)
 
             approval = await create_approval_request(
                 connection,

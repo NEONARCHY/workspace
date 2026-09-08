@@ -1,7 +1,7 @@
 from calendar import monthrange
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -61,6 +61,7 @@ from .workspace_schemas import (
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
     ChatMessageResponse,
+    ChatPermissions,
     CreateApprovalRequest,
     CreateCalendarEventRequest,
     CreateChecklistItemRequest,
@@ -193,6 +194,9 @@ def _task_cycle(row: Record) -> TaskCycleResponse:
         title=row["title"],
         schedule_kind=row["schedule_kind"],
         interval=int(config.get("interval", 1)),
+        calendar_rule=config.get("calendarRule"),
+        weekdays=list(config.get("weekdays", [])),
+        month_days=list(config.get("monthDays", [])),
         timezone=row["timezone"],
         next_run_at=row["next_run_at"],
         is_enabled=row["is_enabled"],
@@ -242,6 +246,7 @@ def _task(
     dependencies: Sequence[TaskDependencyResponse] = (),
     cycle: TaskCycleResponse | None = None,
     parent_task_title: str | None = None,
+    chat_id: UUID | None = None,
     latest_return: TaskReturnResponse | None = None,
 ) -> TaskResponse:
     checklist_done = sum(item.is_completed for item in checklist)
@@ -263,6 +268,7 @@ def _task(
         result_text=row["result_text"],
         parent_task_id=(str(row["parent_task_id"]) if row.get("parent_task_id") else None),
         parent_task_title=parent_task_title,
+        chat_id=str(chat_id) if chat_id else None,
         latest_return=latest_return,
         participants=list(participants),
         checklist=list(checklist),
@@ -967,11 +973,12 @@ async def _task_detail_maps(
     dict[UUID, list[TaskDependencyResponse]],
     dict[UUID, TaskCycleResponse],
     dict[UUID, str],
+    dict[UUID, UUID],
     dict[UUID, TaskReturnResponse],
 ]:
     task_ids = [row["id"] for row in task_rows]
     if not task_ids:
-        return {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}
 
     participant_rows = (
         (
@@ -1075,6 +1082,19 @@ async def _task_detail_maps(
         else []
     )
     parent_titles = {row["id"]: row["title"] for row in parent_rows}
+    task_chat_rows = (
+        (
+            await connection.execute(
+                select(chats.c.id, chats.c.context_id).where(
+                    chats.c.context_type == "task",
+                    chats.c.context_id.in_(task_ids),
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    task_chat_ids = {row["context_id"]: row["id"] for row in task_chat_rows}
     return_rows = (
         (
             await connection.execute(
@@ -1110,6 +1130,7 @@ async def _task_detail_maps(
         dependencies,
         cycles,
         parent_titles,
+        task_chat_ids,
         latest_returns,
     )
 
@@ -1125,6 +1146,7 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
         dependencies,
         cycles,
         parent_titles,
+        task_chat_ids,
         latest_returns,
     ) = await _task_detail_maps(connection, [row])
     return _task(
@@ -1135,6 +1157,7 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
         dependencies=dependencies.get(task_id, []),
         cycle=cycles.get(row["cycle_id"]),
         parent_task_title=parent_titles.get(row["parent_task_id"]),
+        chat_id=task_chat_ids.get(task_id),
         latest_return=latest_returns.get(task_id),
     )
 
@@ -1744,6 +1767,7 @@ async def load_workspace(
         task_dependencies_by_task,
         task_cycles_by_id,
         task_parent_titles,
+        task_chat_ids,
         task_latest_returns,
     ) = await _task_detail_maps(connection, task_rows)
 
@@ -1880,6 +1904,7 @@ async def load_workspace(
                 dependencies=task_dependencies_by_task.get(row["id"], []),
                 cycle=task_cycles_by_id.get(row["cycle_id"]),
                 parent_task_title=task_parent_titles.get(row["parent_task_id"]),
+                chat_id=task_chat_ids.get(row["id"]),
                 latest_return=task_latest_returns.get(row["id"]),
             )
             for row in task_rows
@@ -2335,6 +2360,132 @@ async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
     return user_id
 
 
+async def _sync_task_chat(
+    connection: AsyncConnection,
+    *,
+    task_id: UUID,
+    title: str,
+    description: str,
+    author_user_id: UUID,
+    assignee_user_id: UUID,
+    occurred_at: datetime | None = None,
+) -> UUID:
+    """Create one task chat and keep its membership aligned with task roles."""
+    now = occurred_at or datetime.now(UTC)
+    chat_id = await connection.scalar(
+        select(chats.c.id).where(
+            chats.c.context_type == "task",
+            chats.c.context_id == task_id,
+        )
+    )
+    if chat_id is None:
+        proposed_id = uuid4()
+        chat_id = await connection.scalar(
+            pg_insert(chats)
+            .values(
+                id=proposed_id,
+                kind="task",
+                title=f"Задача · {title}"[:240],
+                description=description[:4000],
+                context_type="task",
+                context_id=task_id,
+                direct_key=None,
+                created_by_user_id=author_user_id,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[chats.c.context_type, chats.c.context_id],
+                index_where=and_(
+                    chats.c.context_type.is_not(None),
+                    chats.c.context_id.is_not(None),
+                ),
+            )
+            .returning(chats.c.id)
+        )
+        if chat_id is None:
+            chat_id = await connection.scalar(
+                select(chats.c.id).where(
+                    chats.c.context_type == "task",
+                    chats.c.context_id == task_id,
+                )
+            )
+        if chat_id is None:
+            raise WorkspaceRepositoryError(500, "Task chat could not be created")
+    else:
+        await connection.execute(
+            update(chats)
+            .where(chats.c.id == chat_id)
+            .values(
+                title=f"Задача · {title}"[:240],
+                description=description[:4000],
+                updated_at=now,
+            )
+        )
+
+    participant_ids = set(
+        (
+            await connection.execute(
+                select(task_participants.c.user_id).where(
+                    task_participants.c.task_id == task_id
+                )
+            )
+        ).scalars()
+    )
+    desired_ids = participant_ids | {author_user_id, assignee_user_id}
+    await connection.execute(
+        delete(chat_members).where(
+            chat_members.c.chat_id == chat_id,
+            chat_members.c.user_id.not_in(desired_ids),
+        )
+    )
+    await connection.execute(
+        update(chat_members)
+        .where(
+            chat_members.c.chat_id == chat_id,
+            chat_members.c.user_id != author_user_id,
+        )
+        .values(
+            member_role="member",
+            permissions=ChatPermissions().model_dump(),
+        )
+    )
+    await connection.execute(
+        pg_insert(chat_members)
+        .values(
+            chat_id=chat_id,
+            user_id=author_user_id,
+            member_role="owner",
+            permissions=messenger_service.FULL_PERMISSIONS.model_dump(),
+            joined_at=now,
+            muted_until=None,
+        )
+        .on_conflict_do_update(
+            index_elements=[chat_members.c.chat_id, chat_members.c.user_id],
+            set_={
+                "member_role": "owner",
+                "permissions": messenger_service.FULL_PERMISSIONS.model_dump(),
+            },
+        )
+    )
+    member_values = [
+        {
+            "chat_id": chat_id,
+            "user_id": user_id,
+            "member_role": "member",
+            "permissions": ChatPermissions().model_dump(),
+            "joined_at": now,
+            "muted_until": None,
+        }
+        for user_id in sorted(desired_ids - {author_user_id})
+    ]
+    if member_values:
+        await connection.execute(
+            pg_insert(chat_members).values(member_values).on_conflict_do_nothing()
+        )
+    return cast(UUID, chat_id)
+
+
 async def create_task(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -2412,9 +2563,19 @@ async def create_task(
             "parentTaskId": str(parent_task_id) if parent_task_id else None,
         },
     )
+    chat_id = await _sync_task_chat(
+        connection,
+        task_id=task_id,
+        title=payload.title,
+        description=payload.description,
+        author_user_id=current_user.id,
+        assignee_user_id=assignee_id,
+        occurred_at=now,
+    )
     return _task(
         values,
         parent_task_title=parent_row["title"] if parent_row is not None else None,
+        chat_id=chat_id,
     )
 
 
@@ -2471,6 +2632,15 @@ async def update_task(
             task_participants.c.task_id == task_id,
             task_participants.c.user_id == assignee_id,
         )
+    )
+    await _sync_task_chat(
+        connection,
+        task_id=task_id,
+        title=payload.title,
+        description=payload.description,
+        author_user_id=task_row["author_user_id"],
+        assignee_user_id=assignee_id,
+        occurred_at=now,
     )
     return await _task_response(connection, task_id)
 
@@ -2801,6 +2971,14 @@ async def set_task_participant(
             participant_role=payload.role,
         )
     )
+    await _sync_task_chat(
+        connection,
+        task_id=task_id,
+        title=task_row["title"],
+        description=task_row["description"],
+        author_user_id=task_row["author_user_id"],
+        assignee_user_id=task_row["primary_assignee_user_id"],
+    )
     return await _task_response(connection, task_id)
 
 
@@ -2810,12 +2988,20 @@ async def remove_task_participant(
     task_id: UUID,
     user_id: UUID,
 ) -> TaskResponse:
-    await _task_access_row(connection, current_user, task_id, manage=True)
+    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
     await connection.execute(
         delete(task_participants).where(
             task_participants.c.task_id == task_id,
             task_participants.c.user_id == user_id,
         )
+    )
+    await _sync_task_chat(
+        connection,
+        task_id=task_id,
+        title=task_row["title"],
+        description=task_row["description"],
+        author_user_id=task_row["author_user_id"],
+        assignee_user_id=task_row["primary_assignee_user_id"],
     )
     return await _task_response(connection, task_id)
 
@@ -3000,11 +3186,44 @@ async def remove_task_dependency(
     return await _task_response(connection, task_id)
 
 
-def _advance_cycle_time(value: datetime, schedule_kind: str, interval: int) -> datetime:
+def _next_calendar_occurrence(
+    value: datetime,
+    config: Mapping[str, Any],
+    timezone: str,
+    *,
+    include_current: bool = False,
+) -> datetime:
+    zone = ZoneInfo(timezone)
+    aware_value = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    local_value = aware_value.astimezone(zone)
+    weekdays = {int(day) for day in config.get("weekdays", [])}
+    month_days = {int(day) for day in config.get("monthDays", [])}
+    rule = config.get("calendarRule")
+    start_offset = 0 if include_current else 1
+    for offset in range(start_offset, 366 * 8):
+        candidate = local_value + timedelta(days=offset)
+        matches = (
+            (rule == "weekdays" and candidate.weekday() in weekdays)
+            or (rule == "month_days" and candidate.day in month_days)
+        )
+        if matches:
+            return candidate.astimezone(UTC)
+    raise WorkspaceRepositoryError(422, "Calendar rule has no future occurrence")
+
+
+def _advance_cycle_time(
+    value: datetime,
+    schedule_kind: str,
+    interval: int,
+    config: Mapping[str, Any] | None = None,
+    timezone: str = "Asia/Tashkent",
+) -> datetime:
     if schedule_kind == "daily":
         return value + timedelta(days=interval)
     if schedule_kind == "weekly":
         return value + timedelta(weeks=interval)
+    if schedule_kind == "calendar":
+        return _next_calendar_occurrence(value, config or {}, timezone)
     month_index = value.month - 1 + interval
     year = value.year + month_index // 12
     month = month_index % 12 + 1
@@ -3020,14 +3239,32 @@ async def set_task_cycle(
 ) -> TaskResponse:
     task_row = await _task_access_row(connection, current_user, task_id, edit=True)
     now = datetime.now(UTC)
-    next_run_at = payload.next_run_at or _advance_cycle_time(
-        now, payload.schedule_kind, payload.interval
-    )
+    try:
+        ZoneInfo(payload.timezone)
+    except (KeyError, ValueError) as error:
+        raise WorkspaceRepositoryError(422, "Unknown cycle timezone") from error
+    schedule_config: dict[str, Any] = {
+        "interval": payload.interval,
+        "calendarRule": payload.calendar_rule,
+        "weekdays": payload.weekdays,
+        "monthDays": payload.month_days,
+    }
+    if payload.schedule_kind == "calendar":
+        next_run_at = _next_calendar_occurrence(
+            payload.next_run_at or now + timedelta(minutes=1),
+            schedule_config,
+            payload.timezone,
+            include_current=True,
+        )
+    else:
+        next_run_at = payload.next_run_at or _advance_cycle_time(
+            now, payload.schedule_kind, payload.interval
+        )
     cycle_id = task_row["cycle_id"] or uuid4()
     values = {
         "title": payload.title,
         "schedule_kind": payload.schedule_kind,
-        "schedule_config": {"interval": payload.interval},
+        "schedule_config": schedule_config,
         "timezone": payload.timezone,
         "next_run_at": next_run_at,
         "is_enabled": payload.is_enabled,
@@ -3078,8 +3315,15 @@ async def materialize_due_task_cycles(
     created = 0
     for cycle in cycle_rows:
         scheduled_at = cycle["next_run_at"]
-        interval = int((cycle["schedule_config"] or {}).get("interval", 1))
-        next_run_at = _advance_cycle_time(scheduled_at, cycle["schedule_kind"], interval)
+        schedule_config = cycle["schedule_config"] or {}
+        interval = int(schedule_config.get("interval", 1))
+        next_run_at = _advance_cycle_time(
+            scheduled_at,
+            cycle["schedule_kind"],
+            interval,
+            schedule_config,
+            cycle["timezone"],
+        )
         template = (
             (
                 await connection.execute(
@@ -3197,6 +3441,15 @@ async def materialize_due_task_cycles(
                         for row in checklist_rows
                     ],
                 )
+            await _sync_task_chat(
+                connection,
+                task_id=task_id,
+                title=cycle["title"],
+                description=template["description"],
+                author_user_id=cycle["created_by_user_id"],
+                assignee_user_id=template["primary_assignee_user_id"],
+                occurred_at=current_time,
+            )
             created += 1
         await connection.execute(
             update(task_cycles)

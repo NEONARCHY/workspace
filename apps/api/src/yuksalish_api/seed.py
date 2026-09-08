@@ -802,6 +802,95 @@ async def seed_demo_data(
                 },
             ],
         )
+        demo_task_chat_specs = [
+            (
+                demo_uuid("task/104"),
+                "Подготовить договор на поставку ноутбуков",
+                "Собрать документы и проверить условия поставки.",
+                person_ids["baxtiyor"],
+                {person_ids["aziza"], person_ids["dilshod"]},
+            ),
+            (
+                demo_uuid("task/105"),
+                "Сверить лимиты бюджета на сентябрь",
+                "Подтвердить доступный остаток бюджета.",
+                person_ids["baxtiyor"],
+                {person_ids["aziza"]},
+            ),
+            (
+                demo_uuid("task/106"),
+                "Согласовать график поставки мебели",
+                "Сверить даты с поставщиком и командой офиса.",  # noqa: RUF001
+                person_ids["aziza"],
+                {person_ids["baxtiyor"], person_ids["dilshod"]},
+            ),
+        ]
+        await _insert_missing(
+            connection,
+            chats,
+            [
+                {
+                    "id": demo_uuid(f"task-chat/{task_id}"),
+                    "kind": "task",
+                    "title": f"Задача · {title}",
+                    "description": description,
+                    "context_type": "task",
+                    "context_id": task_id,
+                    "direct_key": None,
+                    "created_by_user_id": author_id,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                for task_id, title, description, author_id, _member_ids in demo_task_chat_specs
+            ],
+        )
+        task_chat_rows = (
+            (
+                await connection.execute(
+                    select(chats.c.id, chats.c.context_id).where(
+                        chats.c.context_type == "task",
+                        chats.c.context_id.in_([spec[0] for spec in demo_task_chat_specs]),
+                    )
+                )
+            )
+            .mappings()
+            .all()
+        )
+        task_chat_ids = {row["context_id"]: row["id"] for row in task_chat_rows}
+        owner_permissions = {
+            "send_messages": True,
+            "upload_files": True,
+            "invite_members": True,
+            "manage_members": True,
+            "edit_info": True,
+            "manage_messages": True,
+        }
+        member_permissions = {
+            "send_messages": True,
+            "upload_files": True,
+            "invite_members": False,
+            "manage_members": False,
+            "edit_info": False,
+            "manage_messages": False,
+        }
+        await _insert_missing(
+            connection,
+            chat_members,
+            [
+                {
+                    "chat_id": task_chat_ids[task_id],
+                    "user_id": user_id,
+                    "member_role": "owner" if user_id == author_id else "member",
+                    "permissions": (
+                        owner_permissions if user_id == author_id else member_permissions
+                    ),
+                    "joined_at": now,
+                    "muted_until": None,
+                }
+                for task_id, _title, _description, author_id, member_ids in demo_task_chat_specs
+                for user_id in member_ids | {author_id}
+            ],
+        )
         await _insert_missing(
             connection,
             task_checklist_items,
