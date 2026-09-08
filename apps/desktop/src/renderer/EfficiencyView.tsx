@@ -30,45 +30,126 @@ function percentageLabel(employee: EmployeeEfficiency): string {
   return employee.percentage == null ? "Нет данных" : `${employee.percentage.toLocaleString("ru-RU", { maximumFractionDigits: 1 })}%`;
 }
 
-function Metric({ label, value, note }: { readonly label: string; readonly value: number; readonly note?: string }) {
-  return <div className="eff-metric"><span>{label}</span><strong>{value.toLocaleString("ru-RU")}</strong>{note ? <small>{note}</small> : null}</div>;
+function countLabel(value: number, forms: readonly [string, string, string]): string {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  const form = mod100 >= 11 && mod100 <= 14 ? forms[2] : mod10 === 1 ? forms[0] : mod10 >= 2 && mod10 <= 4 ? forms[1] : forms[2];
+  return `${value.toLocaleString("ru-RU")} ${form}`;
+}
+
+type MetricTone = "success" | "danger" | "review" | "revision" | "neutral" | "excluded";
+
+function Metric({ label, value, note, maximum, tone }: { readonly label: string; readonly value: number; readonly note?: string; readonly maximum: number; readonly tone: MetricTone }) {
+  const fill = value === 0 ? 0 : Math.max(8, value / maximum * 100);
+  return <div className={`eff-metric tone-${tone}`}>
+    <div><span>{label}</span><strong>{value.toLocaleString("ru-RU")}</strong></div>
+    {note ? <small>{note}</small> : <small>{countLabel(value, ["задача", "задачи", "задач"])}</small>}
+    <div className="eff-metric-scale" aria-hidden="true"><span style={{ width: `${fill}%` }} /></div>
+  </div>;
+}
+
+function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency }) {
+  const score = Math.max(0, Math.min(100, employee.percentage ?? 0));
+  const circumference = 2 * Math.PI * 67;
+  const filled = circumference * score / 100;
+  const hasData = employee.percentage != null;
+  return <div className={`eff-score-gauge ${hasData ? "has-data" : "no-data"}`} role="img" aria-label={`Выполнение задач в срок: ${percentageLabel(employee)}; ${employee.onTimeCount} из ${employee.eligibleCount} задач`}>
+    <svg viewBox="0 0 176 176" aria-hidden="true">
+      <defs><filter id="eff-gauge-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+      <circle className="eff-gauge-track" cx="88" cy="88" r="67" />
+      <circle className="eff-gauge-progress" cx="88" cy="88" r="67" strokeDasharray={`${filled} ${circumference - filled}`} />
+      {!hasData ? <circle className="eff-gauge-placeholder" cx="88" cy="88" r="67" strokeDasharray="3 9" /> : null}
+    </svg>
+    <div><strong>{hasData ? percentageLabel(employee) : "—"}</strong><span>{hasData ? `${employee.onTimeCount} из ${employee.eligibleCount} задач в срок` : "Нет данных"}</span></div>
+  </div>;
+}
+
+function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
+  const points = employee.history.filter((point) => point.percentage != null);
+  if (points.length < 2) return <div className="eff-history-empty">
+    <div className="eff-empty-chart" aria-hidden="true"><i /><i /><i /><i /><i /></div>
+    <div><strong>Нужно ещё немного истории</strong><span>Линия появится после двух месяцев с учитываемыми задачами.</span></div>
+  </div>;
+
+  const left = 48;
+  const right = 618;
+  const top = 18;
+  const bottom = 164;
+  const chartPoints = points.map((point, index) => ({
+    ...point,
+    x: points.length === 1 ? (left + right) / 2 : left + index * (right - left) / (points.length - 1),
+    y: bottom - (point.percentage ?? 0) / 100 * (bottom - top),
+  }));
+  const polyline = chartPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  return <>
+    <div className="eff-history-chart" role="img" aria-label={`Динамика выполнения в срок: ${points.map((point) => `${monthLabel(point.period)} — ${point.percentage}%`).join("; ")}`}>
+      <svg viewBox="0 0 640 210" aria-hidden="true">
+        <defs><filter id="eff-line-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4" result="line-blur" /><feMerge><feMergeNode in="line-blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
+        {[100, 75, 50, 25, 0].map((tick) => { const y = bottom - tick / 100 * (bottom - top); return <g key={tick}><line className="eff-chart-grid" x1={left} x2={right} y1={y} y2={y} /><text className="eff-chart-axis" x="4" y={y + 4}>{tick}%</text></g>; })}
+        <polyline className="eff-chart-line" points={polyline} />
+        {chartPoints.map((point) => <g key={point.period}>
+          <circle className="eff-chart-dot-glow" cx={point.x} cy={point.y} r="8" />
+          <circle className="eff-chart-dot" cx={point.x} cy={point.y} r="4" />
+          <text className="eff-chart-value" x={point.x} y={Math.max(12, point.y - 12)} textAnchor="middle">{point.percentage}%</text>
+          <text className="eff-chart-month" x={point.x} y="193" textAnchor="middle">{monthLabel(point.period).split(" ")[0]}</text>
+        </g>)}
+      </svg>
+    </div>
+    <ul className="eff-history-text">{points.map((point) => <li key={point.period}><span>{monthLabel(point.period)}</span><strong>{point.percentage}% · {point.onTimeCount} из {point.eligibleCount}</strong></li>)}</ul>
+  </>;
 }
 
 function EmployeeSummary({ employee, title }: { readonly employee: EmployeeEfficiency; readonly title: string }) {
-  const realHistory = employee.history.filter((point) => point.percentage != null);
+  const metrics = [
+    { label: "Выполнено вовремя", value: employee.onTimeCount, tone: "success" as const },
+    { label: "Просрочено", value: employee.overdueCount, tone: "danger" as const },
+    { label: "Ожидает проверки", value: employee.awaitingReviewCount, tone: "review" as const },
+    { label: "Возвращено на доработку", value: employee.returnedForRevisionCount, note: "не снижает процент", tone: "revision" as const },
+    { label: "Без срока", value: employee.noDueDateCount, note: "не входит в расчёт", tone: "neutral" as const },
+    { label: "Исключено", value: employee.excludedCount, note: "по подтверждённой причине", tone: "excluded" as const },
+  ];
+  const maximum = Math.max(1, ...metrics.map((metric) => metric.value));
+  const contextTotal = metrics.reduce((sum, metric) => sum + metric.value, 0);
   return <article className="eff-summary" aria-label={`${title}: ${employee.name}`}>
-    <div className="eff-summary-heading">
-      <div><span className="eff-kicker">{title}</span><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div>
-      <div className="eff-score" aria-label={`Выполнение задач в срок: ${percentageLabel(employee)}; ${employee.onTimeCount} из ${employee.eligibleCount} задач`}>
-        <strong>{percentageLabel(employee)}</strong>
-        <span>{employee.eligibleCount ? `${employee.onTimeCount} из ${employee.eligibleCount} задач` : "учитываемых задач нет"}</span>
+    <div className="eff-summary-heading"><span className="eff-kicker">{title}</span><span className="eff-summary-period">{monthLabel(employee.period)}</span></div>
+    <div className="eff-summary-lead">
+      <ScoreGauge employee={employee} />
+      <div className="eff-summary-copy">
+        <div className="eff-person"><Avatar name={employee.name} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></div>
+        <h3>{employee.percentage == null ? "Пока нет задач, по которым можно рассчитать процент" : "Доля задач, переданных или выполненных в установленный срок"}</h3>
+        <p>{employee.eligibleCount ? `В расчёт вошло: ${countLabel(employee.eligibleCount, ["задача", "задачи", "задач"])}. Вовремя выполнено: ${countLabel(employee.onTimeCount, ["задача", "задачи", "задач"])}.` : "Будущие задачи и задачи без срока не ухудшают результат. Показатель появится, когда наступит срок хотя бы одной учитываемой задачи."}</p>
+        {employee.smallSample ? <div className="eff-sample-note">Выборка пока небольшая — интерпретируйте процент осторожно.</div> : null}
+        {employee.historyCompleteness === "partial" ? <div className="eff-history-note">История месяца неполная: достоверный учёт начался в течение периода.</div> : null}
+        {employee.historyCompleteness === "unavailable" ? <div className="eff-history-note">Для этого периода достоверной истории ещё нет.</div> : null}
       </div>
     </div>
-    {employee.smallSample ? <div className="eff-sample-note">Мало данных для устойчивого вывода</div> : null}
-    {employee.historyCompleteness === "partial" ? <div className="eff-history-note">История за этот месяц неполная: надёжный учёт начался в течение периода.</div> : null}
-    {employee.historyCompleteness === "unavailable" ? <div className="eff-history-note">Для этого периода достоверной истории ещё нет.</div> : null}
-    <div className="eff-metrics" aria-label="Состав показателя">
-      <Metric label="Выполнено вовремя" value={employee.onTimeCount} />
-      <Metric label="Просрочено" value={employee.overdueCount} />
-      <Metric label="Ожидает проверки" value={employee.awaitingReviewCount} />
-      <Metric label="Возвращено на доработку" value={employee.returnedForRevisionCount} note="не снижает процент" />
-      <Metric label="Без срока" value={employee.noDueDateCount} note="не входит в расчёт" />
-      <Metric label="Исключено" value={employee.excludedCount} note="по подтверждённой причине" />
-    </div>
-    <p className="eff-caution">Показатель отражает соблюдение сроков зарегистрированных задач и не является общей оценкой сотрудника.</p>
-    <section className="eff-history" aria-label="История показателя">
-      <div className="eff-section-heading"><h3>Динамика</h3><span>только по зафиксированным данным</span></div>
-      {realHistory.length >= 2 ? <>
-        <div className="eff-history-chart" role="img" aria-label={`Динамика выполнения в срок: ${realHistory.map((point) => `${monthLabel(point.period)} — ${point.percentage}%`).join("; ")}`}>
-          {realHistory.map((point) => <div className="eff-history-bar" key={point.period}>
-            <span style={{ height: `${Math.max(3, point.percentage ?? 0)}%` }} />
-            <small>{monthLabel(point.period).split(" ")[0]}</small>
-          </div>)}
-        </div>
-        <ul className="eff-history-text">{realHistory.map((point) => <li key={point.period}><span>{monthLabel(point.period)}</span><strong>{point.percentage}% · {point.onTimeCount} из {point.eligibleCount}</strong></li>)}</ul>
-      </> : <div className="eff-history-empty"><strong>Недостаточно исторических данных</strong><span>График появится после двух месяцев с учитываемыми задачами.</span></div>}
+    <section className="eff-composition" aria-label="Состав задач за период">
+      <div className="eff-section-heading"><h3>Состав задач за период</h3><span>{countLabel(contextTotal, ["событие", "события", "событий"])} в сводке</span></div>
+      <div className={`eff-composition-bar ${contextTotal ? "" : "is-empty"}`} aria-hidden="true">
+        {metrics.filter((metric) => metric.value > 0).map((metric) => <span className={`tone-${metric.tone}`} key={metric.label} style={{ flexGrow: metric.value }} />)}
+      </div>
     </section>
+    <div className="eff-metrics" aria-label="Состав показателя">
+      {metrics.map((metric) => <Metric {...metric} maximum={maximum} key={metric.label} />)}
+    </div>
+    <section className="eff-history" aria-label="История показателя">
+      <div className="eff-section-heading"><h3>Динамика по месяцам</h3><span>шкала от 0 до 100%</span></div>
+      <HistoryChart employee={employee} />
+    </section>
+    <p className="eff-caution">Показатель отражает только соблюдение сроков зарегистрированных задач и не является общей оценкой сотрудника.</p>
   </article>;
+}
+
+function DataCoverageCard({ overview }: { readonly overview: EfficiencyOverview }) {
+  const withData = overview.employees.filter((employee) => employee.percentage != null).length;
+  const partial = overview.employees.filter((employee) => employee.historyCompleteness === "partial").length;
+  const coverage = overview.employees.length ? withData / overview.employees.length * 100 : 0;
+  return <aside className="eff-coverage-card">
+    <div className="eff-section-heading"><div><span className="eff-kicker">Объём данных</span><h2>Сводка команды</h2></div><strong>{withData}<small> / {overview.employees.length}</small></strong></div>
+    <p>Сотрудников с задачами, которые уже можно корректно учесть за выбранный месяц.</p>
+    <div className="eff-coverage-scale" aria-label={`Данные доступны для ${withData} из ${overview.employees.length} сотрудников`}><span style={{ width: `${coverage}%` }} /></div>
+    <dl><div><dt>С расчётным процентом</dt><dd>{withData}</dd></div><div><dt>Неполная история месяца</dt><dd>{partial}</dd></div><div><dt>Без расчётных данных</dt><dd>{overview.employees.length - withData}</dd></div></dl>
+  </aside>;
 }
 
 export function EfficiencyView({ overview, loading, error, onPeriodChange }: EfficiencyViewProps) {
@@ -93,6 +174,8 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
   if (loading && overview === undefined) return <div className="eff-loading" aria-live="polite"><span /><strong>Считаем показатель по журналу задач…</strong></div>;
   if (error && overview === undefined) return <div className="eff-error" role="alert"><strong>Не удалось загрузить эффективность</strong><span>{error}</span><Button onClick={() => void onPeriodChange(monthOptions()[0]!)}>Повторить</Button></div>;
   if (!overview || !mine) return <div className="eff-error"><strong>Данные пока недоступны</strong><span>Сервер не вернул агрегированную сводку.</span></div>;
+  const activeEmployee = selected ?? mine;
+  const activeTitle = activeEmployee.userId === mine.userId ? "Моя эффективность" : "Сводка сотрудника";
 
   return <div className="efficiency-view">
     <div className="eff-commandbar">
@@ -102,14 +185,18 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
     </div>
     {error ? <div className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</div> : null}
     <div className="eff-overview-grid">
-      <EmployeeSummary employee={mine} title="Моя эффективность" />
-      {selected && selected.userId !== mine.userId ? <EmployeeSummary employee={selected} title="Сводка сотрудника" /> : <aside className="eff-method-card"><span className="eff-kicker">Методика {overview.methodologyVersion}</span><h2>Один показатель — один понятный смысл</h2><p>Все задачи имеют одинаковый вес. Возвраты, комментарии и субъективные оценки не меняют процент.</p><dl><div><dt>Начало достоверного учёта</dt><dd>{new Date(overview.trackingStartedAt).toLocaleDateString("ru-RU")}</dd></div><div><dt>Часовой пояс</dt><dd>{overview.timezone}</dd></div></dl><Button appearance="subtle" onClick={() => setHelpOpen(true)}>Открыть правила расчёта</Button></aside>}
+      <EmployeeSummary employee={activeEmployee} title={activeTitle} />
+      <div className="eff-context-stack">
+        {activeEmployee.userId !== mine.userId ? <Button className="eff-back-to-mine" appearance="secondary" onClick={() => setSelectedUserId(mine.userId)}>Вернуться к моей сводке</Button> : null}
+        <aside className="eff-method-card"><span className="eff-kicker">Методика {overview.methodologyVersion}</span><h2>Один показатель — один понятный смысл</h2><p>Все учитываемые задачи имеют одинаковый вес. Возвраты, комментарии и субъективные оценки не меняют процент.</p><dl><div><dt>Начало достоверного учёта</dt><dd>{new Date(overview.trackingStartedAt).toLocaleDateString("ru-RU")}</dd></div><div><dt>Часовой пояс</dt><dd>{overview.timezone}</dd></div><div><dt>Формула</dt><dd>Вовремя ÷ учтено</dd></div></dl><Button appearance="subtle" onClick={() => setHelpOpen(true)}>Открыть правила расчёта</Button></aside>
+        <DataCoverageCard overview={overview} />
+      </div>
     </div>
 
     <section className="eff-people" aria-label="Эффективность сотрудников">
       <div className="eff-people-heading"><div><h2>Сотрудники</h2><p>Нейтральная сортировка по имени. Это не рейтинг.</p></div><Input aria-label="Поиск сотрудников в эффективности" contentBefore={<Search20Regular />} placeholder="Имя или должность" value={query} onChange={(_, data) => setQuery(data.value)} /></div>
       <div className="eff-table-scroll" tabIndex={0} aria-label="Таблица прокручивается горизонтально">
-        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={selected?.userId === employee.userId ? "selected" : ""} onClick={() => setSelectedUserId(employee.userId)}><td><button type="button" aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)}><Avatar name={employee.name} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></button></td><td><strong>{percentageLabel(employee)}</strong>{employee.smallSample ? <small>мало данных</small> : null}</td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
+        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} onClick={() => setSelectedUserId(employee.userId)}><td><button type="button" aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)}><Avatar name={employee.name} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></button></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
       </div>
       {!visibleEmployees.length ? <div className="eff-table-empty">По вашему запросу сотрудники не найдены.</div> : null}
     </section>

@@ -52,6 +52,7 @@ describe("EfficiencyView", () => {
     renderView();
 
     expect(screen.getByLabelText(/Выполнение задач в срок: 80%/)).toHaveTextContent("8 из 10 задач");
+    expect(screen.getByLabelText(/Данные доступны для 1 из 2 сотрудников/)).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: /Нет данных/ })).toBeInTheDocument();
     expect(screen.getByText(/Это не рейтинг\./)).toBeInTheDocument();
   });
@@ -87,10 +88,12 @@ describe("EfficiencyView", () => {
     expect(screen.queryByText("0% · 0 из 0")).not.toBeInTheDocument();
   });
 
-  it("keeps narrow-table scrolling, focus states and reduced motion in the stylesheet", () => {
+  it("keeps the page and narrow table independently scrollable with focus and reduced-motion states", () => {
     const css = readFileSync(resolve(process.cwd(), "src/renderer/styles.css"), "utf8");
 
+    expect(css).toMatch(/\.efficiency-view\s*\{[^}]*overflow-y:\s*auto/s);
     expect(css).toMatch(/\.eff-table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+    expect(css).toMatch(/\.eff-chart-line\s*\{[^}]*filter:\s*url\(#eff-line-glow\)/s);
     expect(css).toMatch(/\.eff-table-scroll:focus-visible/);
     expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/);
   });
