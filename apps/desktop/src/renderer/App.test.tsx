@@ -528,33 +528,69 @@ function mockServer(
     if (url.endsWith("/tasks") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as {
         title: string;
+        description?: string;
         sourceMessageId?: string;
         parentTaskId?: string;
         assigneeId?: string;
         project?: string;
         dueAt?: string;
+        priority?: WorkspaceTask["priority"];
+        participants?: WorkspaceTask["participants"];
+        checklist?: readonly { title: string }[];
+        dependencies?: readonly { dependsOnTaskId: string; dependencyKind: "blocks" | "relates" }[];
+        cycle?: {
+          title: string;
+          scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
+          interval: number;
+          calendarRule?: "weekdays" | "month_days" | null;
+          weekdays?: readonly number[];
+          monthDays?: readonly number[];
+          timezone?: string;
+          nextRunAt?: string | null;
+          isEnabled?: boolean;
+        };
       };
       const parent = tasks.find((item) => item.id === payload.parentTaskId);
       const created: WorkspaceTask = {
         id: payload.parentTaskId ? `server-subtask-${tasks.length}` : "server-task",
         title: payload.title,
-        description: "",
+        description: payload.description ?? "",
         project: payload.project ?? "Без проекта",
         assigneeId: payload.assigneeId ?? people[0]!.id,
         dueLabel: payload.dueAt ? "20 сент., 14:00" : "Срок не указан",
         dueAt: payload.dueAt,
         status: "new",
-        priority: "normal",
+        priority: payload.priority ?? "normal",
         checklistDone: 0,
-        checklistTotal: 0,
+        checklistTotal: payload.checklist?.length ?? 0,
         sourceMessageId: payload.sourceMessageId,
         parentTaskId: payload.parentTaskId,
         parentTaskTitle: parent?.title,
         authorId: currentUser.id,
-        participants: [],
-        checklist: [],
+        participants: payload.participants ?? [],
+        checklist: (payload.checklist ?? []).map((item, index) => ({
+          id: `created-checklist-${index}`,
+          title: item.title,
+          isCompleted: false,
+          sortOrder: index + 1,
+          createdByUserId: currentUser.id,
+          createdAt: "2026-09-09T09:00:00Z",
+        })),
         comments: [],
-        dependencies: [],
+        dependencies: (payload.dependencies ?? []).map((item) => {
+          const dependency = tasks.find((task) => task.id === item.dependsOnTaskId);
+          return {
+            ...item,
+            title: dependency?.title ?? "Задача",
+            status: dependency?.status ?? "new",
+          };
+        }),
+        cycle: payload.cycle ? {
+          id: "created-cycle",
+          ...payload.cycle,
+          timezone: payload.cycle.timezone ?? "Asia/Tashkent",
+          isEnabled: payload.cycle.isEnabled ?? true,
+        } : null,
       };
       tasks = [created, ...tasks];
       return response(created);
@@ -1048,17 +1084,19 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getAllByRole("button", { name: /Создать задачу из сообщения:/ })[0]!);
-    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи из сообщения" }), {
+    expect(screen.getByRole("dialog", { name: "Новая задача" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить счёт из переписки" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Создать задачу" }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
 
     expect(await screen.findByText("Создана из сообщения · связь сохранена")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Новая задача" })).not.toBeInTheDocument();
     expect(screen.getAllByText("Проверить счёт из переписки").length).toBeGreaterThan(0);
   });
 
   it("creates a task after authentication", async () => {
-    mockServer();
+    const fetchMock = mockServer();
     render(<App />);
     await loginToWorkspace();
 
@@ -1067,10 +1105,58 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Создать" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание новой задачи" }), {
+      target: { value: "Сверить роли и вернуть проверяемый результат" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Проект новой задачи" }), {
+      target: { value: "Маршруты" },
+    });
+    fireEvent.change(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
+      target: { value: "high" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
+      target: { value: "Проверить роли" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить пункт" }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/tasks"),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"priority":"high"'),
+      }),
+    ));
+    const taskCall = fetchMock.mock.calls.find(([url, options]) =>
+      String(url).endsWith("/tasks") && (options as RequestInit | undefined)?.method === "POST",
+    );
+    expect(JSON.parse(String((taskCall?.[1] as RequestInit | undefined)?.body))).toMatchObject({
+      title: "Проверить новый маршрут оплаты",
+      description: "Сверить роли и вернуть проверяемый результат",
+      project: "Маршруты",
+      priority: "high",
+      checklist: [{ title: "Проверить роли" }],
+    });
     await waitFor(() =>
       expect(screen.getAllByText("Проверить новый маршрут оплаты").length).toBeGreaterThan(0),
     );
+  });
+
+  it("does not create a task until the detailed composer is confirmed", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая задача" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
+      target: { value: "Черновик без подтверждения" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+
+    expect(screen.queryByRole("dialog", { name: "Новая задача" })).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url, options]) =>
+      String(url).endsWith("/tasks") && (options as RequestInit | undefined)?.method === "POST",
+    )).toBe(false);
   });
 
   it("filters tasks by text in both list and Kanban without modifying records", async () => {

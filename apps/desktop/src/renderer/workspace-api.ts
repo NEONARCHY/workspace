@@ -41,6 +41,7 @@ import type {
   WorkspaceBootstrap,
   WorkspaceAttachment,
   WorkspaceTask,
+  WorkspaceTaskCreateInput,
   TotpSetup,
   WorkspacePosition,
   WorkspaceDepartment,
@@ -558,16 +559,7 @@ export function cancelWorkspaceCalendarEvent(
 
 export function createWorkspaceTask(
   token: string,
-  payload: {
-    readonly title: string;
-    readonly assigneeId: string;
-    readonly project?: string;
-    readonly sourceMessageId?: string;
-    readonly parentTaskId?: string;
-    readonly description?: string;
-    readonly priority?: WorkspaceTask["priority"];
-    readonly dueAt?: string;
-  },
+  payload: WorkspaceTaskCreateInput,
 ): Promise<WorkspaceTask> {
   return apiRequest<WorkspaceTask>(
     "/tasks",

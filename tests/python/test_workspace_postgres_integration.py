@@ -88,6 +88,10 @@ from yuksalish_api.workspace_schemas import (
     SaveWorkflowRequest,
     SendMessageRequest,
     SubmitTaskResultRequest,
+    TaskCreateChecklistItemRequest,
+    TaskCreateCycleRequest,
+    TaskCreateDependencyRequest,
+    TaskCreateParticipantRequest,
     TaskCycleRequest,
     TaskDependencyRequest,
     TaskParticipantRequest,
@@ -455,6 +459,58 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 aziza,
                 CreateTaskRequest(title="Integration blocker", assignee_id=str(aziza.id)),
             )
+            detailed_task = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Detailed task composer",
+                    description="Created with one final confirmation",
+                    project="Workspace UX",
+                    assignee_id=str(aziza.id),
+                    priority="high",
+                    due_at=datetime.now(UTC) + timedelta(days=12),
+                    participants=[
+                        TaskCreateParticipantRequest(
+                            user_id=str(dilshod_auth.id),
+                            role="observer",
+                        )
+                    ],
+                    checklist=[
+                        TaskCreateChecklistItemRequest(title="Confirm requirements"),
+                        TaskCreateChecklistItemRequest(title="Attach result"),
+                    ],
+                    dependencies=[
+                        TaskCreateDependencyRequest(
+                            depends_on_task_id=blocker.id,
+                            dependency_kind="relates",
+                        )
+                    ],
+                    cycle=TaskCreateCycleRequest(
+                        title="Detailed task composer",
+                        schedule_kind="weekly",
+                        interval=2,
+                        next_run_at=datetime.now(UTC) + timedelta(days=13),
+                    ),
+                ),
+            )
+            assert detailed_task.description == "Created with one final confirmation"
+            assert detailed_task.priority == "high"
+            assert detailed_task.participants[0].role == "observer"
+            assert [item.title for item in detailed_task.checklist] == [
+                "Confirm requirements",
+                "Attach result",
+            ]
+            assert detailed_task.dependencies[0].depends_on_task_id == blocker.id
+            assert detailed_task.cycle is not None
+            assert detailed_task.cycle.schedule_kind == "weekly"
+            assert detailed_task.cycle.interval == 2
+            assert detailed_task.chat_id is not None
+            assert await connection.scalar(
+                select(func.count()).select_from(chat_members).where(
+                    chat_members.c.chat_id == UUID(detailed_task.chat_id),
+                    chat_members.c.user_id == dilshod_auth.id,
+                )
+            ) == 1
             task = await set_task_dependency(
                 connection,
                 aziza,

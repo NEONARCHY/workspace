@@ -292,6 +292,61 @@ class TaskResponse(ApiModel):
     cycle: TaskCycleResponse | None = None
 
 
+class TaskCreateParticipantRequest(ApiModel):
+    user_id: str
+    role: TaskParticipantRole
+
+
+class TaskCreateChecklistItemRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=500)
+
+    @field_validator("title")
+    @classmethod
+    def checklist_title_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Checklist title must not be blank")
+        return stripped
+
+
+class TaskCreateDependencyRequest(ApiModel):
+    depends_on_task_id: str
+    dependency_kind: Literal["blocks", "relates"] = "blocks"
+
+
+class TaskCreateCycleRequest(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    schedule_kind: Literal["daily", "weekly", "monthly", "calendar"]
+    interval: int = Field(default=1, ge=1, le=365)
+    calendar_rule: Literal["weekdays", "month_days"] | None = None
+    weekdays: list[int] = Field(default_factory=list, max_length=7)
+    month_days: list[int] = Field(default_factory=list, max_length=31)
+    timezone: str = Field(default="Asia/Tashkent", min_length=1, max_length=64)
+    next_run_at: datetime | None = None
+    is_enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_calendar_rule(self) -> "TaskCreateCycleRequest":
+        self.weekdays = sorted(set(self.weekdays))
+        self.month_days = sorted(set(self.month_days))
+        if any(day < 0 or day > 6 for day in self.weekdays):
+            raise ValueError("Weekdays must be between 0 and 6")
+        if any(day < 1 or day > 31 for day in self.month_days):
+            raise ValueError("Month days must be between 1 and 31")
+        if self.schedule_kind != "calendar":
+            self.calendar_rule = None
+            self.weekdays = []
+            self.month_days = []
+            return self
+        if self.calendar_rule == "weekdays" and self.weekdays:
+            self.month_days = []
+            return self
+        if self.calendar_rule == "month_days" and self.month_days:
+            self.weekdays = []
+            return self
+        raise ValueError("Select at least one calendar day")
+
+
 class CreateTaskRequest(ApiModel):
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
@@ -301,6 +356,10 @@ class CreateTaskRequest(ApiModel):
     parent_task_id: str | None = None
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     due_at: datetime | None = None
+    participants: list[TaskCreateParticipantRequest] = Field(default_factory=list, max_length=100)
+    checklist: list[TaskCreateChecklistItemRequest] = Field(default_factory=list, max_length=200)
+    dependencies: list[TaskCreateDependencyRequest] = Field(default_factory=list, max_length=100)
+    cycle: TaskCreateCycleRequest | None = None
 
     @field_validator("title")
     @classmethod

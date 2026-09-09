@@ -10,6 +10,7 @@ import type {
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceTask,
+  WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import {
   Avatar,
@@ -36,6 +37,7 @@ import {
 import { AttachmentPanel } from "./AttachmentPanel";
 import { EfficiencyView } from "./EfficiencyView";
 import { TaskCalendarView } from "./TaskCalendarView";
+import { TaskComposer } from "./TaskComposer";
 import { TaskRecords } from "./TaskRecords";
 import { TeamDashboardView } from "./TeamDashboardView";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -114,7 +116,7 @@ interface TasksViewProps {
   readonly efficiencyLoading: boolean;
   readonly efficiencyError?: string;
   readonly onLoadEfficiency: (period?: string) => void | Promise<void>;
-  readonly onCreateTask: (title: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onCreateTask: (payload: WorkspaceTaskCreateInput) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onCreateSubtask: (parent: WorkspaceTask, payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string }) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readonly onUpdateTask: (task: WorkspaceTask, payload: TaskEditPayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -172,7 +174,6 @@ export function TasksView(props: TasksViewProps) {
   };
   const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -246,13 +247,13 @@ export function TasksView(props: TasksViewProps) {
     || task.assigneeId === currentUserId
     || task.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee");
 
-  const createTask = async () => {
-    const title = newTitle.trim();
-    if (!title) return;
-    const task = await onCreateTask(title);
-    if (task !== undefined) setSelectedId(task.id);
-    setNewTitle("");
-    setCreating(false);
+  const createTask = async (payload: WorkspaceTaskCreateInput) => {
+    const task = await onCreateTask(payload);
+    if (task !== undefined) {
+      setSelectedId(task.id);
+      setCreating(false);
+    }
+    return task;
   };
 
   const startEditing = () => {
@@ -427,12 +428,6 @@ export function TasksView(props: TasksViewProps) {
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </div> : null}
 
-        {creating ? <div className="quick-create" role="region" aria-label="Создание задачи">
-          <Input autoFocus aria-label="Название задачи" placeholder="Что нужно сделать?" value={newTitle} onChange={(_event, data) => setNewTitle(data.value)} onKeyDown={(event) => { if (event.key === "Enter") void createTask(); if (event.key === "Escape") setCreating(false); }} />
-          <Button appearance="primary" onClick={() => void createTask()} disabled={!newTitle.trim()}>Создать</Button>
-          <Button appearance="subtle" onClick={() => setCreating(false)}>Отмена</Button>
-        </div> : null}
-
         {mode === "dashboard" ? <TeamDashboardView tasks={tasks} people={people} currentUserId={currentUserId} efficiency={efficiency} efficiencyLoading={efficiencyLoading} efficiencyError={efficiencyError} onSelectTask={(taskId) => { setSelectedId(taskId); setMode("list"); }} /> : mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {
@@ -448,6 +443,15 @@ export function TasksView(props: TasksViewProps) {
           </div>
         )}
       </div>
+
+      {creating ? <TaskComposer
+        open
+        people={people}
+        tasks={tasks}
+        currentUserId={currentUserId}
+        onClose={() => setCreating(false)}
+        onSubmit={createTask}
+      /> : null}
 
       {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">

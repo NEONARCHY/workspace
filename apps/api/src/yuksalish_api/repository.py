@@ -93,6 +93,7 @@ from .workspace_schemas import (
     SubmitTaskResultRequest,
     TaskChecklistItemResponse,
     TaskCommentResponse,
+    TaskCreateCycleRequest,
     TaskCycleRequest,
     TaskCycleResponse,
     TaskDependencyRequest,
@@ -3005,8 +3006,35 @@ async def create_task(
         )
         if parent_row["status"] in {"completed", "cancelled"}:
             raise WorkspaceRepositoryError(409, "A closed task cannot receive new subtasks")
+    participant_ids: list[tuple[UUID, str]] = []
+    seen_participants: set[UUID] = set()
+    for participant in payload.participants:
+        participant_id = await _active_user_id(connection, participant.user_id)
+        if participant_id == assignee_id:
+            raise WorkspaceRepositoryError(
+                409, "The primary assignee is already a task participant"
+            )
+        if participant_id in seen_participants:
+            raise WorkspaceRepositoryError(409, "A task participant can have only one role")
+        seen_participants.add(participant_id)
+        participant_ids.append((participant_id, participant.role))
+    dependency_ids: list[tuple[UUID, str]] = []
+    seen_dependencies: set[UUID] = set()
+    for dependency in payload.dependencies:
+        try:
+            dependency_id = UUID(dependency.depends_on_task_id)
+        except ValueError as error:
+            raise WorkspaceRepositoryError(422, "Invalid dependency task identifier") from error
+        if dependency_id in seen_dependencies:
+            raise WorkspaceRepositoryError(409, "A dependency can be added only once")
+        await _task_access_row(connection, current_user, dependency_id)
+        seen_dependencies.add(dependency_id)
+        dependency_ids.append((dependency_id, dependency.dependency_kind))
     task_id = uuid4()
     now = datetime.now(UTC)
+    cycle_id: UUID | None = None
+    if payload.cycle is not None:
+        cycle_id = await _create_task_cycle(connection, current_user, payload.cycle, now)
     values = {
         "id": task_id,
         "title": payload.title.strip(),
@@ -3016,8 +3044,8 @@ async def create_task(
         "author_user_id": current_user.id,
         "primary_assignee_user_id": assignee_id,
         "parent_task_id": parent_task_id,
-        "cycle_id": None,
-        "cycle_occurrence_key": None,
+        "cycle_id": cycle_id,
+        "cycle_occurrence_key": "initial" if cycle_id is not None else None,
         "project_key": payload.project,
         "starts_at": now,
         "due_at": payload.due_at,
@@ -3027,6 +3055,42 @@ async def create_task(
         "updated_at": now,
     }
     await connection.execute(insert(tasks).values(**values))
+    if participant_ids:
+        await connection.execute(insert(task_participants).values([
+            {
+                "task_id": task_id,
+                "user_id": participant_id,
+                "participant_role": role,
+            }
+            for participant_id, role in participant_ids
+        ]))
+    if payload.checklist:
+        await connection.execute(insert(task_checklist_items).values([
+            {
+                "id": uuid4(),
+                "task_id": task_id,
+                "title": item.title,
+                "is_completed": False,
+                "sort_order": index,
+                "created_by_user_id": current_user.id,
+                "completed_by_user_id": None,
+                "completed_at": None,
+                "created_at": now,
+                "updated_at": now,
+            }
+            for index, item in enumerate(payload.checklist, start=1)
+        ]))
+    if dependency_ids:
+        await connection.execute(insert(task_dependencies).values([
+            {
+                "task_id": task_id,
+                "depends_on_task_id": dependency_id,
+                "dependency_kind": dependency_kind,
+                "created_by_user_id": current_user.id,
+                "created_at": now,
+            }
+            for dependency_id, dependency_kind in dependency_ids
+        ]))
     await record_task_event(
         connection,
         task_id=task_id,
@@ -3042,7 +3106,7 @@ async def create_task(
             "parentTaskId": str(parent_task_id) if parent_task_id else None,
         },
     )
-    chat_id = await _sync_task_chat(
+    await _sync_task_chat(
         connection,
         task_id=task_id,
         title=payload.title,
@@ -3051,11 +3115,52 @@ async def create_task(
         assignee_user_id=assignee_id,
         occurred_at=now,
     )
-    return _task(
-        values,
-        parent_task_title=parent_row["title"] if parent_row is not None else None,
-        chat_id=chat_id,
+    return await _task_response(connection, task_id)
+
+
+async def _create_task_cycle(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    payload: TaskCreateCycleRequest,
+    now: datetime,
+) -> UUID:
+    try:
+        ZoneInfo(payload.timezone)
+    except (KeyError, ValueError) as error:
+        raise WorkspaceRepositoryError(422, "Unknown cycle timezone") from error
+    schedule_config: dict[str, Any] = {
+        "interval": payload.interval,
+        "calendarRule": payload.calendar_rule,
+        "weekdays": payload.weekdays,
+        "monthDays": payload.month_days,
+    }
+    if payload.schedule_kind == "calendar":
+        next_run_at = _next_calendar_occurrence(
+            payload.next_run_at or now + timedelta(minutes=1),
+            schedule_config,
+            payload.timezone,
+            include_current=True,
+        )
+    else:
+        next_run_at = payload.next_run_at or _advance_cycle_time(
+            now, payload.schedule_kind, payload.interval
+        )
+    cycle_id = uuid4()
+    await connection.execute(
+        insert(task_cycles).values(
+            id=cycle_id,
+            title=payload.title,
+            schedule_kind=payload.schedule_kind,
+            schedule_config=schedule_config,
+            timezone=payload.timezone,
+            next_run_at=next_run_at,
+            is_enabled=payload.is_enabled,
+            created_by_user_id=current_user.id,
+            created_at=now,
+            updated_at=now,
+        )
     )
+    return cycle_id
 
 
 async def update_task(

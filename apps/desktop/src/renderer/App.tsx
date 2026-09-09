@@ -30,6 +30,7 @@ import type {
   WorkflowPosition,
   WorkspaceSection,
   WorkspaceTask,
+  WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import { moduleKeys } from "@yuksalish/contracts";
 import {
@@ -619,13 +620,10 @@ export function App() {
     transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
   };
 
-  const handleCreateTask = async (title: string) => {
+  const handleCreateTask = async (payload: WorkspaceTaskCreateInput) => {
     if (session === undefined) return undefined;
     try {
-      const task = await createWorkspaceTask(session.accessToken, {
-        title,
-        assigneeId: workspace.currentUser.id,
-      });
+      const task = await createWorkspaceTask(session.accessToken, payload);
       setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
       return task;
     } catch (error) {
@@ -634,12 +632,14 @@ export function App() {
     }
   };
 
-  const handleCreateTaskFromMessage = async (message: ChatMessage, title: string) => {
+  const handleCreateTaskFromMessage = async (
+    message: ChatMessage,
+    payload: WorkspaceTaskCreateInput,
+  ) => {
     if (session === undefined) return undefined;
     try {
       const task = await createWorkspaceTask(session.accessToken, {
-        title,
-        assigneeId: workspace.currentUser.id,
+        ...payload,
         sourceMessageId: message.id,
       });
       setWorkspace((current) => ({ ...current, tasks: [task, ...current.tasks] }));
@@ -1319,6 +1319,7 @@ export function App() {
                 onPersonalChat={(chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action))}
                 onPinnedOrder={(order) => personalMutation((token) => reorderPinnedChats(token, order, workspace.personalPreferences.revision))}
                 messages={workspace.messages}
+                tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
                 onSendMessage={handleSendMessage}

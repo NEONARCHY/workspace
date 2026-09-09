@@ -10,6 +10,7 @@ import type {
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceTask,
+  WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import {
   Avatar,
@@ -40,6 +41,7 @@ import { AttachmentChips } from "./AttachmentPanel";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
 import { defaultPersonalPreferences } from "./personal-organization";
+import { TaskComposer } from "./TaskComposer";
 import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 
 const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
@@ -59,6 +61,7 @@ interface MessengerViewProps {
   readonly currentUserId: string;
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
+  readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
   readonly chatActions: ChatActions;
@@ -80,7 +83,7 @@ interface MessengerViewProps {
   readonly onDeleteMessage: (message: ChatMessage) => Promise<void>;
   readonly onCreateTaskFromMessage: (
     message: ChatMessage,
-    title: string,
+    payload: WorkspaceTaskCreateInput,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onDownloadAttachment: (
     attachment: WorkspaceAttachment,
@@ -94,6 +97,7 @@ function Conversation({
   messages,
   attachments,
   people,
+  tasks,
   currentUserId,
   onSendMessage,
   onSendVoiceMessage,
@@ -119,7 +123,6 @@ function Conversation({
   const [mentionPicker, setMentionPicker] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
-  const [taskTitle, setTaskTitle] = useState("");
   const [editing, setEditing] = useState<ChatMessage>();
   const [editBody, setEditBody] = useState("");
   const [deleting, setDeleting] = useState<ChatMessage>();
@@ -483,10 +486,7 @@ function Conversation({
                         size="small"
                         icon={<TaskListSquareLtr24Regular />}
                         aria-label={`Создать задачу из сообщения: ${message.body.slice(0, 40)}`}
-                        onClick={() => {
-                          setTaskSource(message);
-                          setTaskTitle(message.body.slice(0, 160));
-                        }}
+                        onClick={() => setTaskSource(message)}
                       >
                         В задачу
                       </Button>
@@ -551,36 +551,21 @@ function Conversation({
           </Button>
         </div>
       )}
-      {taskSource && (
-        <div
-          className="linked-create-panel"
-          role="region"
-          aria-label="Задача из сообщения"
-        >
-          <TaskListSquareLtr24Regular />
-          <Input
-            autoFocus
-            aria-label="Название задачи из сообщения"
-            value={taskTitle}
-            onChange={(_, data) => setTaskTitle(data.value)}
-          />
-          <Button
-            appearance="primary"
-            disabled={busy || !taskTitle.trim()}
-            onClick={() =>
-              void run(async () => {
-                if (await onCreateTaskFromMessage(taskSource, taskTitle.trim()))
-                  setTaskSource(undefined);
-              })
-            }
-          >
-            Создать задачу
-          </Button>
-          <Button appearance="subtle" onClick={() => setTaskSource(undefined)}>
-            Отмена
-          </Button>
-        </div>
-      )}
+      {taskSource ? <TaskComposer
+        open
+        people={people}
+        tasks={tasks}
+        currentUserId={currentUserId}
+        initialTitle={taskSource.body.slice(0, 160)}
+        initialDescription={taskSource.body}
+        sourceLabel="Карточка сохранит ссылку на исходное сообщение."
+        onClose={() => setTaskSource(undefined)}
+        onSubmit={async (payload) => {
+          const task = await onCreateTaskFromMessage(taskSource, payload);
+          if (task !== undefined) setTaskSource(undefined);
+          return task;
+        }}
+      /> : null}
       {!canSend ? (
         <div className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец

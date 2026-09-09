@@ -430,6 +430,39 @@ export interface WorkspaceTask {
   readonly cycle?: TaskCycle | null;
 }
 
+export interface TaskCycleInput {
+  readonly title: string;
+  readonly scheduleKind: "daily" | "weekly" | "monthly" | "calendar";
+  readonly interval: number;
+  readonly calendarRule?: "weekdays" | "month_days" | null;
+  readonly weekdays?: readonly number[];
+  readonly monthDays?: readonly number[];
+  readonly timezone?: string;
+  readonly nextRunAt?: string | null;
+  readonly isEnabled?: boolean;
+}
+
+export interface WorkspaceTaskCreateInput {
+  readonly title: string;
+  readonly description?: string;
+  readonly project?: string;
+  readonly assigneeId: string;
+  readonly sourceMessageId?: string;
+  readonly parentTaskId?: string;
+  readonly priority?: WorkspaceTask["priority"];
+  readonly dueAt?: string;
+  readonly participants?: readonly {
+    readonly userId: string;
+    readonly role: TaskParticipantRole;
+  }[];
+  readonly checklist?: readonly { readonly title: string }[];
+  readonly dependencies?: readonly {
+    readonly dependsOnTaskId: string;
+    readonly dependencyKind: "blocks" | "relates";
+  }[];
+  readonly cycle?: TaskCycleInput | null;
+}
+
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";
 
 export interface EfficiencyHistoryPoint {

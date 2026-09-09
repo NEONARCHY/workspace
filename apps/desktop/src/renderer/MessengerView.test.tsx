@@ -10,7 +10,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
-import { initialChats, initialMessages, people } from "./demo-data";
+import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { MessengerView } from "./MessengerView";
 
 function actions(): ChatActions {
@@ -30,6 +30,7 @@ function renderMessenger(
     currentUserId: "aziza",
     chats: initialChats,
     messages: initialMessages,
+    tasks: initialTasks,
     people,
     attachments: [],
     chatActions: actions(),

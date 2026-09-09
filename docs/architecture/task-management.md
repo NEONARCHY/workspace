@@ -1,6 +1,6 @@
 # Task management
 
-**Status:** implemented through desktop 0.22.0 / API 0.18.0
+**Status:** implemented through desktop 0.28.0 / API 0.23.0
 
 ## Product flow
 
@@ -77,6 +77,20 @@ Relevant endpoints:
 - `PUT|DELETE /api/v1/tasks/{task_id}/dependencies[...]`
 - `PUT /api/v1/tasks/{task_id}/cycle`
 - `PUT /api/v1/attachments/task/{task_id}`
+
+## Atomic creation
+
+The creation dialog sends the title, expected result, project, assignee, deadline,
+priority, participants, checklist, dependencies and optional recurrence in one
+`POST /api/v1/tasks` request. The repository validates every referenced employee
+and task before inserting anything. The task, participant roles, checklist,
+dependency edges, recurrence and managed task chat are then written in one database
+transaction. A failed validation or chat synchronisation leaves no partial task.
+
+The same contract is used for a task created from a messenger message; only the
+source message identifier is added. The compact subtask action remains intentionally
+separate because its parent, visibility and review lifecycle are already fixed by
+the selected task.
 
 ## Verification boundary
 
