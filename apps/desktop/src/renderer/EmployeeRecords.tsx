@@ -4,7 +4,7 @@ import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuk
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
-export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован" })[status] ?? status;
+export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
 
 export function EmployeeRecords({ employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
   employees: readonly DirectoryEmployee[];
@@ -59,7 +59,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
           <td className="employee-department">{departmentNames.get(employee.departmentId ?? "") ?? "Не назначено"}</td>
           <td className="record-username">@{employee.username}</td>
           <td><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>
-          <td><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>
+          <td><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : employee.status === "archived" ? "subtle" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>
         </tr>)}</tbody>
       </table>
       {!employees.length && <div className="record-table-empty"><strong>Сотрудники не найдены</strong><span>Измените поисковый запрос или фильтры.</span></div>}

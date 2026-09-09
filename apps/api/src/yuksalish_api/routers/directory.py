@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from yuksalish_api.administration_schemas import EmployeeStatusUpdateRequest
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.directory_schemas import (
@@ -28,6 +29,7 @@ from yuksalish_api.directory_service import (
     set_module_access_rule,
     update_department,
     update_employee_access,
+    update_employee_status,
     update_position,
 )
 from yuksalish_api.events import WorkspaceEventBus
@@ -190,4 +192,27 @@ async def patch_employee(
         raise _translate(error) from error
     event_bus: WorkspaceEventBus = request.app.state.event_bus
     await event_bus.publish({"type": "directory.employee_updated", "entityId": result.id})
+    return result
+
+
+@router.patch("/employees/{employee_id}/status", response_model=DirectoryEmployeeResponse)
+async def patch_employee_status(
+    employee_id: UUID,
+    payload: EmployeeStatusUpdateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> DirectoryEmployeeResponse:
+    try:
+        result = await update_employee_status(connection, current_user, employee_id, payload)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    event_bus: WorkspaceEventBus = request.app.state.event_bus
+    await event_bus.publish(
+        {
+            "type": "directory.employee_status_updated",
+            "entityId": result.id,
+            "status": result.status,
+        }
+    )
     return result

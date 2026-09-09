@@ -1442,6 +1442,7 @@ export function App() {
                 token={session.accessToken}
                 currentUser={workspace.currentUser}
                 allowAdministration={modulePermissions.employees?.admin ?? ["admin", "superadmin"].includes(workspace.currentUser.role)}
+                allowChatAdministration={Boolean(modulePermissions.messenger?.admin) && ["admin", "superadmin"].includes(workspace.currentUser.role)}
                 onInvite={() => { setAccountInvite(true); setAccountOpen(true); }}
                 onCreateChat={chatActions.create}
                 onChatCreated={(chatId) => {

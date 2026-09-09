@@ -120,6 +120,10 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return ("employees", "view") if normalized == "/directory" else None
     if normalized.startswith("/directory/"):
         return "employees", "admin"
+    if normalized.startswith("/administration/chats") or normalized.startswith(
+        "/administration/chat-inspections"
+    ):
+        return "messenger", "admin"
     prefixes = (
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),

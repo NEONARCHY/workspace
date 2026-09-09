@@ -115,6 +115,44 @@ export interface DirectoryBootstrap {
   readonly accessRules: readonly ModuleAccessRule[];
 }
 
+export type ManagedEmployeeStatus = "active" | "blocked" | "archived";
+
+export interface AdministrativeChatMember {
+  readonly userId: string;
+  readonly name: string;
+  readonly status: string;
+}
+
+export interface AdministrativeChat {
+  readonly id: string;
+  readonly title: string;
+  readonly kind: string;
+  readonly members: readonly AdministrativeChatMember[];
+  readonly messageCount: number;
+  readonly updatedAt: string;
+}
+
+export interface AdministrativeChatMessage {
+  readonly id: string;
+  readonly authorUserId: string;
+  readonly authorName: string;
+  readonly body: string;
+  readonly createdAt: string;
+  readonly editedAt?: string | null;
+  readonly deletedAt?: string | null;
+}
+
+export interface AdministrativeChatInspection {
+  readonly id: string;
+  readonly chat: AdministrativeChat;
+  readonly messages: readonly AdministrativeChatMessage[];
+  readonly reason: string;
+  readonly createdAt: string;
+  readonly expiresAt: string;
+  readonly totalMessages: number;
+  readonly truncated: boolean;
+}
+
 export interface WorkspacePerson {
   readonly id: string;
   readonly username?: string;

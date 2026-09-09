@@ -1,5 +1,7 @@
 import type {
   NavigationKey,
+  AdministrativeChat,
+  AdministrativeChatInspection,
   PersonalChatAction,
   PersonalPreferences,
   ApprovalRequestSummary,
@@ -45,6 +47,7 @@ import type {
   WorkspaceProject,
   WorkspaceNotification,
   WorkspaceRole,
+  ManagedEmployeeStatus,
 } from "@yuksalish/contracts";
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
@@ -196,6 +199,44 @@ export function updateEmployeeAccess(
         departmentId: departmentId || null,
       }),
     },
+    token,
+  );
+}
+
+export function updateEmployeeStatus(
+  token: string,
+  employeeId: string,
+  status: ManagedEmployeeStatus,
+  reason: string,
+): Promise<DirectoryEmployee> {
+  return apiRequest<DirectoryEmployee>(
+    `/directory/employees/${employeeId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status, reason }) },
+    token,
+  );
+}
+
+export function loadAdministrativeChats(token: string): Promise<readonly AdministrativeChat[]> {
+  return apiRequest<readonly AdministrativeChat[]>("/administration/chats", {}, token);
+}
+
+export function createAdministrativeChatInspection(
+  token: string,
+  chatId: string,
+  reason: string,
+  durationMinutes: 15 | 30 | 60,
+): Promise<AdministrativeChatInspection> {
+  return apiRequest<AdministrativeChatInspection>(
+    "/administration/chat-inspections",
+    { method: "POST", body: JSON.stringify({ chatId, reason, durationMinutes }) },
+    token,
+  );
+}
+
+export function revokeAdministrativeChatInspection(token: string, inspectionId: string): Promise<void> {
+  return apiRequest<void>(
+    `/administration/chat-inspections/${inspectionId}`,
+    { method: "DELETE" },
     token,
   );
 }

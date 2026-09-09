@@ -8,6 +8,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import MODULE_KEYS, normalize_permissions
+from .administration_schemas import EmployeeStatusUpdateRequest
 from .auth import AuthenticatedUser
 from .catalog import MODULE_CATALOG
 from .directory_schemas import (
@@ -25,7 +26,15 @@ from .directory_schemas import (
     PositionUpdateRequest,
     RoleDescriptorResponse,
 )
-from .tables import audit_events, departments, module_access_rules, positions, users
+from .tables import (
+    audit_events,
+    auth_invitations,
+    auth_sessions,
+    departments,
+    module_access_rules,
+    positions,
+    users,
+)
 from .workspace_schemas import ModulePermissionSet
 
 
@@ -661,4 +670,98 @@ async def update_employee_access(
         position_id=str(payload.position_id) if payload.position_id else None,
         job_title=position_name,
         status=employee["status"],
+    )
+
+
+async def update_employee_status(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    employee_id: UUID,
+    payload: EmployeeStatusUpdateRequest,
+) -> DirectoryEmployeeResponse:
+    _require_admin(actor)
+    employee = (
+        await connection.execute(
+            select(users).where(users.c.id == employee_id).with_for_update()
+        )
+    ).mappings().first()
+    if employee is None:
+        raise DirectoryServiceError(404, "Employee was not found")
+    if employee_id == actor.id:
+        raise DirectoryServiceError(409, "You cannot change your own account status")
+    if employee["role"] == "superadmin" and actor.role != "superadmin":
+        raise DirectoryServiceError(403, "Only a superadmin can manage a superadmin")
+    if employee["role"] == "admin" and actor.role != "superadmin":
+        raise DirectoryServiceError(403, "Only a superadmin can manage an administrator")
+    if employee["role"] == "superadmin" and payload.status != "active":
+        active_superadmins = int(
+            await connection.scalar(
+                select(func.count(users.c.id)).where(
+                    users.c.role == "superadmin",
+                    users.c.status == "active",
+                )
+            )
+            or 0
+        )
+        if active_superadmins <= 1:
+            raise DirectoryServiceError(409, "The last active superadmin cannot be disabled")
+    if payload.status == "active" and not employee["password_hash"]:
+        raise DirectoryServiceError(
+            409,
+            "An account without an activated password cannot be restored; send a new invitation",
+        )
+    if employee["status"] == payload.status:
+        raise DirectoryServiceError(409, "Employee already has this status")
+
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(users)
+        .where(users.c.id == employee_id)
+        .values(
+            status=payload.status,
+            failed_login_count=0,
+            locked_until=None,
+            updated_at=now,
+        )
+    )
+    if payload.status != "active":
+        await connection.execute(
+            update(auth_sessions)
+            .where(
+                auth_sessions.c.user_id == employee_id,
+                auth_sessions.c.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        await connection.execute(
+            update(auth_invitations)
+            .where(
+                auth_invitations.c.user_id == employee_id,
+                auth_invitations.c.accepted_at.is_(None),
+                auth_invitations.c.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+    await _audit(
+        connection,
+        actor,
+        "employee.status_updated",
+        "user",
+        employee_id,
+        {
+            "before": employee["status"],
+            "after": payload.status,
+            "reason": payload.reason,
+            "sessionsRevoked": payload.status != "active",
+        },
+    )
+    return DirectoryEmployeeResponse(
+        id=str(employee_id),
+        username=employee["username"],
+        name=employee["full_name"],
+        role=employee["role"],
+        department_id=str(employee["department_id"]) if employee["department_id"] else None,
+        position_id=str(employee["position_id"]) if employee["position_id"] else None,
+        job_title=employee["job_title"],
+        status=payload.status,
     )

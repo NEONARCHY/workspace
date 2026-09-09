@@ -7,22 +7,25 @@ import type {
   DirectoryEmployee,
   ModuleAccessRule,
   ModuleAccessSubject,
+  ManagedEmployeeStatus,
   WorkspacePerson,
   WorkspaceDepartment,
   WorkspacePosition,
   WorkspaceRole,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
 
 import {
   createPosition,
   loadDirectory,
   updateEmployeeAccess,
+  updateEmployeeStatus,
   updatePosition,
 } from "./workspace-api";
 
@@ -30,6 +33,7 @@ interface EmployeesViewProps {
   readonly token: string;
   readonly currentUser: WorkspacePerson;
   readonly allowAdministration?: boolean;
+  readonly allowChatAdministration?: boolean;
   readonly onInvite?: () => void;
   readonly onCreateChat?: (input: CreateChatInput) => Promise<ChatSummary>;
   readonly onChatCreated?: (chatId: string) => void;
@@ -76,7 +80,7 @@ function replaceDepartment(
   };
 }
 
-export function EmployeesView({ token, currentUser, allowAdministration, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
+export function EmployeesView({ token, currentUser, allowAdministration, allowChatAdministration, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -94,6 +98,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, onInvit
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [chatControlOpen, setChatControlOpen] = useState(false);
+  const [employeeStatusAction, setEmployeeStatusAction] = useState<ManagedEmployeeStatus>();
+  const [employeeStatusReason, setEmployeeStatusReason] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<ReadonlySet<string>>(new Set());
   const [bulkPanel, setBulkPanel] = useState<"position" | "role" | "chat" | null>(null);
   const [bulkPositionId, setBulkPositionId] = useState("__choose__");
@@ -197,6 +204,31 @@ export function EmployeesView({ token, currentUser, allowAdministration, onInvit
       setFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveEmployeeStatus = async () => {
+    if (busy || !canManage || directory === undefined || selectedEmployee === undefined || employeeStatusAction === undefined || employeeStatusReason.trim().length < 12) return;
+    setBusy(true);
+    try {
+      const saved = await updateEmployeeStatus(
+        token,
+        selectedEmployee.id,
+        employeeStatusAction,
+        employeeStatusReason.trim(),
+      );
+      setDirectory(replaceEmployee(directory, saved));
+      setEmployeeStatusAction(undefined);
+      setEmployeeStatusReason("");
+      setFeedback(
+        saved.status === "active"
+          ? `${saved.name}: доступ восстановлен.`
+          : `${saved.name}: статус «${employeeStatusLabel(saved.status)}» сохранён, активные сеансы отозваны.`,
+      );
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось изменить состояние сотрудника");
     } finally {
       setBusy(false);
     }
@@ -329,6 +361,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, onInvit
         <div className="toolbar-actions">
           {canManage ? <Button onClick={() => setDepartmentsOpen(true)}>Подразделения</Button> : null}
           {canManage ? <Button onClick={() => setAccessOpen(true)}>Права модулей</Button> : null}
+          {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
           <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
           {canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
         </div>
@@ -463,13 +496,22 @@ export function EmployeesView({ token, currentUser, allowAdministration, onInvit
                 </Field>
               </div>
               {canManage ? (
-                <Button
-                  appearance="primary"
-                  disabled={busy || selectedEmployee.role === "superadmin"}
-                  onClick={() => void saveEmployee()}
-                >
-                  Сохранить сотрудника
-                </Button>
+                <div className="employee-admin-actions">
+                  <Button
+                    appearance="primary"
+                    disabled={busy || selectedEmployee.role === "superadmin"}
+                    onClick={() => void saveEmployee()}
+                  >
+                    Сохранить сотрудника
+                  </Button>
+                  {selectedEmployee.id !== currentUser.id
+                    && (selectedEmployee.role !== "superadmin" || currentUser.role === "superadmin")
+                    && (selectedEmployee.role !== "admin" || currentUser.role === "superadmin") ? <div className="employee-status-actions" aria-label="Управление состоянием сотрудника">
+                      {selectedEmployee.status === "blocked" || selectedEmployee.status === "archived" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("active"); setEmployeeStatusReason(""); setFeedback(""); }}>Восстановить доступ</Button> : null}
+                      {selectedEmployee.status === "active" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("blocked"); setEmployeeStatusReason(""); setFeedback(""); }}>Заблокировать</Button> : null}
+                      {selectedEmployee.status !== "archived" ? <Button className="employee-archive-button" disabled={busy} onClick={() => { setEmployeeStatusAction("archived"); setEmployeeStatusReason(""); setFeedback(""); }}>Архивировать</Button> : null}
+                    </div> : null}
+                </div>
               ) : null}
             </>
           ) : null}
@@ -543,6 +585,35 @@ export function EmployeesView({ token, currentUser, allowAdministration, onInvit
         <DialogSurface className="directory-management-dialog access-dialog" aria-label="Права модулей">
           <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть права модулей" onClick={() => setAccessOpen(false)} /></div>
           <ModuleAccessManagement token={token} directory={directory} onRuleChanged={mergeAccessRule} onRuleDeleted={removeAccessRule} />
+        </DialogSurface>
+      </Dialog> : null}
+      {chatControlOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setChatControlOpen(false); }}>
+        <DialogSurface className="admin-chat-dialog" aria-label="Контроль чатов">
+          <AdministrativeChatInspectionView token={token} onClose={() => setChatControlOpen(false)} />
+        </DialogSurface>
+      </Dialog> : null}
+      {employeeStatusAction && selectedEmployee ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setEmployeeStatusAction(undefined); }}>
+        <DialogSurface className="employee-status-dialog" aria-label="Изменение состояния сотрудника">
+          <DialogBody>
+            <DialogTitle>{employeeStatusAction === "active" ? "Восстановить доступ" : employeeStatusAction === "blocked" ? "Заблокировать сотрудника" : "Архивировать сотрудника"}</DialogTitle>
+            <DialogContent>
+              <p className="employee-status-lead">
+                {employeeStatusAction === "active"
+                  ? `${selectedEmployee.name} снова сможет войти в Workspace. Исторические задачи и переписка останутся без изменений.`
+                  : employeeStatusAction === "blocked"
+                    ? `Доступ ${selectedEmployee.name} будет остановлен немедленно, а все активные сеансы — отозваны. Учётная запись останется в списке.`
+                    : `${selectedEmployee.name} будет перемещён в архив и потеряет доступ. Задачи, согласования и история сохранятся.`}
+              </p>
+              <Field label="Основание" required hint="Минимум 12 символов. Причина будет записана в аудит.">
+                <Textarea aria-label="Основание изменения состояния сотрудника" resize="vertical" maxLength={500} value={employeeStatusReason} disabled={busy} onChange={(_, data) => setEmployeeStatusReason(data.value)} />
+              </Field>
+              {feedback ? <div className="admin-chat-error" role="alert">{feedback}</div> : null}
+            </DialogContent>
+            <DialogActions>
+              <Button appearance="primary" disabled={busy || employeeStatusReason.trim().length < 12} onClick={() => void saveEmployeeStatus()}>{busy ? "Сохраняем…" : "Подтвердить"}</Button>
+              <Button disabled={busy} onClick={() => setEmployeeStatusAction(undefined)}>Отмена</Button>
+            </DialogActions>
+          </DialogBody>
         </DialogSurface>
       </Dialog> : null}
       {bulkPanel ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setBulkPanel(null); }}>

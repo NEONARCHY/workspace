@@ -80,6 +80,19 @@ audit_events = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+admin_chat_inspections = sa.Table(
+    "messenger_admin_inspections",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("chat_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("reason", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("expires_at", sa.DateTime(timezone=True)),
+    sa.Column("last_accessed_at", sa.DateTime(timezone=True)),
+    sa.Column("revoked_at", sa.DateTime(timezone=True)),
+)
+
 auth_invitations = sa.Table(
     "auth_invitations",
     metadata,

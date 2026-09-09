@@ -4,11 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeesView } from "./EmployeesView";
 import { workspaceTheme } from "./workspace-theme";
-import { loadDirectory, setModuleAccessRule, updateEmployeeAccess, updatePosition } from "./workspace-api";
+import { loadDirectory, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadDirectory: vi.fn(),
   updateEmployeeAccess: vi.fn(),
+  updateEmployeeStatus: vi.fn(),
   updatePosition: vi.fn(),
   createPosition: vi.fn(),
   createDepartment: vi.fn(),
@@ -64,6 +65,27 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить сотрудника" }));
     await screen.findByText("Нет связи"); expect(screen.getByLabelText("Роль доступа")).toHaveValue("manager");
     expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "manager", "p1", "d1");
+  });
+  it("requires an audited reason before blocking an employee", async () => {
+    vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "blocked" });
+    mount(); await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Азиза Каримова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Заблокировать" }));
+    const confirm = screen.getByRole("button", { name: "Подтвердить" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Основание изменения состояния сотрудника"), { target: { value: "Временная блокировка доступа" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(updateEmployeeStatus).toHaveBeenCalledWith(
+      "test-token", "one", "blocked", "Временная блокировка доступа",
+    ));
+    expect(await screen.findByText(/статус «Заблокирован» сохранён/)).toBeInTheDocument();
+  });
+  it("shows chat control only when the caller has administrative messenger access", async () => {
+    mount(user, { allowChatAdministration: true }); await screen.findByRole("table");
+    expect(screen.getByRole("button", { name: "Контроль чатов" })).toBeInTheDocument();
+    cleanup();
+    mount({ ...user, role: "employee" }, { allowChatAdministration: false }); await screen.findByRole("table");
+    expect(screen.queryByRole("button", { name: "Контроль чатов" })).not.toBeInTheDocument();
   });
   it("selects a row and reveals a persistent action bar with an accurate count", async () => {
     mount(); await screen.findByRole("table");
