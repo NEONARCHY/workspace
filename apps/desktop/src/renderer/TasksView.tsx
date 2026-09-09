@@ -24,6 +24,7 @@ import {
 } from "@fluentui/react-components";
 import {
   Add24Regular,
+  Board24Regular,
   Calendar24Regular,
   Chat24Regular,
   Delete24Regular,
@@ -36,6 +37,7 @@ import { AttachmentPanel } from "./AttachmentPanel";
 import { EfficiencyView } from "./EfficiencyView";
 import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskRecords } from "./TaskRecords";
+import { TeamDashboardView } from "./TeamDashboardView";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
@@ -79,7 +81,7 @@ function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
 
 const kanbanStatuses = ["new", "in_progress", "awaiting_review", "overdue", "completed"] as const;
 type TaskFilter = "active" | "mine" | "overdue" | "completed";
-type TaskMode = "list" | "kanban" | "calendar" | "efficiency";
+type TaskMode = "dashboard" | "list" | "kanban" | "calendar" | "efficiency";
 
 interface TaskEditPayload {
   readonly title: string;
@@ -401,22 +403,23 @@ export function TasksView(props: TasksViewProps) {
   };
 
   return (
-    <section className={`workspace-view tasks-view bp5-tasks ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask ? "detail-open" : ""}`} aria-label="Задачи">
+    <section className={`workspace-view tasks-view bp5-tasks ${mode === "efficiency" ? "efficiency-mode" : ""} ${mode === "dashboard" ? "dashboard-mode" : ""} ${detailOpen && selectedTask && !["dashboard", "efficiency"].includes(mode) ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
         <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
             <div className="view-switch" aria-label="Представление задач">
+              {privileged ? <button className={mode === "dashboard" ? "active" : ""} aria-label="Обзор команды" aria-pressed={mode === "dashboard"} onClick={() => { setDetailOpen(false); setMode("dashboard"); if (!efficiencyLoading) void onLoadEfficiency(); }} type="button"><Board24Regular aria-hidden="true" />Обзор</button> : null}
               <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
               <button className={mode === "kanban" ? "active" : ""} aria-pressed={mode === "kanban"} onClick={() => setMode("kanban")} type="button">Kanban</button>
               <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
               <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
             </div>
-            {mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
+            {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
           </div>
         </header>
 
-        {mode !== "efficiency" ? <div className="task-filters" aria-label="Фильтры задач">
+        {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-filters" aria-label="Фильтры задач">
           {([ ["active", "Активные"], ["mine", "Мои"], ["overdue", "Просроченные"], ["completed", "Завершённые"] ] as const).map(([key, label]) => (
             <button className={filter === key ? "active" : ""} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button">{label}</button>
           ))}
@@ -430,7 +433,7 @@ export function TasksView(props: TasksViewProps) {
           <Button appearance="subtle" onClick={() => setCreating(false)}>Отмена</Button>
         </div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
+        {mode === "dashboard" ? <TeamDashboardView tasks={tasks} people={people} currentUserId={currentUserId} efficiency={efficiency} efficiencyLoading={efficiencyLoading} efficiencyError={efficiencyError} onSelectTask={(taskId) => { setSelectedId(taskId); setMode("list"); }} /> : mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
@@ -446,7 +449,7 @@ export function TasksView(props: TasksViewProps) {
         )}
       </div>
 
-      {mode !== "efficiency" && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
+      {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}

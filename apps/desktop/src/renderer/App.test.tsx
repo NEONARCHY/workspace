@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -367,6 +367,36 @@ function mockServer(
     }
     if (url.endsWith("/directory") && options?.method === undefined) {
       return response(directory);
+    }
+    if (url.includes("/efficiency") && options?.method === undefined) {
+      return response({
+        period: "2026-09",
+        timezone: "Asia/Tashkent",
+        methodologyVersion: "EFF-1.0",
+        trackingStartedAt: "2026-09-01T00:00:00Z",
+        currentUserId: currentUser.id,
+        employees: people.map((person) => ({
+          userId: person.id,
+          name: person.name,
+          jobTitle: person.jobTitle ?? "",
+          period: "2026-09",
+          timezone: "Asia/Tashkent",
+          percentage: 80,
+          onTimeCount: 4,
+          eligibleCount: 5,
+          overdueCount: 1,
+          awaitingReviewCount: 1,
+          noDueDateCount: 0,
+          returnedForRevisionCount: 0,
+          excludedCount: 0,
+          sampleSize: 5,
+          methodologyVersion: "EFF-1.0",
+          trackingStartedAt: "2026-09-01T00:00:00Z",
+          historyCompleteness: "complete",
+          smallSample: false,
+          history: [],
+        })),
+      });
     }
     if (url.endsWith("/notifications/read-all") && options?.method === "POST") {
       notifications = notifications.map((item) => ({
@@ -1067,7 +1097,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(document.querySelector<HTMLButtonElement>(".view-switch button:nth-child(3)")!);
+    fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
     expect(document.querySelectorAll(".task-calendar-item")).toHaveLength(initialTasks.length);
 
@@ -1083,6 +1113,24 @@ describe("corporate workspace authentication alpha", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("opens the team dashboard for a manager and hides it from an employee", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", { name: "Обзор команды" }));
+
+    expect(await screen.findByRole("heading", { name: "Добрый день, Азиза" })).toBeInTheDocument();
+    expect(screen.getByText(/не норму и не оценку сотрудника/i)).toBeInTheDocument();
+
+    cleanup();
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("dilshod");
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    expect(screen.queryByRole("button", { name: "Обзор команды" })).not.toBeInTheDocument();
   });
 
   it("finds employees without changing their roles or selected record", async () => {
