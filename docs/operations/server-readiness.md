@@ -18,7 +18,7 @@ platform; it can later be used for approved local AI workloads.
 - UPS model and expected runtime during a power outage
 - Stable local network connection and preferably a reserved LAN address
 - Backup destination outside the server and an assigned restore-test owner
-- Domain, Cloudflare account and administrative access
+- Domain and Cloudflare account for **future Internet access**; neither is required for the LAN pilot
 
 A single powerful PC is still a single point of failure. CPU and GPU performance do not
 replace a second disk, UPS, external encrypted backup and a tested restoration procedure.
@@ -37,6 +37,7 @@ measured pilot data, file growth and backup duration.
 
 ## Domain and Cloudflare status
 
-No domain or Cloudflare account exists yet. Development and local staging can continue on
-`127.0.0.1`; public access, remote pilot access and production cutover remain blocked until
-the user creates or selects a domain and grants access to a Cloudflare account.
+No domain or Cloudflare account exists yet. The LAN-only production-mode pilot can use the
+internal HTTPS procedure in [lan-server-handoff.md](lan-server-handoff.md). Public access and
+remote employees remain blocked until a separate Internet-access design, domain and account
+are ready. A LAN deployment must not be treated as a remotely accessible server.
