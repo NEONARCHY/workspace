@@ -96,11 +96,27 @@ try {
         "desktop-updates.tar.gz" = "yuksalish-workspace_desktop-updates"
     }
     foreach ($archive in $archives.Keys) {
-        & docker run --rm `
-            --mount "type=volume,src=$($archives[$archive]),dst=/source,readonly" `
-            --mount "type=bind,src=$backupPath,dst=/backup" `
-            alpine:3.22 tar -C /source -czf "/backup/$archive" .
-        if ($LASTEXITCODE -ne 0) { throw "Failed to export $archive." }
+        # Docker Desktop cannot bind-mount some removable Windows drives (notably FAT32).
+        # Create the archive inside a short-lived container, then copy it via the Docker API.
+        $helper = "yuksalish-handoff-$([guid]::NewGuid().ToString('N'))"
+        $created = $false
+        try {
+            & docker create --name $helper `
+                --mount "type=volume,src=$($archives[$archive]),dst=/source,readonly" `
+                alpine:3.22 sh -c 'tar -C /source -czf /tmp/archive.tar.gz .' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Failed to create archive helper for $archive." }
+            $created = $true
+            & docker start -a $helper | Out-Null
+            $archiveExitCode = (& docker inspect --format '{{.State.ExitCode}}' $helper).Trim()
+            if ($LASTEXITCODE -ne 0 -or $archiveExitCode -ne "0") {
+                throw "Failed to export $archive."
+            }
+            & docker cp "${helper}:/tmp/archive.tar.gz" (Join-Path $backupPath $archive)
+            if ($LASTEXITCODE -ne 0) { throw "Failed to copy $archive to the backup drive." }
+        }
+        finally {
+            if ($created) { & docker rm -f $helper | Out-Null }
+        }
     }
 
     $files = @("database.dump") + @($archives.Keys)
