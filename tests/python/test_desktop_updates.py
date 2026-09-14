@@ -119,12 +119,33 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                 assert (await policy_snapshot(connection)).mandatory
                 disabled = await set_mandatory(connection, owner, settings, False)
                 assert not disabled.mandatory and disabled.minimum_version is None
-                actions = set((await connection.execute(select(audit_events.c.action))).scalars())
+                audit_rows = (
+                    await connection.execute(
+                        select(audit_events.c.action, audit_events.c.target_id).where(
+                            audit_events.c.action.in_((
+                                "desktop_update.staged",
+                                "desktop_update.published",
+                                "desktop_update.mandatory_changed",
+                            ))
+                        )
+                    )
+                ).all()
+                actions = {row.action for row in audit_rows}
                 assert {
                     "desktop_update.staged",
                     "desktop_update.published",
                     "desktop_update.mandatory_changed",
                 } <= actions
+                assert all(row.target_id is not None for row in audit_rows)
+                release_targets = {
+                    row.target_id for row in audit_rows
+                    if row.action in {"desktop_update.staged", "desktop_update.published"}
+                }
+                assert len(release_targets) == 1
+                assert release_targets.isdisjoint({
+                    row.target_id for row in audit_rows
+                    if row.action == "desktop_update.mandatory_changed"
+                })
             finally:
                 await transaction.rollback()
     finally:
