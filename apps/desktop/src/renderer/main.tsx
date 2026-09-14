@@ -15,6 +15,12 @@ import "./message-layout.css";
 import "./team-dashboard.css";
 import "./spatial-workspace.css";
 import "./workspace-2-payments.css";
+import "./desktop-updates.css";
+import "./window-titlebar.css";
+
+if (window.yuksalish && navigator.userAgent.includes("Windows")) {
+  document.documentElement.classList.add("desktop-window-chrome");
+}
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));

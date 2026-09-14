@@ -28,6 +28,7 @@ import type {
   WorkspaceProject,
   WorkspaceNotification,
   WorkflowPosition,
+  DesktopUpdatePolicy,
   WorkspaceSection,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
@@ -57,6 +58,8 @@ import {
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
+import { DesktopUpdateGate } from "./DesktopUpdateGate";
+import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
@@ -143,6 +146,8 @@ import {
   uploadWorkspaceAttachment,
   addWorkspaceFeedComment,
   type PaymentRequestInput,
+  apiBaseUrl,
+  loadDesktopUpdatePolicy,
 } from "./workspace-api";
 
 interface NavItem {
@@ -279,6 +284,7 @@ export function App() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
+  const [sessionRestoring, setSessionRestoring] = useState(() => window.yuksalish?.loadSession !== undefined);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
@@ -293,6 +299,8 @@ export function App() {
   const [railPreference, setRailPreference] = useState<boolean>();
   const railCollapsed = railPreference ?? compactWindow;
   const [backgroundError, setBackgroundError] = useState("");
+  const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
+  const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
@@ -309,8 +317,13 @@ export function App() {
     setConnectionDetail("Сервер подключён");
   }, () => activeToken.current));
 
-  const establishSession = async (authenticated: AuthenticationSession) => {
+  const persistRefreshSession = useCallback((refreshToken: string) => {
+    void window.yuksalish?.saveSession(refreshToken).catch(() => undefined);
+  }, []);
+
+  const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
     const loaded = await loadWorkspace(authenticated.accessToken);
+    setUpdatePolicy(undefined);
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
@@ -319,10 +332,19 @@ export function App() {
     setEfficiencyError(undefined);
     setNavigationEditing(false);
     setSession(authenticated);
+    persistRefreshSession(authenticated.refreshToken);
+    try {
+      const key = `yuksalish:resume-section:${authenticated.user.id}`;
+      const lastSection = localStorage.getItem(key);
+      localStorage.removeItem(key);
+      if (lastSection && navItems.some((item) => item.key === lastSection && item.key !== "settings")) {
+        setActiveSection(lastSection as WorkspaceSection);
+      }
+    } catch { /* local storage can be disabled */ }
     setConnectionDetail("Сервер подключён");
     setAuthError(undefined);
     setBackgroundError("");
-  };
+  }, [persistRefreshSession]);
 
   const handleLogin = async (username: string, password: string, totpCode?: string) => {
     setAuthBusy(true);
@@ -367,8 +389,10 @@ export function App() {
     setAccountInvite(false);
     setNavigationEditing(false);
     setSession(undefined);
+    setUpdatePolicy(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
+    await window.yuksalish?.clearSession().catch(() => undefined);
     if (current !== undefined) {
       await logout(current.accessToken).catch(() => undefined);
     }
@@ -380,6 +404,74 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const bridge = window.yuksalish;
+    if (!bridge?.onUpdateStatus) return;
+    return bridge.onUpdateStatus(setUpdateStatus);
+  }, []);
+
+  useEffect(() => {
+    const bridge = window.yuksalish;
+    if (!bridge?.loadSession) {
+      return;
+    }
+    let active = true;
+    void bridge.loadSession()
+      .then(async (refreshToken) => {
+        if (!refreshToken) return;
+        let renewedSession = false;
+        try {
+          const renewed = await refreshAuthentication(refreshToken);
+          renewedSession = true;
+          if (!active) return;
+          // A refresh token can rotate. Persist its replacement before the
+          // workspace bootstrap request so a transient connection error does
+          // not leave the employee signed out on the next opening.
+          await bridge.saveSession(renewed.refreshToken).catch(() => undefined);
+          if (active) await establishSession(renewed);
+        } catch {
+          if (!active) return;
+          if (!renewedSession) {
+            await bridge.clearSession().catch(() => undefined);
+            return;
+          }
+          setAuthError("Не удалось загрузить рабочее пространство. Повторите открытие приложения.");
+        }
+      })
+      .finally(() => { if (active) setSessionRestoring(false); });
+    return () => { active = false; };
+  }, [establishSession]);
+
+  useEffect(() => {
+    if (!session) return;
+    let active = true;
+    const refreshPolicy = () => {
+      void loadDesktopUpdatePolicy(session.accessToken)
+        .then((policy) => { if (active) setUpdatePolicy(policy); })
+        .catch(() => { /* retain the last known gate during a transient disconnection */ });
+    };
+    refreshPolicy();
+    const timer = window.setInterval(refreshPolicy, 30_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [session]);
+
+  useEffect(() => {
+    if (!session || !updatePolicy?.publishedVersion || !window.yuksalish?.configureUpdates) return;
+    let active = true;
+    void window.yuksalish.configureUpdates(apiBaseUrl, session.accessToken)
+      .then((status) => {
+        if (!active) return;
+        setUpdateStatus(status);
+        return window.yuksalish?.checkForUpdates().then((checked) => {
+          if (active) setUpdateStatus(checked);
+        });
+      })
+      .catch((error: unknown) => {
+        if (active) setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось настроить обновление" });
+      });
+    return () => { active = false; };
+  }, [session, updatePolicy?.publishedVersion]);
+
+  useEffect(() => {
     if (session === undefined) return;
     let cancelled = false;
     const refreshAfter = Math.max(60_000, (session.expiresIn - 60) * 1_000);
@@ -389,17 +481,20 @@ export function App() {
           if (cancelled) return;
           activeToken.current = renewed.accessToken;
           setSession(renewed);
+          persistRefreshSession(renewed.refreshToken);
           await refreshWorkspace(renewed.accessToken).catch(reportError);
         })
         .catch(() => {
           if (cancelled) return;
           activeToken.current = undefined;
           setSession(undefined);
+          setUpdatePolicy(undefined);
+          void window.yuksalish?.clearSession().catch(() => undefined);
           setAuthError("Сессия завершена. Войдите снова.");
         });
     }, refreshAfter);
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [refreshWorkspace, reportError, session]);
+  }, [persistRefreshSession, refreshWorkspace, reportError, session]);
 
   useEffect(() => {
     if (session === undefined) return;
@@ -453,6 +548,7 @@ export function App() {
     if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
       void refreshWorkspace(session.accessToken).catch(reportError);
+      void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
     }, reportError);
   }, [refreshWorkspace, reportError, session]);
 
@@ -962,7 +1058,7 @@ export function App() {
       readonly delegateToUserId?: string;
     },
   ) => {
-    if (session === undefined) return;
+    if (session === undefined) throw new Error("Сеанс завершён. Войдите повторно.");
     try {
       const request = await actOnWorkspaceApproval(
         session.accessToken,
@@ -976,6 +1072,7 @@ export function App() {
       }));
     } catch (error) {
       reportError(error);
+      throw error;
     }
   };
 
@@ -1188,14 +1285,35 @@ export function App() {
     return (
       <FluentProvider theme={workspaceTheme} className="app-provider">
         <LoginView
-          busy={authBusy}
+          busy={authBusy || sessionRestoring}
           error={authError}
+          restoring={sessionRestoring}
           onLogin={handleLogin}
           onAcceptInvitation={handleAcceptInvitation}
           onCompletePasswordReset={handleCompletePasswordReset}
         />
       </FluentProvider>
     );
+  }
+
+  if (requiresDesktopUpdate(updatePolicy, window.yuksalish?.version)) {
+    return <FluentProvider theme={workspaceTheme} className="app-provider">
+      <DesktopUpdateGate
+        requiredVersion={updatePolicy!.minimumVersion!}
+        currentVersion={window.yuksalish!.version}
+        status={updateStatus}
+        onRetry={() => void window.yuksalish?.checkForUpdates().then(setUpdateStatus).catch((error: unknown) => {
+          setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось проверить обновление" });
+        })}
+        onInstall={() => {
+          try { localStorage.setItem(`yuksalish:resume-section:${session.user.id}`, activeSection); }
+          catch { /* local storage can be disabled */ }
+          void window.yuksalish?.installUpdate().catch((error: unknown) => {
+            setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось установить обновление" });
+          });
+        }}
+      />
+    </FluentProvider>;
   }
 
   const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));

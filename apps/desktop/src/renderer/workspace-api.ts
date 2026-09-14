@@ -49,9 +49,43 @@ import type {
   WorkspaceNotification,
   WorkspaceRole,
   ManagedEmployeeStatus,
+  DesktopRelease,
+  DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
 
 export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+
+export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePolicy> {
+  return apiRequest<DesktopUpdatePolicy>("/updates/policy", {}, token);
+}
+
+export function loadDesktopReleases(token: string): Promise<readonly DesktopRelease[]> {
+  return apiRequest<DesktopRelease[]>("/updates/releases", {}, token);
+}
+
+export function stageDesktopRelease(token: string, version: string, file: File): Promise<DesktopRelease> {
+  return boundedRequest(`${apiBaseUrl}/api/v1/updates/releases`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/octet-stream",
+      "X-Release-Version": version,
+    },
+    body: file,
+  }, (response) => response.json() as Promise<DesktopRelease>, 20 * 60_000);
+}
+
+export function publishDesktopRelease(token: string, version: string): Promise<DesktopUpdatePolicy> {
+  return apiRequest<DesktopUpdatePolicy>(
+    `/updates/releases/${encodeURIComponent(version)}/publish`, { method: "POST" }, token,
+  );
+}
+
+export function setMandatoryDesktopUpdate(token: string, mandatory: boolean): Promise<DesktopUpdatePolicy> {
+  return apiRequest<DesktopUpdatePolicy>(
+    "/updates/mandatory", { method: "PUT", body: JSON.stringify({ mandatory }) }, token,
+  );
+}
 
 export function changePersonalChat(token: string, chatId: string, action: PersonalChatAction) {
   return apiRequest<PersonalPreferences>(`/personal-preferences/chats/${chatId}`, {
@@ -100,6 +134,7 @@ async function apiRequest<T>(
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
+  if (window.yuksalish?.version) headers.set("X-Desktop-Version", window.yuksalish.version);
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
   return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
@@ -300,6 +335,22 @@ export function createPasswordReset(
   return apiRequest<PasswordResetResult>(
     "/auth/password-resets",
     { method: "POST", body: JSON.stringify({ username, resetTotp }) },
+    token,
+  );
+}
+
+export function changeOwnPassword(token: string, password: string): Promise<void> {
+  return apiRequest<void>(
+    "/auth/password",
+    { method: "PUT", body: JSON.stringify({ password }) },
+    token,
+  );
+}
+
+export function changeUserPassword(token: string, userId: string, password: string): Promise<void> {
+  return apiRequest<void>(
+    `/auth/users/${encodeURIComponent(userId)}/password`,
+    { method: "PUT", body: JSON.stringify({ password }) },
     token,
   );
 }

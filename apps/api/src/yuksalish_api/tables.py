@@ -68,6 +68,27 @@ users = sa.Table(
     sa.Column("password_changed_at", sa.DateTime(timezone=True)),
 )
 
+update_releases = sa.Table(
+    "workspace_update_releases", metadata,
+    sa.Column("version", sa.String(32), primary_key=True),
+    sa.Column("file_name", sa.String(160)),
+    sa.Column("sha512", sa.String(128)),
+    sa.Column("size_bytes", sa.BigInteger()),
+    sa.Column("uploaded_by_user_id", uuid_type),
+    sa.Column("uploaded_at", sa.DateTime(timezone=True)),
+    sa.Column("published_at", sa.DateTime(timezone=True)),
+)
+
+update_policy = sa.Table(
+    "workspace_update_policy", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("published_version", sa.String(32)),
+    sa.Column("minimum_version", sa.String(32)),
+    sa.Column("mandatory", sa.Boolean()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 audit_events = sa.Table(
     "core_audit_events",
     metadata,

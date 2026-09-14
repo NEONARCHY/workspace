@@ -59,7 +59,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
     lock.current = true; setPending(true); setPendingId(id); setNotice("Сохраняем переход…");
     transition.current = Promise.resolve().then(() => onMove(id, lane)).then(() => {
       setNotice("Данные доски обновлены. Текущий этап указан на карточке.");
-    }).catch(() => { setNotice("Переход не выполнен. Карточка осталась на исходном этапе."); }).finally(() => {
+    }).catch(() => { setNotice("Переход не подтверждён. Проверьте состояние карточки перед повтором."); }).finally(() => {
       // Network state must not depend on an optional animation completing (or even mounting).
       lock.current = false; setPending(false); setPendingId(null);
     });

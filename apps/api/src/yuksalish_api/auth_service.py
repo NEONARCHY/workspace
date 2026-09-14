@@ -23,6 +23,7 @@ from .auth import AuthenticatedUser, issue_access_token
 from .auth_schemas import InvitationCreateRequest, PasswordResetCreateRequest
 from .settings import Settings
 from .tables import (
+    audit_events,
     auth_invitations,
     auth_password_resets,
     auth_sessions,
@@ -489,7 +490,7 @@ async def create_password_reset(
     user = (
         (
             await connection.execute(
-                select(users.c.id, users.c.username).where(
+                select(users.c.id, users.c.username, users.c.role).where(
                     users.c.username == payload.username,
                     users.c.status.in_(("active", "blocked")),
                 )
@@ -500,6 +501,7 @@ async def create_password_reset(
     )
     if user is None:
         raise AuthServiceError(404, "User was not found")
+    _require_password_management_permission(issuer, user["id"], user["role"])
 
     created_at = datetime.now(UTC) if now is None else now
     await connection.execute(
@@ -534,6 +536,78 @@ async def create_password_reset(
         "reset_totp": payload.reset_totp,
         "expires_at": expires_at,
     }
+
+
+def _require_password_management_permission(
+    actor: AuthenticatedUser,
+    target_id: UUID,
+    target_role: str,
+) -> None:
+    if actor.id == target_id or actor.role == "superadmin":
+        return
+    if actor.role == "admin" and target_role in {"employee", "manager"}:
+        return
+    raise AuthServiceError(403, "Password change is not permitted for this account")
+
+
+async def change_account_password(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    target_id: UUID,
+    password: str,
+    *,
+    now: datetime | None = None,
+) -> None:
+    target = (
+        await connection.execute(
+            select(users.c.id, users.c.username, users.c.role, users.c.status)
+            .where(users.c.id == target_id)
+            .with_for_update()
+        )
+    ).mappings().first()
+    if target is None:
+        raise AuthServiceError(404, "User was not found")
+    _require_password_management_permission(actor, target_id, target["role"])
+    if target["status"] != "active":
+        raise AuthServiceError(409, "Only active accounts can change passwords")
+    validate_password(password, target["username"])
+    changed_at = datetime.now(UTC) if now is None else now
+    await connection.execute(
+        update(users)
+        .where(users.c.id == target_id)
+        .values(
+            password_hash=hash_password(password),
+            failed_login_count=0,
+            locked_until=None,
+            password_changed_at=changed_at,
+            updated_at=changed_at,
+        )
+    )
+    await connection.execute(
+        update(auth_sessions)
+        .where(auth_sessions.c.user_id == target_id, auth_sessions.c.revoked_at.is_(None))
+        .values(revoked_at=changed_at)
+    )
+    await connection.execute(
+        update(auth_password_resets)
+        .where(
+            auth_password_resets.c.user_id == target_id,
+            auth_password_resets.c.consumed_at.is_(None),
+            auth_password_resets.c.revoked_at.is_(None),
+        )
+        .values(revoked_at=changed_at)
+    )
+    await connection.execute(
+        insert(audit_events).values(
+            id=uuid4(),
+            actor_user_id=actor.id,
+            action="auth.password_changed",
+            target_type="user",
+            target_id=target_id,
+            details={"self_service": actor.id == target_id},
+            created_at=changed_at,
+        )
+    )
 
 
 async def complete_password_reset(

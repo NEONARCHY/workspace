@@ -1,0 +1,36 @@
+#window-titlebar { display: none; }
+
+html.desktop-window-chrome { --window-titlebar-height: 32px; }
+html.desktop-window-chrome #window-titlebar {
+  position: relative;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--window-titlebar-height);
+  padding: 0 12px;
+  border-bottom: 1px solid #e8edf1;
+  background: #ffffff;
+  color: #293a55;
+  font-family: Gilroy, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+html.desktop-window-chrome #root {
+  height: calc(100% - var(--window-titlebar-height));
+  min-height: 0;
+}
+html.desktop-window-chrome .auth-screen { min-height: 100%; }
+html.desktop-window-chrome .app-shell { height: 100%; }
+
+@media (forced-colors: active) {
+  html.desktop-window-chrome #window-titlebar {
+    border-bottom-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+}

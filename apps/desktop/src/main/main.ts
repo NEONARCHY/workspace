@@ -1,9 +1,12 @@
-import { app, BrowserWindow, dialog, ipcMain, Notification, screen, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, screen, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { fitWindowBounds, type WindowBounds } from "./window-state";
+import { registerDesktopUpdates } from "./updates";
+import { registerEncryptedDrafts } from "./drafts";
+import { registerSecureSession } from "./secure-session";
 
 app.enableSandbox();
 
@@ -49,6 +52,11 @@ function createWindow(): BrowserWindow {
     movable: true,
     autoHideMenuBar: true,
     show: false,
+    ...(process.platform === "win32" ? {
+      titleBarStyle: "hidden" as const,
+      titleBarOverlay: { color: "#ffffff", symbolColor: "#293a55", height: 32 },
+    } : {}),
+    accentColor: false,
     backgroundColor: "#f5f7fa",
     webPreferences: {
       preload: join(__dirname, "../preload/preload.js"),
@@ -105,6 +113,12 @@ function createWindow(): BrowserWindow {
 }
 
 void app.whenReady().then(() => {
+  // The renderer has only a light theme for now. Keep native window chrome in
+  // the same mode; a future dark-theme switch can update this source at runtime.
+  nativeTheme.themeSource = "light";
+  registerDesktopUpdates(isAllowedNavigation);
+  registerEncryptedDrafts(isAllowedNavigation);
+  registerSecureSession(isAllowedNavigation);
   try {
     const previous: unknown = JSON.parse(readFileSync(join(app.getPath("userData"), "diagnostics.json"), "utf8"));
     if (Array.isArray(previous)) diagnostics.push(...previous.slice(-49));

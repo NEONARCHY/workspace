@@ -57,6 +57,18 @@ function renderMessenger(
 describe("Private messenger", () => {
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
+  });
+  it("removes an encrypted chat draft after restoring it into the composer", async () => {
+    const loadDraft = vi.fn().mockResolvedValue("Текст до обновления");
+    const clearDraft = vi.fn().mockResolvedValue(undefined);
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("yuksalish", { loadDraft, clearDraft, saveDraft });
+    renderMessenger();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveValue("Текст до обновления"));
+    expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance");
+    await waitFor(() => expect(clearDraft).toHaveBeenCalledWith("chat:aziza:finance"));
+    expect(saveDraft).not.toHaveBeenCalled();
   });
   it("lets a regular employee create a private group with selected colleagues, even with no chats", async () => {
     const chatActions = actions();
@@ -365,7 +377,9 @@ describe("Private messenger", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Нравится: 3" }));
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(message, "👍"));
-    fireEvent.click(screen.getByRole("button", { name: "Открепить сообщение" }));
+    const unpin = screen.getByRole("button", { name: "Открепить сообщение" });
+    await waitFor(() => expect(unpin).toBeEnabled());
+    fireEvent.click(unpin);
     await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false));
 
     fireEvent.click(screen.getByRole("button", { name: /Закреплено: 1/ }));

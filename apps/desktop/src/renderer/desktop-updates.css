@@ -1,0 +1,22 @@
+.desktop-update-gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 20%, #e2f4ef 0, #f5f9f7 52%, #edf3f5 100%); color: var(--ws-text); }
+.desktop-update-gate-card { width: min(520px, 100%); display: grid; gap: 16px; padding: clamp(24px, 5vw, 44px); border: 1px solid #fff; border-radius: 28px; background: #fff; box-shadow: var(--ws-shadow-float); }
+.desktop-update-gate-card .company-logo { max-width: 155px; }
+.desktop-update-kicker { color: var(--ws-link); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.desktop-update-gate-card h1 { margin: 0; color: var(--ws-navy); font-size: clamp(24px, 4vw, 32px); line-height: 1.15; }
+.desktop-update-gate-card p { margin: 0; line-height: 1.55; }
+.desktop-update-gate-card small { color: var(--ws-muted); line-height: 1.5; }
+.desktop-update-versions, .desktop-update-release { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.desktop-update-versions { padding: 14px; border-radius: 16px; background: #f0f7f4; font-size: 13px; }
+.desktop-update-progress { display: grid; gap: 8px; }
+.desktop-update-progress progress { width: 100%; height: 8px; accent-color: var(--ws-teal); }
+.desktop-update-error { color: #9b3028; }
+.desktop-update-actions { display: flex; gap: 10px; }
+.desktop-update-settings { display: grid; gap: 16px; }
+.desktop-update-step { display: grid; gap: 8px; padding: 14px; border-radius: 16px; background: #f5f9f7; }
+.desktop-update-step p { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
+.desktop-update-step input[type="file"] { max-width: 100%; }
+.desktop-update-step small { color: var(--ws-muted); }
+.desktop-update-release { padding-block: 8px; border-top: 1px solid var(--ws-line); }
+.desktop-update-confirm { display: grid; gap: 12px; padding: 16px; border-radius: 16px; background: #e7f1ed; }
+.desktop-update-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 520px) { .desktop-update-versions, .desktop-update-release { align-items: flex-start; flex-direction: column; } }

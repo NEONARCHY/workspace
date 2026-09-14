@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
 
 import { Button, Field, Input } from "@fluentui/react-components";
+import { Eye24Regular, EyeOff24Regular } from "@fluentui/react-icons";
 import { CompanyLogo } from "./CompanyLogo";
 
 interface LoginViewProps {
   readonly busy: boolean;
+  readonly restoring?: boolean;
   readonly error?: string;
   readonly onLogin: (username: string, password: string, totpCode?: string) => Promise<void>;
   readonly onAcceptInvitation: (inviteToken: string, password: string) => Promise<void>;
@@ -13,6 +15,7 @@ interface LoginViewProps {
 
 export function LoginView({
   busy,
+  restoring = false,
   error,
   onLogin,
   onAcceptInvitation,
@@ -26,6 +29,19 @@ export function LoginView({
   const [totpCode, setTotpCode] = useState("");
   const [inviteToken, setInviteToken] = useState("");
   const [confirmation, setConfirmation] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+
+  const passwordVisibilityControl = (
+    <Button
+      appearance="subtle"
+      size="small"
+      type="button"
+      icon={passwordVisible ? <EyeOff24Regular /> : <Eye24Regular />}
+      aria-label={passwordVisible ? "Скрыть пароль" : "Показать пароль"}
+      aria-pressed={passwordVisible}
+      onClick={() => setPasswordVisible((visible) => !visible)}
+    />
+  );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -122,10 +138,11 @@ export function LoginView({
 
           <Field label="Пароль" required>
             <Input
-              type="password"
+              type={passwordVisible ? "text" : "password"}
               value={password}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               onChange={(_, data) => setPassword(data.value)}
+              contentAfter={passwordVisibilityControl}
             />
           </Field>
 
@@ -148,14 +165,20 @@ export function LoginView({
               }
             >
               <Input
-                type="password"
+                type={passwordVisible ? "text" : "password"}
                 value={confirmation}
                 autoComplete="new-password"
                 onChange={(_, data) => setConfirmation(data.value)}
+                contentAfter={passwordVisibilityControl}
               />
             </Field>
           )}
 
+          {restoring ? (
+            <div className="auth-session-restoring" role="status" aria-live="polite">
+              Восстанавливаем защищённый вход…
+            </div>
+          ) : null}
           {error ? <div className="auth-error" role="alert">{error}</div> : null}
           <Button
             type="submit"

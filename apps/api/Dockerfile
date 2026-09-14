@@ -14,6 +14,7 @@ COPY apps ./apps
 COPY modules ./modules
 
 RUN python -m pip install --no-cache-dir . \
+    && mkdir -p /workspace/var/desktop-updates \
     && chown -R yuksalish:yuksalish /workspace
 
 USER yuksalish

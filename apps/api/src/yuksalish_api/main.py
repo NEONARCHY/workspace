@@ -23,6 +23,7 @@ from .routers import (
     messenger,
     modules,
     personal,
+    updates,
     workspace,
 )
 from .seed import seed_demo_data
@@ -92,7 +93,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origins=cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        allow_headers=[
+            "Authorization", "Content-Type", "X-Request-ID",
+            "X-Desktop-Version", "X-Release-Version",
+        ],
     )
 
     @application.middleware("http")
@@ -112,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     application.include_router(administration.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
+    application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     return application
 
 

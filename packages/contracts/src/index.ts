@@ -818,3 +818,20 @@ export interface SessionSummary {
   readonly expiresAt: string;
   readonly current: boolean;
 }
+
+export interface DesktopRelease {
+  readonly version: string;
+  readonly fileName: string;
+  readonly sha512: string;
+  readonly sizeBytes: number;
+  readonly uploadedAt: string;
+  readonly publishedAt: string | null;
+}
+
+export interface DesktopUpdatePolicy {
+  readonly publishedVersion: string | null;
+  readonly minimumVersion: string | null;
+  readonly mandatory: boolean;
+  readonly updatedAt: string | null;
+  readonly release: DesktopRelease | null;
+}

@@ -58,7 +58,7 @@ describe("Spatial object transfer", () => {
     const onMove = vi.fn(async () => { throw new Error("Permission changed"); });
     const { card, next } = setup(true, onMove);
     await dropSpatialCard(card, next);
-    await waitFor(() => expect(screen.getByText(/Переход не выполнен/)).toHaveAttribute("role", "status"));
+    await waitFor(() => expect(screen.getByText(/Переход не подтверждён/)).toHaveAttribute("role", "status"));
     await waitFor(() => expect(card).not.toHaveClass("is-lifted"));
     expect(card.closest("[data-spatial-lane]")).toHaveAttribute("data-spatial-lane", "start");
     await dropSpatialCard(card, next);

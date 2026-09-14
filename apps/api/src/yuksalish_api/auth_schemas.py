@@ -98,6 +98,10 @@ class PasswordResetCompleteRequest(ApiModel):
     device_label: str = Field(default="Yuksalish Desktop", min_length=1, max_length=160)
 
 
+class DirectPasswordChangeRequest(ApiModel):
+    password: str = Field(min_length=12, max_length=128)
+
+
 class TotpSetupResponse(ApiModel):
     secret: str
     otpauth_uri: str

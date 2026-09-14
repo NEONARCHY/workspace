@@ -44,6 +44,8 @@
 .approvals-view .approval-column-stack { gap: 10px; padding: 10px; }
 .approvals-view .approval-board-card { border: 1px solid rgb(255 255 255 / 90%); border-radius: 16px; background: #fff; box-shadow: 0 6px 18px -14px rgb(31 62 72 / 30%); }
 .approvals-view .approval-board-card:hover { border-color: #a8cfce; box-shadow: var(--ws-shadow-card); }
+.approvals-view .approval-board-card { transition: border-color 160ms ease, transform 160ms ease, opacity 160ms ease; }
+.approvals-view .approval-board-card.selected { border-color: #53a5a5; box-shadow: 0 0 0 2px rgb(0 145 168 / 12%); }
 .approvals-view .approval-card-open { gap: 7px; padding: 15px 15px 11px; }
 .approvals-view .approval-card-topline { align-items: start; padding-right: 19px; }
 .approvals-view .approval-card-topline > span:first-child { flex: none; padding-top: 3px; color: #5b7784; font-size: 10px; letter-spacing: .015em; }
@@ -58,6 +60,57 @@
 .approvals-view .approval-card-meta > span:last-child { flex: none; }
 .approvals-view .approval-board-card > footer { padding: 8px 14px; border-color: #f0f3f2; color: #58717e; font-size: 11px; }
 .approvals-view .approval-move-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The request stays in the same visual workspace: the board remains behind a bounded inspector. */
+.approvals-view .approval-detail-overlay { position: fixed; z-index: var(--ws-layer-overlay); inset: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; background: rgb(29 49 62 / 16%); backdrop-filter: blur(2px); }
+.approvals-view .approval-detail-panel { width: min(1000px, 100%); height: calc(100dvh - 28px); max-height: calc(100dvh - 28px); margin: 0; grid-template-rows: auto auto minmax(0, 1fr); border: 1px solid rgb(255 255 255 / 92%); border-radius: 25px; background: #f4f8f7; box-shadow: 0 24px 70px -27px rgb(29 48 62 / 40%); }
+.approvals-view .approval-detail-header { min-height: 88px; padding: 16px 24px; border-bottom: 1px solid #e4eceb; background: #fbfdfc; }
+.approvals-view .approval-detail-header > div > span { color: #487681; font-size: 11px; letter-spacing: .025em; }
+.approvals-view .approval-detail-header h2 { color: var(--ws-text); font-size: 23px; font-weight: 600; line-height: 1.2; }
+.approvals-view .approval-detail-header > button { width: 36px; height: 36px; border-radius: 12px; background: #ecf2f1; }
+.approvals-view .approval-stage-ribbon { gap: 5px; min-height: 58px; padding: 10px 18px; border-color: #e3eae9; background: #f8fbfa; scrollbar-width: thin; }
+.approvals-view .approval-stage-ribbon > span { flex: none; min-width: 0; max-width: 210px; margin: 0; padding: 8px 11px; border: 1px solid transparent; border-radius: 10px; color: #506a77; background: #eaf0ef; font-size: 11px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; clip-path: none; }
+.approvals-view .approval-stage-ribbon > span:first-child { clip-path: none; }
+.approvals-view .approval-stage-ribbon > span + span { margin-left: 0; }
+.approvals-view .approval-stage-ribbon > span.passed { color: #315f58; background: #e2f1e9; }
+.approvals-view .approval-stage-ribbon > span.current { border-color: #006779; color: #fff; background: #006779; box-shadow: none; }
+.approvals-view .approval-detail-content { min-height: 0; grid-template-columns: minmax(0, .96fr) minmax(0, 1.04fr); background: #f3f7f6; }
+.approvals-view .approval-detail-facts, .approvals-view .approval-detail-process { min-width: 0; padding: 18px 22px 30px; scrollbar-width: thin; }
+.approvals-view .approval-detail-facts { border-right: 1px solid #e2eae8; background: #fbfdfc; }
+.approvals-view .approval-detail-process { background: #f3f7f6; }
+.approvals-view .approval-amount-block { gap: 3px; padding: 18px; border: 0; border-radius: 17px; background: linear-gradient(110deg, #e4f3ee, #edf4f5 58%, #eff2f8); }
+.approvals-view .approval-amount-block strong { color: #21485d; font-size: clamp(22px, 2.1vw, 30px); font-weight: 650; overflow-wrap: anywhere; }
+.approvals-view .approval-amount-block :is(span,small) { color: #435f6b; font-size: 12px; }
+.approvals-view .approval-deadline-control { margin-top: 14px; border-radius: 15px; border-left-width: 3px; }
+.approvals-view .approval-deadline-control > header span,
+.approvals-view .approval-deadline-control > header small,
+.approvals-view .approval-deadline-control dt,
+.approvals-view .approval-deadline-control .approval-deadline-events time { color: #435d6b; }
+.approvals-view .approval-fact-section h3, .approvals-view .approval-version-list h3 { color: var(--ws-text); font-size: 14px; font-weight: 650; }
+.approvals-view .approval-fact-section dt { color: #536c79; font-size: 12px; }
+.approvals-view .approval-fact-section dd { color: #304b5d; font-size: 13px; }
+.approvals-view .approval-decision-block, .approvals-view .approval-timeline, .approvals-view .approval-version-list { border: 1px solid rgb(255 255 255 / 90%); border-radius: 17px; background: #fff; box-shadow: 0 6px 18px -18px rgb(31 62 72 / 30%); }
+.approvals-view .approval-decision-block { padding: 16px; border-color: #c8e1df; }
+.approvals-view .approval-decision-block > span { color: #216b76; font-size: 12px; letter-spacing: 0; text-transform: none; }
+.approvals-view .approval-decision-block > div > strong { font-size: 13px; }
+.approvals-view .approval-timeline { padding: 18px; }
+.approvals-view .approval-timeline > header span { font-size: 14px; }
+.approvals-view .approval-timeline-event :is(span,time), .approvals-view .approval-version-list span { color: #536b78; font-size: 12px; }
+.approvals-view .approval-version-list { padding: 18px; }
+.approvals-view .approval-action-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #efc6c8; border-radius: 12px; color: #84333e; background: #fff3f2; font-size: 12px; line-height: 1.4; }
+.approvals-view .approval-action-error > button { flex: none; width: 27px; height: 27px; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
+.approvals-view .approval-detail-process > .approval-action-error { margin-bottom: 12px; }
+
+@container workspace (min-width: 1050px) {
+  .approvals-view .approval-detail-overlay { display: flex; align-items: stretch; justify-content: flex-end; padding: 12px; }
+  .approvals-view .approval-detail-panel { width: min(810px, 75%); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); animation: ws2-detail-enter 240ms var(--ws-ease-spatial) both; }
+}
+@container workspace (max-width: 1049px) {
+  .approvals-view .approval-detail-content { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content; align-content: start; overflow-y: auto; }
+  .approvals-view .approval-detail-facts, .approvals-view .approval-detail-process { overflow: visible; }
+  .approvals-view .approval-detail-facts { border-right: 0; border-bottom: 1px solid #e2eae8; }
+}
+@keyframes ws2-detail-enter { from { opacity: .82; transform: translateX(14px); } to { opacity: 1; transform: translateX(0); } }
 
 @container workspace (max-width: 900px) {
   .approval-overview { grid-template-columns: minmax(0, .9fr) minmax(0, 1.2fr); }
@@ -85,9 +138,13 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .approvals-view :is(.approval-board-card, .approval-board-filters button, .approval-column) { transition-duration: 0ms; }
+  .approvals-view .approval-detail-panel { animation: none; }
 }
 @media (forced-colors: active) {
   .approval-overview, .approvals-view .approval-column, .approvals-view .approval-board-card { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
   .approvals-view .approval-column > header::before { background: Highlight; }
   .approval-overview-focus, .approvals-view .approval-mode-switch button.active { color: CanvasText; }
+  .approvals-view .approval-detail-panel, .approvals-view .approval-decision-block, .approvals-view .approval-timeline { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .approvals-view .approval-detail-overlay { backdrop-filter: none; }
+  .approvals-view .approval-board-card.selected { outline: 2px solid Highlight; }
 }

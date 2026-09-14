@@ -64,6 +64,8 @@ services:
 
   api:
     <<: *python-service
+    volumes:
+      - desktop-updates:/workspace/var/desktop-updates
     command:
       - /bin/sh
       - -c
@@ -134,3 +136,4 @@ volumes:
   postgres-data:
   redis-data:
   minio-data:
+  desktop-updates:
