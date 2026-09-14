@@ -1,0 +1,8 @@
+{
+	auto_https disable_redirects
+}
+
+{$YUKSALISH_LAN_IP}:8443 {
+	tls internal
+	reverse_proxy gateway:8080
+}

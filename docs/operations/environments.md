@@ -9,6 +9,7 @@ Git.
 | Development | `.env.example` | `.env` | Developer workstation and disposable QA |
 | Staging | `.env.staging.example` | `.env.staging` | Pre-production verification with non-production data |
 | Production | `.env.production.example` | `.env.production` | Live employee data and services |
+| LAN pilot | `.env.lan.example` | `.env.lan` | Single production-mode server on a private LAN |
 
 Never reuse a password, MinIO key, bucket or database between environments. Templates use
 obvious placeholders and must never be treated as deployable configuration.
@@ -32,6 +33,10 @@ Copy-Item .env.staging.example .env.staging
 
 The validator intentionally rejects staging and production files containing placeholders,
 localhost origins or development-only values.
+
+For a LAN handoff, use `scripts/lan/new-server-environment.ps1` and validate with
+`-Environment production -NetworkMode lan -EnvFile .env.lan`. Follow
+`docs/operations/lan-server-handoff.md`; do not use Cloudflare credentials for LAN mode.
 
 ## Start Compose with an explicit environment
 
