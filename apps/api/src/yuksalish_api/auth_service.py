@@ -151,7 +151,8 @@ def decrypt_totp_secret(ciphertext: str, key: SecretStr) -> str:
         nonce, encrypted = packed[:12], packed[12:]
         if len(nonce) != 12 or len(encrypted) <= 16:
             raise ValueError("Invalid encrypted secret")
-        return AESGCM(_encryption_key(key)).decrypt(nonce, encrypted, None).decode()
+        plaintext: bytes = AESGCM(_encryption_key(key)).decrypt(nonce, encrypted, None)
+        return plaintext.decode()
     except (InvalidTag, ValueError, UnicodeDecodeError) as error:
         raise AuthServiceError(500, "TOTP secret cannot be decrypted") from error
 
