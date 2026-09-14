@@ -818,11 +818,17 @@ export function ApprovalsView({
   const [creatingBusy, setCreatingBusy] = useState(false);
   const creatingBusyRef = useRef(false);
   const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
+  const [actionBusy, setActionBusy] = useState(false);
+  const actionBusyRef = useRef(false);
+  const [actionError, setActionError] = useState("");
   const createPanelRef = useRef<HTMLFormElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
+  const stageRibbonRef = useRef<HTMLDivElement>(null);
   const closeCreate = () => { if (!creatingBusyRef.current) setCreatingRequest(false); };
+  const openDetail = (requestId: string) => { setActionError(""); setSelectedRequestId(requestId); };
+  const closeDetail = () => { setActionError(""); setSelectedRequestId(""); };
   useModalFocus(createPanelRef, creatingRequest, closeCreate);
-  useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), () => setSelectedRequestId(""));
+  useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), closeDetail);
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
   const [requestQuery, setRequestQuery] = useState("");
   const [movingRequestId, setMovingRequestId] = useState("");
@@ -908,6 +914,11 @@ export function ApprovalsView({
   const selectedDeadline = selectedRequest === undefined
     ? undefined
     : approvalDeadlinePresentation(selectedRequest);
+  useEffect(() => {
+    const ribbon = stageRibbonRef.current;
+    const current = ribbon?.querySelector<HTMLElement>(".current");
+    if (ribbon && current) ribbon.scrollLeft = Math.max(0, current.offsetLeft - ribbon.clientWidth / 3);
+  }, [selectedRequestColumn, selectedRequestId]);
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
     [people],
@@ -1186,12 +1197,34 @@ export function ApprovalsView({
     else setEditError("Сервер не подтвердил исправленную версию");
   };
 
+  const performAction = async (
+    requestId: string,
+    action: Parameters<ApprovalsViewProps["onAction"]>[1],
+    options?: Parameters<ApprovalsViewProps["onAction"]>[2],
+  ): Promise<boolean> => {
+    if (actionBusyRef.current) return false;
+    actionBusyRef.current = true;
+    setActionBusy(true);
+    setActionError("");
+    try {
+      await onAction(requestId, action, options);
+      return true;
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Сервер не подтвердил действие. Проверьте заявку перед повтором.");
+      return false;
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy(false);
+    }
+  };
+
   const returnForRevision = async (requestId: string) => {
     if (!returnComment.trim()) return;
-    await onAction(requestId, "return", {
+    const confirmed = await performAction(requestId, "return", {
       comment: returnComment.trim(),
       nodeKey: returnNodeKey || undefined,
     });
+    if (!confirmed) return;
     setReturnRequestId("");
     setReturnNodeKey("");
     setReturnComment("");
@@ -1201,11 +1234,12 @@ export function ApprovalsView({
     if (decision === undefined) return;
     if (decision.action === "reject" && !decisionComment.trim()) return;
     if (decision.action === "delegate" && !delegateToUserId) return;
-    await onAction(decision.requestId, decision.action, {
+    const confirmed = await performAction(decision.requestId, decision.action, {
       comment: decisionComment.trim() || undefined,
       nodeKey: decision.nodeKey,
       delegateToUserId: decision.action === "delegate" ? delegateToUserId : undefined,
     });
+    if (!confirmed) return;
     setDecision(undefined);
     setDecisionComment("");
     setDelegateToUserId("");
@@ -1217,7 +1251,10 @@ export function ApprovalsView({
     const target = boardColumns.find(column => column.key === columnKey);
     if (!request || !plan?.targetKeys.includes(columnKey) || !target) return;
     setMovingRequestId(request.id);
-    try { await onAction(request.id, plan.action, { nodeKey: plan.nodeKey, comment: `Переход на этап «${target.label}» выполнен с доски` }); }
+    try {
+      const confirmed = await performAction(request.id, plan.action, { nodeKey: plan.nodeKey, comment: `Переход на этап «${target.label}» выполнен с доски` });
+      if (!confirmed) throw new Error("Переход не подтверждён сервером");
+    }
     finally { setMovingRequestId(""); }
   };
 
@@ -1409,6 +1446,12 @@ export function ApprovalsView({
               ))}
             </div>
           </div>
+          {actionError && !selectedRequest ? (
+            <div className="approval-board-notice approval-action-error" role="alert">
+              <span>Переход не подтверждён. {actionError} Проверьте состояние заявки перед повтором.</span>
+              <button type="button" onClick={() => setActionError("")} aria-label="Скрыть ошибку перехода">×</button>
+            </div>
+          ) : null}
           {!canCreateRequest ? (
             <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
           ) : null}
@@ -1446,13 +1489,13 @@ export function ApprovalsView({
                       return (
                         <SpatialCard id={request.id} lane={column.key} label={request.title} disabled={!plan || movingRequestId === request.id}
                           key={request.id}
-                          className={`approval-board-card${plan ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}`}
+                          className={`approval-board-card${plan ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}${selectedRequestId === request.id ? " selected" : ""}`}
                         >
                           <button
                             type="button"
                             className="approval-card-open"
                             aria-label={`Открыть заявку №${request.number}: ${request.title}`}
-                            onClick={() => setSelectedRequestId(request.id)}
+                            onClick={() => openDetail(request.id)}
                           >
                             <span className="approval-card-topline">
                               <span>№{request.number}</span>
@@ -1500,7 +1543,7 @@ export function ApprovalsView({
                                 size="small"
                                 appearance="subtle"
                                 onClick={() => {
-                                  setSelectedRequestId(request.id);
+                                  openDetail(request.id);
                                   startRevision(request);
                                 }}
                               >
@@ -1610,7 +1653,7 @@ export function ApprovalsView({
             <div
               className="approval-overlay approval-detail-overlay"
               onMouseDown={(event) => {
-                if (event.target === event.currentTarget) setSelectedRequestId("");
+                if (event.target === event.currentTarget) closeDetail();
               }}
             >
               <article ref={detailPanelRef} tabIndex={-1} className="approval-detail-panel" role="dialog" aria-modal="true" aria-labelledby="approval-detail-title">
@@ -1625,10 +1668,10 @@ export function ApprovalsView({
                   >
                     {selectedRequest.statusLabel}
                   </Badge>
-                  <button type="button" aria-label="Закрыть карточку заявки" onClick={() => setSelectedRequestId("")}>×</button>
+                  <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
                 </header>
 
-                <div className="approval-stage-ribbon" role="region" tabIndex={0} aria-label="Стадии заявки">
+                <div ref={stageRibbonRef} className="approval-stage-ribbon" role="region" tabIndex={0} aria-label="Стадии заявки">
                   {boardColumns.map((column, index) => (
                     <span
                       key={column.key}
@@ -1645,8 +1688,8 @@ export function ApprovalsView({
                   ))}
                 </div>
 
-                <div className="approval-detail-content">
-                  <section className="approval-detail-facts">
+                <div className="approval-detail-content" role="region" tabIndex={0} aria-label="Содержимое карточки заявки">
+                  <section className="approval-detail-facts" role="region" tabIndex={0} aria-label="Сведения о заявке">
                     <div className="approval-amount-block">
                       <span>К перечислению</span>
                       <strong>{formatMoney(selectedRequest.amount, selectedRequest.currency)}</strong>
@@ -1733,7 +1776,8 @@ export function ApprovalsView({
                     </section>
                   </section>
 
-                  <aside className="approval-detail-process">
+                  <aside className="approval-detail-process" tabIndex={0} aria-label="Ход согласования и действия">
+                    {actionError ? <div className="approval-action-error" role="alert">Не удалось выполнить действие: {actionError}. Проверьте состояние заявки перед повтором.</div> : null}
                     {selectedRequest.status === "running" && selectedRequest.activeStages.some((stage) => stage.canAct) ? (
                       <section className="approval-decision-block">
                         <span>Нужно ваше решение</span>
@@ -1741,11 +1785,11 @@ export function ApprovalsView({
                           <div key={stage.key}>
                             <strong>{stage.label}</strong>
                             <div>
-                              <Button appearance="primary" onClick={() => void onAction(selectedRequest.id, "approve", { nodeKey: stage.key })}>Согласовать</Button>
-                              <Button appearance="subtle" onClick={() => { setReturnRequestId(selectedRequest.id); setReturnNodeKey(stage.key); }}>Вернуть</Button>
-                              <Button appearance="subtle" onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "reject" })}>Отклонить</Button>
-                              <Button appearance="subtle" onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "clarify" })}>Уточнить</Button>
-                              <Button appearance="subtle" onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
+                              <Button appearance="primary" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "approve", { nodeKey: stage.key })}>Согласовать</Button>
+                              <Button appearance="subtle" disabled={actionBusy} onClick={() => { setReturnRequestId(selectedRequest.id); setReturnNodeKey(stage.key); }}>Вернуть</Button>
+                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "reject" })}>Отклонить</Button>
+                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "clarify" })}>Уточнить</Button>
+                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
                             </div>
                           </div>
                         ))}
@@ -1757,7 +1801,7 @@ export function ApprovalsView({
                     {returnRequestId === selectedRequest.id ? (
                       <div className="request-inline-editor return-editor">
                         <Textarea autoFocus aria-label={`Причина возврата заявки ${selectedRequest.number}`} placeholder="Что нужно исправить?" value={returnComment} onChange={(_event, data) => setReturnComment(data.value)} />
-                        <Button appearance="primary" disabled={!returnComment.trim()} onClick={() => void returnForRevision(selectedRequest.id)}>Подтвердить возврат</Button>
+                        <Button appearance="primary" disabled={actionBusy || !returnComment.trim()} onClick={() => void returnForRevision(selectedRequest.id)}>Подтвердить возврат</Button>
                         <Button appearance="subtle" onClick={() => setReturnRequestId("")}>Отмена</Button>
                       </div>
                     ) : null}
@@ -1770,7 +1814,7 @@ export function ApprovalsView({
                           </select>
                         ) : null}
                         <Textarea aria-label={`Комментарий решения по заявке ${selectedRequest.number}`} placeholder={decision.action === "reject" ? "Причина отклонения обязательна" : "Комментарий"} value={decisionComment} onChange={(_event, data) => setDecisionComment(data.value)} />
-                        <Button appearance="primary" disabled={(decision.action === "reject" && !decisionComment.trim()) || (decision.action === "delegate" && !delegateToUserId)} onClick={() => void completeDecision()}>Подтвердить</Button>
+                        <Button appearance="primary" disabled={actionBusy || (decision.action === "reject" && !decisionComment.trim()) || (decision.action === "delegate" && !delegateToUserId)} onClick={() => void completeDecision()}>Подтвердить</Button>
                         <Button appearance="subtle" onClick={() => setDecision(undefined)}>Отмена</Button>
                       </div>
                     ) : null}
@@ -1819,7 +1863,7 @@ export function ApprovalsView({
                       ))}
                     </section>
                     {selectedRequest.requesterId === currentUserId && ["draft", "running", "needs_revision"].includes(selectedRequest.status) ? (
-                      <Button appearance="subtle" onClick={() => void onAction(selectedRequest.id, "cancel", { comment: "Отменено автором" })}>Отменить заявку</Button>
+                      <Button appearance="subtle" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "cancel", { comment: "Отменено автором" })}>Отменить заявку</Button>
                     ) : null}
                   </aside>
                 </div>

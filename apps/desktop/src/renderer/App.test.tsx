@@ -159,8 +159,10 @@ function mockServer(
     readonly withReturnedRequest?: boolean;
     readonly restrictPaymentCreators?: boolean;
     readonly extraNotifications?: readonly WorkspaceNotification[];
+    readonly failApprovalActionOnce?: boolean;
   } = {},
 ) {
+  let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
   let currentUser = people[0]!;
   let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
   let requests: ApprovalRequestSummary[] = serverOptions.withReturnedRequest
@@ -333,6 +335,15 @@ function mockServer(
       return response({
         accessToken: "access-token",
         refreshToken: "refresh-token",
+        tokenType: "bearer",
+        expiresIn: 900,
+        user: currentUser,
+      });
+    }
+    if (url.endsWith("/auth/refresh")) {
+      return response({
+        accessToken: "refreshed-access-token",
+        refreshToken: "rotated-refresh-token",
         tokenType: "bearer",
         expiresIn: 900,
         user: currentUser,
@@ -898,6 +909,10 @@ function mockServer(
       return response(revised);
     }
     if (url.includes("/approval-requests/") && url.endsWith("/actions")) {
+      if (failApprovalActionOnce) {
+        failApprovalActionOnce = false;
+        return { ok: false, status: 409, json: async () => ({ detail: "Этап уже изменён" }) } as Response;
+      }
       const payload = JSON.parse(String(options?.body)) as { action: string; comment?: string };
       const current = requests[0]!;
       const changed = {
@@ -967,6 +982,45 @@ describe("corporate workspace authentication alpha", () => {
 
     expect(screen.getByRole("heading", { name: "Добро пожаловать" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Сообщения" })).not.toBeInTheDocument();
+  });
+
+  it("stores a protected refresh session after a successful password login", async () => {
+    const saveSession = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("yuksalish", {
+      loadSession: vi.fn().mockResolvedValue(null),
+      saveSession,
+      clearSession: vi.fn().mockResolvedValue(undefined),
+      onNotificationOpen: vi.fn(() => () => undefined),
+    });
+    mockServer();
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Войти" });
+    await loginToWorkspace();
+    await waitFor(() => expect(saveSession).toHaveBeenCalledWith("refresh-token"));
+  });
+
+  it("restores a saved session without asking the employee for a password", async () => {
+    const loadSession = vi.fn().mockResolvedValue("stored-refresh-token");
+    const saveSession = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("yuksalish", {
+      version: "0.30.2",
+      loadSession,
+      saveSession,
+      clearSession: vi.fn().mockResolvedValue(undefined),
+      onNotificationOpen: vi.fn(() => () => undefined),
+    });
+    const fetchMock = mockServer();
+    render(<App />);
+
+    await screen.findByText("Сервер подключён");
+    expect(screen.queryByRole("heading", { name: "Добро пожаловать" })).not.toBeInTheDocument();
+    expect(loadSession).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/refresh"),
+      expect.objectContaining({ body: JSON.stringify({ refreshToken: "stored-refresh-token" }) }),
+    );
+    expect(saveSession).toHaveBeenCalledWith("rotated-refresh-token");
   });
 
   it("logs in and sends a server-backed message", async () => {
@@ -1499,6 +1553,37 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
     fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
+  });
+
+  it("keeps a payment card in place after a rejected board move and allows retry", async () => {
+    const fetchMock = mockServer({ failApprovalActionOnce: true });
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
+      target: { value: "Заявка с повтором" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
+      target: { value: "7350000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+
+    const openCard = await screen.findByRole("button", { name: "Открыть заявку №502: Заявка с повтором" });
+    const card = openCard.closest("article");
+    expect(card).not.toBeNull();
+    installSpatialGeometry();
+    const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
+    await dropSpatialCard(card!, targetColumn);
+
+    await waitFor(() => expect(document.querySelector(".approval-board-notice")).toHaveTextContent("Этап уже изменён"));
+    expect(card!.closest("[data-spatial-lane]")?.getAttribute("aria-label")).toMatch(/^Согласование: 1 /);
+    expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
+
+    await dropSpatialCard(card!, targetColumn);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Открыть заявку №502: Заявка с повтором" }).closest("[data-spatial-lane]")?.getAttribute("aria-label")).toMatch(/^Согласовано: 1 /));
+    expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
+    expect(fetchMock.mock.calls.filter(([url, options]) => String(url).endsWith("/approval-requests/server-request/actions") && options?.method === "POST")).toHaveLength(2);
   });
 
   it("edits a returned request and resubmits its new version", async () => {

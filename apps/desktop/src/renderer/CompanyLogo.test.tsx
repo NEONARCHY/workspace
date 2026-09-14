@@ -29,4 +29,16 @@ describe("Company branding", () => {
     fireEvent.click(screen.getByRole("button", { name: "Войти" }));
     expect(onLogin).toHaveBeenCalledWith("test-user", "test-password", undefined);
   });
+
+  it("lets the employee reveal a password before the first sign-in", () => {
+    render(<LoginView busy={false} onLogin={vi.fn()} onAcceptInvitation={vi.fn()} onCompletePasswordReset={vi.fn()} />);
+    const password = screen.getByLabelText(/^Пароль/) as HTMLInputElement;
+    expect(password).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "Показать пароль" }));
+    expect(password).toHaveAttribute("type", "text");
+
+    fireEvent.click(screen.getByRole("button", { name: "Скрыть пароль" }));
+    expect(password).toHaveAttribute("type", "password");
+  });
 });

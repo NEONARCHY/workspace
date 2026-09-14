@@ -118,6 +118,9 @@ function Conversation({
   readonly onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
+  const draftKey = `chat:${currentUserId}:${chat.id}`;
+  const draftEdited = useRef(false);
+  const draftReady = useRef(false);
   const [reply, setReply] = useState<ChatMessage>();
   const [mentions, setMentions] = useState<readonly string[]>([]);
   const [mentionPicker, setMentionPicker] = useState(false);
@@ -140,6 +143,26 @@ function Conversation({
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const scrollInitialized = useRef(false);
+  useEffect(() => {
+    const bridge = window.yuksalish;
+    if (!bridge?.loadDraft) return;
+    let active = true;
+    void bridge.loadDraft(draftKey).then((saved) => {
+      if (active && !draftEdited.current && saved !== null) {
+        setDraft(saved);
+        void bridge.clearDraft(draftKey).catch(() => undefined);
+      }
+    }).catch(() => undefined).finally(() => { draftReady.current = true; });
+    return () => { active = false; };
+  }, [draftKey]);
+  useEffect(() => {
+    const bridge = window.yuksalish;
+    if (!bridge?.saveDraft || !draftReady.current || !draftEdited.current) return;
+    const timer = window.setTimeout(() => {
+      void (draft ? bridge.saveDraft(draftKey, draft) : bridge.clearDraft(draftKey)).catch(() => undefined);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draft, draftKey]);
   const canSend = chat.permissions.sendMessages;
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
@@ -221,6 +244,8 @@ function Conversation({
           "Сообщение не отправлено. Текст сохранён — попробуйте снова.",
         );
       setDraft("");
+      draftEdited.current = true;
+      void window.yuksalish?.clearDraft(draftKey).catch(() => undefined);
       setReply(undefined);
       setMentions([]);
       setMentionPicker(false);
@@ -714,6 +739,7 @@ function Conversation({
                 value={draft}
                 disabled={busy}
                 onChange={(_, data) => {
+                  draftEdited.current = true;
                   setDraft(data.value);
                   if (data.value.endsWith("@")) setMentionPicker(true);
                 }}

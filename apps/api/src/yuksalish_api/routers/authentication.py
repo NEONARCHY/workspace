@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from yuksalish_api.auth import AuthenticatedUser, issue_access_token, require_user
 from yuksalish_api.auth_schemas import (
     AuthenticationResponse,
+    DirectPasswordChangeRequest,
     InvitationAcceptRequest,
     InvitationCreateRequest,
     InvitationResponse,
@@ -26,6 +27,7 @@ from yuksalish_api.auth_service import (
     AuthServiceError,
     accept_invitation,
     begin_totp_setup,
+    change_account_password,
     complete_password_reset,
     confirm_totp_setup,
     create_invitation,
@@ -207,6 +209,37 @@ async def reset_password(
     except AuthServiceError as error:
         raise _translate(error) from error
     return await _response(connection, result)
+
+
+@router.put("/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_own_password(
+    payload: DirectPasswordChangeRequest,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await change_account_password(connection, current_user, current_user.id, payload.password)
+    except AuthServiceError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/users/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
+async def change_user_password(
+    user_id: UUID,
+    payload: DirectPasswordChangeRequest,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Use /auth/password for your own account")
+    try:
+        await change_account_password(connection, current_user, user_id, payload.password)
+    except AuthServiceError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/totp", response_model=TotpStatusResponse)

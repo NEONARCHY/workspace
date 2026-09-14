@@ -40,6 +40,7 @@ yuksalish-api = "yuksalish_api.main:run"
 yuksalish-worker = "yuksalish_worker.main:run"
 yuksalish-scheduler = "yuksalish_scheduler.main:run"
 yuksalish-bootstrap-admin = "yuksalish_api.bootstrap_admin:main"
+yuksalish-provision-admins = "yuksalish_api.provision_admins:main"
 hisobot-import = "hisobot_import.cli:main"
 
 [tool.setuptools.packages.find]

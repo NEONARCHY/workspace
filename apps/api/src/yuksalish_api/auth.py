@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .access_control import ensure_request_module_access
 from .database import get_connection
 from .settings import Settings
-from .tables import auth_sessions, users
+from .tables import auth_sessions, update_policy, users
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -201,6 +202,29 @@ async def require_user(
             credentials.credentials,
             request.app.state.settings,
         )
+        update_path = f"{request.app.state.settings.api_prefix}/updates/"
+        if (
+            request.app.state.settings.environment == "production"
+            and not request.url.path.startswith(update_path)
+        ):
+            policy = (
+                await connection.execute(
+                    select(update_policy.c.mandatory, update_policy.c.minimum_version).where(
+                        update_policy.c.id == 1
+                    )
+                )
+            ).mappings().one()
+            minimum = policy["minimum_version"]
+            supplied = request.headers.get("X-Desktop-Version", "")
+            valid = re.fullmatch(r"\d+\.\d+\.\d+", supplied)
+            if policy["mandatory"] and minimum and (
+                valid is None
+                or tuple(map(int, supplied.split("."))) < tuple(map(int, minimum.split(".")))
+            ):
+                raise HTTPException(
+                    status_code=426,
+                    detail=f"Требуется обновить приложение до версии {minimum}",
+                )
         await ensure_request_module_access(connection, user, request.url.path, request.method)
         return user
     except InvalidTokenError as error:

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type {
+  DirectoryEmployee,
   InvitationResult,
   PasswordResetResult,
   SessionSummary,
@@ -12,8 +13,11 @@ import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-
 import { Dismiss24Regular } from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
+import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 
 import {
+  changeOwnPassword,
+  changeUserPassword,
   confirmTotp,
   createInvitation,
   createPasswordReset,
@@ -54,6 +58,11 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
   const [inviteRole, setInviteRole] = useState<"admin" | "manager" | "employee">("employee");
   const [invitePositionId, setInvitePositionId] = useState("");
   const [positions, setPositions] = useState<readonly WorkspacePosition[]>([]);
+  const [employees, setEmployees] = useState<readonly DirectoryEmployee[]>([]);
+  const [ownPassword, setOwnPassword] = useState("");
+  const [managedUserId, setManagedUserId] = useState("");
+  const [managedPassword, setManagedPassword] = useState("");
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [reset, setReset] = useState<PasswordResetResult>();
   const [resetUsername, setResetUsername] = useState("");
   const [resetTotp, setResetTotp] = useState(false);
@@ -82,6 +91,7 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
         setTotpActive(totp.enabled);
         setSessions(currentSessions);
         setPositions(directory.positions.filter((position) => position.isActive));
+        setEmployees(directory.employees);
       })
       .catch((error: unknown) => {
         if (active) {
@@ -150,6 +160,41 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
     }
   };
 
+  const submitOwnPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    setPasswordBusy(true);
+    try {
+      await changeOwnPassword(token, ownPassword);
+      setOwnPassword("");
+      onLogout();
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось сменить пароль");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const submitManagedPassword = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!managedUserId) return;
+    setPasswordBusy(true);
+    try {
+      await changeUserPassword(token, managedUserId, managedPassword);
+      setManagedPassword("");
+      const employee = employees.find((item) => item.id === managedUserId);
+      setFeedback(`Пароль ${employee?.name ?? "сотрудника"} изменён. Все его устройства выйдут из аккаунта.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось сменить пароль");
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
+  const manageableEmployees = employees.filter((employee) =>
+    employee.id !== user.id && employee.status === "active" &&
+    (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
+  );
+
   return (
     <div className="account-scrim" role="presentation" onMouseDown={onClose}>
       <aside
@@ -172,8 +217,11 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
         {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
           <button type="button" onClick={() => jumpToSection(".audio-device-settings")}>Звук</button>
           <button type="button" onClick={() => jumpToSection("[data-account-section=security]")}>Защита</button>
+          <button type="button" onClick={() => jumpToSection("[data-account-section=password]")}>Пароль</button>
           <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
           {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=invite]")}>Доступ сотрудников</button>}
+          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=managed-password]")}>Пароли сотрудников</button>}
+          {user.role === "superadmin" && <button type="button" onClick={() => jumpToSection("[data-account-section=updates]")}>Обновления</button>}
         </nav>}
 
         {initialSection !== "invite" && <><section className="account-profile">
@@ -186,6 +234,23 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
         </section>
 
         <AudioDeviceSettings />
+        {user.role === "superadmin" && <DesktopUpdateSettings token={token} />}
+
+        <section className="account-section" data-account-section="password">
+          <div className="account-section-title">
+            <div>
+              <h3>Сменить свой пароль</h3>
+              <p>После сохранения вы войдёте заново. Другие устройства также выйдут из аккаунта.</p>
+            </div>
+          </div>
+          <form className="invite-form" onSubmit={(event) => void submitOwnPassword(event)}>
+            <Field label="Новый пароль" required>
+              <Input type="password" autoComplete="new-password" value={ownPassword} onChange={(_, data) => setOwnPassword(data.value)} />
+            </Field>
+            <Button type="submit" appearance="primary" disabled={passwordBusy || ownPassword.length < 12}>Сохранить новый пароль</Button>
+          </form>
+          <p className="account-password-hint">Не менее 12 символов: заглавные и строчные буквы, цифра и специальный знак.</p>
+        </section>
 
         <section className="account-section" data-account-section="security">
           <div className="account-section-title">
@@ -293,6 +358,30 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
               </div>
             ) : null}
             </section>
+
+            {initialSection !== "invite" && <section className="account-section" data-account-section="managed-password">
+              <div className="account-section-title">
+                <div>
+                  <h3>Сменить пароль сотрудника</h3>
+                  <p>Без кода сброса. После сохранения все устройства сотрудника выйдут из аккаунта.</p>
+                </div>
+              </div>
+              <form className="invite-form" onSubmit={(event) => void submitManagedPassword(event)}>
+                <Field label="Сотрудник" required>
+                  <Select value={managedUserId} onChange={(event) => setManagedUserId(event.target.value)}>
+                    <option value="">Выберите сотрудника</option>
+                    {manageableEmployees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>{employee.name} (@{employee.username})</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="Новый пароль" required>
+                  <Input type="password" autoComplete="new-password" value={managedPassword} onChange={(_, data) => setManagedPassword(data.value)} />
+                </Field>
+                <Button type="submit" appearance="primary" disabled={passwordBusy || !managedUserId || managedPassword.length < 12}>Сменить пароль</Button>
+              </form>
+              <p className="account-password-hint">Администратор может менять пароли сотрудников и руководителей; суперадминистратор — всех.</p>
+            </section>}
 
             {initialSection !== "invite" && <section className="account-section">
               <div className="account-section-title">

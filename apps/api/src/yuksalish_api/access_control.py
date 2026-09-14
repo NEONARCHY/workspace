@@ -116,6 +116,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     upper_method = method.upper()
     if normalized in {"/auth/invitations", "/auth/password-resets"}:
         return "employees", "admin"
+    if normalized.startswith("/auth/users/") and normalized.endswith("/password"):
+        return "employees", "admin"
     if normalized in {"/workspace/bootstrap", "/directory"}:
         return ("employees", "view") if normalized == "/directory" else None
     if normalized.startswith("/directory/"):

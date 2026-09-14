@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import type {
   TaskCycleInput,
@@ -100,6 +100,55 @@ export function TaskComposer({
   const [cycleMonthDays, setCycleMonthDays] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const draftKey = `task:${currentUserId}`;
+  const persistDraft = !initialTitle && !initialDescription && !sourceLabel;
+  const draftReady = useRef(false);
+  const draftEdited = useRef(false);
+
+  useEffect(() => {
+    const bridge = window.yuksalish;
+    if (!persistDraft || !bridge?.loadDraft) return;
+    let active = true;
+    void bridge.loadDraft(draftKey).then((saved) => {
+      if (!active || draftEdited.current || !saved) return;
+      try {
+        const value = JSON.parse(saved) as Record<string, unknown>;
+        if (typeof value.title === "string") setTitle(value.title);
+        if (typeof value.description === "string") setDescription(value.description);
+        if (typeof value.project === "string") setProject(value.project);
+        if (typeof value.assigneeId === "string") setAssigneeId(value.assigneeId);
+        if (["low", "normal", "high", "urgent"].includes(String(value.priority))) setPriority(value.priority as WorkspaceTask["priority"]);
+        if (typeof value.dueAt === "string") setDueAt(value.dueAt);
+        if (Array.isArray(value.participants)) setParticipants(value.participants as DraftParticipant[]);
+        if (Array.isArray(value.checklist)) setChecklist(value.checklist as string[]);
+        if (Array.isArray(value.dependencies)) setDependencies(value.dependencies as DraftDependency[]);
+        if (typeof value.repeatEnabled === "boolean") setRepeatEnabled(value.repeatEnabled);
+        if (["daily", "weekly", "monthly", "calendar"].includes(String(value.cycleKind))) setCycleKind(value.cycleKind as TaskCycleInput["scheduleKind"]);
+        if (typeof value.cycleInterval === "string") setCycleInterval(value.cycleInterval);
+        if (typeof value.cycleNextRun === "string") setCycleNextRun(value.cycleNextRun);
+        if (value.cycleCalendarRule === "weekdays" || value.cycleCalendarRule === "month_days") setCycleCalendarRule(value.cycleCalendarRule);
+        if (Array.isArray(value.cycleWeekdays)) setCycleWeekdays(value.cycleWeekdays as number[]);
+        if (typeof value.cycleMonthDays === "string") setCycleMonthDays(value.cycleMonthDays);
+        void bridge.clearDraft(draftKey).catch(() => undefined);
+      } catch { /* A damaged local draft must not block task creation. */ }
+    }).catch(() => undefined).finally(() => { draftReady.current = true; });
+    return () => { active = false; };
+  }, [draftKey, persistDraft]);
+
+  useEffect(() => {
+    if (!persistDraft || !draftReady.current || !draftEdited.current || !window.yuksalish?.saveDraft) return;
+    const snapshot = JSON.stringify({
+      title, description, project, assigneeId, priority, dueAt, participants,
+      checklist, dependencies, repeatEnabled, cycleKind, cycleInterval,
+      cycleNextRun, cycleCalendarRule, cycleWeekdays, cycleMonthDays,
+    });
+    const timer = window.setTimeout(() => {
+      void window.yuksalish?.saveDraft(draftKey, snapshot).catch(() => undefined);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draftKey, persistDraft, title, description, project, assigneeId, priority, dueAt, participants,
+    checklist, dependencies, repeatEnabled, cycleKind, cycleInterval, cycleNextRun,
+    cycleCalendarRule, cycleWeekdays, cycleMonthDays]);
 
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
@@ -236,6 +285,8 @@ export function TaskComposer({
       });
       if (created === undefined) {
         setError("Не удалось добавить задачу. Проверьте подключение и повторите.");
+      } else if (persistDraft) {
+        void window.yuksalish?.clearDraft(draftKey).catch(() => undefined);
       }
     } finally {
       setBusy(false);
@@ -249,6 +300,7 @@ export function TaskComposer({
           className="record-composer task-composer"
           noValidate
           aria-busy={busy}
+          onChangeCapture={() => { draftEdited.current = true; }}
           onSubmit={(event) => void submit(event)}
         >
           <RecordComposer
