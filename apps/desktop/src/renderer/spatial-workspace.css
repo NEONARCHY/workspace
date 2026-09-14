@@ -1,12 +1,13 @@
 /* Soft Spatial Workspace. Composition layer; domain layouts and business states
    remain in their owning modules. Tokens are shared by controls and portals. */
 :root, .app-provider {
-  --ws-canvas: #edf2f3;
+  --ws-canvas: #eef4f3;
   --ws-surface: #fcfdfd;
   --ws-muted-surface: #f2f6f6;
   --ws-selected: #dff0ef;
   --ws-line: #e1e9eb;
   --ws-control-line: #b8c9ce;
+  --ws-accent-wash: #e2f2ef;
   --ws-text: #293a55;
   --ws-muted: #566b7c;
   --ws-radius: 22px;
@@ -31,7 +32,8 @@ body { background: var(--ws-canvas); }
 .app-rail .rail-nav { gap: 5px; }
 .app-rail .rail-action { min-height: 45px; padding: 10px 12px; border-radius: 14px; color: var(--ws-muted); }
 .app-rail .rail-action:hover { background: #eaf1f2; color: var(--ws-text); }
-.app-rail .rail-action.active { color: #fff; background: var(--ws-navy); box-shadow: 0 7px 16px -10px #293a55; }
+.app-rail .rail-action.active { color: var(--ws-text); background: var(--ws-accent-wash); box-shadow: inset 3px 0 #0091a8; }
+.app-rail .rail-action.active .rail-label { font-weight: 650; }
 .app-rail .rail-label { font-size: 13px; font-weight: 500; }
 .app-rail .rail-badge { min-width: 20px; height: 20px; line-height: 20px; color: #933e4e; background: #f7e4e7; font-size: 10px; font-weight: 600; }
 .app-rail .rail-action.active .rail-badge { background: #fff; color: #933e4e; }
@@ -40,7 +42,7 @@ body { background: var(--ws-canvas); }
 .app-stage.has-feedback { grid-template-rows: 62px auto minmax(0,1fr); }
 .global-bar { display: flex; justify-content: space-between; gap: 16px; min-height: 0; padding: 0 10px 12px; border: 0; background: transparent; }
 .section-jump-trigger { display: flex; align-items: center; gap: 12px; width: min(430px,48%); min-height: 40px; padding: 8px 15px; border: 1px solid rgb(255 255 255 / 85%); border-radius: 16px; background: rgb(255 255 255 / 66%); color: var(--ws-muted); box-shadow: 0 2px 5px rgb(41 58 85 / 2%); }
-.section-jump-trigger kbd { margin-left: auto; border: 0; color: #6b7d88; background: #edf2f3; padding: 2px 6px; border-radius: 5px; font: inherit; font-size: 10px; }
+.section-jump-trigger kbd { margin-left: auto; border: 0; color: #405b6b; background: #edf2f3; padding: 2px 6px; border-radius: 5px; font: inherit; font-size: 10px; }
 .workspace-top-context, .workspace-identity { display: flex; align-items: center; gap: 12px; }
 .workspace-identity { padding: 5px 10px 5px 5px; background: transparent; border: 0; border-radius: 30px; cursor: pointer; }
 .workspace-identity:hover { background: #fff; }

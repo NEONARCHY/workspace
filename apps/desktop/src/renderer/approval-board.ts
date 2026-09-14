@@ -60,6 +60,27 @@ export interface ApprovalDeadlinePresentation {
   readonly detail: string;
 }
 
+/** A decision or correction the signed-in person can actually act on. */
+export function approvalRequestNeedsAction(
+  request: { readonly status: ApprovalRequestSummary["status"]; readonly activeStages: readonly { readonly canAct: boolean }[]; readonly requesterId: string },
+  currentUserId: string,
+): boolean {
+  if (request.status === "running") return request.activeStages.some(stage => stage.canAct);
+  if (request.status === "needs_revision") {
+    return request.requesterId === currentUserId || request.activeStages.some(stage => stage.canAct);
+  }
+  return false;
+}
+
+export function approvalRequestIsOverdue(
+  request: Pick<ApprovalRequestSummary, "status" | "deadlineControl"> & {
+    readonly details: { readonly deadline?: string | null };
+  },
+  now = new Date(),
+): boolean {
+  return approvalDeadlinePresentation(request, now).label.startsWith("Просрочено");
+}
+
 export function formatDeadlineDistance(seconds: number): string {
   const absolute = Math.abs(seconds);
   if (absolute < 3600) return `${Math.max(1, Math.ceil(absolute / 60))} мин.`;
