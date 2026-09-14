@@ -45,7 +45,7 @@ describe("Project composer", () => {
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ title: "Тест", code: "QA", currency: "UZS" }));
   });
   it("keeps the existing stage and uses the update contract when editing", async () => {
-    const { onUpdate, onCreate } = setup(undefined, [project]); fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    const { onUpdate, onCreate } = setup(undefined, [project]); fireEvent.click(screen.getByText(project.title)); fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
     expect(screen.getByLabelText("Стадии проекта").querySelector('[aria-current="step"]')).toHaveTextContent("Согласование");
     change("Название проекта", "Уточнённый проект"); fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1)); expect(onCreate).not.toHaveBeenCalled();

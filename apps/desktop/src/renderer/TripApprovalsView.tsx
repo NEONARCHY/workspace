@@ -1,4 +1,5 @@
 import { useRef, useState, type CSSProperties } from "react";
+import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
@@ -46,14 +47,11 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
   const [query, setQuery] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
-  const [draggedId, setDraggedId] = useState("");
-  const [dropTarget, setDropTarget] = useState<TripStage>();
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
-  const dragged = requests.find((request) => request.id === draggedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const visibleRequests = requests.filter((request) => {
@@ -62,7 +60,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     return [request.number, request.purpose, request.destination, request.stageLabel, ...request.employeeIds.map(personName)]
       .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
   });
-  const resetDrag = () => { setDraggedId(""); setDropTarget(undefined); };
+
   const openRequest = (id: string) => { setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
   const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
   const create = () => { setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setError(""); };
@@ -101,11 +99,6 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     }
     await commitAction(request, action);
   };
-  const drop = (target: TripStage) => {
-    const action = dragged && tripDropAction(dragged, target);
-    resetDrag();
-    if (dragged && action) void act(dragged, action);
-  };
   const feedback = error ? <p className="trip-feedback error" role="alert">{error}</p> : null;
 
   return (
@@ -128,26 +121,21 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       {notice ? <p className="trip-feedback" role="status">{notice}</p> : null}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
+        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage); if (request && action) await act(request, action); }}>
         <div className="approval-kanban trip-kanban" aria-label="Стадии поездок" aria-busy={busy}>
           {tripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
-            const dropAction = !busy && dragged ? tripDropAction(dragged, column.key) : undefined;
-            return <section key={column.key} data-stage-key={column.key} className={`approval-column trip-column ${dropAction ? "drop-allowed" : ""} ${dropAction && dropTarget === column.key ? "drop-active" : ""}`}
+            return <SpatialLane id={column.key} key={column.key} data-stage-key={column.key} className={`approval-column trip-column `}
               style={{ "--approval-stage-color": column.color, "--approval-stage-ink": "#111111" } as CSSProperties}
-              aria-label={`${column.label}: ${items.length} поездок`}
-              onDragOver={(event) => { if (dropAction) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget(column.key); } }}
-              onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDropTarget(undefined); }}
-              onDrop={(event) => { event.preventDefault(); drop(column.key); }}>
+              aria-label={`${column.label}: ${items.length} поездок`}>
               <header><strong title={column.label}>{column.label}</strong><span className="approval-column-count" aria-label={`${items.length} поездок`}>{items.length}</span></header>
               <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="В заявках на поездку пока нет поля суммы. Бюджет не задан, это не означает бесплатную поездку."><span>Сумма в колонке</span><strong>{tripColumnTotal(items)}</strong></div>
               <div className="approval-column-stack">
-                <div className="trip-column-command">{column.key === "launch" ? <Button {...restoreFocusTarget} size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : dropAction ? moveLabels[dropAction] : null}</div>
+                <div className="trip-column-command">{column.key === "launch" ? <Button {...restoreFocusTarget} size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : null}</div>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
                   const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key));
-                  return <article key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""} ${draggedId === request.id ? "moving" : ""}`} draggable={movable}
-                    onDragStart={(event) => { if (!movable) { event.preventDefault(); return; } event.dataTransfer.setData("application/x-yuksalish-trip", request.id); event.dataTransfer.effectAllowed = "move"; setDraggedId(request.id); }}
-                    onDragEnd={resetDrag}>
+                  return <SpatialCard id={request.id} lane={column.key} label={request.purpose} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
                       <strong>{request.purpose}</strong>
@@ -156,13 +144,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                       <span className="approval-card-meta"><span>{personName(request.requesterUserId)}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
                     <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
-                  </article>;
+                  </SpatialCard>;
                 })}
-                {!items.length ? <div className="approval-column-empty">{dropAction ? moveLabels[dropAction] : "Нет поездок"}</div> : null}
+                {!items.length ? <div className="approval-column-empty">Нет поездок</div> : null}
               </div>
-            </section>;
+            </SpatialLane>;
           })}
         </div>
+        </SpatialBoard>
       ) : (
         <div className="trip-list" aria-label="Список поездок">{visibleRequests.map((request) => <button className="trip-list-item" key={request.id} onClick={() => openRequest(request.id)} type="button">
           <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b><p>{request.purpose}</p><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>

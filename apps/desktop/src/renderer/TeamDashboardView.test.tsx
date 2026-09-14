@@ -84,8 +84,8 @@ describe("TeamDashboardView", () => {
     renderDashboard();
 
     expect(screen.getByRole("heading", { name: "Добрый день, Азиза" })).toBeInTheDocument();
-    expect(within(screen.getByText("Активные задачи").closest("article")!).getByText("3")).toBeInTheDocument();
-    expect(within(screen.getByText("Нужна помощь").closest("article")!).getByText("1")).toBeInTheDocument();
+    expect(within(screen.getByText("Активные задачи").closest("button")!).getByText("3")).toBeInTheDocument();
+    expect(within(screen.getByText("Нужна помощь").closest("button")!).getByText("1")).toBeInTheDocument();
     expect(screen.getByText(/не норму и не оценку сотрудника/i)).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
   });
@@ -116,5 +116,18 @@ describe("TeamDashboardView", () => {
 
     expect(screen.getByText(/Показана нагрузка по задачам/)).toHaveTextContent("Сервис недоступен");
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+  it("filters operational attention using the metric objects and resets the filter", () => {
+    renderDashboard();
+    const attention = screen.getByRole("region", { name: "Требует внимания" });
+    fireEvent.click(screen.getByText("Нужна помощь").closest("button")!);
+    expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
+    expect(within(attention).queryByText("Проверить бюджет")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Ждут решения").closest("button")!);
+    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
+    expect(within(attention).queryByText("Подготовить договор")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Активные задачи").closest("button")!);
+    expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
+    expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
   });
 });

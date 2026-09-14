@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
+import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
+import { Avatar } from "@fluentui/react-components";
 
 import type {
   ProjectInput,
@@ -10,7 +12,7 @@ import type {
   WorkspaceProject,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, ArrowRight24Regular, Edit24Regular } from "@fluentui/react-icons";
+import { Add24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular } from "@fluentui/react-icons";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -170,47 +172,42 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         ) : null}
       </header>
 
+      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && nextStages[project.stage].includes(target as ProjectStage); }} onPick={id => updateSelectedId(id)} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board" aria-label="Стадии проектов">
         {stages.map((stage) => {
           const items = projects.filter((project) => project.stage === stage);
           return (
-            <section
+            <SpatialLane id={stage}
               className={`project-column project-stage-${stage}`}
               key={stage}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                const project = projects.find((item) => item.id === event.dataTransfer.getData("text/project-id"));
-                if (project?.canMove && nextStages[project.stage].includes(stage)) void move(project, stage);
-              }}
             >
               <header><strong>{stageLabels[stage]}</strong><Badge appearance="tint">{items.length}</Badge></header>
               <div className="project-stack">
                 {items.map((project) => (
-                  <button
-                    className={`project-card ${project.id === selected?.id ? "selected" : ""}`}
-                    draggable={project.canMove}
+                  <SpatialCard id={project.id} lane={stage} label={project.title} disabled={!project.canMove}
+                    className={`project-card ${detailOpen && project.id === selected?.id ? "selected" : ""}`}
                     key={project.id}
-                    onDragStart={(event) => event.dataTransfer.setData("text/project-id", project.id)}
-                    onClick={() => setSelectedId(project.id)}
-                    type="button"
                   >
+                    <button className="spatial-card-open" type="button" onClick={() => setSelectedId(project.id)}>
                     <span className="project-code">{project.code}</span>
                     <strong>{project.title}</strong>
-                    <small>{personName(project.managerUserId)}</small>
+                    <small className="spatial-person"><Avatar size={24} name={personName(project.managerUserId)} color="colorful" />{personName(project.managerUserId)}</small>
                     <div className="budget-progress"><i style={{ width: `${project.budget ? Math.min(100, project.spentBudget / project.budget * 100) : 0}%` }} /></div>
                     <small>{money(project.spentBudget, project.currency)} из {money(project.budget, project.currency)}</small>
-                  </button>
+                    </button>
+                  </SpatialCard>
                 ))}
                 {items.length === 0 ? <p className="empty-column">Перетащите проект сюда</p> : null}
               </div>
-            </section>
+            </SpatialLane>
           );
         })}
       </div>
+      </SpatialBoard>
 
-      {selected !== undefined ? (
-        <aside className="bp7-detail">
-          <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К проектам</Button>
+      {selected !== undefined && detailOpen ? (
+        <aside className="bp7-detail spatial-inspector">
+          <Button className="project-inspector-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть карточку проекта" onClick={() => setDetailOpen(false)} />
           <header>
             <div><span>{selected.code}</span><h2>{selected.title}</h2></div>
             {selected.canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={() => {

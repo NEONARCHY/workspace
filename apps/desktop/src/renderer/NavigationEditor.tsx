@@ -1,3 +1,4 @@
+import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useState } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
 import { ArrowDown16Regular, ArrowUp16Regular, ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
@@ -12,8 +13,6 @@ export function NavigationEditor({ order, revision, labels, onSave, onClose }: {
 }) {
   const [draft, setDraft] = useState(() => normalizeNavigation(order));
   const [baseRevision] = useState(revision);
-  const [dragged, setDragged] = useState<NavigationKey>();
-  const [over, setOver] = useState<NavigationKey>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [announcement, setAnnouncement] = useState("");
@@ -24,19 +23,17 @@ export function NavigationEditor({ order, revision, labels, onSave, onClose }: {
   };
   return <section className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}>
     <p>Перетащите раздел или используйте стрелки. Это ваше личное меню.</p>
+    <SpatialSort ids={draft} onMove={(source, target) => move(source as NavigationKey, target as NavigationKey)}>
     <div role="list" aria-label="Разделы меню">
-      {draft.map((key, index) => <div key={key} role="listitem" className={`navigation-edit-row ${over === key ? "drop-target" : ""}`}
-        data-navigation-key={key} draggable={!busy}
-        onDragStart={(event) => { if (busy) { event.preventDefault(); return; } setDragged(key); event.dataTransfer.setData("application/x-yuksalish-navigation", key); event.dataTransfer.effectAllowed = "move"; }}
-        onDragOver={(event) => { if (!busy && dragged && dragged !== key) { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setOver(key); } }}
-        onDrop={(event) => { if (!busy && dragged && event.dataTransfer.getData("application/x-yuksalish-navigation") === dragged) { event.preventDefault(); move(dragged, key); } setDragged(undefined); setOver(undefined); }}
-        onDragEnd={() => { setDragged(undefined); setOver(undefined); }}>
+      {draft.map((key, index) => <SpatialSortItem id={key} label={labels[key]} disabled={busy} key={key} role="listitem" className="navigation-edit-row"
+        data-navigation-key={key}>
         <ReOrderDotsVertical16Regular aria-hidden="true" />
         <span>{labels[key]}</span>
         <button type="button" aria-label={`${labels[key]}: выше`} disabled={busy || index === 0} onClick={() => move(key, draft[index - 1]!)}><ArrowUp16Regular /></button>
         <button type="button" aria-label={`${labels[key]}: ниже`} disabled={busy || index === draft.length - 1} onClick={() => move(key, draft[index + 1]!)}><ArrowDown16Regular /></button>
-      </div>)}
+      </SpatialSortItem>)}
     </div>
+    </SpatialSort>
     <span className="organization-live" role="status">{announcement}</span>
     {error && <div className="organization-error" role="alert">{error}</div>}
     <div className="navigation-edit-actions">

@@ -38,6 +38,7 @@ import { AttachmentPanel } from "./AttachmentPanel";
 import { EfficiencyView } from "./EfficiencyView";
 import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
+import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { TaskRecords } from "./TaskRecords";
 import { TeamDashboardView } from "./TeamDashboardView";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -429,18 +430,19 @@ export function TasksView(props: TasksViewProps) {
         </div> : null}
 
         {mode === "dashboard" ? <TeamDashboardView tasks={tasks} people={people} currentUserId={currentUserId} efficiency={efficiency} efficiencyLoading={efficiencyLoading} efficiencyError={efficiencyError} onSelectTask={(taskId) => { setSelectedId(taskId); setMode("list"); }} /> : mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
+          <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
-              const acceptsDrop = ["new", "in_progress"].includes(status);
-              return <section className="kanban-column" data-task-status={status} key={status} onDragOver={(event) => { if (acceptsDrop) event.preventDefault(); }} onDrop={(event) => { if (!acceptsDrop) return; const taskId = event.dataTransfer.getData("text/task-id"); if (taskId) void onChangeStatus(taskId, status); }}>
+              return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>
-                  {columnTasks.map((task) => { const draggable = canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status); return <button {...newTaskFocusTarget} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} draggable={draggable} key={task.id} onClick={() => setSelectedId(task.id)} onDragStart={(event) => { if (draggable) event.dataTransfer.setData("text/task-id", task.id); }} type="button"><strong>{task.title}</strong>{task.parentTaskId ? <span className="subtask-marker">Подзадача</span> : null}<span>{task.project}</span><small>{task.dueLabel}</small><ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistTotal ? task.checklistDone / task.checklistTotal : 0} /></button>; })}
+                  {columnTasks.map((task) => <SpatialCard id={task.id} lane={status} label={task.title} disabled={!canEditTask(task) || ["awaiting_review", "completed", "cancelled"].includes(task.status)} className={`kanban-card ${selectedTask?.id === task.id ? "selected" : ""}`} key={task.id}><button {...newTaskFocusTarget} className="spatial-card-open" type="button" onClick={() => setSelectedId(task.id)}><span className="spatial-card-context">{task.project}</span><strong>{task.title}</strong>{task.parentTaskId ? <span className="subtask-marker">Подзадача</span> : null}<span className="spatial-person"><Avatar size={24} name={personById(task.assigneeId)?.name ?? "Сотрудник"} color="colorful" /><small>{personById(task.assigneeId)?.name ?? "Сотрудник"}</small></span><small>{task.dueLabel}</small>{task.checklistTotal ? <ProgressBar aria-label={`Чек-лист: ${task.title}`} value={task.checklistDone / task.checklistTotal} /> : null}</button></SpatialCard>)}
                 </div>
-              </section>;
+              </SpatialLane>;
             })}
           </div>
+          </SpatialBoard>
         )}
       </div>
 

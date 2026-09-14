@@ -95,17 +95,19 @@ function taskAttention(task: WorkspaceTask, now: Date): { readonly score: number
   return undefined;
 }
 
-function MetricCard({ icon, label, value, note, tone }: {
+function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
   readonly icon: ReactNode;
   readonly label: string;
   readonly value: number;
   readonly note: string;
   readonly tone: "brand" | "danger" | "review" | "calm";
+  readonly active: boolean;
+  readonly onSelect: () => void;
 }) {
-  return <article className={`team-dash-metric tone-${tone}`}>
+  return <button type="button" onClick={onSelect} aria-pressed={active} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
     <div><span>{label}</span><strong>{value.toLocaleString("ru-RU")}</strong><small>{note}</small></div>
-  </article>;
+  </button>;
 }
 
 export function TeamDashboardView({
@@ -119,6 +121,7 @@ export function TeamDashboardView({
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
+  const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -142,6 +145,7 @@ export function TeamDashboardView({
     .map((task) => ({ task, attention: taskAttention(task, now) }))
     .filter((item): item is { task: WorkspaceTask; attention: NonNullable<ReturnType<typeof taskAttention>> } => item.attention !== undefined)
     .filter((item) => !selectedPersonId || item.task.assigneeId === selectedPersonId)
+    .filter(({ task }) => attentionFilter === "all" || attentionFilter === "overdue" && isTaskOverdue(task, now) || attentionFilter === "review" && task.status === "awaiting_review" || attentionFilter === "today" && dueToday.some(item => item.id === task.id))
     .sort((left, right) => right.attention.score - left.attention.score)
     .slice(0, 8);
 
@@ -173,16 +177,15 @@ export function TeamDashboardView({
   });
   const maximumDayCount = Math.max(1, ...horizon.map((day) => day.count));
   const flowParts = [
-    { key: "new", label: "Новые", value: activeTasks.filter((task) => task.status === "new").length },
-    { key: "progress", label: "В работе", value: activeTasks.filter((task) => task.status === "in_progress").length },
-    { key: "review", label: "На проверке", value: reviewTasks.length },
+    { key: "new", label: "Новые", value: activeTasks.filter((task) => task.status === "new" && !isTaskOverdue(task, now)).length },
+    { key: "progress", label: "В работе", value: activeTasks.filter((task) => task.status === "in_progress" && !isTaskOverdue(task, now)).length },
+    { key: "review", label: "На проверке", value: reviewTasks.filter(task => !isTaskOverdue(task, now)).length },
     { key: "overdue", label: "Просрочены", value: overdueTasks.length },
   ];
   const firstName = currentUser?.name.split(" ")[0] ?? "руководитель";
 
   return <div className="team-dashboard">
     <section className="team-dash-hero" aria-labelledby="team-dashboard-title">
-      <div className="team-dash-hero-mark" aria-hidden="true"><i /><i /><i /></div>
       <div className="team-dash-hero-copy">
         <span>Обзор команды · сегодня</span>
         <h2 id="team-dashboard-title">Добрый день, {firstName}</h2>
@@ -196,11 +199,16 @@ export function TeamDashboardView({
       </div>
     </section>
 
+    <div className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
+      <button type="button" aria-pressed={!selectedPersonId} className="team-focus-all" onClick={() => setSelectedPersonId(undefined)}><PeopleTeam24Regular /><span>Вся команда</span></button>
+      {people.map(person => <button key={person.id} type="button" className="team-focus-person" aria-pressed={selectedPersonId === person.id} onClick={() => setSelectedPersonId(current => current === person.id ? undefined : person.id)} title={person.jobTitle ?? person.name}><Avatar size={36} name={person.name} color="colorful" /><span>{person.name}</span></button>)}
+    </div>
+
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
-      <MetricCard icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
-      <MetricCard icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "просроченные задачи" : "просрочек нет"} tone="danger" />
-      <MetricCard icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты на проверке" tone="review" />
-      <MetricCard icon={<CalendarClock24Regular />} label="Срок сегодня" value={dueToday.length} note={dueToday.length ? "дедлайны до конца дня" : "сегодня без дедлайнов"} tone="calm" />
+      <MetricCard active={attentionFilter === "all"} onSelect={() => setAttentionFilter("all")} icon={<Sparkle24Regular />} label="Активные задачи" value={activeTasks.length} note={`${dueThisWeek.length} со сроком в ближайшие 7 дней`} tone="brand" />
+      <MetricCard active={attentionFilter === "overdue"} onSelect={() => setAttentionFilter("overdue")} icon={<Warning24Regular />} label="Нужна помощь" value={overdueTasks.length} note={overdueTasks.length ? "просроченные задачи" : "просрочек нет"} tone="danger" />
+      <MetricCard active={attentionFilter === "review"} onSelect={() => setAttentionFilter("review")} icon={<CheckmarkCircle24Regular />} label="Ждут решения" value={reviewTasks.length} note="результаты на проверке" tone="review" />
+      <MetricCard active={attentionFilter === "today"} onSelect={() => setAttentionFilter("today")} icon={<CalendarClock24Regular />} label="Срок сегодня" value={dueToday.length} note={dueToday.length ? "дедлайны до конца дня" : "сегодня без дедлайнов"} tone="calm" />
     </section>
 
     <div className="team-dash-main-grid">

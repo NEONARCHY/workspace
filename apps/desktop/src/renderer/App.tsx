@@ -59,6 +59,7 @@ import {
 import { AccountPanel } from "./AccountPanel";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
+import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
@@ -1268,21 +1269,14 @@ export function App() {
 
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
-            <div className="global-brand">
-              <span className={`connection-state ${backgroundError ? "" : "online"}`} title={connectionDetail}>{connectionDetail}</span>
-            </div>
-            <SectionJump items={orderedNavItems} onNavigate={(key) => {
+            <SectionJump items={orderedNavItems} commands={[
+              ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
+              ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
+            ]} onNavigate={(key) => {
               if (key === "settings") { setAccountOpen(true); return; }
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <button className="account-trigger" type="button" onClick={() => setAccountOpen(true)}>
-              <Avatar name={workspace.currentUser.name} size={28} color="colorful" />
-              <span>
-                <strong>{workspace.currentUser.name}</strong>
-                <small>{workspace.currentUser.jobTitle ?? workspace.currentUser.role}</small>
-              </span>
-            </button>
-            <Button appearance="subtle" onClick={() => void handleLogout()}>Выйти</Button>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} /><WorkspaceIdentity person={workspace.currentUser} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">

@@ -18,7 +18,7 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
   return <>
     <header className="record-composer-header">
       <div><span className="record-eyebrow">{eyebrow}</span><h2 id={titleId}>{title}</h2></div>
-      <Button type="button" appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={onClose} aria-label="Закрыть форму создания">Закрыть</Button>
+      <Button type="button" appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={onClose} aria-label="Закрыть форму создания" />
     </header>
     <div className="record-composer-body">
       {stages}
@@ -35,8 +35,12 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
   </>;
 }
 
-export function RecordSection({ title, description, children }: { readonly title: string; readonly description?: string; readonly children: ReactNode }) {
+export function RecordSection({ title, description, children, collapsible = false, summary }: { readonly title: string; readonly description?: string; readonly children: ReactNode; readonly collapsible?: boolean; readonly summary?: string }) {
   const titleId = useId();
+  if (collapsible) return <details className="record-section record-disclosure">
+    <summary><span><strong>{title}</strong><small>{summary || description}</small></span><span className="disclosure-plus" aria-hidden="true">+</span></summary>
+    <div className="record-disclosure-body">{children}</div>
+  </details>;
   return <section className="record-section" aria-labelledby={titleId}>
     <header><h3 id={titleId}>{title}</h3>{description ? <p>{description}</p> : null}</header>
     {children}

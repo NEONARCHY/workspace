@@ -9,6 +9,7 @@ import type {
   WorkspacePosition,
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-components";
+import { Dismiss24Regular } from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 
@@ -57,6 +58,12 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
   const [resetUsername, setResetUsername] = useState("");
   const [resetTotp, setResetTotp] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const jumpToSection = (selector: string) => {
+    const section = panelRef.current?.querySelector<HTMLElement>(selector);
+    section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    const heading = section?.querySelector<HTMLElement>("h3");
+    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  };
 
   const refreshSecurity = async () => {
     const [totp, currentSessions] = await Promise.all([
@@ -159,8 +166,15 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
             <span>Настройки</span>
             <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Аккаунт и безопасность"}</h2>
           </div>
-          <Button appearance="subtle" onClick={onClose}>Закрыть</Button>
+          <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
         </header>
+
+        {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
+          <button type="button" onClick={() => jumpToSection(".audio-device-settings")}>Звук</button>
+          <button type="button" onClick={() => jumpToSection("[data-account-section=security]")}>Защита</button>
+          <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
+          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=invite]")}>Доступ сотрудников</button>}
+        </nav>}
 
         {initialSection !== "invite" && <><section className="account-profile">
           <Avatar name={user.name} size={48} color="colorful" />
@@ -173,7 +187,7 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
 
         <AudioDeviceSettings />
 
-        <section className="account-section">
+        <section className="account-section" data-account-section="security">
           <div className="account-section-title">
             <div>
               <h3>Двухфакторная защита</h3>
@@ -205,7 +219,7 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
           ) : null}
         </section>
 
-        <section className="account-section">
+        <section className="account-section" data-account-section="sessions">
           <div className="account-section-title">
             <div>
               <h3>Активные устройства</h3>
@@ -230,7 +244,7 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
         </>}
         {["admin", "superadmin"].includes(user.role) ? (
           <>
-            <section ref={inviteRef} className="account-section">
+            <section ref={inviteRef} className="account-section" data-account-section="invite">
             <div className="account-section-title">
               <div>
                 <h3>Пригласить сотрудника</h3>

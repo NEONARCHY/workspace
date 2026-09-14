@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
+import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 
 import type {
   ApprovalNodeData,
@@ -28,6 +29,7 @@ import {
   CheckmarkCircle24Regular,
   CircleEdit24Regular,
   Delete24Regular,
+  Dismiss24Regular,
   Money24Regular,
   Save24Regular,
 } from "@fluentui/react-icons";
@@ -813,13 +815,7 @@ export function ApprovalsView({
   useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), () => setSelectedRequestId(""));
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
   const [requestQuery, setRequestQuery] = useState("");
-  const [draggedRequest, setDraggedRequest] = useState<{
-    readonly requestId: string;
-    readonly plan: ApprovalAdvancePlan;
-  }>();
-  const [dropColumnKey, setDropColumnKey] = useState("");
   const [movingRequestId, setMovingRequestId] = useState("");
-  const [boardNotice, setBoardNotice] = useState("");
   const [editingRequestId, setEditingRequestId] = useState("");
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
@@ -1192,49 +1188,14 @@ export function ApprovalsView({
     setDelegateToUserId("");
   };
 
-  const startDragging = (
-    event: ReactDragEvent<HTMLElement>,
-    request: ApprovalRequestSummary,
-    plan: ApprovalAdvancePlan,
-  ) => {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", request.id);
-    setDraggedRequest({ requestId: request.id, plan });
-    setBoardNotice("");
-  };
-
-  const allowColumnDrop = (
-    event: ReactDragEvent<HTMLElement>,
-    columnKey: string,
-  ) => {
-    if (!draggedRequest?.plan.targetKeys.includes(columnKey)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDropColumnKey(columnKey);
-  };
-
-  const moveRequest = async (columnKey: string) => {
-    if (
-      draggedRequest === undefined
-      || !draggedRequest.plan.targetKeys.includes(columnKey)
-    ) return;
-    const request = requests.find((item) => item.id === draggedRequest.requestId);
-    const target = boardColumns.find((column) => column.key === columnKey);
-    if (request === undefined || target === undefined) return;
+  const moveRequest = async (requestId: string, columnKey: string) => {
+    const request = requests.find(item => item.id === requestId);
+    const plan = request && approvalAdvancePlan(request, workflow, currentUserId);
+    const target = boardColumns.find(column => column.key === columnKey);
+    if (!request || !plan?.targetKeys.includes(columnKey) || !target) return;
     setMovingRequestId(request.id);
-    setDropColumnKey("");
-    try {
-      await onAction(request.id, draggedRequest.plan.action, {
-        nodeKey: draggedRequest.plan.nodeKey,
-        comment: `Переход на этап «${target.label}» выполнен с доски`,
-      });
-      setBoardNotice(
-        `Заявка №${request.number}: сервер обработал переход на этап «${target.label}»`,
-      );
-    } finally {
-      setMovingRequestId("");
-      setDraggedRequest(undefined);
-    }
+    try { await onAction(request.id, plan.action, { nodeKey: plan.nodeKey, comment: `Переход на этап «${target.label}» выполнен с доски` }); }
+    finally { setMovingRequestId(""); }
   };
 
   const publish = async () => {
@@ -1415,30 +1376,22 @@ export function ApprovalsView({
           {!canCreateRequest ? (
             <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
           ) : null}
-          {boardNotice ? <div className="approval-board-notice" role="status">{boardNotice}</div> : null}
 
+          <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !!request && (approvalAdvancePlan(request, workflow, currentUserId)?.targetKeys.includes(target) ?? false); }} onMove={moveRequest}>
           <div className="approval-kanban" aria-label="Доска заявок по стадиям">
             {boardColumns.map((column) => {
               const columnRequests = filteredRequests.filter((request) =>
                 requestBoardColumn(request, boardColumns) === column.key,
               );
-              const isAllowedDrop = draggedRequest?.plan.targetKeys.includes(column.key) ?? false;
               const palette = approvalStagePalette(column);
               const totals = approvalColumnTotals(columnRequests);
               return (
-                <section
+                <SpatialLane id={column.key}
                   key={column.key}
                   data-stage-key={column.key}
-                  className={`approval-column column-${column.kind}${isAllowedDrop ? " drop-allowed" : ""}${dropColumnKey === column.key ? " drop-active" : ""}`}
+                  className={`approval-column column-${column.kind}`}
                   style={{ "--approval-stage-color": palette.background, "--approval-stage-ink": palette.foreground } as CSSProperties}
                   aria-label={`${column.label}: ${columnRequests.length} заявок`}
-                  onDragEnter={(event) => allowColumnDrop(event, column.key)}
-                  onDragOver={(event) => allowColumnDrop(event, column.key)}
-                  onDragLeave={() => setDropColumnKey((current) => current === column.key ? "" : current)}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    void moveRequest(column.key);
-                  }}
                 >
                   <header>
                     <strong title={column.label}>{column.label}</strong>
@@ -1455,17 +1408,9 @@ export function ApprovalsView({
                         attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
                       ).length;
                       return (
-                        <article
+                        <SpatialCard id={request.id} lane={column.key} label={request.title} disabled={!plan || movingRequestId === request.id}
                           key={request.id}
                           className={`approval-board-card${plan ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}`}
-                          draggable={plan !== undefined && movingRequestId !== request.id}
-                          onDragStart={(event) => {
-                            if (plan !== undefined) startDragging(event, request, plan);
-                          }}
-                          onDragEnd={() => {
-                            setDraggedRequest(undefined);
-                            setDropColumnKey("");
-                          }}
                         >
                           <button
                             type="button"
@@ -1526,16 +1471,16 @@ export function ApprovalsView({
                               </Button>
                             ) : null}
                           </footer>
-                        </article>
+                        </SpatialCard>
                       );
                     })}
                     {columnRequests.length === 0 ? (
                       <div className="approval-column-empty">
-                        {isAllowedDrop ? "Отпустите карточку здесь" : "Нет заявок"}
+                        Нет заявок
                       </div>
                     ) : null}
                   </div>
-                </section>
+                </SpatialLane>
               );
             })}
             {filteredRequests.length === 0 ? (
@@ -1546,6 +1491,7 @@ export function ApprovalsView({
               </div>
             ) : null}
           </div>
+          </SpatialBoard>
 
           {creatingRequest ? (
             <div
@@ -1901,6 +1847,7 @@ export function ApprovalsView({
               }}
               onConnect={connect}
               onNodeClick={(_event, node) => setSelectedNodeId(node.id)}
+              onPaneClick={() => setSelectedNodeId("")}
               fitView
               fitViewOptions={{ padding: 0.2 }}
               minZoom={0.45}
@@ -1912,7 +1859,7 @@ export function ApprovalsView({
             </ReactFlow>
           </div>
 
-          <aside className="workflow-inspector">
+          <aside className="workflow-inspector" hidden={selectedNode === undefined}>
             {selectedNode === undefined ? (
               <div className="empty-compact">Выберите блок на схеме</div>
             ) : (
@@ -1920,6 +1867,7 @@ export function ApprovalsView({
                 <div className="inspector-heading">
                   <CircleEdit24Regular />
                   <div><strong>Настройка блока</strong><span>{kindLabels[selectedNode.data.kind]}</span></div>
+                  <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть настройки блока" onClick={() => setSelectedNodeId("")} />
                 </div>
                 <label>
                   Название

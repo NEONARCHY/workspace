@@ -1,3 +1,4 @@
+import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -957,6 +958,7 @@ describe("corporate workspace authentication alpha", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it("requires a password before opening the workspace", () => {
@@ -986,7 +988,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getAllByRole("img", { name: "Yuksalish" })).toHaveLength(1);
     expect(screen.getByRole("img", { name: "Yuksalish" })).toHaveClass("rail-brand");
     expect(document.querySelector(".global-bar img")).toBeNull();
-    expect(screen.getByText("Сервер подключён")).toHaveClass("online");
+    expect(screen.getByRole("button", { name: "Подключение: Сервер подключён" })).not.toHaveClass("has-error");
 
     fetchMock.mockImplementation((input, options) => {
       if (String(input).includes("/messages") && options?.method === "POST") return Promise.reject(new Error("Test connection failure"));
@@ -995,7 +997,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Не отправлено" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     const failedStatus = await screen.findByText("Не удалось выполнить операцию");
-    expect(failedStatus).toHaveClass("connection-state");
+    expect(failedStatus.closest("button")).toHaveClass("connection-indicator", "has-error");
     expect(failedStatus).not.toHaveClass("online");
     expect(screen.queryByText("Сервер подключён")).not.toBeInTheDocument();
   });
@@ -1114,10 +1116,16 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
       target: { value: "high" },
     });
+    const plan = screen.getByText("План выполнения").closest("details")!;
+    expect(plan).not.toHaveAttribute("open");
+    fireEvent.click(plan.querySelector("summary")!);
+    expect(plan).toHaveAttribute("open");
     fireEvent.change(screen.getByRole("textbox", { name: "Новый пункт чек-листа при создании" }), {
       target: { value: "Проверить роли" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить пункт" }));
+    fireEvent.click(plan.querySelector("summary")!);
+    expect(plan).not.toHaveAttribute("open");
     fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/tasks"),
@@ -1473,15 +1481,9 @@ describe("corporate workspace authentication alpha", () => {
 
     const card = openCard.closest("article");
     expect(card).not.toBeNull();
-    const dataTransfer = {
-      effectAllowed: "none",
-      dropEffect: "none",
-      setData: vi.fn(),
-    };
-    fireEvent.dragStart(card!, { dataTransfer });
+    installSpatialGeometry();
     const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
-    fireEvent.dragOver(targetColumn, { dataTransfer });
-    fireEvent.drop(targetColumn, { dataTransfer });
+    await dropSpatialCard(card!, targetColumn);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/approval-requests/server-request/actions"),
@@ -1490,7 +1492,7 @@ describe("corporate workspace authentication alpha", () => {
         body: expect.stringContaining('"action":"approve"'),
       }),
     ));
-    expect(await screen.findByText(/сервер обработал переход на этап «Согласовано»/)).toBeInTheDocument();
+    await waitFor(() => expect(targetColumn.querySelector(".approval-board-card")).not.toBeNull());
     expect(screen.getByLabelText("Сумма в колонке «Согласование»")).toHaveTextContent("0 UZS");
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
     fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "Нет такого названия" } });

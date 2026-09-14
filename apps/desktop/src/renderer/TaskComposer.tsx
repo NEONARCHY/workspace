@@ -24,6 +24,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
+import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
@@ -253,7 +254,7 @@ export function TaskComposer({
           <RecordComposer
             title="Новая задача"
             titleId="task-composer-title"
-            eyebrow="Подробная карточка"
+            eyebrow="Задачи / Создание"
             busy={busy}
             error={error}
             submitLabel="Добавить задачу"
@@ -322,17 +323,16 @@ export function TaskComposer({
                 </label>
                 <label>
                   <span>Ответственный <b aria-hidden="true">*</b></span>
-                  <select
-                    aria-label="Ответственный новой задачи"
+                  <PersonPicker
+                    label="Ответственный новой задачи"
+                    people={people}
+                    disabled={busy}
                     value={assigneeId}
-                    onChange={(event) => {
-                      const next = event.target.value;
+                    onChange={(next) => {
                       setAssigneeId(next);
                       setParticipants((current) => current.filter((item) => item.userId !== next));
                     }}
-                  >
-                    {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                  </select>
+                  />
                 </label>
                 <label>
                   <span>Срок</span>
@@ -357,12 +357,9 @@ export function TaskComposer({
               </div>
             </RecordSection>
 
-            <RecordSection title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
+            <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
               <div className="task-composer-add-row participant-add-row">
-                <select aria-label="Участник новой задачи" value={participantId} onChange={(event) => setParticipantId(event.target.value)}>
-                  <option value="">Выберите сотрудника</option>
-                  {availableParticipants.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                </select>
+                <PersonPicker label="Участник новой задачи" people={availableParticipants} value={participantId} onChange={setParticipantId} disabled={busy} />
                 <select aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
                   <option value="co_assignee">Соисполнитель</option>
                   <option value="observer">Наблюдатель</option>
@@ -381,7 +378,7 @@ export function TaskComposer({
               </div> : <p className="task-composer-empty">Дополнительные участники не выбраны.</p>}
             </RecordSection>
 
-            <RecordSection title="План выполнения" description="Чек-лист делает объём работы понятным до начала выполнения.">
+            <RecordSection collapsible summary={checklist.length ? `${checklist.length} пунктов чек-листа` : "Разделить результат на понятные шаги"} title="План выполнения" description="Чек-лист делает объём работы понятным до начала выполнения.">
               <div className="task-composer-add-row">
                 <Input
                   aria-label="Новый пункт чек-листа при создании"
@@ -402,7 +399,7 @@ export function TaskComposer({
               </ol> : <p className="task-composer-empty">Чек-лист можно оставить пустым.</p>}
             </RecordSection>
 
-            <RecordSection title="Зависимости" description="Укажите задачи, которые блокируют начало или связаны с этой работой.">
+            <RecordSection collapsible summary={dependencies.length ? `${dependencies.length} связанных задач` : "Связать с другими задачами"} title="Зависимости" description="Укажите задачи, которые блокируют начало или связаны с этой работой.">
               <div className="task-composer-add-row dependency-add-row">
                 <select aria-label="Зависимость новой задачи" value={dependencyId} onChange={(event) => setDependencyId(event.target.value)}>
                   <option value="">Выберите задачу</option>
@@ -419,7 +416,7 @@ export function TaskComposer({
               </div> : <p className="task-composer-empty">Зависимостей нет.</p>}
             </RecordSection>
 
-            <RecordSection title="Правило повторения" description="Для регулярной работы система создаст следующую задачу автоматически.">
+            <RecordSection collapsible summary={repeatEnabled ? "Автоматическое повторение включено" : "Не повторяется"} title="Правило повторения" description="Для регулярной работы система создаст следующую задачу автоматически.">
               <Checkbox checked={repeatEnabled} label="Повторять эту задачу" onChange={(_, data) => setRepeatEnabled(data.checked === true)} />
               {repeatEnabled ? <div className="record-field-grid task-cycle-create">
                 <label>

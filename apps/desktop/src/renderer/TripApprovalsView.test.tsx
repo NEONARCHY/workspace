@@ -1,3 +1,4 @@
+import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
@@ -13,30 +14,28 @@ const request: TripRequest = {
   actions: [], createdAt: "2026-09-04T09:00:00Z", updatedAt: "2026-09-04T09:00:00Z",
 };
 function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined)) {
+  installSpatialGeometry();
   const onCreate = vi.fn(async () => undefined);
   render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={people[0]!} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} /></FluentProvider>);
   return { onAction, onCreate };
 }
 const column = (key: string) => document.querySelector(`.trip-column[data-stage-key="${key}"]`)!;
 const card = () => document.querySelector(".trip-board-card")!;
-function drop(target: string) {
-  fireEvent.dragStart(card(), { dataTransfer: { setData: vi.fn() } });
-  fireEvent.drop(column(target));
-}
-afterEach(cleanup);
-describe("Trip approvals interaction", () => {
-  it("keeps selected employees while searching and previews the trip without sending it", () => {
+async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+describe("Trip approvals interaction", async () => {
+  it("keeps selected employees while searching and previews the trip without sending it", async () => {
     const { onCreate } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
     fireEvent.change(screen.getByLabelText("Куда едем"), { target: { value: "Самарканд" } });
     fireEvent.change(screen.getByLabelText("Найти участника поездки"), { target: { value: "нет совпадений" } });
-    expect(screen.getByRole("status")).toHaveTextContent("Сотрудники не найдены");
+    expect(screen.getByText(/Сотрудники не найдены/)).toBeInTheDocument();
     expect(within(screen.getByLabelText("Сводка карточки")).getByText(people[0]!.name, { selector: "li" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Найти участника поездки"), { target: { value: "" } });
     expect(screen.getByRole("checkbox", { name: new RegExp(people[0]!.name) })).toBeChecked();
     expect(onCreate).not.toHaveBeenCalled();
   });
-  it("starts on the coloured board and filters the same cards in list view", () => {
+  it("starts on the coloured board and filters the same cards in list view", async () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();
     expect(column("manager_approval")).toHaveStyle({ "--approval-stage-color": "#88b9ff" });
@@ -50,21 +49,22 @@ describe("Trip approvals interaction", () => {
   });
   it("uses the existing approval action for a permitted drop, with no optimistic stage write", async () => {
     const { onAction } = setup();
-    drop("hr");
+    await drop("hr");
     await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(request, "approve", undefined));
     expect(column("manager_approval").querySelector(".trip-board-card")).not.toBeNull();
     expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось изменить стадию");
   });
-  it("blocks skipped stages and cards without permission", () => {
+  it("blocks skipped stages and cards without permission", async () => {
     const { onAction } = setup({ ...request, stage: "launch", status: "draft", allowedActions: [] });
-    expect(card()).toHaveAttribute("draggable", "false");
-    drop("approved");
+    expect(card()).not.toHaveAttribute("draggable", "true");
+    expect(card().querySelector(".spatial-grip")).toBeNull();
+    await drop("approved");
     expect(onAction).not.toHaveBeenCalled();
   });
   it("requires a reason for a return, and cancelling leaves the card untouched", async () => {
     const onAction = vi.fn(async () => ({ ...request, stage: "launch" as const, stageLabel: "Запуск" }));
     setup(request, onAction);
-    drop("launch");
+    await drop("launch");
     expect(onAction).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
@@ -74,9 +74,9 @@ describe("Trip approvals interaction", () => {
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
     await waitFor(() => expect(onAction).toHaveBeenCalledExactlyOnceWith(request, "return", "Уточнить даты"));
   });
-  it("requires a reason for rejection too", () => {
+  it("requires a reason for rejection too", async () => {
     const { onAction } = setup();
-    drop("rejected");
+    await drop("rejected");
     expect(screen.getByRole("form", { name: "Причина отклонения" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
     expect(onAction).not.toHaveBeenCalled();
@@ -85,14 +85,14 @@ describe("Trip approvals interaction", () => {
     let finish!: (value: TripRequest | undefined) => void;
     const onAction = vi.fn(() => new Promise<TripRequest | undefined>((resolve) => { finish = resolve; }));
     setup(request, onAction);
-    drop("hr");
-    drop("hr");
+    await drop("hr");
+    await drop("hr");
     expect(onAction).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Согласовать: TR-TEST" })).toBeDisabled();
     finish(undefined);
     await screen.findByRole("alert");
   });
-  it("validates missing fields and reversed dates without creating a trip", () => {
+  it("validates missing fields and reversed dates without creating a trip", async () => {
     const { onCreate } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));

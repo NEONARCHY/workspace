@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   NotificationKind,
@@ -66,6 +66,15 @@ export function NotificationCenter({
   const [filter, setFilter] = useState<NotificationFilter>("attention");
   const [query, setQuery] = useState("");
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [contextId, setContextId] = useState<string>();
+  const contextRef = useRef<HTMLElement>(null);
+  const contextTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!contextId) return;
+    contextRef.current?.scrollIntoView?.({ block: "nearest" });
+    contextRef.current?.focus({ preventScroll: true });
+  }, [contextId]);
+  const context = notifications.find(item => item.id === contextId);
   const unreadCount = notifications.filter((item) => !item.readAt).length;
   const attentionCount = notifications.filter(
     (item) => item.requiresAction && !item.resolvedAt,
@@ -192,6 +201,7 @@ export function NotificationCenter({
                 <p>{notification.body}</p>
               </button>
               <div className="notification-row-tail">
+                <Button appearance="subtle" size="small" aria-label={`Контекст: ${notification.title}`} aria-pressed={contextId === notification.id} onClick={event => { contextTrigger.current = event.currentTarget; setContextId(notification.id); }}>Подробнее</Button>
                 <time dateTime={notification.occurredAt}>{timeLabel(notification.occurredAt)}</time>
                 {!notification.readAt ? (
                   <button
@@ -209,6 +219,11 @@ export function NotificationCenter({
         </div>
 
         <aside className="notification-settings" aria-label="Настройки уведомлений">
+          {context ? <section ref={contextRef} tabIndex={-1} className="notification-context" key={context.id} aria-label="Контекст уведомления">
+            <div><span>{kindLabels[context.kind]}</span><button type="button" aria-label="Закрыть контекст уведомления" onClick={() => { setContextId(undefined); contextTrigger.current?.focus(); }}>×</button></div>
+            <h2>{context.title}</h2><p>{context.body}</p><small>{new Date(context.occurredAt).toLocaleString("ru-RU")}</small>
+            <Button appearance="primary" onClick={() => void onOpen(context)}>Открыть в разделе</Button>
+          </section> : null}
           <div className="notification-settings-title">
             <AlertOn24Regular />
             <span><strong>Доставка</strong><small>Можно изменить в любой момент</small></span>

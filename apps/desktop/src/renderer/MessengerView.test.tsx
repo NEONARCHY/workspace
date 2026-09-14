@@ -447,4 +447,16 @@ describe("Private messenger", () => {
       dialog.getByRole("checkbox", { name: "Малика Нурова" }),
     ).toBeChecked();
   });
+
+  it("does not show task chats in the general chat bucket and places them in Чаты задач", () => {
+    renderMessenger();
+    const taskChat = "Задача · Согласовать график";
+    const normalChat = "Финансы и закупки";
+    expect(screen.getByText(taskChat)).not.toBeInTheDocument();
+    expect(screen.getByText(normalChat)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^Чаты задач/ }));
+    expect(screen.getByText(taskChat)).toBeInTheDocument();
+    expect(screen.queryByText(normalChat)).not.toBeInTheDocument();
+  });
 });

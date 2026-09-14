@@ -48,6 +48,7 @@ node_modules/
 /ВРЕМЕННО/
 /tmp/
 /.qa_hisobot_pdfs/
+/artifacts/spatial-redesign/
 
 # Editors and OS
 .idea/
