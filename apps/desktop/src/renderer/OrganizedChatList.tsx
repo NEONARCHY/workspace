@@ -110,7 +110,7 @@ export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, 
           </SpatialSortItem>
         </Fragment>;
       })}
-      {!visibleChats.length && <div className="empty-compact">{query.trim() ? `${bucketLabel(bucket)} по запросу не найдены` : (regularChats.length || taskChats.length || archivedChats.length ? emptyMessage : "Создайте первый разговор кнопкой +")}</div>}
+      {!visibleChats.length && <div className="empty-compact">{query.trim() ? emptyMessage : (regularChats.length || taskChats.length || archivedChats.length ? emptyMessage : "Создайте первый разговор кнопкой +")}</div>}
     </div>
     </SpatialSort>
   </>;

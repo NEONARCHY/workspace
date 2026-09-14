@@ -63,7 +63,7 @@ describe("Personal organization", () => {
     // jsdom has no popover layout. Real visibility/accessible roles are covered by Edge/Electron.
     fireEvent.click(screen.getByText("Вернуть из архива"));
     await waitFor(() => expect(screen.getByText("Архив пуст")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Чаты" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Чаты(?:\s+\d|$)/ }));
     expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", second.id);
     expect(screen.getByText(first.title)).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Поиск чатов и сообщений" }), { target: { value: "does not exist" } });

@@ -452,11 +452,13 @@ describe("Private messenger", () => {
     renderMessenger();
     const taskChat = "Задача · Согласовать график";
     const normalChat = "Финансы и закупки";
-    expect(screen.getByText(taskChat)).not.toBeInTheDocument();
-    expect(screen.getByText(normalChat)).toBeInTheDocument();
+    const generalChats = screen.getByRole("list", { name: "Чаты" });
+    expect(within(generalChats).queryByText(taskChat)).not.toBeInTheDocument();
+    expect(within(generalChats).getByText(normalChat)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /^Чаты задач/ }));
-    expect(screen.getByText(taskChat)).toBeInTheDocument();
-    expect(screen.queryByText(normalChat)).not.toBeInTheDocument();
+    const taskChats = screen.getByRole("list", { name: "Чаты задач" });
+    expect(within(taskChats).getByText(taskChat)).toBeInTheDocument();
+    expect(within(taskChats).queryByText(normalChat)).not.toBeInTheDocument();
   });
 });
