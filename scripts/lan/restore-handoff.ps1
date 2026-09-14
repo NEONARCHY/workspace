@@ -84,11 +84,25 @@ try {
         $volume = $archives[$archive]
         & docker volume create $volume | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Cannot create destination volume $volume." }
-        & docker run --rm `
-            --mount "type=volume,src=$volume,dst=/destination" `
-            --mount "type=bind,src=$backupPath,dst=/backup,readonly" `
-            alpine:3.22 tar -C /destination -xzf "/backup/$archive"
-        if ($LASTEXITCODE -ne 0) { throw "Could not restore $archive. Do not retry into a nonempty project." }
+        # Copy through the Docker API: removable Windows drives are not always bind-mountable.
+        $helper = "yuksalish-restore-$([guid]::NewGuid().ToString('N'))"
+        $created = $false
+        try {
+            & docker create --name $helper --mount "type=volume,src=$volume,dst=/destination" `
+                alpine:3.22 sh -c 'tar -C /destination -xzf /tmp/archive.tar.gz' | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Cannot create restore helper for $archive." }
+            $created = $true
+            & docker cp (Join-Path $backupPath $archive) "${helper}:/tmp/archive.tar.gz"
+            if ($LASTEXITCODE -ne 0) { throw "Cannot copy $archive into the restore helper." }
+            & docker start -a $helper | Out-Null
+            $restoreExitCode = (& docker inspect --format '{{.State.ExitCode}}' $helper).Trim()
+            if ($LASTEXITCODE -ne 0 -or $restoreExitCode -ne "0") {
+                throw "Could not restore $archive. Do not retry into a nonempty project."
+            }
+        }
+        finally {
+            if ($created) { & docker rm -f $helper | Out-Null }
+        }
     }
 
     & docker compose --env-file $envPath -f $baseCompose -f $lanCompose `
