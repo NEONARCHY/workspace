@@ -88,6 +88,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [employeeRole, setEmployeeRole] = useState<Exclude<WorkspaceRole, "superadmin">>("employee");
   const [employeePositionId, setEmployeePositionId] = useState("");
   const [employeeDepartmentId, setEmployeeDepartmentId] = useState("");
+  const [directManagerUserId, setDirectManagerUserId] = useState("");
   const [positionName, setPositionName] = useState("");
   const [positionActive, setPositionActive] = useState(true);
   const [newPositionName, setNewPositionName] = useState("");
@@ -129,6 +130,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           setEmployeeRole(firstEmployee.role);
           setEmployeePositionId(firstEmployee.positionId ?? "");
           setEmployeeDepartmentId(firstEmployee.departmentId ?? "");
+          setDirectManagerUserId(firstEmployee.directManagerUserId ?? "");
         }
         setSelectedPositionId(firstPosition?.id ?? "");
         setPositionName(firstPosition?.name ?? "");
@@ -164,6 +166,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     if (employee.role !== "superadmin") setEmployeeRole(employee.role);
     setEmployeePositionId(employee.positionId ?? "");
     setEmployeeDepartmentId(employee.departmentId ?? "");
+    setDirectManagerUserId(employee.directManagerUserId ?? "");
     setPanel("employee");
   };
 
@@ -199,6 +202,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         employeeRole,
         employeePositionId || undefined,
         employeeDepartmentId || undefined,
+        directManagerUserId || undefined,
       );
       setDirectory(replaceEmployee(directory, saved));
       setFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
@@ -492,6 +496,12 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                   >
                     <option value="">Не назначено</option>
                     {directory.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Непосредственный руководитель" hint="Получает заявки на отпуск, отгул, опоздание и больничный.">
+                  <Select disabled={busy || !canManage || selectedEmployee.role === "superadmin"} value={directManagerUserId} onChange={(event) => setDirectManagerUserId(event.target.value)}>
+                    <option value="">Не назначен</option>
+                    {directory.employees.filter((employee) => employee.id !== selectedEmployee.id && employee.status === "active").map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
                   </Select>
                 </Field>
               </div>

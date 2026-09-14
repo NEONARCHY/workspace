@@ -5,6 +5,7 @@ export const moduleKeys = [
   "feed",
   "projects",
   "trip_approvals",
+  "absences",
   "messenger",
   "calendar",
   "employees",
@@ -104,6 +105,7 @@ export interface DirectoryEmployee {
   readonly positionId?: string | null;
   readonly jobTitle?: string | null;
   readonly status: string;
+  readonly directManagerUserId?: string | null;
 }
 
 export interface DirectoryBootstrap {
@@ -291,11 +293,55 @@ export interface CalendarEventInput {
   readonly attendeeIds: readonly string[];
 }
 
-export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar";
+export type AbsenceKind = "vacation" | "personal_time" | "late_arrival" | "sick_leave" | "business_event";
+export type AbsenceStatus = "draft" | "pending" | "approved" | "acknowledged" | "rejected" | "cancelled";
+export type AbsenceAction = "submit" | "approve" | "acknowledge" | "reject" | "cancel";
+
+export interface AbsenceActionHistory {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly action: AbsenceAction | "created";
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface AbsenceRequest {
+  readonly id: string;
+  readonly requesterUserId: string;
+  readonly directManagerUserId: string;
+  readonly kind: AbsenceKind;
+  readonly reason: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly status: AbsenceStatus;
+  readonly statusLabel: string;
+  readonly documentStatus: "not_required" | "required" | "uploaded" | "overdue";
+  readonly canEdit: boolean;
+  readonly allowedActions: readonly AbsenceAction[];
+  readonly actions: readonly AbsenceActionHistory[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AbsenceRequestInput {
+  readonly kind: AbsenceKind;
+  readonly reason: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export interface PresenceSummaryItem {
+  readonly userId: string;
+  readonly status: "working" | "trip" | AbsenceKind;
+  readonly startsAt?: string | null;
+  readonly endsAt?: string | null;
+}
+
+export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar" | "absence";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
-  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar"
+  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar" | "absences"
 >;
 
 export interface WorkspaceNotification {
@@ -321,10 +367,11 @@ export interface NotificationPreferences {
   readonly approvalsEnabled: boolean;
   readonly tripsEnabled: boolean;
   readonly calendarEnabled: boolean;
+  readonly absencesEnabled: boolean;
   readonly remindersEnabled: boolean;
 }
 
-export type AttachmentOwnerType = "message" | "task" | "approval_request";
+export type AttachmentOwnerType = "message" | "task" | "approval_request" | "absence";
 
 export interface WorkspaceAttachment {
   readonly id: string;
@@ -766,6 +813,8 @@ export interface WorkspaceBootstrap {
   readonly requests: readonly ApprovalRequestSummary[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
+  readonly absenceRequests: readonly AbsenceRequest[];
+  readonly presenceSummary: readonly PresenceSummaryItem[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];

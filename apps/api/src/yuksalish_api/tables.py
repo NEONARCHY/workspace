@@ -61,6 +61,7 @@ users = sa.Table(
     sa.Column("status", sa.String(24)),
     sa.Column("department_id", uuid_type),
     sa.Column("position_id", uuid_type),
+    sa.Column("direct_manager_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
     sa.Column("failed_login_count", sa.Integer()),
@@ -559,6 +560,32 @@ trip_request_actions = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+absence_requests = sa.Table(
+    "absence_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("direct_manager_user_id", uuid_type),
+    sa.Column("kind", sa.String(32)),
+    sa.Column("reason", sa.Text()),
+    sa.Column("starts_at", sa.DateTime(timezone=True)),
+    sa.Column("ends_at", sa.DateTime(timezone=True)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+absence_request_actions = sa.Table(
+    "absence_request_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 feed_posts = sa.Table(
     "feed_posts",
     metadata,
@@ -644,6 +671,7 @@ workspace_notification_preferences = sa.Table(
     sa.Column("approvals_enabled", sa.Boolean()),
     sa.Column("trips_enabled", sa.Boolean()),
     sa.Column("calendar_enabled", sa.Boolean()),
+    sa.Column("absences_enabled", sa.Boolean()),
     sa.Column("reminders_enabled", sa.Boolean()),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )

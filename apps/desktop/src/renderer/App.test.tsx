@@ -324,7 +324,8 @@ function mockServer(
     tasksEnabled: true,
     approvalsEnabled: true,
     tripsEnabled: true,
-    calendarEnabled: true,
+        calendarEnabled: true,
+        absencesEnabled: true,
     remindersEnabled: true,
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {

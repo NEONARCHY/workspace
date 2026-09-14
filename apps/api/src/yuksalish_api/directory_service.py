@@ -95,16 +95,20 @@ async def _position_response(
     position_id: UUID,
 ) -> PositionResponse:
     row = (
-        await connection.execute(
-            select(
-                positions,
-                func.count(users.c.id).label("assigned_users_count"),
+        (
+            await connection.execute(
+                select(
+                    positions,
+                    func.count(users.c.id).label("assigned_users_count"),
+                )
+                .outerjoin(users, users.c.position_id == positions.c.id)
+                .where(positions.c.id == position_id)
+                .group_by(positions.c.id)
             )
-            .outerjoin(users, users.c.position_id == positions.c.id)
-            .where(positions.c.id == position_id)
-            .group_by(positions.c.id)
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         raise DirectoryServiceError(404, "Position was not found")
     return PositionResponse(
@@ -122,16 +126,20 @@ async def _department_response(
     department_id: UUID,
 ) -> DepartmentResponse:
     row = (
-        await connection.execute(
-            select(
-                departments,
-                func.count(users.c.id).label("assigned_users_count"),
+        (
+            await connection.execute(
+                select(
+                    departments,
+                    func.count(users.c.id).label("assigned_users_count"),
+                )
+                .outerjoin(users, users.c.department_id == departments.c.id)
+                .where(departments.c.id == department_id)
+                .group_by(departments.c.id)
             )
-            .outerjoin(users, users.c.department_id == departments.c.id)
-            .where(departments.c.id == department_id)
-            .group_by(departments.c.id)
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if row is None:
         raise DirectoryServiceError(404, "Department was not found")
     return DepartmentResponse(
@@ -160,55 +168,69 @@ async def load_directory(
     actor: AuthenticatedUser | None = None,
 ) -> DirectoryBootstrapResponse:
     department_rows = (
-        await connection.execute(
-            select(
-                departments,
-                func.count(users.c.id).label("assigned_users_count"),
+        (
+            await connection.execute(
+                select(
+                    departments,
+                    func.count(users.c.id).label("assigned_users_count"),
+                )
+                .outerjoin(users, users.c.department_id == departments.c.id)
+                .group_by(departments.c.id)
+                .order_by(departments.c.name)
             )
-            .outerjoin(users, users.c.department_id == departments.c.id)
-            .group_by(departments.c.id)
-            .order_by(departments.c.name)
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     position_rows = (
-        await connection.execute(
-            select(
-                positions,
-                func.count(users.c.id).label("assigned_users_count"),
+        (
+            await connection.execute(
+                select(
+                    positions,
+                    func.count(users.c.id).label("assigned_users_count"),
+                )
+                .outerjoin(users, users.c.position_id == positions.c.id)
+                .group_by(positions.c.id)
+                .order_by(positions.c.is_active.desc(), positions.c.sort_order, positions.c.name)
             )
-            .outerjoin(users, users.c.position_id == positions.c.id)
-            .group_by(positions.c.id)
-            .order_by(positions.c.is_active.desc(), positions.c.sort_order, positions.c.name)
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     employee_rows = (
-        await connection.execute(
-            select(
-                users.c.id,
-                users.c.username,
-                users.c.full_name,
-                users.c.role,
-                users.c.department_id,
-                users.c.position_id,
-                func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
-                users.c.status,
+        (
+            await connection.execute(
+                select(
+                    users.c.id,
+                    users.c.username,
+                    users.c.full_name,
+                    users.c.role,
+                    users.c.department_id,
+                    users.c.position_id,
+                    func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
+                    users.c.status,
+                )
+                .outerjoin(positions, positions.c.id == users.c.position_id)
+                .order_by(users.c.full_name)
             )
-            .outerjoin(positions, positions.c.id == users.c.position_id)
-            .order_by(users.c.full_name)
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     access_rule_rows: list[RowMapping] = []
     if actor is None or actor.role in {"admin", "superadmin"}:
         access_rule_rows = list(
             (
                 await connection.execute(
-                select(module_access_rules).order_by(
-                    module_access_rules.c.subject_type,
-                    module_access_rules.c.subject_key,
-                    module_access_rules.c.module_key,
+                    select(module_access_rules).order_by(
+                        module_access_rules.c.subject_type,
+                        module_access_rules.c.subject_key,
+                        module_access_rules.c.module_key,
+                    )
                 )
             )
-            ).mappings().all()
+            .mappings()
+            .all()
         )
     return DirectoryBootstrapResponse(
         roles=ROLE_DESCRIPTORS,
@@ -239,12 +261,13 @@ async def load_directory(
                 username=row["username"],
                 name=row["full_name"],
                 role=row["role"],
-                department_id=(
-                    str(row["department_id"]) if row["department_id"] else None
-                ),
+                department_id=(str(row["department_id"]) if row["department_id"] else None),
                 position_id=str(row["position_id"]) if row["position_id"] else None,
                 job_title=row["job_title"],
                 status=row["status"],
+                direct_manager_user_id=(
+                    str(row["direct_manager_user_id"]) if row["direct_manager_user_id"] else None
+                ),
             )
             for row in employee_rows
         ],
@@ -310,10 +333,14 @@ async def update_department(
 ) -> DepartmentResponse:
     _require_admin(actor)
     existing = (
-        await connection.execute(
-            select(departments).where(departments.c.id == department_id).with_for_update()
+        (
+            await connection.execute(
+                select(departments).where(departments.c.id == department_id).with_for_update()
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if existing is None:
         raise DirectoryServiceError(404, "Department was not found")
     values: dict[str, Any] = {}
@@ -366,9 +393,7 @@ async def update_department(
             "before": {
                 "code": existing["code"],
                 "name": existing["name"],
-                "parentId": (
-                    str(existing["parent_id"]) if existing["parent_id"] else None
-                ),
+                "parentId": (str(existing["parent_id"]) if existing["parent_id"] else None),
             },
             "after": {
                 "code": values.get("code", existing["code"]),
@@ -469,14 +494,18 @@ async def delete_module_access_rule(
 ) -> None:
     _require_admin(actor)
     existing = (
-        await connection.execute(
-            select(module_access_rules).where(
-                module_access_rules.c.subject_type == subject_type,
-                module_access_rules.c.subject_key == subject_key,
-                module_access_rules.c.module_key == module_key,
+        (
+            await connection.execute(
+                select(module_access_rules).where(
+                    module_access_rules.c.subject_type == subject_type,
+                    module_access_rules.c.subject_key == subject_key,
+                    module_access_rules.c.module_key == module_key,
+                )
             )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if existing is None:
         return
     await connection.execute(
@@ -536,10 +565,14 @@ async def update_position(
 ) -> PositionResponse:
     _require_admin(actor)
     existing = (
-        await connection.execute(
-            select(positions).where(positions.c.id == position_id).with_for_update()
+        (
+            await connection.execute(
+                select(positions).where(positions.c.id == position_id).with_for_update()
+            )
         )
-    ).mappings().first()
+        .mappings()
+        .first()
+    )
     if existing is None:
         raise DirectoryServiceError(404, "Position was not found")
     values: dict[str, Any] = {"updated_at": datetime.now(UTC)}
@@ -596,27 +629,47 @@ async def update_employee_access(
 ) -> DirectoryEmployeeResponse:
     _require_admin(actor)
     employee = (
-        await connection.execute(
-            select(users).where(users.c.id == employee_id).with_for_update()
-        )
-    ).mappings().first()
+        (await connection.execute(select(users).where(users.c.id == employee_id).with_for_update()))
+        .mappings()
+        .first()
+    )
     if employee is None:
         raise DirectoryServiceError(404, "Employee was not found")
     if employee["role"] == "superadmin" and actor.role != "superadmin":
         raise DirectoryServiceError(403, "Only a superadmin can edit a superadmin")
     if employee_id == actor.id and payload.role != actor.role:
         raise DirectoryServiceError(409, "You cannot change your own role")
+    if payload.direct_manager_user_id == employee_id:
+        raise DirectoryServiceError(422, "Employee cannot be their own direct manager")
+    if payload.direct_manager_user_id is not None:
+        manager = (
+            (
+                await connection.execute(
+                    select(users.c.id, users.c.status).where(
+                        users.c.id == payload.direct_manager_user_id
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if manager is None or manager["status"] != "active":
+            raise DirectoryServiceError(422, "Direct manager must be an active employee")
 
     position_name = None
     if payload.position_id is not None:
         position = (
-            await connection.execute(
-                select(positions.c.name).where(
-                    positions.c.id == payload.position_id,
-                    positions.c.is_active.is_(True),
+            (
+                await connection.execute(
+                    select(positions.c.name).where(
+                        positions.c.id == payload.position_id,
+                        positions.c.is_active.is_(True),
+                    )
                 )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if position is None:
             raise DirectoryServiceError(422, "Position is not active or does not exist")
         position_name = position["name"]
@@ -635,6 +688,7 @@ async def update_employee_access(
             department_id=payload.department_id,
             position_id=payload.position_id,
             job_title=position_name,
+            direct_manager_user_id=payload.direct_manager_user_id,
             updated_at=now,
         )
     )
@@ -654,10 +708,11 @@ async def update_employee_access(
             },
             "after": {
                 "role": payload.role,
-                "departmentId": (
-                    str(payload.department_id) if payload.department_id else None
-                ),
+                "departmentId": (str(payload.department_id) if payload.department_id else None),
                 "positionId": str(payload.position_id) if payload.position_id else None,
+                "directManagerUserId": str(payload.direct_manager_user_id)
+                if payload.direct_manager_user_id
+                else None,
             },
         },
     )
@@ -670,6 +725,9 @@ async def update_employee_access(
         position_id=str(payload.position_id) if payload.position_id else None,
         job_title=position_name,
         status=employee["status"],
+        direct_manager_user_id=(
+            str(payload.direct_manager_user_id) if payload.direct_manager_user_id else None
+        ),
     )
 
 
@@ -681,10 +739,10 @@ async def update_employee_status(
 ) -> DirectoryEmployeeResponse:
     _require_admin(actor)
     employee = (
-        await connection.execute(
-            select(users).where(users.c.id == employee_id).with_for_update()
-        )
-    ).mappings().first()
+        (await connection.execute(select(users).where(users.c.id == employee_id).with_for_update()))
+        .mappings()
+        .first()
+    )
     if employee is None:
         raise DirectoryServiceError(404, "Employee was not found")
     if employee_id == actor.id:

@@ -11,12 +11,14 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
+from .absence_service import presence_summary, visible_absences
 from .access_control import ModuleAction, module_permissions_for_user
 from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
 from .tables import (
+    absence_requests,
     approval_actions,
     approval_deadline_events,
     approval_edges,
@@ -443,9 +445,7 @@ def _approval_escalation_hours(configs: Sequence[Mapping[str, Any]]) -> int | No
         if config.get("escalationEnabled", True) is False:
             continue
         try:
-            value = int(
-                config.get("escalationAfterHours", DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS)
-            )
+            value = int(config.get("escalationAfterHours", DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS))
         except (TypeError, ValueError):
             value = DEFAULT_APPROVAL_ESCALATION_AFTER_HOURS
         if 1 <= value <= 24 * 30:
@@ -500,15 +500,19 @@ def _approval_deadline_control(
         if escalation_hours is not None and not finished
         else None
     )
-    candidates = [] if finished else [
-        candidate
-        for candidate in [
-            *(deadline - timedelta(hours=hours) for hours in reminder_hours),
-            deadline,
-            escalation_at,
+    candidates = (
+        []
+        if finished
+        else [
+            candidate
+            for candidate in [
+                *(deadline - timedelta(hours=hours) for hours in reminder_hours),
+                deadline,
+                escalation_at,
+            ]
+            if candidate is not None and candidate > current_time
         ]
-        if candidate is not None and candidate > current_time
-    ]
+    )
     return ApprovalDeadlineControlResponse(
         status=status,
         remaining_seconds=remaining_seconds,
@@ -927,8 +931,7 @@ async def _request_deadline_controls(
                     approval_nodes.c.template_id,
                     approval_nodes.c.node_key,
                     approval_nodes.c.config,
-                )
-                .where(approval_nodes.c.template_id.in_(template_ids))
+                ).where(approval_nodes.c.template_id.in_(template_ids))
             )
         )
         .mappings()
@@ -953,9 +956,7 @@ async def _request_deadline_controls(
     )
     events_by_request: dict[UUID, list[ApprovalDeadlineEventResponse]] = {}
     for event_row in event_rows:
-        events_by_request.setdefault(event_row["request_id"], []).append(
-            _deadline_event(event_row)
-        )
+        events_by_request.setdefault(event_row["request_id"], []).append(_deadline_event(event_row))
     return {
         row["id"]: _approval_deadline_control(
             row,
@@ -1391,6 +1392,7 @@ async def get_notification_preferences(
         approvals_enabled=bool(row["approvals_enabled"]),
         trips_enabled=bool(row["trips_enabled"]),
         calendar_enabled=bool(row["calendar_enabled"]),
+        absences_enabled=bool(row["absences_enabled"]),
         reminders_enabled=bool(row["reminders_enabled"]),
     )
 
@@ -1637,9 +1639,7 @@ async def _sync_notifications_for_user(
                                 ),
                                 and_(
                                     workspace_notifications.c.entity_id.is_(None),
-                                    workspace_notifications.c.event_key.like(
-                                        "efficiency:daily:%"
-                                    ),
+                                    workspace_notifications.c.event_key.like("efficiency:daily:%"),
                                 ),
                             ),
                         ),
@@ -1656,6 +1656,7 @@ async def _sync_notifications_for_user(
                             ),
                         ),
                         workspace_notifications.c.section == "calendar",
+                        workspace_notifications.c.section == "absences",
                     ),
                 )
                 .order_by(workspace_notifications.c.occurred_at.desc())
@@ -1846,10 +1847,7 @@ async def _create_approval_deadline_delivery(
         priority = "urgent"
     else:
         title = "Эскалация просроченной заявки"
-        body = (
-            f"{request_row['title']} · {node_title} · просрочка более "
-            f"{threshold_hours} ч."
-        )
+        body = f"{request_row['title']} · {node_title} · просрочка более {threshold_hours} ч."
         priority = "urgent"
     await _upsert_notification(
         connection,
@@ -1907,11 +1905,7 @@ async def _materialize_approval_deadline_notifications(
     )
     node_by_key = {(row["template_id"], row["node_key"]): row for row in node_rows}
     user_rows = (
-        (
-            await connection.execute(select(users).where(users.c.status == "active"))
-        )
-        .mappings()
-        .all()
+        (await connection.execute(select(users).where(users.c.status == "active"))).mappings().all()
     )
     created = 0
     for request_row in due_rows:
@@ -1931,9 +1925,7 @@ async def _materialize_approval_deadline_notifications(
             reminder_hours = _approval_reminder_hours([config])
             if now < deadline:
                 reached = [
-                    hours
-                    for hours in reminder_hours
-                    if now >= deadline - timedelta(hours=hours)
+                    hours for hours in reminder_hours if now >= deadline - timedelta(hours=hours)
                 ]
                 if reached:
                     threshold = min(reached)
@@ -2266,6 +2258,14 @@ async def load_workspace(
         connection,
         [row["id"] for row in trip_rows],
     )
+    absence_responses = (
+        await visible_absences(connection, current_user, can("absences", "admin"))
+        if can("absences")
+        else []
+    )
+    presence_responses = (
+        await presence_summary(connection, can("absences", "admin")) if can("absences") else []
+    )
 
     feed_rows = (
         (
@@ -2372,7 +2372,9 @@ async def load_workspace(
                 latest_return=task_latest_returns.get(row["id"]),
             )
             for row in task_rows
-        ] if can("tasks") else [],
+        ]
+        if can("tasks")
+        else [],
         requests=[
             _approval_request(
                 row,
@@ -2382,10 +2384,14 @@ async def load_workspace(
                 deadline_controls_by_request.get(row["id"]),
             )
             for row in request_rows
-        ] if can("payment_requests") else [],
+        ]
+        if can("payment_requests")
+        else [],
         projects=[
             _project(row, current_user, project_history.get(row["id"], [])) for row in project_rows
-        ] if can("projects") else [],
+        ]
+        if can("projects")
+        else [],
         trip_requests=[
             _trip_request(
                 row,
@@ -2394,7 +2400,11 @@ async def load_workspace(
                 trip_actions.get(row["id"], []),
             )
             for row in trip_rows
-        ] if can("trip_approvals") else [],
+        ]
+        if can("trip_approvals")
+        else [],
+        absence_requests=absence_responses,
+        presence_summary=presence_responses,
         feed_posts=[
             _feed_post(
                 row,
@@ -2403,15 +2413,17 @@ async def load_workspace(
                 feed_reaction_map.get(row["id"], []),
             )
             for row in feed_rows
-        ] if can("feed") else [],
+        ]
+        if can("feed")
+        else [],
         calendar_events=[
             _calendar_event(row, current_user, calendar_attendees.get(row["id"], []))
             for row in calendar_rows
-        ] if can("calendar") else [],
+        ]
+        if can("calendar")
+        else [],
         notifications=[
-            notification
-            for notification in notification_responses
-            if can(notification.section)
+            notification for notification in notification_responses if can(notification.section)
         ],
         notification_preferences=notification_preferences,
         personal_preferences=await get_personal_preferences(connection, current_user),
@@ -2906,9 +2918,7 @@ async def _sync_task_chat(
     participant_ids = set(
         (
             await connection.execute(
-                select(task_participants.c.user_id).where(
-                    task_participants.c.task_id == task_id
-                )
+                select(task_participants.c.user_id).where(task_participants.c.task_id == task_id)
             )
         ).scalars()
     )
@@ -3001,9 +3011,7 @@ async def create_task(
             raise WorkspaceRepositoryError(422, "Source message is not accessible")
     parent_row: Record | None = None
     if parent_task_id is not None:
-        parent_row = await _task_access_row(
-            connection, current_user, parent_task_id, edit=True
-        )
+        parent_row = await _task_access_row(connection, current_user, parent_task_id, edit=True)
         if parent_row["status"] in {"completed", "cancelled"}:
             raise WorkspaceRepositoryError(409, "A closed task cannot receive new subtasks")
     participant_ids: list[tuple[UUID, str]] = []
@@ -3056,41 +3064,53 @@ async def create_task(
     }
     await connection.execute(insert(tasks).values(**values))
     if participant_ids:
-        await connection.execute(insert(task_participants).values([
-            {
-                "task_id": task_id,
-                "user_id": participant_id,
-                "participant_role": role,
-            }
-            for participant_id, role in participant_ids
-        ]))
+        await connection.execute(
+            insert(task_participants).values(
+                [
+                    {
+                        "task_id": task_id,
+                        "user_id": participant_id,
+                        "participant_role": role,
+                    }
+                    for participant_id, role in participant_ids
+                ]
+            )
+        )
     if payload.checklist:
-        await connection.execute(insert(task_checklist_items).values([
-            {
-                "id": uuid4(),
-                "task_id": task_id,
-                "title": item.title,
-                "is_completed": False,
-                "sort_order": index,
-                "created_by_user_id": current_user.id,
-                "completed_by_user_id": None,
-                "completed_at": None,
-                "created_at": now,
-                "updated_at": now,
-            }
-            for index, item in enumerate(payload.checklist, start=1)
-        ]))
+        await connection.execute(
+            insert(task_checklist_items).values(
+                [
+                    {
+                        "id": uuid4(),
+                        "task_id": task_id,
+                        "title": item.title,
+                        "is_completed": False,
+                        "sort_order": index,
+                        "created_by_user_id": current_user.id,
+                        "completed_by_user_id": None,
+                        "completed_at": None,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                    for index, item in enumerate(payload.checklist, start=1)
+                ]
+            )
+        )
     if dependency_ids:
-        await connection.execute(insert(task_dependencies).values([
-            {
-                "task_id": task_id,
-                "depends_on_task_id": dependency_id,
-                "dependency_kind": dependency_kind,
-                "created_by_user_id": current_user.id,
-                "created_at": now,
-            }
-            for dependency_id, dependency_kind in dependency_ids
-        ]))
+        await connection.execute(
+            insert(task_dependencies).values(
+                [
+                    {
+                        "task_id": task_id,
+                        "depends_on_task_id": dependency_id,
+                        "dependency_kind": dependency_kind,
+                        "created_by_user_id": current_user.id,
+                        "created_at": now,
+                    }
+                    for dependency_id, dependency_kind in dependency_ids
+                ]
+            )
+        )
     await record_task_event(
         connection,
         task_id=task_id,
@@ -3206,9 +3226,7 @@ async def update_task(
             actor_user_id=current_user.id,
             assignee_user_id=assignee_id,
             due_at=payload.due_at,
-            old_value={
-                "dueAt": task_row["due_at"].isoformat() if task_row["due_at"] else None
-            },
+            old_value={"dueAt": task_row["due_at"].isoformat() if task_row["due_at"] else None},
             new_value={"dueAt": payload.due_at.isoformat() if payload.due_at else None},
         )
     await connection.execute(
@@ -3786,9 +3804,8 @@ def _next_calendar_occurrence(
     start_offset = 0 if include_current else 1
     for offset in range(start_offset, 366 * 8):
         candidate = local_value + timedelta(days=offset)
-        matches = (
-            (rule == "weekdays" and candidate.weekday() in weekdays)
-            or (rule == "month_days" and candidate.day in month_days)
+        matches = (rule == "weekdays" and candidate.weekday() in weekdays) or (
+            rule == "month_days" and candidate.day in month_days
         )
         if matches:
             return candidate.astimezone(UTC)
@@ -4609,6 +4626,31 @@ async def validate_attachment_owner(
 
     if owner_type == "task":
         await _task_access_row(connection, current_user, owner_id, edit=write)
+        return
+
+    if owner_type == "absence":
+        absence = (
+            (
+                await connection.execute(
+                    select(absence_requests).where(absence_requests.c.id == owner_id)
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if absence is None:
+            raise WorkspaceRepositoryError(404, "Больничный документ не найден")
+        allowed = (
+            current_user.role in {"admin", "superadmin"}
+            or absence["requester_user_id"] == current_user.id
+        )
+        writable = (
+            allowed
+            and absence["requester_user_id"] == current_user.id
+            and absence["kind"] == "sick_leave"
+        )
+        if not allowed or (write and not writable):
+            raise WorkspaceRepositoryError(404, "Больничный документ не найден")
         return
 
     row = (

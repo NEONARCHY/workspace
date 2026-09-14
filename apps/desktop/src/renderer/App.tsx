@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import type {
   ApprovalRequestSummary,
+  AbsenceAction,
+  AbsenceRequest,
+  AbsenceRequestInput,
   AuthenticationSession,
   CalendarEvent,
   CalendarEventInput,
@@ -22,6 +25,7 @@ import type {
   TripAction,
   TripRequest,
   TripRequestInput,
+  PresenceSummaryItem,
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspacePerson,
@@ -51,6 +55,7 @@ import {
   Navigation24Regular,
   News24Regular,
   PeopleTeam24Regular,
+  PersonAvailable24Regular,
   Settings24Regular,
   Edit16Regular,
   TaskListSquareLtr24Filled,
@@ -78,6 +83,7 @@ import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
+import { AbsencesView } from "./AbsencesView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
@@ -88,6 +94,7 @@ import {
   reorderPinnedChats,
   reorderNavigation,
   actOnWorkspaceTripRequest,
+  actOnWorkspaceAbsence,
   actOnWorkspaceApproval,
   addWorkspaceTaskChecklistItem,
   addWorkspaceTaskComment,
@@ -101,6 +108,7 @@ import {
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
+  createWorkspaceAbsence,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
@@ -169,6 +177,8 @@ interface WorkspaceState {
   readonly requests: readonly ApprovalRequestSummary[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
+  readonly absenceRequests: readonly AbsenceRequest[];
+  readonly presenceSummary: readonly PresenceSummaryItem[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];
@@ -195,6 +205,8 @@ const initialWorkspace: WorkspaceState = {
   requests: [],
   projects: [],
   tripRequests: [],
+  absenceRequests: [],
+  presenceSummary: [],
   feedPosts: [],
   calendarEvents: [],
   notifications: [],
@@ -205,6 +217,7 @@ const initialWorkspace: WorkspaceState = {
     approvalsEnabled: true,
     tripsEnabled: true,
     calendarEnabled: true,
+    absencesEnabled: true,
     remindersEnabled: true,
   },
   attachments: [],
@@ -235,6 +248,7 @@ const navItems: readonly NavItem[] = [
     icon: <Chat24Regular />,
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
+  { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
   { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
   { key: "settings", label: "Настройки", icon: <Settings24Regular /> },
@@ -510,6 +524,7 @@ export function App() {
       approval: preferences.approvalsEnabled,
       trip: preferences.tripsEnabled,
       calendar: preferences.calendarEnabled,
+      absence: preferences.absencesEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -566,7 +581,7 @@ export function App() {
   };
 
   const uploadFiles = async (
-    ownerType: "message" | "task" | "approval_request",
+    ownerType: "message" | "task" | "approval_request" | "absence",
     ownerId: string,
     files: readonly File[],
     documentRole: "general" | "primary" | "additional" = "general",
@@ -1143,6 +1158,34 @@ export function App() {
     runTripMutation((token) =>
       actOnWorkspaceTripRequest(token, tripRequest.id, action, comment));
 
+  const mergeAbsenceRequest = (absenceRequest: AbsenceRequest) => {
+    setWorkspace((current) => ({
+      ...current,
+      absenceRequests: current.absenceRequests.some((item) => item.id === absenceRequest.id)
+        ? current.absenceRequests.map((item) => item.id === absenceRequest.id ? absenceRequest : item)
+        : [absenceRequest, ...current.absenceRequests],
+    }));
+    return absenceRequest;
+  };
+
+  const runAbsenceMutation = async (
+    mutation: (token: string) => Promise<AbsenceRequest>,
+  ): Promise<AbsenceRequest | undefined> => {
+    if (session === undefined) return undefined;
+    try {
+      return mergeAbsenceRequest(await mutation(session.accessToken));
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
+  const handleCreateAbsence = (payload: AbsenceRequestInput) =>
+    runAbsenceMutation((token) => createWorkspaceAbsence(token, payload));
+
+  const handleAbsenceAction = (absenceRequest: AbsenceRequest, action: AbsenceAction, comment = "") =>
+    runAbsenceMutation((token) => actOnWorkspaceAbsence(token, absenceRequest.id, action, comment));
+
   const mergeFeedPost = (post: FeedPost) => {
     setWorkspace((current) => ({
       ...current,
@@ -1413,6 +1456,10 @@ export function App() {
                 onMarkRead={handleMarkNotificationRead}
                 onMarkAllRead={handleMarkAllNotificationsRead}
                 onUpdatePreferences={handleNotificationPreferences}
+                absenceRequests={workspace.absenceRequests}
+                onAbsenceAction={async (absenceRequest, action) => {
+                  await handleAbsenceAction(absenceRequest, action);
+                }}
               />
             ) : null}
             {displayedSection === "crm" ? (
@@ -1548,6 +1595,20 @@ export function App() {
                 onUpdate={handleUpdateCalendarEvent}
                 onCancel={handleCancelCalendarEvent}
                 focusEventId={focusTarget?.section === "calendar" ? focusTarget.entityId : undefined}
+              />
+            ) : null}
+            {displayedSection === "absences" ? (
+              <AbsencesView
+                currentUserId={workspace.currentUser.id}
+                people={workspace.people}
+                requests={workspace.absenceRequests}
+                summary={workspace.presenceSummary}
+                canAdmin={modulePermissions.absences?.admin === true}
+                onCreate={handleCreateAbsence}
+                onAction={handleAbsenceAction}
+                onUploadDocument={async (requestId, file) => {
+                  await uploadFiles("absence", requestId, [file]);
+                }}
               />
             ) : null}
             {displayedSection === "employees" ? (

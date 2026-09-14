@@ -1,6 +1,9 @@
 import type {
   NavigationKey,
   AdministrativeChat,
+  AbsenceAction,
+  AbsenceRequest,
+  AbsenceRequestInput,
   AdministrativeChatInspection,
   PersonalChatAction,
   PersonalPreferences,
@@ -224,6 +227,7 @@ export function updateEmployeeAccess(
   role: Exclude<WorkspaceRole, "superadmin">,
   positionId?: string,
   departmentId?: string,
+  directManagerUserId?: string,
 ): Promise<DirectoryEmployee> {
   return apiRequest<DirectoryEmployee>(
     `/directory/employees/${employeeId}`,
@@ -233,6 +237,7 @@ export function updateEmployeeAccess(
         role,
         positionId: positionId || null,
         departmentId: departmentId || null,
+        directManagerUserId: directManagerUserId || null,
       }),
     },
     token,
@@ -973,6 +978,18 @@ export function actOnWorkspaceTripRequest(
     { method: "POST", body: JSON.stringify({ action, comment }) },
     token,
   );
+}
+
+export function createWorkspaceAbsence(token: string, payload: AbsenceRequestInput): Promise<AbsenceRequest> {
+  return apiRequest<AbsenceRequest>("/absence-requests", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function updateWorkspaceAbsence(token: string, requestId: string, payload: AbsenceRequestInput): Promise<AbsenceRequest> {
+  return apiRequest<AbsenceRequest>(`/absence-requests/${requestId}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+}
+
+export function actOnWorkspaceAbsence(token: string, requestId: string, action: AbsenceAction, comment = ""): Promise<AbsenceRequest> {
+  return apiRequest<AbsenceRequest>(`/absence-requests/${requestId}/actions`, { method: "POST", body: JSON.stringify({ action, comment }) }, token);
 }
 
 export async function uploadWorkspaceAttachment(

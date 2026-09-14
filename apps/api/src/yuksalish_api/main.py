@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
+from .absence_service import materialize_sick_document_notifications
 from .database import create_database_engine
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
@@ -56,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     async with engine.begin() as connection:
                         created = await materialize_due_notifications(connection)
                         created += await materialize_efficiency_digest_notifications(connection)
+                        created += await materialize_sick_document_notifications(connection)
                     if created:
                         await lifespan_app.state.event_bus.publish(
                             {"type": "notifications.created", "count": created}
@@ -94,8 +96,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=[
-            "Authorization", "Content-Type", "X-Request-ID",
-            "X-Desktop-Version", "X-Release-Version",
+            "Authorization",
+            "Content-Type",
+            "X-Request-ID",
+            "X-Desktop-Version",
+            "X-Release-Version",
         ],
     )
 

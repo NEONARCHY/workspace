@@ -17,6 +17,12 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from yuksalish_api.absence_service import (
+    AbsenceError,
+    act_on_absence,
+    create_absence,
+    update_absence,
+)
 from yuksalish_api.access_control import ModuleAction, ensure_module_action
 from yuksalish_api.auth import (
     AuthenticatedUser,
@@ -77,6 +83,9 @@ from yuksalish_api.repository import (
     validate_attachment_owner,
 )
 from yuksalish_api.workspace_schemas import (
+    AbsenceActionRequest,
+    AbsenceRequestResponse,
+    AbsenceWriteRequest,
     ApprovalActionRequest,
     ApprovalRequestResponse,
     AttachmentOwnerType,
@@ -126,6 +135,10 @@ router = APIRouter(tags=["workspace"])
 
 
 def _translate(error: WorkspaceRepositoryError) -> HTTPException:
+    return HTTPException(status_code=error.status_code, detail=error.detail)
+
+
+def _translate_absence(error: AbsenceError) -> HTTPException:
     return HTTPException(status_code=error.status_code, detail=error.detail)
 
 
@@ -777,6 +790,61 @@ async def patch_project_stage(
     return result
 
 
+@router.post("/absence-requests", response_model=AbsenceRequestResponse, status_code=201)
+async def post_absence_request(
+    payload: AbsenceWriteRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> AbsenceRequestResponse:
+    await ensure_module_action(connection, current_user, "absences", "create")
+    try:
+        result = await create_absence(connection, current_user, payload)
+    except AbsenceError as error:
+        raise _translate_absence(error) from error
+    await _event_bus(request).publish({"type": "absence.created", "entityId": result.id})
+    return result
+
+
+@router.patch("/absence-requests/{request_id}", response_model=AbsenceRequestResponse)
+async def patch_absence_request(
+    request_id: UUID,
+    payload: AbsenceWriteRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> AbsenceRequestResponse:
+    await ensure_module_action(connection, current_user, "absences", "edit")
+    try:
+        result = await update_absence(connection, current_user, request_id, payload)
+    except AbsenceError as error:
+        raise _translate_absence(error) from error
+    await _event_bus(request).publish({"type": "absence.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/absence-requests/{request_id}/actions", response_model=AbsenceRequestResponse)
+async def post_absence_action(
+    request_id: UUID,
+    payload: AbsenceActionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> AbsenceRequestResponse:
+    await ensure_module_action(
+        connection,
+        current_user,
+        "absences",
+        "approve" if payload.action in {"approve", "acknowledge", "reject"} else "edit",
+    )
+    try:
+        result = await act_on_absence(connection, current_user, request_id, payload)
+    except AbsenceError as error:
+        raise _translate_absence(error) from error
+    await _event_bus(request).publish({"type": "absence.updated", "entityId": result.id})
+    return result
+
+
 @router.post("/trip-requests", response_model=TripRequestResponse, status_code=201)
 async def post_trip_request(
     payload: CreateTripRequest,
@@ -861,6 +929,7 @@ async def put_attachment(
         "message": "messenger",
         "task": "tasks",
         "approval_request": "payment_requests",
+        "absence": "absences",
     }[owner_type]
     await ensure_module_action(connection, current_user, attachment_module, "edit")
     safe_name = _safe_file_name(file_name)
@@ -967,6 +1036,7 @@ async def download_attachment(
             "message": "messenger",
             "task": "tasks",
             "approval_request": "payment_requests",
+            "absence": "absences",
         }[metadata.owner_type]
         await ensure_module_action(connection, current_user, attachment_module, "view")
         content = await _object_storage(request).get(storage_key)
