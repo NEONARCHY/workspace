@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   approvalColumnTotals,
   approvalDeadlinePresentation,
+  approvalRequestIsOverdue,
+  approvalRequestNeedsAction,
   approvalStagePalette,
   paymentStageColors,
 } from "./approval-board";
@@ -80,5 +82,28 @@ describe("Payment request deadline presentation", () => {
       status: "approved",
       details: { deadline: "2026-09-07T08:00:00Z" },
     }, now)).toMatchObject({ tone: "success", label: "Завершена" });
+  });
+});
+
+describe("Payment board actionable summary", () => {
+  const stage = (canAct: boolean) => ({ canAct });
+
+  it("counts a decision only for the person who can act", () => {
+    expect(approvalRequestNeedsAction({ status: "running", requesterId: "owner", activeStages: [stage(false), stage(true)] }, "reviewer")).toBe(true);
+    expect(approvalRequestNeedsAction({ status: "running", requesterId: "owner", activeStages: [stage(false)] }, "reviewer")).toBe(false);
+    expect(approvalRequestNeedsAction({ status: "approved", requesterId: "owner", activeStages: [stage(true)] }, "reviewer")).toBe(false);
+  });
+
+  it("includes the requester in correction without claiming a finished request needs action", () => {
+    const correction = { status: "needs_revision" as const, requesterId: "owner", activeStages: [stage(false)] };
+    expect(approvalRequestNeedsAction(correction, "owner")).toBe(true);
+    expect(approvalRequestNeedsAction(correction, "someone-else")).toBe(false);
+  });
+
+  it("counts actual overdue requests, not merely urgent upcoming deadlines", () => {
+    const now = new Date("2026-09-08T08:00:00Z");
+    expect(approvalRequestIsOverdue({ status: "running", details: { deadline: "2026-09-08T07:00:00Z" } }, now)).toBe(true);
+    expect(approvalRequestIsOverdue({ status: "running", details: { deadline: "2026-09-08T09:00:00Z" } }, now)).toBe(false);
+    expect(approvalRequestIsOverdue({ status: "approved", details: { deadline: "2026-09-08T07:00:00Z" } }, now)).toBe(false);
   });
 });

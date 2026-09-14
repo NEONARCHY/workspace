@@ -35,7 +35,7 @@ Yuksalish Workspace — корпоративное Windows-приложение 
 
 ## 3. Что читать перед изменениями
 
-- Общая визуальная система: `docs/design/workspace-design-system.md` и `docs/soft-spatial-workspace.md`.
+- Общая визуальная система: `docs/design/workspace-design-system.md` и `docs/soft-spatial-workspace.md`. Для поэтапной переделки интерфейса 2.0 также читай `docs/design/workspace-2-redesign-roadmap.md` и обновляй статус завершённого пакета только после проверки.
 - Анимации, шрифты, плавность: `docs/design/motion-and-rendering.md`, `docs/architecture/ui-motion-and-colors.md`.
 - Задачи и сотрудники: `docs/architecture/task-management.md`, `docs/design/record-lists.md`, `docs/design/task-composer.md`.
 - Messenger: `docs/architecture/messenger-groups.md`, `docs/design/message-actions.md`, `docs/architecture/personal-organization.md`.

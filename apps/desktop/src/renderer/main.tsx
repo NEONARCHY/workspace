@@ -14,6 +14,7 @@ import "./record-lists.css";
 import "./message-layout.css";
 import "./team-dashboard.css";
 import "./spatial-workspace.css";
+import "./workspace-2-payments.css";
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));

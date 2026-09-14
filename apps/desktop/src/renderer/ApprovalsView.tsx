@@ -14,6 +14,7 @@ import type {
   WorkflowPosition,
 } from "@yuksalish/contracts";
 import {
+  Avatar,
   Badge,
   Button,
   Input,
@@ -56,6 +57,8 @@ import type { PaymentRequestInput } from "./workspace-api";
 import {
   approvalColumnTotals,
   approvalDeadlinePresentation,
+  approvalRequestIsOverdue,
+  approvalRequestNeedsAction,
   approvalStagePalette,
 } from "./approval-board";
 import { AnimatedAmount } from "./AnimatedAmount";
@@ -594,6 +597,13 @@ function formatMoney(amount: number, currency: string): string {
   return `${new Intl.NumberFormat("ru-RU").format(amount)} ${currency}`;
 }
 
+function actionableRequestCaption(count: number): string {
+  const last = count % 10, lastTwo = count % 100;
+  if (last === 1 && lastTwo !== 11) return "заявка ждёт";
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "заявки ждут";
+  return "заявок ждут";
+}
+
 function formatDateTime(value: string | null | undefined): string {
   return value ? new Date(value).toLocaleString("ru-RU") : "Не указано";
 }
@@ -851,19 +861,32 @@ export function ApprovalsView({
     () => approvalBoardColumns(workflow, requests),
     [requests, workflow],
   );
-  const filteredRequests = useMemo(() => {
+  const boardSummary = useMemo(() => ({
+    actionable: requests.filter(request => approvalRequestNeedsAction(request, currentUserId)).length,
+    running: requests.filter(request => request.status === "running").length,
+    revision: requests.filter(request => request.status === "needs_revision").length,
+    overdue: requests.filter(request => approvalRequestIsOverdue(request)).length,
+  }), [currentUserId, requests]);
+  const matchingRequests = useMemo(() => {
     const query = requestQuery.trim().toLocaleLowerCase("ru-RU");
-    return requests.filter((request) => {
-      const matchesQuery = !query || [
-        request.number,
-        request.title,
-        request.purpose,
-        request.details.projectName,
-        request.details.projectCode,
-      ].some((value) => value.toLocaleLowerCase("ru-RU").includes(query));
-      if (!matchesQuery) return false;
+    return requests.filter(request => !query || [
+      request.number,
+      request.title,
+      request.purpose,
+      request.details.projectName,
+      request.details.projectCode,
+    ].some(value => value.toLocaleLowerCase("ru-RU").includes(query)));
+  }, [requestQuery, requests]);
+  const filterCounts = useMemo(() => ({
+    all: matchingRequests.length,
+    actionable: matchingRequests.filter(request => approvalRequestNeedsAction(request, currentUserId)).length,
+    revision: matchingRequests.filter(request => request.status === "needs_revision").length,
+    finished: matchingRequests.filter(request => ["approved", "rejected", "cancelled"].includes(request.status)).length,
+  }), [currentUserId, matchingRequests]);
+  const filteredRequests = useMemo(() => {
+    return matchingRequests.filter((request) => {
       if (boardFilter === "actionable") {
-        return approvalAdvancePlan(request, workflow, currentUserId) !== undefined;
+        return approvalRequestNeedsAction(request, currentUserId);
       }
       if (boardFilter === "revision") return request.status === "needs_revision";
       if (boardFilter === "finished") {
@@ -871,7 +894,7 @@ export function ApprovalsView({
       }
       return true;
     });
-  }, [boardFilter, currentUserId, requestQuery, requests, workflow]);
+  }, [boardFilter, currentUserId, matchingRequests]);
   const selectedRequest = useMemo(
     () => requests.find((request) => request.id === selectedRequestId),
     [requests, selectedRequestId],
@@ -1341,12 +1364,24 @@ export function ApprovalsView({
 
       {mode === "requests" ? (
         <div className="approval-workspace">
-          <div className="approval-commandbar">
-            <div className="approval-metrics" aria-label="Сводка заявок">
-              <span><strong>{requests.filter((request) => request.status === "running").length}</strong> в работе</span>
-              <span><strong>{requests.filter((request) => request.status === "needs_revision").length}</strong> на доработке</span>
-              <span><strong>{requests.filter((request) => request.status === "approved").length}</strong> оплачено</span>
+          <div className="approval-overview" aria-label="Сводка заявок на оплату">
+            <button
+              type="button"
+              className="approval-overview-focus"
+              aria-label={`Показать заявки, требующие моего решения: ${boardSummary.actionable}`}
+              onClick={() => setBoardFilter("actionable")}
+            >
+              <span className="approval-overview-eyebrow">Ваше внимание</span>
+              <span className="approval-overview-main"><strong>{boardSummary.actionable}</strong><span>{actionableRequestCaption(boardSummary.actionable)}<br />вашего решения</span></span>
+              <span className="approval-overview-link">Показать в доске <span aria-hidden="true">↗</span></span>
+            </button>
+            <div className="approval-overview-secondary" aria-label="Состояние всех заявок">
+              <div><strong>{boardSummary.running}</strong><span>В работе</span></div>
+              <div><strong>{boardSummary.revision}</strong><span>На доработке</span></div>
+              <div className={boardSummary.overdue ? "has-overdue" : ""}><strong>{boardSummary.overdue}</strong><span>Просрочено</span></div>
             </div>
+          </div>
+          <div className="approval-commandbar">
             <Input
               className="approval-search"
               aria-label="Поиск заявок"
@@ -1356,19 +1391,20 @@ export function ApprovalsView({
             />
             <div className="approval-board-filters" aria-label="Фильтр заявок">
               {([
-                ["all", "Все"],
-                ["actionable", "Нужно моё решение"],
-                ["revision", "Доработка"],
-                ["finished", "Завершённые"],
-              ] as const).map(([filter, label]) => (
+                ["all", "Все", filterCounts.all],
+                ["actionable", "Нужно моё решение", filterCounts.actionable],
+                ["revision", "Доработка", filterCounts.revision],
+                ["finished", "Завершённые", filterCounts.finished],
+              ] as const).map(([filter, label, count]) => (
                 <button
                   key={filter}
                   type="button"
                   className={boardFilter === filter ? "active" : ""}
+                  aria-label={label}
                   aria-pressed={boardFilter === filter}
                   onClick={() => setBoardFilter(filter)}
                 >
-                  {label}
+                  <span>{label}</span><span className="approval-filter-count" aria-hidden="true">{count}</span>
                 </button>
               ))}
             </div>
@@ -1431,11 +1467,12 @@ export function ApprovalsView({
                               {request.details.projectName || "Без проекта"}
                               {request.details.projectCode ? ` · ${request.details.projectCode}` : ""}
                             </span>
-                            <span className="approval-card-version">
-                              Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}
+                            <span className="approval-card-owner">
+                              <Avatar size={24} name={peopleById.get(request.responsibleUserId)?.name || "Ответственный"} color="colorful" />
+                              <span>{peopleById.get(request.responsibleUserId)?.name || "Ответственный не указан"}</span>
                             </span>
                             <span className="approval-card-meta">
-                              <span>{request.details.deadline ? `до ${formatDateTime(request.details.deadline)}` : "срок не указан"}</span>
+                              <span title={request.details.deadline ? `Срок: ${formatDateTime(request.details.deadline)}` : "Срок не указан"}>Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}</span>
                               <span>{requestAttachments} файл.</span>
                             </span>
                           </button>
