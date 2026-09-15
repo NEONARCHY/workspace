@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Yuksalish Forward</title>
+  <desc id="description">Two rising ribbons create an abstract Y and forward arrow.</desc>
+  <rect x="24" y="24" width="464" height="464" rx="116" fill="#FFFFFF"/>
+  <path d="M111 145h82l63 95 63-95h82L291 302v91h-70v-91Z" fill="#293A55"/>
+  <path d="M256 240c44-52 91-91 143-117l-5 67c-43 23-80 56-113 98Z" fill="#0091A8"/>
+  <path d="m400 123 3 78-69-40Z" fill="#0091A8"/>
+  <rect x="36" y="36" width="440" height="440" rx="104" fill="none" stroke="#E4ECEC" stroke-width="8"/>
+</svg>

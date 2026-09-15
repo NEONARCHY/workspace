@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Yuksalish Rise</title>
+  <desc id="description">A white Y and turquoise rising sweep on a navy rounded square.</desc>
+  <rect x="24" y="24" width="464" height="464" rx="116" fill="#293A55"/>
+  <path d="M146 151 256 270 366 151" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 267v111" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round"/>
+  <path d="M121 213c72-68 177-93 278-58-31 4-58 15-81 32-68-13-133-4-197 26Z" fill="#0091A8"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Yuksalish Workflow</title>
+  <desc id="description">Connected workflow points form a Y on a turquoise rounded square.</desc>
+  <rect x="24" y="24" width="464" height="464" rx="116" fill="#0091A8"/>
+  <path d="M150 150 256 257l106-107M256 257v119" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="150" cy="150" r="40" fill="#FFFFFF"/>
+  <circle cx="362" cy="150" r="40" fill="#FFFFFF"/>
+  <circle cx="256" cy="376" r="40" fill="#FFFFFF"/>
+  <circle cx="256" cy="257" r="46" fill="#293A55"/>
+  <circle cx="256" cy="257" r="16" fill="#FFFFFF"/>
+</svg>

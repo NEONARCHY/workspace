@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Yuksalish Route</title>
+  <desc id="description">A two-colour Y route with an upward turquoise destination.</desc>
+  <rect x="24" y="24" width="464" height="464" rx="116" fill="#F5F9F7"/>
+  <rect x="36" y="36" width="440" height="440" rx="104" fill="none" stroke="#DCE7E7" stroke-width="8"/>
+  <path d="M151 153 252 263v116" fill="none" stroke="#293A55" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M252 263c40-38 74-76 106-116" fill="none" stroke="#0091A8" stroke-width="60" stroke-linecap="round"/>
+  <path d="m346 111 66 4-15 64Z" fill="#0091A8"/>
+  <circle cx="252" cy="263" r="18" fill="#FFFFFF"/>
+</svg>

@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" role="img" aria-labelledby="title description">
+  <title id="title">Yuksalish application icon concepts</title>
+  <desc id="description">Four square application icon concepts shown on a light workspace canvas.</desc>
+  <rect width="1280" height="420" rx="34" fill="#EEF3F4"/>
+  <text x="54" y="58" fill="#293A55" font-family="Gilroy, Arial, sans-serif" font-size="28" font-weight="600">Yuksalish — варианты иконки</text>
+  <g transform="translate(54 92)">
+    <rect width="260" height="270" rx="30" fill="#FFFFFF"/>
+    <g transform="translate(22 16) scale(.421875)">
+      <rect x="24" y="24" width="464" height="464" rx="116" fill="#293A55"/>
+      <path d="M146 151 256 270 366 151" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M256 267v111" fill="none" stroke="#FFFFFF" stroke-width="58" stroke-linecap="round"/>
+      <path d="M121 213c72-68 177-93 278-58-31 4-58 15-81 32-68-13-133-4-197 26Z" fill="#0091A8"/>
+    </g>
+    <text x="22" y="250" fill="#293A55" font-family="Gilroy, Arial, sans-serif" font-size="17" font-weight="600">01 · Rise</text>
+  </g>
+  <g transform="translate(358 92)">
+    <rect width="260" height="270" rx="30" fill="#FFFFFF"/>
+    <g transform="translate(22 16) scale(.421875)">
+      <rect x="24" y="24" width="464" height="464" rx="116" fill="#F5F9F7"/>
+      <rect x="36" y="36" width="440" height="440" rx="104" fill="none" stroke="#DCE7E7" stroke-width="8"/>
+      <path d="M151 153 252 263v116" fill="none" stroke="#293A55" stroke-width="60" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M252 263c40-38 74-76 106-116" fill="none" stroke="#0091A8" stroke-width="60" stroke-linecap="round"/>
+      <path d="m346 111 66 4-15 64Z" fill="#0091A8"/>
+      <circle cx="252" cy="263" r="18" fill="#FFFFFF"/>
+    </g>
+    <text x="22" y="250" fill="#293A55" font-family="Gilroy, Arial, sans-serif" font-size="17" font-weight="600">02 · Route</text>
+  </g>
+  <g transform="translate(662 92)">
+    <rect width="260" height="270" rx="30" fill="#FFFFFF"/>
+    <g transform="translate(22 16) scale(.421875)">
+      <rect x="24" y="24" width="464" height="464" rx="116" fill="#0091A8"/>
+      <path d="M150 150 256 257l106-107M256 257v119" fill="none" stroke="#FFFFFF" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="150" cy="150" r="40" fill="#FFFFFF"/>
+      <circle cx="362" cy="150" r="40" fill="#FFFFFF"/>
+      <circle cx="256" cy="376" r="40" fill="#FFFFFF"/>
+      <circle cx="256" cy="257" r="46" fill="#293A55"/>
+      <circle cx="256" cy="257" r="16" fill="#FFFFFF"/>
+    </g>
+    <text x="22" y="250" fill="#293A55" font-family="Gilroy, Arial, sans-serif" font-size="17" font-weight="600">03 · Workflow</text>
+  </g>
+  <g transform="translate(966 92)">
+    <rect width="260" height="270" rx="30" fill="#FFFFFF"/>
+    <g transform="translate(22 16) scale(.421875)">
+      <rect x="24" y="24" width="464" height="464" rx="116" fill="#FFFFFF"/>
+      <path d="M111 145h82l63 95 63-95h82L291 302v91h-70v-91Z" fill="#293A55"/>
+      <path d="M256 240c44-52 91-91 143-117l-5 67c-43 23-80 56-113 98Z" fill="#0091A8"/>
+      <path d="m400 123 3 78-69-40Z" fill="#0091A8"/>
+      <rect x="36" y="36" width="440" height="440" rx="104" fill="none" stroke="#E4ECEC" stroke-width="8"/>
+    </g>
+    <text x="22" y="250" fill="#293A55" font-family="Gilroy, Arial, sans-serif" font-size="17" font-weight="600">04 · Forward</text>
+  </g>
+</svg>

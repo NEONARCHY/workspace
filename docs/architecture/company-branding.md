@@ -24,7 +24,10 @@ SHA-256 оригиналов и копий совпадает:
 - `yuksalish-logo-white.png`: `1FFE7A401C199404356CC4152AB1A1854072F467FB44C2AA717A2566F88EF466`.
 - `yuksalish-logo-color.png`: `5C3766F2DF5FE97828D5281D8E12CF7981F6A37F946B4AA59DEA456EE7532C1D`.
 
-Иконка EXE/ярлыка не заменялась: запрос касается логотипа внутри интерфейса; отдельного квадратного значка приложения пока нет.
+Иконка EXE/ярлыка пока не заменена. Четыре квадратных направления для выбора находятся
+в [`docs/design/assets/app-icon-concepts`](../design/assets/app-icon-concepts/README.md):
+исходные SVG, PNG-превью и multi-resolution Windows ICO. До решения владельца ни один
+вариант не подключён к Electron builder.
 
 ## Проверки
 
