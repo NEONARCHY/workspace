@@ -52,9 +52,9 @@ async def test_module_catalog_has_all_locales() -> None:
         "feed",
         "projects",
         "trip_approvals",
-        "absences",
         "messenger",
         "calendar",
+        "absences",
         "employees",
     ]
     assert all(

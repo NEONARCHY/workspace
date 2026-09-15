@@ -207,6 +207,7 @@ async def load_directory(
                     users.c.role,
                     users.c.department_id,
                     users.c.position_id,
+                    users.c.direct_manager_user_id,
                     func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
                     users.c.status,
                 )
