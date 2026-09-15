@@ -782,7 +782,8 @@ export interface DevelopmentSession {
 
 export interface AuthenticationSession {
   readonly accessToken: string;
-  readonly refreshToken: string;
+  readonly refreshToken?: string;
+  readonly csrfToken?: string;
   readonly tokenType: "bearer";
   readonly expiresIn: number;
   readonly user: WorkspacePerson;

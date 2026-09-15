@@ -31,6 +31,7 @@ from .tables import (
     positions,
     users,
 )
+from .web_security import token_hash
 
 _PASSWORD_HASHER = PasswordHasher(
     time_cost=3,
@@ -57,6 +58,7 @@ class AuthResult:
     refresh_token: str
     expires_in: int
     user: Record
+    csrf_token: str | None = None
 
 
 def hash_password(password: str) -> str:
@@ -191,16 +193,20 @@ async def _create_session(
     settings: Settings,
     device_label: str,
     *,
+    client_kind: str = "desktop",
     now: datetime | None = None,
 ) -> AuthResult:
     created_at = datetime.now(UTC) if now is None else now
     session_id = uuid4()
     refresh_token = secrets.token_urlsafe(48)
+    csrf_token = secrets.token_urlsafe(32) if client_kind == "web" else None
     await connection.execute(
         insert(auth_sessions).values(
             id=session_id,
             user_id=user["id"],
             refresh_token_hash=_hash_token(refresh_token),
+            client_kind=client_kind,
+            csrf_token_hash=token_hash(csrf_token) if csrf_token else None,
             device_label=device_label,
             created_at=created_at,
             expires_at=created_at + timedelta(days=settings.refresh_token_ttl_days),
@@ -219,6 +225,7 @@ async def _create_session(
         refresh_token=refresh_token,
         expires_in=settings.access_token_ttl_seconds,
         user=user,
+        csrf_token=csrf_token,
     )
 
 
@@ -230,6 +237,7 @@ async def login_with_password(
     device_label: str,
     settings: Settings,
     *,
+    client_kind: str = "desktop",
     now: datetime | None = None,
 ) -> AuthResult:
     current_time = datetime.now(UTC) if now is None else now
@@ -295,7 +303,14 @@ async def login_with_password(
         .where(users.c.id == row["id"])
         .values(failed_login_count=0, locked_until=None, updated_at=current_time)
     )
-    return await _create_session(connection, row, settings, device_label, now=current_time)
+    return await _create_session(
+        connection,
+        row,
+        settings,
+        device_label,
+        client_kind=client_kind,
+        now=current_time,
+    )
 
 
 async def refresh_session(
@@ -303,6 +318,8 @@ async def refresh_session(
     refresh_token: str,
     settings: Settings,
     *,
+    expected_client_kind: str = "desktop",
+    csrf_token: str | None = None,
     now: datetime | None = None,
 ) -> AuthResult:
     current_time = datetime.now(UTC) if now is None else now
@@ -311,6 +328,8 @@ async def refresh_session(
             auth_sessions.c.id.label("session_id"),
             auth_sessions.c.expires_at,
             auth_sessions.c.revoked_at,
+            auth_sessions.c.client_kind,
+            auth_sessions.c.csrf_token_hash,
             users.c.id,
             users.c.username,
             users.c.full_name,
@@ -329,13 +348,24 @@ async def refresh_session(
         or row["revoked_at"] is not None
         or row["expires_at"] <= current_time
         or row["status"] != "active"
+        or row["client_kind"] != expected_client_kind
     ):
         raise AuthServiceError(401, "Refresh session is not active")
+    if expected_client_kind == "web" and (
+        csrf_token is None
+        or not hmac.compare_digest(token_hash(csrf_token), row["csrf_token_hash"] or "")
+    ):
+        raise AuthServiceError(403, "CSRF validation failed")
     rotated_token = secrets.token_urlsafe(48)
+    rotated_csrf = secrets.token_urlsafe(32) if expected_client_kind == "web" else None
     await connection.execute(
         update(auth_sessions)
         .where(auth_sessions.c.id == row["session_id"])
-        .values(refresh_token_hash=_hash_token(rotated_token), last_seen_at=current_time)
+        .values(
+            refresh_token_hash=_hash_token(rotated_token),
+            csrf_token_hash=token_hash(rotated_csrf) if rotated_csrf else None,
+            last_seen_at=current_time,
+        )
     )
     return AuthResult(
         access_token=issue_access_token(
@@ -348,6 +378,7 @@ async def refresh_session(
         refresh_token=rotated_token,
         expires_in=settings.access_token_ttl_seconds,
         user=row,
+        csrf_token=rotated_csrf,
     )
 
 
@@ -430,6 +461,7 @@ async def accept_invitation(
     device_label: str,
     settings: Settings,
     *,
+    client_kind: str = "desktop",
     now: datetime | None = None,
 ) -> AuthResult:
     current_time = datetime.now(UTC) if now is None else now
@@ -474,7 +506,14 @@ async def accept_invitation(
         .where(auth_invitations.c.id == row["invitation_id"])
         .values(accepted_at=current_time)
     )
-    return await _create_session(connection, row, settings, device_label, now=current_time)
+    return await _create_session(
+        connection,
+        row,
+        settings,
+        device_label,
+        client_kind=client_kind,
+        now=current_time,
+    )
 
 
 async def create_password_reset(
@@ -617,6 +656,7 @@ async def complete_password_reset(
     device_label: str,
     settings: Settings,
     *,
+    client_kind: str = "desktop",
     now: datetime | None = None,
 ) -> AuthResult:
     current_time = datetime.now(UTC) if now is None else now
@@ -679,7 +719,14 @@ async def complete_password_reset(
         .where(auth_password_resets.c.id == row["reset_id"])
         .values(consumed_at=current_time)
     )
-    return await _create_session(connection, row, settings, device_label, now=current_time)
+    return await _create_session(
+        connection,
+        row,
+        settings,
+        device_label,
+        client_kind=client_kind,
+        now=current_time,
+    )
 
 
 async def begin_totp_setup(
