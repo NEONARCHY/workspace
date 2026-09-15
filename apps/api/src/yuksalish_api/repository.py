@@ -376,6 +376,7 @@ def _approval_request(
     status_value = str(row["status"])
     return ApprovalRequestResponse(
         id=str(row["id"]),
+        workflow_id=str(row["template_id"]),
         number=str(payload.get("number", str(row["id"])[:8])),
         title=row["title"],
         amount=int(payload.get("amount", 0)),
@@ -1071,6 +1072,28 @@ async def _workflow_response(
             for row in edge_rows
         ],
     )
+
+
+async def _request_workflows(
+    connection: AsyncConnection,
+    request_rows: Sequence[Record],
+) -> dict[UUID, WorkflowResponse]:
+    template_ids = list(dict.fromkeys(row["template_id"] for row in request_rows))
+    if not template_ids:
+        return {}
+    template_rows = (
+        (
+            await connection.execute(
+                select(approval_templates).where(approval_templates.c.id.in_(template_ids))
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return {
+        row["id"]: await _workflow_response(connection, row)
+        for row in template_rows
+    }
 
 
 async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
@@ -2229,6 +2252,11 @@ async def load_workspace(
     versions_by_request = await _request_versions(connection, request_ids)
     actions_by_request = await _request_actions(connection, request_ids)
     deadline_controls_by_request = await _request_deadline_controls(connection, request_rows)
+    request_workflows = (
+        await _request_workflows(connection, request_rows)
+        if can("payment_requests")
+        else {}
+    )
 
     project_rows = (
         (
@@ -2387,6 +2415,9 @@ async def load_workspace(
         ]
         if can("payment_requests")
         else [],
+        request_workflows=(
+            list(request_workflows.values()) if can("payment_requests") else []
+        ),
         projects=[
             _project(row, current_user, project_history.get(row["id"], [])) for row in project_rows
         ]
@@ -4098,8 +4129,8 @@ async def save_workflow(
     template_id: UUID,
     payload: SaveWorkflowRequest,
 ) -> WorkflowResponse:
-    if current_user.role not in {"manager", "admin", "superadmin"}:
-        raise WorkspaceRepositoryError(403, "Only managers can edit workflows")
+    if current_user.role not in {"admin", "superadmin"}:
+        raise WorkspaceRepositoryError(403, "Only administrators can edit workflows")
     _validate_graph(payload)
     template = (
         (
@@ -4169,8 +4200,8 @@ async def publish_workflow(
     current_user: AuthenticatedUser,
     template_id: UUID,
 ) -> WorkflowResponse:
-    if current_user.role not in {"manager", "admin", "superadmin"}:
-        raise WorkspaceRepositoryError(403, "Only managers can publish workflows")
+    if current_user.role not in {"admin", "superadmin"}:
+        raise WorkspaceRepositoryError(403, "Only administrators can publish workflows")
     template = (
         (
             await connection.execute(
