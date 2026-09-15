@@ -1136,7 +1136,7 @@ class NotificationPreferencesUpdate(ApiModel):
     approvals_enabled: bool
     trips_enabled: bool
     calendar_enabled: bool
-    absences_enabled: bool
+    absences_enabled: bool = True
     reminders_enabled: bool
 
 
