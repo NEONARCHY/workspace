@@ -131,6 +131,16 @@ if ($Environment -in @("staging", "production")) {
         if (-not $private) {
             throw "YUKSALISH_LAN_IP must be an RFC 1918 private IPv4 address."
         }
+        try {
+            $origins = @($values["YUKSALISH_CORS_ORIGINS"] | ConvertFrom-Json)
+        }
+        catch {
+            throw "YUKSALISH_CORS_ORIGINS must be a JSON array."
+        }
+        $requiredWebOrigin = "https://$($values['YUKSALISH_LAN_IP']):8443"
+        if ($origins -notcontains "null" -or $origins -notcontains $requiredWebOrigin) {
+            throw "YUKSALISH_CORS_ORIGINS must contain 'null' and '$requiredWebOrigin'."
+        }
     }
 }
 

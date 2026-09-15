@@ -65,7 +65,7 @@ $lines = @(
     "YUKSALISH_S3_SECRET_KEY=$minioPassword",
     "YUKSALISH_S3_SECURE=false",
     "YUKSALISH_S3_BUCKET=$bucket",
-    'YUKSALISH_CORS_ORIGINS=["null"]'
+    "YUKSALISH_CORS_ORIGINS=[`"null`",`"https://${ServerIp}:8443`"]"
 )
 [System.IO.File]::WriteAllLines($target, $lines, [System.Text.UTF8Encoding]::new($false))
 & (Join-Path $projectRoot "scripts\validate-environment.ps1") -Environment production `

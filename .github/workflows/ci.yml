@@ -77,6 +77,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm build:web
+      - name: Validate LAN web Compose
+        shell: pwsh
+        run: |
+          $env:YUKSALISH_ENV_FILE = (Resolve-Path ".env.lan.example").Path
+          $env:YUKSALISH_WEB_BUILD_ID = "ci"
+          docker compose --env-file .env.lan.example `
+            -f infrastructure/compose.yaml `
+            -f infrastructure/compose.lan.yaml config --quiet
       - run: pnpm audit --audit-level low
 
   secrets:
