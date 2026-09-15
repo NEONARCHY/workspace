@@ -36,7 +36,7 @@ localhost origins or development-only values.
 
 For a LAN handoff, use `scripts/lan/new-server-environment.ps1` and validate with
 `-Environment production -NetworkMode lan -EnvFile .env.lan`. Follow
-`docs/operations/lan-server-handoff.md`; do not use Cloudflare credentials for LAN mode.
+`docs/operations/lan-server-transfer.md`; do not use Cloudflare credentials for LAN mode.
 
 ## Start Compose with an explicit environment
 

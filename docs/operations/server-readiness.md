@@ -38,6 +38,6 @@ measured pilot data, file growth and backup duration.
 ## Domain and Cloudflare status
 
 No domain or Cloudflare account exists yet. The LAN-only production-mode pilot can use the
-internal HTTPS procedure in [lan-server-handoff.md](lan-server-handoff.md). Public access and
+internal HTTPS procedure in [lan-server-transfer.md](lan-server-transfer.md). Public access and
 remote employees remain blocked until a separate Internet-access design, domain and account
 are ready. A LAN deployment must not be treated as a remotely accessible server.
