@@ -39,8 +39,10 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  Handle,
   MarkerType,
   MiniMap,
+  Position,
   ReactFlow,
   useEdgesState,
   useNodesState,
@@ -49,6 +51,8 @@ import {
   type EdgeChange,
   type Node,
   type NodeChange,
+  type NodeProps,
+  type NodeTypes,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -89,6 +93,7 @@ interface ApprovalsViewProps {
   readonly people: readonly WorkspacePerson[];
   readonly positions: readonly WorkflowPosition[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly requestWorkflows?: readonly WorkflowDefinition[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
   readonly onSaveWorkflow: (workflow: WorkflowDefinition) => void | Promise<void>;
@@ -221,6 +226,34 @@ const kindLabels: Readonly<Record<ApprovalNodeKind, string>> = {
   end: "Завершение",
 };
 
+const roleLabels: Readonly<Record<string, string>> = {
+  manager: "Руководитель",
+  admin: "Администратор",
+  superadmin: "Суперадминистратор",
+  employee: "Сотрудник",
+};
+
+function WorkflowObjectNode({ data, selected }: NodeProps<ApprovalNode>) {
+  const journeyState = typeof data.journeyState === "string" ? data.journeyState : "editor";
+  const statusText = typeof data.statusText === "string" ? data.statusText : data.detail;
+  const assignee = typeof data.assignee === "string" ? data.assignee : "";
+  return (
+    <div className={`workflow-object-node state-${journeyState}${selected ? " is-selected" : ""}`}>
+      <Handle type="target" position={Position.Left} />
+      <div className="workflow-object-heading">
+        <i aria-hidden="true" />
+        <span>{kindLabels[data.kind]}</span>
+      </div>
+      <strong>{data.label}</strong>
+      {statusText ? <small>{statusText}</small> : null}
+      {assignee ? <em>{assignee}</em> : null}
+      <Handle type="source" position={Position.Right} />
+    </div>
+  );
+}
+
+const workflowNodeTypes: NodeTypes = { approvalObject: WorkflowObjectNode };
+
 interface PaymentFormState {
   readonly transferType: NonNullable<PaymentRequestDetails["transferType"]> | "";
   readonly projectName: string;
@@ -318,9 +351,12 @@ function workflowNodeConfig(data: ApprovalNodeData): Readonly<Record<string, unk
 }
 
 function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
-  if (workflow === undefined) return initialNodes;
+  if (workflow === undefined) {
+    return initialNodes.map((node) => ({ ...node, type: "approvalObject" }));
+  }
   return workflow.nodes.map((node) => ({
     id: node.id,
+    type: "approvalObject",
     position: { x: node.positionX, y: node.positionY },
     data: { ...node.config, label: node.label, kind: node.kind, detail: node.detail },
     className: `workflow-node node-${node.kind}`,
@@ -485,6 +521,117 @@ function requestBoardColumn(
     ?? request.activeNodeKeys[0]
     ?? columns.find((column) => column.kind === "start")?.key
     ?? "";
+}
+
+function workflowAssignee(
+  node: WorkflowDefinition["nodes"][number],
+  people: readonly WorkspacePerson[],
+  positions: readonly WorkflowPosition[],
+): string {
+  const userId = typeof node.config.approverUserId === "string"
+    ? node.config.approverUserId
+    : "";
+  const positionId = typeof node.config.approverPositionId === "string"
+    ? node.config.approverPositionId
+    : "";
+  const role = typeof node.config.approverRole === "string" ? node.config.approverRole : "";
+  if (userId) return people.find((person) => person.id === userId)?.name ?? "Назначенный сотрудник";
+  if (positionId) {
+    return positions.find((position) => position.id === positionId)?.name ?? "Назначенная должность";
+  }
+  if (role) return roleLabels[role] ?? role;
+  if (node.kind === "start") return "Инициатор заявки";
+  if (node.kind === "condition") return "Автоматическое правило";
+  if (node.kind === "parallel") {
+    return node.config.decisionMode === "any" ? "Достаточно одной ветви" : "Нужны все ветви";
+  }
+  return "По правилам маршрута";
+}
+
+interface ApprovalJourneyProps {
+  readonly request: ApprovalRequestSummary;
+  readonly workflow?: WorkflowDefinition;
+  readonly people: readonly WorkspacePerson[];
+  readonly positions: readonly WorkflowPosition[];
+}
+
+function ApprovalJourney({ request, workflow, people, positions }: ApprovalJourneyProps) {
+  if (workflow === undefined) return null;
+  const completedKeys = new Set(
+    request.actions
+      .filter((action) => ["approve", "resubmit"].includes(action.action))
+      .map((action) => action.nodeKey),
+  );
+  const finalColumn = requestBoardColumn(
+    request,
+    workflow.nodes.map((node) => ({ key: node.id, label: node.label, kind: node.kind })),
+  );
+  const journeyNodes: ApprovalNode[] = workflow.nodes.map((node) => {
+    const isCurrent = request.activeNodeKeys.includes(node.id)
+      || request.activeStages.some((stage) => stage.key === node.id)
+      || (["approved", "rejected", "cancelled"].includes(request.status) && node.id === finalColumn);
+    const isComplete = node.kind === "start" || completedKeys.has(node.id);
+    const journeyState = isCurrent ? "current" : isComplete ? "complete" : "waiting";
+    const currentStage = request.activeStages.find((stage) => stage.key === node.id);
+    const statusText = isCurrent
+      ? currentStage?.canAct ? "Ждёт вашего решения" : "Сейчас выполняется"
+      : isComplete ? "Подтверждено историей" : node.kind === "condition"
+        ? "Выбор ветви по данным заявки" : "Следующий возможный этап";
+    return {
+      id: node.id,
+      type: "approvalObject",
+      position: { x: node.positionX * 0.76, y: node.positionY * 0.8 },
+      data: {
+        ...node.config,
+        label: node.label,
+        kind: node.kind,
+        detail: node.detail,
+        journeyState,
+        statusText,
+        assignee: workflowAssignee(node, people, positions),
+      },
+      className: `workflow-node node-${node.kind} journey-${journeyState}`,
+    };
+  });
+  const journeyEdges = flowEdges(workflow).map((edge) => ({
+    ...edge,
+    animated: request.activeNodeKeys.includes(edge.target),
+    className: request.activeNodeKeys.includes(edge.target) ? "journey-edge-current" : "",
+  }));
+  return (
+    <section className="approval-journey" aria-label="Живой маршрут заявки">
+      <header>
+        <div>
+          <span>Живой маршрут</span>
+          <strong>{request.activeStages.length > 1 ? `${request.activeStages.length} этапа идут параллельно` : request.stageLabel}</strong>
+        </div>
+        <div className="approval-journey-legend" aria-label="Обозначения маршрута">
+          <span className="complete">Пройдено</span>
+          <span className="current">Сейчас</span>
+          <span>Дальше</span>
+        </div>
+      </header>
+      <div className="approval-journey-map" aria-label={`Карта маршрута заявки ${request.number}`}>
+        <ReactFlow
+          nodes={journeyNodes}
+          edges={journeyEdges}
+          nodeTypes={workflowNodeTypes}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable={false}
+          zoomOnDoubleClick={false}
+          fitView
+          fitViewOptions={{ padding: 0.22, maxZoom: 0.9 }}
+          minZoom={0.35}
+          maxZoom={1.1}
+          proOptions={{ hideAttribution: true }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d8e4e2" />
+        </ReactFlow>
+      </div>
+      <p>Статусы «Пройдено» основаны только на подтверждённой истории действий. Остальные блоки показывают возможное продолжение опубликованного маршрута.</p>
+    </section>
+  );
 }
 
 function requestConditionValue(request: ApprovalRequestSummary, field: string): unknown {
@@ -775,6 +922,7 @@ export function ApprovalsView({
   people,
   positions,
   requests,
+  requestWorkflows = [],
   attachments,
   workflow,
   onSaveWorkflow,
@@ -788,7 +936,7 @@ export function ApprovalsView({
   const [mode, setMode] = useState<ApprovalMode>("requests");
   const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
   const [edges, setEdges, onEdgesChange] = useEdgesState<ApprovalEdge>(flowEdges(workflow));
-  const [selectedNodeId, setSelectedNodeId] = useState<string>("amount");
+  const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [saved, setSaved] = useState(true);
   const [saveError, setSaveError] = useState("");
   const baselineSnapshotRef = useRef<WorkflowSnapshot>(
@@ -1076,6 +1224,7 @@ export function ApprovalsView({
       ...current,
       {
         id,
+        type: "approvalObject",
         position: { x: 380 + current.length * 18, y: 210 + current.length * 12 },
         data,
         className: `workflow-node node-${kind}`,
@@ -1387,15 +1536,16 @@ export function ApprovalsView({
           >
             Текущие заявки
           </button>
-          <button
-            type="button"
-            aria-pressed={mode === "designer"}
-            className={mode === "designer" ? "active" : ""}
-            disabled={!canManage}
-            onClick={() => setMode("designer")}
-          >
-            Конструктор маршрутов
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              aria-pressed={mode === "designer"}
+              className={mode === "designer" ? "active" : ""}
+              onClick={() => setMode("designer")}
+            >
+              Конструктор маршрутов
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -1688,6 +1838,16 @@ export function ApprovalsView({
                   ))}
                 </div>
 
+                <ApprovalJourney
+                  request={selectedRequest}
+                  workflow={
+                    requestWorkflows.find((candidate) => candidate.id === selectedRequest.workflowId)
+                    ?? workflow
+                  }
+                  people={people}
+                  positions={positions}
+                />
+
                 <div className="approval-detail-content" role="region" tabIndex={0} aria-label="Содержимое карточки заявки">
                   <section className="approval-detail-facts" role="region" tabIndex={0} aria-label="Сведения о заявке">
                     <div className="approval-amount-block">
@@ -1874,15 +2034,19 @@ export function ApprovalsView({
       ) : (
         <div className="workflow-layout">
           <aside className="workflow-library">
-            <div>
+            <div className="workflow-template-summary">
               <span className="detail-kicker">Шаблон</span>
               <h2>{workflow?.name ?? "Заявка на оплату"}</h2>
               <p>
                 Черновик v{workflow?.version ?? "—"} · опубликована v{workflow?.publishedVersion ?? "—"}
               </p>
+              <dl>
+                <div><dt>Блоки</dt><dd>{nodes.length}</dd></div>
+                <div><dt>Связи</dt><dd>{edges.length}</dd></div>
+              </dl>
             </div>
             <div className="node-library">
-              <strong>Добавить элемент</strong>
+              <strong>Новый объект маршрута</strong>
               <Button appearance="subtle" icon={<CheckmarkCircle24Regular />} onClick={() => addNode("approval")}>
                 Согласование
               </Button>
@@ -1897,14 +2061,20 @@ export function ApprovalsView({
               </Button>
             </div>
             <div className="workflow-help">
-              Перетаскивайте блоки и соединяйте точки на их границах. Положение блока не меняет правило исполнения.
+              <strong>Как работать со схемой</strong>
+              <span>Перетаскивайте блоки и соединяйте точки на границах. Геометрия помогает читать маршрут, но не меняет порядок исполнения.</span>
             </div>
           </aside>
 
           <div className="workflow-canvas" aria-label="Дерево согласования заявки на оплату">
+            <div className="workflow-canvas-heading">
+              <div><span>Карта процесса</span><strong>От заявки до финального решения</strong></div>
+              <div className="workflow-canvas-legend"><span>Согласование</span><span>Правило</span><span>Доработка</span></div>
+            </div>
             <ReactFlow
               nodes={nodes}
               edges={edges}
+              nodeTypes={workflowNodeTypes}
               onNodesChange={handleNodesChange}
               onEdgesChange={handleEdgesChange}
               onNodeDragStart={() => {
@@ -1933,6 +2103,7 @@ export function ApprovalsView({
               fitViewOptions={{ padding: 0.2 }}
               minZoom={0.45}
               maxZoom={1.6}
+              proOptions={{ hideAttribution: true }}
             >
               <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#c7d2df" />
               <MiniMap pannable zoomable nodeColor="#d9e8f6" maskColor="rgba(245, 247, 250, .74)" />
@@ -1940,9 +2111,16 @@ export function ApprovalsView({
             </ReactFlow>
           </div>
 
-          <aside className="workflow-inspector" hidden={selectedNode === undefined}>
+          <aside
+            className={`workflow-inspector${selectedNode === undefined ? " is-empty" : ""}`}
+            aria-label="Настройки выбранного блока"
+          >
             {selectedNode === undefined ? (
-              <div className="empty-compact">Выберите блок на схеме</div>
+              <div className="workflow-inspector-empty">
+                <CircleEdit24Regular />
+                <strong>Выберите блок</strong>
+                <span>Здесь появятся исполнитель, правила перехода и контроль срока выбранного объекта.</span>
+              </div>
             ) : (
               <>
                 <div className="inspector-heading">

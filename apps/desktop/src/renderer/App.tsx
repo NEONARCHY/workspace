@@ -169,6 +169,7 @@ interface WorkspaceState {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly requestWorkflows?: readonly WorkflowDefinition[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
   readonly feedPosts: readonly FeedPost[];
@@ -195,6 +196,7 @@ const initialWorkspace: WorkspaceState = {
   messages: initialMessages,
   tasks: initialTasks,
   requests: [],
+  requestWorkflows: [],
   projects: [],
   tripRequests: [],
   feedPosts: [],
@@ -1512,12 +1514,16 @@ export function App() {
             {displayedSection === "payment_requests" && workspace.workflow ? (
               <ApprovalsView
                 key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
-                canManage={modulePermissions.payment_requests?.admin ?? ["manager", "admin", "superadmin"].includes(workspace.currentUser.role)}
+                canManage={
+                  ["admin", "superadmin"].includes(workspace.currentUser.role)
+                  && (modulePermissions.payment_requests?.admin ?? true)
+                }
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
                 positions={workspace.positions}
                 requests={workspace.requests}
+                requestWorkflows={workspace.requestWorkflows ?? []}
                 attachments={workspace.attachments}
                 workflow={workspace.workflow}
                 onSaveWorkflow={handleSaveWorkflow}

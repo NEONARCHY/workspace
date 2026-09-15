@@ -135,6 +135,9 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert sum(chat.unread for chat in initial.chats) >= 2
             assert initial.workflow.nodes
             assert initial.workflow.published_version == 6
+            assert {item.workflow_id for item in initial.requests}.issubset(
+                {item.id for item in initial.request_workflows}
+            )
             assert initial.notifications
             assert len({item.id for item in initial.notifications}) == len(initial.notifications)
             assert any(
@@ -917,9 +920,20 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert approval.amount == 82_400_000
             assert approval.revision == 3
 
+            with pytest.raises(WorkspaceRepositoryError, match="Only administrators"):
+                await save_workflow(
+                    connection,
+                    aziza,
+                    UUID(initial.workflow.id),
+                    SaveWorkflowRequest(
+                        nodes=list(initial.workflow.nodes),
+                        edges=list(initial.workflow.edges),
+                    ),
+                )
+
             saved = await save_workflow(
                 connection,
-                aziza,
+                admin,
                 UUID(initial.workflow.id),
                 SaveWorkflowRequest(
                     nodes=list(initial.workflow.nodes),
@@ -929,7 +943,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert len(saved.nodes) == len(initial.workflow.nodes)
             next_draft = await publish_workflow(
                 connection,
-                aziza,
+                admin,
                 UUID(initial.workflow.id),
             )
             assert next_draft.version == initial.workflow.version + 1
@@ -938,7 +952,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             with pytest.raises(WorkspaceRepositoryError, match="cannot be edited"):
                 await save_workflow(
                     connection,
-                    aziza,
+                    admin,
                     UUID(initial.workflow.id),
                     SaveWorkflowRequest(
                         nodes=list(initial.workflow.nodes),
@@ -977,7 +991,12 @@ async def _exercise_parallel_workflow(database_url: str) -> None:
             assert aziza_row is not None
             aziza = await load_authenticated_user(connection, aziza_row["id"])
             assert aziza is not None
+            admin_row = await find_active_user_by_username(connection, "malika")
+            assert admin_row is not None
+            admin = await load_authenticated_user(connection, admin_row["id"])
+            assert admin is not None
             workflow = (await load_workspace(connection, aziza)).workflow
+            assert workflow is not None
             nodes = [
                 WorkflowNodeResponse(
                     id="start",
@@ -1040,11 +1059,11 @@ async def _exercise_parallel_workflow(database_url: str) -> None:
             ]
             await save_workflow(
                 connection,
-                aziza,
+                admin,
                 UUID(workflow.id),
                 SaveWorkflowRequest(nodes=nodes, edges=edges),
             )
-            next_draft = await publish_workflow(connection, aziza, UUID(workflow.id))
+            next_draft = await publish_workflow(connection, admin, UUID(workflow.id))
             request = await create_approval_request(
                 connection,
                 aziza,
@@ -1074,11 +1093,11 @@ async def _exercise_parallel_workflow(database_url: str) -> None:
             ]
             await save_workflow(
                 connection,
-                aziza,
+                admin,
                 UUID(next_draft.id),
                 SaveWorkflowRequest(nodes=any_nodes, edges=edges),
             )
-            await publish_workflow(connection, aziza, UUID(next_draft.id))
+            await publish_workflow(connection, admin, UUID(next_draft.id))
             request = await create_approval_request(
                 connection,
                 aziza,

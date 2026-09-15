@@ -648,6 +648,7 @@ class PaymentRequestDetails(ApiModel):
 
 class ApprovalRequestResponse(ApiModel):
     id: str
+    workflow_id: str
     number: str
     title: str
     amount: int
@@ -1132,6 +1133,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     messages: list[ChatMessageResponse]
     tasks: list[TaskResponse]
     requests: list[ApprovalRequestResponse]
+    request_workflows: list[WorkflowResponse]
     projects: list[ProjectResponse]
     trip_requests: list[TripRequestResponse]
     feed_posts: list[FeedPostResponse]
