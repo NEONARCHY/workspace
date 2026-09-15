@@ -8,11 +8,12 @@ import { people } from "./demo-data";
 
 const project: WorkspaceProject = { id: "qa-project", code: "YUK-26", title: "Региональная программа", description: "Описание",
   managerUserId: people[0]!.id, budget: 100000, spentBudget: 20000, remainingBudget: 80000, currency: "UZS",
-  status: "in_progress", stage: "approval", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, history: [] };
+  status: "in_progress", stage: "approval", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, canDelete: true, history: [] };
 function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = []) {
   const onUpdate = vi.fn(async () => project);
-  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={people[0]!} onCreate={onCreate} onUpdate={onUpdate} onMove={vi.fn()} /></FluentProvider>);
-  return { onCreate, onUpdate };
+  const onDelete = vi.fn(async () => true);
+  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={people[0]!} onCreate={onCreate} onUpdate={onUpdate} onMove={vi.fn()} onDelete={onDelete} /></FluentProvider>);
+  return { onCreate, onUpdate, onDelete };
 }
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name, { exact: true }), { target: { value } });
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
@@ -50,5 +51,15 @@ describe("Project composer", () => {
     change("Название проекта", "Уточнённый проект"); fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1)); expect(onCreate).not.toHaveBeenCalled();
     expect(onUpdate).toHaveBeenCalledWith(project, { code: project.code, title: "Уточнённый проект", description: project.description, managerUserId: project.managerUserId, startDate: null, endDate: null, budget: 100000, spentBudget: 20000, currency: "UZS" });
+  });
+  it("requires a reason before deleting a project", async () => {
+    const { onDelete } = setup(undefined, [project]);
+    fireEvent.click(screen.getByText(project.title));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить проект" }));
+    fireEvent.change(screen.getByLabelText("Причина решения"), {
+      target: { value: "Проект создан ошибочно" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить решение" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith(project, "Проект создан ошибочно"));
   });
 });

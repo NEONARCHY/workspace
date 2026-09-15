@@ -285,6 +285,9 @@ tasks = sa.Table(
     sa.Column("source_message_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_by_user_id", uuid_type),
+    sa.Column("deletion_reason", sa.Text()),
 )
 
 employee_efficiency_methodologies = sa.Table(
@@ -448,6 +451,9 @@ approval_requests = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
     sa.Column("finished_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_by_user_id", uuid_type),
+    sa.Column("deletion_reason", sa.Text()),
 )
 
 approval_request_versions = sa.Table(
@@ -510,6 +516,9 @@ workspace_projects = sa.Table(
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_by_user_id", uuid_type),
+    sa.Column("deletion_reason", sa.Text()),
 )
 
 project_stage_actions = sa.Table(

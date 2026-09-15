@@ -46,6 +46,9 @@ from yuksalish_api.repository import (
     create_project,
     create_task,
     create_trip_request,
+    delete_approval_request,
+    delete_project,
+    delete_task,
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
@@ -102,6 +105,7 @@ from yuksalish_api.workspace_schemas import (
     NotificationResponse,
     PinFeedPostRequest,
     ProjectResponse,
+    RecordDeletionRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -502,6 +506,22 @@ async def patch_task(
     return result
 
 
+@router.delete("/tasks/{task_id}", status_code=204)
+async def remove_task(
+    task_id: UUID,
+    payload: RecordDeletionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await delete_task(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.deleted", "entityId": str(task_id)})
+    return Response(status_code=204)
+
+
 @router.put("/tasks/{task_id}/participants", response_model=TaskResponse)
 async def put_task_participant(
     task_id: UUID,
@@ -711,6 +731,24 @@ async def patch_approval_request(
     return result
 
 
+@router.delete("/approval-requests/{request_id}", status_code=204)
+async def remove_approval_request(
+    request_id: UUID,
+    payload: RecordDeletionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await delete_approval_request(connection, current_user, request_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish(
+        {"type": "approval.deleted", "entityId": str(request_id)}
+    )
+    return Response(status_code=204)
+
+
 @router.post("/approval-requests/{request_id}/actions", response_model=ApprovalRequestResponse)
 async def post_approval_action(
     request_id: UUID,
@@ -760,6 +798,22 @@ async def patch_project(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "project.updated", "entityId": result.id})
     return result
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def remove_project(
+    project_id: UUID,
+    payload: RecordDeletionRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await delete_project(connection, current_user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "project.deleted", "entityId": str(project_id)})
+    return Response(status_code=204)
 
 
 @router.patch("/projects/{project_id}/stage", response_model=ProjectResponse)

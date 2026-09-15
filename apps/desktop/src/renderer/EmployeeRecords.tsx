@@ -4,7 +4,7 @@ import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuk
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
-export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
+export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "Уволен" })[status] ?? status;
 
 export function EmployeeRecords({ employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
   employees: readonly DirectoryEmployee[];

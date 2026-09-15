@@ -25,6 +25,7 @@ from .tables import (
     approval_requests,
     approval_templates,
     attachments,
+    audit_events,
     calendar_event_attendees,
     calendar_events,
     chat_members,
@@ -87,6 +88,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    RecordDeletionRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -258,6 +260,7 @@ def _task(
     parent_task_title: str | None = None,
     chat_id: UUID | None = None,
     latest_return: TaskReturnResponse | None = None,
+    can_delete: bool = False,
 ) -> TaskResponse:
     checklist_done = sum(item.is_completed for item in checklist)
     return TaskResponse(
@@ -280,6 +283,7 @@ def _task(
         parent_task_title=parent_task_title,
         chat_id=str(chat_id) if chat_id else None,
         latest_return=latest_return,
+        can_delete=can_delete,
         participants=list(participants),
         checklist=list(checklist),
         comments=list(comments),
@@ -369,6 +373,7 @@ def _approval_request(
     actions: Sequence[ApprovalActionHistoryResponse] = (),
     active_stages: Sequence[ApprovalStageResponse] = (),
     deadline_control: ApprovalDeadlineControlResponse | None = None,
+    can_delete: bool = False,
 ) -> ApprovalRequestResponse:
     payload = row["payload"] or {}
     status_value = str(row["status"])
@@ -406,6 +411,7 @@ def _approval_request(
         versions=list(versions),
         actions=list(actions),
         deadline_control=deadline_control or _approval_deadline_control(row),
+        can_delete=can_delete,
     )
 
 
@@ -554,6 +560,38 @@ def _is_privileged(current_user: AuthenticatedUser) -> bool:
     return current_user.role in {"manager", "admin", "superadmin"}
 
 
+def _can_delete_record(
+    row: Record,
+    current_user: AuthenticatedUser,
+    creator_field: str,
+) -> bool:
+    return (
+        row[creator_field] == current_user.id
+        or current_user.role in {"admin", "superadmin"}
+    )
+
+
+async def _audit_record_deletion(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    *,
+    target_type: str,
+    target_id: UUID,
+    reason: str,
+) -> None:
+    await connection.execute(
+        insert(audit_events).values(
+            id=uuid4(),
+            actor_user_id=current_user.id,
+            action=f"{target_type}.deleted",
+            target_type=target_type,
+            target_id=target_id,
+            details={"reason": reason},
+            created_at=datetime.now(UTC),
+        )
+    )
+
+
 def _project_action(row: Record) -> ProjectStageActionResponse:
     return ProjectStageActionResponse(
         id=str(row["id"]),
@@ -572,6 +610,10 @@ def _project(
     history: Sequence[ProjectStageActionResponse] = (),
 ) -> ProjectResponse:
     can_manage = _is_privileged(current_user)
+    can_delete = (
+        row["created_by_user_id"] == current_user.id
+        or current_user.role in {"admin", "superadmin"}
+    )
     return ProjectResponse(
         id=str(row["id"]),
         code=row["code"],
@@ -591,6 +633,7 @@ def _project(
         updated_at=row["updated_at"],
         can_edit=can_manage,
         can_move=can_manage,
+        can_delete=can_delete,
         history=list(history),
     )
 
@@ -978,7 +1021,10 @@ async def _request_response(
     row = (
         (
             await connection.execute(
-                select(approval_requests).where(approval_requests.c.id == request_id)
+                select(approval_requests).where(
+                    approval_requests.c.id == request_id,
+                    approval_requests.c.deleted_at.is_(None),
+                )
             )
         )
         .mappings()
@@ -996,6 +1042,9 @@ async def _request_response(
         actions.get(request_id, []),
         stages.get(request_id, []),
         deadline_controls.get(request_id),
+        can_delete=(
+            _can_delete_record(row, current_user, "requester_user_id")
+        ),
     )
 
 
@@ -1253,7 +1302,14 @@ async def _task_detail_maps(
     )
     dependency_ids = list({row["depends_on_task_id"] for row in dependency_rows})
     dependency_task_rows = (
-        (await connection.execute(select(tasks).where(tasks.c.id.in_(dependency_ids))))
+        (
+            await connection.execute(
+                select(tasks).where(
+                    tasks.c.id.in_(dependency_ids),
+                    tasks.c.deleted_at.is_(None),
+                )
+            )
+        )
         .mappings()
         .all()
         if dependency_ids
@@ -1279,7 +1335,10 @@ async def _task_detail_maps(
     parent_rows = (
         (
             await connection.execute(
-                select(tasks.c.id, tasks.c.title).where(tasks.c.id.in_(parent_ids))
+                select(tasks.c.id, tasks.c.title).where(
+                    tasks.c.id.in_(parent_ids),
+                    tasks.c.deleted_at.is_(None),
+                )
             )
         )
         .mappings()
@@ -1341,8 +1400,16 @@ async def _task_detail_maps(
     )
 
 
-async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResponse:
-    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
+async def _task_response(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+) -> TaskResponse:
+    row = (
+        await connection.execute(
+            select(tasks).where(tasks.c.id == task_id, tasks.c.deleted_at.is_(None))
+        )
+    ).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     (
@@ -1365,6 +1432,9 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
         parent_task_title=parent_titles.get(row["parent_task_id"]),
         chat_id=task_chat_ids.get(task_id),
         latest_return=latest_returns.get(task_id),
+        can_delete=(
+            _can_delete_record(row, current_user, "author_user_id")
+        ),
     )
 
 
@@ -2040,6 +2110,7 @@ async def materialize_due_notifications(
         (
             await connection.execute(
                 select(tasks).where(
+                    tasks.c.deleted_at.is_(None),
                     tasks.c.status.not_in({"completed", "cancelled"}),
                     tasks.c.due_at.is_not(None),
                     tasks.c.due_at >= now,
@@ -2223,7 +2294,9 @@ async def load_workspace(
         for row in message_rows
     ]
 
-    task_statement = select(tasks).order_by(tasks.c.updated_at.desc())
+    task_statement = select(tasks).where(tasks.c.deleted_at.is_(None)).order_by(
+        tasks.c.updated_at.desc()
+    )
     if current_user.role == "employee":
         participant_task_ids = select(task_participants.c.task_id).where(
             task_participants.c.user_id == current_user.id
@@ -2245,7 +2318,9 @@ async def load_workspace(
         task_latest_returns,
     ) = await _task_detail_maps(connection, task_rows)
 
-    request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
+    request_statement = select(approval_requests).where(
+        approval_requests.c.deleted_at.is_(None)
+    ).order_by(approval_requests.c.updated_at.desc())
     request_rows = (await connection.execute(request_statement)).mappings().all()
     stages_by_request = await _active_stages_for_requests(connection, request_rows, current_user)
     if current_user.role == "employee":
@@ -2269,7 +2344,9 @@ async def load_workspace(
     project_rows = (
         (
             await connection.execute(
-                select(workspace_projects).order_by(workspace_projects.c.updated_at.desc())
+                select(workspace_projects)
+                .where(workspace_projects.c.deleted_at.is_(None))
+                .order_by(workspace_projects.c.updated_at.desc())
             )
         )
         .mappings()
@@ -2398,6 +2475,9 @@ async def load_workspace(
                 parent_task_title=task_parent_titles.get(row["parent_task_id"]),
                 chat_id=task_chat_ids.get(row["id"]),
                 latest_return=task_latest_returns.get(row["id"]),
+                can_delete=(
+                    _can_delete_record(row, current_user, "author_user_id")
+                ),
             )
             for row in task_rows
         ] if can("tasks") else [],
@@ -2408,6 +2488,9 @@ async def load_workspace(
                 actions_by_request.get(row["id"], []),
                 stages_by_request.get(row["id"], []),
                 deadline_controls_by_request.get(row["id"]),
+                can_delete=(
+                    _can_delete_record(row, current_user, "requester_user_id")
+                ),
             )
             for row in request_rows
         ] if can("payment_requests") else [],
@@ -2823,7 +2906,11 @@ async def _task_access_row(
     edit: bool = False,
     manage: bool = False,
 ) -> Record:
-    row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
+    row = (
+        await connection.execute(
+            select(tasks).where(tasks.c.id == task_id, tasks.c.deleted_at.is_(None))
+        )
+    ).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
     participant_roles = (
@@ -3146,7 +3233,7 @@ async def create_task(
         assignee_user_id=assignee_id,
         occurred_at=now,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def _create_task_cycle(
@@ -3257,7 +3344,61 @@ async def update_task(
         assignee_user_id=assignee_id,
         occurred_at=now,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
+
+
+async def delete_task(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: RecordDeletionRequest,
+) -> None:
+    row = (
+        (
+            await connection.execute(
+                select(tasks)
+                .where(tasks.c.id == task_id, tasks.c.deleted_at.is_(None))
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    if not _can_delete_record(row, current_user, "author_user_id"):
+        raise WorkspaceRepositoryError(
+            403, "Only the task author or an administrator can delete it"
+        )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(tasks)
+        .where(tasks.c.id == task_id)
+        .values(
+            deleted_at=now,
+            deleted_by_user_id=current_user.id,
+            deletion_reason=payload.reason,
+            updated_at=now,
+        )
+    )
+    if row["cycle_id"] is not None:
+        await connection.execute(
+            update(task_cycles)
+            .where(task_cycles.c.id == row["cycle_id"])
+            .values(is_enabled=False, updated_at=now)
+        )
+    task_chat_ids = select(chats.c.id).where(
+        chats.c.context_type == "task",
+        chats.c.context_id == task_id,
+    )
+    await connection.execute(delete(chat_members).where(chat_members.c.chat_id.in_(task_chat_ids)))
+    await _audit_record_deletion(
+        connection,
+        current_user,
+        target_type="task",
+        target_id=task_id,
+        reason=payload.reason,
+    )
 
 
 async def change_task_status(
@@ -3273,7 +3414,7 @@ async def change_task_status(
             "Use result submission or result acceptance for this status",
         )
     if payload.status == task_row["status"]:
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, current_user, task_id)
     allowed_transitions = {
         "new": {"in_progress", "cancelled"},
         "in_progress": {"new", "cancelled"},
@@ -3308,7 +3449,7 @@ async def change_task_status(
             )
         else:
             await record_task_event(event_type="task_status_changed", **base_event)
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def _ensure_task_can_be_submitted(
@@ -3326,6 +3467,7 @@ async def _ensure_task_can_be_submitted(
         .where(
             task_dependencies.c.task_id == task_id,
             task_dependencies.c.dependency_kind == "blocks",
+            tasks.c.deleted_at.is_(None),
             tasks.c.status != "completed",
         )
     )
@@ -3345,6 +3487,7 @@ async def _ensure_subtasks_are_closed(
         .select_from(tasks)
         .where(
             tasks.c.parent_task_id == task_id,
+            tasks.c.deleted_at.is_(None),
             tasks.c.status.not_in({"completed", "cancelled"}),
         )
     )
@@ -3418,7 +3561,7 @@ async def submit_task_result(
             requires_action=True,
             occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def accept_task_result(
@@ -3461,7 +3604,7 @@ async def accept_task_result(
             requires_action=False,
             occurred_at=now,
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def return_task_for_revision(
@@ -3509,7 +3652,7 @@ async def return_task_for_revision(
         requires_action=True,
         occurred_at=now,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def set_task_efficiency_exclusion(
@@ -3545,7 +3688,7 @@ async def set_task_efficiency_exclusion(
             and (latest["reason_text"] or "") == payload.reason_text.strip()
         )
     ):
-        return await _task_response(connection, task_id)
+        return await _task_response(connection, current_user, task_id)
     now = datetime.now(UTC)
     await record_task_event(
         connection,
@@ -3560,7 +3703,7 @@ async def set_task_efficiency_exclusion(
         reason_code=payload.reason_code if payload.excluded else None,
         reason_text=payload.reason_text.strip() or None,
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def set_task_participant(
@@ -3594,7 +3737,7 @@ async def set_task_participant(
         author_user_id=task_row["author_user_id"],
         assignee_user_id=task_row["primary_assignee_user_id"],
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def remove_task_participant(
@@ -3618,7 +3761,7 @@ async def remove_task_participant(
         author_user_id=task_row["author_user_id"],
         assignee_user_id=task_row["primary_assignee_user_id"],
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def add_task_checklist_item(
@@ -3648,7 +3791,7 @@ async def add_task_checklist_item(
             updated_at=now,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def update_task_checklist_item(
@@ -3680,7 +3823,7 @@ async def update_task_checklist_item(
             updated_at=now,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def delete_task_checklist_item(
@@ -3696,7 +3839,7 @@ async def delete_task_checklist_item(
             task_checklist_items.c.task_id == task_id,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def add_task_comment(
@@ -3717,7 +3860,7 @@ async def add_task_comment(
             edited_at=None,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def _would_create_dependency_cycle(
@@ -3782,7 +3925,7 @@ async def set_task_dependency(
             created_at=datetime.now(UTC),
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def remove_task_dependency(
@@ -3798,7 +3941,7 @@ async def remove_task_dependency(
             task_dependencies.c.depends_on_task_id == depends_on_task_id,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 def _next_calendar_occurrence(
@@ -3903,7 +4046,7 @@ async def set_task_cycle(
         await connection.execute(
             update(task_cycles).where(task_cycles.c.id == cycle_id).values(**values)
         )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, current_user, task_id)
 
 
 async def materialize_due_task_cycles(
@@ -3943,7 +4086,10 @@ async def materialize_due_task_cycles(
             (
                 await connection.execute(
                     select(tasks)
-                    .where(tasks.c.cycle_id == cycle["id"])
+                    .where(
+                        tasks.c.cycle_id == cycle["id"],
+                        tasks.c.deleted_at.is_(None),
+                    )
                     .order_by(tasks.c.created_at.desc())
                     .limit(1)
                 )
@@ -4538,7 +4684,10 @@ async def update_approval_request(
         (
             await connection.execute(
                 select(approval_requests)
-                .where(approval_requests.c.id == request_id)
+                .where(
+                    approval_requests.c.id == request_id,
+                    approval_requests.c.deleted_at.is_(None),
+                )
                 .with_for_update()
             )
         )
@@ -4596,6 +4745,52 @@ async def update_approval_request(
     return await _request_response(connection, request_id, current_user)
 
 
+async def delete_approval_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+    payload: RecordDeletionRequest,
+) -> None:
+    row = (
+        (
+            await connection.execute(
+                select(approval_requests)
+                .where(
+                    approval_requests.c.id == request_id,
+                    approval_requests.c.deleted_at.is_(None),
+                )
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Request was not found")
+    if not _can_delete_record(row, current_user, "requester_user_id"):
+        raise WorkspaceRepositoryError(
+            403, "Only the request creator or an administrator can delete it"
+        )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(approval_requests)
+        .where(approval_requests.c.id == request_id)
+        .values(
+            deleted_at=now,
+            deleted_by_user_id=current_user.id,
+            deletion_reason=payload.reason,
+            updated_at=now,
+        )
+    )
+    await _audit_record_deletion(
+        connection,
+        current_user,
+        target_type="approval_request",
+        target_id=request_id,
+        reason=payload.reason,
+    )
+
+
 async def validate_attachment_owner(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -4645,7 +4840,10 @@ async def validate_attachment_owner(
     row = (
         (
             await connection.execute(
-                select(approval_requests).where(approval_requests.c.id == owner_id)
+                select(approval_requests).where(
+                    approval_requests.c.id == owner_id,
+                    approval_requests.c.deleted_at.is_(None),
+                )
             )
         )
         .mappings()
@@ -4717,7 +4915,10 @@ async def create_attachment(
             (
                 await connection.execute(
                     select(approval_requests)
-                    .where(approval_requests.c.id == owner_id)
+                    .where(
+                        approval_requests.c.id == owner_id,
+                        approval_requests.c.deleted_at.is_(None),
+                    )
                     .with_for_update()
                 )
             )
@@ -4766,7 +4967,10 @@ async def _project_response(
     row = (
         (
             await connection.execute(
-                select(workspace_projects).where(workspace_projects.c.id == project_id)
+                select(workspace_projects).where(
+                    workspace_projects.c.id == project_id,
+                    workspace_projects.c.deleted_at.is_(None),
+                )
             )
         )
         .mappings()
@@ -4840,7 +5044,10 @@ async def update_project(
     if not _is_privileged(current_user):
         raise WorkspaceRepositoryError(403, "Only managers can edit projects")
     exists = await connection.scalar(
-        select(workspace_projects.c.id).where(workspace_projects.c.id == project_id)
+        select(workspace_projects.c.id).where(
+            workspace_projects.c.id == project_id,
+            workspace_projects.c.deleted_at.is_(None),
+        )
     )
     if exists is None:
         raise WorkspaceRepositoryError(404, "Project was not found")
@@ -4873,6 +5080,52 @@ async def update_project(
     return await _project_response(connection, current_user, project_id)
 
 
+async def delete_project(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    project_id: UUID,
+    payload: RecordDeletionRequest,
+) -> None:
+    row = (
+        (
+            await connection.execute(
+                select(workspace_projects)
+                .where(
+                    workspace_projects.c.id == project_id,
+                    workspace_projects.c.deleted_at.is_(None),
+                )
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Project was not found")
+    if not _can_delete_record(row, current_user, "created_by_user_id"):
+        raise WorkspaceRepositoryError(
+            403, "Only the project creator or an administrator can delete it"
+        )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(workspace_projects)
+        .where(workspace_projects.c.id == project_id)
+        .values(
+            deleted_at=now,
+            deleted_by_user_id=current_user.id,
+            deletion_reason=payload.reason,
+            updated_at=now,
+        )
+    )
+    await _audit_record_deletion(
+        connection,
+        current_user,
+        target_type="project",
+        target_id=project_id,
+        reason=payload.reason,
+    )
+
+
 async def change_project_stage(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -4885,7 +5138,10 @@ async def change_project_stage(
         (
             await connection.execute(
                 select(workspace_projects)
-                .where(workspace_projects.c.id == project_id)
+                .where(
+                    workspace_projects.c.id == project_id,
+                    workspace_projects.c.deleted_at.is_(None),
+                )
                 .with_for_update()
             )
         )
@@ -5335,7 +5591,10 @@ async def act_on_request(
         (
             await connection.execute(
                 select(approval_requests)
-                .where(approval_requests.c.id == request_id)
+                .where(
+                    approval_requests.c.id == request_id,
+                    approval_requests.c.deleted_at.is_(None),
+                )
                 .with_for_update()
             )
         )

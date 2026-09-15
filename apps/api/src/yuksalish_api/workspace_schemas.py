@@ -290,6 +290,7 @@ class TaskResponse(ApiModel):
     comments: list[TaskCommentResponse] = Field(default_factory=list)
     dependencies: list[TaskDependencyResponse] = Field(default_factory=list)
     cycle: TaskCycleResponse | None = None
+    can_delete: bool = False
 
 
 class TaskCreateParticipantRequest(ApiModel):
@@ -669,6 +670,19 @@ class ApprovalRequestResponse(ApiModel):
     versions: list["ApprovalRequestVersionResponse"] = Field(default_factory=list)
     actions: list[ApprovalActionHistoryResponse] = Field(default_factory=list)
     deadline_control: ApprovalDeadlineControlResponse
+    can_delete: bool = False
+
+
+class RecordDeletionRequest(ApiModel):
+    reason: str = Field(min_length=4, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_be_meaningful(cls, value: str) -> str:
+        normalized = " ".join(value.split())
+        if len(normalized) < 4:
+            raise ValueError("Deletion reason must contain at least 4 characters")
+        return normalized
 
 
 class ApprovalRequestVersionResponse(ApiModel):
@@ -801,6 +815,7 @@ class ProjectResponse(ApiModel):
     updated_at: datetime
     can_edit: bool
     can_move: bool
+    can_delete: bool
     history: list[ProjectStageActionResponse] = Field(default_factory=list)
 
 

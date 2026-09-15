@@ -35,6 +35,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { AttachmentPanel } from "./AttachmentPanel";
+import { DecisionReason } from "./DecisionReason";
 import { EfficiencyView } from "./EfficiencyView";
 import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
@@ -121,6 +122,7 @@ interface TasksViewProps {
   readonly onCreateSubtask: (parent: WorkspaceTask, payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string }) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readonly onUpdateTask: (task: WorkspaceTask, payload: TaskEditPayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onDeleteTask: (task: WorkspaceTask, reason: string) => Promise<boolean>;
   readonly onSetParticipant: (task: WorkspaceTask, userId: string, role: TaskParticipantRole) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveParticipant: (task: WorkspaceTask, userId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAddChecklistItem: (task: WorkspaceTask, title: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -150,7 +152,7 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask,
+    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
@@ -176,6 +178,7 @@ export function TasksView(props: TasksViewProps) {
   const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
@@ -523,7 +526,13 @@ export function TasksView(props: TasksViewProps) {
         <div className="detail-footer">
           <Button appearance="primary" icon={<Chat24Regular />} disabled={!canOpenTaskChat} title={canOpenTaskChat ? "Перейти в связанный чат" : "Чат доступен участникам задачи"} onClick={() => void onOpenTaskChat(selectedTask)}>Открыть чат задачи</Button>
           <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button>
+          {selectedTask.canDelete ? <Button appearance="subtle" icon={<Delete24Regular />} onClick={() => setDeleting(true)}>Удалить задачу</Button> : null}
         </div>
+        {deleting ? <DecisionReason title="Удалить задачу — укажите причину" onCancel={() => setDeleting(false)} onConfirm={async (reason) => {
+          const deleted = await onDeleteTask(selectedTask, reason);
+          if (deleted) setDetailOpen(false);
+          return deleted;
+        }} /> : null}
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
       </aside></DialogSurface>
       </Dialog> : null}

@@ -66,6 +66,7 @@ import {
   approvalStagePalette,
 } from "./approval-board";
 import { AnimatedAmount } from "./AnimatedAmount";
+import { DecisionReason } from "./DecisionReason";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
@@ -120,6 +121,10 @@ interface ApprovalsViewProps {
     primaryFiles: readonly File[],
     additionalFiles: readonly File[],
   ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
+  readonly onDeleteRequest: (
+    request: ApprovalRequestSummary,
+    reason: string,
+  ) => Promise<boolean>;
   readonly onUploadAttachments: (
     request: ApprovalRequestSummary,
     files: readonly File[],
@@ -930,6 +935,7 @@ export function ApprovalsView({
   onCreateRequest,
   onAction,
   onReviseRequest,
+  onDeleteRequest,
   onUploadAttachments,
   onDownloadAttachment,
 }: ApprovalsViewProps) {
@@ -966,6 +972,7 @@ export function ApprovalsView({
   const [creatingBusy, setCreatingBusy] = useState(false);
   const creatingBusyRef = useRef(false);
   const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
+  const [deletingRequestId, setDeletingRequestId] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const actionBusyRef = useRef(false);
   const [actionError, setActionError] = useState("");
@@ -2025,6 +2032,13 @@ export function ApprovalsView({
                     {selectedRequest.requesterId === currentUserId && ["draft", "running", "needs_revision"].includes(selectedRequest.status) ? (
                       <Button appearance="subtle" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "cancel", { comment: "Отменено автором" })}>Отменить заявку</Button>
                     ) : null}
+                    {selectedRequest.canDelete ? deletingRequestId === selectedRequest.id ? (
+                      <DecisionReason title="Удалить заявку — укажите причину" onCancel={() => setDeletingRequestId("")} onConfirm={async (reason) => {
+                        const deleted = await onDeleteRequest(selectedRequest, reason);
+                        if (deleted) setSelectedRequestId("");
+                        return deleted;
+                      }} />
+                    ) : <Button appearance="subtle" icon={<Delete24Regular />} onClick={() => setDeletingRequestId(selectedRequest.id)}>Удалить заявку</Button> : null}
                   </aside>
                 </div>
               </article>

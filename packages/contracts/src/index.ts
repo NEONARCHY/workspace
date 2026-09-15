@@ -428,6 +428,7 @@ export interface WorkspaceTask {
   readonly comments: readonly TaskComment[];
   readonly dependencies: readonly TaskDependency[];
   readonly cycle?: TaskCycle | null;
+  readonly canDelete?: boolean;
 }
 
 export interface TaskCycleInput {
@@ -549,6 +550,7 @@ export interface WorkspaceProject {
   readonly updatedAt: string;
   readonly canEdit: boolean;
   readonly canMove: boolean;
+  readonly canDelete?: boolean;
   readonly history: readonly ProjectStageAction[];
 }
 
@@ -721,6 +723,7 @@ export interface ApprovalRequestSummary {
   readonly versions: readonly ApprovalRequestVersion[];
   readonly actions: readonly ApprovalActionHistory[];
   readonly deadlineControl?: ApprovalDeadlineControl;
+  readonly canDelete?: boolean;
 }
 
 export interface WorkflowNodeDefinition {

@@ -12,7 +12,7 @@ import type {
   WorkspaceProject,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular } from "@fluentui/react-icons";
+import { Add24Regular, ArrowRight24Regular, Delete24Regular, Dismiss20Regular, Edit24Regular } from "@fluentui/react-icons";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -44,6 +44,7 @@ interface ProjectsViewProps {
     stage: ProjectStage,
     comment?: string,
   ) => Promise<WorkspaceProject | undefined>;
+  readonly onDelete: (project: WorkspaceProject, reason: string) => Promise<boolean>;
 }
 
 interface ProjectFormState {
@@ -109,10 +110,11 @@ function money(value: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + ` ${currency}`;
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onDelete }: ProjectsViewProps) {
   const [selectedId, updateSelectedId] = useState(projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(false);
   const [failureId, setFailureId] = useState<string>();
+  const [deletingId, setDeletingId] = useState<string>();
   const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
@@ -233,6 +235,13 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
               ))}
             </div>
           ) : null}
+          {selected.canDelete ? deletingId === selected.id ? (
+            <DecisionReason title="Удалить проект — укажите причину" onCancel={() => setDeletingId(undefined)} onConfirm={async (reason) => {
+              const deleted = await onDelete(selected, reason);
+              if (deleted) setDetailOpen(false);
+              return deleted;
+            }} />
+          ) : <Button appearance="subtle" icon={<Delete24Regular />} onClick={() => setDeletingId(selected.id)}>Удалить проект</Button> : null}
           <div className="bp7-history">
             <h3>История проекта</h3>
             {[...selected.history].reverse().map((entry) => (

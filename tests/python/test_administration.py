@@ -1,9 +1,10 @@
 import os
-from uuid import UUID
+from datetime import UTC, datetime
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api import administration_service, messenger_service
@@ -17,7 +18,7 @@ from yuksalish_api.directory_service import DirectoryServiceError, update_employ
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import audit_events, chat_members, users
+from yuksalish_api.tables import audit_events, chat_members, module_access_rules, users
 from yuksalish_api.workspace_schemas import CreateChatRequest, SendMessageRequest
 
 
@@ -121,6 +122,45 @@ async def test_employee_status_and_chat_inspection_are_audited_and_read_only() -
                         connection, admin, UUID(inspection.id)
                     )
                 assert expired.value.status_code == 410
+
+                await connection.execute(
+                    insert(module_access_rules).values(
+                        id=uuid4(),
+                        subject_type="user",
+                        subject_key=str(peer.id),
+                        module_key="employees",
+                        permissions={
+                            "view": True,
+                            "create": False,
+                            "edit": False,
+                            "approve": False,
+                            "admin": True,
+                        },
+                        created_by_user_id=admin.id,
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+                fired = await update_employee_status(
+                    connection,
+                    peer,
+                    owner.id,
+                    EmployeeStatusUpdateRequest(
+                        status="archived",
+                        reason="Завершение трудовых отношений",
+                    ),
+                )
+                assert fired.status == "archived"
+                restored = await update_employee_status(
+                    connection,
+                    peer,
+                    owner.id,
+                    EmployeeStatusUpdateRequest(
+                        status="active",
+                        reason="Отмена ошибочного увольнения",
+                    ),
+                )
+                assert restored.status == "active"
 
                 updated = await update_employee_status(
                     connection,

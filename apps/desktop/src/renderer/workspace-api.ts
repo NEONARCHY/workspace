@@ -685,6 +685,18 @@ export function updateWorkspaceTask(
   );
 }
 
+export function deleteWorkspaceTask(
+  token: string,
+  taskId: string,
+  reason: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/tasks/${taskId}`,
+    { method: "DELETE", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
 export function changeWorkspaceTaskStatus(
   token: string,
   taskId: string,
@@ -950,6 +962,18 @@ export function updateWorkspaceApproval(
   );
 }
 
+export function deleteWorkspaceApproval(
+  token: string,
+  requestId: string,
+  reason: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/approval-requests/${requestId}`,
+    { method: "DELETE", body: JSON.stringify({ reason }) },
+    token,
+  );
+}
+
 export function createWorkspaceProject(
   token: string,
   payload: ProjectInput,
@@ -969,6 +993,18 @@ export function updateWorkspaceProject(
   return apiRequest<WorkspaceProject>(
     `/projects/${projectId}`,
     { method: "PATCH", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function deleteWorkspaceProject(
+  token: string,
+  projectId: string,
+  reason: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/projects/${projectId}`,
+    { method: "DELETE", body: JSON.stringify({ reason }) },
     token,
   );
 }

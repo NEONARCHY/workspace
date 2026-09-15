@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .access_control import MODULE_KEYS, normalize_permissions
+from .access_control import MODULE_KEYS, module_permissions_for_user, normalize_permissions
 from .administration_schemas import EmployeeStatusUpdateRequest
 from .auth import AuthenticatedUser
 from .catalog import MODULE_CATALOG
@@ -67,6 +67,17 @@ ROLE_DESCRIPTORS = [
 def _require_admin(user: AuthenticatedUser) -> None:
     if user.role not in {"admin", "superadmin"}:
         raise DirectoryServiceError(403, "Administrator role required")
+
+
+async def _require_employee_status_manager(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+) -> None:
+    if user.role in {"admin", "superadmin"}:
+        return
+    permissions = await module_permissions_for_user(connection, user)
+    if not permissions.get("employees", {}).get("admin", False):
+        raise DirectoryServiceError(403, "Employee administration permission required")
 
 
 async def _audit(
@@ -679,7 +690,7 @@ async def update_employee_status(
     employee_id: UUID,
     payload: EmployeeStatusUpdateRequest,
 ) -> DirectoryEmployeeResponse:
-    _require_admin(actor)
+    await _require_employee_status_manager(connection, actor)
     employee = (
         await connection.execute(
             select(users).where(users.c.id == employee_id).with_for_update()

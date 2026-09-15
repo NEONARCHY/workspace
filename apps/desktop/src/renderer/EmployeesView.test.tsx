@@ -80,6 +80,21 @@ describe("Employee list and retained access controls", () => {
     ));
     expect(await screen.findByText(/статус «Заблокирован» сохранён/)).toBeInTheDocument();
   });
+  it("fires an employee from the employee card while preserving the record", async () => {
+    vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "archived" });
+    mount(); await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Азиза Каримова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Уволить" }));
+    expect(screen.getByText(/вся история сохранятся/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Основание изменения состояния сотрудника"), {
+      target: { value: "Трудовые отношения завершены" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(updateEmployeeStatus).toHaveBeenCalledWith(
+      "test-token", "one", "archived", "Трудовые отношения завершены",
+    ));
+    expect(await screen.findByText(/статус «Уволен» сохранён/)).toBeInTheDocument();
+  });
   it("shows chat control only when the caller has administrative messenger access", async () => {
     mount(user, { allowChatAdministration: true }); await screen.findByRole("table");
     expect(screen.getByRole("button", { name: "Контроль чатов" })).toBeInTheDocument();

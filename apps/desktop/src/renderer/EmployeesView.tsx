@@ -509,7 +509,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                     && (selectedEmployee.role !== "admin" || currentUser.role === "superadmin") ? <div className="employee-status-actions" aria-label="Управление состоянием сотрудника">
                       {selectedEmployee.status === "blocked" || selectedEmployee.status === "archived" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("active"); setEmployeeStatusReason(""); setFeedback(""); }}>Восстановить доступ</Button> : null}
                       {selectedEmployee.status === "active" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("blocked"); setEmployeeStatusReason(""); setFeedback(""); }}>Заблокировать</Button> : null}
-                      {selectedEmployee.status !== "archived" ? <Button className="employee-archive-button" disabled={busy} onClick={() => { setEmployeeStatusAction("archived"); setEmployeeStatusReason(""); setFeedback(""); }}>Архивировать</Button> : null}
+                      {selectedEmployee.status !== "archived" ? <Button className="employee-archive-button" disabled={busy} onClick={() => { setEmployeeStatusAction("archived"); setEmployeeStatusReason(""); setFeedback(""); }}>Уволить</Button> : null}
                     </div> : null}
                 </div>
               ) : null}
@@ -595,14 +595,14 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       {employeeStatusAction && selectedEmployee ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setEmployeeStatusAction(undefined); }}>
         <DialogSurface className="employee-status-dialog" aria-label="Изменение состояния сотрудника">
           <DialogBody>
-            <DialogTitle>{employeeStatusAction === "active" ? "Восстановить доступ" : employeeStatusAction === "blocked" ? "Заблокировать сотрудника" : "Архивировать сотрудника"}</DialogTitle>
+            <DialogTitle>{employeeStatusAction === "active" ? "Восстановить доступ" : employeeStatusAction === "blocked" ? "Заблокировать сотрудника" : "Уволить сотрудника"}</DialogTitle>
             <DialogContent>
               <p className="employee-status-lead">
                 {employeeStatusAction === "active"
                   ? `${selectedEmployee.name} снова сможет войти в Workspace. Исторические задачи и переписка останутся без изменений.`
                   : employeeStatusAction === "blocked"
                     ? `Доступ ${selectedEmployee.name} будет остановлен немедленно, а все активные сеансы — отозваны. Учётная запись останется в списке.`
-                    : `${selectedEmployee.name} будет перемещён в архив и потеряет доступ. Задачи, согласования и история сохранятся.`}
+                    : `${selectedEmployee.name} потеряет доступ и будет отмечен как уволенный. Задачи, согласования и вся история сохранятся.`}
               </p>
               <Field label="Основание" required hint="Минимум 12 символов. Причина будет записана в аудит.">
                 <Textarea aria-label="Основание изменения состояния сотрудника" resize="vertical" maxLength={500} value={employeeStatusReason} disabled={busy} onChange={(_, data) => setEmployeeStatusReason(data.value)} />

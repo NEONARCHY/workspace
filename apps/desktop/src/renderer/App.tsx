@@ -104,6 +104,9 @@ import {
   createWorkspaceTask,
   createWorkspaceTripRequest,
   deleteWorkspaceTaskChecklistItem,
+  deleteWorkspaceTask,
+  deleteWorkspaceApproval,
+  deleteWorkspaceProject,
   downloadWorkspaceAttachment,
   loadWorkspace,
   loadWorkspaceEfficiency,
@@ -848,6 +851,30 @@ export function App() {
     },
   ) => runTaskMutation((token) => updateWorkspaceTask(token, task.id, payload));
 
+  const handleDeleteTask = async (task: WorkspaceTask, reason: string) => {
+    if (session === undefined) return false;
+    try {
+      await deleteWorkspaceTask(session.accessToken, task.id, reason);
+      setWorkspace((current) => ({
+        ...current,
+        tasks: current.tasks.filter((item) => item.id !== task.id),
+        chats: task.chatId
+          ? current.chats.filter((chat) => chat.id !== task.chatId)
+          : current.chats,
+        messages: task.chatId
+          ? current.messages.filter((message) => message.chatId !== task.chatId)
+          : current.messages,
+        attachments: current.attachments.filter(
+          (attachment) => !(attachment.ownerType === "task" && attachment.ownerId === task.id),
+        ),
+      }));
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
+
   const handleSetTaskParticipant = (
     task: WorkspaceTask,
     userId: string,
@@ -1094,6 +1121,26 @@ export function App() {
     }
   };
 
+  const handleDeleteApproval = async (request: ApprovalRequestSummary, reason: string) => {
+    if (session === undefined) return false;
+    try {
+      await deleteWorkspaceApproval(session.accessToken, request.id, reason);
+      setWorkspace((current) => ({
+        ...current,
+        requests: current.requests.filter((item) => item.id !== request.id),
+        attachments: current.attachments.filter(
+          (attachment) => !(
+            attachment.ownerType === "approval_request" && attachment.ownerId === request.id
+          ),
+        ),
+      }));
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
+
   const mergeProject = (project: WorkspaceProject) => {
     setWorkspace((current) => ({
       ...current,
@@ -1128,6 +1175,21 @@ export function App() {
     comment = "",
   ) => runProjectMutation((token) =>
     changeWorkspaceProjectStage(token, project.id, stage, comment));
+
+  const handleDeleteProject = async (project: WorkspaceProject, reason: string) => {
+    if (session === undefined) return false;
+    try {
+      await deleteWorkspaceProject(session.accessToken, project.id, reason);
+      setWorkspace((current) => ({
+        ...current,
+        projects: current.projects.filter((item) => item.id !== project.id),
+      }));
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
 
   const mergeTripRequest = (tripRequest: TripRequest) => {
     setWorkspace((current) => ({
@@ -1491,6 +1553,7 @@ export function App() {
                 onCreateSubtask={handleCreateSubtask}
                 onChangeStatus={handleTaskStatus}
                 onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
                 onSetParticipant={handleSetTaskParticipant}
                 onRemoveParticipant={handleRemoveTaskParticipant}
                 onAddChecklistItem={handleAddChecklistItem}
@@ -1531,6 +1594,7 @@ export function App() {
                 onCreateRequest={handleCreateApproval}
                 onAction={handleApprovalAction}
                 onReviseRequest={handleReviseApproval}
+                onDeleteRequest={handleDeleteApproval}
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
                 focusRequestId={focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
@@ -1554,6 +1618,7 @@ export function App() {
                 onCreate={handleCreateProject}
                 onUpdate={handleUpdateProject}
                 onMove={handleMoveProject}
+                onDelete={handleDeleteProject}
               />
             ) : null}
             {displayedSection === "trip_approvals" ? (

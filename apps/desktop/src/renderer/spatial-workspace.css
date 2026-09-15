@@ -27,7 +27,7 @@ body { background: var(--ws-canvas); }
 .app-shell.rail-collapsed { grid-template-columns: 72px minmax(0,1fr); }
 .app-shell .app-rail { min-height: 0; margin: 0; padding: 18px 10px 12px; border: 1px solid rgb(255 255 255 / 85%); border-radius: 26px; background: rgb(251 253 253 / 88%); box-shadow: var(--ws-shadow-card); }
 .app-rail .workspace-logo { min-height: 62px; padding: 4px 6px 16px; gap: 5px; border: 0; }
-.app-rail .rail-brand { width: 157px; transform: translateY(-3px); }
+.app-rail .rail-brand { width: 157px; transform: translateY(-11px); }
 .rail-customize { padding: 4px 12px 12px; opacity: .75; }
 .app-rail .rail-nav { gap: 5px; }
 .app-rail .rail-action { min-height: 45px; padding: 10px 12px; border-radius: 14px; color: var(--ws-muted); }
@@ -68,6 +68,10 @@ body { background: var(--ws-canvas); }
 .app-provider :is(.fui-Input,.fui-Textarea,.fui-Select) { border-radius: 12px; }
 .app-provider .fui-Button:active { transform: translateY(1px); }
 .app-provider :is(button,input,select,textarea):focus-visible { outline: 2px solid #007e92; outline-offset: 3px; }
+.app-provider :is(.fui-Input__input,.fui-Textarea__textarea,.fui-Select__select):focus-visible { outline: 0; }
+.app-provider :is(.fui-Input,.fui-Textarea,.fui-Select):focus-within {
+  box-shadow: 0 0 0 3px rgb(0 126 146 / 14%);
+}
 
 /* Objects, not browser ghosts. Only the active preview owns a compositor layer. */
 .spatial-lane { position: relative; transition: background-color 180ms ease; }
