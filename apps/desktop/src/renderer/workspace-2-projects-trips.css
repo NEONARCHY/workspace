@@ -1,0 +1,280 @@
+/* Workspace 2.0, projects and business trips. Shared renderer: web and Electron. */
+.projects-view,
+.trips-view {
+  --ws2-process-accent: #75bdb5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.trips-view { --ws2-process-accent: #84acd8; }
+
+.ws2-process-overview {
+  display: grid;
+  grid-template-columns: minmax(250px, .9fr) minmax(0, 1.55fr);
+  flex: none;
+  min-width: 0;
+  min-height: 116px;
+  margin: 0 4px 10px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 24px;
+  background: linear-gradient(110deg, #e3f2ed 0%, #eaf3f2 42%, #eef0f8 100%);
+  box-shadow: var(--ws-shadow-card);
+}
+
+.trips-view .ws2-process-overview {
+  background: linear-gradient(110deg, #e6f1f5 0%, #eaf3f2 45%, #f0eef8 100%);
+}
+
+.ws2-process-focus {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 2px 15px;
+  min-width: 0;
+  padding: 17px 24px;
+  border: 0;
+  border-radius: 23px;
+  color: var(--ws-text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws2-process-focus:hover { background: rgb(255 255 255 / 28%); }
+.ws2-process-focus:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -4px; }
+.ws2-process-focus > span { grid-column: 1 / -1; color: #477377; font-size: 11px; font-weight: 650; }
+.ws2-process-focus > strong {
+  grid-row: 2;
+  color: #214e60;
+  font-size: clamp(40px, 4vw, 54px);
+  font-weight: 600;
+  letter-spacing: -.06em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.ws2-process-focus > small { align-self: end; padding-bottom: 5px; color: #356673; font-size: 11px; font-weight: 600; }
+.ws2-process-focus > small span { margin-left: 3px; font-size: 15px; }
+
+.ws2-process-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  min-width: 0;
+  padding: 13px 18px 13px 6px;
+}
+.ws2-process-metrics > div { display: grid; align-content: center; gap: 5px; min-width: 0; min-height: 62px; padding: 7px 20px; border-left: 1px solid rgb(65 96 107 / 12%); }
+.ws2-process-metrics strong { color: var(--ws-text); font-size: 28px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.ws2-process-metrics span { color: #526d7b; font-size: 11px; font-weight: 550; line-height: 1.3; }
+.ws2-process-metrics .attention strong { color: #a34a50; }
+
+.ws2-process-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: 54px;
+  padding: 5px 4px 10px;
+  border: 0;
+  background: transparent;
+}
+.project-toolbar > .fui-Input,
+.trip-commandbar .trip-search { flex: 1 1 260px; max-width: 380px; }
+
+.ws2-segmented {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: 14px;
+  background: #e7eeee;
+}
+.ws2-segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 0;
+  border-radius: 10px;
+  color: #4e6775;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ws2-segmented button:hover { color: var(--ws-text); background: rgb(255 255 255 / 52%); }
+.ws2-segmented button.active { color: var(--ws-text); background: #fff; box-shadow: 0 4px 12px -9px rgb(31 62 72 / 35%); }
+.ws2-segmented button > span { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 7px; color: #54717c; background: #dce8e7; font-size: 10px; font-variant-numeric: tabular-nums; }
+.ws2-segmented button.active > span { color: #236d78; background: #e1f1ee; }
+
+.projects-view .project-board,
+.trips-view .trip-kanban {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 12px;
+  padding: 2px 4px 16px;
+  scrollbar-gutter: stable;
+}
+.projects-view .project-board { grid-template-columns: repeat(5, minmax(250px, 275px)); height: auto; min-width: 0; padding-right: 4px; }
+.trips-view .trip-kanban { grid-auto-columns: minmax(250px, 275px); }
+
+.projects-view .project-column,
+.trips-view .trip-column {
+  min-width: 0;
+  border: 1px solid rgb(255 255 255 / 65%);
+  border-radius: 20px;
+  background: #eaf0f0;
+}
+.projects-view .project-column { background: color-mix(in srgb, var(--context-accent, #86bcb5) 6%, #e9f0f0); }
+.trips-view .trip-column { background: color-mix(in srgb, var(--approval-stage-color) 5%, #e9f0f0); }
+.projects-view .project-column > header,
+.trips-view .trip-column > header { min-height: 62px; padding: 15px 14px 10px; border: 0; }
+.projects-view .project-column > header strong,
+.trips-view .trip-column > header strong { color: var(--ws-text); font-size: 13px; font-weight: 650; line-height: 1.28; }
+.projects-view .project-column > header .fui-Badge,
+.trips-view .approval-column-count { min-width: 22px; min-height: 22px; border: 0; color: #456270; background: rgb(255 255 255 / 78%); font-size: 11px; }
+.projects-view .project-stack,
+.trips-view .approval-column-stack { gap: 10px; padding: 10px; overflow-y: auto; scrollbar-width: thin; }
+.trips-view .approval-column-total { min-height: 46px; padding: 0 15px 10px; border-color: rgb(72 102 111 / 10%); }
+.trips-view .approval-column-total > span { color: #465e69; font-size: 10px; }
+.trips-view .approval-column-total > strong { color: #2d4757; font-size: 17px; }
+.trips-view .approval-column-empty { color: #455d69; }
+
+.projects-view .project-card,
+.trips-view .trip-board-card {
+  border: 1px solid rgb(255 255 255 / 92%);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 6px 18px -14px rgb(31 62 72 / 30%);
+  transition: border-color 160ms ease, transform 160ms ease, opacity 160ms ease;
+}
+.projects-view .project-card:hover,
+.trips-view .trip-board-card:hover { border-color: #a8cfce; box-shadow: var(--ws-shadow-card); }
+.projects-view .project-card.selected { border-color: #53a5a5; box-shadow: 0 0 0 2px rgb(0 145 168 / 12%); }
+.projects-view .spatial-card-open,
+.trips-view .approval-card-open { gap: 8px; padding: 15px 15px 12px; }
+.project-card-topline { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.project-card-topline > span:last-child { color: #536b76; font-size: 10px; white-space: nowrap; }
+.project-card-topline > span[data-tone="soon"] { color: #91620a; }
+.project-card-topline > span[data-tone="overdue"] { color: #a33f48; font-weight: 650; }
+.projects-view .project-code { color: #3b7580; font-size: 10px; letter-spacing: .035em; }
+.projects-view .project-card strong,
+.trips-view .trip-board-card .approval-card-open > strong { color: var(--ws-text); font-size: 14px; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.projects-view .spatial-person,
+.trips-view .approval-card-owner { display: flex; align-items: center; gap: 7px; min-width: 0; margin-top: 2px; color: #48616e; font-size: 11px; }
+.projects-view .spatial-person,
+.trips-view .approval-card-owner > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.projects-view .budget-progress { height: 5px; margin-top: 4px; overflow: hidden; border-radius: 999px; background: #e6eeed; }
+.projects-view .budget-progress > i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #78c7b5, #68a8c5); }
+.trips-view .trip-card-destination { color: #31566a; font-size: 16px; font-weight: 600; }
+.trips-view .approval-card-meta { color: #526c78; font-size: 10px; }
+
+.projects-view .spatial-inspector {
+  position: fixed;
+  z-index: var(--ws-layer-overlay);
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  left: auto;
+  width: min(760px, 72vw);
+  min-width: 0;
+  margin: 0;
+  padding: 24px 24px 34px;
+  overflow-y: auto;
+  border: 1px solid rgb(255 255 255 / 92%);
+  border-radius: 25px;
+  background: #f8fbfa;
+  box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
+  animation: ws2-process-inspector-in 240ms var(--ws-ease-spatial) both;
+}
+.projects-view .project-inspector-close { position: absolute; z-index: 1; top: 18px; right: 18px; width: 36px; height: 36px; border-radius: 12px; background: #eaf1ef; }
+.projects-view .spatial-inspector > header { padding-right: 46px; border-color: #e2eae8; }
+.projects-view .spatial-inspector > header h2 { font-size: 24px; font-weight: 600; }
+.project-detail-stage { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; scrollbar-width: thin; }
+.project-detail-stage > span { flex: 1 0 104px; padding: 9px 10px; border-radius: 10px; color: #536d78; background: #e8efee; font-size: 11px; font-weight: 600; text-align: center; }
+.project-detail-stage > span[aria-current="step"] { color: #fff; background: #276f7d; }
+.project-budget-detail { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; margin: 16px 0; padding: 16px; border-radius: 17px; background: linear-gradient(110deg, #e4f3ee, #edf4f5 58%, #eff2f8); color: #45616e; font-size: 12px; }
+.project-budget-detail > span:last-of-type { text-align: right; }
+.project-budget-detail > .budget-progress { grid-column: 1 / -1; margin: 0; }
+
+.fui-DialogSurface.trip-dialog:not(.record-composer-dialog) {
+  width: min(840px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 92%);
+  border-radius: 25px;
+  background: #f7faf9;
+  box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
+}
+.trip-dialog:not(.record-composer-dialog) .trip-detail { max-height: calc(100dvh - 28px); padding: 0 24px 34px; overflow-y: auto; background: transparent; scrollbar-width: thin; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail > header { position: sticky; z-index: 2; top: 0; min-height: 105px; margin: 0 -24px 14px; padding: 20px 24px 16px; border-color: #e1e9e7; background: rgb(250 252 251 / 94%); backdrop-filter: blur(8px); }
+.trip-dialog:not(.record-composer-dialog) .trip-detail > header span { color: #477681; font-size: 11px; letter-spacing: .02em; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail > header h2 { margin-top: 4px; font-size: 27px; font-weight: 600; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail > header p { margin: 5px 0 0; color: #526d79; font-size: 12px; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail > header button { width: 36px; height: 36px; border-radius: 12px; background: #eaf1ef; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail-stages { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; scrollbar-width: thin; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail-stages > span { flex: 1 0 130px; min-height: 42px; border: 1px solid transparent; border-top: 0; border-radius: 10px; color: #526b77; background: color-mix(in srgb, var(--approval-stage-color) 6%, #e9efee); }
+.trip-dialog:not(.record-composer-dialog) .trip-detail-stages > span[aria-current="step"] { border-color: color-mix(in srgb, var(--approval-stage-color) 35%, #78959a); color: #203b4a; background: color-mix(in srgb, var(--approval-stage-color) 18%, #f4f8f7); }
+.trip-dialog:not(.record-composer-dialog) .trip-purpose { padding: 18px; border: 0; border-radius: 17px; background: linear-gradient(110deg, #e5f1ef, #eef1f8); }
+.trip-dialog:not(.record-composer-dialog) .trip-purpose p { color: var(--ws-text); font-size: 16px; line-height: 1.45; }
+
+@keyframes ws2-process-inspector-in {
+  from { opacity: .82; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@container workspace (max-width: 900px) {
+  .ws2-process-overview { grid-template-columns: minmax(0, .85fr) minmax(0, 1.2fr); }
+  .ws2-process-focus { padding-inline: 17px; }
+  .ws2-process-metrics { padding-inline: 0 10px; }
+  .ws2-process-metrics > div { padding-inline: 12px; }
+  .ws2-process-toolbar { flex-wrap: wrap; }
+  .project-toolbar > .fui-Input,
+  .trip-commandbar .trip-search { flex-basis: 100%; max-width: none; }
+  .projects-view .spatial-inspector { width: min(720px, calc(100vw - 28px)); }
+}
+
+@container workspace (max-width: 610px) {
+  .ws2-process-overview { grid-template-columns: minmax(0, 1fr); }
+  .ws2-process-focus { grid-template-columns: auto 1fr; padding: 14px 18px 8px; }
+  .ws2-process-focus > strong { font-size: 39px; }
+  .ws2-process-metrics { padding: 0 10px 10px; }
+  .ws2-process-metrics > div { min-height: 46px; padding: 4px 10px; }
+  .ws2-process-metrics strong { font-size: 20px; }
+  .ws2-process-metrics span { font-size: 10px; }
+  .ws2-segmented { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+  .ws2-segmented button { flex: none; }
+  .projects-view .spatial-inspector { inset: 8px; width: auto; padding: 20px 18px 28px; border-radius: 21px; }
+}
+
+@media (max-height: 700px) {
+  .projects-view,
+  .trips-view { overflow-y: auto; }
+  .projects-view .project-board,
+  .trips-view .trip-kanban { flex: 0 0 390px; min-height: 390px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-view .project-card,
+  .trips-view .trip-board-card { transition-duration: 0ms; }
+  .projects-view .spatial-inspector { animation: none; }
+}
+
+@media (forced-colors: active) {
+  .ws2-process-overview,
+  .projects-view .project-column,
+  .trips-view .trip-column,
+  .projects-view .project-card,
+  .trips-view .trip-board-card,
+  .projects-view .spatial-inspector,
+  .fui-DialogSurface.trip-dialog:not(.record-composer-dialog) { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .ws2-process-focus,
+  .ws2-segmented button.active { color: CanvasText; }
+  .projects-view .project-card.selected { outline: 2px solid Highlight; }
+}

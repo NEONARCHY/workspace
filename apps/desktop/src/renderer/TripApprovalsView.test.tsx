@@ -39,10 +39,10 @@ describe("Trip approvals interaction", async () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();
     expect(column("manager_approval")).toHaveStyle({ "--approval-stage-color": "#88b9ff" });
-    expect(within(column("manager_approval") as HTMLElement).getByText("Не задана")).toBeInTheDocument();
+    expect(within(column("manager_approval") as HTMLElement).getByLabelText("1 поездок на этапе «Утверждение руководителем»")).toHaveTextContent("1");
     fireEvent.change(screen.getByLabelText("Поиск поездок"), { target: { value: "нет совпадений" } });
     expect(document.querySelectorAll(".trip-board-card")).toHaveLength(0);
-    expect(within(column("manager_approval") as HTMLElement).getByText("0 UZS")).toBeInTheDocument();
+    expect(within(column("manager_approval") as HTMLElement).getByLabelText("0 поездок на этапе «Утверждение руководителем»")).toHaveTextContent("0");
     fireEvent.change(screen.getByLabelText("Поиск поездок"), { target: { value: "самарканд" } });
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
     expect(screen.getByLabelText("Список поездок").children).toHaveLength(1);

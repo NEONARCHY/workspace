@@ -16,6 +16,8 @@ import "./team-dashboard.css";
 import "./spatial-workspace.css";
 import "./workspace-2-payments.css";
 import "./workspace-2-workflow.css";
+import "./workspace-2-projects-trips.css";
+import "./workspace-2-projects-trips.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";
 import "./web-platform.css";

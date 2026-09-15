@@ -12,7 +12,7 @@ import type {
   WorkspaceProject,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular } from "@fluentui/react-icons";
+import { Add24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -109,6 +109,18 @@ function money(value: number, currency: string): string {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value) + ` ${currency}`;
 }
 
+function shortDate(value?: string | null): string {
+  if (!value) return "Срок не указан";
+  return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue" {
+  if (!project.endDate || project.status === "completed") return "neutral";
+  const days = (new Date(`${project.endDate}T23:59:59`).getTime() - Date.now()) / 86_400_000;
+  if (days < 0) return "overdue";
+  return days <= 14 ? "soon" : "neutral";
+}
+
 export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove }: ProjectsViewProps) {
   const [selectedId, updateSelectedId] = useState(projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(false);
@@ -117,15 +129,31 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
   const [formError, setFormError] = useState("");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"active" | "all" | "completed">("active");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
+  const detailRef = useRef<HTMLElement>(null);
   const closeForm = () => { if (!savingRef.current) setFormMode(null); };
+  const closeDetail = () => { setDetailOpen(false); setFailureId(undefined); };
   useModalFocus(formRef, formMode !== null, closeForm);
+  useModalFocus(detailRef, detailOpen && formMode === null, closeDetail);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const activeCount = projects.filter((project) => project.status !== "completed").length;
+  const completedCount = projects.length - activeCount;
+  const actionableCount = projects.filter((project) => project.canMove).length;
+  const deadlineCount = projects.filter((project) => deadlineTone(project) !== "neutral").length;
+  const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
+  const visibleProjects = projects.filter((project) => {
+    if (filter === "active" && project.status === "completed") return false;
+    if (filter === "completed" && project.status !== "completed") return false;
+    return [project.code, project.title, project.description, personName(project.managerUserId)]
+      .join(" ").toLocaleLowerCase("ru-RU").includes(normalizedQuery);
+  });
+  const filterCounts = { active: activeCount, all: projects.length, completed: completedCount };
   const validBudget = form.budget.trim() !== "" && form.spentBudget.trim() !== ""
     && Number.isSafeInteger(Number(form.budget)) && Number.isSafeInteger(Number(form.spentBudget))
     && Number(form.budget) >= 0 && Number(form.spentBudget) >= 0 && Number(form.spentBudget) <= Number(form.budget);
@@ -172,32 +200,56 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         ) : null}
       </header>
 
+      <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
+        <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
+          <span>Сейчас в работе</span>
+          <strong>{activeCount}</strong>
+          <small>Открыть активные проекты <span aria-hidden="true">→</span></small>
+        </button>
+        <div className="ws2-process-metrics">
+          <div><strong>{actionableCount}</strong><span>можно переместить</span></div>
+          <div className={deadlineCount ? "attention" : ""}><strong>{deadlineCount}</strong><span>срок близко или прошёл</span></div>
+          <div><strong>{completedCount}</strong><span>завершено</span></div>
+        </div>
+      </section>
+
+      <div className="ws2-process-toolbar project-toolbar">
+        <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
+        <div className="ws2-segmented" role="group" aria-label="Фильтр проектов">
+          {([["active", "В работе"], ["all", "Все"], ["completed", "Завершённые"]] as const).map(([key, label]) => (
+            <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
+              {label}<span>{filterCounts[key]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && nextStages[project.stage].includes(target as ProjectStage); }} onPick={id => updateSelectedId(id)} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board" aria-label="Стадии проектов">
         {stages.map((stage) => {
-          const items = projects.filter((project) => project.stage === stage);
+          const items = visibleProjects.filter((project) => project.stage === stage);
           return (
             <SpatialLane id={stage}
               className={`project-column project-stage-${stage}`}
               key={stage}
             >
               <header><strong>{stageLabels[stage]}</strong><Badge appearance="tint">{items.length}</Badge></header>
-              <div className="project-stack">
+              <div className="project-stack" tabIndex={0} aria-label={`Проекты на стадии «${stageLabels[stage]}»`}>
                 {items.map((project) => (
                   <SpatialCard id={project.id} lane={stage} label={project.title} disabled={!project.canMove}
                     className={`project-card ${detailOpen && project.id === selected?.id ? "selected" : ""}`}
                     key={project.id}
                   >
                     <button className="spatial-card-open" type="button" onClick={() => setSelectedId(project.id)}>
-                    <span className="project-code">{project.code}</span>
+                    <span className="project-card-topline"><span className="project-code">{project.code}</span><span data-tone={deadlineTone(project)}>{shortDate(project.endDate)}</span></span>
                     <strong>{project.title}</strong>
                     <small className="spatial-person"><Avatar size={24} name={personName(project.managerUserId)} color="colorful" />{personName(project.managerUserId)}</small>
-                    <div className="budget-progress"><i style={{ width: `${project.budget ? Math.min(100, project.spentBudget / project.budget * 100) : 0}%` }} /></div>
+                    <div className="budget-progress" role="progressbar" aria-label={`Использовано бюджета проекта ${project.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={project.budget ? Math.round(Math.min(100, project.spentBudget / project.budget * 100)) : 0}><i style={{ width: `${project.budget ? Math.min(100, project.spentBudget / project.budget * 100) : 0}%` }} /></div>
                     <small>{money(project.spentBudget, project.currency)} из {money(project.budget, project.currency)}</small>
                     </button>
                   </SpatialCard>
                 ))}
-                {items.length === 0 ? <p className="empty-column">Перетащите проект сюда</p> : null}
+                {items.length === 0 ? <p className="empty-column">{visibleProjects.length ? "Перетащите проект сюда" : "Нет проектов"}</p> : null}
               </div>
             </SpatialLane>
           );
@@ -206,16 +258,19 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       </SpatialBoard>
 
       {selected !== undefined && detailOpen ? (
-        <aside className="bp7-detail spatial-inspector">
-          <Button className="project-inspector-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть карточку проекта" onClick={() => setDetailOpen(false)} />
+        <aside ref={detailRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="project-detail-title" className="bp7-detail spatial-inspector">
+          <Button className="project-inspector-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть карточку проекта" onClick={closeDetail} />
           <header>
-            <div><span>{selected.code}</span><h2>{selected.title}</h2></div>
+            <div><span>{selected.code}</span><h2 id="project-detail-title">{selected.title}</h2></div>
             {selected.canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={() => {
               setForm(projectForm(selected));
               setFormError("");
               setFormMode("edit");
             }}>Изменить</Button> : null}
           </header>
+          <div className="project-detail-stage" aria-label={`Текущая стадия: ${stageLabels[selected.stage]}`}>
+            {stages.map((stage) => <span key={stage} aria-current={stage === selected.stage ? "step" : undefined}>{stageLabels[stage]}</span>)}
+          </div>
           <p>{selected.description || "Описание пока не добавлено."}</p>
           {failureId === selected.id ? <DecisionReason title="Причина провала проекта" onCancel={() => setFailureId(undefined)} onConfirm={async (reason) => Boolean(await onMove(selected, "failure", reason))} /> : null}
           <dl className="bp7-facts">
@@ -224,6 +279,11 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             <div><dt>Бюджет</dt><dd>{money(selected.budget, selected.currency)}</dd></div>
             <div><dt>Остаток</dt><dd>{money(selected.remainingBudget, selected.currency)}</dd></div>
           </dl>
+          <div className="project-budget-detail">
+            <span><strong>{money(selected.spentBudget, selected.currency)}</strong> использовано</span>
+            <span>{selected.budget ? Math.round(selected.spentBudget / selected.budget * 100) : 0}% бюджета</span>
+            <div className="budget-progress" role="progressbar" aria-label="Использовано бюджета" aria-valuemin={0} aria-valuemax={100} aria-valuenow={selected.budget ? Math.round(Math.min(100, selected.spentBudget / selected.budget * 100)) : 0}><i style={{ width: `${selected.budget ? Math.min(100, selected.spentBudget / selected.budget * 100) : 0}%` }} /></div>
+          </div>
           {selected.canMove ? (
             <div className="bp7-actions">
               {nextStages[selected.stage].map((stage) => (
