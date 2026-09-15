@@ -3,6 +3,8 @@ import { Button, Field, Select } from "@fluentui/react-components";
 
 const STORAGE_KEY = "yuksalish.audio-devices.v1";
 const CHANGE_EVENT = "yuksalish:audio-devices-changed";
+const outputSelectionSupported = typeof HTMLMediaElement !== "undefined"
+  && "setSinkId" in HTMLMediaElement.prototype;
 
 export interface AudioDevicePreferences {
   readonly inputDeviceId: string;
@@ -87,7 +89,7 @@ function deviceName(device: MediaDeviceInfo, index: number, kind: "input" | "out
 export function AudioDeviceSettings() {
   const [preferences, setPreferences] = useState(getAudioDevicePreferences);
   const [devices, setDevices] = useState<readonly MediaDeviceInfo[]>([]);
-  const [status, setStatus] = useState("Системные устройства меняются вместе с настройками Windows.");
+  const [status, setStatus] = useState("Системные устройства меняются вместе с настройками устройства.");
 
   const refresh = useCallback(async (requestLabels = false) => {
     if (!navigator.mediaDevices?.enumerateDevices) {
@@ -107,7 +109,8 @@ export function AudioDeviceSettings() {
       const next = {
         inputDeviceId: preferences.inputDeviceId === "default" || inputIds.has(preferences.inputDeviceId)
           ? preferences.inputDeviceId : "default",
-        outputDeviceId: preferences.outputDeviceId === "default" || outputIds.has(preferences.outputDeviceId)
+        outputDeviceId: outputSelectionSupported
+          && (preferences.outputDeviceId === "default" || outputIds.has(preferences.outputDeviceId))
           ? preferences.outputDeviceId : "default",
       };
       if (next.inputDeviceId !== preferences.inputDeviceId || next.outputDeviceId !== preferences.outputDeviceId) {
@@ -117,8 +120,8 @@ export function AudioDeviceSettings() {
       }
     } catch (error) {
       setStatus(error instanceof DOMException && error.name === "NotAllowedError"
-        ? "Доступ к микрофону запрещён в Windows. Системное устройство всё равно останется выбранным."
-        : "Не удалось обновить устройства. Проверьте настройки звука Windows.");
+        ? "Доступ к микрофону запрещён в браузере или системе. Системное устройство всё равно останется выбранным."
+        : "Не удалось обновить устройства. Проверьте системные настройки звука.");
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
     }
@@ -141,8 +144,8 @@ export function AudioDeviceSettings() {
     setPreferences(next);
     saveAudioDevicePreferences(next);
     setStatus(next.inputDeviceId === "default" && next.outputDeviceId === "default"
-      ? "Приложение следует за устройствами по умолчанию в Windows."
-      : "Ручной выбор сохранён только на этом компьютере.");
+      ? "Приложение следует за системными устройствами по умолчанию."
+      : "Ручной выбор сохранён только в этом клиенте.");
   };
 
   return (
@@ -150,7 +153,7 @@ export function AudioDeviceSettings() {
       <div className="account-section-title">
         <div>
           <h3>Звук и устройства</h3>
-          <p>Для голосовых сообщений. Системный режим автоматически следует за Windows.</p>
+          <p>Для голосовых сообщений. Системный режим автоматически следует за настройками устройства.</p>
         </div>
       </div>
       <div className="audio-device-fields">
@@ -168,10 +171,13 @@ export function AudioDeviceSettings() {
         <Field label="Вывод звука">
           <Select
             value={preferences.outputDeviceId}
+            disabled={!outputSelectionSupported}
             onChange={(event) => change({ ...preferences, outputDeviceId: event.target.value })}
           >
-            <option value="default">Системные динамики — автоматически</option>
-            {outputs.map((device, index) => (
+            <option value="default">{outputSelectionSupported
+              ? "Системные динамики — автоматически"
+              : "Системные динамики — выбор браузером недоступен"}</option>
+            {outputSelectionSupported && outputs.map((device, index) => (
               <option key={device.deviceId} value={device.deviceId}>{deviceName(device, index, "output")}</option>
             ))}
           </Select>

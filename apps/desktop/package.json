@@ -4,7 +4,9 @@
   "private": true,
   "main": "dist-electron/main/main.js",
   "scripts": {
-    "build": "vite build && tsup src/main/main.ts src/preload/preload.ts --format cjs --platform node --target node20 --out-dir dist-electron --sourcemap --clean --external electron",
+    "build": "pnpm build:renderer && pnpm build:electron",
+    "build:renderer": "vite build",
+    "build:web": "vite build --mode web",
     "dist:win": "pnpm build && electron-builder --win nsis --x64 --config.electronDist=node_modules/electron/dist",
     "dev": "pnpm build:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build:electron": "tsup src/main/main.ts src/preload/preload.ts --format cjs --platform node --target node20 --out-dir dist-electron --sourcemap --clean --external electron",

@@ -10,6 +10,7 @@ import {
   setMandatoryDesktopUpdate,
   stageDesktopRelease,
 } from "./workspace-api";
+import { workspacePlatform } from "./platform-adapter";
 
 interface DesktopUpdateSettingsProps {
   readonly token: string;
@@ -76,7 +77,8 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
         {policy?.mandatory ? "Обязательно" : "Свободный режим"}
       </span>
     </div>
-    <p>На сервере: <strong>{policy?.publishedVersion ?? "нет опубликованной версии"}</strong>. На этом ПК: <strong>{window.yuksalish?.version ?? "режим разработки"}</strong>.</p>
+    <p>На сервере: <strong>{policy?.publishedVersion ?? "нет опубликованной версии"}</strong>. Текущий клиент: <strong>{workspacePlatform.kind === "web" ? `web ${workspacePlatform.version}` : workspacePlatform.version}</strong>.</p>
+    {workspacePlatform.kind === "web" ? <p className="security-ok">Установщики относятся только к Electron. Браузерная версия обновляется отдельной web-выкладкой.</p> : null}
 
     <div className="desktop-update-step">
       <strong>1. Загрузить готовый установщик</strong>
