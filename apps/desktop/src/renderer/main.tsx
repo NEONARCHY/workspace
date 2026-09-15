@@ -17,8 +17,10 @@ import "./spatial-workspace.css";
 import "./workspace-2-payments.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";
+import "./web-platform.css";
+import { workspacePlatform } from "./platform-adapter";
 
-if (window.yuksalish && navigator.userAgent.includes("Windows")) {
+if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {
   document.documentElement.classList.add("desktop-window-chrome");
 }
 

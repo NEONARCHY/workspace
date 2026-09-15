@@ -19,6 +19,7 @@ from .access_control import ensure_request_module_access
 from .database import get_connection
 from .settings import Settings
 from .tables import auth_sessions, update_policy, users
+from .web_security import require_csrf, require_web_origin
 
 bearer = HTTPBearer(auto_error=False)
 
@@ -40,6 +41,8 @@ class AuthenticatedUser:
     role: str
     department_id: UUID | None = None
     session_id: UUID | None = None
+    client_kind: str = "desktop"
+    csrf_token_hash: str | None = None
 
 
 class InvalidTokenError(ValueError):
@@ -128,6 +131,8 @@ async def load_authenticated_user(
     user_id: UUID,
     *,
     session_id: UUID | None = None,
+    client_kind: str = "desktop",
+    csrf_token_hash: str | None = None,
 ) -> AuthenticatedUser | None:
     statement = select(
         users.c.id,
@@ -150,6 +155,8 @@ async def load_authenticated_user(
         role=row["role"],
         department_id=row["department_id"],
         session_id=session_id,
+        client_kind=client_kind,
+        csrf_token_hash=csrf_token_hash,
     )
 
 
@@ -159,27 +166,37 @@ async def authenticate_access_token(
     settings: Settings,
 ) -> AuthenticatedUser:
     claims = read_access_token(token, settings.auth_signing_key)
+    client_kind = "desktop"
+    csrf_token_hash: str | None = None
     if claims.session_id is None:
         if settings.environment not in {"development", "test"}:
             raise InvalidTokenError("Server session required")
     else:
         now = datetime.now(UTC)
-        session_exists = (
+        session_record = (
             await connection.execute(
-                select(auth_sessions.c.id).where(
+                select(
+                    auth_sessions.c.id,
+                    auth_sessions.c.client_kind,
+                    auth_sessions.c.csrf_token_hash,
+                ).where(
                     auth_sessions.c.id == claims.session_id,
                     auth_sessions.c.user_id == claims.user_id,
                     auth_sessions.c.revoked_at.is_(None),
                     auth_sessions.c.expires_at > now,
                 )
             )
-        ).scalar_one_or_none()
-        if session_exists is None:
+        ).mappings().first()
+        if session_record is None:
             raise InvalidTokenError("Session is no longer active")
+        client_kind = session_record["client_kind"]
+        csrf_token_hash = session_record["csrf_token_hash"]
     user = await load_authenticated_user(
         connection,
         claims.user_id,
         session_id=claims.session_id,
+        client_kind=client_kind,
+        csrf_token_hash=csrf_token_hash,
     )
     if user is None:
         raise InvalidTokenError("User is not active")
@@ -202,9 +219,13 @@ async def require_user(
             credentials.credentials,
             request.app.state.settings,
         )
+        if user.client_kind == "web" and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            require_web_origin(request, request.app.state.settings)
+            require_csrf(request, user.csrf_token_hash)
         update_path = f"{request.app.state.settings.api_prefix}/updates/"
         if (
             request.app.state.settings.environment == "production"
+            and user.client_kind != "web"
             and not request.url.path.startswith(update_path)
         ):
             policy = (

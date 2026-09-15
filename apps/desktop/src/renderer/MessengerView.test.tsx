@@ -70,6 +70,25 @@ describe("Private messenger", () => {
     await waitFor(() => expect(clearDraft).toHaveBeenCalledWith("chat:aziza:finance"));
     expect(saveDraft).not.toHaveBeenCalled();
   });
+  it("flushes the current message draft before a web update reload", async () => {
+    const loadDraft = vi.fn().mockResolvedValue(null);
+    const saveDraft = vi.fn().mockResolvedValue(true);
+    vi.stubGlobal("yuksalish", {
+      loadDraft,
+      clearDraft: vi.fn().mockResolvedValue(undefined),
+      saveDraft,
+    });
+    renderMessenger();
+    await waitFor(() => expect(loadDraft).toHaveBeenCalledWith("chat:aziza:finance"));
+    fireEvent.change(screen.getByLabelText("Новое сообщение"), {
+      target: { value: "Сохранить перед обновлением" },
+    });
+    window.dispatchEvent(new Event("yuksalish:prepare-web-update"));
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledWith(
+      "chat:aziza:finance",
+      "Сохранить перед обновлением",
+    ));
+  });
   it("lets a regular employee create a private group with selected colleagues, even with no chats", async () => {
     const chatActions = actions();
     vi.mocked(chatActions.create).mockResolvedValue({

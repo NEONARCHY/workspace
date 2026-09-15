@@ -3,7 +3,7 @@
 ## Контуры
 
 ```text
-Electron renderer (React, без Node.js)
+Electron renderer / LAN browser (общий React UI)
         │ HTTPS / WSS
         ▼
 gateway (единственная опубликованная точка)
@@ -16,6 +16,11 @@ gateway (единственная опубликованная точка)
 ```
 
 Desktop загружает только локально собранный renderer. У renderer отключён Node.js, включены context isolation и sandbox; preload публикует только узкие проверенные возможности: платформу/версию, уведомления, обновления, зашифрованные черновики и защищённую сессию. Произвольный IPC, внешняя навигация, новые окна и запросы разрешений запрещены.
+
+LAN browser получает production-сборку того же renderer из отдельного статического контейнера.
+`platform-adapter.ts` выбирает preload-возможности Electron либо browser-возможности. Web
+refresh-token хранится только в защищённой HttpOnly cookie; access-token остаётся в памяти, а
+изменяющие запросы web-сессии проверяют Origin, Host и CSRF-токен.
 
 ## Защищённый вход desktop
 

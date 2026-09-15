@@ -52,8 +52,13 @@ import type {
   DesktopRelease,
   DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
+import { workspacePlatform } from "./platform-adapter";
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8080";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
+  ?? (workspacePlatform.kind === "web" ? window.location.origin : "http://127.0.0.1:8080");
+
+let pendingMutations = 0;
+export const hasPendingMutation = () => pendingMutations > 0;
 
 export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePolicy> {
   return apiRequest<DesktopUpdatePolicy>("/updates/policy", {}, token);
@@ -111,8 +116,21 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
   options.signal?.addEventListener("abort", abort, { once: true });
   if (options.signal?.aborted) controller.abort();
   const timer = window.setTimeout(abort, timeout);
+  const method = (options.method ?? "GET").toUpperCase();
+  const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
+  const headers = new Headers(options.headers);
+  if (workspacePlatform.kind === "web" && isMutation) {
+    const csrfToken = workspacePlatform.csrfToken();
+    if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
+  }
+  if (isMutation) pendingMutations += 1;
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: workspacePlatform.kind === "web" ? "same-origin" : "omit",
+      signal: controller.signal,
+    });
     if (!response.ok) {
       const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
       throw new Error(typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
@@ -122,6 +140,7 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
     if (controller.signal.aborted) throw new Error("Сервер не ответил вовремя. Обновите данные перед повтором операции: изменения могли сохраниться.", { cause: error });
     throw error;
   } finally {
+    if (isMutation) pendingMutations = Math.max(0, pendingMutations - 1);
     window.clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
   }
@@ -134,7 +153,9 @@ async function apiRequest<T>(
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
-  if (window.yuksalish?.version) headers.set("X-Desktop-Version", window.yuksalish.version);
+  if (workspacePlatform.kind === "electron") {
+    headers.set("X-Desktop-Version", workspacePlatform.version);
+  }
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
   return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
@@ -146,13 +167,23 @@ export function login(
   password: string,
   totpCode?: string,
 ): Promise<AuthenticationSession> {
-  return apiRequest<AuthenticationSession>("/auth/login", {
+  const path = workspacePlatform.kind === "web" ? "/auth/web/login" : "/auth/login";
+  return apiRequest<AuthenticationSession>(path, {
     method: "POST",
-    body: JSON.stringify({ username, password, totpCode, deviceLabel: "Windows desktop" }),
+    body: JSON.stringify({
+      username,
+      password,
+      totpCode,
+      deviceLabel: workspacePlatform.kind === "web" ? "Yuksalish Web" : "Windows desktop",
+    }),
   });
 }
 
-export function refreshAuthentication(refreshToken: string): Promise<AuthenticationSession> {
+export function refreshAuthentication(refreshToken?: string): Promise<AuthenticationSession> {
+  if (workspacePlatform.kind === "web") {
+    return apiRequest<AuthenticationSession>("/auth/web/refresh", { method: "POST" });
+  }
+  if (!refreshToken) return Promise.reject(new Error("Refresh session is missing"));
   return apiRequest<AuthenticationSession>("/auth/refresh", {
     method: "POST",
     body: JSON.stringify({ refreshToken }),
@@ -160,16 +191,26 @@ export function refreshAuthentication(refreshToken: string): Promise<Authenticat
 }
 
 export function logout(token: string): Promise<void> {
-  return apiRequest<void>("/auth/logout", { method: "POST" }, token);
+  return apiRequest<void>(
+    workspacePlatform.kind === "web" ? "/auth/web/logout" : "/auth/logout",
+    { method: "POST" },
+    token,
+  );
 }
 
 export function acceptInvitation(
   inviteToken: string,
   password: string,
 ): Promise<AuthenticationSession> {
-  return apiRequest<AuthenticationSession>("/auth/invitations/accept", {
+  const path = workspacePlatform.kind === "web"
+    ? "/auth/web/invitations/accept" : "/auth/invitations/accept";
+  return apiRequest<AuthenticationSession>(path, {
     method: "POST",
-    body: JSON.stringify({ inviteToken, password, deviceLabel: "Windows desktop" }),
+    body: JSON.stringify({
+      inviteToken,
+      password,
+      deviceLabel: workspacePlatform.kind === "web" ? "Yuksalish Web" : "Windows desktop",
+    }),
   });
 }
 
@@ -359,9 +400,15 @@ export function completePasswordReset(
   resetToken: string,
   password: string,
 ): Promise<AuthenticationSession> {
-  return apiRequest<AuthenticationSession>("/auth/password-resets/complete", {
+  const path = workspacePlatform.kind === "web"
+    ? "/auth/web/password-resets/complete" : "/auth/password-resets/complete";
+  return apiRequest<AuthenticationSession>(path, {
     method: "POST",
-    body: JSON.stringify({ resetToken, password, deviceLabel: "Windows desktop" }),
+    body: JSON.stringify({
+      resetToken,
+      password,
+      deviceLabel: workspacePlatform.kind === "web" ? "Yuksalish Web" : "Windows desktop",
+    }),
   });
 }
 
@@ -1019,7 +1066,8 @@ export function subscribeToWorkspaceEvents(
   onEvent: () => void,
   onError: (error: unknown) => void = () => undefined,
 ): () => void {
-  const websocketUrl = apiBaseUrl.replace(/^http/, "ws") + "/api/v1/events";
+  const websocketUrl = new URL("/api/v1/events", apiBaseUrl);
+  websocketUrl.protocol = websocketUrl.protocol === "https:" ? "wss:" : "ws:";
   let socket: WebSocket;
   let stopped = false;
   let retry = 1_000;
@@ -1034,7 +1082,7 @@ export function subscribeToWorkspaceEvents(
   };
   const connect = () => {
     if (stopped) return;
-    socket = new WebSocket(websocketUrl);
+    socket = new WebSocket(websocketUrl.toString());
     socket.addEventListener("open", () => {
       if (!stopped) socket.send(JSON.stringify({ type: "authenticate", token }));
     });

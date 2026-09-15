@@ -5,6 +5,7 @@ import type {
   NotificationPreferences,
   WorkspaceNotification,
 } from "@yuksalish/contracts";
+import { workspacePlatform } from "./platform-adapter";
 import { Button, Input, Switch } from "@fluentui/react-components";
 import {
   AlertOn24Regular,
@@ -108,7 +109,13 @@ export function NotificationCenter({
     string,
     string,
   ][] = [
-    ["desktopEnabled", "Уведомления Windows", "Показывать новые события поверх других окон"],
+    [
+      "desktopEnabled",
+      workspacePlatform.kind === "web" ? "Системные уведомления браузера" : "Уведомления Windows",
+      workspacePlatform.kind === "web"
+        ? "Показывать новые события после явного разрешения браузера"
+        : "Показывать новые события поверх других окон",
+    ],
     ["messagesEnabled", "Сообщения", "Новые сообщения в доступных чатах"],
     ["tasksEnabled", "Задачи", "Назначения, возвраты и сроки"],
     ["approvalsEnabled", "Заявки", "Этапы, где требуется ваше решение"],

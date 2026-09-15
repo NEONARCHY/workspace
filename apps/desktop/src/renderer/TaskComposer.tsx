@@ -26,6 +26,7 @@ import {
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { workspacePlatform } from "./platform-adapter";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -106,8 +107,8 @@ export function TaskComposer({
   const draftEdited = useRef(false);
 
   useEffect(() => {
-    const bridge = window.yuksalish;
-    if (!persistDraft || !bridge?.loadDraft) return;
+    const bridge = workspacePlatform;
+    if (!persistDraft) return;
     let active = true;
     void bridge.loadDraft(draftKey).then((saved) => {
       if (!active || draftEdited.current || !saved) return;
@@ -136,16 +137,21 @@ export function TaskComposer({
   }, [draftKey, persistDraft]);
 
   useEffect(() => {
-    if (!persistDraft || !draftReady.current || !draftEdited.current || !window.yuksalish?.saveDraft) return;
+    if (!persistDraft || !draftReady.current || !draftEdited.current) return;
     const snapshot = JSON.stringify({
       title, description, project, assigneeId, priority, dueAt, participants,
       checklist, dependencies, repeatEnabled, cycleKind, cycleInterval,
       cycleNextRun, cycleCalendarRule, cycleWeekdays, cycleMonthDays,
     });
+    const save = () => { void workspacePlatform.saveDraft(draftKey, snapshot).catch(() => undefined); };
     const timer = window.setTimeout(() => {
-      void window.yuksalish?.saveDraft(draftKey, snapshot).catch(() => undefined);
+      save();
     }, 350);
-    return () => window.clearTimeout(timer);
+    window.addEventListener("yuksalish:prepare-web-update", save);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("yuksalish:prepare-web-update", save);
+    };
   }, [draftKey, persistDraft, title, description, project, assigneeId, priority, dueAt, participants,
     checklist, dependencies, repeatEnabled, cycleKind, cycleInterval, cycleNextRun,
     cycleCalendarRule, cycleWeekdays, cycleMonthDays]);
@@ -286,7 +292,7 @@ export function TaskComposer({
       if (created === undefined) {
         setError("Не удалось добавить задачу. Проверьте подключение и повторите.");
       } else if (persistDraft) {
-        void window.yuksalish?.clearDraft(draftKey).catch(() => undefined);
+        void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
       }
     } finally {
       setBusy(false);

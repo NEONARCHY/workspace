@@ -959,6 +959,7 @@ function mockServer(
 }
 
 async function loginToWorkspace(username = "aziza") {
+  await screen.findByRole("button", { name: "Войти" });
   fireEvent.change(screen.getByLabelText(/^Логин/), {
     target: { value: username },
   });
