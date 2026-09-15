@@ -65,6 +65,8 @@ import {
 import { AccountPanel } from "./AccountPanel";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
+import { workspacePlatform } from "./platform-adapter";
+import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
@@ -298,7 +300,7 @@ export function App() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
-  const [sessionRestoring, setSessionRestoring] = useState(() => window.yuksalish?.loadSession !== undefined);
+  const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
@@ -331,8 +333,8 @@ export function App() {
     setConnectionDetail("Сервер подключён");
   }, () => activeToken.current));
 
-  const persistRefreshSession = useCallback((refreshToken: string) => {
-    void window.yuksalish?.saveSession(refreshToken).catch(() => undefined);
+  const persistRefreshSession = useCallback((refreshToken?: string) => {
+    if (refreshToken) void workspacePlatform.saveRefreshSession(refreshToken).catch(() => undefined);
   }, []);
 
   const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
@@ -348,9 +350,13 @@ export function App() {
     setSession(authenticated);
     persistRefreshSession(authenticated.refreshToken);
     try {
-      const key = `yuksalish:resume-section:${authenticated.user.id}`;
-      const lastSection = localStorage.getItem(key);
-      localStorage.removeItem(key);
+      const web = workspacePlatform.kind === "web";
+      const key = web
+        ? "yuksalish:web:last-section"
+        : `yuksalish:resume-section:${authenticated.user.id}`;
+      const storage = web ? sessionStorage : localStorage;
+      const lastSection = storage.getItem(key);
+      if (!web) storage.removeItem(key);
       if (lastSection && navItems.some((item) => item.key === lastSection && item.key !== "settings")) {
         setActiveSection(lastSection as WorkspaceSection);
       }
@@ -406,10 +412,10 @@ export function App() {
     setUpdatePolicy(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
-    await window.yuksalish?.clearSession().catch(() => undefined);
     if (current !== undefined) {
       await logout(current.accessToken).catch(() => undefined);
     }
+    await workspacePlatform.clearRefreshSession().catch(() => undefined);
   };
 
   const reportError = useCallback((error: unknown) => {
@@ -418,34 +424,36 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const bridge = window.yuksalish;
-    if (!bridge?.onUpdateStatus) return;
-    return bridge.onUpdateStatus(setUpdateStatus);
+    if (!workspacePlatform.onDesktopUpdateStatus) return;
+    return workspacePlatform.onDesktopUpdateStatus(setUpdateStatus);
   }, []);
 
   useEffect(() => {
-    const bridge = window.yuksalish;
-    if (!bridge?.loadSession) {
+    if (!workspacePlatform.hasSessionHint()) {
       return;
     }
     let active = true;
-    void bridge.loadSession()
+    void workspacePlatform.loadRefreshSession()
       .then(async (refreshToken) => {
         if (!refreshToken) return;
         let renewedSession = false;
         try {
-          const renewed = await refreshAuthentication(refreshToken);
+          const renewed = await refreshAuthentication(
+            workspacePlatform.kind === "web" ? undefined : refreshToken,
+          );
           renewedSession = true;
           if (!active) return;
           // A refresh token can rotate. Persist its replacement before the
           // workspace bootstrap request so a transient connection error does
           // not leave the employee signed out on the next opening.
-          await bridge.saveSession(renewed.refreshToken).catch(() => undefined);
+          if (renewed.refreshToken) {
+            await workspacePlatform.saveRefreshSession(renewed.refreshToken).catch(() => undefined);
+          }
           if (active) await establishSession(renewed);
         } catch {
           if (!active) return;
           if (!renewedSession) {
-            await bridge.clearSession().catch(() => undefined);
+            await workspacePlatform.clearRefreshSession().catch(() => undefined);
             return;
           }
           setAuthError("Не удалось загрузить рабочее пространство. Повторите открытие приложения.");
@@ -456,7 +464,7 @@ export function App() {
   }, [establishSession]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session || workspacePlatform.kind !== "electron") return;
     let active = true;
     const refreshPolicy = () => {
       void loadDesktopUpdatePolicy(session.accessToken)
@@ -469,13 +477,13 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
-    if (!session || !updatePolicy?.publishedVersion || !window.yuksalish?.configureUpdates) return;
+    if (!session || !updatePolicy?.publishedVersion || !workspacePlatform.configureUpdates) return;
     let active = true;
-    void window.yuksalish.configureUpdates(apiBaseUrl, session.accessToken)
+    void workspacePlatform.configureUpdates(apiBaseUrl, session.accessToken)
       .then((status) => {
         if (!active) return;
         setUpdateStatus(status);
-        return window.yuksalish?.checkForUpdates().then((checked) => {
+        return workspacePlatform.checkForDesktopUpdates?.().then((checked) => {
           if (active) setUpdateStatus(checked);
         });
       })
@@ -503,7 +511,7 @@ export function App() {
           activeToken.current = undefined;
           setSession(undefined);
           setUpdatePolicy(undefined);
-          void window.yuksalish?.clearSession().catch(() => undefined);
+          void workspacePlatform.clearRefreshSession().catch(() => undefined);
           setAuthError("Сессия завершена. Войдите снова.");
         });
     }, refreshAfter);
@@ -536,7 +544,7 @@ export function App() {
         || notification.desktopDeliveredAt
         || notification.readAt
       ) continue;
-      void window.yuksalish?.showNotification({
+      void workspacePlatform.showNotification({
         id: notification.id,
         title: notification.title,
         body: notification.body,
@@ -563,9 +571,17 @@ export function App() {
     if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
       void refreshWorkspace(session.accessToken).catch(reportError);
-      void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
+      if (workspacePlatform.kind === "electron") {
+        void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
+      }
     }, reportError);
   }, [refreshWorkspace, reportError, session]);
+
+  useEffect(() => {
+    if (!session || workspacePlatform.kind !== "web") return;
+    try { sessionStorage.setItem("yuksalish:web:last-section", activeSection); }
+    catch { /* session storage can be disabled */ }
+  }, [activeSection, session]);
 
   const personalMutation = async (operation: (token: string) => Promise<PersonalPreferences>) => {
     if (!session) throw new Error("Войдите снова");
@@ -1286,6 +1302,14 @@ export function App() {
   const handleNotificationPreferences = async (preferences: NotificationPreferences) => {
     if (session === undefined) return;
     try {
+      if (
+        workspacePlatform.kind === "web"
+        && preferences.desktopEnabled
+        && !workspace.notificationPreferences.desktopEnabled
+      ) {
+        const allowed = await workspacePlatform.requestNotificationPermission();
+        if (!allowed) throw new Error("Браузер не разрешил системные уведомления.");
+      }
       const saved = await updateWorkspaceNotificationPreferences(
         session.accessToken,
         preferences,
@@ -1307,7 +1331,7 @@ export function App() {
   };
 
   useEffect(() => {
-    return window.yuksalish?.onNotificationOpen((payload) => {
+    return workspacePlatform.onNotificationOpen((payload) => {
       const notification = workspace.notifications.find((item) => item.id === payload.id);
       if (session === undefined || notification === undefined) return;
       if (!notification.readAt) {
@@ -1339,19 +1363,19 @@ export function App() {
     );
   }
 
-  if (requiresDesktopUpdate(updatePolicy, window.yuksalish?.version)) {
+  if (workspacePlatform.kind === "electron" && requiresDesktopUpdate(updatePolicy, workspacePlatform.version)) {
     return <FluentProvider theme={workspaceTheme} className="app-provider">
       <DesktopUpdateGate
         requiredVersion={updatePolicy!.minimumVersion!}
-        currentVersion={window.yuksalish!.version}
+        currentVersion={workspacePlatform.version}
         status={updateStatus}
-        onRetry={() => void window.yuksalish?.checkForUpdates().then(setUpdateStatus).catch((error: unknown) => {
+        onRetry={() => void workspacePlatform.checkForDesktopUpdates?.().then(setUpdateStatus).catch((error: unknown) => {
           setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось проверить обновление" });
         })}
         onInstall={() => {
           try { localStorage.setItem(`yuksalish:resume-section:${session.user.id}`, activeSection); }
           catch { /* local storage can be disabled */ }
-          void window.yuksalish?.installUpdate().catch((error: unknown) => {
+          void workspacePlatform.installDesktopUpdate?.().catch((error: unknown) => {
             setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось установить обновление" });
           });
         }}
@@ -1640,6 +1664,7 @@ export function App() {
         />
         </RecoveryBoundary>
       ) : null}
+      <WebUpdateNotice />
     </FluentProvider>
   );
 }

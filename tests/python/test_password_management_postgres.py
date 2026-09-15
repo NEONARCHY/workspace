@@ -6,12 +6,18 @@ from pydantic import SecretStr
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from yuksalish_api.auth import InvalidTokenError, authenticate_access_token, load_authenticated_user
+from yuksalish_api.auth import (
+    InvalidTokenError,
+    authenticate_access_token,
+    load_authenticated_user,
+    read_access_token,
+)
 from yuksalish_api.auth_schemas import PasswordResetCreateRequest
 from yuksalish_api.auth_service import (
     AuthServiceError,
     change_account_password,
     create_password_reset,
+    hash_password,
     login_with_password,
     verify_password,
 )
@@ -86,6 +92,18 @@ async def test_password_change_permissions_and_session_revocation() -> None:
                     )
                 assert denied.value.status_code == 403
 
+                # Another integration test may have seeded these deterministic demo users
+                # with a different password. Set only this fixture's employee inside the
+                # rollback transaction so the login test does not depend on test order.
+                await connection.execute(
+                    update(users)
+                    .where(users.c.id == employee.id)
+                    .values(
+                        password_hash=hash_password(demo_password.get_secret_value()),
+                        failed_login_count=0,
+                        locked_until=None,
+                    )
+                )
                 login = await login_with_password(
                     connection, "dilshod", demo_password.get_secret_value(), None,
                     "Password test", settings,
@@ -104,7 +122,9 @@ async def test_password_change_permissions_and_session_revocation() -> None:
                 assert (
                     await connection.execute(
                         select(auth_sessions.c.revoked_at).where(
-                            auth_sessions.c.user_id == employee.id
+                            auth_sessions.c.id == read_access_token(
+                                login.access_token, settings.auth_signing_key
+                            ).session_id
                         )
                     )
                 ).scalar_one() == changed_at
@@ -115,6 +135,7 @@ async def test_password_change_permissions_and_session_revocation() -> None:
                         select(audit_events.c.details).where(
                             audit_events.c.action == "auth.password_changed",
                             audit_events.c.target_id == employee.id,
+                            audit_events.c.created_at == changed_at,
                         )
                     )
                 ).scalar_one()

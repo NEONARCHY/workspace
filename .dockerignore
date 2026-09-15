@@ -8,6 +8,7 @@
 node_modules
 **/node_modules
 **/dist
+**/dist-web
 **/dist-electron
 **/release
 .codex-tmp
@@ -16,6 +17,7 @@ inventory
 tmp
 .qa_hisobot_pdfs
 *.env
+.env*
 *.sqlite*
 *.db
 *.log

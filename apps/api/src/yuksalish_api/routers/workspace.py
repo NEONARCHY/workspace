@@ -82,6 +82,7 @@ from yuksalish_api.repository import (
     update_trip_request,
     validate_attachment_owner,
 )
+from yuksalish_api.web_security import is_allowed_web_origin
 from yuksalish_api.workspace_schemas import (
     AbsenceActionRequest,
     AbsenceRequestResponse,
@@ -1079,6 +1080,13 @@ async def workspace_events(websocket: WebSocket) -> None:
             except InvalidTokenError:
                 await websocket.close(code=4401, reason="Invalid token")
                 return
+        if user.client_kind == "web" and not is_allowed_web_origin(
+            websocket.headers.get("origin"),
+            websocket.headers.get("host"),
+            websocket.app.state.settings,
+        ):
+            await websocket.close(code=4403, reason="Trusted web origin required")
+            return
         user_id = user.id
         await event_bus.connect(user_id, websocket)
         await websocket.send_json({"type": "authenticated", "userId": str(user_id)})

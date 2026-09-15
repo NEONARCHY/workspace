@@ -1,11 +1,12 @@
 import { Component, type ReactNode } from "react";
+import { workspacePlatform } from "./platform-adapter";
 
 export function reportDiagnostic(category: string, error: unknown): void {
   // Do not store exception messages: they may contain employee or message data.
   const name = error instanceof Error ? error.name : "UnknownError";
   const frames = error instanceof Error ? (error.stack ?? "").split("\n").slice(1, 7)
     .map((line) => line.replace(/https?:\/\/[^\s)]+/g, (url) => url.split("?")[0] ?? "")).join("\n") : "";
-  void window.yuksalish?.reportDiagnostic?.({ category, name, frames }).catch(() => undefined);
+  void workspacePlatform.reportDiagnostic({ category, name, frames }).catch(() => undefined);
 }
 
 interface Props {

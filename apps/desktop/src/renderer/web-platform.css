@@ -1,0 +1,22 @@
+.web-update-notice {
+  position: fixed;
+  z-index: 40;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 12px 14px 12px 18px;
+  border: 1px solid rgb(0 145 168 / 24%);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: var(--ws-shadow-lift);
+  color: #293a55;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .web-update-notice { right: 10px; bottom: 10px; left: 10px; flex-wrap: wrap; max-width: none; }
+}

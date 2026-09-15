@@ -40,6 +40,14 @@ class AuthenticationResponse(ApiModel):
     user: PersonResponse
 
 
+class WebAuthenticationResponse(ApiModel):
+    access_token: str
+    csrf_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+    user: PersonResponse
+
+
 class InvitationCreateRequest(ApiModel):
     username: str = Field(min_length=3, max_length=64)
     full_name: str = Field(min_length=2, max_length=200)

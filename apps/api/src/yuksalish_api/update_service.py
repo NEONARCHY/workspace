@@ -9,7 +9,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import Request
 from sqlalchemy import insert, select, update
@@ -22,6 +22,11 @@ from .tables import audit_events, update_policy, update_releases
 from .update_schemas import DesktopReleaseResponse, DesktopUpdatePolicyResponse
 
 _VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+_POLICY_AUDIT_ID = uuid5(NAMESPACE_URL, "https://workspace.yuksalish.uz/desktop-update/policy")
+
+
+def _release_audit_id(version: str) -> UUID:
+    return uuid5(NAMESPACE_URL, f"https://workspace.yuksalish.uz/desktop-update/{version}")
 
 
 def require_superadmin(actor: AuthenticatedUser) -> None:
@@ -99,6 +104,7 @@ async def _audit(
     connection: AsyncConnection,
     actor: AuthenticatedUser,
     action: str,
+    target_id: UUID,
     details: dict[str, Any],
 ) -> None:
     await connection.execute(
@@ -107,7 +113,7 @@ async def _audit(
             actor_user_id=actor.id,
             action=action,
             target_type="desktop_update",
-            target_id=None,
+            target_id=target_id,
             details=details,
             created_at=datetime.now(UTC),
         )
@@ -170,7 +176,8 @@ async def stage_release(
             )
         )
         await _audit(
-            connection, actor, "desktop_update.staged", {"version": version, "sizeBytes": total}
+            connection, actor, "desktop_update.staged", _release_audit_id(version),
+            {"version": version, "sizeBytes": total},
         )
         return DesktopReleaseResponse(
             version=version, file_name=file_name, sha512=digest.hexdigest(),
@@ -212,7 +219,10 @@ async def publish_release(
             published_version=version, updated_by_user_id=actor.id, updated_at=now,
         )
     )
-    await _audit(connection, actor, "desktop_update.published", {"version": version})
+    await _audit(
+        connection, actor, "desktop_update.published", _release_audit_id(version),
+        {"version": version},
+    )
     return await policy_snapshot(connection)
 
 
@@ -244,7 +254,7 @@ async def set_mandatory(
             updated_at=now,
         )
     )
-    await _audit(connection, actor, "desktop_update.mandatory_changed", {
+    await _audit(connection, actor, "desktop_update.mandatory_changed", _POLICY_AUDIT_ID, {
         "mandatory": mandatory, "minimumVersion": minimum_version,
     })
     return await policy_snapshot(connection)

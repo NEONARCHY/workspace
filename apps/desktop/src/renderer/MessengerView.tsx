@@ -43,6 +43,7 @@ import { OrganizedChatList } from "./OrganizedChatList";
 import { defaultPersonalPreferences } from "./personal-organization";
 import { TaskComposer } from "./TaskComposer";
 import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
+import { workspacePlatform } from "./platform-adapter";
 
 const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
   { emoji: "👍", label: "Нравится" },
@@ -144,8 +145,7 @@ function Conversation({
   const followLatest = useRef(true);
   const scrollInitialized = useRef(false);
   useEffect(() => {
-    const bridge = window.yuksalish;
-    if (!bridge?.loadDraft) return;
+    const bridge = workspacePlatform;
     let active = true;
     void bridge.loadDraft(draftKey).then((saved) => {
       if (active && !draftEdited.current && saved !== null) {
@@ -156,12 +156,20 @@ function Conversation({
     return () => { active = false; };
   }, [draftKey]);
   useEffect(() => {
-    const bridge = window.yuksalish;
-    if (!bridge?.saveDraft || !draftReady.current || !draftEdited.current) return;
+    const bridge = workspacePlatform;
+    if (!draftReady.current || !draftEdited.current) return;
+    const save = () => {
+      void (draft ? bridge.saveDraft(draftKey, draft) : bridge.clearDraft(draftKey))
+        .catch(() => undefined);
+    };
     const timer = window.setTimeout(() => {
-      void (draft ? bridge.saveDraft(draftKey, draft) : bridge.clearDraft(draftKey)).catch(() => undefined);
+      save();
     }, 350);
-    return () => window.clearTimeout(timer);
+    window.addEventListener("yuksalish:prepare-web-update", save);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("yuksalish:prepare-web-update", save);
+    };
   }, [draft, draftKey]);
   const canSend = chat.permissions.sendMessages;
   const personName = (id: string) =>
@@ -245,7 +253,7 @@ function Conversation({
         );
       setDraft("");
       draftEdited.current = true;
-      void window.yuksalish?.clearDraft(draftKey).catch(() => undefined);
+      void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
       setReply(undefined);
       setMentions([]);
       setMentionPicker(false);

@@ -1,0 +1,11 @@
+{
+	auto_https disable_redirects
+	# Windows Schannel omits SNI for literal IP URLs. Select the managed IP
+	# certificate explicitly instead of aborting those TLS handshakes.
+	default_sni {$YUKSALISH_LAN_IP}
+}
+
+{$YUKSALISH_LAN_IP}:8443 {
+	tls internal
+	reverse_proxy gateway:8080
+}

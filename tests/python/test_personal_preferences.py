@@ -34,7 +34,8 @@ def test_personal_payloads_reject_unknown_fields_duplicates_and_missing_modules(
 
 
 async def exercise_personal_preferences(url: str) -> None:
-    assert make_url(url).database == "yuksalish_test"
+    # Permit an isolated per-run database while still refusing the live database.
+    assert (make_url(url).database or "").startswith("yuksalish_test")
     settings = Settings(
         environment="test",
         database_url=url,

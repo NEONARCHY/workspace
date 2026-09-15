@@ -25,7 +25,11 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
   const [kind, setKind] = useState<AbsenceKind>("personal_time");
   const [reason, setReason] = useState("");
   const [startsAt, setStartsAt] = useState(toInputDate(new Date()));
-  const [endsAt, setEndsAt] = useState(toInputDate(new Date(Date.now() + 60 * 60 * 1000)));
+  const [endsAt, setEndsAt] = useState(() => {
+    const end = new Date();
+    end.setHours(end.getHours() + 1);
+    return toInputDate(end);
+  });
   const [busy, setBusy] = useState(false);
   const [decision, setDecision] = useState<{ request: AbsenceRequest; action: AbsenceAction }>();
   const [comment, setComment] = useState("");

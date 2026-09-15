@@ -1,0 +1,43 @@
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: apps/desktop/Dockerfile.web
+      args:
+        YUKSALISH_WEB_BUILD_ID: ${YUKSALISH_WEB_BUILD_ID:-lan}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - edge
+
+  gateway:
+    depends_on:
+      web:
+        condition: service_healthy
+
+  lan-https:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    ports:
+      - "${YUKSALISH_LAN_IP:?Set the reserved private IPv4 address}:8443:8443"
+    environment:
+      YUKSALISH_LAN_IP: ${YUKSALISH_LAN_IP:?Set the reserved private IPv4 address}
+    volumes:
+      - ./lan/Caddyfile:/etc/caddy/Caddyfile:ro
+      - lan-caddy-data:/data
+      - lan-caddy-config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    networks:
+      - edge
+
+volumes:
+  lan-caddy-data:
+  lan-caddy-config:
