@@ -700,6 +700,7 @@ export interface PaymentRequestDetails {
 
 export interface ApprovalRequestSummary {
   readonly id: string;
+  readonly workflowId?: string;
   readonly number: string;
   readonly title: string;
   readonly amount: number;
@@ -764,6 +765,7 @@ export interface WorkspaceBootstrap {
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
+  readonly requestWorkflows?: readonly WorkflowDefinition[];
   readonly projects: readonly WorkspaceProject[];
   readonly tripRequests: readonly TripRequest[];
   readonly feedPosts: readonly FeedPost[];

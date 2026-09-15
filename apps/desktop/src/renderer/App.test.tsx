@@ -367,6 +367,7 @@ function mockServer(
         messages: initialMessages,
         tasks,
         requests,
+        requestWorkflows: [activeWorkflow],
         projects,
         tripRequests,
         feedPosts,
@@ -855,6 +856,7 @@ function mockServer(
       };
       const created = {
         id: "server-request",
+        workflowId: workflow.id,
         number: "502",
         title: payload.title,
         amount: payload.amount,
@@ -1453,7 +1455,7 @@ describe("corporate workspace authentication alpha", () => {
   it("submits the complete payment card and publishes a workflow version", async () => {
     const fetchMock = mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
     fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
@@ -1532,6 +1534,13 @@ describe("corporate workspace authentication alpha", () => {
       .toBeInTheDocument();
     expect(screen.getByText("Информация по заявке")).toBeInTheDocument();
     expect(screen.getByText("Ход согласования")).toBeInTheDocument();
+    const journey = screen.getByLabelText("Живой маршрут заявки");
+    expect(within(journey).getByText("Живой маршрут")).toBeInTheDocument();
+    expect(within(journey).getByText("Ждёт вашего решения")).toBeInTheDocument();
+    expect(journey.querySelector('.react-flow__node[data-id="manager"]'))
+      .toHaveClass("journey-current");
+    expect(journey.querySelector('.react-flow__node[data-id="start"]'))
+      .toHaveClass("journey-complete");
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
 
     const card = openCard.closest("article");
@@ -1607,18 +1616,30 @@ describe("corporate workspace authentication alpha", () => {
   it("opens the workflow designer inside the authenticated shell", async () => {
     mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
     expect(screen.getByRole("button", { name: "Новая заявка" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
     expect(screen.getByLabelText("Дерево согласования заявки на оплату")).toBeInTheDocument();
+    expect(screen.getByLabelText("Настройки выбранного блока")).toHaveTextContent("Выберите блок");
+    expect(screen.getByText("Карта процесса")).toBeInTheDocument();
+  });
+
+  it("keeps the workflow designer unavailable to a manager", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace("aziza");
+
+    fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    expect(screen.queryByRole("button", { name: "Конструктор маршрутов" }))
+      .not.toBeInTheDocument();
   });
 
   it("stores deadline reminders and escalation rules on an approval stage", async () => {
     const fetchMock = mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
@@ -1661,7 +1682,7 @@ describe("corporate workspace authentication alpha", () => {
   it("undoes, redoes and cancels workflow edits from shortcuts and toolbar controls", async () => {
     mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
