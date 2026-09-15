@@ -152,7 +152,7 @@ class ChatMessageResponse(ApiModel):
     can_pin: bool = False
 
 
-AttachmentOwnerType = Literal["message", "task", "approval_request"]
+AttachmentOwnerType = Literal["message", "task", "approval_request", "absence"]
 
 
 class AttachmentResponse(ApiModel):
@@ -853,6 +853,68 @@ TripStage = Literal["launch", "manager_approval", "hr", "approved", "rejected"]
 TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected"]
 TripAction = Literal["submit", "approve", "return", "reject", "resubmit"]
 
+AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
+AbsenceStatus = Literal["draft", "pending", "approved", "acknowledged", "rejected", "cancelled"]
+AbsenceAction = Literal["submit", "approve", "acknowledge", "reject", "cancel"]
+
+
+class AbsenceActionHistoryResponse(ApiModel):
+    id: str
+    actor_user_id: str
+    action: str
+    comment: str | None
+    created_at: datetime
+
+
+class AbsenceRequestResponse(ApiModel):
+    id: str
+    requester_user_id: str
+    direct_manager_user_id: str
+    kind: AbsenceKind
+    reason: str
+    starts_at: datetime
+    ends_at: datetime
+    status: AbsenceStatus
+    status_label: str
+    document_status: Literal["not_required", "required", "uploaded", "overdue"]
+    can_edit: bool
+    allowed_actions: list[AbsenceAction]
+    actions: list[AbsenceActionHistoryResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AbsenceWriteRequest(ApiModel):
+    kind: AbsenceKind
+    reason: str = Field(min_length=1, max_length=4000)
+    starts_at: datetime
+    ends_at: datetime
+
+    @field_validator("reason")
+    @classmethod
+    def absence_reason_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Причина отсутствия обязательна")
+        return value.strip()
+
+    @model_validator(mode="after")
+    def absence_period_is_valid(self) -> "AbsenceWriteRequest":
+        if self.ends_at <= self.starts_at:
+            raise ValueError("Окончание отсутствия должно быть позже начала")
+        return self
+
+
+class AbsenceActionRequest(ApiModel):
+    action: AbsenceAction
+    comment: str = Field(default="", max_length=4000)
+
+
+class PresenceSummaryItemResponse(ApiModel):
+    user_id: str
+    status: str
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+
 
 class TripActionHistoryResponse(ApiModel):
     id: str
@@ -1028,7 +1090,7 @@ class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
 
 
-NotificationKind = Literal["message", "task", "approval", "trip", "calendar"]
+NotificationKind = Literal["message", "task", "approval", "trip", "calendar", "absence"]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
     "messenger",
@@ -1036,6 +1098,7 @@ NotificationSection = Literal[
     "payment_requests",
     "trip_approvals",
     "calendar",
+    "absences",
 ]
 
 
@@ -1062,6 +1125,7 @@ class NotificationPreferencesResponse(ApiModel):
     approvals_enabled: bool = True
     trips_enabled: bool = True
     calendar_enabled: bool = True
+    absences_enabled: bool = True
     reminders_enabled: bool = True
 
 
@@ -1072,16 +1136,37 @@ class NotificationPreferencesUpdate(ApiModel):
     approvals_enabled: bool
     trips_enabled: bool
     calendar_enabled: bool
+    absences_enabled: bool = True
     reminders_enabled: bool
 
 
 NavigationKey = Literal[
-    "crm", "tasks", "payment_requests", "feed", "projects", "trip_approvals",
-    "messenger", "calendar", "employees", "notifications", "settings",
+    "crm",
+    "tasks",
+    "payment_requests",
+    "feed",
+    "projects",
+    "trip_approvals",
+    "messenger",
+    "calendar",
+    "absences",
+    "employees",
+    "notifications",
+    "settings",
 ]
 DEFAULT_NAVIGATION: list[NavigationKey] = [
-    "crm", "tasks", "payment_requests", "feed", "projects", "trip_approvals",
-    "messenger", "calendar", "employees", "notifications", "settings",
+    "crm",
+    "tasks",
+    "payment_requests",
+    "feed",
+    "projects",
+    "trip_approvals",
+    "messenger",
+    "calendar",
+    "absences",
+    "employees",
+    "notifications",
+    "settings",
 ]
 
 
@@ -1112,7 +1197,7 @@ class PinnedChatOrder(ApiModel):
 
 class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
-    order: list[NavigationKey] = Field(min_length=11, max_length=11)
+    order: list[NavigationKey] = Field(min_length=12, max_length=12)
     revision: int = Field(ge=0)
 
     @field_validator("order")
@@ -1136,6 +1221,8 @@ class WorkspaceBootstrapResponse(ApiModel):
     request_workflows: list[WorkflowResponse]
     projects: list[ProjectResponse]
     trip_requests: list[TripRequestResponse]
+    absence_requests: list[AbsenceRequestResponse]
+    presence_summary: list[PresenceSummaryItemResponse]
     feed_posts: list[FeedPostResponse]
     calendar_events: list[CalendarEventResponse]
     notifications: list[NotificationResponse]

@@ -64,7 +64,9 @@ describe("Employee list and retained access controls", () => {
     fireEvent.change(screen.getByLabelText("Роль доступа"), { target: { value: "manager" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить сотрудника" }));
     await screen.findByText("Нет связи"); expect(screen.getByLabelText("Роль доступа")).toHaveValue("manager");
-    expect(updateEmployeeAccess).toHaveBeenCalledWith("test-token", "one", "manager", "p1", "d1");
+    expect(updateEmployeeAccess).toHaveBeenCalledWith(
+      "test-token", "one", "manager", "p1", "d1", undefined,
+    );
   });
   it("requires an audited reason before blocking an employee", async () => {
     vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "blocked" });

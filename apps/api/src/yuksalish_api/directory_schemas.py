@@ -116,12 +116,14 @@ class DirectoryEmployeeResponse(ApiModel):
     position_id: str | None
     job_title: str | None
     status: str
+    direct_manager_user_id: str | None = None
 
 
 class EmployeeAccessUpdateRequest(ApiModel):
     role: EditableRole
     department_id: UUID | None = None
     position_id: UUID | None = None
+    direct_manager_user_id: UUID | None = None
 
 
 class DirectoryBootstrapResponse(ApiModel):

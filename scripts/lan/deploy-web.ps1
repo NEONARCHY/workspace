@@ -31,6 +31,9 @@ try {
     & docker @compose config --quiet
     & docker @compose build web api
     & docker @compose up -d --no-build --wait api web gateway lan-https
+    # gateway mounts its Nginx config from the repository. Reload it so a changed
+    # route is active even when Compose does not recreate an already-running service.
+    & docker @compose exec -T gateway nginx -s reload
 
     $lanIpLine = Get-Content -LiteralPath $resolvedEnvFile |
         Where-Object { $_ -match '^YUKSALISH_LAN_IP=' } | Select-Object -First 1

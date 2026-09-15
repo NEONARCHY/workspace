@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   NotificationKind,
+  AbsenceAction,
+  AbsenceRequest,
   NotificationPreferences,
   WorkspaceNotification,
 } from "@yuksalish/contracts";
@@ -12,6 +14,7 @@ import {
   Airplane24Regular,
   ApprovalsApp24Regular,
   CalendarLtr24Regular,
+  PersonAvailable24Regular,
   Chat24Regular,
   CheckmarkCircle24Regular,
   Search24Regular,
@@ -29,6 +32,8 @@ interface NotificationCenterProps {
   readonly onUpdatePreferences: (
     preferences: NotificationPreferences,
   ) => void | Promise<void>;
+  readonly absenceRequests?: readonly AbsenceRequest[];
+  readonly onAbsenceAction?: (request: AbsenceRequest, action: AbsenceAction) => void | Promise<void>;
 }
 
 const kindLabels: Record<NotificationKind, string> = {
@@ -37,6 +42,7 @@ const kindLabels: Record<NotificationKind, string> = {
   approval: "Заявки на оплату",
   trip: "Командировки",
   calendar: "Календарь",
+  absence: "Отсутствия",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -44,6 +50,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "task") return <TaskListSquareLtr24Regular />;
   if (kind === "approval") return <ApprovalsApp24Regular />;
   if (kind === "trip") return <Airplane24Regular />;
+  if (kind === "absence") return <PersonAvailable24Regular />;
   return <CalendarLtr24Regular />;
 }
 
@@ -63,6 +70,8 @@ export function NotificationCenter({
   onMarkRead,
   onMarkAllRead,
   onUpdatePreferences,
+  absenceRequests = [],
+  onAbsenceAction,
 }: NotificationCenterProps) {
   const [filter, setFilter] = useState<NotificationFilter>("attention");
   const [query, setQuery] = useState("");
@@ -121,6 +130,7 @@ export function NotificationCenter({
     ["approvalsEnabled", "Заявки", "Этапы, где требуется ваше решение"],
     ["tripsEnabled", "Командировки", "Согласование и возврат на доработку"],
     ["calendarEnabled", "Календарь", "Предстоящие встречи и события"],
+    ["absencesEnabled", "Отсутствия", "Заявки, решения и больничные документы"],
     ["remindersEnabled", "Напоминания", "Сроки в ближайшие 24 часа"],
   ];
 
@@ -208,6 +218,14 @@ export function NotificationCenter({
                 <p>{notification.body}</p>
               </button>
               <div className="notification-row-tail">
+                {notification.kind === "absence" && notification.requiresAction && !notification.resolvedAt
+                  ? absenceRequests.filter(request => request.id === notification.entityId).map(request => (
+                    <span key={request.id} className="notification-quick-actions">
+                      {request.allowedActions.includes("approve") ? <Button size="small" appearance="primary" onClick={() => void onAbsenceAction?.(request, "approve")}>Согласовать</Button> : null}
+                      {request.allowedActions.includes("acknowledge") ? <Button size="small" appearance="primary" onClick={() => void onAbsenceAction?.(request, "acknowledge")}>Подтвердить</Button> : null}
+                      {request.allowedActions.includes("reject") ? <Button size="small" onClick={() => void onOpen(notification)}>Отклонить…</Button> : null}
+                    </span>
+                  )) : null}
                 <Button appearance="subtle" size="small" aria-label={`Контекст: ${notification.title}`} aria-pressed={contextId === notification.id} onClick={event => { contextTrigger.current = event.currentTarget; setContextId(notification.id); }}>Подробнее</Button>
                 <time dateTime={notification.occurredAt}>{timeLabel(notification.occurredAt)}</time>
                 {!notification.readAt ? (

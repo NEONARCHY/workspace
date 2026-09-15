@@ -381,3 +381,15 @@ body { background: var(--ws-canvas); }
   .spatial-lane, .spatial-card, .app-rail, .calendar-day { border: 1px solid CanvasText; }
   .spatial-lane.is-target, .spatial-card.is-lifted { outline: 2px solid Highlight; }
 }
+
+.absences-view { display: grid; gap: 18px; align-content: start; }
+.absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
+.absence-summary > div { min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(135deg, #fff, #f2fafb); box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
+.absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
+.absence-summary span { color: var(--ws-muted, #607086); font-size: 12px; }
+.absences-view .record-card { display: flex; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: var(--ws-surface, #fff); }
+.absences-view .record-card strong, .absences-view .record-card span, .absences-view .record-card small, .absences-view .record-card em { display: block; }
+.absences-view .record-card span, .absences-view .record-card small { margin-top: 4px; color: var(--ws-muted, #607086); }
+.absences-view .record-card em { margin-top: 8px; color: #b43b2d; font-size: 12px; font-style: normal; }
+.record-card-actions, .notification-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+@media (max-width: 720px) { .absences-view .record-card { display: grid; } }
