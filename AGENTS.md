@@ -42,7 +42,8 @@ Yuksalish Workspace — корпоративное Windows-приложение 
 - Оплаты, поездки, проекты и маршруты: соответствующие документы в `docs/architecture/`; сроки заявок — `approval-deadlines.md`.
 - Календарь, руководитель, эффективность: `docs/design/workspace-calendar.md`, `docs/design/team-dashboard.md`, `docs/product/employee-effectiveness.md`.
 - Права и сотрудники: `docs/architecture/departments-and-module-access.md`, `docs/architecture/administration-controls.md`.
-- Сервер и запуск: `docs/operations/environments.md`, `docs/operations/server-readiness.md`.
+- Сервер и запуск: `docs/operations/environments.md`, `docs/operations/server-readiness.md`;
+  перенос единственного LAN-сервера между ПК — `docs/operations/lan-server-transfer.md`.
 
 Читай документы, относящиеся к задаче, а не весь архив версий подряд. Если документ описывает старую версию, сверь формулировки с текущим кодом.
 
