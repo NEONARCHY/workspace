@@ -21,6 +21,21 @@ def upgrade() -> None:
         "workspace_notification_preferences",
         sa.Column("absences_enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
     )
+    op.drop_constraint("ck_workspace_notifications_kind", "workspace_notifications", type_="check")
+    op.create_check_constraint(
+        "ck_workspace_notifications_kind",
+        "workspace_notifications",
+        "kind IN ('message', 'task', 'approval', 'trip', 'calendar', 'absence')",
+    )
+    op.drop_constraint(
+        "ck_workspace_notifications_section", "workspace_notifications", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_workspace_notifications_section",
+        "workspace_notifications",
+        "section IN ('messenger', 'tasks', 'payment_requests', 'trip_approvals', "
+        "'calendar', 'absences')",
+    )
     op.add_column(
         "core_users",
         sa.Column("direct_manager_user_id", postgresql.UUID(as_uuid=True), nullable=True),
@@ -94,6 +109,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_constraint(
+        "ck_workspace_notifications_section", "workspace_notifications", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_workspace_notifications_section",
+        "workspace_notifications",
+        "section IN ('messenger', 'tasks', 'payment_requests', 'trip_approvals', 'calendar')",
+    )
+    op.drop_constraint("ck_workspace_notifications_kind", "workspace_notifications", type_="check")
+    op.create_check_constraint(
+        "ck_workspace_notifications_kind",
+        "workspace_notifications",
+        "kind IN ('message', 'task', 'approval', 'trip', 'calendar')",
+    )
     op.drop_column("workspace_notification_preferences", "absences_enabled")
     op.drop_index("ix_absence_request_actions_request", table_name="absence_request_actions")
     op.drop_table("absence_request_actions")
