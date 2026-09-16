@@ -1585,8 +1585,18 @@ describe("corporate workspace authentication alpha", () => {
     expect(card!.closest("[data-spatial-lane]")?.getAttribute("aria-label")).toMatch(/^Согласование: 1 /);
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
 
-    await dropSpatialCard(card!, targetColumn);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Открыть заявку №502: Заявка с повтором" }).closest("[data-spatial-lane]")?.getAttribute("aria-label")).toMatch(/^Согласовано: 1 /));
+    // A rejected spatial drop visibly settles back to its source before the
+    // next drag is accepted; retry must still use the same protected action.
+    await waitFor(() => expect(card).not.toHaveClass("is-lifted"));
+    const retryCard = screen
+      .getByRole("button", { name: "Открыть заявку №502: Заявка с повтором" })
+      .closest("article");
+    expect(retryCard).not.toBeNull();
+    const retryTargetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
+    await dropSpatialCard(retryCard!, retryTargetColumn);
+    await waitFor(() => expect(screen
+      .getByRole("button", { name: "Открыть заявку №502: Заявка с повтором" })
+      .closest("[data-spatial-lane]")?.getAttribute("aria-label")).toMatch(/^Согласовано: 1 /));
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
     expect(fetchMock.mock.calls.filter(([url, options]) => String(url).endsWith("/approval-requests/server-request/actions") && options?.method === "POST")).toHaveLength(2);
   });
