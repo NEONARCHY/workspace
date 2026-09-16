@@ -1842,6 +1842,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Лента" }));
     expect(screen.getByText("Корпоративная лента подключена.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Новое объявление" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Заголовок публикации" }), {
       target: { value: "Итоги рабочего дня" },
     });

@@ -351,7 +351,7 @@ function workflowNodeConfig(data: ApprovalNodeData): Readonly<Record<string, unk
 }
 
 function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
-  if (workflow === undefined) {
+  if (workflow?.nodes === undefined) {
     return initialNodes.map((node) => ({ ...node, type: "approvalObject" }));
   }
   return workflow.nodes.map((node) => ({
@@ -364,7 +364,7 @@ function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
 }
 
 function flowEdges(workflow?: WorkflowDefinition): ApprovalEdge[] {
-  if (workflow === undefined) return initialEdges;
+  if (workflow?.edges === undefined) return initialEdges;
   return workflow.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
@@ -1306,7 +1306,7 @@ export function ApprovalsView({
     const request = requests.find(item => item.id === requestId);
     const plan = request && approvalAdvancePlan(request, workflow, currentUserId);
     const target = boardColumns.find(column => column.key === columnKey);
-    const targetNode = workflow?.nodes.find((node) => node.id === columnKey);
+    const targetNode = workflow?.nodes?.find((node) => node.id === columnKey);
     const canManuallyMove = !!request && !!targetNode && ["approval", "correction"].includes(targetNode.kind)
       && (canManage || request.activeStages.some((stage) => stage.canAct));
     const canAdvance = !!plan?.targetKeys.includes(columnKey);
@@ -1518,7 +1518,16 @@ export function ApprovalsView({
             <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
           ) : null}
 
-          <SpatialBoard interactionMode="payment" canDrop={(id, target) => { const request = requests.find(item => item.id === id); const node = workflow?.nodes.find((item) => item.id === target); return !!request && !!node && ["approval", "correction"].includes(node.kind) && target !== requestBoardColumn(request, boardColumns) && (canManage || request.activeStages.some((stage) => stage.canAct)); }} onMove={moveRequest}>
+          <SpatialBoard interactionMode="payment" canDrop={(id, target) => {
+            const request = requests.find((item) => item.id === id);
+            if (!request || target === requestBoardColumn(request, boardColumns)) return false;
+            const plan = approvalAdvancePlan(request, workflow, currentUserId);
+            const canAdvance = plan?.targetKeys.includes(target) ?? false;
+            const node = workflow?.nodes?.find((item) => item.id === target);
+            const canManuallyMove = !!node && ["approval", "correction"].includes(node.kind)
+              && (canManage || request.activeStages.some((stage) => stage.canAct));
+            return canAdvance || canManuallyMove;
+          }} onMove={moveRequest}>
           <div className="approval-kanban" aria-label="Доска заявок по стадиям">
             {boardColumns.map((column) => {
               const columnRequests = filteredRequests.filter((request) =>
