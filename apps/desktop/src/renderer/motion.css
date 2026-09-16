@@ -1,10 +1,14 @@
 /* Motion is feedback, not a delay before work. No layout/size/blur animations,
    no persistent compositing layers, no transforms on parents of fixed dialogs. */
 :root {
+  --ws-motion-micro: 160ms;
+  --ws-motion-common: 220ms;
+  --ws-motion-drawer: 280ms;
   --ws-motion-fast: 160ms;
   --ws-motion-normal: 220ms;
   --ws-motion-enter: 240ms;
   --ws-ease: cubic-bezier(.2, 0, 0, 1);
+  --ws-ease-physical: cubic-bezier(.18, .86, .25, 1);
 }
 
 /* Override legacy 80ms presses and instantaneous custom controls. Shadows stay

@@ -19,12 +19,50 @@ from yuksalish_api.auth_service import (
     verify_password,
     verify_totp,
 )
-from yuksalish_api.repository import WorkspaceRepositoryError, _condition_outcome, _validate_graph
+from yuksalish_api.repository import (
+    WorkspaceRepositoryError,
+    _condition_outcome,
+    _validate_graph,
+    person_from_record,
+)
 from yuksalish_api.workspace_schemas import (
     SaveWorkflowRequest,
     WorkflowEdgeResponse,
     WorkflowNodeResponse,
 )
+
+
+def test_person_from_legacy_record_defaults_to_active_status() -> None:
+    person = person_from_record(
+        {
+            "id": uuid4(),
+            "username": "legacy.employee",
+            "full_name": "Legacy Employee",
+            "role": "employee",
+            "department_id": None,
+            "position_id": None,
+            "job_title": "Specialist",
+        }
+    )
+
+    assert person.status == "active"
+
+
+def test_person_from_record_preserves_pending_status() -> None:
+    person = person_from_record(
+        {
+            "id": uuid4(),
+            "username": "pending.employee",
+            "full_name": "Pending Employee",
+            "role": "employee",
+            "department_id": None,
+            "position_id": None,
+            "job_title": "Specialist",
+            "status": "pending",
+        }
+    )
+
+    assert person.status == "pending"
 
 
 def test_signed_access_token_round_trip_and_expiration() -> None:

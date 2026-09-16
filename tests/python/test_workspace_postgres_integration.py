@@ -40,6 +40,7 @@ from yuksalish_api.repository import (
     create_task,
     create_trip_request,
     delete_feed_post,
+    delete_task,
     delete_task_checklist_item,
     find_active_user_by_username,
     get_attachment,
@@ -692,6 +693,46 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 select(task_cycles.c.next_run_at).where(task_cycles.c.id == UUID(task.cycle.id))
             ) == datetime(2026, 9, 9, 4, tzinfo=UTC)
 
+            disposable_task = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Task that its author can delete",
+                    assignee_id=str(dilshod_auth.id),
+                ),
+            )
+            disposable_subtask = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Child removed with its parent",
+                    assignee_id=str(dilshod_auth.id),
+                    parent_task_id=disposable_task.id,
+                ),
+            )
+            with pytest.raises(WorkspaceRepositoryError, match="author or an administrator"):
+                await delete_task(connection, dilshod_auth, UUID(disposable_task.id))
+            await delete_task(connection, aziza, UUID(disposable_task.id))
+            assert await connection.scalar(
+                select(func.count()).select_from(tasks).where(
+                    tasks.c.id.in_({UUID(disposable_task.id), UUID(disposable_subtask.id)})
+                )
+            ) == 0
+            admin_deleted_task = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Task that an administrator can delete",
+                    assignee_id=str(dilshod_auth.id),
+                ),
+            )
+            await delete_task(connection, admin, UUID(admin_deleted_task.id))
+            assert await connection.scalar(
+                select(func.count()).select_from(tasks).where(
+                    tasks.c.id == UUID(admin_deleted_task.id)
+                )
+            ) == 0
+
             approval = await create_approval_request(
                 connection,
                 aziza,
@@ -744,6 +785,48 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ApprovalActionRequest(action="approve", comment="Integration approval"),
             )
             assert approval.status == "running"
+            assert approval.active_node_keys == ["finance_manager_projects"]
+            with pytest.raises(WorkspaceRepositoryError, match="destination workflow stage"):
+                await act_on_request(
+                    connection,
+                    admin,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move"),
+                )
+            with pytest.raises(WorkspaceRepositoryError, match="not a movable workflow stage"):
+                await act_on_request(
+                    connection,
+                    admin,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move", node_key="start"),
+                )
+            with pytest.raises(WorkspaceRepositoryError, match="cannot move"):
+                await act_on_request(
+                    connection,
+                    dilshod_auth,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move", node_key="project_financier"),
+                )
+            approval = await act_on_request(
+                connection,
+                admin,
+                UUID(approval.id),
+                ApprovalActionRequest(
+                    action="move",
+                    node_key="project_financier",
+                    comment="Administrative rollback coverage",
+                ),
+            )
+            assert approval.status == "running"
+            assert approval.active_node_keys == ["project_financier"]
+            assert approval.actions[-1].action == "move"
+            assert approval.actions[-1].comment == "Administrative rollback coverage"
+            approval = await act_on_request(
+                connection,
+                aziza,
+                UUID(approval.id),
+                ApprovalActionRequest(action="move", node_key="finance_manager_projects"),
+            )
             assert approval.active_node_keys == ["finance_manager_projects"]
             approval = await act_on_request(
                 connection,

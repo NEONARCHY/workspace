@@ -7,7 +7,7 @@ import { dropSpatialCard, installSpatialGeometry, startSpatialDrag } from "./spa
 beforeEach(() => { installSpatialGeometry(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 function setup(allowed = true, onMove = vi.fn(async () => undefined)) {
-  render(<SpatialBoard canDrop={(_, lane) => allowed && lane === "next"} onMove={onMove}>
+  render(<SpatialBoard interactionMode="payment" canDrop={(_, lane) => allowed && lane === "next"} onMove={onMove}>
     <SpatialLane id="start"><SpatialCard id="one" lane="start" label="План" disabled={!allowed}><button>План</button></SpatialCard></SpatialLane>
     <SpatialLane id="next">Согласование</SpatialLane><SpatialLane id="closed">Архив</SpatialLane>
   </SpatialBoard>);
@@ -23,6 +23,20 @@ describe("Spatial object transfer", () => {
     expect(document.querySelector('[data-spatial-lane="closed"]')).not.toHaveClass("is-receptive");
     expect(document.querySelector('[draggable="true"]')).toBeNull();
     fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+    expect(onMove).not.toHaveBeenCalled();
+  });
+  it("shows restrained feedback over an unavailable destination and never executes it", async () => {
+    const { card, next, onMove } = setup();
+    const closed = document.querySelector('[data-spatial-lane="closed"]')!;
+    await startSpatialDrag(card, next);
+    const destination = closed.getBoundingClientRect();
+    await act(async () => {
+      fireEvent.pointerMove(document, { clientX: destination.left + 120, clientY: destination.top + 150, pointerId: 1, isPrimary: true });
+    });
+    expect(closed).toHaveClass("is-unavailable");
+    expect(closed).toHaveAttribute("data-drop-state", "unavailable");
+    expect(closed).toHaveTextContent("Недоступно для переноса");
+    await act(async () => { fireEvent.pointerUp(document, { pointerId: 1, isPrimary: true }); });
     expect(onMove).not.toHaveBeenCalled();
   });
   it("calls the existing mutation once and leaves the canonical source unchanged without confirmation", async () => {

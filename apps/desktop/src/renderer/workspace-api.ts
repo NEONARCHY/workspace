@@ -703,6 +703,10 @@ export function updateWorkspaceTask(
   );
 }
 
+export function deleteWorkspaceTask(token: string, taskId: string): Promise<void> {
+  return apiRequest<void>(`/tasks/${taskId}`, { method: "DELETE" }, token);
+}
+
 export function changeWorkspaceTaskStatus(
   token: string,
   taskId: string,
@@ -942,7 +946,7 @@ export function createWorkspaceApproval(
 export function actOnWorkspaceApproval(
   token: string,
   requestId: string,
-  action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+  action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel" | "move",
   options: {
     readonly comment?: string;
     readonly nodeKey?: string;

@@ -111,6 +111,7 @@ import {
   createWorkspaceCalendarEvent,
   createWorkspaceFeedPost,
   deleteWorkspaceFeedPost,
+  deleteWorkspaceTask,
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
@@ -896,6 +897,39 @@ export function App() {
     },
   ) => runTaskMutation((token) => updateWorkspaceTask(token, task.id, payload));
 
+  const handleDeleteTask = async (task: WorkspaceTask): Promise<boolean> => {
+    if (session === undefined) return false;
+    try {
+      await deleteWorkspaceTask(session.accessToken, task.id);
+      setWorkspace((current) => ({
+        ...current,
+        tasks: (() => {
+          const deletedIds = new Set([task.id]);
+          let foundDescendant = true;
+          while (foundDescendant) {
+            foundDescendant = false;
+            for (const item of current.tasks) {
+              if (item.parentTaskId && deletedIds.has(item.parentTaskId) && !deletedIds.has(item.id)) {
+                deletedIds.add(item.id);
+                foundDescendant = true;
+              }
+            }
+          }
+          return current.tasks.filter((item) => !deletedIds.has(item.id));
+        })(),
+      }));
+      if (efficiency !== undefined) {
+        void loadWorkspaceEfficiency(session.accessToken, efficiency.period)
+          .then(setEfficiency)
+          .catch(() => undefined);
+      }
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
+
   const handleSetTaskParticipant = (
     task: WorkspaceTask,
     userId: string,
@@ -1117,7 +1151,7 @@ export function App() {
 
   const handleApprovalAction = async (
     requestId: string,
-    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel" | "move",
     options?: {
       readonly comment?: string;
       readonly nodeKey?: string;
@@ -1603,6 +1637,7 @@ export function App() {
                 onCreateSubtask={handleCreateSubtask}
                 onChangeStatus={handleTaskStatus}
                 onUpdateTask={handleUpdateTask}
+                onDeleteTask={handleDeleteTask}
                 onSetParticipant={handleSetTaskParticipant}
                 onRemoveParticipant={handleRemoveTaskParticipant}
                 onAddChecklistItem={handleAddChecklistItem}

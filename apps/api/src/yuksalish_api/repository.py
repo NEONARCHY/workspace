@@ -181,6 +181,10 @@ def person_from_record(row: Record, color_index: int = 0) -> PersonResponse:
         position_id=(str(row["position_id"]) if row.get("position_id") else None),
         job_title=row["job_title"],
         color=PERSON_COLORS[color_index % len(PERSON_COLORS)],
+        # Some focused queries and test doubles predate the employment-status field.
+        # Treat an omitted value as the legacy active state while preserving explicit
+        # blocked/archived values for workspace people references.
+        status=row.get("status", "active"),
     )
 
 
@@ -2146,7 +2150,16 @@ async def load_workspace(
     people_rows = (
         (
             await connection.execute(
-                select(users).where(users.c.status == "active").order_by(users.c.full_name)
+                select(users)
+                .where(
+                    or_(
+                        users.c.status == "active",
+                        users.c.id.in_(select(tasks.c.author_user_id)),
+                        users.c.id.in_(select(tasks.c.primary_assignee_user_id)),
+                        users.c.id.in_(select(task_participants.c.user_id)),
+                    )
+                )
+                .order_by(users.c.full_name)
             )
         )
         .mappings()
@@ -3324,6 +3337,104 @@ async def update_task(
         occurred_at=now,
     )
     return await _task_response(connection, task_id)
+
+
+async def delete_task(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+) -> None:
+    """Permanently remove a task for its author or an administrator."""
+    row = (
+        (
+            await connection.execute(
+                select(tasks).where(tasks.c.id == task_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Task was not found")
+    if row["author_user_id"] != current_user.id and current_user.role not in {
+        "admin",
+        "superadmin",
+    }:
+        raise WorkspaceRepositoryError(
+            403, "Only the task author or an administrator can delete it"
+        )
+
+    task_ids = {task_id}
+    frontier = {task_id}
+    while frontier:
+        descendants = set(
+            (
+                await connection.execute(
+                    select(tasks.c.id).where(tasks.c.parent_task_id.in_(frontier))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        frontier = descendants - task_ids
+        task_ids.update(frontier)
+
+    task_chat_ids = set(
+        (
+            await connection.execute(
+                select(chats.c.id).where(
+                    chats.c.context_type == "task",
+                    chats.c.context_id.in_(task_ids),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if task_chat_ids:
+        message_ids = set(
+            (
+                await connection.execute(
+                    select(messages.c.id).where(messages.c.chat_id.in_(task_chat_ids))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if message_ids:
+            await connection.execute(
+                delete(attachments).where(
+                    attachments.c.owner_type == "message",
+                    attachments.c.owner_id.in_(message_ids),
+                )
+            )
+        await connection.execute(delete(chats).where(chats.c.id.in_(task_chat_ids)))
+
+    await connection.execute(
+        delete(attachments).where(
+            attachments.c.owner_type == "task",
+            attachments.c.owner_id.in_(task_ids),
+        )
+    )
+    await connection.execute(
+        delete(task_efficiency_events).where(task_efficiency_events.c.task_id.in_(task_ids))
+    )
+    await connection.execute(delete(tasks).where(tasks.c.id == task_id))
+    await connection.execute(
+        insert(audit_events).values(
+            id=uuid4(),
+            actor_user_id=current_user.id,
+            action="task.deleted",
+            target_type="task",
+            target_id=task_id,
+            details={
+                "title": row["title"],
+                "status": row["status"],
+                "deletedTaskCount": len(task_ids),
+            },
+            created_at=datetime.now(UTC),
+        )
+    )
 
 
 async def change_task_status(
@@ -5479,6 +5590,59 @@ async def act_on_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
+    if payload.action == "move":
+        if not payload.node_key:
+            raise WorkspaceRepositoryError(422, "A destination workflow stage is required")
+        target = (
+            (
+                await connection.execute(
+                    select(approval_nodes.c.node_key, approval_nodes.c.kind)
+                    .where(
+                        approval_nodes.c.template_id == row["template_id"],
+                        approval_nodes.c.node_key == payload.node_key,
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if target is None or target["kind"] not in {"approval", "correction"}:
+            raise WorkspaceRepositoryError(422, "The destination is not a movable workflow stage")
+        is_administrator = current_user.role in {"admin", "superadmin"}
+        move_active_nodes: Sequence[str] = row["active_node_keys"] or []
+        can_move_current = any(
+            [
+                await _can_act_on_node(connection, current_user, row, node)
+                for node in move_active_nodes
+            ]
+        )
+        if not is_administrator and not can_move_current:
+            raise WorkspaceRepositoryError(403, "This user cannot move the request")
+        now = datetime.now(UTC)
+        await connection.execute(
+            insert(approval_actions).values(
+                id=uuid4(),
+                request_id=request_id,
+                node_key=payload.node_key,
+                actor_user_id=current_user.id,
+                delegated_to_user_id=None,
+                action="move",
+                comment=payload.comment,
+                created_at=now,
+            )
+        )
+        await connection.execute(
+            update(approval_requests)
+            .where(approval_requests.c.id == request_id)
+            .values(
+                status="needs_revision" if target["kind"] == "correction" else "running",
+                active_node_keys=[payload.node_key],
+                actor_overrides={},
+                updated_at=now,
+                finished_at=None,
+            )
+        )
+        return await _request_response(connection, request_id, current_user)
     if row["status"] not in {"running", "needs_revision"}:
         raise WorkspaceRepositoryError(409, "Request is already finished")
     if payload.action in {"return", "reject"} and not (payload.comment or "").strip():

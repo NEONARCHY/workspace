@@ -71,10 +71,12 @@ import {
   approvalStagePalette,
 } from "./approval-board";
 import { AnimatedAmount } from "./AnimatedAmount";
+import { AnimatedInteger } from "./AnimatedInteger";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
 type ApprovalBoardFilter = "all" | "actionable" | "revision" | "finished";
+type ApprovalDetailTab = "overview" | "route" | "files" | "activity";
 interface ApprovalEdgeData extends Record<string, unknown> {
   readonly outcome: string;
   readonly condition: Readonly<Record<string, unknown>>;
@@ -111,7 +113,7 @@ interface ApprovalsViewProps {
   ) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
   readonly onAction: (
     requestId: string,
-    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel",
+    action: "approve" | "reject" | "return" | "clarify" | "delegate" | "resubmit" | "cancel" | "move",
     options?: {
       readonly comment?: string;
       readonly nodeKey?: string;
@@ -627,6 +629,7 @@ const approvalActionLabels: Readonly<Record<string, string>> = {
   delegate: "Передано другому сотруднику",
   resubmit: "Повторно отправлено",
   cancel: "Отменено",
+  move: "Перемещено вручную",
 };
 
 const deadlineEventLabels = {
@@ -854,6 +857,7 @@ export function ApprovalsView({
   const [creatingBusy, setCreatingBusy] = useState(false);
   const creatingBusyRef = useRef(false);
   const [selectedRequestId, setSelectedRequestId] = useState(focusRequestId ?? "");
+  const [detailTab, setDetailTab] = useState<ApprovalDetailTab>("overview");
   const [actionBusy, setActionBusy] = useState(false);
   const actionBusyRef = useRef(false);
   const [actionError, setActionError] = useState("");
@@ -861,7 +865,7 @@ export function ApprovalsView({
   const detailPanelRef = useRef<HTMLElement>(null);
   const stageRibbonRef = useRef<HTMLDivElement>(null);
   const closeCreate = () => { if (!creatingBusyRef.current) setCreatingRequest(false); };
-  const openDetail = (requestId: string) => { setActionError(""); setSelectedRequestId(requestId); };
+  const openDetail = (requestId: string) => { setActionError(""); setDetailTab("overview"); setSelectedRequestId(requestId); };
   const closeDetail = () => { setActionError(""); setSelectedRequestId(""); };
   const removeRequest = async (request: ApprovalRequestSummary) => {
     if (!canManage || actionBusyRef.current) return;
@@ -970,7 +974,7 @@ export function ApprovalsView({
     const ribbon = stageRibbonRef.current;
     const current = ribbon?.querySelector<HTMLElement>(".current");
     if (ribbon && current) ribbon.scrollLeft = Math.max(0, current.offsetLeft - ribbon.clientWidth / 3);
-  }, [selectedRequestColumn, selectedRequestId]);
+  }, [detailTab, selectedRequestColumn, selectedRequestId]);
   const peopleById = useMemo(
     () => new Map(people.map((person) => [person.id, person])),
     [people],
@@ -1302,10 +1306,18 @@ export function ApprovalsView({
     const request = requests.find(item => item.id === requestId);
     const plan = request && approvalAdvancePlan(request, workflow, currentUserId);
     const target = boardColumns.find(column => column.key === columnKey);
-    if (!request || !plan?.targetKeys.includes(columnKey) || !target) return;
+    const targetNode = workflow?.nodes?.find((node) => node.id === columnKey);
+    const canManuallyMove = !!request && !!targetNode && ["approval", "correction"].includes(targetNode.kind)
+      && (canManage || request.activeStages.some((stage) => stage.canAct));
+    const canAdvance = !!plan?.targetKeys.includes(columnKey);
+    if (!request || (!canAdvance && !canManuallyMove) || !target) return;
     setMovingRequestId(request.id);
     try {
-      const confirmed = await performAction(request.id, plan.action, { nodeKey: plan.nodeKey, comment: `Переход на этап «${target.label}» выполнен с доски` });
+      const confirmed = await performAction(
+        request.id,
+        canManuallyMove ? "move" : plan!.action,
+        { nodeKey: canManuallyMove ? columnKey : plan!.nodeKey, comment: `Переход на этап «${target.label}» выполнен с доски` },
+      );
       if (!confirmed) throw new Error("Переход не подтверждён сервером");
     }
     finally { setMovingRequestId(""); }
@@ -1506,7 +1518,16 @@ export function ApprovalsView({
             <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
           ) : null}
 
-          <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !!request && (approvalAdvancePlan(request, workflow, currentUserId)?.targetKeys.includes(target) ?? false); }} onMove={moveRequest}>
+          <SpatialBoard interactionMode="payment" canDrop={(id, target) => {
+            const request = requests.find((item) => item.id === id);
+            if (!request || target === requestBoardColumn(request, boardColumns)) return false;
+            const plan = approvalAdvancePlan(request, workflow, currentUserId);
+            const canAdvance = plan?.targetKeys.includes(target) ?? false;
+            const node = workflow?.nodes?.find((item) => item.id === target);
+            const canManuallyMove = !!node && ["approval", "correction"].includes(node.kind)
+              && (canManage || request.activeStages.some((stage) => stage.canAct));
+            return canAdvance || canManuallyMove;
+          }} onMove={moveRequest}>
           <div className="approval-kanban" aria-label="Доска заявок по стадиям">
             {boardColumns.map((column) => {
               const columnRequests = filteredRequests.filter((request) =>
@@ -1524,7 +1545,7 @@ export function ApprovalsView({
                 >
                   <header>
                     <strong title={column.label}>{column.label}</strong>
-                    <span className="approval-column-count" aria-label={`${columnRequests.length} заявок`}>{columnRequests.length}</span>
+                    <AnimatedInteger className="approval-column-count" label={`${columnRequests.length} заявок`} value={columnRequests.length} />
                   </header>
                   <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="Сумма заявок, показанных в этой колонке с текущими фильтрами. Разные валюты считаются отдельно.">
                     <span>Сумма в колонке</span>
@@ -1545,9 +1566,9 @@ export function ApprovalsView({
                         attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
                       ).length;
                       return (
-                        <SpatialCard id={request.id} lane={column.key} label={request.title} disabled={!plan || movingRequestId === request.id}
+                        <SpatialCard id={request.id} lane={column.key} label={request.title} disabled={(!plan && !canManage && !request.activeStages.some((stage) => stage.canAct)) || movingRequestId === request.id}
                           key={request.id}
-                          className={`approval-board-card${plan ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}${selectedRequestId === request.id ? " selected" : ""}`}
+                          className={`approval-board-card${plan || canManage || request.activeStages.some((stage) => stage.canAct) ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}${selectedRequestId === request.id ? " selected" : ""}`}
                         >
                           <button
                             type="button"
@@ -1734,7 +1755,7 @@ export function ApprovalsView({
               <article ref={detailPanelRef} tabIndex={-1} className="approval-detail-panel" role="dialog" aria-modal="true" aria-labelledby="approval-detail-title">
                 <header className="approval-detail-header">
                   <div>
-                    <span>Заявка №{selectedRequest.number} · версия {selectedRequest.revision}</span>
+                    <span>{selectedRequest.details.projectCode ? `${selectedRequest.details.projectCode} · ` : ""}Заявка №{selectedRequest.number} · v{selectedRequest.revision}</span>
                     <h2 id="approval-detail-title">{selectedRequest.title}</h2>
                   </div>
                   <Badge
@@ -1743,6 +1764,9 @@ export function ApprovalsView({
                   >
                     {selectedRequest.statusLabel}
                   </Badge>
+                  {selectedRequest.status === "needs_revision" && (selectedRequest.requesterId === currentUserId || selectedRequest.activeStages.some((stage) => stage.canAct)) && editingRequestId !== selectedRequest.id ? (
+                    <Button className="approval-edit-button" appearance="subtle" icon={<CircleEdit24Regular />} disabled={actionBusy} onClick={() => startRevision(selectedRequest)}>Исправить заявку</Button>
+                  ) : null}
                   {canManage ? (
                     <Button
                       className="approval-delete-button"
@@ -1758,7 +1782,19 @@ export function ApprovalsView({
                   <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
                 </header>
 
-                <div ref={stageRibbonRef} className="approval-stage-ribbon" role="region" tabIndex={0} aria-label="Стадии заявки">
+                <nav className="approval-detail-tabs" aria-label="Разделы заявки">
+                  {([
+                    ["overview", "Обзор"],
+                    ["route", "Маршрут"],
+                    ["files", "Файлы"],
+                    ["activity", "Активность"],
+                  ] as const).map(([tab, label]) => (
+                    <button key={tab} type="button" className={detailTab === tab ? "active" : ""}
+                      aria-pressed={detailTab === tab} onClick={() => setDetailTab(tab)}>{label}</button>
+                  ))}
+                </nav>
+
+                {detailTab === "route" ? <div ref={stageRibbonRef} className="approval-stage-ribbon detail-route" role="region" tabIndex={0} aria-label="Стадии заявки">
                   {boardColumns.map((column, index) => (
                     <span
                       key={column.key}
@@ -1773,22 +1809,27 @@ export function ApprovalsView({
                       {column.label}
                     </span>
                   ))}
-                </div>
+                </div> : null}
 
-                <div className="approval-detail-content" role="region" tabIndex={0} aria-label="Содержимое карточки заявки">
+                <div className={`approval-detail-content tab-${detailTab}`} role="region" tabIndex={0} aria-label="Содержимое карточки заявки">
                   <section className="approval-detail-facts" role="region" tabIndex={0} aria-label="Сведения о заявке">
-                    <div className="approval-amount-block">
+                    <div className="approval-amount-block detail-overview">
                       <span>К перечислению</span>
                       <strong>{formatMoney(selectedRequest.amount, selectedRequest.currency)}</strong>
                       <small>{selectedRequest.details.requestPriority === "urgent" ? "Срочный платёж" : "Обычный приоритет"}</small>
                     </div>
+                    <dl className="approval-key-facts detail-overview">
+                      <div><dt>Текущий этап</dt><dd>{selectedRequest.stageLabel}</dd></div>
+                      <div><dt>Ответственный</dt><dd>{peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник"}</dd></div>
+                      <div><dt>Срок</dt><dd>{selectedDeadline?.label ?? "Без срока"}</dd></div>
+                    </dl>
                     {selectedRequest.status === "needs_revision" && latestReturnComment(selectedRequest) ? (
-                      <div className="approval-detail-return">
+                      <div className="approval-detail-return detail-overview">
                         <strong>Что нужно исправить</strong>
                         <span>{latestReturnComment(selectedRequest)}</span>
                       </div>
                     ) : null}
-                    <section className={`approval-deadline-control deadline-${selectedDeadline?.tone ?? "neutral"}`}>
+                    <section className={`approval-deadline-control detail-route deadline-${selectedDeadline?.tone ?? "neutral"}`}>
                       <header>
                         <div><span>Контроль срока</span><strong>{selectedDeadline?.label ?? "Без срока"}</strong></div>
                         <small>{selectedDeadline?.detail}</small>
@@ -1801,19 +1842,8 @@ export function ApprovalsView({
                           <div><dt>Правило</dt><dd>за {(selectedRequest.deadlineControl?.reminderHoursBefore ?? [24, 2]).join(" и ")} ч.; эскалация через {selectedRequest.deadlineControl?.escalationAfterHours ?? 4} ч.</dd></div>
                         </dl>
                       ) : <p>Укажите срок в заявке, чтобы включить напоминания и эскалацию.</p>}
-                      {selectedRequest.deadlineControl?.events.length ? (
-                        <div className="approval-deadline-events" aria-label="Журнал контроля срока">
-                          {selectedRequest.deadlineControl.events.slice(-5).reverse().map((event) => (
-                            <div key={event.id}>
-                              <span>{deadlineEventLabels[event.eventType]}</span>
-                              <strong>{peopleById.get(event.recipientUserId)?.name ?? "Сотрудник"}</strong>
-                              <time>{formatDateTime(event.createdAt)}</time>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
                     </section>
-                    <section className="approval-fact-section">
+                    <section className="approval-fact-section detail-overview">
                       <h3>Информация по заявке</h3>
                       <dl>
                         <div><dt>Назначение</dt><dd>{selectedRequest.purpose || "Не указано"}</dd></div>
@@ -1828,7 +1858,7 @@ export function ApprovalsView({
                         <div><dt>Комментарий</dt><dd>{selectedRequest.details.comment || "Нет комментария"}</dd></div>
                       </dl>
                     </section>
-                    <section className="approval-fact-section">
+                    <section className="approval-fact-section detail-overview approval-people-summary">
                       <h3>Ответственные</h3>
                       <dl>
                         <div><dt>Инициатор</dt><dd>{peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник"}</dd></div>
@@ -1837,7 +1867,7 @@ export function ApprovalsView({
                         <div><dt>Создана</dt><dd>{formatDateTime(selectedRequest.createdAt)}</dd></div>
                       </dl>
                     </section>
-                    <section className="approval-fact-section approval-detail-files">
+                    <section className="approval-fact-section approval-detail-files detail-files">
                       <AttachmentPanel
                         title="Основные документы"
                         attachments={attachments.filter((attachment) =>
@@ -1866,7 +1896,7 @@ export function ApprovalsView({
                   <aside className="approval-detail-process" tabIndex={0} aria-label="Ход согласования и действия">
                     {actionError ? <div className="approval-action-error" role="alert">Не удалось выполнить действие: {actionError}. Проверьте состояние заявки перед повтором.</div> : null}
                     {selectedRequest.status === "running" && selectedRequest.activeStages.some((stage) => stage.canAct) ? (
-                      <section className="approval-decision-block">
+                      <section className="approval-decision-block detail-overview">
                         <span>Нужно ваше решение</span>
                         {selectedRequest.activeStages.filter((stage) => stage.canAct).map((stage) => (
                           <div key={stage.key}>
@@ -1882,18 +1912,15 @@ export function ApprovalsView({
                         ))}
                       </section>
                     ) : null}
-                    {selectedRequest.status === "needs_revision" && (selectedRequest.requesterId === currentUserId || selectedRequest.activeStages.some((stage) => stage.canAct)) && editingRequestId !== selectedRequest.id ? (
-                      <Button appearance="primary" onClick={() => startRevision(selectedRequest)}>Исправить заявку</Button>
-                    ) : null}
                     {returnRequestId === selectedRequest.id ? (
-                      <div className="request-inline-editor return-editor">
+                      <div className="request-inline-editor return-editor detail-overview">
                         <Textarea autoFocus aria-label={`Причина возврата заявки ${selectedRequest.number}`} placeholder="Что нужно исправить?" value={returnComment} onChange={(_event, data) => setReturnComment(data.value)} />
                         <Button appearance="primary" disabled={actionBusy || !returnComment.trim()} onClick={() => void returnForRevision(selectedRequest.id)}>Подтвердить возврат</Button>
                         <Button appearance="subtle" onClick={() => setReturnRequestId("")}>Отмена</Button>
                       </div>
                     ) : null}
                     {decision?.requestId === selectedRequest.id ? (
-                      <div className="request-inline-editor decision-editor">
+                      <div className="request-inline-editor decision-editor detail-overview">
                         {decision.action === "delegate" ? (
                           <WorkspaceSelect aria-label={`Новый согласующий заявки ${selectedRequest.number}`} value={delegateToUserId} onChange={(event) => setDelegateToUserId(event.target.value)}>
                             <option value="">Выберите сотрудника</option>
@@ -1906,7 +1933,7 @@ export function ApprovalsView({
                       </div>
                     ) : null}
                     {editingRequestId === selectedRequest.id ? (
-                      <section className="approval-revision-editor" aria-label="Редактирование возвращённой заявки">
+                      <section className="approval-revision-editor detail-overview" aria-label="Редактирование возвращённой заявки">
                         <h3>Исправленная версия</h3>
                         <label>Название<Input aria-label="Исправленное название заявки" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} /></label>
                         <label>Сумма<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
@@ -1922,7 +1949,19 @@ export function ApprovalsView({
                       </section>
                     ) : null}
 
-                    <section className="approval-timeline">
+                    {selectedRequest.deadlineControl?.events.length ? (
+                      <section className="approval-deadline-events detail-activity" aria-label="Журнал контроля срока">
+                        <header><span>Контроль срока</span><strong>{selectedRequest.deadlineControl.events.length} событий</strong></header>
+                        {selectedRequest.deadlineControl.events.slice().reverse().map((event) => (
+                          <div key={event.id}>
+                            <span>{deadlineEventLabels[event.eventType]}</span>
+                            <strong>{peopleById.get(event.recipientUserId)?.name ?? "Сотрудник"}</strong>
+                            <time>{formatDateTime(event.createdAt)}</time>
+                          </div>
+                        ))}
+                      </section>
+                    ) : null}
+                    <section className="approval-timeline detail-activity">
                       <header><span>Ход согласования</span><strong>{selectedRequest.actions.length + 1} событий</strong></header>
                       <div className="approval-timeline-event">
                         <i />
@@ -1940,7 +1979,7 @@ export function ApprovalsView({
                         </div>
                       ))}
                     </section>
-                    <section className="approval-version-list" aria-label={`История версий заявки ${selectedRequest.number}`}>
+                    <section className="approval-version-list detail-activity" aria-label={`История версий заявки ${selectedRequest.number}`}>
                       <h3>Версии</h3>
                       {selectedRequest.versions.slice().reverse().map((version) => (
                         <div key={version.version}>
@@ -1950,7 +1989,7 @@ export function ApprovalsView({
                       ))}
                     </section>
                     {selectedRequest.requesterId === currentUserId && ["draft", "running", "needs_revision"].includes(selectedRequest.status) ? (
-                      <Button appearance="subtle" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "cancel", { comment: "Отменено автором" })}>Отменить заявку</Button>
+                      <Button className="detail-overview approval-cancel-button" appearance="subtle" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "cancel", { comment: "Отменено автором" })}>Отменить заявку</Button>
                     ) : null}
                   </aside>
                 </div>

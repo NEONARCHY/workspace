@@ -136,6 +136,7 @@ interface TasksViewProps {
   readonly onCreateSubtask: (parent: WorkspaceTask, payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string }) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
   readonly onUpdateTask: (task: WorkspaceTask, payload: TaskEditPayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onDeleteTask: (task: WorkspaceTask) => boolean | Promise<boolean>;
   readonly onSetParticipant: (task: WorkspaceTask, userId: string, role: TaskParticipantRole) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveParticipant: (task: WorkspaceTask, userId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAddChecklistItem: (task: WorkspaceTask, title: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -165,7 +166,7 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask,
+    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
@@ -191,6 +192,7 @@ export function TasksView(props: TasksViewProps) {
   const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
@@ -253,6 +255,8 @@ export function TasksView(props: TasksViewProps) {
   const privileged = ["manager", "admin", "superadmin"].includes(currentUser?.role ?? "");
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;
   const canEdit = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId || selectedTask.assigneeId === currentUserId || coAssignee);
+  const canDelete = selectedTask !== undefined
+    && (selectedTask.authorId === currentUserId || ["admin", "superadmin"].includes(currentUser?.role ?? ""));
   const canManageParticipants = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId);
   const canSubmitResult = selectedTask !== undefined
     && (privileged || selectedTask.assigneeId === currentUserId || coAssignee)
@@ -302,6 +306,23 @@ export function TasksView(props: TasksViewProps) {
       dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
     });
     if (updated !== undefined) setEditing(false);
+  };
+
+  const deleteSelectedTask = async () => {
+    if (selectedTask === undefined || deleting) return;
+    const confirmed = window.confirm(
+      `Удалить задачу «${selectedTask.title}» без возможности восстановления? Связанные подзадачи и чат задачи также будут удалены.`,
+    );
+    if (!confirmed) return;
+    setDeleting(true);
+    try {
+      if (await onDeleteTask(selectedTask)) {
+        setDetailOpen(false);
+        updateSelectedId("");
+      }
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const addParticipant = async () => {
@@ -489,7 +510,7 @@ export function TasksView(props: TasksViewProps) {
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
-        <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div>{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div>
+        <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}{canDelete ? <Button className="task-delete-button" appearance="subtle" icon={<Delete24Regular />} disabled={deleting} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить"}</Button> : null}</div></div>
         {selectedTask.sourceMessageId ? <div className="source-link-note">Создана из сообщения · связь сохранена</div> : null}
         <div className="detail-meta"><div><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></div><div><Calendar24Regular /><span><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
         <div className="task-lifecycle-summary"><span>Статус</span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
@@ -553,11 +574,11 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Мотивированный возврат фиксируется в истории отдельно и не уменьшает процент выполнения в срок.</p>{canManageParticipants ? <div className="task-editor-actions"><Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
         {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
+        {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
         <div className="detail-footer">
           <Button appearance="primary" icon={<Chat24Regular />} disabled={!canOpenTaskChat} title={canOpenTaskChat ? "Перейти в связанный чат" : "Чат доступен участникам задачи"} onClick={() => void onOpenTaskChat(selectedTask)}>Открыть чат задачи</Button>
           <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button>
         </div>
-        {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
       </aside></DialogSurface>
       </Dialog> : null}
     </section>
@@ -569,5 +590,5 @@ function ParticipantChip({ person, label, onRemove }: {
   readonly label: string;
   readonly onRemove?: () => void;
 }) {
-  return <div className="participant-chip"><Avatar name={person?.name ?? "Сотрудник"} size={24} /><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
+  return <div className={`participant-chip${person?.status && person.status !== "active" ? " workspace-person-inactive" : ""}`}><Avatar name={person?.name ?? "Сотрудник"} size={24} /><span>{person?.name ?? "Сотрудник"}<small>{label}</small></span>{onRemove ? <button aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={onRemove} type="button">×</button> : null}</div>;
 }
