@@ -257,6 +257,7 @@ export interface FeedPost {
   readonly likedByCurrentUser: boolean;
   readonly likeCount: number;
   readonly canEdit: boolean;
+  readonly canDelete?: boolean;
   readonly canPin: boolean;
   readonly comments: readonly FeedComment[];
   readonly createdAt: string;

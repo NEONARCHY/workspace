@@ -52,6 +52,8 @@ from yuksalish_api.repository import (
     create_project,
     create_task,
     create_trip_request,
+    delete_approval_request,
+    delete_feed_post,
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
@@ -341,6 +343,20 @@ async def delete_feed_like(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
     return result
+
+
+@router.delete("/feed/posts/{post_id}", status_code=204)
+async def remove_feed_post(
+    post_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    try:
+        await delete_feed_post(connection, current_user, post_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.deleted", "entityId": str(post_id)})
 
 
 @router.patch("/feed/posts/{post_id}/pin", response_model=FeedPostResponse)
@@ -722,6 +738,20 @@ async def patch_approval_request(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "approval.updated", "entityId": result.id})
     return result
+
+
+@router.delete("/approval-requests/{request_id}", status_code=204)
+async def remove_approval_request(
+    request_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    try:
+        await delete_approval_request(connection, current_user, request_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "approval.deleted", "entityId": str(request_id)})
 
 
 @router.post("/approval-requests/{request_id}/actions", response_model=ApprovalRequestResponse)

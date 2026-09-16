@@ -27,6 +27,7 @@ from .tables import (
     approval_requests,
     approval_templates,
     attachments,
+    audit_events,
     calendar_event_attendees,
     calendar_events,
     chat_members,
@@ -738,7 +739,10 @@ def _feed_post(
         liked_by_current_user=current_user.id in reaction_user_ids,
         like_count=len(reaction_user_ids),
         can_edit=row["author_user_id"] == current_user.id or _is_privileged(current_user),
-        can_pin=_is_privileged(current_user),
+        can_delete=row["author_user_id"] == current_user.id
+        or current_user.role in {"admin", "superadmin"},
+        can_pin=row["author_user_id"] == current_user.id
+        or current_user.role in {"admin", "superadmin"},
         comments=list(comments),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -2658,8 +2662,25 @@ async def pin_feed_post(
     post_id: UUID,
     payload: PinFeedPostRequest,
 ) -> FeedPostResponse:
-    if not _is_privileged(current_user):
-        raise WorkspaceRepositoryError(403, "Only managers can pin feed posts")
+    post = (
+        (
+            await connection.execute(
+                select(feed_posts.c.author_user_id).where(feed_posts.c.id == post_id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if post is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["author_user_id"] != current_user.id and current_user.role not in {
+        "admin",
+        "superadmin",
+    }:
+        raise WorkspaceRepositoryError(
+            403,
+            "Only the author or an administrator can pin feed posts",
+        )
     result = await connection.execute(
         update(feed_posts)
         .where(feed_posts.c.id == post_id)
@@ -2668,6 +2689,33 @@ async def pin_feed_post(
     if result.rowcount == 0:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
     return await _feed_post_response(connection, current_user, post_id)
+
+
+async def delete_feed_post(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+) -> None:
+    post = (
+        (
+            await connection.execute(
+                select(feed_posts).where(feed_posts.c.id == post_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if post is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["author_user_id"] != current_user.id and current_user.role not in {
+        "admin",
+        "superadmin",
+    }:
+        raise WorkspaceRepositoryError(
+            403,
+            "Only the author or an administrator can delete feed posts",
+        )
+    await connection.execute(delete(feed_posts).where(feed_posts.c.id == post_id))
 
 
 async def _calendar_event_response(
@@ -4611,6 +4659,51 @@ async def update_approval_request(
         )
     )
     return await _request_response(connection, request_id, current_user)
+
+
+async def delete_approval_request(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    request_id: UUID,
+) -> None:
+    """Permanently remove a payment request; only administrators may do so."""
+    if current_user.role not in {"admin", "superadmin"}:
+        raise WorkspaceRepositoryError(403, "Only administrators can delete payment requests")
+    row = (
+        (
+            await connection.execute(
+                select(approval_requests)
+                .where(approval_requests.c.id == request_id)
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Request was not found")
+
+    # Request history and deadline/action rows cascade from approval_requests. The
+    # attachment table intentionally has a polymorphic owner, so clean its rows
+    # explicitly to avoid leaving metadata that points at a deleted request.
+    await connection.execute(
+        delete(attachments).where(
+            attachments.c.owner_type == "approval_request",
+            attachments.c.owner_id == request_id,
+        )
+    )
+    await connection.execute(delete(approval_requests).where(approval_requests.c.id == request_id))
+    await connection.execute(
+        insert(audit_events).values(
+            id=uuid4(),
+            actor_user_id=current_user.id,
+            action="approval_request.deleted",
+            target_type="approval_request",
+            target_id=request_id,
+            details={"number": (row["payload"] or {}).get("number"), "title": row["title"]},
+            created_at=datetime.now(UTC),
+        )
+    )
 
 
 async def validate_attachment_owner(

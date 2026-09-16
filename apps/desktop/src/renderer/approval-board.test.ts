@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  approvalCardStatusPresentation,
   approvalColumnTotals,
   approvalDeadlinePresentation,
   approvalRequestIsOverdue,
@@ -82,6 +83,46 @@ describe("Payment request deadline presentation", () => {
       status: "approved",
       details: { deadline: "2026-09-07T08:00:00Z" },
     }, now)).toMatchObject({ tone: "success", label: "Завершена" });
+  });
+});
+
+describe("Payment request card status", () => {
+  const request = (overrides: Partial<{
+    status: "running" | "needs_revision" | "approved" | "rejected" | "cancelled";
+    statusLabel: string;
+    requesterId: string;
+    canAct: boolean;
+    deadline: string | null;
+  }> = {}) => ({
+    status: overrides.status ?? "running",
+    statusLabel: overrides.statusLabel ?? "Ожидает решения",
+    requesterId: overrides.requesterId ?? "owner",
+    activeStages: [{ canAct: overrides.canAct ?? false }],
+    deadlineControl: undefined,
+    details: { deadline: overrides.deadline ?? null },
+  });
+
+  it("prioritizes overdue and revision states over generic workflow text", () => {
+    const now = new Date("2026-09-08T08:00:00Z");
+    expect(approvalCardStatusPresentation(request({
+      canAct: true,
+      deadline: "2026-09-06T08:00:00Z",
+    }), "reviewer", now)).toMatchObject({ tone: "overdue", label: "Просрочено на 2 дн." });
+    expect(approvalCardStatusPresentation(request({ status: "needs_revision" }), "owner", now))
+      .toEqual({ tone: "revision", label: "Требует доработки" });
+  });
+
+  it("explains personal action and finished outcomes with text", () => {
+    expect(approvalCardStatusPresentation(request({ canAct: true }), "reviewer"))
+      .toEqual({ tone: "action", label: "Нужно ваше решение" });
+    expect(approvalCardStatusPresentation(request({
+      status: "approved",
+      statusLabel: "Согласовано",
+    }), "reviewer")).toEqual({ tone: "success", label: "Согласовано" });
+    expect(approvalCardStatusPresentation(request({
+      status: "cancelled",
+      statusLabel: "Отменено",
+    }), "reviewer")).toEqual({ tone: "danger", label: "Отменено" });
   });
 });
 

@@ -675,6 +675,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .approval-create-panel > header > button, .approval-detail-header > button { display: grid; width: 32px; height: 32px; flex: none; padding: 0; place-items: center; border: 0; border-radius: 7px; color: #5d7184; background: #edf2f6; font-size: 21px; cursor: pointer; transition: color 140ms ease, background-color 140ms ease, transform 80ms ease; }
 .approval-create-panel > header > button:hover, .approval-detail-header > button:hover { color: #173f5f; background: #dfe9f1; }
 .approval-create-panel > header > button:active, .approval-detail-header > button:active { transform: translateY(1px); }
+.approval-detail-header > .approval-delete-button { display: inline-flex; width: auto; min-width: 0; height: 32px; padding: 0 10px; border-radius: 9px; font-size: 12px; }
 .approval-create-scroll { display: grid; gap: 10px; min-height: 0; padding: 16px 20px 26px; overflow-y: auto; }
 .approval-create-panel > footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid #d8e1e8; background: #ffffff; }
 .approval-create-panel > footer > span { color: #6d7f90; font-size: 11px; }
@@ -848,6 +849,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .position-list span { font-size: 12px; line-height: 1.35; }
 .position-list small { color: #718096; font-size: 11px; }
 .position-editor { display: grid; gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid #d8dee7; border-radius: 9px; background: #f8fafc; }
+.position-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.position-delete-button { color: #a4262c !important; }
 .directory-feedback { position: absolute; z-index: 10; right: 22px; bottom: 20px; max-width: 520px; padding: 11px 13px; border: 1px solid #b8d8f0; border-radius: 8px; color: #17496d; background: #e7f2fb; box-shadow: 0 8px 20px rgb(28 52 76 / 12%); font-size: 12px; }
 .employee-admin-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .employee-status-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1035,7 +1038,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-list { display: grid; gap: 12px; margin-top: 13px; }
 .feed-card { padding: 16px; }
 .feed-card.pinned { border-top: 3px solid var(--ws-link, #0f6cbd); }
-.feed-card > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 9px; }
+.feed-card > header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 9px; }
 .feed-card > header > span { display: grid; gap: 2px; }
 .feed-card header strong { color: #2d4357; font-size: 11px; }
 .feed-card header small { color: #7a8997; font-size: 11px; }

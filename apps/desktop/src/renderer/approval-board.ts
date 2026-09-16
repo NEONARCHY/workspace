@@ -60,6 +60,39 @@ export interface ApprovalDeadlinePresentation {
   readonly detail: string;
 }
 
+export interface ApprovalCardStatusPresentation {
+  readonly tone: "neutral" | "action" | "revision" | "overdue" | "success" | "danger";
+  readonly label: string;
+}
+
+/** Compact, textual card status. Colour is only a secondary signal in the UI. */
+export function approvalCardStatusPresentation(
+  request: Pick<ApprovalRequestSummary, "status" | "statusLabel" | "requesterId" | "deadlineControl"> & {
+    readonly activeStages: readonly { readonly canAct: boolean }[];
+    readonly details: { readonly deadline?: string | null };
+  },
+  currentUserId: string,
+  now = new Date(),
+): ApprovalCardStatusPresentation {
+  const deadline = approvalDeadlinePresentation(request, now);
+  if (deadline.label.startsWith("Просрочено")) {
+    return { tone: "overdue", label: deadline.label };
+  }
+  if (request.status === "needs_revision") {
+    return { tone: "revision", label: "Требует доработки" };
+  }
+  if (["rejected", "cancelled"].includes(request.status)) {
+    return { tone: "danger", label: request.statusLabel };
+  }
+  if (request.status === "approved") {
+    return { tone: "success", label: request.statusLabel || "Согласовано" };
+  }
+  if (approvalRequestNeedsAction(request, currentUserId)) {
+    return { tone: "action", label: "Нужно ваше решение" };
+  }
+  return { tone: "neutral", label: request.statusLabel };
+}
+
 /** A decision or correction the signed-in person can actually act on. */
 export function approvalRequestNeedsAction(
   request: { readonly status: ApprovalRequestSummary["status"]; readonly activeStages: readonly { readonly canAct: boolean }[]; readonly requesterId: string },
