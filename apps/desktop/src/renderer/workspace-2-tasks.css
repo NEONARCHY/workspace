@@ -153,9 +153,10 @@
 .task-card-progress b { font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .task-record-dialog {
+  overflow: hidden;
   background: color-mix(in srgb, var(--ws-surface, #fff) 94%, #eaf4f3);
 }
-.task-record-dialog .task-detail { gap: 0; padding: 24px 28px 28px; background: transparent; }
+.task-record-dialog .task-detail { gap: 0; max-height: calc(100dvh - 32px); padding: 24px 28px 0; overflow-y: auto; background: transparent; }
 .task-record-dialog .task-detail-heading h2 { max-width: 620px; margin-bottom: 10px; font-size: clamp(24px, 3vw, 32px); }
 .task-record-dialog .detail-meta { margin-top: 12px; }
 .task-record-dialog .task-lifecycle-summary { margin-top: 18px; border: 0; border-radius: 14px; background: rgb(255 255 255 / 68%); }
@@ -188,7 +189,10 @@
 .task-record-dialog .detail-section:hover { background: rgb(255 255 255 / 82%); }
 .task-record-dialog .task-review-section { margin-top: 16px; background: #f2faf9; }
 .task-record-dialog .task-review-section.status-awaiting_review { background: #fff9ea; }
-.task-record-dialog .detail-footer { position: sticky; bottom: -28px; z-index: 3; margin: 18px -28px -28px; padding: 14px 28px; border-top: 1px solid rgb(41 58 85 / 8%); background: rgb(248 251 251 / 92%); backdrop-filter: blur(14px); }
+.task-record-dialog .detail-footer { position: sticky; bottom: 0; z-index: 3; margin: 18px -28px 0; padding: 14px 28px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgb(41 58 85 / 8%); background: rgb(248 251 251 / 94%); box-shadow: 0 -10px 28px rgb(32 54 72 / 7%); backdrop-filter: blur(14px); }
+.task-detail-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.task-delete-button { color: #a23b45; }
+.task-delete-button:hover { color: #8f2833; background: #fff0f1; }
 
 @media (max-width: 900px) {
   .task-workbench-summary { padding-inline: 14px; }
@@ -224,4 +228,10 @@
   .task-record-signal,
   .task-record-progress i,
   .task-journey li > span { forced-color-adjust: none; }
+}
+.workspace-person-inactive > span,
+.workspace-person-inactive > small {
+  color: #b65b63;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }

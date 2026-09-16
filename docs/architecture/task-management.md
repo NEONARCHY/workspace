@@ -30,6 +30,9 @@ Each task card contains:
 - The author and primary assignee can read and edit their task.
 - A co-assignee can work on the card; an observer can read and comment.
 - Only the author, manager or administrator can change participants.
+- Only the author or an administrator can permanently delete a task. Deletion also
+  removes its subtasks, managed task chats, attachment metadata and efficiency events,
+  while an audit event records who deleted the root task.
 - Chat membership consists of the author, current assignee, co-assignees and
   observers. Managerial task visibility alone does not reveal the conversation.
 
@@ -67,6 +70,7 @@ Relevant endpoints:
 
 - `POST /api/v1/tasks`
 - `PATCH /api/v1/tasks/{task_id}`
+- `DELETE /api/v1/tasks/{task_id}`
 - `PATCH /api/v1/tasks/{task_id}/status`
 - `POST /api/v1/tasks/{task_id}/submit-result`
 - `POST /api/v1/tasks/{task_id}/accept-result`

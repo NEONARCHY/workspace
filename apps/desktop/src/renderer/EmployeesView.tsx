@@ -452,6 +452,16 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 <MenuList>
                   {canManage ? <MenuItem disabled={!roleEditableSelectedEmployees.length} onClick={() => { setBulkRole(""); setBulkPanel("role"); }}>Изменить роль доступа</MenuItem> : null}
                   <MenuItem disabled={selectedEmployees.length !== 1} onClick={() => selectedEmployees[0] && selectEmployee(selectedEmployees[0])}>Открыть карточку сотрудника</MenuItem>
+                  {canManage ? <MenuItem
+                    icon={<Delete24Regular />}
+                    disabled={selectedEmployees.length !== 1 || selectedEmployees[0]?.status !== "active" || selectedEmployees[0]?.id === currentUser.id || selectedEmployees[0]?.role === "superadmin"}
+                    onClick={() => {
+                      const employee = selectedEmployees[0];
+                      if (!employee) return;
+                      selectEmployee(employee);
+                      setEmployeeStatusAction("archived");
+                    }}
+                  >Уволить сотрудника</MenuItem> : null}
                   <MenuItem icon={<Dismiss20Regular />} onClick={() => setSelectedEmployeeIds(new Set())}>Снять выделение</MenuItem>
                 </MenuList>
               </MenuPopover>
@@ -649,7 +659,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       {employeeStatusAction && selectedEmployee ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setEmployeeStatusAction(undefined); }}>
         <DialogSurface className="employee-status-dialog" aria-label="Изменение состояния сотрудника">
           <DialogBody>
-            <DialogTitle>{employeeStatusAction === "active" ? "Восстановить доступ" : employeeStatusAction === "blocked" ? "Заблокировать сотрудника" : "Архивировать сотрудника"}</DialogTitle>
+            <DialogTitle>{employeeStatusAction === "active" ? "Восстановить доступ" : employeeStatusAction === "blocked" ? "Заблокировать сотрудника" : "Уволить сотрудника"}</DialogTitle>
             <DialogContent>
               <p className="employee-status-lead">
                 {employeeStatusAction === "active"

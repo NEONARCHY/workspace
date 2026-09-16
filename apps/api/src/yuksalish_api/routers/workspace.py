@@ -54,6 +54,7 @@ from yuksalish_api.repository import (
     create_trip_request,
     delete_approval_request,
     delete_feed_post,
+    delete_task,
     delete_task_checklist_item,
     get_attachment,
     load_workspace,
@@ -529,6 +530,20 @@ async def patch_task(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
     return result
+
+
+@router.delete("/tasks/{task_id}", status_code=204)
+async def remove_task(
+    task_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> None:
+    try:
+        await delete_task(connection, current_user, task_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.deleted", "entityId": str(task_id)})
 
 
 @router.put("/tasks/{task_id}/participants", response_model=TaskResponse)

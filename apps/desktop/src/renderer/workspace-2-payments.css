@@ -298,7 +298,7 @@
 .approvals-view .approval-move-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The request stays in the same visual workspace: the board remains behind a bounded inspector. */
-.approvals-view .approval-detail-overlay { position: fixed; z-index: var(--ws-layer-overlay); inset: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; background: rgb(29 49 62 / 16%); backdrop-filter: blur(2px); }
+.approvals-view .approval-detail-overlay { position: fixed; z-index: var(--ws-layer-overlay); inset: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; background: rgb(29 49 62 / 16%); backdrop-filter: blur(2px); animation: ws2-detail-backdrop var(--ws-motion-micro) var(--ws-ease) both; }
 .approvals-view .approval-detail-panel { width: min(1000px, 100%); height: calc(100dvh - 28px); max-height: calc(100dvh - 28px); margin: 0; grid-template-rows: auto auto minmax(0, 1fr); border: 1px solid rgb(255 255 255 / 92%); border-radius: 25px; background: #f4f8f7; box-shadow: 0 24px 70px -27px rgb(29 48 62 / 40%); }
 .approvals-view .approval-detail-header { min-height: 88px; padding: 16px 24px; border-bottom: 1px solid #e4eceb; background: #fbfdfc; }
 .approvals-view .approval-detail-header > div > span { color: #487681; font-size: 11px; letter-spacing: .025em; }
@@ -338,16 +338,138 @@
 .approvals-view .approval-action-error > button { flex: none; width: 27px; height: 27px; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
 .approvals-view .approval-detail-process > .approval-action-error { margin-bottom: 12px; }
 
+/* Payment request inspector: one contextual surface, one scroll container. */
+.approvals-view .approval-detail-overlay {
+  align-items: stretch;
+  justify-content: flex-end;
+  padding: 10px;
+  background: rgb(24 44 57 / 12%);
+  backdrop-filter: blur(1px);
+}
+.approvals-view .approval-detail-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 45vw);
+  min-width: 610px;
+  height: calc(100dvh - 20px);
+  max-height: calc(100dvh - 20px);
+  overflow: hidden;
+  border-color: rgb(255 255 255 / 88%);
+  border-radius: 30px 22px 22px 30px;
+  background: #f8fbfa;
+  box-shadow: -18px 0 54px -32px rgb(27 51 64 / 48%), 0 24px 70px -36px rgb(27 51 64 / 32%);
+}
+.approvals-view .approval-detail-header {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 0;
+  padding: 18px 20px 13px;
+  border: 0;
+  background: rgb(251 253 252 / 96%);
+}
+.approvals-view .approval-detail-header > div:first-child { min-width: 0; }
+.approvals-view .approval-detail-header > div > span { display: block; margin-bottom: 3px; color: #52717c; font-size: 10px; font-weight: 600; letter-spacing: .045em; text-transform: uppercase; }
+.approvals-view .approval-detail-header h2 { overflow: hidden; margin: 0; font-size: clamp(19px, 1.45vw, 24px); line-height: 1.16; letter-spacing: -.018em; text-overflow: ellipsis; white-space: nowrap; }
+.approvals-view .approval-detail-header .fui-Badge { justify-self: end; }
+.approvals-view .approval-detail-header > button:last-child { grid-column: -2 / -1; grid-row: 1; width: 34px; height: 34px; }
+.approvals-view .approval-detail-header > :is(.approval-edit-button, .approval-delete-button) { width: auto; height: 34px; padding-inline: 10px; color: #4d6874; background: #edf3f2; }
+.approvals-view .approval-detail-header > .approval-delete-button { color: #86555a; background: #faf1f0; }
+.approvals-view .approval-detail-tabs {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  padding: 0 20px 10px;
+  border-bottom: 1px solid #e4ecea;
+  background: rgb(251 253 252 / 96%);
+}
+.approvals-view .approval-detail-tabs button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  color: #60747e;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.approvals-view .approval-detail-tabs button:is(:hover, :focus-visible) { color: #20465a; background: #edf3f2; }
+.approvals-view .approval-detail-tabs button.active { color: #164b5f; background: #e1f0ed; box-shadow: inset 0 0 0 1px rgb(0 126 146 / 9%); }
+.approvals-view .approval-stage-ribbon { flex: none; min-height: 0; padding: 9px 18px; border: 0; border-bottom: 1px solid #e3ebe9; border-radius: 0; background: #f5f9f8; }
+.approvals-view .approval-detail-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #f5f8f7;
+  scrollbar-width: thin;
+  scrollbar-color: #9bb2b7 transparent;
+}
+.approvals-view .approval-detail-facts,
+.approvals-view .approval-detail-process { display: contents; }
+.approvals-view .approval-detail-content > :is(.approval-detail-facts, .approval-detail-process) > * { margin-inline: 20px; }
+.approvals-view .approval-detail-content > .approval-detail-facts > :first-child { margin-top: 18px; }
+.approvals-view .approval-detail-content > .approval-detail-process > :first-child { margin-top: 18px; }
+.approvals-view .approval-detail-content > .approval-detail-process > :last-child,
+.approvals-view .approval-detail-content > .approval-detail-facts > :last-child { margin-bottom: 24px; }
+.approvals-view .approval-detail-content:not(.tab-overview) .detail-overview,
+.approvals-view .approval-detail-content:not(.tab-route) .detail-route,
+.approvals-view .approval-detail-content:not(.tab-files) .detail-files,
+.approvals-view .approval-detail-content:not(.tab-activity) .detail-activity { display: none !important; }
+.approvals-view .tab-overview .approval-detail-process { order: -1; }
+.approvals-view .approval-amount-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 2px 16px;
+  padding: 18px 20px;
+  background: radial-gradient(circle at 100% 0%, rgb(201 211 241 / 34%), transparent 46%), linear-gradient(115deg, #def2eb, #eef4f4 68%);
+}
+.approvals-view .approval-amount-block > span { grid-column: 1; }
+.approvals-view .approval-amount-block > strong { grid-column: 1; font-size: clamp(25px, 2.4vw, 34px); font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.approvals-view .approval-amount-block > small { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 6px 9px; border-radius: 9px; background: rgb(255 255 255 / 58%); }
+.approvals-view .approval-key-facts { display: grid; grid-template-columns: 1.2fr 1fr .8fr; gap: 1px; margin-block: 10px 16px; overflow: hidden; border-radius: 15px; background: #dfe8e6; }
+.approvals-view .approval-key-facts > div { min-width: 0; padding: 12px 14px; background: #fbfdfc; }
+.approvals-view .approval-key-facts :is(dt, dd) { margin: 0; }
+.approvals-view .approval-key-facts dt { margin-bottom: 3px; color: #6a7f88; font-size: 10px; }
+.approvals-view .approval-key-facts dd { overflow: hidden; color: #203d50; font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.approvals-view .approval-fact-section { margin-top: 10px; padding: 18px 20px; border: 0; border-radius: 17px; background: #fbfdfc; box-shadow: 0 10px 28px -26px rgb(29 55 67 / 34%); }
+.approvals-view .approval-fact-section > h3 { margin: 0 0 13px; font-size: 14px; }
+.approvals-view .approval-fact-section > dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 22px; }
+.approvals-view .approval-fact-section > dl > div { display: block; padding: 0; border: 0; }
+.approvals-view .approval-fact-section dt { margin-bottom: 2px; color: #73858d; font-size: 10px; }
+.approvals-view .approval-fact-section dd { color: #263f50; font-size: 12px; line-height: 1.4; }
+.approvals-view .approval-decision-block { position: sticky; z-index: 1; top: 0; margin-bottom: 0; border: 0; border-radius: 0 0 18px 18px; background: #f8fbfa; box-shadow: 0 14px 30px -28px rgb(21 49 63 / 52%); }
+.approvals-view .approval-decision-block > span { color: #55727c; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.approvals-view .approval-deadline-control { margin-top: 18px; padding: 20px; border-radius: 18px; background: #fbfdfc; }
+.approvals-view .approval-detail-files { background: transparent; box-shadow: none; }
+.approvals-view .approval-timeline,
+.approvals-view .approval-version-list,
+.approvals-view .approval-deadline-events { margin-top: 18px; padding: 19px 20px; border: 0; border-radius: 18px; background: #fbfdfc; }
+.approvals-view .approval-deadline-events > header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 13px; }
+.approvals-view .approval-deadline-events > header span { font-size: 14px; font-weight: 600; }
+.approvals-view .approval-deadline-events > header strong { color: #6b7e86; font-size: 11px; font-weight: 500; }
+.approvals-view .approval-cancel-button { align-self: flex-start; color: #855157; }
+
 @container workspace (min-width: 1050px) {
   .approvals-view .approval-detail-overlay { display: flex; align-items: stretch; justify-content: flex-end; padding: 12px; }
-  .approvals-view .approval-detail-panel { width: min(810px, 75%); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); animation: ws2-detail-enter 240ms var(--ws-ease-spatial) both; }
+  .approvals-view .approval-detail-panel { width: min(860px, 45vw); min-width: 610px; height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); animation: ws2-detail-enter var(--ws-motion-drawer) var(--ws-ease-spatial) both; }
 }
 @container workspace (max-width: 1049px) {
-  .approvals-view .approval-detail-content { grid-template-columns: minmax(0, 1fr); grid-template-rows: max-content max-content; align-content: start; overflow-y: auto; }
-  .approvals-view .approval-detail-facts, .approvals-view .approval-detail-process { overflow: visible; }
-  .approvals-view .approval-detail-facts { border-right: 0; border-bottom: 1px solid #e2eae8; }
+  .approvals-view .approval-detail-panel { width: min(720px, calc(100% - 48px)); min-width: 0; }
+  .approvals-view .approval-detail-content { display: flex; overflow-y: auto; }
+  .approvals-view .approval-detail-facts, .approvals-view .approval-detail-process { display: contents; overflow: visible; }
 }
 @keyframes ws2-detail-enter { from { opacity: .82; transform: translateX(14px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes ws2-detail-backdrop { from { opacity: 0; } to { opacity: 1; } }
 
 @container workspace (max-width: 1080px) {
   .approvals-view .approval-commandbar { grid-template-columns: minmax(0, 1fr) auto; }
