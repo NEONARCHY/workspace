@@ -24,7 +24,7 @@ class PersonResponse(ApiModel):
     position_id: str | None
     job_title: str | None
     color: str
-    status: Literal["active", "blocked", "archived"]
+    status: Literal["pending", "active", "blocked", "archived"]
 
 
 class ModulePermissionSet(ApiModel):
