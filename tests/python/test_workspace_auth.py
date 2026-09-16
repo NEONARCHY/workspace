@@ -48,6 +48,23 @@ def test_person_from_legacy_record_defaults_to_active_status() -> None:
     assert person.status == "active"
 
 
+def test_person_from_record_preserves_pending_status() -> None:
+    person = person_from_record(
+        {
+            "id": uuid4(),
+            "username": "pending.employee",
+            "full_name": "Pending Employee",
+            "role": "employee",
+            "department_id": None,
+            "position_id": None,
+            "job_title": "Specialist",
+            "status": "pending",
+        }
+    )
+
+    assert person.status == "pending"
+
+
 def test_signed_access_token_round_trip_and_expiration() -> None:
     user_id = uuid4()
     key = SecretStr("unit-test-signing-key")
