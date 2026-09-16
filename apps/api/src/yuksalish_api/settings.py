@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )
+    smartoffice_integration_key: SecretStr = SecretStr("")
 
 
 @lru_cache

@@ -26,6 +26,11 @@ import type {
   TripRequest,
   TripRequestInput,
   PresenceSummaryItem,
+  AttendanceCorrection,
+  AttendanceDay,
+  AttendanceProfile,
+  WorkScheduleException,
+  WorkSchedulePeriod,
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspacePerson,
@@ -60,6 +65,7 @@ import {
   Edit16Regular,
   TaskListSquareLtr24Filled,
   TaskListSquareLtr24Regular,
+  PresenceAvailable24Regular,
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
@@ -86,6 +92,7 @@ import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
+import { AttendanceView } from "./AttendanceView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
@@ -111,6 +118,12 @@ import {
   createWorkspaceTask,
   createWorkspaceTripRequest,
   createWorkspaceAbsence,
+  actOnAttendanceCorrection,
+  createAttendanceCorrection,
+  createWorkSchedulePeriod,
+  recordAttendanceAction,
+  saveAttendanceProfile,
+  saveWorkScheduleException,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
@@ -182,6 +195,11 @@ interface WorkspaceState {
   readonly tripRequests: readonly TripRequest[];
   readonly absenceRequests: readonly AbsenceRequest[];
   readonly presenceSummary: readonly PresenceSummaryItem[];
+  readonly attendanceDays: readonly AttendanceDay[];
+  readonly attendanceSchedulePeriods: readonly WorkSchedulePeriod[];
+  readonly attendanceScheduleExceptions: readonly WorkScheduleException[];
+  readonly attendanceCorrections: readonly AttendanceCorrection[];
+  readonly attendanceProfiles: readonly AttendanceProfile[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];
@@ -211,6 +229,11 @@ const initialWorkspace: WorkspaceState = {
   tripRequests: [],
   absenceRequests: [],
   presenceSummary: [],
+  attendanceDays: [],
+  attendanceSchedulePeriods: [],
+  attendanceScheduleExceptions: [],
+  attendanceCorrections: [],
+  attendanceProfiles: [],
   feedPosts: [],
   calendarEvents: [],
   notifications: [],
@@ -222,6 +245,7 @@ const initialWorkspace: WorkspaceState = {
     tripsEnabled: true,
     calendarEnabled: true,
     absencesEnabled: true,
+    attendanceEnabled: true,
     remindersEnabled: true,
   },
   attachments: [],
@@ -253,6 +277,7 @@ const navItems: readonly NavItem[] = [
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
+  { key: "attendance", label: "Посещаемость", icon: <PresenceAvailable24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
   { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
   { key: "settings", label: "Настройки", icon: <Settings24Regular /> },
@@ -535,6 +560,7 @@ export function App() {
       trip: preferences.tripsEnabled,
       calendar: preferences.calendarEnabled,
       absence: preferences.absencesEnabled,
+      attendance: preferences.attendanceEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -1204,6 +1230,68 @@ export function App() {
   const handleAbsenceAction = (absenceRequest: AbsenceRequest, action: AbsenceAction, comment = "") =>
     runAbsenceMutation((token) => actOnWorkspaceAbsence(token, absenceRequest.id, action, comment));
 
+  const mergeAttendanceDay = (day: AttendanceDay) => {
+    setWorkspace((current) => ({
+      ...current,
+      attendanceDays: current.attendanceDays.some((item) => item.id === day.id)
+        ? current.attendanceDays.map((item) => item.id === day.id ? day : item)
+        : [day, ...current.attendanceDays],
+    }));
+    return day;
+  };
+
+  const handleAttendanceAction = async (action: "start" | "end") => {
+    if (session === undefined) return undefined;
+    try { return mergeAttendanceDay(await recordAttendanceAction(session.accessToken, action)); }
+    catch (error) { reportError(error); return undefined; }
+  };
+
+  const mergeAttendanceCorrection = (correction: AttendanceCorrection) => {
+    setWorkspace((current) => ({
+      ...current,
+      attendanceCorrections: current.attendanceCorrections.some((item) => item.id === correction.id)
+        ? current.attendanceCorrections.map((item) => item.id === correction.id ? correction : item)
+        : [correction, ...current.attendanceCorrections],
+    }));
+    return correction;
+  };
+
+  const handleAttendanceCorrection = async (payload: { eventKind: "arrival" | "start" | "end"; requestedAt: string; reason: string }) => {
+    if (session === undefined) return undefined;
+    try { return mergeAttendanceCorrection(await createAttendanceCorrection(session.accessToken, payload)); }
+    catch (error) { reportError(error); return undefined; }
+  };
+
+  const handleAttendanceCorrectionAction = async (correction: AttendanceCorrection, action: "approve" | "reject" | "cancel", comment = "") => {
+    if (session === undefined) return undefined;
+    try { return mergeAttendanceCorrection(await actOnAttendanceCorrection(session.accessToken, correction.id, action, comment)); }
+    catch (error) { reportError(error); return undefined; }
+  };
+
+  const handleSaveAttendanceProfile = async (userId: string, payload: { smartofficeStaffKey?: string | null; dateOfBirth?: string | null }) => {
+    if (session === undefined) return;
+    try {
+      const profile = await saveAttendanceProfile(session.accessToken, userId, payload);
+      setWorkspace((current) => ({ ...current, attendanceProfiles: current.attendanceProfiles.filter((item) => item.userId !== userId).concat(profile) }));
+    } catch (error) { reportError(error); }
+  };
+
+  const handleSaveAttendancePeriod = async (payload: { userId: string; startsOn: string; endsOn: string; weekdays: readonly number[]; startsAt: string; endsAt: string }) => {
+    if (session === undefined) return;
+    try {
+      const period = await createWorkSchedulePeriod(session.accessToken, payload);
+      setWorkspace((current) => ({ ...current, attendanceSchedulePeriods: [period, ...current.attendanceSchedulePeriods] }));
+    } catch (error) { reportError(error); }
+  };
+
+  const handleSaveAttendanceException = async (payload: { userId: string; workDate: string; kind: "day_off" | "workday"; startsAt?: string | null; endsAt?: string | null }) => {
+    if (session === undefined) return;
+    try {
+      const exception = await saveWorkScheduleException(session.accessToken, payload);
+      setWorkspace((current) => ({ ...current, attendanceScheduleExceptions: current.attendanceScheduleExceptions.filter((item) => !(item.userId === exception.userId && item.workDate === exception.workDate)).concat(exception) }));
+    } catch (error) { reportError(error); }
+  };
+
   const mergeFeedPost = (post: FeedPost) => {
     setWorkspace((current) => ({
       ...current,
@@ -1486,6 +1574,10 @@ export function App() {
                 onAbsenceAction={async (absenceRequest, action) => {
                   await handleAbsenceAction(absenceRequest, action);
                 }}
+                attendanceCorrections={workspace.attendanceCorrections}
+                onAttendanceAction={async (correction, action, comment) => {
+                  await handleAttendanceCorrectionAction(correction, action, comment);
+                }}
               />
             ) : null}
             {displayedSection === "crm" ? (
@@ -1638,6 +1730,24 @@ export function App() {
                 onUploadDocument={async (requestId, file) => {
                   await uploadFiles("absence", requestId, [file]);
                 }}
+              />
+            ) : null}
+            {displayedSection === "attendance" ? (
+              <AttendanceView
+                currentUser={workspace.currentUser}
+                people={workspace.people}
+                days={workspace.attendanceDays}
+                periods={workspace.attendanceSchedulePeriods}
+                exceptions={workspace.attendanceScheduleExceptions}
+                corrections={workspace.attendanceCorrections}
+                profiles={workspace.attendanceProfiles}
+                canAdmin={modulePermissions.attendance?.admin === true}
+                onAction={handleAttendanceAction}
+                onCorrection={handleAttendanceCorrection}
+                onCorrectionAction={handleAttendanceCorrectionAction}
+                onSaveProfile={handleSaveAttendanceProfile}
+                onSavePeriod={handleSaveAttendancePeriod}
+                onSaveException={handleSaveAttendanceException}
               />
             ) : null}
             {displayedSection === "employees" ? (

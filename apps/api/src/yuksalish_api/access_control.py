@@ -134,6 +134,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/projects",), "projects"),
         (("/trip-requests",), "trip_approvals"),
         (("/absence-requests",), "absences"),
+        (("/attendance",), "attendance"),
         (("/feed",), "feed"),
         (("/calendar",), "calendar"),
         (("/efficiency",), "employees"),
@@ -155,9 +156,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return module_key, "admin"
     if normalized.endswith("/actions"):
         return module_key, "view"
-    if module_key == "tasks" and normalized.endswith(
-        ("/accept-result", "/return-for-revision")
-    ):
+    if module_key == "tasks" and normalized.endswith(("/accept-result", "/return-for-revision")):
         return module_key, "approve"
     if upper_method == "GET":
         return module_key, "view"
@@ -167,6 +166,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/projects",
         "/trip-requests",
         "/absence-requests",
+        "/attendance/corrections",
         "/feed/posts",
         "/calendar/events",
         "/messenger/chats",

@@ -465,6 +465,26 @@ body { background: var(--ws-canvas); }
 }
 
 .absences-view { display: grid; gap: 18px; align-content: start; }
+.attendance-view { display: grid; gap: 18px; align-content: start; }
+.attendance-today, .attendance-admin { padding: 18px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 18px; background: linear-gradient(135deg, #fff, #edf9fa); box-shadow: 0 10px 28px rgb(41 58 85 / 7%); }
+.attendance-today { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
+.attendance-today strong, .attendance-today span { display: block; }
+.attendance-today strong { font-size: 19px; color: var(--ws-navy, #293a55); }
+.attendance-today span { margin-top: 5px; color: var(--ws-muted, #607086); }
+.attendance-day-actions, .attendance-correction-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.attendance-columns .record-list { display: grid; gap: 10px; align-content: start; }
+.attendance-columns .record-list > h2, .attendance-columns .record-list > h3 { margin: 0; }
+.attendance-admin { display: grid; gap: 12px; }
+.attendance-admin h2 { margin: 0; }
+.attendance-admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; align-items: end; }
+.attendance-correction-actions { min-width: min(100%, 300px); }
+.attendance-team { display: grid; gap: 10px; padding: 18px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 18px; background: #f7fbfa; }
+.attendance-team h2 { margin: 0; }
+.attendance-summary { display: flex; flex-wrap: wrap; gap: 8px; }
+.attendance-summary span { padding: 8px 10px; border-radius: 999px; background: #fff; color: var(--ws-muted, #607086); }
+.attendance-summary strong { color: var(--ws-navy, #293a55); }
+.attendance-team-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+@media (max-width: 720px) { .attendance-today { display: grid; } }
 .absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
 .absence-summary > div { min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(135deg, #fff, #f2fafb); box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
 .absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }

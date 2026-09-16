@@ -54,6 +54,11 @@ import type {
   ManagedEmployeeStatus,
   DesktopRelease,
   DesktopUpdatePolicy,
+  AttendanceDay,
+  AttendanceCorrection,
+  WorkSchedulePeriod,
+  WorkScheduleException,
+  AttendanceProfile,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
 
@@ -1037,6 +1042,38 @@ export function updateWorkspaceAbsence(token: string, requestId: string, payload
 
 export function actOnWorkspaceAbsence(token: string, requestId: string, action: AbsenceAction, comment = ""): Promise<AbsenceRequest> {
   return apiRequest<AbsenceRequest>(`/absence-requests/${requestId}/actions`, { method: "POST", body: JSON.stringify({ action, comment }) }, token);
+}
+
+export function recordAttendanceAction(token: string, action: "start" | "end"): Promise<AttendanceDay> {
+  return apiRequest<AttendanceDay>("/attendance/actions", { method: "POST", body: JSON.stringify({ action }) }, token);
+}
+
+export function createAttendanceCorrection(token: string, payload: {
+  readonly eventKind: "arrival" | "start" | "end";
+  readonly requestedAt: string;
+  readonly reason: string;
+}): Promise<AttendanceCorrection> {
+  return apiRequest<AttendanceCorrection>("/attendance/corrections", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function actOnAttendanceCorrection(token: string, correctionId: string, action: "approve" | "reject" | "cancel", comment = ""): Promise<AttendanceCorrection> {
+  return apiRequest<AttendanceCorrection>(`/attendance/corrections/${correctionId}/actions`, { method: "POST", body: JSON.stringify({ action, comment }) }, token);
+}
+
+export function saveAttendanceProfile(token: string, userId: string, payload: { readonly smartofficeStaffKey?: string | null; readonly dateOfBirth?: string | null }): Promise<AttendanceProfile> {
+  return apiRequest<AttendanceProfile>(`/attendance/profiles/${userId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+}
+
+export function createWorkSchedulePeriod(token: string, payload: {
+  readonly userId: string; readonly startsOn: string; readonly endsOn: string; readonly weekdays: readonly number[]; readonly startsAt: string; readonly endsAt: string;
+}): Promise<WorkSchedulePeriod> {
+  return apiRequest<WorkSchedulePeriod>("/attendance/schedules", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function saveWorkScheduleException(token: string, payload: {
+  readonly userId: string; readonly workDate: string; readonly kind: "day_off" | "workday"; readonly startsAt?: string | null; readonly endsAt?: string | null;
+}): Promise<WorkScheduleException> {
+  return apiRequest<WorkScheduleException>("/attendance/schedule-exceptions", { method: "PUT", body: JSON.stringify(payload) }, token);
 }
 
 export async function uploadWorkspaceAttachment(

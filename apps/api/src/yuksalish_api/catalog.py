@@ -75,6 +75,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="attendance",
+        label=LocalizedLabel(
+            ru="Посещаемость",
+            uz_cyrl="Давомат",
+            uz_latn="Davomat",
+        ),
+        route="/attendance",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="employees",
         label=LocalizedLabel(ru="Сотрудники", uz_cyrl="Ходимлар", uz_latn="Xodimlar"),
         route="/employees",

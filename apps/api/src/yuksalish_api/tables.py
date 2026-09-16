@@ -62,6 +62,8 @@ users = sa.Table(
     sa.Column("department_id", uuid_type),
     sa.Column("position_id", uuid_type),
     sa.Column("direct_manager_user_id", uuid_type),
+    sa.Column("date_of_birth", sa.Date()),
+    sa.Column("smartoffice_staff_key", sa.String(128)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
     sa.Column("failed_login_count", sa.Integer()),
@@ -588,11 +590,105 @@ absence_request_actions = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+work_schedule_periods = sa.Table(
+    "attendance_schedule_periods",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("starts_on", sa.Date()),
+    sa.Column("ends_on", sa.Date()),
+    sa.Column("weekdays", postgresql.JSONB()),
+    sa.Column("starts_at", sa.Time()),
+    sa.Column("ends_at", sa.Time()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+work_schedule_exceptions = sa.Table(
+    "attendance_schedule_exceptions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("work_date", sa.Date()),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("starts_at", sa.Time()),
+    sa.Column("ends_at", sa.Time()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+attendance_days = sa.Table(
+    "attendance_days",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("work_date", sa.Date()),
+    sa.Column("status", sa.String(24)),
+    sa.Column("scheduled_starts_at", sa.DateTime(timezone=True)),
+    sa.Column("scheduled_ends_at", sa.DateTime(timezone=True)),
+    sa.Column("arrived_at", sa.DateTime(timezone=True)),
+    sa.Column("started_at", sa.DateTime(timezone=True)),
+    sa.Column("ended_at", sa.DateTime(timezone=True)),
+    sa.Column("absence_kind", sa.String(32)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+attendance_events = sa.Table(
+    "attendance_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("event_key", sa.String(128)),
+    sa.Column("user_id", uuid_type),
+    sa.Column("source", sa.String(24)),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("occurred_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+attendance_corrections = sa.Table(
+    "attendance_corrections",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("direct_manager_user_id", uuid_type),
+    sa.Column("event_kind", sa.String(16)),
+    sa.Column("requested_at", sa.DateTime(timezone=True)),
+    sa.Column("reason", sa.Text()),
+    sa.Column("status", sa.String(16)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+attendance_correction_actions = sa.Table(
+    "attendance_correction_actions",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("correction_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(24)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+attendance_birthday_events = sa.Table(
+    "attendance_birthday_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("work_date", sa.Date()),
+    sa.Column("feed_post_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 feed_posts = sa.Table(
     "feed_posts",
     metadata,
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("author_user_id", uuid_type),
+    sa.Column("system_author_label", sa.String(80)),
     sa.Column("title", sa.String(240)),
     sa.Column("body", sa.Text()),
     sa.Column("is_pinned", sa.Boolean()),
@@ -674,6 +770,7 @@ workspace_notification_preferences = sa.Table(
     sa.Column("trips_enabled", sa.Boolean()),
     sa.Column("calendar_enabled", sa.Boolean()),
     sa.Column("absences_enabled", sa.Boolean()),
+    sa.Column("attendance_enabled", sa.Boolean()),
     sa.Column("reminders_enabled", sa.Boolean()),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )

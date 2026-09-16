@@ -6,6 +6,7 @@ export const moduleKeys = [
   "projects",
   "trip_approvals",
   "absences",
+  "attendance",
   "messenger",
   "calendar",
   "employees",
@@ -251,6 +252,7 @@ export interface FeedComment {
 export interface FeedPost {
   readonly id: string;
   readonly authorUserId: string;
+  readonly systemAuthorLabel?: string | null;
   readonly title: string;
   readonly body: string;
   readonly isPinned: boolean;
@@ -337,11 +339,65 @@ export interface PresenceSummaryItem {
   readonly endsAt?: string | null;
 }
 
-export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar" | "absence";
+export type AttendanceDayStatus = "unscheduled" | "scheduled" | "arrived" | "working" | "completed" | "late" | "absence";
+export type AttendanceEventSource = "smartoffice" | "manual" | "correction";
+export type AttendanceCorrectionStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface WorkSchedulePeriod {
+  readonly id: string;
+  readonly userId: string;
+  readonly startsOn: string;
+  readonly endsOn: string;
+  readonly weekdays: readonly number[];
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export interface WorkScheduleException {
+  readonly id: string;
+  readonly userId: string;
+  readonly workDate: string;
+  readonly kind: "day_off" | "workday";
+  readonly startsAt?: string | null;
+  readonly endsAt?: string | null;
+}
+
+export interface AttendanceDay {
+  readonly id: string;
+  readonly userId: string;
+  readonly workDate: string;
+  readonly status: AttendanceDayStatus;
+  readonly scheduledStartsAt?: string | null;
+  readonly scheduledEndsAt?: string | null;
+  readonly arrivedAt?: string | null;
+  readonly startedAt?: string | null;
+  readonly endedAt?: string | null;
+  readonly absenceKind?: AbsenceKind | "trip" | null;
+}
+
+export interface AttendanceCorrection {
+  readonly id: string;
+  readonly userId: string;
+  readonly directManagerUserId: string;
+  readonly eventKind: "arrival" | "start" | "end";
+  readonly requestedAt: string;
+  readonly reason: string;
+  readonly status: AttendanceCorrectionStatus;
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface AttendanceProfile {
+  readonly userId: string;
+  readonly smartofficeStaffKey?: string | null;
+  readonly dateOfBirth?: string | null;
+}
+
+export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar" | "absence" | "attendance";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
-  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar" | "absences"
+  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar" | "absences" | "attendance"
 >;
 
 export interface WorkspaceNotification {
@@ -368,6 +424,7 @@ export interface NotificationPreferences {
   readonly tripsEnabled: boolean;
   readonly calendarEnabled: boolean;
   readonly absencesEnabled: boolean;
+  readonly attendanceEnabled: boolean;
   readonly remindersEnabled: boolean;
 }
 
@@ -817,6 +874,11 @@ export interface WorkspaceBootstrap {
   readonly tripRequests: readonly TripRequest[];
   readonly absenceRequests: readonly AbsenceRequest[];
   readonly presenceSummary: readonly PresenceSummaryItem[];
+  readonly attendanceDays: readonly AttendanceDay[];
+  readonly attendanceSchedulePeriods: readonly WorkSchedulePeriod[];
+  readonly attendanceScheduleExceptions: readonly WorkScheduleException[];
+  readonly attendanceCorrections: readonly AttendanceCorrection[];
+  readonly attendanceProfiles: readonly AttendanceProfile[];
   readonly feedPosts: readonly FeedPost[];
   readonly calendarEvents: readonly CalendarEvent[];
   readonly notifications: readonly WorkspaceNotification[];

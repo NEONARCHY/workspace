@@ -4,6 +4,7 @@ import type {
   NotificationKind,
   AbsenceAction,
   AbsenceRequest,
+  AttendanceCorrection,
   NotificationPreferences,
   WorkspaceNotification,
 } from "@yuksalish/contracts";
@@ -15,6 +16,7 @@ import {
   ApprovalsApp24Regular,
   CalendarLtr24Regular,
   PersonAvailable24Regular,
+  PresenceAvailable24Regular,
   Chat24Regular,
   CheckmarkCircle24Regular,
   Search24Regular,
@@ -34,6 +36,12 @@ interface NotificationCenterProps {
   ) => void | Promise<void>;
   readonly absenceRequests?: readonly AbsenceRequest[];
   readonly onAbsenceAction?: (request: AbsenceRequest, action: AbsenceAction) => void | Promise<void>;
+  readonly attendanceCorrections?: readonly AttendanceCorrection[];
+  readonly onAttendanceAction?: (
+    correction: AttendanceCorrection,
+    action: "approve" | "reject",
+    comment?: string,
+  ) => void | Promise<void>;
 }
 
 const kindLabels: Record<NotificationKind, string> = {
@@ -43,6 +51,7 @@ const kindLabels: Record<NotificationKind, string> = {
   trip: "Командировки",
   calendar: "Календарь",
   absence: "Отсутствия",
+  attendance: "Посещаемость",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -51,6 +60,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "approval") return <ApprovalsApp24Regular />;
   if (kind === "trip") return <Airplane24Regular />;
   if (kind === "absence") return <PersonAvailable24Regular />;
+  if (kind === "attendance") return <PresenceAvailable24Regular />;
   return <CalendarLtr24Regular />;
 }
 
@@ -72,6 +82,8 @@ export function NotificationCenter({
   onUpdatePreferences,
   absenceRequests = [],
   onAbsenceAction,
+  attendanceCorrections = [],
+  onAttendanceAction,
 }: NotificationCenterProps) {
   const [filter, setFilter] = useState<NotificationFilter>("attention");
   const [query, setQuery] = useState("");
@@ -131,6 +143,7 @@ export function NotificationCenter({
     ["tripsEnabled", "Командировки", "Согласование и возврат на доработку"],
     ["calendarEnabled", "Календарь", "Предстоящие встречи и события"],
     ["absencesEnabled", "Отсутствия", "Заявки, решения и больничные документы"],
+    ["attendanceEnabled", "Посещаемость", "Отметки, исправления и график"],
     ["remindersEnabled", "Напоминания", "Сроки в ближайшие 24 часа"],
   ];
 
@@ -226,6 +239,10 @@ export function NotificationCenter({
                       {request.allowedActions.includes("reject") ? <Button size="small" onClick={() => void onOpen(notification)}>Отклонить…</Button> : null}
                     </span>
                   )) : null}
+                {notification.kind === "attendance" && notification.requiresAction && !notification.resolvedAt
+                  ? attendanceCorrections.filter(item => item.id === notification.entityId && item.status === "pending").map(item => (
+                    <AttendanceQuickActions key={item.id} correction={item} onAction={onAttendanceAction} />
+                  )) : null}
                 <Button appearance="subtle" size="small" aria-label={`Контекст: ${notification.title}`} aria-pressed={contextId === notification.id} onClick={event => { contextTrigger.current = event.currentTarget; setContextId(notification.id); }}>Подробнее</Button>
                 <time dateTime={notification.occurredAt}>{timeLabel(notification.occurredAt)}</time>
                 {!notification.readAt ? (
@@ -273,4 +290,19 @@ export function NotificationCenter({
       </div>
     </section>
   );
+}
+
+function AttendanceQuickActions({
+  correction,
+  onAction,
+}: {
+  readonly correction: AttendanceCorrection;
+  readonly onAction: NotificationCenterProps["onAttendanceAction"];
+}) {
+  const [comment, setComment] = useState("");
+  return <span className="notification-quick-actions">
+    <Button size="small" appearance="primary" onClick={() => void onAction?.(correction, "approve", comment)}>Согласовать</Button>
+    <Input aria-label="Причина отказа" placeholder="Причина отказа" value={comment} onChange={(_, data) => setComment(data.value)} />
+    <Button size="small" disabled={!comment.trim()} onClick={() => void onAction?.(correction, "reject", comment)}>Отклонить</Button>
+  </span>;
 }

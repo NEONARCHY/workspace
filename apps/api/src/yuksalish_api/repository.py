@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
 from .access_control import ModuleAction, module_permissions_for_user
+from .attendance_service import load_attendance
 from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
@@ -732,6 +733,7 @@ def _feed_post(
     return FeedPostResponse(
         id=str(row["id"]),
         author_user_id=str(row["author_user_id"]),
+        system_author_label=row["system_author_label"],
         title=row["title"],
         body=row["body"],
         is_pinned=row["is_pinned"],
@@ -1416,6 +1418,7 @@ async def get_notification_preferences(
         trips_enabled=bool(row["trips_enabled"]),
         calendar_enabled=bool(row["calendar_enabled"]),
         absences_enabled=bool(row["absences_enabled"]),
+        attendance_enabled=bool(row["attendance_enabled"]),
         reminders_enabled=bool(row["reminders_enabled"]),
     )
 
@@ -1680,6 +1683,7 @@ async def _sync_notifications_for_user(
                         ),
                         workspace_notifications.c.section == "calendar",
                         workspace_notifications.c.section == "absences",
+                        workspace_notifications.c.section == "attendance",
                     ),
                 )
                 .order_by(workspace_notifications.c.occurred_at.desc())
@@ -2294,6 +2298,17 @@ async def load_workspace(
     presence_responses = (
         await presence_summary(connection, can("absences", "admin")) if can("absences") else []
     )
+    (
+        attendance_days,
+        attendance_periods,
+        attendance_exceptions,
+        attendance_corrections,
+        attendance_profiles,
+    ) = (
+        await load_attendance(connection, current_user, can("attendance", "admin"))
+        if can("attendance")
+        else ([], [], [], [], [])
+    )
 
     feed_rows = (
         (
@@ -2436,6 +2451,11 @@ async def load_workspace(
         else [],
         absence_requests=absence_responses,
         presence_summary=presence_responses,
+        attendance_days=attendance_days,
+        attendance_schedule_periods=attendance_periods,
+        attendance_schedule_exceptions=attendance_exceptions,
+        attendance_corrections=attendance_corrections,
+        attendance_profiles=attendance_profiles,
         feed_posts=[
             _feed_post(
                 row,

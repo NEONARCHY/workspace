@@ -103,7 +103,7 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin }: 
                 <header>
                   <Avatar name={author?.name ?? "Сотрудник"} size={40} color="colorful" />
                   <span>
-                    <strong>{author?.name ?? "Сотрудник"}</strong>
+                    <strong>{post.systemAuthorLabel ?? author?.name ?? "Сотрудник"}</strong>
                     <small>{dateLabel(post.createdAt)}</small>
                   </span>
                   {post.isPinned ? <span className="feed-pin"><Pin24Filled /> Закреплено</span> : null}

@@ -994,6 +994,7 @@ class FeedCommentResponse(ApiModel):
 class FeedPostResponse(ApiModel):
     id: str
     author_user_id: str
+    system_author_label: str | None = None
     title: str
     body: str
     is_pinned: bool
@@ -1090,7 +1091,9 @@ class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
 
 
-NotificationKind = Literal["message", "task", "approval", "trip", "calendar", "absence"]
+NotificationKind = Literal[
+    "message", "task", "approval", "trip", "calendar", "absence", "attendance"
+]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
     "messenger",
@@ -1099,6 +1102,7 @@ NotificationSection = Literal[
     "trip_approvals",
     "calendar",
     "absences",
+    "attendance",
 ]
 
 
@@ -1126,6 +1130,7 @@ class NotificationPreferencesResponse(ApiModel):
     trips_enabled: bool = True
     calendar_enabled: bool = True
     absences_enabled: bool = True
+    attendance_enabled: bool = True
     reminders_enabled: bool = True
 
 
@@ -1137,6 +1142,7 @@ class NotificationPreferencesUpdate(ApiModel):
     trips_enabled: bool
     calendar_enabled: bool
     absences_enabled: bool = True
+    attendance_enabled: bool = True
     reminders_enabled: bool
 
 
@@ -1150,6 +1156,7 @@ NavigationKey = Literal[
     "messenger",
     "calendar",
     "absences",
+    "attendance",
     "employees",
     "notifications",
     "settings",
@@ -1164,6 +1171,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "messenger",
     "calendar",
     "absences",
+    "attendance",
     "employees",
     "notifications",
     "settings",
@@ -1197,7 +1205,7 @@ class PinnedChatOrder(ApiModel):
 
 class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
-    order: list[NavigationKey] = Field(min_length=12, max_length=12)
+    order: list[NavigationKey] = Field(min_length=13, max_length=13)
     revision: int = Field(ge=0)
 
     @field_validator("order")
@@ -1223,6 +1231,11 @@ class WorkspaceBootstrapResponse(ApiModel):
     trip_requests: list[TripRequestResponse]
     absence_requests: list[AbsenceRequestResponse]
     presence_summary: list[PresenceSummaryItemResponse]
+    attendance_days: list[Any]
+    attendance_schedule_periods: list[Any]
+    attendance_schedule_exceptions: list[Any]
+    attendance_corrections: list[Any]
+    attendance_profiles: list[Any]
     feed_posts: list[FeedPostResponse]
     calendar_events: list[CalendarEventResponse]
     notifications: list[NotificationResponse]
