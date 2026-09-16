@@ -77,9 +77,10 @@ it("lets an admin change an employee password but does not list peer admins", as
   api.changeUserPassword.mockResolvedValue(undefined);
   renderPanel();
   const employeeSelect = await screen.findByRole("combobox", { name: "Сотрудник" });
-  await waitFor(() => expect(employeeSelect).toHaveTextContent("Сотрудник (@employee)"));
+  expect(employeeSelect).toHaveTextContent("Выберите сотрудника");
   expect(employeeSelect).not.toHaveTextContent("Другой администратор");
   fireEvent.change(employeeSelect, { target: { value: "employee-1" } });
+  await waitFor(() => expect(employeeSelect).toHaveTextContent("Сотрудник (@employee)"));
   const managedField = document.querySelector<HTMLInputElement>(
     '[data-account-section="managed-password"] input[type="password"]',
   );

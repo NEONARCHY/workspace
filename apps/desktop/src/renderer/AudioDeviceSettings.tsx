@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Field, Select } from "@fluentui/react-components";
+import { Button, Field } from "@fluentui/react-components";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 const STORAGE_KEY = "yuksalish.audio-devices.v1";
 const CHANGE_EVENT = "yuksalish:audio-devices-changed";

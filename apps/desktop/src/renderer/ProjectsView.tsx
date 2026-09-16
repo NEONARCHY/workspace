@@ -3,6 +3,7 @@ import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import { Avatar } from "@fluentui/react-components";
 
 import type {
@@ -323,12 +324,12 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
                 </div>
               </RecordSection>
               <RecordSection title="Сроки и ответственность"><div className="record-field-grid">
-                <label className="record-field-wide">Руководитель<select aria-label="Руководитель проекта" value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+                <label className="record-field-wide">Руководитель<WorkspaceSelect aria-label="Руководитель проекта" value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label>
                 <label>Начало<Input aria-label="Начало проекта" type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
                 <label>Окончание<Input aria-label="Окончание проекта" type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
               </div></RecordSection>
               <RecordSection title="Бюджет" description="Все суммы — в валюте проекта, целыми единицами."><div className="record-field-grid">
-                <label className="record-field-wide">Валюта проекта<select aria-label="Валюта проекта" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as ProjectFormState["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></select></label>
+                <label className="record-field-wide">Валюта проекта<WorkspaceSelect aria-label="Валюта проекта" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as ProjectFormState["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></WorkspaceSelect></label>
                 <label>Бюджет проекта<Input aria-label="Бюджет проекта" type="number" min="0" value={form.budget} onChange={(_, data) => setForm({ ...form, budget: data.value })} /></label>
                 <label>Потрачено<Input aria-label="Потрачено" type="number" min="0" value={form.spentBudget} onChange={(_, data) => setForm({ ...form, spentBudget: data.value })} /></label>
                 <label className="record-field-wide">Оставшийся бюджет<output aria-label="Оставшийся бюджет">{remaining}</output><small>Рассчитывается автоматически: бюджет минус потрачено.</small></label>

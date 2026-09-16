@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 
 import type { WorkspaceDepartment } from "@yuksalish/contracts";
-import { Button, Field, Input, Select } from "@fluentui/react-components";
+import { Button, Field, Input } from "@fluentui/react-components";
 import { Add20Regular, Building20Regular } from "@fluentui/react-icons";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import { createDepartment, updateDepartment } from "./workspace-api";
 

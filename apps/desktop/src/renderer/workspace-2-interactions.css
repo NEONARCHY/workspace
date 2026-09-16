@@ -1,0 +1,295 @@
+/* Workspace 2.0 — shared interaction shell.
+   Calm by default; depth and light appear only around the object being used. */
+:root,
+.app-provider {
+  --ws-focus-line: #4f9eae;
+  --ws-focus-ring: rgb(0 145 168 / 13%);
+  --ws-focus-light: rgb(89 176 209 / 16%);
+  --ws-popup-surface: rgb(252 253 253 / 94%);
+}
+
+/* Editable controls: the container receives one soft focus treatment. Fluent's
+   inner input no longer draws the square browser outline seen in the old UI. */
+.app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown) {
+  border-color: color-mix(in srgb, var(--ws-control-line) 72%, white);
+  background: rgb(255 255 255 / 84%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 88%);
+  transition:
+    border-color 170ms var(--ws-ease) 0ms,
+    background-color 170ms var(--ws-ease) 0ms,
+    box-shadow 210ms var(--ws-ease) 0ms;
+}
+
+.app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):focus-within {
+  border-color: var(--ws-focus-line);
+  background: #fff;
+  box-shadow:
+    0 0 0 3px var(--ws-focus-ring),
+    12px 0 28px -18px var(--ws-focus-light),
+    inset 0 1px 0 rgb(255 255 255 / 95%);
+  transition-delay: 45ms, 45ms, 55ms;
+}
+
+.app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox)
+  :is(input, textarea, select):focus,
+.app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox)
+  :is(input, textarea, select):focus-visible {
+  outline: 0;
+}
+
+.app-provider .fui-Dropdown:focus,
+.app-provider .fui-Dropdown:focus-visible { outline: 0; }
+
+.app-provider :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  textarea:not(.fui-Textarea__textarea),
+  select:not(.fui-Select__select)
+) {
+  border: 1px solid color-mix(in srgb, var(--ws-control-line) 72%, white);
+  border-radius: var(--ws-control-radius, 12px);
+  background-color: rgb(255 255 255 / 84%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 88%);
+  transition:
+    border-color 170ms var(--ws-ease) 0ms,
+    background-color 170ms var(--ws-ease) 0ms,
+    box-shadow 210ms var(--ws-ease) 0ms;
+}
+
+.app-provider :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  textarea:not(.fui-Textarea__textarea),
+  select:not(.fui-Select__select)
+):focus,
+.app-provider :is(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  textarea:not(.fui-Textarea__textarea),
+  select:not(.fui-Select__select)
+):focus-visible {
+  border-color: var(--ws-focus-line);
+  outline: 0;
+  background-color: #fff;
+  box-shadow:
+    0 0 0 3px var(--ws-focus-ring),
+    12px 0 28px -18px var(--ws-focus-light),
+    inset 0 1px 0 rgb(255 255 255 / 95%);
+  transition-delay: 45ms, 45ms, 55ms;
+}
+
+/* Form choices use the same portal material as action menus. Keeping this in
+   one component prevents Windows-owned option windows from breaking the UI. */
+.app-provider .workspace-select.workspace-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: var(--ws-control-radius, 12px);
+  color: var(--ws-text);
+}
+.workspace-select .fui-Dropdown__button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.record-list-controls .workspace-select { min-width: 165px; }
+.app-provider .workspace-select.task-role-filter { flex: 0 1 158px; width: 158px; }
+.app-provider .record-table-paging .workspace-select.workspace-select {
+  width: auto;
+  min-width: 64px;
+  min-height: 32px;
+}
+.payment-fields .workspace-select,
+.payment-trip-fields .workspace-select,
+.decision-editor .workspace-select,
+.workflow-inspector .workspace-select,
+.record-field-grid .workspace-select,
+.task-composer-add-row .workspace-select { width: 100%; }
+.inline-task-form > .workspace-select:first-child { grid-column: 1 / -1; width: 100%; }
+.decision-editor > .workspace-select { grid-column: 1 / -1; }
+
+/* The custom caret is steady rather than blinking. Its short blue light follows
+   the collapsed selection; native selection remains available when text is selected. */
+.ws-caret-tracked { caret-color: transparent !important; }
+.ws-caret-mirror {
+  position: fixed !important;
+  z-index: -1 !important;
+  top: -10000px !important;
+  left: -10000px !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.ws-caret-glow {
+  --ws-caret-x: -100px;
+  --ws-caret-y: -100px;
+  --ws-caret-height: 18px;
+  position: fixed;
+  z-index: 140;
+  top: var(--ws-caret-y);
+  left: var(--ws-caret-x);
+  width: 2px;
+  height: var(--ws-caret-height);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-1px);
+  transition: opacity 130ms var(--ws-ease), transform 150ms var(--ws-ease);
+}
+.ws-caret-glow::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #3d8fa6, #006779);
+  box-shadow: 0 0 4px rgb(72 161 190 / 28%);
+  content: "";
+}
+.ws-caret-glow::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 58px;
+  height: 40px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 20% 50%, rgb(91 178 215 / 22%), rgb(91 178 215 / 8%) 38%, transparent 72%);
+  content: "";
+  opacity: .72;
+  transform: translate(-7px, -50%);
+}
+.ws-caret-glow.is-visible { opacity: 1; transform: translateX(0); }
+
+/* Navigation behaves like one moving workspace object. The active surface grows
+   into place; page content follows after a short, non-blocking delay. */
+.app-rail .rail-slot { position: relative; }
+.app-rail .rail-action {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  transition:
+    color 190ms var(--ws-ease),
+    transform 180ms var(--ws-ease);
+}
+.app-rail .rail-action::before {
+  position: absolute;
+  z-index: -1;
+  inset: 2px 0;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 12% 50%, rgb(0 145 168 / 10%), transparent 42%),
+    linear-gradient(100deg, #e1f1ee, #eaf3f2);
+  box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(255 255 255 / 82%);
+  content: "";
+  opacity: 0;
+  transform: translateX(-7px) scale(.96);
+  transition: opacity 180ms var(--ws-ease), transform 220ms var(--ws-ease);
+}
+.app-rail .rail-action:hover { background: transparent; transform: translateX(2px); }
+.app-rail .rail-action:hover::before { opacity: .55; transform: translateX(0) scale(.985); }
+.app-rail .rail-action.active { color: var(--ws-text); background: transparent; box-shadow: none; }
+.app-rail .rail-action.active::before { opacity: 1; transform: translateX(0) scale(1); }
+.app-rail .rail-action .rail-icon,
+.app-rail .rail-action .rail-label,
+.app-rail .rail-action .rail-badge {
+  transition: color 180ms var(--ws-ease), transform 220ms var(--ws-ease), opacity 180ms var(--ws-ease);
+}
+.app-rail .rail-action.active .rail-icon { color: #007d91; transform: translateX(2px) scale(1.04); }
+.app-rail .rail-action:active { transform: translateX(2px) scale(.985); }
+
+.app-content > .workspace-view {
+  animation: ws2-view-arrive 270ms var(--ws-ease) 35ms backwards;
+}
+@keyframes ws2-view-arrive {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Popovers and menus use one local material language instead of a native-looking
+   white rectangle. The blur is bounded to small contextual surfaces only. */
+:is(
+  .fui-PopoverSurface.fui-PopoverSurface,
+  .fui-MenuPopover.fui-MenuPopover,
+  .fui-Listbox.fui-Listbox
+) {
+  border: 1px solid rgb(255 255 255 / 88%);
+  border-radius: 19px;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 96%), rgb(245 250 250 / 92%)),
+    var(--ws-popup-surface);
+  box-shadow:
+    0 2px 4px rgb(41 58 85 / 3%),
+    0 24px 64px -24px rgb(41 58 85 / 28%),
+    inset 0 1px 0 rgb(255 255 255 / 92%);
+  backdrop-filter: blur(16px) saturate(1.05);
+  animation: ws2-popup-arrive 190ms var(--ws-ease);
+}
+.fui-MenuPopover.fui-MenuPopover { min-width: 220px; padding: 7px; border-radius: 19px; }
+.fui-Listbox.fui-Listbox { min-width: min(220px, calc(100vw - 24px)); max-width: min(360px, calc(100vw - 24px)); padding: 7px; }
+.fui-MenuList { display: grid; gap: 3px; }
+:is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option) {
+  min-height: 38px;
+  border-radius: 11px;
+  color: var(--ws-text);
+  transition: color 150ms var(--ws-ease), background-color 150ms var(--ws-ease), transform 150ms var(--ws-ease);
+}
+:is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
+.fui-MenuItem[aria-disabled="true"] { opacity: .48; }
+.fui-PopoverSurface.identity-popover { width: min(310px, calc(100vw - 28px)); padding: 10px; gap: 7px; border-radius: 22px; }
+.identity-popover-profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid rgb(41 58 85 / 7%);
+  border-radius: 15px;
+  background: rgb(255 255 255 / 66%);
+}
+.identity-popover-profile > span { min-width: 0; }
+.identity-popover-profile h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+.identity-popover-profile p { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-popover-actions { display: grid; gap: 3px; padding-top: 2px; }
+.identity-popover-actions .fui-Button { width: 100%; min-height: 42px; justify-content: flex-start; border-radius: 12px; }
+.identity-popover-actions .fui-Button:hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
+.identity-popover-actions .identity-signout { margin-top: 3px; border-top: 1px solid rgb(41 58 85 / 7%); border-radius: 0 0 12px 12px; }
+.fui-PopoverSurface.person-picker-surface { padding: 12px; border-radius: 20px; }
+.person-picker-list > button { border-radius: 13px; transition: background-color 160ms var(--ws-ease), transform 160ms var(--ws-ease); }
+.person-picker-list > button:hover { transform: translateX(2px); }
+.person-picker-surface .person-picker-list small { color: #4d6372; }
+.person-picker-surface .fui-Avatar__initials { color: #293a55; }
+
+:is(
+  .account-panel,
+  .approval-detail-panel,
+  .task-record-dialog,
+  .directory-record-dialog,
+  .directory-management-dialog,
+  .employee-status-dialog,
+  .employee-bulk-dialog,
+  .chat-settings-dialog,
+  .trip-dialog
+) {
+  border: 1px solid rgb(255 255 255 / 90%);
+  background:
+    radial-gradient(circle at 92% 4%, rgb(84 171 195 / 8%), transparent 25rem),
+    color-mix(in srgb, var(--ws-surface) 96%, #e9f4f3);
+  box-shadow: 0 30px 90px -34px rgb(26 49 70 / 42%), inset 0 1px 0 rgb(255 255 255 / 94%);
+}
+
+@keyframes ws2-popup-arrive {
+  from { opacity: 0; transform: translateY(-5px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-caret-glow { display: none; }
+  .ws-caret-tracked { caret-color: auto !important; }
+}
+
+@media (max-width: 720px) {
+  .record-list-controls .workspace-select { min-width: 0; width: 100%; }
+}
+
+@media (forced-colors: active) {
+  .ws-caret-glow { display: none; }
+  .ws-caret-tracked { caret-color: auto !important; }
+  .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):focus-within,
+  .app-provider :is(input, textarea, select):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
+  .app-rail .rail-action.active::before { border: 2px solid Highlight; background: Canvas; }
+  :is(.fui-PopoverSurface, .fui-MenuPopover, .fui-Listbox) { border: 1px solid CanvasText; background: Canvas; box-shadow: none; backdrop-filter: none; }
+}

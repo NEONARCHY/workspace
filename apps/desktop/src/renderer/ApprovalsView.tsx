@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 
 import type {
   ApprovalNodeData,
@@ -782,7 +783,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
         <div className="payment-field-grid">
           <label>
             Тип перевода
-            <select
+            <WorkspaceSelect
               aria-label={`${prefix}тип перевода`}
               value={form.transferType}
               onChange={(event) => update("transferType", event.target.value as PaymentFormState["transferType"])}
@@ -791,18 +792,18 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
               <option value="Гонорар (с расчетом)">Гонорар (с расчетом)</option>
               <option value="Конвертация">Конвертация</option>
               <option value="Другие услуги">Другие услуги</option>
-            </select>
+            </WorkspaceSelect>
           </label>
           <label>
             Приоритет
-            <select
+            <WorkspaceSelect
               aria-label={`${prefix}приоритет заявки`}
               value={form.requestPriority}
               onChange={(event) => update("requestPriority", event.target.value as PaymentFormState["requestPriority"])}
             >
               <option value="normal">Обычная</option>
               <option value="urgent">Срочная</option>
-            </select>
+            </WorkspaceSelect>
           </label>
           <label>
             Название проекта
@@ -834,7 +835,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
           </label>
           <label>
             Категория платежа
-            <select
+            <WorkspaceSelect
               aria-label={`${prefix}категория платежа`}
               value={form.paymentPurpose}
               onChange={(event) => update("paymentPurpose", event.target.value as PaymentFormState["paymentPurpose"])}
@@ -846,7 +847,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
               <option value="Перелеты">Перелеты</option>
               <option value="Оплата за услуги">Оплата за услуги</option>
               <option value="Другие">Другие</option>
-            </select>
+            </WorkspaceSelect>
           </label>
           <label>
             Основание платежа
@@ -866,11 +867,11 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
         <div className="payment-field-grid">
           <label>
             Ответственный
-            <select aria-label={`${prefix}ответственный за заявку`} value={form.responsibleUserId} onChange={(event) => update("responsibleUserId", event.target.value)}>
+            <WorkspaceSelect aria-label={`${prefix}ответственный за заявку`} value={form.responsibleUserId} onChange={(event) => update("responsibleUserId", event.target.value)}>
               {people.map((person) => (
                 <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
               ))}
-            </select>
+            </WorkspaceSelect>
           </label>
           <label>
             Срок оплаты
@@ -897,7 +898,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
           </label>
           <label className="payment-trip-employees">
             Сотрудники поездки
-            <select
+            <WorkspaceSelect
               multiple
               aria-label={`${prefix}сотрудники поездки`}
               value={[...form.employeeIds]}
@@ -906,7 +907,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
               {people.map((person) => (
                 <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
               ))}
-            </select>
+            </WorkspaceSelect>
           </label>
         </div>
       </details>
@@ -1968,10 +1969,10 @@ export function ApprovalsView({
                     {decision?.requestId === selectedRequest.id ? (
                       <div className="request-inline-editor decision-editor">
                         {decision.action === "delegate" ? (
-                          <select aria-label={`Новый согласующий заявки ${selectedRequest.number}`} value={delegateToUserId} onChange={(event) => setDelegateToUserId(event.target.value)}>
+                          <WorkspaceSelect aria-label={`Новый согласующий заявки ${selectedRequest.number}`} value={delegateToUserId} onChange={(event) => setDelegateToUserId(event.target.value)}>
                             <option value="">Выберите сотрудника</option>
                             {people.filter((person) => person.id !== currentUserId).map((person) => <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>)}
-                          </select>
+                          </WorkspaceSelect>
                         ) : null}
                         <Textarea aria-label={`Комментарий решения по заявке ${selectedRequest.number}`} placeholder={decision.action === "reject" ? "Причина отклонения обязательна" : "Комментарий"} value={decisionComment} onChange={(_event, data) => setDecisionComment(data.value)} />
                         <Button appearance="primary" disabled={actionBusy || (decision.action === "reject" && !decisionComment.trim()) || (decision.action === "delegate" && !delegateToUserId)} onClick={() => void completeDecision()}>Подтвердить</Button>
@@ -2145,20 +2146,22 @@ export function ApprovalsView({
                 </label>
                 <label>
                   Тип блока
-                  <select
+                  <WorkspaceSelect
+                    aria-label="Тип блока маршрута"
                     value={selectedNode.data.kind}
                     onChange={(event) => updateSelected({ kind: event.target.value as ApprovalNodeKind })}
                   >
                     {Object.entries(kindLabels).map(([kind, label]) => (
                       <option key={kind} value={kind}>{label}</option>
                     ))}
-                  </select>
+                  </WorkspaceSelect>
                 </label>
                 {selectedNode.data.kind === "approval" ? (
                   <>
                     <label>
                       Должность согласующего
-                      <select
+                      <WorkspaceSelect
+                        aria-label="Должность согласующего"
                         value={String(selectedNode.data.approverPositionId ?? "")}
                         onChange={(event) => updateSelected({
                           approverPositionId: event.target.value || undefined,
@@ -2169,11 +2172,12 @@ export function ApprovalsView({
                         {positions.map((position) => (
                           <option key={position.id} value={position.id}>{position.name}</option>
                         ))}
-                      </select>
+                      </WorkspaceSelect>
                     </label>
                     <label>
                       Роль согласующего, если должность не выбрана
-                      <select
+                      <WorkspaceSelect
+                        aria-label="Роль согласующего"
                         value={String(selectedNode.data.approverRole ?? "manager")}
                         onChange={(event) => updateSelected({ approverRole: event.target.value })}
                       >
@@ -2181,11 +2185,12 @@ export function ApprovalsView({
                         <option value="admin">Администратор</option>
                         <option value="superadmin">Суперадминистратор</option>
                         <option value="employee">Сотрудник</option>
-                      </select>
+                      </WorkspaceSelect>
                     </label>
                     <label>
                       Конкретный сотрудник
-                      <select
+                      <WorkspaceSelect
+                        aria-label="Конкретный согласующий"
                         value={String(selectedNode.data.approverUserId ?? "")}
                         onChange={(event) => updateSelected({
                           approverUserId: event.target.value || undefined,
@@ -2196,7 +2201,7 @@ export function ApprovalsView({
                         {people.map((person) => (
                           <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
                         ))}
-                      </select>
+                      </WorkspaceSelect>
                     </label>
                     <fieldset className="workflow-deadline-settings">
                       <legend>Сроки и эскалация</legend>
@@ -2212,10 +2217,10 @@ export function ApprovalsView({
                         <input type="number" min={1} max={720} value={Number(selectedNode.data.escalationAfterHours ?? 4)} onChange={(event) => updateSelected({ escalationAfterHours: Math.max(1, Number(event.target.value) || 4) })} />
                       </label>
                       <label>Получатель эскалации
-                        <select value={String(selectedNode.data.escalationUserId ?? "")} onChange={(event) => updateSelected({ escalationUserId: event.target.value || undefined })}>
+                        <WorkspaceSelect aria-label="Получатель эскалации" value={String(selectedNode.data.escalationUserId ?? "")} onChange={(event) => updateSelected({ escalationUserId: event.target.value || undefined })}>
                           <option value="">Владелец маршрута</option>
                           {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                        </select>
+                        </WorkspaceSelect>
                       </label>
                       <small>Напоминания получают согласующие этапа. Инициатор видит просрочку отдельно.</small>
                     </fieldset>
@@ -2226,7 +2231,8 @@ export function ApprovalsView({
                     {selectedNode.data.kind === "start"
                       ? "Должности, которые создают заявки"
                       : "Должности, которые выводят из доработки"}
-                    <select
+                    <WorkspaceSelect
+                      aria-label={selectedNode.data.kind === "start" ? "Должности создателей заявки" : "Должности для вывода из доработки"}
                       multiple
                       value={(
                         selectedNode.data.kind === "start"
@@ -2248,20 +2254,21 @@ export function ApprovalsView({
                       {positions.map((position) => (
                         <option key={position.id} value={position.id}>{position.name}</option>
                       ))}
-                    </select>
-                    <small>Ctrl позволяет выбрать несколько должностей</small>
+                    </WorkspaceSelect>
+                    <small>Можно выбрать одну или несколько должностей</small>
                   </label>
                 ) : null}
                 {selectedNode.data.kind === "parallel" ? (
                   <label>
                     Завершение параллельных веток
-                    <select
+                    <WorkspaceSelect
+                      aria-label="Завершение параллельных веток"
                       value={String(selectedNode.data.decisionMode ?? "all")}
                       onChange={(event) => updateSelected({ decisionMode: event.target.value })}
                     >
                       <option value="all">Нужны решения всех</option>
                       <option value="any">Достаточно одного решения</option>
-                    </select>
+                    </WorkspaceSelect>
                   </label>
                 ) : null}
                 <Tooltip content="Стартовый блок удалить нельзя" relationship="description">

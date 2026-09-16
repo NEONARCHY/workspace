@@ -9,11 +9,12 @@ import type {
   WorkspacePerson,
   WorkspacePosition,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, Field, Input, Select } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, Field, Input } from "@fluentui/react-components";
 import { Dismiss24Regular } from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import {
   changeOwnPassword,
