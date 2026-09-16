@@ -17,6 +17,8 @@ describe("MembersView", () => {
     expect(screen.getByRole("heading", { name: "Работа с членами" })).toBeInTheDocument();
     expect(screen.getByText("Бахтиёр Самугов")).toBeInTheDocument();
     expect(screen.getByLabelText("Фильтр по региону")).toHaveTextContent("Все регионы");
-    expect(screen.getByText("1 в текущей выборке")).toBeInTheDocument();
+    expect(screen.getByLabelText("Сводка текущей выборки")).toHaveTextContent(
+      /1\s*в текущей выборке/,
+    );
   });
 });
