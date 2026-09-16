@@ -27,12 +27,15 @@ import {
   ArrowDownload24Regular,
   ArrowRedo24Regular,
   ArrowUndo24Regular,
+  Attach16Regular,
   BranchFork24Regular,
   CheckmarkCircle24Regular,
   CircleEdit24Regular,
+  Clock16Regular,
   Delete24Regular,
   Dismiss24Regular,
   Money24Regular,
+  Open16Regular,
   Save24Regular,
 } from "@fluentui/react-icons";
 import {
@@ -60,6 +63,7 @@ import "@xyflow/react/dist/style.css";
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
 import type { PaymentRequestInput } from "./workspace-api";
 import {
+  approvalCardStatusPresentation,
   approvalColumnTotals,
   approvalDeadlinePresentation,
   approvalRequestIsOverdue,
@@ -437,15 +441,18 @@ function approvalBoardColumns(
   workflow: WorkflowDefinition | undefined,
   requests: readonly ApprovalRequestSummary[],
 ): ApprovalBoardColumn[] {
-  // These two keys belonged to the original demo-only workflow. They can still
-  // appear in old request snapshots, but are not part of the current route and
-  // must not create phantom board lanes.
-  const hiddenLegacyKeys = new Set(["manager", "finance"]);
-  const workflowNodes = (workflow?.nodes ?? initialNodes.map((node) => ({
+  const sourceNodes = workflow?.nodes ?? initialNodes.map((node) => ({
     id: node.id,
     kind: node.data.kind,
     label: node.data.label,
-  }))).filter((node) => !hiddenLegacyKeys.has(node.id));
+  }));
+  const configuredKeys = new Set(sourceNodes.map((node) => node.id));
+  // Legacy runtime snapshots must not add phantom lanes, but a stage with the
+  // same key remains valid when it is explicitly present in the active route.
+  const hiddenLegacyKeys = new Set(
+    ["manager", "finance"].filter((key) => !configuredKeys.has(key)),
+  );
+  const workflowNodes = sourceNodes.filter((node) => !hiddenLegacyKeys.has(node.id));
   const nodeById = new Map(workflowNodes.map((node) => [node.id, node]));
   const outgoing = new Map<string, WorkflowDefinition["edges"][number][]>();
   for (const edge of (workflow?.edges ?? initialEdges.map((edge, index) => ({
@@ -1526,6 +1533,14 @@ export function ApprovalsView({
                   <div className="approval-column-stack">
                     {columnRequests.map((request) => {
                       const plan = approvalAdvancePlan(request, workflow, currentUserId);
+                      const deadline = approvalDeadlinePresentation(request);
+                      const cardStatus = approvalCardStatusPresentation(request, currentUserId);
+                      const responsibleName = peopleById.get(request.responsibleUserId)?.name
+                        || "Ответственный не указан";
+                      const canRevise = request.status === "needs_revision" && (
+                        request.requesterId === currentUserId
+                        || request.activeStages.some((stage) => stage.canAct)
+                      );
                       const requestAttachments = attachments.filter((attachment) =>
                         attachment.ownerType === "approval_request" && attachment.ownerId === request.id,
                       ).length;
@@ -1540,26 +1555,46 @@ export function ApprovalsView({
                             aria-label={`Открыть заявку №${request.number}: ${request.title}`}
                             onClick={() => openDetail(request.id)}
                           >
-                            <span className="approval-card-topline">
-                              <span>№{request.number}</span>
-                              <span className="approval-card-flags">
-                                {request.details.requestPriority === "urgent" ? <em>Срочно</em> : null}
-                                {request.details.deadline ? <em className={`deadline-${approvalDeadlinePresentation(request).tone}`}>{approvalDeadlinePresentation(request).label}</em> : null}
+                            <span className="approval-card-quick-action" aria-hidden="true">
+                              <Open16Regular /> Открыть
+                            </span>
+                            <strong className="approval-card-title">{request.title}</strong>
+                            <span className="approval-card-amount">{formatMoney(request.amount, request.currency)}</span>
+                            <span className="approval-card-statusline">
+                              <span className={`approval-card-status status-${cardStatus.tone}`}>
+                                <i aria-hidden="true" />
+                                {cardStatus.label}
+                              </span>
+                              {request.details.requestPriority === "urgent" ? (
+                                <em className="approval-card-priority">Срочно</em>
+                              ) : null}
+                            </span>
+                            <span className="approval-card-peopleline">
+                              <span className="approval-card-owner">
+                                <Avatar size={24} name={responsibleName} color="colorful" />
+                                <span>{responsibleName}</span>
+                              </span>
+                              {request.details.deadline && cardStatus.tone !== "overdue" ? (
+                                <span
+                                  className={`approval-card-deadline deadline-${deadline.tone}`}
+                                  title={`Срок: ${formatDateTime(request.details.deadline)}`}
+                                >
+                                  <Clock16Regular /> {deadline.label}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="approval-card-context">
+                              <span className="approval-card-project" title={request.details.projectName || "Без проекта"}>
+                                {request.details.projectName || "Без проекта"}
+                                {request.details.projectCode ? ` · ${request.details.projectCode}` : ""}
+                              </span>
+                              <span className="approval-card-attachments" title={`${requestAttachments} вложений`}>
+                                <Attach16Regular /> {requestAttachments}
                               </span>
                             </span>
-                            <strong>{request.title}</strong>
-                            <span className="approval-card-amount">{formatMoney(request.amount, request.currency)}</span>
-                            <span className="approval-card-project">
-                              {request.details.projectName || "Без проекта"}
-                              {request.details.projectCode ? ` · ${request.details.projectCode}` : ""}
-                            </span>
-                            <span className="approval-card-owner">
-                              <Avatar size={24} name={peopleById.get(request.responsibleUserId)?.name || "Ответственный"} color="colorful" />
-                              <span>{peopleById.get(request.responsibleUserId)?.name || "Ответственный не указан"}</span>
-                            </span>
                             <span className="approval-card-meta">
-                              <span title={request.details.deadline ? `Срок: ${formatDateTime(request.details.deadline)}` : "Срок не указан"}>Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}</span>
-                              <span>{requestAttachments} файл.</span>
+                              <span>#{request.number}</span>
+                              <span>Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}</span>
                             </span>
                           </button>
                           {request.activeStages.length > 1 ? (
@@ -1568,7 +1603,7 @@ export function ApprovalsView({
                           {request.status === "needs_revision" && latestReturnComment(request) ? (
                             <span className="approval-return-note">{latestReturnComment(request)}</span>
                           ) : null}
-                          <footer>
+                          {plan || canRevise ? <footer>
                             {plan ? (
                               <span className="approval-move-hint">
                                 Перетащите → {plan.targetKeys.map((targetKey) =>
@@ -1576,12 +1611,9 @@ export function ApprovalsView({
                                 ).filter(Boolean).join(" / ")}
                               </span>
                             ) : (
-                              <span>{request.statusLabel}</span>
+                              <span className="approval-card-footer-context">Откройте для исправления</span>
                             )}
-                            {request.status === "needs_revision" && (
-                              request.requesterId === currentUserId
-                              || request.activeStages.some((stage) => stage.canAct)
-                            ) ? (
+                            {canRevise ? (
                               <Button
                                 size="small"
                                 appearance="subtle"
@@ -1593,7 +1625,7 @@ export function ApprovalsView({
                                 Исправить заявку
                               </Button>
                             ) : null}
-                          </footer>
+                          </footer> : null}
                         </SpatialCard>
                       );
                     })}
