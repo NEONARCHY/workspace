@@ -80,9 +80,24 @@ try {
     )->fetchAll();
     $regions = $pdo->query('SELECT id, name_ru, name_uz, name_en FROM regions ORDER BY id')->fetchAll();
     $spheres = $pdo->query('SELECT id, name_ru, name_uz, name_en FROM spheres ORDER BY id')->fetchAll();
+} catch (PDOException $error) {
+    error_log('workspace-members bridge failed: ' . $error->getMessage());
+    http_response_code(502);
+    $driverCode = isset($error->errorInfo[1]) ? (string) $error->errorInfo[1] : '';
+    if ($driverCode === '1045') {
+        header('X-Yuksalish-Bridge-Error: source-authentication');
+    } elseif ($driverCode === '1049') {
+        header('X-Yuksalish-Bridge-Error: source-database');
+    } else {
+        header('X-Yuksalish-Bridge-Error: source-query');
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['detail' => 'Source database is unavailable.']);
+    exit;
 } catch (Throwable $error) {
     error_log('workspace-members bridge failed: ' . $error->getMessage());
     http_response_code(502);
+    header('X-Yuksalish-Bridge-Error: bridge-runtime');
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['detail' => 'Source database is unavailable.']);
     exit;
