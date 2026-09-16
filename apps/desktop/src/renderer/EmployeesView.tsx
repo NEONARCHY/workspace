@@ -14,7 +14,7 @@ import type {
   WorkspaceRole,
 } from "@yuksalish/contracts";
 import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
-import { Add24Regular, Chat24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Add24Regular, Chat24Regular, Delete24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
@@ -24,6 +24,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import {
   createPosition,
+  deletePosition,
   loadDirectory,
   updateEmployeeAccess,
   updateEmployeeStatus,
@@ -267,6 +268,37 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setFeedback("Новая должность добавлена в справочник.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось создать должность");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removePosition = async () => {
+    if (busy || !canManage || directory === undefined || selectedPosition === undefined) return;
+    const assignedCount = selectedPosition.assignedUsersCount;
+    const assignmentNote = assignedCount > 0
+      ? ` Должность будет снята у ${assignedCount} ${assignedCount === 1 ? "сотрудника" : "сотрудников"}.`
+      : "";
+    if (!window.confirm(`Удалить должность «${selectedPosition.name}»?${assignmentNote}`)) return;
+    setBusy(true);
+    try {
+      await deletePosition(token, selectedPosition.id);
+      const remaining = directory.positions.filter((position) => position.id !== selectedPosition.id);
+      setDirectory({
+        ...directory,
+        positions: remaining,
+        employees: directory.employees.map((employee) => employee.positionId === selectedPosition.id
+          ? { ...employee, positionId: null, jobTitle: null }
+          : employee),
+      });
+      const next = remaining[0];
+      setSelectedPositionId(next?.id ?? "");
+      setPositionName(next?.name ?? "");
+      setPositionActive(next?.isActive ?? true);
+      setEmployeePositionId((current) => current === selectedPosition.id ? "" : current);
+      setFeedback(`Должность «${selectedPosition.name}» удалена. Связь с сотрудниками снята.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось удалить должность");
     } finally {
       setBusy(false);
     }
@@ -578,9 +610,20 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 label="Доступна для новых назначений"
                 onChange={(_, data) => setPositionActive(data.checked === true)}
               />
-              <Button disabled={busy || !positionName.trim()} onClick={() => void savePosition()}>
-                Сохранить должность
-              </Button>
+              <div className="position-editor-actions">
+                <Button disabled={busy || !positionName.trim()} onClick={() => void savePosition()}>
+                  Сохранить должность
+                </Button>
+                <Button
+                  appearance="subtle"
+                  icon={<Delete24Regular />}
+                  className="position-delete-button"
+                  disabled={busy}
+                  onClick={() => void removePosition()}
+                >
+                  Удалить должность
+                </Button>
+              </div>
             </div>
           ) : null}
         </aside>}

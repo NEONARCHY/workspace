@@ -375,6 +375,16 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert resubmitted.status_code == 200
         assert resubmitted.json()["status"] == "running"
+        denied_delete_approval = await client.delete(
+            f"/api/v1/approval-requests/{approval_id}",
+            headers=finance_headers,
+        )
+        assert denied_delete_approval.status_code == 403
+        deleted_approval = await client.delete(
+            f"/api/v1/approval-requests/{approval_id}",
+            headers=admin_headers,
+        )
+        assert deleted_approval.status_code == 204
 
         directory = await client.get("/api/v1/directory", headers=admin_headers)
         assert directory.status_code == 200
@@ -588,6 +598,19 @@ async def test_authentication_http_vertical_slice() -> None:
         )
         assert deactivated.status_code == 200
         assert deactivated.json()["isActive"] is False
+        deleted_position = await client.delete(
+            f"/api/v1/directory/positions/{position_id}",
+            headers=admin_headers,
+        )
+        assert deleted_position.status_code == 204
+        directory_after_delete = await client.get("/api/v1/directory", headers=admin_headers)
+        deleted_employee = next(
+            item
+            for item in directory_after_delete.json()["employees"]
+            if item["username"] == username
+        )
+        assert deleted_employee["positionId"] is None
+        assert deleted_employee["jobTitle"] is None
 
         status = await client.get("/api/v1/auth/totp", headers=employee_headers)
         assert status.json() == {"enabled": False}

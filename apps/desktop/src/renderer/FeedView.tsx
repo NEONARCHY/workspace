@@ -6,6 +6,7 @@ import {
   Comment24Regular,
   Pin24Filled,
   Pin24Regular,
+  Delete24Regular,
   Send24Regular,
   ThumbLike24Filled,
   ThumbLike24Regular,
@@ -18,6 +19,7 @@ interface FeedViewProps {
   readonly onComment: (post: FeedPost, body: string) => Promise<FeedPost | undefined>;
   readonly onLike: (post: FeedPost, liked: boolean) => Promise<FeedPost | undefined>;
   readonly onPin: (post: FeedPost, pinned: boolean) => Promise<FeedPost | undefined>;
+  readonly onDelete: (post: FeedPost) => Promise<boolean>;
 }
 
 function dateLabel(value: string): string {
@@ -29,7 +31,7 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-export function FeedView({ posts, people, onCreate, onComment, onLike, onPin }: FeedViewProps) {
+export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, onDelete }: FeedViewProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -57,6 +59,16 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin }: 
       if (await onComment(post, value)) {
         setCommentDrafts((current) => ({ ...current, [post.id]: "" }));
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = async (post: FeedPost) => {
+    if (!post.canDelete || !window.confirm(`Удалить публикацию «${post.title}»?`)) return;
+    setBusy(true);
+    try {
+      await onDelete(post);
     } finally {
       setBusy(false);
     }
@@ -114,6 +126,16 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin }: 
                       icon={post.isPinned ? <Pin24Filled /> : <Pin24Regular />}
                       aria-label={post.isPinned ? "Открепить публикацию" : "Закрепить публикацию"}
                       onClick={() => void onPin(post, !post.isPinned)}
+                    />
+                  ) : null}
+                  {post.canDelete ? (
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<Delete24Regular />}
+                      aria-label="Удалить публикацию"
+                      disabled={busy}
+                      onClick={() => void remove(post)}
                     />
                   ) : null}
                 </header>

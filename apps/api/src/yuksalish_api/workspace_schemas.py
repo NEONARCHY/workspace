@@ -1000,6 +1000,7 @@ class FeedPostResponse(ApiModel):
     liked_by_current_user: bool
     like_count: int
     can_edit: bool
+    can_delete: bool
     can_pin: bool
     comments: list[FeedCommentResponse] = Field(default_factory=list)
     created_at: datetime

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Avatar, Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 
@@ -55,7 +56,14 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
         >
           <td className="record-selection-cell"><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
           <td><span className="record-person employee-person"><Avatar name={employee.name} size={36} color="colorful" aria-hidden="true" /><span><button {...restoreFocusTarget} type="button" className="record-open" aria-haspopup="dialog" aria-label={`Открыть сотрудника: ${employee.name}`} onClick={() => onOpen(employee)}><strong>{employee.name}</strong></button><small>@{employee.username}</small></span></span></td>
-          <td className="employee-position">{employee.jobTitle ?? "Не назначена"}</td>
+          <td className="employee-position">
+            {employee.jobTitle ? employee.jobTitle : (
+              <span className="employee-position-missing" title="Должность не назначена">
+                <Warning16Regular aria-hidden="true" />
+                <span>Не назначена</span>
+              </span>
+            )}
+          </td>
           <td className="employee-department">{departmentNames.get(employee.departmentId ?? "") ?? "Не назначено"}</td>
           <td className="record-username">@{employee.username}</td>
           <td><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>

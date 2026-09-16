@@ -114,6 +114,7 @@ interface ApprovalsViewProps {
       readonly delegateToUserId?: string;
     },
   ) => void | Promise<void>;
+  readonly onDeleteRequest: (request: ApprovalRequestSummary) => void | Promise<void>;
   readonly onReviseRequest: (
     request: ApprovalRequestSummary,
     payload: PaymentRequestInput,
@@ -436,14 +437,18 @@ function approvalBoardColumns(
   workflow: WorkflowDefinition | undefined,
   requests: readonly ApprovalRequestSummary[],
 ): ApprovalBoardColumn[] {
-  const workflowNodes = workflow?.nodes ?? initialNodes.map((node) => ({
+  // These two keys belonged to the original demo-only workflow. They can still
+  // appear in old request snapshots, but are not part of the current route and
+  // must not create phantom board lanes.
+  const hiddenLegacyKeys = new Set(["manager", "finance"]);
+  const workflowNodes = (workflow?.nodes ?? initialNodes.map((node) => ({
     id: node.id,
     kind: node.data.kind,
     label: node.data.label,
-  }));
+  }))).filter((node) => !hiddenLegacyKeys.has(node.id));
   const nodeById = new Map(workflowNodes.map((node) => [node.id, node]));
   const outgoing = new Map<string, WorkflowDefinition["edges"][number][]>();
-  for (const edge of workflow?.edges ?? initialEdges.map((edge, index) => ({
+  for (const edge of (workflow?.edges ?? initialEdges.map((edge, index) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
@@ -451,7 +456,7 @@ function approvalBoardColumns(
     label: typeof edge.label === "string" ? edge.label : null,
     condition: edge.data?.condition ?? {},
     sortOrder: edge.data?.sortOrder ?? index,
-  }))) {
+  }))).filter((edge) => !hiddenLegacyKeys.has(edge.source) && !hiddenLegacyKeys.has(edge.target))) {
     if (["return", "reject", "resubmit"].includes(edge.outcome)) continue;
     const current = outgoing.get(edge.source) ?? [];
     outgoing.set(edge.source, [...current, edge].sort((left, right) => left.sortOrder - right.sortOrder));
@@ -475,7 +480,8 @@ function approvalBoardColumns(
   const runtimeColumns = requests
     .flatMap((request) => request.activeStages)
     .filter((stage, index, stages) =>
-      !ordered.some((column) => column.key === stage.key)
+      !hiddenLegacyKeys.has(stage.key)
+      && !ordered.some((column) => column.key === stage.key)
       && stages.findIndex((candidate) => candidate.key === stage.key) === index)
     .map((stage) => ({ key: stage.key, label: stage.label, kind: stage.kind }));
   const firstCorrectionOrEnd = ordered.findIndex((column) =>
@@ -624,13 +630,6 @@ const deadlineEventLabels = {
 
 function formatMoney(amount: number, currency: string): string {
   return `${new Intl.NumberFormat("ru-RU").format(amount)} ${currency}`;
-}
-
-function actionableRequestCaption(count: number): string {
-  const last = count % 10, lastTwo = count % 100;
-  if (last === 1 && lastTwo !== 11) return "заявка ждёт";
-  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return "заявки ждут";
-  return "заявок ждут";
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -810,6 +809,7 @@ export function ApprovalsView({
   onPublishWorkflow,
   onCreateRequest,
   onAction,
+  onDeleteRequest,
   onReviseRequest,
   onUploadAttachments,
   onDownloadAttachment,
@@ -856,6 +856,22 @@ export function ApprovalsView({
   const closeCreate = () => { if (!creatingBusyRef.current) setCreatingRequest(false); };
   const openDetail = (requestId: string) => { setActionError(""); setSelectedRequestId(requestId); };
   const closeDetail = () => { setActionError(""); setSelectedRequestId(""); };
+  const removeRequest = async (request: ApprovalRequestSummary) => {
+    if (!canManage || actionBusyRef.current) return;
+    if (!window.confirm(`Удалить заявку №${request.number}? История согласования и документы будут удалены.`)) return;
+    setActionBusy(true);
+    actionBusyRef.current = true;
+    setActionError("");
+    try {
+      await onDeleteRequest(request);
+      closeDetail();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Не удалось удалить заявку");
+    } finally {
+      actionBusyRef.current = false;
+      setActionBusy(false);
+    }
+  };
   useModalFocus(createPanelRef, creatingRequest, closeCreate);
   useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), closeDetail);
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
@@ -1432,24 +1448,20 @@ export function ApprovalsView({
 
       {mode === "requests" ? (
         <div className="approval-workspace">
-          <div className="approval-overview" aria-label="Сводка заявок на оплату">
-            <button
-              type="button"
-              className="approval-overview-focus"
-              aria-label={`Показать заявки, требующие моего решения: ${boardSummary.actionable}`}
-              onClick={() => setBoardFilter("actionable")}
-            >
-              <span className="approval-overview-eyebrow">Ваше внимание</span>
-              <span className="approval-overview-main"><strong>{boardSummary.actionable}</strong><span>{actionableRequestCaption(boardSummary.actionable)}<br />вашего решения</span></span>
-              <span className="approval-overview-link">Показать в доске <span aria-hidden="true">↗</span></span>
-            </button>
-            <div className="approval-overview-secondary" aria-label="Состояние всех заявок">
-              <div><strong>{boardSummary.running}</strong><span>В работе</span></div>
-              <div><strong>{boardSummary.revision}</strong><span>На доработке</span></div>
-              <div className={boardSummary.overdue ? "has-overdue" : ""}><strong>{boardSummary.overdue}</strong><span>Просрочено</span></div>
-            </div>
-          </div>
           <div className="approval-commandbar">
+            <div className="approval-metrics" aria-label="Сводка заявок">
+              <button
+                type="button"
+                className="approval-metric approval-metric-actionable"
+                aria-pressed={boardFilter === "actionable"}
+                onClick={() => setBoardFilter("actionable")}
+              >
+                <strong>{boardSummary.actionable}</strong><span>Нужно моё решение</span>
+              </button>
+              <span className="approval-metric"><strong>{boardSummary.running}</strong><span>В работе</span></span>
+              <span className="approval-metric"><strong>{boardSummary.revision}</strong><span>На доработке</span></span>
+              <span className="approval-metric approval-metric-overdue"><strong>{boardSummary.overdue}</strong><span>Просрочено</span></span>
+            </div>
             <Input
               className="approval-search"
               aria-label="Поиск заявок"
@@ -1699,6 +1711,18 @@ export function ApprovalsView({
                   >
                     {selectedRequest.statusLabel}
                   </Badge>
+                  {canManage ? (
+                    <Button
+                      className="approval-delete-button"
+                      appearance="subtle"
+                      icon={<Delete24Regular />}
+                      aria-label="Удалить заявку"
+                      disabled={actionBusy}
+                      onClick={() => void removeRequest(selectedRequest)}
+                    >
+                      Удалить
+                    </Button>
+                  ) : null}
                   <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
                 </header>
 

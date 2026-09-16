@@ -622,6 +622,44 @@ async def update_position(
     return await _position_response(connection, position_id)
 
 
+async def delete_position(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    position_id: UUID,
+) -> int:
+    """Remove a position and clear its assignment from every employee."""
+    _require_admin(actor)
+    existing = (
+        (
+            await connection.execute(
+                select(positions).where(positions.c.id == position_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if existing is None:
+        raise DirectoryServiceError(404, "Position was not found")
+
+    now = datetime.now(UTC)
+    detached = await connection.execute(
+        update(users)
+        .where(users.c.position_id == position_id)
+        .values(position_id=None, job_title=None, updated_at=now)
+    )
+    detached_count = detached.rowcount or 0
+    await connection.execute(delete(positions).where(positions.c.id == position_id))
+    await _audit(
+        connection,
+        actor,
+        "position.deleted",
+        "position",
+        position_id,
+        {"name": existing["name"], "detachedUsersCount": detached_count},
+    )
+    return detached_count
+
+
 async def update_employee_access(
     connection: AsyncConnection,
     actor: AuthenticatedUser,

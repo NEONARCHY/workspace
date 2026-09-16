@@ -262,6 +262,10 @@ export function updatePosition(
   );
 }
 
+export function deletePosition(token: string, positionId: string): Promise<void> {
+  return apiRequest<void>(`/directory/positions/${positionId}`, { method: "DELETE" }, token);
+}
+
 export function updateEmployeeAccess(
   token: string,
   employeeId: string,
@@ -626,6 +630,10 @@ export function pinWorkspaceFeedPost(
   );
 }
 
+export function deleteWorkspaceFeedPost(token: string, postId: string): Promise<void> {
+  return apiRequest<void>(`/feed/posts/${postId}`, { method: "DELETE" }, token);
+}
+
 export function createWorkspaceCalendarEvent(
   token: string,
   payload: CalendarEventInput,
@@ -953,6 +961,10 @@ export function updateWorkspaceApproval(
     { method: "PATCH", body: JSON.stringify(payload) },
     token,
   );
+}
+
+export function deleteWorkspaceApproval(token: string, requestId: string): Promise<void> {
+  return apiRequest<void>(`/approval-requests/${requestId}`, { method: "DELETE" }, token);
 }
 
 export function createWorkspaceProject(

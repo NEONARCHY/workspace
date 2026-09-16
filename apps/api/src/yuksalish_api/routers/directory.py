@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.administration_schemas import EmployeeStatusUpdateRequest
@@ -25,6 +25,7 @@ from yuksalish_api.directory_service import (
     create_department,
     create_position,
     delete_module_access_rule,
+    delete_position,
     load_directory,
     set_module_access_rule,
     update_department,
@@ -176,6 +177,23 @@ async def patch_position(
     event_bus: WorkspaceEventBus = request.app.state.event_bus
     await event_bus.publish({"type": "directory.position_updated", "entityId": result.id})
     return result
+
+
+@router.delete("/positions/{position_id}", status_code=204)
+async def remove_position(
+    position_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await delete_position(connection, current_user, position_id)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.position_deleted", "entityId": str(position_id)}
+    )
+    return Response(status_code=204)
 
 
 @router.patch("/employees/{employee_id}", response_model=DirectoryEmployeeResponse)

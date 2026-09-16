@@ -105,8 +105,10 @@ import {
   cancelWorkspaceCalendarEvent,
   completePasswordReset,
   createWorkspaceApproval,
+  deleteWorkspaceApproval,
   createWorkspaceCalendarEvent,
   createWorkspaceFeedPost,
+  deleteWorkspaceFeedPost,
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
@@ -1109,6 +1111,23 @@ export function App() {
     }
   };
 
+  const handleDeleteApproval = async (request: ApprovalRequestSummary) => {
+    if (session === undefined) throw new Error("Сеанс завершён. Войдите повторно.");
+    try {
+      await deleteWorkspaceApproval(session.accessToken, request.id);
+      setWorkspace((current) => ({
+        ...current,
+        requests: current.requests.filter((item) => item.id !== request.id),
+        attachments: current.attachments.filter(
+          (attachment) => attachment.ownerType !== "approval_request" || attachment.ownerId !== request.id,
+        ),
+      }));
+    } catch (error) {
+      reportError(error);
+      throw error;
+    }
+  };
+
   const mergeProject = (project: WorkspaceProject) => {
     setWorkspace((current) => ({
       ...current,
@@ -1234,6 +1253,21 @@ export function App() {
     runFeedMutation((token) => setWorkspaceFeedLike(token, post.id, liked));
   const handleFeedPin = (post: FeedPost, pinned: boolean) =>
     runFeedMutation((token) => pinWorkspaceFeedPost(token, post.id, pinned));
+
+  const handleFeedDelete = async (post: FeedPost): Promise<boolean> => {
+    if (session === undefined) return false;
+    try {
+      await deleteWorkspaceFeedPost(session.accessToken, post.id);
+      setWorkspace((current) => ({
+        ...current,
+        feedPosts: current.feedPosts.filter((item) => item.id !== post.id),
+      }));
+      return true;
+    } catch (error) {
+      reportError(error);
+      return false;
+    }
+  };
 
   const mergeCalendarEvent = (event: CalendarEvent) => {
     setWorkspace((current) => ({
@@ -1403,7 +1437,7 @@ export function App() {
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
-      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
+      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""} ${displayedSection === "payment_requests" ? "approval-shell" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
@@ -1576,6 +1610,7 @@ export function App() {
                 onPublishWorkflow={handlePublishWorkflow}
                 onCreateRequest={handleCreateApproval}
                 onAction={handleApprovalAction}
+                onDeleteRequest={handleDeleteApproval}
                 onReviseRequest={handleReviseApproval}
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
@@ -1590,6 +1625,7 @@ export function App() {
                 onComment={handleFeedComment}
                 onLike={handleFeedLike}
                 onPin={handleFeedPin}
+                onDelete={handleFeedDelete}
               />
             ) : null}
             {displayedSection === "projects" ? (

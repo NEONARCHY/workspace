@@ -15,6 +15,7 @@ from yuksalish_api.directory_schemas import (
 )
 from yuksalish_api.directory_service import (
     create_position,
+    delete_position,
     load_directory,
     update_employee_access,
     update_position,
@@ -38,6 +39,7 @@ from yuksalish_api.repository import (
     create_project,
     create_task,
     create_trip_request,
+    delete_feed_post,
     delete_task_checklist_item,
     find_active_user_by_username,
     get_attachment,
@@ -228,6 +230,17 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 await connection.scalar(select(func.count()).select_from(audit_events))
                 == audit_event_count + 3
             )
+            detached_count = await delete_position(connection, admin, UUID(new_position.id))
+            assert detached_count == 1
+            directory_after_delete = await load_directory(connection)
+            deleted_employee = next(
+                employee
+                for employee in directory_after_delete.employees
+                if employee.id == dilshod.id
+            )
+            assert deleted_employee.position_id is None
+            assert deleted_employee.job_title is None
+            assert all(item.id != new_position.id for item in directory_after_delete.positions)
 
             message = await send_message(
                 connection,
@@ -267,6 +280,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 PinFeedPostRequest(is_pinned=True),
             )
             assert feed_post.is_pinned is True
+            await delete_feed_post(connection, admin, UUID(feed_post.id))
+            assert all(
+                item.id != feed_post.id
+                for item in (await load_workspace(connection, aziza)).feed_posts
+            )
 
             with pytest.raises(WorkspaceRepositoryError, match="past date"):
                 await create_calendar_event(
