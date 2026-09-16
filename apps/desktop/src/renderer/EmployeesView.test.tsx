@@ -39,7 +39,9 @@ describe("Employee list and retained access controls", () => {
     mount(); await screen.findByRole("table");
     fireEvent.change(screen.getByLabelText("Фильтр по роли сотрудника"), { target: { value: "manager" } });
     fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), { target: { value: "invited" } });
-    expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
+    });
     expect(screen.getByText("Бахтиёр Самугов")).toBeInTheDocument();
     expect(updateEmployeeAccess).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сбросить фильтры" }));
