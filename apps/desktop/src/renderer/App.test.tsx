@@ -433,6 +433,13 @@ function mockServer(
     if (url.endsWith("/approval-templates/workflow/publish") && options?.method === "POST") {
       return response({ ...workflow, id: "workflow-v2", version: 2, publishedVersion: 1 });
     }
+    if (url.endsWith("/approval-templates/workflow/graph") && options?.method === "PUT") {
+      const payload = JSON.parse(String(options.body)) as {
+        nodes: typeof workflow.nodes;
+        edges: typeof workflow.edges;
+      };
+      return response({ ...workflow, ...payload });
+    }
     if (url.endsWith("/directory/positions") && options?.method === "POST") {
       return response({
         id: "position-new",
@@ -1757,6 +1764,7 @@ describe("corporate workspace authentication alpha", () => {
       "Список проектов",
       "Согласование поездок",
       "Отсутствия",
+      "Работа с членами",
       "Мессенджер",
       "Календарь",
       "Сотрудники",
