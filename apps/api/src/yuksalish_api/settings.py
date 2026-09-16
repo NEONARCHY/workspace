@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     s3_secret_key: SecretStr = SecretStr("local-only")
     s3_secure: bool = False
     s3_bucket: str = "workspace-files"
+    members_api_url: str = ""
+    members_integration_key: SecretStr = SecretStr("")
+    members_cache_seconds: int = 300
     attachment_max_bytes: int = 25 * 1024 * 1024
     voice_message_max_bytes: int = 4 * 1024 * 1024
     voice_message_max_duration_ms: int = 10 * 60 * 1000

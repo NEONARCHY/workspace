@@ -55,6 +55,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "messenger",
         "calendar",
         "absences",
+        "members",
         "employees",
     ]
     assert all(

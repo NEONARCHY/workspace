@@ -52,6 +52,7 @@ import type {
   WorkspaceNotification,
   WorkspaceRole,
   ManagedEmployeeStatus,
+  MembersRegistry,
   DesktopRelease,
   DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
@@ -65,6 +66,10 @@ export const hasPendingMutation = () => pendingMutations > 0;
 
 export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePolicy> {
   return apiRequest<DesktopUpdatePolicy>("/updates/policy", {}, token);
+}
+
+export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
+  return apiRequest<MembersRegistry>("/members", {}, token);
 }
 
 export function loadDesktopReleases(token: string): Promise<readonly DesktopRelease[]> {

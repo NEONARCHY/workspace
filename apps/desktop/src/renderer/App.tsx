@@ -13,6 +13,7 @@ import type {
   MessageOptions,
   EffectiveModuleAccess,
   MessageReactionEmoji,
+  MembersRegistry,
   FeedPost,
   NotificationPreferences,
   NavigationKey,
@@ -86,6 +87,7 @@ import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
+import { MembersView } from "./MembersView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
@@ -118,6 +120,7 @@ import {
   downloadWorkspaceAttachment,
   loadWorkspace,
   loadWorkspaceEfficiency,
+  loadMembersRegistry,
   login,
   logout,
   markAllWorkspaceNotificationsRead,
@@ -256,6 +259,7 @@ const navItems: readonly NavItem[] = [
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
+  { key: "members", label: "Работа с членами", icon: <PeopleTeam24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
   { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
   { key: "settings", label: "Настройки", icon: <Settings24Regular /> },
@@ -310,6 +314,9 @@ export function App() {
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
   const [efficiencyError, setEfficiencyError] = useState<string>();
+  const [membersRegistry, setMembersRegistry] = useState<MembersRegistry>();
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string>();
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -351,6 +358,8 @@ export function App() {
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? defaultModuleAccess, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setEfficiency(undefined);
     setEfficiencyError(undefined);
+    setMembersRegistry(undefined);
+    setMembersError(undefined);
     setNavigationEditing(false);
     setSession(authenticated);
     persistRefreshSession(authenticated.refreshToken);
@@ -415,6 +424,8 @@ export function App() {
     setNavigationEditing(false);
     setSession(undefined);
     setUpdatePolicy(undefined);
+    setMembersRegistry(undefined);
+    setMembersError(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
     if (current !== undefined) {
@@ -428,10 +439,30 @@ export function App() {
     setBackgroundError(error instanceof Error ? error.message : "Ошибка операции");
   }, []);
 
+  const refreshMembers = useCallback(async () => {
+    if (!session || membersLoading) return;
+    setMembersLoading(true);
+    setMembersError(undefined);
+    try {
+      setMembersRegistry(await loadMembersRegistry(session.accessToken));
+    } catch (error) {
+      setMembersError(error instanceof Error ? error.message : "Не удалось загрузить реестр членов.");
+    } finally {
+      setMembersLoading(false);
+    }
+  }, [membersLoading, session]);
+
   useEffect(() => {
     if (!workspacePlatform.onDesktopUpdateStatus) return;
     return workspacePlatform.onDesktopUpdateStatus(setUpdateStatus);
   }, []);
+
+  useEffect(() => {
+    if (activeSection !== "members" || membersRegistry || membersError) return undefined;
+    // Defer the request outside the effect turn; navigation state remains responsive.
+    const timer = window.setTimeout(() => void refreshMembers(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeSection, membersError, membersRegistry, refreshMembers]);
 
   useEffect(() => {
     if (!workspacePlatform.hasSessionHint()) {
@@ -1709,6 +1740,14 @@ export function App() {
                 onUploadDocument={async (requestId, file) => {
                   await uploadFiles("absence", requestId, [file]);
                 }}
+              />
+            ) : null}
+            {displayedSection === "members" ? (
+              <MembersView
+                registry={membersRegistry}
+                loading={membersLoading}
+                error={membersError}
+                onRefresh={() => void refreshMembers()}
               />
             ) : null}
             {displayedSection === "employees" ? (

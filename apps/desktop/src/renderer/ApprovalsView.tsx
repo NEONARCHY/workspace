@@ -351,7 +351,7 @@ function workflowNodeConfig(data: ApprovalNodeData): Readonly<Record<string, unk
 }
 
 function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
-  if (workflow?.nodes === undefined) {
+  if (workflow === undefined || !Array.isArray(workflow.nodes)) {
     return initialNodes.map((node) => ({ ...node, type: "approvalObject" }));
   }
   return workflow.nodes.map((node) => ({
@@ -364,7 +364,7 @@ function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
 }
 
 function flowEdges(workflow?: WorkflowDefinition): ApprovalEdge[] {
-  if (workflow?.edges === undefined) return initialEdges;
+  if (workflow === undefined || !Array.isArray(workflow.edges)) return initialEdges;
   return workflow.edges.map((edge) => ({
     id: edge.id,
     source: edge.source,
