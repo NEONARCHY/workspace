@@ -16,10 +16,10 @@ import {
   DialogTitle,
   Field,
   Input,
-  Select,
   Textarea,
 } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 export interface ChatActions {
   readonly create: (input: CreateChatInput) => Promise<ChatSummary>;
@@ -138,12 +138,12 @@ function MemberEditor({
         <Select
           value={draft.role}
           disabled={busy}
-          onChange={(_, data) =>
+          onChange={(event) =>
             setDraft({
               ...draft,
-              role: data.value as "moderator" | "member",
+              role: event.target.value as "moderator" | "member",
               permissions:
-                data.value === "moderator"
+                event.target.value === "moderator"
                   ? adminPermissions
                   : memberPermissions,
             })
@@ -279,8 +279,8 @@ export function ChatManagement({
                   <Select
                     value={kind}
                     disabled={busy}
-                    onChange={(_, data) => {
-                      setKind(data.value as typeof kind);
+                    onChange={(event) => {
+                      setKind(event.target.value as typeof kind);
                       setSelected([]);
                     }}
                   >

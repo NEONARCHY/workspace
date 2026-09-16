@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { AdministrativeChat, AdministrativeChatInspection } from "@yuksalish/contracts";
-import { Button, Field, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
+import { Button, Field, Input, Spinner, Textarea } from "@fluentui/react-components";
 import { Dismiss20Regular, LockClosed20Regular, Search20Regular } from "@fluentui/react-icons";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import {
   createAdministrativeChatInspection,

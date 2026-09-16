@@ -13,13 +13,14 @@ import type {
   WorkspacePosition,
   WorkspaceRole,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Select, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import {
   createPosition,
@@ -373,8 +374,8 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
       <div className="record-list-controls">
         <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин, должность или подразделение" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
-        <label>Роль<select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-        <label>Состояние<select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></select></label>
+        <label>Роль<Select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></label>
+        <label>Состояние<Select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></Select></label>
         {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
       </div>
       <EmployeeRecords

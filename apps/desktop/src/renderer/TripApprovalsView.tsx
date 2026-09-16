@@ -2,11 +2,11 @@ import { useRef, useState, type CSSProperties } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
-import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
+import { tripColumns, tripDropAction } from "./trip-board";
 import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
-import { Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
-import { Add24Regular, Edit24Regular } from "@fluentui/react-icons";
+import { Add24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -54,6 +54,11 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const runningCount = requests.filter((request) => !isFinished(request)).length;
+  const finishedCount = requests.length - runningCount;
+  const actionableCount = requests.filter((request) => request.allowedActions.length > 0).length;
+  const revisionCount = requests.filter((request) => request.status === "needs_revision").length;
+  const filterCounts = { running: runningCount, all: requests.length, finished: finishedCount };
   const visibleRequests = requests.filter((request) => {
     if (filter === "running" && isFinished(request)) return false;
     if (filter === "finished" && !isFinished(request)) return false;
@@ -107,14 +112,28 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p></div>
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
-      <div className="trip-commandbar">
-        <div className="approval-board-filters" role="group" aria-label="Вид поездок">
+
+      <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
+        <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
+          <span>Ожидают действий</span>
+          <strong>{actionableCount}</strong>
+          <small>Показать поездки в работе <span aria-hidden="true">→</span></small>
+        </button>
+        <div className="ws2-process-metrics">
+          <div><strong>{runningCount}</strong><span>в работе</span></div>
+          <div className={revisionCount ? "attention" : ""}><strong>{revisionCount}</strong><span>на доработке</span></div>
+          <div><strong>{finishedCount}</strong><span>завершено</span></div>
+        </div>
+      </section>
+
+      <div className="trip-commandbar ws2-process-toolbar">
+        <div className="ws2-segmented" role="group" aria-label="Вид поездок">
           <button type="button" className={view === "kanban" ? "active" : ""} aria-pressed={view === "kanban"} onClick={() => setView("kanban")}>Канбан</button>
           <button type="button" className={view === "list" ? "active" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>Список</button>
         </div>
-        <Input className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
-        <div className="approval-board-filters" role="group" aria-label="Фильтр поездок">
-          {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}
+        <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
+        <div className="ws2-segmented" role="group" aria-label="Фильтр поездок">
+          {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span>{filterCounts[key]}</span></button>)}
         </div>
       </div>
       {feedback}
@@ -129,8 +148,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
               style={{ "--approval-stage-color": column.color, "--approval-stage-ink": "#111111" } as CSSProperties}
               aria-label={`${column.label}: ${items.length} поездок`}>
               <header><strong title={column.label}>{column.label}</strong><span className="approval-column-count" aria-label={`${items.length} поездок`}>{items.length}</span></header>
-              <div className="approval-column-total" aria-label={`Сумма в колонке «${column.label}»`} title="В заявках на поездку пока нет поля суммы. Бюджет не задан, это не означает бесплатную поездку."><span>Сумма в колонке</span><strong>{tripColumnTotal(items)}</strong></div>
-              <div className="approval-column-stack">
+              <div className="approval-column-total" aria-label={`${items.length} поездок на этапе «${column.label}»`}><span>Поездок на этапе</span><strong>{items.length}</strong></div>
+              <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 <div className="trip-column-command">{column.key === "launch" ? <Button {...restoreFocusTarget} size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : null}</div>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
@@ -141,7 +160,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                       <strong>{request.purpose}</strong>
                       <span className="trip-card-destination">{request.destination}</span>
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
-                      <span className="approval-card-meta"><span>{personName(request.requesterUserId)}</span><span>{request.employeeIds.length} участн.</span></span>
+                      <span className="approval-card-owner"><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></span>
+                      <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
                     <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
                   </SpatialCard>;
@@ -165,8 +185,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       }}>
         <DialogSurface className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : ""}`} aria-labelledby={formMode !== null ? "trip-composer-title" : undefined}>
           {formMode === null && selected ? <article className="trip-detail">
-            <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle></div><Button autoFocus appearance="subtle" disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки">Закрыть</Button></header>
-            <Badge appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
+            <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button autoFocus appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
+            <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
             <div className="trip-detail-stages" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}

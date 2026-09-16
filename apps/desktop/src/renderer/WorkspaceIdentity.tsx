@@ -5,7 +5,13 @@ import type { WorkspacePerson } from "@yuksalish/contracts";
 export function WorkspaceIdentity({ person, onSettings, onLogout }: { person: WorkspacePerson; onSettings: () => void; onLogout: () => void }) {
   return <Popover positioning="below-end" withArrow>
     <PopoverTrigger disableButtonEnhancement><button className="workspace-identity" type="button" aria-label={`Профиль: ${person.name}`}><Avatar name={person.name} size={32} color="colorful" /><span>{person.name}</span><ChevronDown16Regular /></button></PopoverTrigger>
-    <PopoverSurface className="identity-popover"><Avatar name={person.name} size={48} color="colorful" /><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p><Button appearance="subtle" icon={<Settings20Regular />} onClick={onSettings}>Настройки профиля</Button><Button appearance="subtle" icon={<SignOut20Regular />} onClick={onLogout}>Выйти</Button></PopoverSurface>
+    <PopoverSurface className="identity-popover">
+      <div className="identity-popover-profile"><Avatar name={person.name} size={48} color="colorful" /><span><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p></span></div>
+      <div className="identity-popover-actions">
+        <Button appearance="subtle" icon={<Settings20Regular />} onClick={onSettings}>Настройки профиля</Button>
+        <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={onLogout}>Выйти</Button>
+      </div>
+    </PopoverSurface>
   </Popover>;
 }
 

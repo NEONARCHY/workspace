@@ -6,7 +6,7 @@ import type {
   CalendarEventType,
   WorkspacePerson,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, Input, Select, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
@@ -14,6 +14,7 @@ import {
   ChevronRight24Regular,
   Dismiss20Regular,
 } from "@fluentui/react-icons";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 interface CalendarViewProps {
   readonly focusEventId?: string;

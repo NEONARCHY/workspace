@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
 import { Avatar, Button, Input } from "@fluentui/react-components";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 
 interface EfficiencyViewProps {
   readonly overview?: EfficiencyOverview;
@@ -180,7 +181,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
   return <div className="efficiency-view">
     <div className="eff-commandbar">
       <div><strong>Выполнение задач в срок</strong><span>Календарный месяц · Asia/Tashkent</span></div>
-      <label><span>Период</span><select aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</select></label>
+      <label><span>Период</span><WorkspaceSelect aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</WorkspaceSelect></label>
       <Button className="eff-help-button" appearance="secondary" aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>?</Button>
     </div>
     {error ? <div className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</div> : null}

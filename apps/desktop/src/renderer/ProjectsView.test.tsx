@@ -18,6 +18,17 @@ const change = (name: string, value: string) => fireEvent.change(screen.getByLab
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
 afterEach(cleanup);
 describe("Project composer", () => {
+  it("filters the board without changing projects and exposes exact overview counts", () => {
+    const completed = { ...project, id: "done-project", code: "DONE", title: "Завершённый проект", status: "completed" as const, stage: "success" as const, canMove: false };
+    setup(undefined, [project, completed]);
+    expect(screen.getByLabelText("Сводка по проектам")).toHaveTextContent("1завершено");
+    expect(document.querySelectorAll(".project-card")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Все.*2/ }));
+    expect(document.querySelectorAll(".project-card")).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText("Поиск проектов"), { target: { value: "DONE" } });
+    expect(document.querySelectorAll(".project-card")).toHaveLength(1);
+    expect(screen.getByText("Завершённый проект")).toBeInTheDocument();
+  });
   it("groups fields and recalculates the remainder in the selected currency", () => {
     setup(); open(); change("Название проекта", "Региональные инициативы"); change("Бюджет проекта", "14500"); change("Потрачено", "2500"); change("Валюта проекта", "USD");
     expect(screen.getByLabelText("Оставшийся бюджет").textContent?.replace(/\s/g, "")).toBe("12000USD");

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 
 import type { DirectoryBootstrap, ModuleAccessRule, ModuleAccessSubject, ModulePermissionSet } from "@yuksalish/contracts";
-import { Button, Checkbox, Select } from "@fluentui/react-components";
+import { Button, Checkbox } from "@fluentui/react-components";
 import { LockClosed20Regular } from "@fluentui/react-icons";
+import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
 import { deleteModuleAccessRule, setModuleAccessRule } from "./workspace-api";
 

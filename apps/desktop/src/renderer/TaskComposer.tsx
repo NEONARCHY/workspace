@@ -26,6 +26,7 @@ import {
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import { workspacePlatform } from "./platform-adapter";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
@@ -404,13 +405,13 @@ export function TaskComposer({
                 </label>
                 <label>
                   <span>Приоритет</span>
-                  <select
+                  <WorkspaceSelect
                     aria-label="Приоритет новой задачи"
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as WorkspaceTask["priority"])}
                   >
                     {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
+                  </WorkspaceSelect>
                 </label>
               </div>
             </RecordSection>
@@ -418,10 +419,10 @@ export function TaskComposer({
             <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
               <div className="task-composer-add-row participant-add-row">
                 <PersonPicker label="Участник новой задачи" people={availableParticipants} value={participantId} onChange={setParticipantId} disabled={busy} />
-                <select aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
+                <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
                   <option value="co_assignee">Соисполнитель</option>
                   <option value="observer">Наблюдатель</option>
-                </select>
+                </WorkspaceSelect>
                 <Button type="button" icon={<Add20Regular />} disabled={!participantId} onClick={addParticipant}>Добавить</Button>
               </div>
               {participants.length ? <div className="task-composer-chip-list">
@@ -459,14 +460,14 @@ export function TaskComposer({
 
             <RecordSection collapsible summary={dependencies.length ? `${dependencies.length} связанных задач` : "Связать с другими задачами"} title="Зависимости" description="Укажите задачи, которые блокируют начало или связаны с этой работой.">
               <div className="task-composer-add-row dependency-add-row">
-                <select aria-label="Зависимость новой задачи" value={dependencyId} onChange={(event) => setDependencyId(event.target.value)}>
+                <WorkspaceSelect aria-label="Зависимость новой задачи" value={dependencyId} onChange={(event) => setDependencyId(event.target.value)}>
                   <option value="">Выберите задачу</option>
                   {availableDependencies.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}
-                </select>
-                <select aria-label="Тип зависимости новой задачи" value={dependencyKind} onChange={(event) => setDependencyKind(event.target.value as "blocks" | "relates")}>
+                </WorkspaceSelect>
+                <WorkspaceSelect aria-label="Тип зависимости новой задачи" value={dependencyKind} onChange={(event) => setDependencyKind(event.target.value as "blocks" | "relates")}>
                   <option value="blocks">Блокирует выполнение</option>
                   <option value="relates">Связанная задача</option>
-                </select>
+                </WorkspaceSelect>
                 <Button type="button" icon={<Add20Regular />} disabled={!dependencyId} onClick={addDependency}>Связать</Button>
               </div>
               {dependencies.length ? <div className="task-composer-dependencies">
@@ -479,19 +480,19 @@ export function TaskComposer({
               {repeatEnabled ? <div className="record-field-grid task-cycle-create">
                 <label>
                   <span>Расписание</span>
-                  <select aria-label="Расписание новой задачи" value={cycleKind} onChange={(event) => setCycleKind(event.target.value as TaskCycleInput["scheduleKind"])}>
+                  <WorkspaceSelect aria-label="Расписание новой задачи" value={cycleKind} onChange={(event) => setCycleKind(event.target.value as TaskCycleInput["scheduleKind"])}>
                     {Object.entries(cycleLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
+                  </WorkspaceSelect>
                 </label>
                 {cycleKind !== "calendar" ? <label>
                   <span>Интервал</span>
                   <Input aria-label="Интервал новой задачи" min={1} max={365} type="number" value={cycleInterval} onChange={(_, data) => setCycleInterval(data.value)} />
                 </label> : <label>
                   <span>Календарное правило</span>
-                  <select aria-label="Календарное правило новой задачи" value={cycleCalendarRule} onChange={(event) => setCycleCalendarRule(event.target.value as "weekdays" | "month_days")}>
+                  <WorkspaceSelect aria-label="Календарное правило новой задачи" value={cycleCalendarRule} onChange={(event) => setCycleCalendarRule(event.target.value as "weekdays" | "month_days")}>
                     <option value="weekdays">Дни недели</option>
                     <option value="month_days">Числа месяца</option>
-                  </select>
+                  </WorkspaceSelect>
                 </label>}
                 <label className="record-field-wide">
                   <span>Ближайший запуск</span>
