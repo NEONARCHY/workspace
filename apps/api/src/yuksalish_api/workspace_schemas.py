@@ -1151,6 +1151,7 @@ NavigationKey = Literal[
     "messenger",
     "calendar",
     "absences",
+    "members",
     "employees",
     "notifications",
     "settings",
@@ -1165,6 +1166,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "messenger",
     "calendar",
     "absences",
+    "members",
     "employees",
     "notifications",
     "settings",
@@ -1198,7 +1200,7 @@ class PinnedChatOrder(ApiModel):
 
 class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
-    order: list[NavigationKey] = Field(min_length=12, max_length=12)
+    order: list[NavigationKey] = Field(min_length=13, max_length=13)
     revision: int = Field(ge=0)
 
     @field_validator("order")

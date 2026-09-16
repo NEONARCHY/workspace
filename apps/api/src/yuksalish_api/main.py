@@ -21,6 +21,7 @@ from .routers import (
     authentication,
     directory,
     health,
+    members,
     messenger,
     modules,
     personal,
@@ -115,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
+    application.include_router(members.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)

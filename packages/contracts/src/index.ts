@@ -6,6 +6,7 @@ export const moduleKeys = [
   "projects",
   "trip_approvals",
   "absences",
+  "members",
   "messenger",
   "calendar",
   "employees",
@@ -336,6 +337,43 @@ export interface PresenceSummaryItem {
   readonly status: "working" | "trip" | AbsenceKind;
   readonly startsAt?: string | null;
   readonly endsAt?: string | null;
+}
+
+export interface MemberDirectoryItem {
+  readonly id: number;
+  readonly telegramId?: string | null;
+  readonly username?: string | null;
+  readonly firstName: string;
+  readonly lastName?: string | null;
+  readonly language?: string | null;
+  readonly phone?: string | null;
+  readonly status: string;
+  readonly createdAt: string;
+  readonly regionId?: number | null;
+  readonly regionNameRu?: string | null;
+  readonly regionNameUz?: string | null;
+  readonly sphereId?: number | null;
+  readonly sphereNameRu?: string | null;
+  readonly sphereNameUz?: string | null;
+  readonly gender?: "male" | "female" | null;
+  readonly birthDate?: string | null;
+  readonly profileStatus?: string | null;
+  readonly updatedAt?: string | null;
+}
+
+export interface MemberDirectoryReference {
+  readonly id: number;
+  readonly nameRu: string;
+  readonly nameUz: string;
+  readonly nameEn?: string | null;
+}
+
+export interface MembersRegistry {
+  readonly configured: boolean;
+  readonly generatedAt?: string | null;
+  readonly members: readonly MemberDirectoryItem[];
+  readonly regions: readonly MemberDirectoryReference[];
+  readonly spheres: readonly MemberDirectoryReference[];
 }
 
 export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar" | "absence";

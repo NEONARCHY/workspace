@@ -1,0 +1,25 @@
+.members-view { display: flex; flex-direction: column; min-height: 0; }
+.members-toolbar { flex: none; }
+.members-summary { display: flex; gap: 12px; padding: 0 24px 16px; }
+.members-summary > div { display: grid; min-width: 150px; gap: 3px; padding: 13px 15px; border: 1px solid #c7dfe4; border-radius: 14px; background: #f8fcfc; }
+.members-summary strong { color: var(--ws-navy); font-size: 22px; font-variant-numeric: tabular-nums; }
+.members-summary span { color: var(--ws-muted); font-size: 12px; }
+.members-controls { padding-bottom: 14px; }
+.members-controls input[type="date"] { min-height: 36px; padding: 6px 9px; border: 1px solid var(--ws-control-line); border-radius: 10px; color: var(--ws-text); font: inherit; }
+.members-content { display: flex; min-height: 0; flex: 1; gap: 16px; overflow: hidden; }
+.members-content .members-records { flex: 1; min-width: 0; }
+.members-record-table { min-width: 980px; }
+.members-record-table th:first-child { width: 26%; }
+.member-row td:first-child { background: #f5fafb; }
+.member-row:hover td:first-child, .member-row:focus-within td:first-child { background: #e5f3f6; }
+.member-inspector { display: grid; align-content: start; gap: 18px; width: min(300px, 30vw); margin: 0 24px 12px 0; padding: 20px; border: 1px solid #c7dfe4; border-radius: 16px; background: white; box-shadow: 0 12px 30px rgb(21 62 82 / 12%); overflow: auto; }
+.member-inspector > div { display: flex; align-items: center; gap: 12px; }
+.member-inspector h2 { margin: 0; color: var(--ws-navy); font-size: 18px; }
+.member-inspector p { margin: 4px 0 0; color: var(--ws-muted); font-size: 12px; }
+.member-inspector dl { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 1.4fr); gap: 10px 12px; margin: 0; font-size: 13px; }
+.member-inspector dt { color: var(--ws-muted); }
+.member-inspector dd { margin: 0; overflow-wrap: anywhere; }
+.members-state { display: grid; place-content: center; justify-items: center; gap: 16px; padding: 48px; text-align: center; }
+.members-state h1, .members-state p { max-width: 560px; margin: 0; }
+@media (max-width: 1080px) { .members-content { overflow-y: auto; } .member-inspector { width: 260px; } }
+@media (max-width: 760px) { .members-summary { flex-wrap: wrap; padding: 0 12px 12px; } .members-summary > div { flex: 1 1 130px; min-width: 0; } .members-controls input[type="date"] { width: 100%; box-sizing: border-box; } .members-content { display: block; overflow-y: auto; } .member-inspector { width: auto; margin: 0 12px 12px; } }

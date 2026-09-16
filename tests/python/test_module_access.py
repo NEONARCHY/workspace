@@ -22,6 +22,7 @@ def test_permission_normalization_preserves_safe_dependencies() -> None:
 def test_request_paths_map_to_server_enforced_module_actions() -> None:
     assert request_module_action("/api/v1/workspace/bootstrap", "GET") is None
     assert request_module_action("/api/v1/directory", "GET") == ("employees", "view")
+    assert request_module_action("/api/v1/members", "GET") == ("members", "view")
     assert request_module_action("/api/v1/directory/departments", "POST") == (
         "employees",
         "admin",
