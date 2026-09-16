@@ -786,6 +786,48 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert approval.status == "running"
             assert approval.active_node_keys == ["finance_manager_projects"]
+            with pytest.raises(WorkspaceRepositoryError, match="destination workflow stage"):
+                await act_on_request(
+                    connection,
+                    admin,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move"),
+                )
+            with pytest.raises(WorkspaceRepositoryError, match="not a movable workflow stage"):
+                await act_on_request(
+                    connection,
+                    admin,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move", node_key="start"),
+                )
+            with pytest.raises(WorkspaceRepositoryError, match="cannot move"):
+                await act_on_request(
+                    connection,
+                    dilshod_auth,
+                    UUID(approval.id),
+                    ApprovalActionRequest(action="move", node_key="project_financier"),
+                )
+            approval = await act_on_request(
+                connection,
+                admin,
+                UUID(approval.id),
+                ApprovalActionRequest(
+                    action="move",
+                    node_key="project_financier",
+                    comment="Administrative rollback coverage",
+                ),
+            )
+            assert approval.status == "running"
+            assert approval.active_node_keys == ["project_financier"]
+            assert approval.actions[-1].action == "move"
+            assert approval.actions[-1].comment == "Administrative rollback coverage"
+            approval = await act_on_request(
+                connection,
+                aziza,
+                UUID(approval.id),
+                ApprovalActionRequest(action="move", node_key="finance_manager_projects"),
+            )
+            assert approval.active_node_keys == ["finance_manager_projects"]
             approval = await act_on_request(
                 connection,
                 aziza,
