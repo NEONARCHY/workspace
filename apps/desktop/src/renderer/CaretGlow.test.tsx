@@ -1,11 +1,11 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { CaretGlow } from "./CaretGlow";
+import { WorkspaceCaret } from "./CaretGlow";
 
-describe("CaretGlow", () => {
+describe("WorkspaceCaret", () => {
   it("tracks a collapsed text selection and restores the native caret on blur", async () => {
-    const { container } = render(<><input aria-label="Рабочее поле" defaultValue="Текст" /><CaretGlow /></>);
+    const { container } = render(<><input aria-label="Рабочее поле" defaultValue="Текст" /><WorkspaceCaret /></>);
     const input = container.querySelector("input")!;
     Object.defineProperty(input, "clientWidth", { configurable: true, value: 240 });
     input.getBoundingClientRect = () => ({
@@ -16,11 +16,11 @@ describe("CaretGlow", () => {
     input.setSelectionRange(5, 5);
     fireEvent.input(input);
 
-    await waitFor(() => expect(input).toHaveClass("ws-caret-tracked"));
-    await waitFor(() => expect(container.querySelector(".ws-caret-glow")).toHaveClass("is-visible"));
+    await waitFor(() => expect(input).toHaveClass("ws-caret-managed"));
+    await waitFor(() => expect(container.querySelector(".ws-caret-line")).toHaveClass("is-visible"));
 
     fireEvent.blur(input);
-    expect(input).not.toHaveClass("ws-caret-tracked");
-    expect(container.querySelector(".ws-caret-glow")).not.toHaveClass("is-visible");
+    expect(input).not.toHaveClass("ws-caret-managed");
+    expect(container.querySelector(".ws-caret-line")).not.toHaveClass("is-visible");
   });
 });

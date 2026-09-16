@@ -70,18 +70,100 @@ body { background: var(--ws-canvas); }
 .app-provider :is(button,input,select,textarea):focus-visible { outline: 2px solid #007e92; outline-offset: 3px; }
 
 /* Objects, not browser ghosts. Only the active preview owns a compositor layer. */
-.spatial-lane { position: relative; transition: background-color 180ms ease; }
-.spatial-lane.is-receptive { background: #e5f0ee; outline: 1px dashed #8bbab9; outline-offset: -2px; }
-.spatial-lane.is-target { background: #dceeea; outline: 2px solid #5b9c9e; }
+.spatial-lane {
+  position: relative;
+  isolation: isolate;
+  transition: background-color 180ms var(--ws-ease);
+}
+.spatial-lane::after {
+  position: absolute;
+  z-index: 4;
+  inset: 7px;
+  border: 1px dashed rgb(91 156 158 / 0%);
+  border-radius: inherit;
+  background: rgb(224 246 241 / 0%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(.987);
+  transition:
+    border-color 170ms var(--ws-ease),
+    background-color 170ms var(--ws-ease),
+    opacity 170ms var(--ws-ease),
+    transform 210ms var(--ws-ease);
+}
+.spatial-lane.is-receptive { background: #e5f0ee; }
+.spatial-lane.is-receptive::after {
+  border-color: rgb(91 156 158 / 42%);
+  background: rgb(224 246 241 / 20%);
+  opacity: .54;
+}
+.spatial-lane.is-target { background: #dceeea; }
+.spatial-lane.is-target::after {
+  border-color: #5b9c9e;
+  background: rgb(224 246 241 / 38%);
+  opacity: 1;
+  transform: scale(1);
+}
 .spatial-card { position: relative; flex: none; touch-action: pan-y; }
-.spatial-card.is-lifted { opacity: .28; outline: 1px dashed #72959b; box-shadow: none; }
+.spatial-card.is-lifted {
+  opacity: .28;
+  outline: 1px dashed #72959b;
+  box-shadow: none;
+  transition: opacity 160ms var(--ws-ease);
+}
+.spatial-card.is-arriving { animation: spatial-card-settle 220ms cubic-bezier(.22,.8,.22,1); }
 .spatial-grip { position: absolute; top: 9px; right: 6px; display: grid; place-items: center; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 9px; color: #557781; background: transparent; opacity: 0; cursor: grab; touch-action: none; }
 .spatial-card:hover .spatial-grip, .spatial-card:focus-within .spatial-grip { opacity: 1; }
 .spatial-grip:active { cursor: grabbing; }
-.spatial-drop-marker { position: absolute; z-index: 2; bottom: 12px; left: 12px; right: 12px; padding: 12px; border: 1px dashed #85aaa8; border-radius: 14px; background: #f0f9f6; color: #316d71; font-size: 11px; text-align: center; pointer-events: none; animation: spatial-appear 180ms ease; }
-.spatial-drop-marker { display: none; }
-.spatial-lane.is-target :is(.approval-column-stack,.project-stack,.kanban-stack)::before { content: "Отпустите, чтобы перенести"; display: block; flex: none; padding: 16px 8px; border: 1px dashed #85aaa8; border-radius: 14px; color: #316d71; background: #edf8f3; font-size: 11px; text-align: center; }
-.spatial-drag-preview { pointer-events: none; box-sizing: border-box; padding: 0 !important; border: 1px solid #b0d1cf !important; border-radius: 19px; background: #fff; box-shadow: var(--ws-shadow-lift) !important; transform: rotate(-.7deg) scale(1.025); opacity: .98; cursor: grabbing; }
+.spatial-drop-marker {
+  position: absolute;
+  z-index: 5;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  padding: 12px;
+  border: 1px dashed #85aaa8;
+  border-radius: 14px;
+  background: #f0f9f6;
+  color: #316d71;
+  font-size: 11px;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(5px);
+  transition: opacity 160ms var(--ws-ease), transform 210ms var(--ws-ease);
+}
+.spatial-lane.is-target .spatial-drop-marker { opacity: 1; transform: translateY(0); }
+.spatial-drag-preview {
+  box-sizing: border-box;
+  border: 1px solid #b0d1cf !important;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: var(--ws-shadow-lift) !important;
+  cursor: grabbing;
+  opacity: .98;
+  pointer-events: none;
+}
+.spatial-drag-preview-shell {
+  transform-origin: center;
+  animation: spatial-card-lift 180ms cubic-bezier(.18,.86,.25,1) both;
+}
+.spatial-drag-preview.is-settling .spatial-drag-preview-shell {
+  animation: spatial-card-land 220ms cubic-bezier(.22,.8,.22,1) both;
+}
+@keyframes spatial-card-lift {
+  from { opacity: .74; transform: rotate(0) scale(.985); }
+  to { opacity: 1; transform: rotate(-.45deg) scale(1.014); }
+}
+@keyframes spatial-card-land {
+  from { opacity: 1; transform: rotate(-.45deg) scale(1.014); }
+  to { opacity: 1; transform: rotate(0) scale(1); }
+}
+@keyframes spatial-card-settle {
+  from { opacity: .5; transform: scale(1.012); }
+  to { opacity: 1; transform: scale(1); }
+}
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }
 .spatial-card-open > strong { padding-right: 10px; font-size: 15px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
 .spatial-card-context, .spatial-card-open > small { color: var(--ws-muted); font-size: 11px; }

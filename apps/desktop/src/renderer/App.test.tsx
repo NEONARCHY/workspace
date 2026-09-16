@@ -1535,13 +1535,7 @@ describe("corporate workspace authentication alpha", () => {
       .toBeInTheDocument();
     expect(screen.getByText("Информация по заявке")).toBeInTheDocument();
     expect(screen.getByText("Ход согласования")).toBeInTheDocument();
-    const journey = screen.getByLabelText("Живой маршрут заявки");
-    expect(within(journey).getByText("Живой маршрут")).toBeInTheDocument();
-    expect(within(journey).getByText("Ждёт вашего решения")).toBeInTheDocument();
-    expect(journey.querySelector('.react-flow__node[data-id="manager"]'))
-      .toHaveClass("journey-current");
-    expect(journey.querySelector('.react-flow__node[data-id="start"]'))
-      .toHaveClass("journey-complete");
+    expect(screen.queryByLabelText("Живой маршрут заявки")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
 
     const card = openCard.closest("article");
