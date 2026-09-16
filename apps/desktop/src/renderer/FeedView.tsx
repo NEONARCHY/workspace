@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { FeedPost, WorkspacePerson } from "@yuksalish/contracts";
-import { Avatar, Button, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
 import {
   Comment24Regular,
   Pin24Filled,
@@ -10,7 +10,9 @@ import {
   Send24Regular,
   ThumbLike24Filled,
   ThumbLike24Regular,
+  Add24Regular,
 } from "@fluentui/react-icons";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 interface FeedViewProps {
   readonly posts: readonly FeedPost[];
@@ -36,6 +38,7 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, on
   const [body, setBody] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(false);
   const person = (id: string) => people.find((item) => item.id === id);
 
   const create = async () => {
@@ -45,6 +48,7 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, on
       if (await onCreate(title.trim(), body.trim())) {
         setTitle("");
         setBody("");
+        setComposerOpen(false);
       }
     } finally {
       setBusy(false);
@@ -83,30 +87,6 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, on
             <p>Новости, решения и обсуждения компании</p>
           </div>
         </header>
-        <article className="feed-composer">
-          <Input
-            aria-label="Заголовок публикации"
-            placeholder="Заголовок"
-            value={title}
-            onChange={(_event, data) => setTitle(data.value)}
-          />
-          <Textarea
-            aria-label="Текст публикации"
-            placeholder="Поделитесь новостью с командой"
-            resize="vertical"
-            value={body}
-            onChange={(_event, data) => setBody(data.value)}
-          />
-          <Button
-            appearance="primary"
-            icon={<Send24Regular />}
-            disabled={busy || !title.trim() || !body.trim()}
-            onClick={() => void create()}
-          >
-            Опубликовать
-          </Button>
-        </article>
-
         <div className="feed-list">
           {posts.map((post) => {
             const author = person(post.authorUserId);
@@ -118,7 +98,7 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, on
                     <strong>{author?.name ?? "Сотрудник"}</strong>
                     <small>{dateLabel(post.createdAt)}</small>
                   </span>
-                  {post.isPinned ? <span className="feed-pin"><Pin24Filled /> Закреплено</span> : null}
+                  {post.isPinned ? <span className="feed-pin">Закреплено</span> : null}
                   {post.canPin ? (
                     <Button
                       appearance="subtle"
@@ -194,11 +174,31 @@ export function FeedView({ posts, people, onCreate, onComment, onLike, onPin, on
           {posts.length === 0 ? <div className="empty-state">Публикаций пока нет</div> : null}
         </div>
       </div>
-      <aside className="feed-side">
-        <strong>Корпоративная лента</strong>
-        <p>Видна всем активным сотрудникам. Закреплять важные объявления могут руководители.</p>
-        <span>{posts.length} публикаций</span>
+      <aside className="feed-side" aria-label="Действия ленты">
+        <Button className="feed-create-button" appearance="primary" icon={<Add24Regular />} onClick={() => setComposerOpen(true)}>
+          Новое объявление
+        </Button>
+        <section className="feed-context-card">
+          <strong>Корпоративная лента</strong>
+          <p>Видна всем активным сотрудникам. Закреплять важные объявления могут руководители.</p>
+          <span>{posts.length} публикаций</span>
+        </section>
       </aside>
+      <Dialog open={composerOpen} onOpenChange={(_, data) => !busy && setComposerOpen(data.open)}>
+        <DialogSurface className="feed-composer-dialog" aria-label="Новое объявление">
+          <DialogBody>
+            <DialogTitle>Новое объявление</DialogTitle>
+            <DialogContent className="feed-composer">
+              <Input autoFocus aria-label="Заголовок публикации" placeholder="Заголовок" value={title} onChange={(_event, data) => setTitle(data.value)} />
+              <Textarea aria-label="Текст публикации" placeholder="Поделитесь новостью с командой" resize="vertical" value={body} onChange={(_event, data) => setBody(data.value)} />
+            </DialogContent>
+            <DialogActions>
+              <Button disabled={busy} onClick={() => setComposerOpen(false)}>Отмена</Button>
+              <Button appearance="primary" icon={<Send24Regular />} disabled={busy || !title.trim() || !body.trim()} onClick={() => void create()}>Опубликовать</Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </section>
   );
 }

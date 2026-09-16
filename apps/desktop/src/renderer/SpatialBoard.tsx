@@ -18,6 +18,7 @@ interface BoardContext {
   pending: boolean;
   pendingId: string | null;
   arrivingId: string | null;
+  interactionMode: "standard" | "payment";
   canDrop: (id: string, lane: string) => boolean;
 }
 const Context = createContext<BoardContext | null>(null);
@@ -40,11 +41,12 @@ const keyboardCoordinates: KeyboardCoordinateGetter = (event, { context, current
 };
 
 /** A board is only a spatial view. The existing mutation remains the authority for a move. */
-export function SpatialBoard({ children, canDrop, onMove, onPick }: {
+export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMode = "standard" }: {
   children: ReactNode;
   canDrop: (id: string, lane: string) => boolean;
   onMove: (id: string, lane: string) => Promise<unknown> | void;
   onPick?: (id: string) => void;
+  interactionMode?: "standard" | "payment";
 }) {
   const [cards] = useState(() => new Map<string, CardRecord>());
   const [positions] = useState(() => new Map<string, DOMRect>());
@@ -70,7 +72,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
       setArrivingId(transaction.id);
       arrivalTimer.current = window.setTimeout(() => {
         setArrivingId((current) => current === transaction.id ? null : current);
-      }, 220);
+      }, 280);
     }
     lock.current = false;
     setPending(false);
@@ -154,19 +156,24 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
       if (transaction) release(transaction);
     }
   };
-  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, arrivingId, canDrop }}>
+  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, arrivingId, interactionMode, canDrop }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
+      autoScroll={{ threshold: { x: 0.12, y: 0.1 }, acceleration: 8, interval: 10 }}
       onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
         onDragStart: ({ active: picked }) => `Поднята карточка: ${cards.get(String(picked.id))?.label ?? ""}`,
-        onDragOver: ({ over: target }) => target ? "Доступный этап выбран. Нажмите пробел для переноса." : "Выберите доступный этап.",
+        onDragOver: ({ active: picked, over: target }) => target
+          ? (canDrop(String(picked.id), String(target.id))
+            ? "Доступный этап выбран. Нажмите пробел для переноса."
+            : "Этот этап недоступен для переноса.")
+          : "Выберите доступный этап.",
         onDragEnd: () => "Перетаскивание завершено. Переход проверяется сервером.", onDragCancel: () => "Перенос отменён.",
       } }}>
       {children}
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
       {createPortal(<DragOverlay dropAnimation={settle}>
-        {active && preview ? <div className={`spatial-drag-preview ${preview.className}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></div> : null}
+        {active && preview ? <div className={`spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""} ${preview.className}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></div> : null}
       </DragOverlay>, document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
@@ -175,10 +182,14 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
 export function SpatialLane({ id, children, className = "", ...props }: HTMLAttributes<HTMLElement> & { id: string }) {
   const board = useBoard();
   const allowed = !!board.active && board.canDrop(board.active, id);
-  const { setNodeRef, isOver } = useDroppable({ id, disabled: !allowed || board.pending });
-  return <section {...props} ref={setNodeRef} className={`${className} spatial-lane ${allowed ? "is-receptive" : ""} ${isOver ? "is-target" : ""}`} data-spatial-lane={id}>
+  const showUnavailable = board.interactionMode === "payment";
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !board.active || board.pending || (!showUnavailable && !allowed) });
+  const unavailable = showUnavailable && !!board.active && isOver && !allowed;
+  return <section {...props} ref={setNodeRef}
+    className={`${className} spatial-lane ${showUnavailable ? "is-payment-motion" : ""} ${allowed ? "is-receptive" : ""} ${isOver && allowed ? "is-target" : ""} ${unavailable ? "is-unavailable" : ""}`}
+    data-spatial-lane={id} data-drop-state={unavailable ? "unavailable" : isOver && allowed ? "target" : allowed ? "available" : undefined}>
     {children}
-    <div className="spatial-drop-marker" aria-hidden="true">Отпустите, чтобы перенести</div>
+    <div className="spatial-drop-marker" aria-hidden="true">{unavailable ? "Недоступно для переноса" : "Переместить сюда"}</div>
   </section>;
 }
 
@@ -202,7 +213,7 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
   return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${isDragging || board.pendingId === id ? "is-lifted" : ""} ${board.arrivingId === id ? "is-arriving" : ""}`} data-spatial-card={id}
+    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging || board.pendingId === id ? "is-lifted" : ""} ${board.arrivingId === id ? "is-arriving" : ""}`} data-spatial-card={id}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}

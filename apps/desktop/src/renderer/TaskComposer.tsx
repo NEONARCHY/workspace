@@ -166,7 +166,8 @@ export function TaskComposer({
     [tasks],
   );
   const assignee = peopleById.get(assigneeId);
-  const availableParticipants = people.filter(
+  const activePeople = people.filter((person) => !person.status || person.status === "active");
+  const availableParticipants = activePeople.filter(
     (person) =>
       person.id !== assigneeId
       && !participants.some((participant) => participant.userId === person.id),
@@ -384,7 +385,7 @@ export function TaskComposer({
                   <span>Ответственный <b aria-hidden="true">*</b></span>
                   <PersonPicker
                     label="Ответственный новой задачи"
-                    people={people}
+                    people={activePeople}
                     disabled={busy}
                     value={assigneeId}
                     onChange={(next) => {

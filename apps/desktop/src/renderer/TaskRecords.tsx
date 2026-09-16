@@ -11,6 +11,7 @@ export function TaskRecords({ tasks, people, selectedId, filterKey, onSelect }: 
 }) {
   const [sort, setSort] = useState<TableSort>({ key: "", descending: false });
   const restoreFocusTarget = useRestoreFocusTarget();
+  const peopleById = useMemo(() => new Map(people.map(person => [person.id, person])), [people]);
   const names = useMemo(() => new Map(people.map(person => [person.id, person.name])), [people]);
   const sorted = useMemo(() => {
     const text = (task: WorkspaceTask) => sort.key === "author" ? names.get(task.authorId) ?? ""
@@ -29,7 +30,10 @@ export function TaskRecords({ tasks, people, selectedId, filterKey, onSelect }: 
   }, [tasks, sort, names]);
   const paging = useTablePage(sorted.length, `${filterKey}:${sort.key}:${sort.descending}`);
   const onSort = (key: string) => setSort({ key, descending: sort.key === key && !sort.descending });
-  const person = (id: string) => <span className="record-person"><Avatar name={names.get(id) ?? "Сотрудник"} size={28} color="colorful" aria-hidden="true" /><span>{names.get(id) ?? "Сотрудник"}</span></span>;
+  const person = (id: string) => {
+    const value = peopleById.get(id);
+    return <span className={`record-person${value?.status && value.status !== "active" ? " workspace-person-inactive" : ""}`}><Avatar name={value?.name ?? "Сотрудник"} size={28} color="colorful" aria-hidden="true" /><span>{value?.name ?? "Сотрудник"}</span></span>;
+  };
   return <div className="record-table-frame task-records">
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>
       <table className="record-table task-record-table" aria-label="Задачи">

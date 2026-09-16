@@ -146,7 +146,7 @@
 .app-rail .rail-action {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   background: transparent;
   box-shadow: none;
   transition:
@@ -165,20 +165,30 @@
   box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(255 255 255 / 82%);
   content: "";
   opacity: 0;
-  transform: translateX(-7px) scale(.96);
+  transform: scale(.97);
   transition: opacity 180ms var(--ws-ease), transform 220ms var(--ws-ease);
 }
-.app-rail .rail-action:hover { background: transparent; transform: translateX(2px); }
-.app-rail .rail-action:hover::before { opacity: .55; transform: translateX(0) scale(.985); }
+.app-rail .rail-action:hover { background: transparent; transform: translateY(-1px); }
+.app-rail .rail-action:hover::before { opacity: .55; transform: scale(.99); }
 .app-rail .rail-action.active { color: var(--ws-text); background: transparent; box-shadow: none; }
-.app-rail .rail-action.active::before { opacity: 1; transform: translateX(0) scale(1); }
+.app-rail .rail-action.active::before { opacity: 1; transform: scale(1); }
 .app-rail .rail-action .rail-icon,
 .app-rail .rail-action .rail-label,
 .app-rail .rail-action .rail-badge {
   transition: color 180ms var(--ws-ease), transform 220ms var(--ws-ease), opacity 180ms var(--ws-ease);
 }
-.app-rail .rail-action.active .rail-icon { color: #007d91; transform: translateX(2px) scale(1.04); }
-.app-rail .rail-action:active { transform: translateX(2px) scale(.985); }
+.app-rail .rail-action.active .rail-icon { color: #007d91; transform: scale(1.04); }
+.app-rail .rail-action:active { transform: scale(.985); }
+
+/* Native text carets stay aligned with the font metrics. */
+.app-provider .fui-Input { align-items: center; }
+.app-provider .fui-Input__input {
+  min-height: 0;
+  height: 34px;
+  padding-block: 7px;
+  line-height: 20px;
+  box-sizing: border-box;
+}
 
 .app-content > .workspace-view {
   animation: ws2-view-arrive 270ms var(--ws-ease) 35ms backwards;

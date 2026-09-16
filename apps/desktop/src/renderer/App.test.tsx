@@ -648,6 +648,10 @@ function mockServer(
         dueLabel: payload.dueAt ? "20 сент., 14:00" : "Срок не указан",
       });
     }
+    if (currentTask && options?.method === "DELETE" && /\/tasks\/[^/]+$/.test(url)) {
+      tasks = tasks.filter((item) => item.id !== currentTask.id);
+      return response(undefined);
+    }
     if (currentTask && url.endsWith("/participants") && options?.method === "PUT") {
       const payload = JSON.parse(String(options.body)) as {
         userId: string;
@@ -1391,6 +1395,25 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByText("Карточка готова к проверке")).toBeInTheDocument();
   });
 
+  it("lets an administrator delete an active task after confirmation", async () => {
+    const fetchMock = mockServer();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<App />);
+    await loginToWorkspace("malika");
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringMatching(/\/tasks\/[^/]+$/),
+        expect.objectContaining({ method: "DELETE" }),
+      );
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("creates a subtask and runs result review with a motivated return", async () => {
     const fetchMock = mockServer();
     render(<App />);
@@ -1532,11 +1555,17 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(openCard);
     expect(screen.getByRole("dialog", { name: "Заявка для доски" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Обзор" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Маршрут" }));
     expect(screen.getByText("Контроль срока")).toBeInTheDocument();
     expect(screen.getByText("Укажите срок в заявке, чтобы включить напоминания и эскалацию."))
       .toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Обзор" }));
     expect(screen.getByText("Информация по заявке")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Активность" }));
     expect(screen.getByText("Ход согласования")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Файлы" }));
+    expect(screen.getByText("Основные документы")).toBeInTheDocument();
     expect(screen.queryByLabelText("Живой маршрут заявки")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
 

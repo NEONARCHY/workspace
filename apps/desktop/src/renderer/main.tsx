@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
-import { WorkspaceCaret } from "./CaretGlow";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
 import "./responsive.css";
@@ -40,6 +39,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><App /><WorkspaceCaret /></RecoveryBoundary>
+    <RecoveryBoundary><App /></RecoveryBoundary>
   </StrictMode>,
 );
