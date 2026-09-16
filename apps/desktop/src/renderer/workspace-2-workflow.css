@@ -220,31 +220,6 @@
 .approvals-view .workflow-deadline-settings input { min-height: 37px; border-color: #c8d9d7; border-radius: 10px; }
 .approvals-view .workflow-deadline-settings { border-color: #d7e5e2; border-radius: 13px; background: #f1f7f5; }
 
-/* The published graph remains visible as a compact, read-only map inside a request. */
-.approvals-view .approval-detail-panel:has(.approval-journey) { grid-template-rows: auto auto auto minmax(0, 1fr); }
-.approvals-view .approval-journey { display: grid; gap: 8px; padding: 12px 18px 10px; border-bottom: 1px solid #e1ebe8; background: #f6faf9; }
-.approvals-view .approval-journey > header { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
-.approvals-view .approval-journey > header > div:first-child { display: grid; gap: 2px; }
-.approvals-view .approval-journey > header > div:first-child span { color: #4f7a7c; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .045em; }
-.approvals-view .approval-journey > header strong { color: #29495a; font-size: 13px; font-weight: 650; }
-.approvals-view .approval-journey-legend { display: flex; align-items: center; gap: 10px; }
-.approvals-view .approval-journey-legend span { display: inline-flex; align-items: center; gap: 5px; color: #607681; font-size: 10px; }
-.approvals-view .approval-journey-legend span::before { width: 7px; height: 7px; border-radius: 50%; background: #c5d1d1; content: ""; }
-.approvals-view .approval-journey-legend .complete::before { background: #79ad86; }
-.approvals-view .approval-journey-legend .current::before { background: #008ca1; box-shadow: 0 0 0 3px rgb(0 145 168 / 12%); }
-.approvals-view .approval-journey-map { height: 210px; overflow: hidden; border: 1px solid #e1ebe8; border-radius: 16px; background: #edf5f3; }
-.approvals-view .approval-journey-map .react-flow__node { width: 175px !important; }
-.approvals-view .approval-journey-map .workflow-object-node { min-height: 82px; }
-.approvals-view .approval-journey-map .journey-complete .workflow-object-node { border-color: #b8d6bf; background: #f1f8f2; }
-.approvals-view .approval-journey-map .journey-current .workflow-object-node { border-color: #008ca1; background: #f5fcfc; box-shadow: 0 0 0 3px rgb(0 145 168 / 12%); }
-.approvals-view .approval-journey-map .journey-waiting .workflow-object-node { opacity: .72; }
-.approvals-view .approval-journey-map .journey-edge-current .react-flow__edge-path { stroke: #008ca1; stroke-width: 2.2; }
-.approvals-view .approval-journey > p { margin: 0; color: #667d86; font-size: 10px; line-height: 1.4; }
-
-@container workspace (min-width: 1050px) {
-  .approvals-view .approval-detail-panel:has(.approval-journey) { width: min(1060px, 86%); }
-}
-
 @container workspace (max-width: 1180px) {
   .approvals-view .workflow-layout { grid-template-columns: 210px minmax(390px, 1fr); }
   .approvals-view .workflow-canvas-legend { display: none; }
@@ -261,23 +236,17 @@
 }
 
 @container workspace (max-width: 610px) {
-  .approvals-view .approval-journey > header { align-items: flex-start; flex-direction: column; }
-  .approvals-view .approval-journey-map { height: 190px; }
   .approvals-view .workflow-canvas-heading { right: 58px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .approvals-view .node-library button,
   .workflow-object-node { transition-duration: 0ms; }
-  .approvals-view .approval-journey-map .react-flow__edge.animated path { animation: none; }
 }
 
 @media (forced-colors: active) {
   .approvals-view .workflow-library,
   .approvals-view .workflow-canvas,
   .approvals-view .workflow-inspector,
-  .workflow-object-node,
-  .approvals-view .approval-journey,
-  .approvals-view .approval-journey-map { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
-  .approvals-view .approval-journey-map .journey-current .workflow-object-node { outline: 2px solid Highlight; }
+  .workflow-object-node { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
 }

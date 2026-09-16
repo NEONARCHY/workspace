@@ -94,7 +94,6 @@ interface ApprovalsViewProps {
   readonly people: readonly WorkspacePerson[];
   readonly positions: readonly WorkflowPosition[];
   readonly requests: readonly ApprovalRequestSummary[];
-  readonly requestWorkflows?: readonly WorkflowDefinition[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition;
   readonly onSaveWorkflow: (workflow: WorkflowDefinition) => void | Promise<void>;
@@ -225,13 +224,6 @@ const kindLabels: Readonly<Record<ApprovalNodeKind, string>> = {
   parallel: "Параллельные ветки",
   correction: "Доработка",
   end: "Завершение",
-};
-
-const roleLabels: Readonly<Record<string, string>> = {
-  manager: "Руководитель",
-  admin: "Администратор",
-  superadmin: "Суперадминистратор",
-  employee: "Сотрудник",
 };
 
 function WorkflowObjectNode({ data, selected }: NodeProps<ApprovalNode>) {
@@ -524,117 +516,6 @@ function requestBoardColumn(
     ?? "";
 }
 
-function workflowAssignee(
-  node: WorkflowDefinition["nodes"][number],
-  people: readonly WorkspacePerson[],
-  positions: readonly WorkflowPosition[],
-): string {
-  const userId = typeof node.config.approverUserId === "string"
-    ? node.config.approverUserId
-    : "";
-  const positionId = typeof node.config.approverPositionId === "string"
-    ? node.config.approverPositionId
-    : "";
-  const role = typeof node.config.approverRole === "string" ? node.config.approverRole : "";
-  if (userId) return people.find((person) => person.id === userId)?.name ?? "Назначенный сотрудник";
-  if (positionId) {
-    return positions.find((position) => position.id === positionId)?.name ?? "Назначенная должность";
-  }
-  if (role) return roleLabels[role] ?? role;
-  if (node.kind === "start") return "Инициатор заявки";
-  if (node.kind === "condition") return "Автоматическое правило";
-  if (node.kind === "parallel") {
-    return node.config.decisionMode === "any" ? "Достаточно одной ветви" : "Нужны все ветви";
-  }
-  return "По правилам маршрута";
-}
-
-interface ApprovalJourneyProps {
-  readonly request: ApprovalRequestSummary;
-  readonly workflow?: WorkflowDefinition;
-  readonly people: readonly WorkspacePerson[];
-  readonly positions: readonly WorkflowPosition[];
-}
-
-function ApprovalJourney({ request, workflow, people, positions }: ApprovalJourneyProps) {
-  if (workflow === undefined) return null;
-  const completedKeys = new Set(
-    request.actions
-      .filter((action) => ["approve", "resubmit"].includes(action.action))
-      .map((action) => action.nodeKey),
-  );
-  const finalColumn = requestBoardColumn(
-    request,
-    workflow.nodes.map((node) => ({ key: node.id, label: node.label, kind: node.kind })),
-  );
-  const journeyNodes: ApprovalNode[] = workflow.nodes.map((node) => {
-    const isCurrent = request.activeNodeKeys.includes(node.id)
-      || request.activeStages.some((stage) => stage.key === node.id)
-      || (["approved", "rejected", "cancelled"].includes(request.status) && node.id === finalColumn);
-    const isComplete = node.kind === "start" || completedKeys.has(node.id);
-    const journeyState = isCurrent ? "current" : isComplete ? "complete" : "waiting";
-    const currentStage = request.activeStages.find((stage) => stage.key === node.id);
-    const statusText = isCurrent
-      ? currentStage?.canAct ? "Ждёт вашего решения" : "Сейчас выполняется"
-      : isComplete ? "Подтверждено историей" : node.kind === "condition"
-        ? "Выбор ветви по данным заявки" : "Следующий возможный этап";
-    return {
-      id: node.id,
-      type: "approvalObject",
-      position: { x: node.positionX * 0.76, y: node.positionY * 0.8 },
-      data: {
-        ...node.config,
-        label: node.label,
-        kind: node.kind,
-        detail: node.detail,
-        journeyState,
-        statusText,
-        assignee: workflowAssignee(node, people, positions),
-      },
-      className: `workflow-node node-${node.kind} journey-${journeyState}`,
-    };
-  });
-  const journeyEdges = flowEdges(workflow).map((edge) => ({
-    ...edge,
-    animated: request.activeNodeKeys.includes(edge.target),
-    className: request.activeNodeKeys.includes(edge.target) ? "journey-edge-current" : "",
-  }));
-  return (
-    <section className="approval-journey" aria-label="Живой маршрут заявки">
-      <header>
-        <div>
-          <span>Живой маршрут</span>
-          <strong>{request.activeStages.length > 1 ? `${request.activeStages.length} этапа идут параллельно` : request.stageLabel}</strong>
-        </div>
-        <div className="approval-journey-legend" aria-label="Обозначения маршрута">
-          <span className="complete">Пройдено</span>
-          <span className="current">Сейчас</span>
-          <span>Дальше</span>
-        </div>
-      </header>
-      <div className="approval-journey-map" aria-label={`Карта маршрута заявки ${request.number}`}>
-        <ReactFlow
-          nodes={journeyNodes}
-          edges={journeyEdges}
-          nodeTypes={workflowNodeTypes}
-          nodesDraggable={false}
-          nodesConnectable={false}
-          elementsSelectable={false}
-          zoomOnDoubleClick={false}
-          fitView
-          fitViewOptions={{ padding: 0.22, maxZoom: 0.9 }}
-          minZoom={0.35}
-          maxZoom={1.1}
-          proOptions={{ hideAttribution: true }}
-        >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#d8e4e2" />
-        </ReactFlow>
-      </div>
-      <p>Статусы «Пройдено» основаны только на подтверждённой истории действий. Остальные блоки показывают возможное продолжение опубликованного маршрута.</p>
-    </section>
-  );
-}
-
 function requestConditionValue(request: ApprovalRequestSummary, field: string): unknown {
   if (field === "amount") return request.amount;
   if (field === "currency") return request.currency;
@@ -923,7 +804,6 @@ export function ApprovalsView({
   people,
   positions,
   requests,
-  requestWorkflows = [],
   attachments,
   workflow,
   onSaveWorkflow,
@@ -1838,16 +1718,6 @@ export function ApprovalsView({
                     </span>
                   ))}
                 </div>
-
-                <ApprovalJourney
-                  request={selectedRequest}
-                  workflow={
-                    requestWorkflows.find((candidate) => candidate.id === selectedRequest.workflowId)
-                    ?? workflow
-                  }
-                  people={people}
-                  positions={positions}
-                />
 
                 <div className="approval-detail-content" role="region" tabIndex={0} aria-label="Содержимое карточки заявки">
                   <section className="approval-detail-facts" role="region" tabIndex={0} aria-label="Сведения о заявке">

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import { Button, Field, Input } from "@fluentui/react-components";
 import { Eye24Regular, EyeOff24Regular } from "@fluentui/react-icons";
+import { AuthWaves } from "./AuthWaves";
 import { CompanyLogo } from "./CompanyLogo";
 
 interface LoginViewProps {
@@ -59,10 +60,12 @@ export function LoginView({
 
   return (
     <main className="auth-screen">
+      <AuthWaves />
       <section className="auth-intro">
-        <CompanyLogo tone="white" className="auth-brand" />
-        <p className="auth-kicker">Yuksalish Workspace</p>
-        <h1>Работа компании в одном защищённом пространстве</h1>
+        <CompanyLogo tone="color" className="auth-brand" />
+        <p className="auth-kicker">Workspace</p>
+        <h1>Рабочее пространство команды</h1>
+        <p className="auth-minimal-copy">Войдите, чтобы продолжить работу.</p>
         {showDemoCredentials ? (
           <div className="auth-security-note">
             <strong>Локальная alpha</strong>
@@ -73,9 +76,10 @@ export function LoginView({
       </section>
 
       <section className="auth-card" aria-label="Вход в Yuksalish Workspace">
-        <div className="auth-mode-switch">
+        <div className="auth-mode-switch" aria-label="Способ входа">
           <button
             type="button"
+            aria-pressed={mode === "login"}
             className={mode === "login" ? "active" : ""}
             onClick={() => setMode("login")}
           >
@@ -83,6 +87,7 @@ export function LoginView({
           </button>
           <button
             type="button"
+            aria-pressed={mode === "invitation"}
             className={mode === "invitation" ? "active" : ""}
             onClick={() => setMode("invitation")}
           >
@@ -90,6 +95,7 @@ export function LoginView({
           </button>
           <button
             type="button"
+            aria-pressed={mode === "recovery"}
             className={mode === "recovery" ? "active" : ""}
             onClick={() => setMode("recovery")}
           >
@@ -97,9 +103,9 @@ export function LoginView({
           </button>
         </div>
 
-        <form onSubmit={submit}>
+        <form id="auth-form" aria-labelledby="auth-form-heading" onSubmit={submit}>
           <div>
-            <h2>
+            <h2 id="auth-form-heading">
               {mode === "login"
                 ? "Добро пожаловать"
                 : mode === "invitation"
@@ -183,6 +189,8 @@ export function LoginView({
           <Button
             type="submit"
             appearance="primary"
+            className={`auth-submit${busy ? " is-pending" : ""}`}
+            aria-busy={busy}
             disabled={
               busy ||
               !password ||

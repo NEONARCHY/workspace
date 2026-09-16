@@ -41,4 +41,13 @@ describe("Company branding", () => {
     fireEvent.click(screen.getByRole("button", { name: "Скрыть пароль" }));
     expect(password).toHaveAttribute("type", "password");
   });
+
+  it("shows the real pending state while sign-in is being checked", () => {
+    render(<LoginView busy onLogin={vi.fn()} onAcceptInvitation={vi.fn()} onCompletePasswordReset={vi.fn()} />);
+
+    const submit = screen.getByRole("button", { name: "Проверяем…" });
+    expect(submit).toBeDisabled();
+    expect(submit).toHaveAttribute("aria-busy", "true");
+    expect(submit).toHaveClass("auth-submit", "is-pending");
+  });
 });

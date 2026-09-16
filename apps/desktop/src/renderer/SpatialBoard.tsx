@@ -1,10 +1,15 @@
-import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type KeyboardCoordinateGetter, type DropAnimation } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ReOrderDotsVertical20Regular } from "@fluentui/react-icons";
 
 interface CardRecord { node: HTMLElement; content: ReactNode; className: string; label: string; lane: string }
+interface DropTransaction {
+  readonly id: string;
+  readonly lane: string;
+  outcome: "pending" | "confirmed" | "rejected";
+}
 interface BoardContext {
   cards: Map<string, CardRecord>;
   positions: Map<string, DOMRect>;
@@ -12,6 +17,7 @@ interface BoardContext {
   over: string | null;
   pending: boolean;
   pendingId: string | null;
+  arrivingId: string | null;
   canDrop: (id: string, lane: string) => boolean;
 }
 const Context = createContext<BoardContext | null>(null);
@@ -46,44 +52,111 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
   const [over, setOver] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [arrivingId, setArrivingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
+  const drop = useRef<DropTransaction | null>(null);
+  const arrivalTimer = useRef(0);
+  const releaseTimer = useRef(0);
   const [preview, setPreview] = useState<CardRecord | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }));
   const reset = () => { setActive(null); setOver(null); };
+  const release = (transaction: DropTransaction) => {
+    if (drop.current !== transaction) return;
+    window.clearTimeout(arrivalTimer.current);
+    window.clearTimeout(releaseTimer.current);
+    if (transaction.outcome === "confirmed") {
+      setArrivingId(transaction.id);
+      arrivalTimer.current = window.setTimeout(() => {
+        setArrivingId((current) => current === transaction.id ? null : current);
+      }, 220);
+    }
+    lock.current = false;
+    setPending(false);
+    setPendingId(null);
+    drop.current = null;
+  };
+  useEffect(() => () => {
+    window.clearTimeout(arrivalTimer.current);
+    window.clearTimeout(releaseTimer.current);
+  }, []);
   const finish = ({ active: picked, over: target }: DragEndEvent) => {
     const id = String(picked.id), lane = target ? String(target.id) : null;
-    reset();
-    if (lock.current || !lane || !canDrop(id, lane)) return;
-    lock.current = true; setPending(true); setPendingId(id); setNotice("Сохраняем переход…");
-    transition.current = Promise.resolve().then(() => onMove(id, lane)).then(() => {
-      setNotice("Данные доски обновлены. Текущий этап указан на карточке.");
-    }).catch(() => { setNotice("Переход не подтверждён. Проверьте состояние карточки перед повтором."); }).finally(() => {
-      // Network state must not depend on an optional animation completing (or even mounting).
-      lock.current = false; setPending(false); setPendingId(null);
+    if (lock.current || !lane || !canDrop(id, lane)) {
+      drop.current = { id, lane: "", outcome: "rejected" };
+      reset();
+      return;
+    }
+    const transaction: DropTransaction = { id, lane, outcome: "pending" };
+    // Assign the promise before DnD removes the active overlay. This avoids a
+    // frame where the source reappears while the protected mutation is pending.
+    drop.current = transaction;
+    lock.current = true;
+    setPending(true);
+    setPendingId(id);
+    setNotice("Сохраняем переход…");
+    transition.current = Promise.resolve().then(() => onMove(id, lane)).then(
+      () => {
+        transaction.outcome = "confirmed";
+        setNotice("Данные доски обновлены. Текущий этап указан на карточке.");
+      },
+      () => {
+        transaction.outcome = "rejected";
+        setNotice("Переход не подтверждён. Проверьте состояние карточки перед повтором.");
+      },
+    );
+    // Browsers settle through DragOverlay. This only releases state if a
+    // browser cannot mount that overlay (for example JSDOM or a recovering
+    // renderer), after the normal landing window has elapsed.
+    void transition.current.then(() => {
+      releaseTimer.current = window.setTimeout(() => release(transaction), 380);
     });
+    reset();
   };
   const settle: DropAnimation = async ({ active: picked, dragOverlay, transform }) => {
     let destinationVisibility: Animation | undefined;
+    const transaction = drop.current;
+    const settleAtSource = async () => {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !dragOverlay.node.animate) return;
+      dragOverlay.node.classList.add("is-settling");
+      const animation = dragOverlay.node.animate([
+        { transform: CSS.Transform.toString(transform) },
+        { transform: CSS.Transform.toString({ ...transform, x: 0, y: 0, scaleX: 1, scaleY: 1 }) },
+      ], { duration: 210, easing: "cubic-bezier(.22,.8,.22,1)", fill: "forwards" });
+      await animation.finished.catch(() => undefined);
+    };
     try {
+      if (!transaction || transaction.id !== String(picked.id)) return;
       await transition.current;
-      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      if (transaction.outcome !== "confirmed") {
+        await settleAtSource();
+        return;
+      }
       const destinationNode = cards.get(String(picked.id))?.node;
       const destination = destinationNode?.getBoundingClientRect();
-      if (destination && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && dragOverlay.node.animate) {
+      const destinationLane = destinationNode?.closest<HTMLElement>("[data-spatial-lane]")?.dataset.spatialLane;
+      if (destination && destinationLane === transaction.lane && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && dragOverlay.node.animate) {
         destinationVisibility = destinationNode?.animate?.([{ opacity: 0 }, { opacity: 0 }], { duration: 260, fill: "forwards" });
+        dragOverlay.node.classList.add("is-settling");
         const animation = dragOverlay.node.animate([
           { transform: CSS.Transform.toString(transform) },
           { transform: CSS.Transform.toString({ ...transform, x: transform.x + destination.left - dragOverlay.rect.left, y: transform.y + destination.top - dragOverlay.rect.top, scaleX: 1, scaleY: 1 }) },
-        ], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)", fill: "forwards" });
+        ], { duration: 260, easing: "cubic-bezier(.22,.8,.22,1)", fill: "forwards" });
         await animation.finished.catch(() => undefined);
+      } else {
+        await settleAtSource();
       }
-    } finally { destinationVisibility?.cancel(); }
+    } finally {
+      destinationVisibility?.cancel();
+      dragOverlay.node.classList.remove("is-settling");
+      if (transaction) release(transaction);
+    }
   };
-  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, canDrop }}>
+  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, arrivingId, canDrop }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
-      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
+      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
         onDragStart: ({ active: picked }) => `Поднята карточка: ${cards.get(String(picked.id))?.label ?? ""}`,
@@ -93,7 +166,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick }: {
       {children}
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
       {createPortal(<DragOverlay dropAnimation={settle}>
-        {active && preview ? <div className={`spatial-drag-preview ${preview.className}`} aria-hidden="true" inert>{preview.content}</div> : null}
+        {active && preview ? <div className={`spatial-drag-preview ${preview.className}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></div> : null}
       </DragOverlay>, document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
@@ -105,7 +178,7 @@ export function SpatialLane({ id, children, className = "", ...props }: HTMLAttr
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !allowed || board.pending });
   return <section {...props} ref={setNodeRef} className={`${className} spatial-lane ${allowed ? "is-receptive" : ""} ${isOver ? "is-target" : ""}`} data-spatial-lane={id}>
     {children}
-    {isOver && allowed ? <div className="spatial-drop-marker" aria-hidden="true">Отпустите, чтобы перенести</div> : null}
+    <div className="spatial-drop-marker" aria-hidden="true">Отпустите, чтобы перенести</div>
   </section>;
 }
 
@@ -120,16 +193,16 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     movement.current?.cancel();
     const next = element.getBoundingClientRect(), previous = board.positions.get(id);
     board.positions.set(id, next);
-    if (!previous || !next.width || board.pendingId === id || board.active === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (!previous || !next.width || board.pendingId === id || board.arrivingId === id || board.active === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const x = previous.left - next.left, y = previous.top - next.top;
     if ((Math.abs(x) > 1 || Math.abs(y) > 1) && element.animate) movement.current = element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0, 0)" }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
-  }, [board.active, board.over, board.pendingId, board.positions, children, id, lane]);
+  }, [board.active, board.arrivingId, board.over, board.pendingId, board.positions, children, id, lane]);
   useLayoutEffect(() => {
     if (node.current) board.cards.set(id, { node: node.current, content: children, className, label, lane });
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
   return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${isDragging || board.pendingId === id ? "is-lifted" : ""}`} data-spatial-card={id}
+    className={`${className} spatial-card ${isDragging || board.pendingId === id ? "is-lifted" : ""} ${board.arrivingId === id ? "is-arriving" : ""}`} data-spatial-card={id}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}

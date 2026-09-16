@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
-import { CaretGlow } from "./CaretGlow";
+import { WorkspaceCaret } from "./CaretGlow";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
 import "./responsive.css";
@@ -20,6 +20,7 @@ import "./workspace-2-workflow.css";
 import "./workspace-2-projects-trips.css";
 import "./workspace-2-tasks.css";
 import "./workspace-2-interactions.css";
+import "./workspace-2-auth.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";
 import "./web-platform.css";
@@ -39,6 +40,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><App /><CaretGlow /></RecoveryBoundary>
+    <RecoveryBoundary><App /><WorkspaceCaret /></RecoveryBoundary>
   </StrictMode>,
 );

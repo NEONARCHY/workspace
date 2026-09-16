@@ -101,10 +101,11 @@
 .inline-task-form > .workspace-select:first-child { grid-column: 1 / -1; width: 100%; }
 .decision-editor > .workspace-select { grid-column: 1 / -1; }
 
-/* The custom caret is steady rather than blinking. Its short blue light follows
-   the collapsed selection; native selection remains available when text is selected. */
-.ws-caret-tracked { caret-color: transparent !important; }
-.ws-caret-mirror {
+/* The caret remains an ordinary editing affordance. A narrow, gently blinking
+   line is used only while a collapsed selection is active; selections keep the
+   native browser treatment. */
+.ws-caret-managed { caret-color: transparent !important; }
+.ws-caret-measure {
   position: fixed !important;
   z-index: -1 !important;
   top: -10000px !important;
@@ -113,7 +114,7 @@
   visibility: hidden !important;
   pointer-events: none !important;
 }
-.ws-caret-glow {
+.ws-caret-line {
   --ws-caret-x: -100px;
   --ws-caret-y: -100px;
   --ws-caret-height: 18px;
@@ -121,35 +122,23 @@
   z-index: 140;
   top: var(--ws-caret-y);
   left: var(--ws-caret-x);
-  width: 2px;
+  width: 1.5px;
   height: var(--ws-caret-height);
   border-radius: 999px;
+  background: linear-gradient(180deg, #4c94a8, #006779);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(-1px);
-  transition: opacity 130ms var(--ws-ease), transform 150ms var(--ws-ease);
+  transition: opacity 100ms var(--ws-ease);
 }
-.ws-caret-glow::before {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(180deg, #3d8fa6, #006779);
-  box-shadow: 0 0 4px rgb(72 161 190 / 28%);
-  content: "";
+.ws-caret-line.is-visible {
+  opacity: 1;
+  animation: ws-caret-office-blink 1.08s ease-in-out infinite;
 }
-.ws-caret-glow::after {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 58px;
-  height: 40px;
-  border-radius: 50%;
-  background: radial-gradient(ellipse at 20% 50%, rgb(91 178 215 / 22%), rgb(91 178 215 / 8%) 38%, transparent 72%);
-  content: "";
-  opacity: .72;
-  transform: translate(-7px, -50%);
+@keyframes ws-caret-office-blink {
+  0%, 42% { opacity: 1; }
+  54%, 72% { opacity: .16; }
+  84%, 100% { opacity: 1; }
 }
-.ws-caret-glow.is-visible { opacity: 1; transform: translateX(0); }
 
 /* Navigation behaves like one moving workspace object. The active surface grows
    into place; page content follows after a short, non-blocking delay. */
@@ -216,7 +205,6 @@
     0 24px 64px -24px rgb(41 58 85 / 28%),
     inset 0 1px 0 rgb(255 255 255 / 92%);
   backdrop-filter: blur(16px) saturate(1.05);
-  animation: ws2-popup-arrive 190ms var(--ws-ease);
 }
 .fui-MenuPopover.fui-MenuPopover { min-width: 220px; padding: 7px; border-radius: 19px; }
 .fui-Listbox.fui-Listbox { min-width: min(220px, calc(100vw - 24px)); max-width: min(360px, calc(100vw - 24px)); padding: 7px; }
@@ -271,14 +259,9 @@
   box-shadow: 0 30px 90px -34px rgb(26 49 70 / 42%), inset 0 1px 0 rgb(255 255 255 / 94%);
 }
 
-@keyframes ws2-popup-arrive {
-  from { opacity: 0; transform: translateY(-5px) scale(.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .ws-caret-glow { display: none; }
-  .ws-caret-tracked { caret-color: auto !important; }
+  .ws-caret-line { display: none; }
+  .ws-caret-managed { caret-color: auto !important; }
 }
 
 @media (max-width: 720px) {
@@ -286,8 +269,8 @@
 }
 
 @media (forced-colors: active) {
-  .ws-caret-glow { display: none; }
-  .ws-caret-tracked { caret-color: auto !important; }
+  .ws-caret-line { display: none; }
+  .ws-caret-managed { caret-color: auto !important; }
   .app-provider :is(.fui-Input, .fui-Textarea, .fui-Select, .fui-Combobox, .fui-Dropdown):focus-within,
   .app-provider :is(input, textarea, select):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
   .app-rail .rail-action.active::before { border: 2px solid Highlight; background: Canvas; }

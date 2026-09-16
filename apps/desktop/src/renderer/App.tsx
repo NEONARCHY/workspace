@@ -1570,7 +1570,6 @@ export function App() {
                 people={workspace.people}
                 positions={workspace.positions}
                 requests={workspace.requests}
-                requestWorkflows={workspace.requestWorkflows ?? []}
                 attachments={workspace.attachments}
                 workflow={workspace.workflow}
                 onSaveWorkflow={handleSaveWorkflow}

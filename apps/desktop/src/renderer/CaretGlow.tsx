@@ -22,16 +22,16 @@ const mirroredProperties = [
  * A visual-only caret companion for text fields. Native selection and editing stay intact;
  * the overlay follows the collapsed selection without reading or storing field contents.
  */
-export function CaretGlow() {
-  const glowRef = useRef<HTMLDivElement>(null);
+export function WorkspaceCaret() {
+  const caretRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const glow = glowRef.current;
-    if (!glow) return;
+    const caret = caretRef.current;
+    if (!caret) return;
 
     const mirror = document.createElement("div");
     const marker = document.createElement("span");
-    mirror.className = "ws-caret-mirror";
+    mirror.className = "ws-caret-measure";
     marker.textContent = "\u200b";
     mirror.append(marker);
     document.body.append(mirror);
@@ -42,9 +42,9 @@ export function CaretGlow() {
 
     const hide = () => {
       window.clearTimeout(revealTimer);
-      active?.classList.remove("ws-caret-tracked");
+      active?.classList.remove("ws-caret-managed");
       active = undefined;
-      glow.classList.remove("is-visible");
+      caret.classList.remove("is-visible");
     };
 
     const position = () => {
@@ -54,8 +54,8 @@ export function CaretGlow() {
       const start = editor.selectionStart;
       const end = editor.selectionEnd;
       if (start === null || end === null || start !== end) {
-        editor.classList.remove("ws-caret-tracked");
-        glow.classList.remove("is-visible");
+        editor.classList.remove("ws-caret-managed");
+        caret.classList.remove("is-visible");
         return;
       }
 
@@ -79,17 +79,17 @@ export function CaretGlow() {
       const innerRight = rect.right - Number.parseFloat(computed.paddingRight || "0");
 
       if (x < innerLeft - 2 || x > innerRight + 2 || y < rect.top || y + lineHeight > rect.bottom + 2) {
-        editor.classList.remove("ws-caret-tracked");
-        glow.classList.remove("is-visible");
+        editor.classList.remove("ws-caret-managed");
+        caret.classList.remove("is-visible");
         return;
       }
 
-      editor.classList.add("ws-caret-tracked");
-      glow.style.setProperty("--ws-caret-x", `${Math.max(innerLeft, Math.min(x, innerRight))}px`);
-      glow.style.setProperty("--ws-caret-y", `${y}px`);
-      glow.style.setProperty("--ws-caret-height", `${Math.max(16, lineHeight)}px`);
+      editor.classList.add("ws-caret-managed");
+      caret.style.setProperty("--ws-caret-x", `${Math.max(innerLeft, Math.min(x, innerRight))}px`);
+      caret.style.setProperty("--ws-caret-y", `${y}px`);
+      caret.style.setProperty("--ws-caret-height", `${Math.max(16, lineHeight)}px`);
       window.clearTimeout(revealTimer);
-      revealTimer = window.setTimeout(() => glow.classList.add("is-visible"), 70);
+      revealTimer = window.setTimeout(() => caret.classList.add("is-visible"), 70);
     };
 
     const schedule = () => {
@@ -98,7 +98,7 @@ export function CaretGlow() {
     };
     const focusIn = (event: FocusEvent) => {
       if (!isTextEditor(event.target)) return;
-      active?.classList.remove("ws-caret-tracked");
+      active?.classList.remove("ws-caret-managed");
       active = event.target;
       schedule();
     };
@@ -133,5 +133,8 @@ export function CaretGlow() {
     };
   }, []);
 
-  return <div ref={glowRef} className="ws-caret-glow" aria-hidden="true" />;
+  return <div ref={caretRef} className="ws-caret-line" aria-hidden="true" />;
 }
+
+/** @deprecated Use WorkspaceCaret. Kept to avoid breaking renderer-only imports. */
+export const CaretGlow = WorkspaceCaret;

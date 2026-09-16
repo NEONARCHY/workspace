@@ -43,34 +43,68 @@ async function main() {
   try {
     await page.goto(origin);
     await page.evaluate(await fs.readFile(require.resolve("axe-core/axe.min.js"), "utf8"));
+    await page.locator("[data-auth-waves]").waitFor();
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector("[data-auth-waves]");
+      return canvas instanceof HTMLCanvasElement && canvas.width > 0 && canvas.height > 0;
+    });
+    const authComposition = await page.locator(".auth-screen").evaluate(element => {
+      const card = element.querySelector(".auth-card").getBoundingClientRect();
+      const intro = element.querySelector(".auth-intro").getBoundingClientRect();
+      const canvas = element.querySelector("[data-auth-waves]");
+      return {
+        cardCenterOffset: Math.round(card.left + card.width / 2 - window.innerWidth / 2),
+        introCenterOffset: Math.round(intro.left + intro.width / 2 - window.innerWidth / 2),
+        canvas: canvas instanceof HTMLCanvasElement
+          ? { width: canvas.width, height: canvas.height, motion: canvas.dataset.motion }
+          : null,
+      };
+    });
+    assert(Math.abs(authComposition.cardCenterOffset) <= 2, "the sign-in card must be centred");
+    assert(Math.abs(authComposition.introCenterOffset) <= 2, "the sign-in identity must be centred");
+    assert(authComposition.canvas && authComposition.canvas.width > 0 && authComposition.canvas.height > 0);
+    assert.equal(authComposition.canvas.motion, "active");
+    await page.screenshot({ path: path.join(output, "login-overview.png") });
     const login = page.getByRole("textbox", { name: /Логин/ });
     await login.fill("");
     await login.focus();
     await login.type("visual");
     await page.waitForTimeout(220);
-    const firstCaret = await page.locator(".ws-caret-glow").boundingBox();
+    const firstCaret = await page.locator(".ws-caret-line").boundingBox();
     assert(firstCaret && firstCaret.x > 0, "custom caret must be visible inside the login field");
     const focusedField = await login.evaluate(element => ({
       caret: getComputedStyle(element).caretColor,
       outline: getComputedStyle(element).outlineStyle,
       shellShadow: getComputedStyle(element.closest(".fui-Input")).boxShadow,
       delay: getComputedStyle(element.closest(".fui-Input")).transitionDelay,
-      glowAnimation: getComputedStyle(document.querySelector(".ws-caret-glow")).animationName,
+      caretAnimation: getComputedStyle(document.querySelector(".ws-caret-line")).animationName,
     }));
     assert.equal(focusedField.caret, "rgba(0, 0, 0, 0)");
     assert.equal(focusedField.outline, "none");
     assert.notEqual(focusedField.shellShadow, "none");
     assert.match(focusedField.delay, /0\.0[45]5?s/);
-    assert.equal(focusedField.glowAnimation, "none");
+    assert.equal(focusedField.caretAnimation, "ws-caret-office-blink");
     await login.type("-field");
     await page.waitForTimeout(120);
-    const movedCaret = await page.locator(".ws-caret-glow").boundingBox();
-    assert(movedCaret && movedCaret.x > firstCaret.x + 8, "caret light must follow the insertion point");
+    const movedCaret = await page.locator(".ws-caret-line").boundingBox();
+    assert(movedCaret && movedCaret.x > firstCaret.x + 8, "caret must follow the insertion point");
     await page.screenshot({ path: path.join(output, "login-focus.png") });
     await audit("login-focus", ".auth-screen");
     await page.getByRole("heading", { name: "Добро пожаловать" }).click();
     await page.waitForTimeout(180);
-    assert.equal(await page.locator(".ws-caret-glow").evaluate(element => getComputedStyle(element).opacity), "0");
+    assert.equal(await page.locator(".ws-caret-line").evaluate(element => getComputedStyle(element).opacity), "0");
+
+    await page.setViewportSize({ width: 1024, height: 768 });
+    const authAtTablet = await page.locator(".auth-screen").evaluate(element => ({
+      documentOverflow: document.documentElement.scrollWidth > window.innerWidth,
+      cardWidth: Math.round(element.querySelector(".auth-card").getBoundingClientRect().width),
+      logoWidth: Math.round(element.querySelector(".auth-brand").getBoundingClientRect().width),
+    }));
+    assert.equal(authAtTablet.documentOverflow, false, "the sign-in screen must not overflow at 1024px");
+    assert(authAtTablet.cardWidth <= 430 && authAtTablet.logoWidth <= 276);
+    await page.screenshot({ path: path.join(output, "login-1024.png") });
+    await audit("login-1024", ".auth-screen");
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     await login.fill("visual");
     await page.getByLabel(/Пароль/).fill("visual-only");
@@ -115,11 +149,13 @@ async function main() {
       blur: getComputedStyle(element).backdropFilter,
       background: getComputedStyle(element).backgroundImage,
       width: element.getBoundingClientRect().width,
+      animation: getComputedStyle(element).animationName,
     }));
     assert(dropdownStyle.radius >= 18);
     assert(dropdownStyle.width >= 220);
     assert.notEqual(dropdownStyle.blur, "none");
     assert.notEqual(dropdownStyle.background, "none");
+    assert.equal(dropdownStyle.animation, "none");
     await page.screenshot({ path: path.join(output, "form-dropdown.png") });
     await audit("form-dropdown", ".fui-Listbox");
     await formDropdown.getByRole("option", { name: "Сотрудник", exact: true }).click();
@@ -138,10 +174,12 @@ async function main() {
       blur: getComputedStyle(element).backdropFilter,
       background: getComputedStyle(element).backgroundImage,
       className: element.className,
+      animation: getComputedStyle(element).animationName,
     }));
     assert(menuStyle.radius >= 18);
     assert.notEqual(menuStyle.blur, "none");
     assert.notEqual(menuStyle.background, "none");
+    assert.equal(menuStyle.animation, "none");
     await page.screenshot({ path: path.join(output, "context-menu.png") });
     await audit("context-menu", ".fui-MenuPopover");
     await page.keyboard.press("Escape");
@@ -160,13 +198,13 @@ async function main() {
     await pickerSearch.focus();
     await pickerSearch.type("Бах");
     await page.waitForTimeout(120);
-    const reduced = await pickerSearch.evaluate(element => ({ caret: getComputedStyle(element).caretColor, glow: getComputedStyle(document.querySelector(".ws-caret-glow")).display }));
+    const reduced = await pickerSearch.evaluate(element => ({ caret: getComputedStyle(element).caretColor, line: getComputedStyle(document.querySelector(".ws-caret-line")).display }));
     assert.notEqual(reduced.caret, "rgba(0, 0, 0, 0)");
-    assert.equal(reduced.glow, "none");
+    assert.equal(reduced.line, "none");
 
     assert.deepEqual(violations, []);
     assert.deepEqual(errors, []);
-    await fs.writeFile(path.join(output, "results.json"), JSON.stringify({ focusedField, navState, popupStyle, dropdownStyle, menuStyle, reduced, errors, violations }, null, 2));
+    await fs.writeFile(path.join(output, "results.json"), JSON.stringify({ authComposition, authAtTablet, focusedField, navState, popupStyle, dropdownStyle, menuStyle, reduced, errors, violations }, null, 2));
     console.log(`PASS: WS2 interaction shell verified in ${output}`);
   } finally { await browser.close(); }
 }
