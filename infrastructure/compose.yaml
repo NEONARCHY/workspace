@@ -64,6 +64,12 @@ services:
 
   api:
     <<: *python-service
+    # The API remains private on `backend`, but this isolated network permits
+    # explicitly configured server-to-server integrations (such as the
+    # read-only member registry bridge) to reach their HTTPS endpoints.
+    networks:
+      - backend
+      - api-egress
     volumes:
       - desktop-updates:/workspace/var/desktop-updates
     command:
@@ -129,6 +135,7 @@ services:
 networks:
   backend:
     internal: true
+  api-egress:
   test-loopback:
   edge:
 
