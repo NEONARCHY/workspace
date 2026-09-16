@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemberDirectoryItem, MembersRegistry } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Input, Spinner } from "@fluentui/react-components";
@@ -18,6 +18,12 @@ const genderLabel: Record<string, string> = { male: "Мужской", female: "�
 const displayName = (member: MemberDirectoryItem) =>
   [member.firstName, member.lastName].filter(Boolean).join(" ") || member.username || `Член №${member.id}`;
 const dateText = (value?: string | null) => value ? new Intl.DateTimeFormat("ru-RU", { dateStyle: "medium" }).format(new Date(value)) : "—";
+
+function recentMembersStart(generatedAt?: string | null) {
+  const reference = generatedAt ? new Date(generatedAt) : new Date();
+  reference.setDate(reference.getDate() - 30);
+  return reference.toISOString().slice(0, 10);
+}
 
 function MembersRecords({ members, filterKey, onOpen }: {
   readonly members: readonly MemberDirectoryItem[];
@@ -69,6 +75,13 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [selected, setSelected] = useState<MemberDirectoryItem>();
+  const appliedDefaultPeriod = useRef(false);
+  useEffect(() => {
+    if (registry?.configured && !appliedDefaultPeriod.current) {
+      setCreatedFrom(recentMembersStart(registry.generatedAt));
+      appliedDefaultPeriod.current = true;
+    }
+  }, [registry]);
   const visible = useMemo(() => {
     if (!registry) return [];
     const needle = query.trim().toLocaleLowerCase("ru");
@@ -83,6 +96,21 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
         && (!createdTo || registered <= createdTo);
     });
   }, [createdFrom, createdTo, gender, query, regionId, registry, sphereId]);
+  const regionalRanking = useMemo(() => {
+    if (!registry) return [];
+    const regionNames = new Map(registry.regions.map((region) => [region.id, region.nameRu]));
+    const counts = new Map<number | null, number>();
+    for (const member of visible) {
+      const key = member.regionId ?? null;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([region, count]) => ({
+        region: region === null ? "Регион не указан" : regionNames.get(region) ?? "Регион не указан",
+        count,
+      }))
+      .sort((left, right) => right.count - left.count || tableCollator.compare(left.region, right.region));
+  }, [registry, visible]);
   const filtersApplied = Boolean(query || regionId !== "all" || sphereId !== "all" || gender !== "all" || createdFrom || createdTo);
   const clearFilters = () => { setQuery(""); setRegionId("all"); setSphereId("all"); setGender("all"); setCreatedFrom(""); setCreatedTo(""); };
 
@@ -93,6 +121,13 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
   return <section className="workspace-view members-view" aria-label="Работа с членами">
     <header className="section-toolbar members-toolbar"><div><h1>Работа с членами</h1><p>{registry.members.length.toLocaleString("ru-RU")} членов в реестре · данные обновляются безопасно с хостинга</p></div><div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={onRefresh}>{loading ? "Обновляем…" : "Обновить"}</Button></div></header>
     <div className="members-summary" aria-label="Сводка текущей выборки"><div><strong>{visible.length.toLocaleString("ru-RU")}</strong><span>в текущей выборке</span></div><div><strong>{new Set(visible.map((member) => member.regionId).filter(Boolean)).size}</strong><span>регионов</span></div><div><strong>{visible.filter((member) => member.status === "active").length.toLocaleString("ru-RU")}</strong><span>активных</span></div></div>
+    <section className="members-regional-ranking" aria-labelledby="members-regional-ranking-title">
+      <div className="members-ranking-heading"><div><h2 id="members-regional-ranking-title">Рейтинг регионов</h2><p>Новые члены за последние 30 дней по текущим условиям отбора.</p></div><strong>{visible.length.toLocaleString("ru-RU")}</strong></div>
+      {regionalRanking.length ? <ol className="members-ranking-list">{regionalRanking.map((item, index) => <li key={item.region}>
+        <div className="members-ranking-label"><span className="members-ranking-place">{index + 1}</span><span>{item.region}</span><strong>{item.count.toLocaleString("ru-RU")}</strong></div>
+        <div className="members-ranking-track" aria-hidden="true"><span style={{ width: `${(item.count / regionalRanking[0]!.count) * 100}%` }} /></div>
+      </li>)}</ol> : <p className="members-ranking-empty">За выбранный период новых участников пока нет.</p>}
+    </section>
     <div className="record-list-controls members-controls">
       <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск членов" placeholder="Имя, логин, телефон или Telegram ID" value={query} onChange={(_, data) => setQuery(data.value)} />
       <label>Регион<Select aria-label="Фильтр по региону" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">Все регионы</option>{registry.regions.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
