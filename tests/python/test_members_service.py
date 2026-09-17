@@ -11,7 +11,14 @@ from yuksalish_api.settings import Settings
 def test_registry_is_unconfigured_without_a_source_endpoint() -> None:
     async def exercise() -> None:
         members_service._cache = None
-        result = await members_service.load_members_registry(Settings(environment="test"))
+        # State the unconfigured case outright: a developer .env that happens to
+        # hold real integration keys must not decide what this test exercises.
+        settings = Settings(
+            environment="test",
+            members_api_url="",
+            members_integration_key=SecretStr(""),
+        )
+        result = await members_service.load_members_registry(settings)
         assert result.configured is False
         assert result.members == []
 

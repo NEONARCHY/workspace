@@ -336,7 +336,14 @@ async def test_zoom_booking_conflicts_permissions_and_recovery() -> None:
 
 @pytest.mark.anyio
 async def test_booking_is_refused_while_zoom_is_not_configured() -> None:
-    settings = Settings(environment="test")  # type: ignore[call-arg]
+    # Stated outright rather than inherited from whatever .env this machine has.
+    settings = Settings(  # type: ignore[call-arg]
+        environment="test",
+        zoom_account_id="",
+        zoom_client_id="",
+        zoom_client_secret=SecretStr(""),
+        zoom_host_user_id="",
+    )
     assert settings.zoom_configured is False
     transport = httpx.MockTransport(lambda _: httpx.Response(500))
     client = ZoomClient(settings, httpx.AsyncClient(transport=transport))

@@ -75,6 +75,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="outgoing_letters",
+        label=LocalizedLabel(
+            ru="Исходящие письма",
+            uz_cyrl="Чиқувчи хатлар",
+            uz_latn="Chiquvchi xatlar",
+        ),
+        route="/outgoing-letters",
+        status="placeholder",
+    ),
+    ModuleDescriptor(
         key="absences",
         label=LocalizedLabel(
             ru="Отсутствия",

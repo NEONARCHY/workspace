@@ -62,6 +62,7 @@ import {
   Edit16Regular,
   TaskListSquareLtr24Filled,
   TaskListSquareLtr24Regular,
+  MailArrowUp24Regular,
   Video24Regular,
 } from "@fluentui/react-icons";
 
@@ -264,6 +265,7 @@ const navItems: readonly NavItem[] = [
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
   { key: "zoom_meetings", label: "Zoom-конференции", icon: <Video24Regular /> },
+  { key: "outgoing_letters", label: "Исходящие письма", icon: <MailArrowUp24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
   { key: "members", label: "Работа с членами", icon: <PeopleTeam24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
@@ -1636,6 +1638,14 @@ export function App() {
                 error={zoomError}
                 onRefresh={() => void refreshZoom()}
                 focusMeetingId={focusTarget?.section === "zoom_meetings" ? focusTarget.entityId : undefined}
+              />
+            ) : null}
+            {displayedSection === "outgoing_letters" ? (
+              <ModulePreview
+                icon={<MailArrowUp24Regular />}
+                title="Исходящие письма"
+                evidence="Раздел закреплён в меню. Подготовка и утверждение писем подключаются вместе с серверной частью; регистрирует и отправляет письмо робот E-XAT."
+                packageLabel="Раздел готовится"
               />
             ) : null}
             {displayedSection === "messenger" ? (

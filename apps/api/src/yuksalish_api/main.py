@@ -24,6 +24,7 @@ from .routers import (
     members,
     messenger,
     modules,
+    outgoing,
     personal,
     updates,
     workspace,
@@ -137,6 +138,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     application.include_router(zoom.router, prefix=runtime_settings.api_prefix)
+    application.include_router(outgoing.router, prefix=runtime_settings.api_prefix)
     return application
 
 

@@ -54,3 +54,19 @@ def test_request_paths_map_to_server_enforced_module_actions() -> None:
         "zoom_meetings",
         "edit",
     )
+    assert request_module_action("/api/v1/outgoing-letters", "GET") == (
+        "outgoing_letters",
+        "view",
+    )
+    assert request_module_action("/api/v1/outgoing-letters", "POST") == (
+        "outgoing_letters",
+        "create",
+    )
+    assert request_module_action("/api/v1/outgoing-letters/letter-id", "PATCH") == (
+        "outgoing_letters",
+        "edit",
+    )
+    assert request_module_action("/api/v1/outgoing-letters/letter-id/approve", "POST") == (
+        "outgoing_letters",
+        "edit",
+    )

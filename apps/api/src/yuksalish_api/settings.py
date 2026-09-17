@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     zoom_reminder_minutes: int = 30
     zoom_booking_horizon_days: int = 180
     zoom_availability_cache_seconds: int = 60
+    exat_integration_key: SecretStr = SecretStr("")
+    exat_worker_id: str = "exat-robot"
     attachment_max_bytes: int = 25 * 1024 * 1024
     voice_message_max_bytes: int = 4 * 1024 * 1024
     voice_message_max_duration_ms: int = 10 * 60 * 1000
@@ -58,6 +60,11 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )
+
+    @property
+    def exat_configured(self) -> bool:
+        """The letters module stays idle until the E-XAT robot has a shared key."""
+        return bool(self.exat_integration_key.get_secret_value())
 
     @property
     def zoom_configured(self) -> bool:
