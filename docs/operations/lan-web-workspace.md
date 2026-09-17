@@ -42,6 +42,34 @@ YUKSALISH_CORS_ORIGINS=["null","https://192.168.0.119:8443"]
 .\scripts\validate-environment.ps1 -Environment production -NetworkMode lan -EnvFile .env.lan
 ```
 
+## Перезапуск API: только через LAN-файл окружения
+
+`env_file` в `infrastructure/compose.yaml` по умолчанию указывает на `../.env`, а LAN-сервер
+работает от `../.env.lan`. Значения из `env_file` запекаются в контейнер при создании, поэтому
+`docker compose up -d api` без `YUKSALISH_ENV_FILE` и без `--env-file .env.lan` пересоздаёт API
+с **другим** набором переменных. Интеграции, настроенные только в одном файле, при этом тихо
+выключаются: раздел отвечает `configured: false` и показывает заглушку, хотя сервер здоров.
+
+Оба файла должны содержать один и тот же набор интеграционных переменных
+(`YUKSALISH_MEMBERS_*`, `YUKSALISH_ZOOM_*`), даже если сервер обычно поднимается только из
+`.env.lan`. Так перезапуск из любого файла не отключает модуль.
+
+Правильная команда перезапуска — та же, что и для развёртывания:
+
+```powershell
+$env:YUKSALISH_ENV_FILE = "../.env.lan"
+docker compose --env-file .env.lan `
+  -f infrastructure\compose.yaml -f infrastructure\compose.lan.yaml `
+  up -d --wait api web gateway lan-https
+```
+
+Проверка, что контейнер получил ожидаемое окружение:
+
+```powershell
+docker inspect yuksalish-workspace-api-1 --format '{{range .Config.Env}}{{println .}}{{end}}' |
+  Select-String "YUKSALISH_MEMBERS_API_URL|YUKSALISH_ZOOM_ACCOUNT_ID"
+```
+
 ## Сборка и развёртывание web
 
 Скрипт можно запускать из любого каталога. Он не выполняет `git pull`, не создаёт NSIS, не
