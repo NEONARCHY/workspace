@@ -30,6 +30,8 @@ interface ZoomViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
+  /** Set when a reminder notification opened this section. */
+  readonly focusMeetingId?: string;
 }
 
 const SLOT_MINUTES = 15;
@@ -231,7 +233,7 @@ function BusyStrip({ availability, day, timeZone }: {
   );
 }
 
-export function ZoomView({ token, people, currentUserId }: ZoomViewProps) {
+export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomViewProps) {
   const [registry, setRegistry] = useState<ZoomMeetingsRegistry>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -259,6 +261,8 @@ export function ZoomView({ token, people, currentUserId }: ZoomViewProps) {
   }, [token]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+
+  useEffect(() => { if (focusMeetingId) setSelectedId(focusMeetingId); }, [focusMeetingId]);
 
   useEffect(() => {
     if (!draft?.date || registry?.configured !== true) return undefined;

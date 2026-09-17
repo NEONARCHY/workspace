@@ -32,6 +32,7 @@ from .routers import (
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
 from .zoom_client import ZoomClient
+from .zoom_service import materialize_zoom_reminders, recover_zoom_meetings
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -64,6 +65,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created = await materialize_due_notifications(connection)
                         created += await materialize_efficiency_digest_notifications(connection)
                         created += await materialize_sick_document_notifications(connection)
+                        created += await materialize_zoom_reminders(connection, runtime_settings)
+                    if runtime_settings.zoom_configured:
+                        # Bookings a crash or a Zoom outage left half-finished.
+                        await recover_zoom_meetings(engine, zoom_client)
                     if created:
                         await lifespan_app.state.event_bus.publish(
                             {"type": "notifications.created", "count": created}

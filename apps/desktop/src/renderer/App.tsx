@@ -230,6 +230,7 @@ const initialWorkspace: WorkspaceState = {
     tripsEnabled: true,
     calendarEnabled: true,
     absencesEnabled: true,
+    zoomEnabled: true,
     remindersEnabled: true,
   },
   attachments: [],
@@ -572,6 +573,7 @@ export function App() {
       trip: preferences.tripsEnabled,
       calendar: preferences.calendarEnabled,
       absence: preferences.absencesEnabled,
+      zoom: preferences.zoomEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -1603,6 +1605,7 @@ export function App() {
                 token={session.accessToken}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
+                focusMeetingId={focusTarget?.section === "zoom_meetings" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {displayedSection === "messenger" ? (

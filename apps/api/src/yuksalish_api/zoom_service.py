@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 import structlog
 from fastapi import HTTPException
 from sqlalchemy import delete, insert, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
@@ -33,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from .access_control import ensure_module_action
 from .auth import AuthenticatedUser
 from .settings import Settings
-from .tables import users, zoom_meeting_participants, zoom_meetings
+from .tables import users, workspace_notifications, zoom_meeting_participants, zoom_meetings
 from .zoom_client import ZoomClient, ZoomError, ZoomHostBooking
 from .zoom_schemas import (
     SLOT_MINUTES,
@@ -679,6 +680,69 @@ def upcoming_reminder_window(settings: Settings, now: datetime) -> tuple[datetim
     """Meetings whose reminder is due right now."""
     lead = timedelta(minutes=settings.zoom_reminder_minutes)
     return now, now + lead
+async def materialize_zoom_reminders(
+    connection: AsyncConnection,
+    settings: Settings,
+    current_time: datetime | None = None,
+) -> int:
+    """Remind the organizer and the invited employees once per conference."""
+    now = current_time or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    rows = await due_reminder_rows(connection, settings, now)
+    if not rows:
+        return 0
+    participants = await _participants_by_meeting(connection, [row["id"] for row in rows])
+    zone = _zone(settings)
+    created = 0
+    for row in rows:
+        recipients: list[UUID] = []
+        organizer_id = row["organizer_user_id"]
+        if organizer_id is not None:
+            recipients.append(organizer_id)
+        recipients.extend(
+            UUID(value)
+            for value in participants.get(row["id"], [])
+            if UUID(value) != organizer_id
+        )
+        if not recipients:
+            continue
+        local_start = row["starts_at"].astimezone(zone)
+        # The start time is part of the key, so a rescheduled meeting reminds again.
+        event_key = f"zoom:{row['id']}:reminder:{row['starts_at'].isoformat()}"
+        body = (
+            f"{row['topic']} · начало в {local_start:%H:%M} "
+            f"({settings.zoom_timezone.split('/')[-1]})"
+        )
+        for user_id in recipients:
+            await connection.execute(
+                pg_insert(workspace_notifications)
+                .values(
+                    id=uuid4(),
+                    user_id=user_id,
+                    event_key=event_key,
+                    kind="zoom",
+                    priority="attention",
+                    title=f"Через {settings.zoom_reminder_minutes} минут конференция Zoom",
+                    body=body[:4000],
+                    section="zoom_meetings",
+                    entity_id=row["id"],
+                    requires_action=False,
+                    is_reminder=True,
+                    occurred_at=now,
+                    read_at=None,
+                    resolved_at=None,
+                    desktop_delivered_at=None,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        workspace_notifications.c.user_id,
+                        workspace_notifications.c.event_key,
+                    ]
+                )
+            )
+        created += 1
+    return created
 
 
 async def due_reminder_rows(
@@ -714,6 +778,7 @@ __all__ = [
     "due_reminder_rows",
     "load_zoom_availability",
     "load_zoom_meetings",
+    "materialize_zoom_reminders",
     "recover_zoom_meetings",
     "reset_host_calendar_cache",
     "update_zoom_meeting",

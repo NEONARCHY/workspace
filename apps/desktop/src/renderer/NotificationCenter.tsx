@@ -19,6 +19,7 @@ import {
   CheckmarkCircle24Regular,
   Search24Regular,
   TaskListSquareLtr24Regular,
+  Video24Regular,
 } from "@fluentui/react-icons";
 
 type NotificationFilter = "attention" | "unread" | "all";
@@ -43,6 +44,7 @@ const kindLabels: Record<NotificationKind, string> = {
   trip: "Командировки",
   calendar: "Календарь",
   absence: "Отсутствия",
+  zoom: "Zoom-конференции",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -51,6 +53,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "approval") return <ApprovalsApp24Regular />;
   if (kind === "trip") return <Airplane24Regular />;
   if (kind === "absence") return <PersonAvailable24Regular />;
+  if (kind === "zoom") return <Video24Regular />;
   return <CalendarLtr24Regular />;
 }
 
@@ -131,6 +134,7 @@ export function NotificationCenter({
     ["tripsEnabled", "Командировки", "Согласование и возврат на доработку"],
     ["calendarEnabled", "Календарь", "Предстоящие встречи и события"],
     ["absencesEnabled", "Отсутствия", "Заявки, решения и больничные документы"],
+    ["zoomEnabled", "Zoom-конференции", "Напоминание перед началом конференции"],
     ["remindersEnabled", "Напоминания", "Сроки в ближайшие 24 часа"],
   ];
 
