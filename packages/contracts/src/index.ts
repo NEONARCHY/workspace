@@ -378,11 +378,24 @@ export interface MembersRegistry {
   readonly spheres: readonly MemberDirectoryReference[];
 }
 
-export type NotificationKind = "message" | "task" | "approval" | "trip" | "calendar" | "absence";
+export type NotificationKind =
+  | "message"
+  | "task"
+  | "approval"
+  | "trip"
+  | "calendar"
+  | "absence"
+  | "zoom";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
-  "messenger" | "tasks" | "payment_requests" | "trip_approvals" | "calendar" | "absences"
+  | "messenger"
+  | "tasks"
+  | "payment_requests"
+  | "trip_approvals"
+  | "calendar"
+  | "absences"
+  | "zoom_meetings"
 >;
 
 export interface WorkspaceNotification {
@@ -409,7 +422,71 @@ export interface NotificationPreferences {
   readonly tripsEnabled: boolean;
   readonly calendarEnabled: boolean;
   readonly absencesEnabled: boolean;
+  readonly zoomEnabled: boolean;
   readonly remindersEnabled: boolean;
+}
+
+export type ZoomMeetingStatus =
+  | "provisioning"
+  | "scheduled"
+  | "cancellation_pending"
+  | "cancelled"
+  | "failed";
+export type ZoomMeetingSource = "workspace" | "zoombot";
+export type ZoomBusySource = "workspace" | "external";
+
+export interface ZoomMeeting {
+  readonly id: string;
+  readonly topic: string;
+  readonly description: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly durationMinutes: number;
+  readonly status: ZoomMeetingStatus;
+  readonly source: ZoomMeetingSource;
+  readonly organizerUserId?: string | null;
+  readonly organizerName: string;
+  readonly participantIds: readonly string[];
+  /** Connection details are omitted for people outside the meeting. */
+  readonly zoomMeetingId?: string | null;
+  readonly joinUrl?: string | null;
+  readonly passcode?: string | null;
+  readonly canEdit: boolean;
+  readonly canCancel: boolean;
+}
+
+export interface ZoomMeetingInput {
+  readonly topic: string;
+  readonly description: string;
+  readonly startsAt: string;
+  readonly durationMinutes: number;
+  readonly participantIds: readonly string[];
+}
+
+export interface ZoomMeetingsRegistry {
+  readonly configured: boolean;
+  readonly timezone: string;
+  readonly reminderMinutes: number;
+  readonly bookingHorizonDays: number;
+  readonly slotMinutes: number;
+  readonly meetings: readonly ZoomMeeting[];
+}
+
+export interface ZoomBusyInterval {
+  readonly startsAt: string;
+  readonly endsAt: string;
+  readonly topic: string;
+  readonly source: ZoomBusySource;
+  readonly meetingId?: string | null;
+}
+
+export interface ZoomAvailability {
+  readonly configured: boolean;
+  readonly timezone: string;
+  readonly slotMinutes: number;
+  /** False when the Zoom host calendar could not be read: the day may be incomplete. */
+  readonly hostCalendarSynced: boolean;
+  readonly intervals: readonly ZoomBusyInterval[];
 }
 
 export type AttachmentOwnerType = "message" | "task" | "approval_request" | "absence";

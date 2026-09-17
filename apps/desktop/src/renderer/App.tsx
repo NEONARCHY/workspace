@@ -75,6 +75,7 @@ import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
+import { ZoomView } from "./ZoomView";
 import { NavigationEditor } from "./NavigationEditor";
 import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
@@ -1598,11 +1599,10 @@ export function App() {
               />
             ) : null}
             {displayedSection === "zoom_meetings" ? (
-              <ModulePreview
-                icon={<Video24Regular />}
-                title="Zoom-конференции"
-                evidence="Раздел закреплён в меню. Создание конференций подключается вместе с серверной интеграцией Zoom."
-                packageLabel="Раздел готовится"
+              <ZoomView
+                token={session.accessToken}
+                people={workspace.people}
+                currentUserId={workspace.currentUser.id}
               />
             ) : null}
             {displayedSection === "messenger" ? (

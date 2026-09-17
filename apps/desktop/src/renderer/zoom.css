@@ -1,0 +1,97 @@
+/* Zoom conferences: one shared host, so the screen reads as a single calendar
+   with a working detail panel next to it. Tokens come from design-system.css. */
+.zoom-view { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); min-height: 0; }
+.zoom-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 18px; }
+.zoom-header h1 { margin: 0; }
+.zoom-header p { max-width: 62ch; margin: 6px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+.zoom-header-actions { display: flex; flex: none; gap: 10px; }
+.zoom-error { margin: 0 24px 12px; }
+.zoom-notice { margin: 0 24px 12px; padding: 10px 12px; border-left: 3px solid var(--ws-turquoise); border-radius: 0 10px 10px 0; color: var(--ws-text); background: var(--ws-selected); font-size: 13px; }
+
+.zoom-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); min-height: 0; border-top: 1px solid var(--ws-line); }
+.zoom-list { display: grid; align-content: start; gap: 14px; min-height: 0; padding: 20px 20px 24px; overflow-y: auto; }
+.zoom-buckets { justify-self: start; display: inline-flex; gap: 4px; }
+.zoom-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.zoom-empty { margin: 0; color: var(--ws-muted); font-size: 13px; }
+
+.zoom-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; width: 100%; padding: 14px 16px; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); color: var(--ws-text); background: var(--ws-surface); text-align: left; cursor: pointer; transition: transform 140ms ease, box-shadow 160ms ease, border-color 160ms ease; }
+.zoom-row:hover { transform: translateY(-1px); border-color: var(--ws-turquoise); box-shadow: var(--ws-shadow); }
+.zoom-row:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.zoom-row.selected { border-color: var(--ws-turquoise); background: var(--ws-selected); }
+.zoom-row-time { display: grid; gap: 2px; min-width: 92px; }
+.zoom-row-time b { color: var(--ws-navy); font-size: 17px; font-variant-numeric: tabular-nums; }
+.zoom-row-time small, .zoom-row-body small { color: var(--ws-muted); font-size: 12px; }
+.zoom-row-body { display: grid; gap: 2px; min-width: 0; }
+.zoom-row-body strong { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Status is carried by the word first; colour only reinforces it. */
+.zoom-status { flex: none; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #365d7b; background: #edf4f9; }
+.zoom-status.scheduled { color: #1f6b52; background: #e6f5ee; }
+.zoom-status.provisioning { color: #725516; background: #fff6df; }
+.zoom-status.cancellation_pending { color: #725516; background: #fff6df; }
+.zoom-status.cancelled { color: #7e3540; background: #fcedef; }
+.zoom-status.failed { color: #7e3540; background: #fcedef; }
+
+.zoom-side { min-width: 0; min-height: 0; padding: 20px; overflow-y: auto; border-left: 1px solid var(--ws-line); background: var(--ws-muted-surface); scrollbar-gutter: stable; }
+.zoom-side:focus { outline: none; }
+.zoom-side-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.zoom-side-nav > span { color: var(--ws-link); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.zoom-detail h2 { margin: 0; color: var(--ws-navy); font-size: 20px; line-height: 1.2; }
+.zoom-detail-time { margin: 6px 0 14px; color: var(--ws-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.zoom-detail-text { margin: 0 0 12px; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.zoom-organizer { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.zoom-organizer span { display: grid; }
+.zoom-organizer strong { font-size: 13px; font-weight: 600; }
+.zoom-organizer small { color: var(--ws-muted); font-size: 12px; }
+.zoom-connection { display: grid; gap: 8px; margin: 0 0 16px; padding: 14px; border-radius: 14px; background: var(--ws-surface); }
+.zoom-connection div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.zoom-connection dt { color: var(--ws-muted); font-size: 12px; }
+.zoom-connection dd { margin: 0; }
+.zoom-mono { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
+.zoom-detail-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.zoom-confirm { margin-top: 16px; padding: 14px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
+.zoom-confirm p { margin: 0 0 12px; font-size: 13px; line-height: 1.5; }
+.zoom-confirm div { display: flex; gap: 8px; }
+
+.zoom-form { display: grid; gap: 14px; }
+.zoom-field { display: grid; gap: 6px; font-size: 13px; color: var(--ws-muted); }
+.zoom-field-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 140px); gap: 12px; }
+.zoom-durations, .zoom-participants { margin: 0; padding: 0; border: 0; }
+.zoom-durations legend, .zoom-participants legend { padding: 0 0 6px; color: var(--ws-muted); font-size: 13px; }
+.zoom-duration-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.zoom-duration-chips button { min-height: 32px; padding: 0 14px; border: 1px solid var(--ws-control-line); border-radius: 999px; color: var(--ws-text); background: var(--ws-surface); font-size: 13px; font-weight: 600; cursor: pointer; }
+.zoom-duration-chips button:hover { border-color: var(--ws-turquoise); }
+.zoom-duration-chips button.active { border-color: var(--ws-turquoise); color: var(--ws-link); background: var(--ws-selected); }
+.zoom-duration-chips button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.zoom-participant-list { display: grid; gap: 2px; max-height: 190px; padding: 8px 10px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: var(--ws-radius-control); background: var(--ws-surface); }
+.zoom-form-actions { display: flex; gap: 8px; }
+
+/* The busy strip answers one question while picking a time: is the host free? */
+.zoom-strip { display: grid; gap: 6px; padding: 12px 14px; border-radius: 14px; background: var(--ws-surface); }
+.zoom-strip-track { position: relative; height: 12px; border-radius: 999px; background: #e7eef3; overflow: hidden; }
+.zoom-strip-busy { position: absolute; top: 0; bottom: 0; min-width: 3px; border-radius: 999px; background: var(--ws-turquoise); }
+.zoom-strip-busy.external { background: #8ca7ba; }
+.zoom-strip-scale { display: flex; justify-content: space-between; color: var(--ws-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.zoom-strip-legend { display: grid; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12px; }
+.zoom-strip-legend li { display: flex; flex-wrap: wrap; gap: 8px; color: var(--ws-text); }
+.zoom-strip-legend b { font-variant-numeric: tabular-nums; }
+.zoom-strip-legend span { color: var(--ws-muted); overflow-wrap: anywhere; }
+.zoom-strip-legend em { color: var(--ws-muted); font-style: normal; }
+.zoom-strip-free { color: var(--ws-muted); }
+.zoom-strip-warning { margin: 4px 0 0; color: #725516; font-size: 12px; }
+
+.zoom-placeholder, .zoom-hint { display: grid; place-content: center; justify-items: center; gap: 10px; padding: 48px 24px; text-align: center; }
+.zoom-hint { color: var(--ws-muted); font-size: 13px; }
+.zoom-hint svg, .zoom-unconfigured svg { width: 32px; height: 32px; color: var(--ws-turquoise); }
+.zoom-unconfigured h1 { margin: 0; }
+.zoom-unconfigured p { max-width: 52ch; margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+
+@media (width <= 1100px) {
+  .zoom-split { grid-template-columns: minmax(0, 1fr); }
+  .zoom-side { border-left: 0; border-top: 1px solid var(--ws-line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zoom-row { transition: none; }
+  .zoom-row:hover { transform: none; }
+}
