@@ -241,7 +241,10 @@ export function ZoomView({
   token, people, currentUserId, registry, loading, error, onRefresh, focusMeetingId,
 }: ZoomViewProps) {
   const [actionError, setActionError] = useState("");
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(focusMeetingId);
+  // The upcoming/past boundary is taken once per mount: a list that silently
+  // reshuffles itself mid-render would move rows under the pointer.
+  const [openedAt] = useState(Date.now);
   const [bucket, setBucket] = useState<"upcoming" | "past">("upcoming");
   const [draft, setDraft] = useState<Draft>();
   const [availability, setAvailability] = useState<ZoomAvailability>();
@@ -251,8 +254,6 @@ export function ZoomView({
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const sideRef = useRef<HTMLElement>(null);
   const timeZone = registry?.timezone ?? "Asia/Tashkent";
-
-  useEffect(() => { if (focusMeetingId) setSelectedId(focusMeetingId); }, [focusMeetingId]);
 
   useEffect(() => {
     if (!draft?.date || registry?.configured !== true) return undefined;
@@ -265,17 +266,15 @@ export function ZoomView({
   }, [draft?.date, registry?.configured, token]);
 
   const meetings = useMemo(() => registry?.meetings ?? [], [registry]);
-  const visible = useMemo(() => {
-    const now = Date.now();
-    return meetings
-      .filter((meeting) => meeting.status !== "failed")
-      .filter((meeting) => (bucket === "upcoming"
-        ? new Date(meeting.endsAt).getTime() >= now && meeting.status !== "cancelled"
-        : new Date(meeting.endsAt).getTime() < now || meeting.status === "cancelled"))
-      .sort((left, right) => (bucket === "upcoming"
-        ? new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()
-        : new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime()));
-  }, [bucket, meetings]);
+  const visible = useMemo(() => meetings
+    .filter((meeting) => meeting.status !== "failed")
+    .filter((meeting) => (bucket === "upcoming"
+      ? new Date(meeting.endsAt).getTime() >= openedAt && meeting.status !== "cancelled"
+      : new Date(meeting.endsAt).getTime() < openedAt || meeting.status === "cancelled"))
+    .sort((left, right) => (bucket === "upcoming"
+      ? new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()
+      : new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime())),
+  [bucket, meetings, openedAt]);
   const selected = meetings.find((meeting) => meeting.id === selectedId);
 
   const copy = async (text: string, confirmation: string) => {

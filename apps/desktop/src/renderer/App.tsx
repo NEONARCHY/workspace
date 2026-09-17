@@ -1627,6 +1627,7 @@ export function App() {
             ) : null}
             {displayedSection === "zoom_meetings" ? (
               <ZoomView
+                key={focusTarget?.revision}
                 token={session.accessToken}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
