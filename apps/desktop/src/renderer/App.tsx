@@ -61,6 +61,7 @@ import {
   Edit16Regular,
   TaskListSquareLtr24Filled,
   TaskListSquareLtr24Regular,
+  Video24Regular,
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
@@ -258,6 +259,7 @@ const navItems: readonly NavItem[] = [
     icon: <Chat24Regular />,
   },
   { key: "calendar", label: "Календарь", icon: <CalendarLtr24Regular /> },
+  { key: "zoom_meetings", label: "Zoom-конференции", icon: <Video24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
   { key: "members", label: "Работа с членами", icon: <PeopleTeam24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
@@ -1593,6 +1595,14 @@ export function App() {
                 title="CRM"
                 evidence="CRM пока не используется. Этот раздел сохранён в меню; рабочие задачи, проекты и согласования доступны в своих разделах."
                 packageLabel="Раздел отложен"
+              />
+            ) : null}
+            {displayedSection === "zoom_meetings" ? (
+              <ModulePreview
+                icon={<Video24Regular />}
+                title="Zoom-конференции"
+                evidence="Раздел закреплён в меню. Создание конференций подключается вместе с серверной интеграцией Zoom."
+                packageLabel="Раздел готовится"
               />
             ) : null}
             {displayedSection === "messenger" ? (

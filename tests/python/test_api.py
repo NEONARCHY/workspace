@@ -54,6 +54,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "trip_approvals",
         "messenger",
         "calendar",
+        "zoom_meetings",
         "absences",
         "members",
         "employees",

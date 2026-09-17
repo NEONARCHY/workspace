@@ -9,6 +9,7 @@ export const moduleKeys = [
   "members",
   "messenger",
   "calendar",
+  "zoom_meetings",
   "employees",
 ] as const;
 

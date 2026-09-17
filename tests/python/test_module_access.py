@@ -44,3 +44,13 @@ def test_request_paths_map_to_server_enforced_module_actions() -> None:
         "payment_requests",
         "admin",
     )
+    assert request_module_action("/api/v1/zoom-meetings", "GET") == ("zoom_meetings", "view")
+    assert request_module_action("/api/v1/zoom-meetings/availability", "GET") == (
+        "zoom_meetings",
+        "view",
+    )
+    assert request_module_action("/api/v1/zoom-meetings", "POST") == ("zoom_meetings", "create")
+    assert request_module_action("/api/v1/zoom-meetings/meeting-id/cancel", "POST") == (
+        "zoom_meetings",
+        "edit",
+    )
