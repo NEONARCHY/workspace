@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   WorkspacePerson,
@@ -22,7 +22,6 @@ import {
   cancelZoomMeeting,
   createZoomMeeting,
   loadZoomAvailability,
-  loadZoomMeetings,
   updateZoomMeeting,
 } from "./workspace-api";
 
@@ -30,6 +29,11 @@ interface ZoomViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
+  /** Owned by App so the calendar shows the same schedule. */
+  readonly registry?: ZoomMeetingsRegistry;
+  readonly loading: boolean;
+  readonly error?: string;
+  readonly onRefresh: () => void | Promise<void>;
   /** Set when a reminder notification opened this section. */
   readonly focusMeetingId?: string;
 }
@@ -233,10 +237,10 @@ function BusyStrip({ availability, day, timeZone }: {
   );
 }
 
-export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomViewProps) {
-  const [registry, setRegistry] = useState<ZoomMeetingsRegistry>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+export function ZoomView({
+  token, people, currentUserId, registry, loading, error, onRefresh, focusMeetingId,
+}: ZoomViewProps) {
+  const [actionError, setActionError] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
   const [bucket, setBucket] = useState<"upcoming" | "past">("upcoming");
   const [draft, setDraft] = useState<Draft>();
@@ -247,20 +251,6 @@ export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomV
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const sideRef = useRef<HTMLElement>(null);
   const timeZone = registry?.timezone ?? "Asia/Tashkent";
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      setRegistry(await loadZoomMeetings(token));
-      setError("");
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось загрузить конференции");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => { void refresh(); }, [refresh]);
 
   useEffect(() => { if (focusMeetingId) setSelectedId(focusMeetingId); }, [focusMeetingId]);
 
@@ -330,7 +320,7 @@ export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomV
       setDraft(undefined);
       setSelectedId(saved.id);
       setFormError("");
-      await refresh();
+      await onRefresh();
     } catch (reason) {
       setFormError(reason instanceof Error ? reason.message : "Не удалось сохранить конференцию");
     } finally {
@@ -343,11 +333,12 @@ export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomV
     setBusy(true);
     try {
       await cancelZoomMeeting(token, selected.id);
+      setActionError("");
       setConfirmingCancel(false);
       setNotice("Конференция отменена, ссылка больше не работает.");
-      await refresh();
+      await onRefresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось отменить конференцию");
+      setActionError(reason instanceof Error ? reason.message : "Не удалось отменить конференцию");
     } finally {
       setBusy(false);
     }
@@ -393,7 +384,7 @@ export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomV
             appearance="subtle"
             icon={<ArrowClockwise20Regular />}
             disabled={loading}
-            onClick={() => void refresh()}
+            onClick={() => void onRefresh()}
           >
             Обновить
           </Button>
@@ -407,7 +398,9 @@ export function ZoomView({ token, people, currentUserId, focusMeetingId }: ZoomV
         </div>
       </header>
 
-      {error ? <div className="auth-error zoom-error" role="alert">{error}</div> : null}
+      {error || actionError ? (
+        <div className="auth-error zoom-error" role="alert">{actionError || error}</div>
+      ) : null}
       {notice ? <p className="zoom-notice" role="status">{notice}</p> : null}
 
       <div className="zoom-split">

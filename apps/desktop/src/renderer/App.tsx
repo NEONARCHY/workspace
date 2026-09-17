@@ -14,6 +14,7 @@ import type {
   EffectiveModuleAccess,
   MessageReactionEmoji,
   MembersRegistry,
+  ZoomMeetingsRegistry,
   FeedPost,
   NotificationPreferences,
   NavigationKey,
@@ -123,6 +124,7 @@ import {
   loadWorkspace,
   loadWorkspaceEfficiency,
   loadMembersRegistry,
+  loadZoomMeetings,
   login,
   logout,
   markAllWorkspaceNotificationsRead,
@@ -321,6 +323,9 @@ export function App() {
   const [membersRegistry, setMembersRegistry] = useState<MembersRegistry>();
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string>();
+  const [zoomRegistry, setZoomRegistry] = useState<ZoomMeetingsRegistry>();
+  const [zoomLoading, setZoomLoading] = useState(false);
+  const [zoomError, setZoomError] = useState<string>();
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -456,10 +461,30 @@ export function App() {
     }
   }, [membersLoading, session]);
 
+  const refreshZoom = useCallback(async () => {
+    if (!session) return;
+    setZoomLoading(true);
+    try {
+      setZoomRegistry(await loadZoomMeetings(session.accessToken));
+      setZoomError(undefined);
+    } catch (error) {
+      setZoomError(error instanceof Error ? error.message : "Не удалось загрузить конференции.");
+    } finally {
+      setZoomLoading(false);
+    }
+  }, [session]);
+
   useEffect(() => {
     if (!workspacePlatform.onDesktopUpdateStatus) return;
     return workspacePlatform.onDesktopUpdateStatus(setUpdateStatus);
   }, []);
+
+  useEffect(() => {
+    // The calendar shows conferences too, so both sections need the schedule.
+    if (activeSection !== "zoom_meetings" && activeSection !== "calendar") return undefined;
+    const timer = window.setTimeout(() => void refreshZoom(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeSection, refreshZoom]);
 
   useEffect(() => {
     if (activeSection !== "members" || membersRegistry || membersError) return undefined;
@@ -1605,6 +1630,10 @@ export function App() {
                 token={session.accessToken}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
+                registry={zoomRegistry}
+                loading={zoomLoading}
+                error={zoomError}
+                onRefresh={() => void refreshZoom()}
                 focusMeetingId={focusTarget?.section === "zoom_meetings" ? focusTarget.entityId : undefined}
               />
             ) : null}
@@ -1733,6 +1762,11 @@ export function App() {
               <CalendarView
                 key={focusTarget?.revision}
                 events={workspace.calendarEvents}
+                zoomMeetings={zoomRegistry?.meetings}
+                onOpenZoomMeeting={(meetingId) => {
+                  setFocusTarget((current) => ({ section: "zoom_meetings", entityId: meetingId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("zoom_meetings");
+                }}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateCalendarEvent}

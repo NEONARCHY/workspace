@@ -95,3 +95,8 @@
   .zoom-row { transition: none; }
   .zoom-row:hover { transform: none; }
 }
+
+/* Conferences inside the calendar module: recognisable, read-only, and clearly
+   a different object from a calendar event. */
+.calendar-event-pill.zoom, .calendar-agenda-card.zoom { border-color: var(--ws-turquoise); color: var(--ws-link); background: var(--ws-selected); }
+.calendar-agenda-card.zoom { border-left: 3px solid var(--ws-turquoise); }

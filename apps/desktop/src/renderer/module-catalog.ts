@@ -53,7 +53,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     key: "zoom_meetings",
     label: { ru: "Zoom-конференции", uz_cyrl: "Zoom конференциялар", uz_latn: "Zoom konferensiyalar" },
     route: "/zoom-meetings",
-    status: "placeholder",
+    status: "available",
   },
   {
     key: "absences",

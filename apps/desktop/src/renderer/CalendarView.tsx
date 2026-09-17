@@ -5,6 +5,7 @@ import type {
   CalendarEventInput,
   CalendarEventType,
   WorkspacePerson,
+  ZoomMeeting,
 } from "@yuksalish/contracts";
 import { Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
 import {
@@ -19,6 +20,9 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 interface CalendarViewProps {
   readonly focusEventId?: string;
   readonly events: readonly CalendarEvent[];
+  /** Conferences of the shared Zoom host, shown read-only next to the events. */
+  readonly zoomMeetings?: readonly ZoomMeeting[];
+  readonly onOpenZoomMeeting?: (meetingId: string) => void;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
   readonly onCreate: (payload: CalendarEventInput) => Promise<CalendarEvent | undefined>;
@@ -108,6 +112,8 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
 export function CalendarView({
   focusEventId,
   events,
+  zoomMeetings,
+  onOpenZoomMeeting,
   people,
   currentUserId,
   onCreate,
@@ -153,7 +159,23 @@ export function CalendarView({
     return grouped;
   }, [events]);
 
+  const zoomByDay = useMemo(() => {
+    const grouped = new Map<string, ZoomMeeting[]>();
+    for (const meeting of zoomMeetings ?? []) {
+      if (meeting.status !== "scheduled") continue;
+      const start = new Date(meeting.startsAt);
+      if (!Number.isFinite(start.getTime())) continue;
+      const key = dayKey(start);
+      grouped.set(key, [...(grouped.get(key) ?? []), meeting]);
+    }
+    for (const bucket of grouped.values()) {
+      bucket.sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
+    }
+    return grouped;
+  }, [zoomMeetings]);
+
   const selectedDayEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
+  const selectedDayZoom = zoomByDay.get(dayKey(selectedDay)) ?? [];
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
     const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -283,6 +305,7 @@ export function CalendarView({
             {days.map((day) => {
               const key = dayKey(day);
               const dayEvents = eventsByDay.get(key) ?? [];
+              const dayZoom = zoomByDay.get(key) ?? [];
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());
               const active = key === dayKey(selectedDay);
@@ -325,6 +348,20 @@ export function CalendarView({
                       >
                         <span>{event.allDay ? "День" : dayKey(new Date(event.startsAt)) === key ? new Date(event.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
                         <strong>{event.title}</strong>
+                      </button>
+                    ))}
+                    {dayZoom.slice(0, visibleEventsPerDay).map((meeting) => (
+                      <button
+                        className="calendar-event-pill zoom"
+                        key={meeting.id}
+                        type="button"
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation();
+                          onOpenZoomMeeting?.(meeting.id);
+                        }}
+                      >
+                        <span>{new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <strong>{meeting.topic}</strong>
                       </button>
                     ))}
                     {dayEvents.length > visibleEventsPerDay ? <span className="calendar-more-events">Ещё {dayEvents.length - visibleEventsPerDay}</span> : null}
@@ -424,6 +461,20 @@ export function CalendarView({
             </div>
             {selectedDayIsPast ? <div className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</div> : null}
             <div className="calendar-day-agenda">
+              {selectedDayZoom.map((meeting) => (
+                <button
+                  className="calendar-agenda-card zoom"
+                  key={meeting.id}
+                  type="button"
+                  onClick={() => onOpenZoomMeeting?.(meeting.id)}
+                >
+                  <span className="calendar-agenda-time">
+                    {new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <strong>{meeting.topic}</strong>
+                  <small>Zoom-конференция · {meeting.organizerName}</small>
+                </button>
+              ))}
               {selectedDayEvents.length > 0 ? selectedDayEvents.map((event) => (
                 <button className={`calendar-agenda-card ${event.eventType} ${event.status}`} key={event.id} type="button" onClick={() => { setSelected(event); setError(""); }}>
                   <span className="calendar-agenda-time">{eventTime(event)}</span>
@@ -431,7 +482,7 @@ export function CalendarView({
                   <small>{typeLabels[event.eventType]}{event.location ? ` · ${event.location}` : ""}</small>
                   {event.status === "cancelled" ? <em>Отменено</em> : null}
                 </button>
-              )) : (
+              )) : selectedDayZoom.length > 0 ? null : (
                 <div className="calendar-empty">
                   <span aria-hidden="true">{selectedDayIsPast ? "✓" : "+"}</span>
                   <h3>{selectedDayIsPast ? "День без событий" : "Пока свободно"}</h3>

@@ -72,7 +72,7 @@ MODULE_CATALOG = (
             uz_latn="Zoom konferensiyalar",
         ),
         route="/zoom-meetings",
-        status="placeholder",
+        status="available",
     ),
     ModuleDescriptor(
         key="absences",

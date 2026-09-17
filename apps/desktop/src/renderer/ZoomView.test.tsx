@@ -9,11 +9,9 @@ import {
   cancelZoomMeeting,
   createZoomMeeting,
   loadZoomAvailability,
-  loadZoomMeetings,
 } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
-  loadZoomMeetings: vi.fn(),
   loadZoomAvailability: vi.fn(),
   createZoomMeeting: vi.fn(),
   updateZoomMeeting: vi.fn(),
@@ -53,9 +51,18 @@ const registry: ZoomMeetingsRegistry = {
   meetings: [meeting],
 };
 
-const mount = () => render(
+const onRefresh = vi.fn();
+const mount = (props: Partial<React.ComponentProps<typeof ZoomView>> = {}) => render(
   <FluentProvider theme={workspaceTheme}>
-    <ZoomView token="test-token" people={people} currentUserId="me" />
+    <ZoomView
+      token="test-token"
+      people={people}
+      currentUserId="me"
+      registry={registry}
+      loading={false}
+      onRefresh={onRefresh}
+      {...props}
+    />
   </FluentProvider>,
 );
 
@@ -64,7 +71,6 @@ const futureDay = () => new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOStri
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(loadZoomMeetings).mockResolvedValue(registry);
   vi.mocked(loadZoomAvailability).mockResolvedValue({
     configured: true,
     timezone: "Asia/Tashkent",
@@ -146,21 +152,22 @@ describe("Zoom conference booking", () => {
   });
 
   it("hides the link and the controls from an employee outside the meeting", async () => {
-    vi.mocked(loadZoomMeetings).mockResolvedValue({
-      ...registry,
-      meetings: [{
-        ...meeting,
-        organizerUserId: "peer",
-        organizerName: "Азиза Каримова",
-        participantIds: [],
-        zoomMeetingId: null,
-        joinUrl: null,
-        passcode: null,
-        canEdit: false,
-        canCancel: false,
-      }],
+    mount({
+      registry: {
+        ...registry,
+        meetings: [{
+          ...meeting,
+          organizerUserId: "peer",
+          organizerName: "Азиза Каримова",
+          participantIds: [],
+          zoomMeetingId: null,
+          joinUrl: null,
+          passcode: null,
+          canEdit: false,
+          canCancel: false,
+        }],
+      },
     });
-    mount();
     fireEvent.click(await screen.findByRole("button", { name: /Планёрка отдела/ }));
     expect(screen.queryByRole("button", { name: "Подключиться" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Отменить конференцию" })).not.toBeInTheDocument();
@@ -168,15 +175,13 @@ describe("Zoom conference booking", () => {
   });
 
   it("explains that the section is idle while Zoom is not connected", async () => {
-    vi.mocked(loadZoomMeetings).mockResolvedValue({ ...registry, configured: false, meetings: [] });
-    mount();
+    mount({ registry: { ...registry, configured: false, meetings: [] } });
     expect(await screen.findByText("Zoom ещё не подключён")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Новая конференция" })).not.toBeInTheDocument();
   });
 
   it("reports a failed load instead of showing an empty schedule", async () => {
-    vi.mocked(loadZoomMeetings).mockRejectedValue(new Error("Сервер вернул ошибку 502"));
-    mount();
+    mount({ registry: undefined, error: "Сервер вернул ошибку 502" });
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер вернул ошибку 502");
   });
 
