@@ -15,14 +15,14 @@ from uuid import UUID, uuid4
 import httpx
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.settings import Settings
-from yuksalish_api.tables import zoom_meetings
+from yuksalish_api.tables import zoom_meeting_participants, zoom_meetings
 from yuksalish_api.zoom_client import ZoomClient
 from yuksalish_api.zoom_schemas import CreateZoomMeetingRequest, UpdateZoomMeetingRequest
 from yuksalish_api.zoom_service import (
@@ -147,6 +147,9 @@ async def test_zoom_booking_conflicts_permissions_and_recovery() -> None:
     try:
         await seed_demo_data(engine)
         async with engine.begin() as connection:
+            # The shared host calendar is global, so a repeat run starts from empty.
+            await connection.execute(delete(zoom_meeting_participants))
+            await connection.execute(delete(zoom_meetings))
             owner_row = await find_active_user_by_username(connection, "dilshod")
             peer_row = await find_active_user_by_username(connection, "aziza")
             admin_row = await find_active_user_by_username(connection, "malika")

@@ -1209,7 +1209,10 @@ class PinnedChatOrder(ApiModel):
 
 class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
-    order: list[NavigationKey] = Field(min_length=13, max_length=13)
+    # Derived from the catalog so adding a section never silently breaks reordering.
+    order: list[NavigationKey] = Field(
+        min_length=len(DEFAULT_NAVIGATION), max_length=len(DEFAULT_NAVIGATION)
+    )
     revision: int = Field(ge=0)
 
     @field_validator("order")

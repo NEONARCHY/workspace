@@ -24,6 +24,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import structlog
+from fastapi import HTTPException
 from sqlalchemy import delete, insert, or_, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.exc import IntegrityError
@@ -502,7 +503,13 @@ async def _load_manageable(
         raise ZoomServiceError(404, "Конференция не найдена.")
     if row["organizer_user_id"] != current_user.id:
         # Someone else's conference is an administrative action, checked on the server.
-        await ensure_module_action(connection, current_user, "zoom_meetings", "admin")
+        try:
+            await ensure_module_action(connection, current_user, "zoom_meetings", "admin")
+        except HTTPException as error:
+            # The service speaks one error type, so it stays usable outside FastAPI.
+            raise ZoomServiceError(
+                error.status_code, "Чужую конференцию может изменить только администратор."
+            ) from error
     if row["status"] != "scheduled":
         raise ZoomServiceError(409, "Эта конференция уже отменяется или отменена.")
     return row
