@@ -40,6 +40,16 @@ class Settings(BaseSettings):
     members_api_url: str = ""
     members_integration_key: SecretStr = SecretStr("")
     members_cache_seconds: int = 300
+    zoom_account_id: str = ""
+    zoom_client_id: str = ""
+    zoom_client_secret: SecretStr = SecretStr("")
+    zoom_host_user_id: str = ""
+    zoom_api_base_url: str = "https://api.zoom.us/v2"
+    zoom_oauth_url: str = "https://zoom.us/oauth/token"
+    zoom_timezone: str = "Asia/Tashkent"
+    zoom_reminder_minutes: int = 30
+    zoom_booking_horizon_days: int = 180
+    zoom_availability_cache_seconds: int = 60
     attachment_max_bytes: int = 25 * 1024 * 1024
     voice_message_max_bytes: int = 4 * 1024 * 1024
     voice_message_max_duration_ms: int = 10 * 60 * 1000
@@ -48,6 +58,16 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )
+
+    @property
+    def zoom_configured(self) -> bool:
+        """Zoom stays switched off until every Server-to-Server credential is present."""
+        return bool(
+            self.zoom_account_id
+            and self.zoom_client_id
+            and self.zoom_client_secret.get_secret_value()
+            and self.zoom_host_user_id
+        )
 
 
 @lru_cache

@@ -1093,7 +1093,9 @@ class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
 
 
-NotificationKind = Literal["message", "task", "approval", "trip", "calendar", "absence"]
+NotificationKind = Literal[
+    "message", "task", "approval", "trip", "calendar", "absence", "zoom"
+]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
     "messenger",
@@ -1102,6 +1104,7 @@ NotificationSection = Literal[
     "trip_approvals",
     "calendar",
     "absences",
+    "zoom_meetings",
 ]
 
 
@@ -1129,6 +1132,7 @@ class NotificationPreferencesResponse(ApiModel):
     trips_enabled: bool = True
     calendar_enabled: bool = True
     absences_enabled: bool = True
+    zoom_enabled: bool = True
     reminders_enabled: bool = True
 
 
@@ -1140,6 +1144,7 @@ class NotificationPreferencesUpdate(ApiModel):
     trips_enabled: bool
     calendar_enabled: bool
     absences_enabled: bool = True
+    zoom_enabled: bool = True
     reminders_enabled: bool
 
 
@@ -1152,6 +1157,7 @@ NavigationKey = Literal[
     "trip_approvals",
     "messenger",
     "calendar",
+    "zoom_meetings",
     "absences",
     "members",
     "employees",
@@ -1167,6 +1173,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "trip_approvals",
     "messenger",
     "calendar",
+    "zoom_meetings",
     "absences",
     "members",
     "employees",
@@ -1202,7 +1209,10 @@ class PinnedChatOrder(ApiModel):
 
 class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
-    order: list[NavigationKey] = Field(min_length=13, max_length=13)
+    # Derived from the catalog so adding a section never silently breaks reordering.
+    order: list[NavigationKey] = Field(
+        min_length=len(DEFAULT_NAVIGATION), max_length=len(DEFAULT_NAVIGATION)
+    )
     revision: int = Field(ge=0)
 
     @field_validator("order")

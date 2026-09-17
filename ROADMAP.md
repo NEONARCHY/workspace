@@ -292,7 +292,7 @@ Hisobot можно анализировать параллельно с этап
 3. `[ ]` CAO Opportunity Monitor
 4. `[ ]` Hudud Reyting
 5. `[ ]` Referent / Exat
-6. `[ ]` Zoom Planner
+6. `[x]` Zoom Planner — раздел «Zoom-конференции», бронирование на общем хосте; см. `docs/architecture/zoom-meetings.md`. ZoomBot пока работает параллельно.
 7. `[ ]` Transcription / Live Translator
 
 Для каждого модуля применяется один шаблон: аудит → выделение доменной логики → выбор `server`/`desktop-sidecar`/`hybrid` → API и UI → миграция данных → автоматические тесты → параллельная проверка → cutover → архивирование старой версии.

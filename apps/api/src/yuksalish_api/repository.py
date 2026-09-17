@@ -1424,6 +1424,7 @@ async def get_notification_preferences(
         trips_enabled=bool(row["trips_enabled"]),
         calendar_enabled=bool(row["calendar_enabled"]),
         absences_enabled=bool(row["absences_enabled"]),
+        zoom_enabled=bool(row["zoom_enabled"]),
         reminders_enabled=bool(row["reminders_enabled"]),
     )
 

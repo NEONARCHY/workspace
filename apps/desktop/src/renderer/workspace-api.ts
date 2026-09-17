@@ -53,6 +53,10 @@ import type {
   WorkspaceRole,
   ManagedEmployeeStatus,
   MembersRegistry,
+  ZoomAvailability,
+  ZoomMeeting,
+  ZoomMeetingInput,
+  ZoomMeetingsRegistry,
   DesktopRelease,
   DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
@@ -70,6 +74,27 @@ export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePol
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
+}
+
+export function loadZoomMeetings(token: string): Promise<ZoomMeetingsRegistry> {
+  return apiRequest<ZoomMeetingsRegistry>("/zoom-meetings", {}, token);
+}
+
+/** `day` is a local calendar date (YYYY-MM-DD) in the organization timezone. */
+export function loadZoomAvailability(token: string, day: string): Promise<ZoomAvailability> {
+  return apiRequest<ZoomAvailability>(`/zoom-meetings/availability?day=${encodeURIComponent(day)}`, {}, token);
+}
+
+export function createZoomMeeting(token: string, payload: ZoomMeetingInput): Promise<ZoomMeeting> {
+  return apiRequest<ZoomMeeting>("/zoom-meetings", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function updateZoomMeeting(token: string, meetingId: string, payload: ZoomMeetingInput): Promise<ZoomMeeting> {
+  return apiRequest<ZoomMeeting>(`/zoom-meetings/${meetingId}`, { method: "PATCH", body: JSON.stringify(payload) }, token);
+}
+
+export function cancelZoomMeeting(token: string, meetingId: string): Promise<ZoomMeeting> {
+  return apiRequest<ZoomMeeting>(`/zoom-meetings/${meetingId}/cancel`, { method: "POST" }, token);
 }
 
 export function loadDesktopReleases(token: string): Promise<readonly DesktopRelease[]> {

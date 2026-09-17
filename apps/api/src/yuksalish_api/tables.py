@@ -674,6 +674,37 @@ workspace_notification_preferences = sa.Table(
     sa.Column("trips_enabled", sa.Boolean()),
     sa.Column("calendar_enabled", sa.Boolean()),
     sa.Column("absences_enabled", sa.Boolean()),
+    sa.Column("zoom_enabled", sa.Boolean()),
     sa.Column("reminders_enabled", sa.Boolean()),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+zoom_meetings = sa.Table(
+    "zoom_meetings",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("organizer_user_id", uuid_type),
+    sa.Column("organizer_display_name", sa.String(240)),
+    sa.Column("topic", sa.String(200)),
+    sa.Column("description", sa.Text()),
+    sa.Column("starts_at", sa.DateTime(timezone=True)),
+    sa.Column("ends_at", sa.DateTime(timezone=True)),
+    sa.Column("duration_minutes", sa.Integer()),
+    sa.Column("timezone", sa.String(64)),
+    sa.Column("zoom_meeting_id", sa.String(64)),
+    sa.Column("join_url", sa.Text()),
+    sa.Column("passcode", sa.String(64)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("source", sa.String(16)),
+    sa.Column("reminders_enabled", sa.Boolean()),
+    sa.Column("technical_error", sa.String(120)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+zoom_meeting_participants = sa.Table(
+    "zoom_meeting_participants",
+    metadata,
+    sa.Column("meeting_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
 )

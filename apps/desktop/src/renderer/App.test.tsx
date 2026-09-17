@@ -326,6 +326,7 @@ function mockServer(
     tripsEnabled: true,
         calendarEnabled: true,
         absencesEnabled: true,
+    zoomEnabled: true,
     remindersEnabled: true,
   };
   const fetchMock = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
@@ -1796,6 +1797,7 @@ describe("corporate workspace authentication alpha", () => {
       "Работа с членами",
       "Мессенджер",
       "Календарь",
+      "Zoom-конференции",
       "Сотрудники",
       "Уведомления",
       "Настройки",

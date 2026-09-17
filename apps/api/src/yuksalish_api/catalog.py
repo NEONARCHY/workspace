@@ -65,6 +65,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="zoom_meetings",
+        label=LocalizedLabel(
+            ru="Zoom-конференции",
+            uz_cyrl="Zoom конференциялар",
+            uz_latn="Zoom konferensiyalar",
+        ),
+        route="/zoom-meetings",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="absences",
         label=LocalizedLabel(
             ru="Отсутствия",
