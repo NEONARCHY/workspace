@@ -17,19 +17,46 @@ if (!is_file($configPath)) {
 
 /** @var array{dsn: string, username: string, password: string, sharedKey: string} $config */
 $config = require $configPath;
-$timestamp = $_SERVER['HTTP_X_YUKSALISH_TIMESTAMP'] ?? '';
-$signature = $_SERVER['HTTP_X_YUKSALISH_SIGNATURE'] ?? '';
+
+function requestHeader(string $name): string
+{
+    $serverKey = 'HTTP_' . str_replace('-', '_', strtoupper($name));
+    if (isset($_SERVER[$serverKey]) && is_string($_SERVER[$serverKey])) {
+        return $_SERVER[$serverKey];
+    }
+
+    if (function_exists('getallheaders')) {
+        foreach (getallheaders() as $headerName => $headerValue) {
+            if (strcasecmp($headerName, $name) === 0 && is_string($headerValue)) {
+                return $headerValue;
+            }
+        }
+    }
+
+    return '';
+}
+
+function rejectAuthentication(string $reason): void
+{
+    http_response_code(401);
+    header('X-Yuksalish-Auth-Error: ' . $reason);
+    exit;
+}
+
+$timestamp = requestHeader('X-Yuksalish-Timestamp');
+$signature = requestHeader('X-Yuksalish-Signature');
 $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
-if (!ctype_digit($timestamp) || abs(time() - (int) $timestamp) > 300) {
-    http_response_code(401);
-    exit;
+if (!ctype_digit($timestamp)) {
+    rejectAuthentication('missing-timestamp');
+}
+if (abs(time() - (int) $timestamp) > 300) {
+    rejectAuthentication('expired-timestamp');
 }
 $message = $timestamp . ".GET\n" . $requestPath . "\n";
 $expected = hash_hmac('sha256', $message, $config['sharedKey']);
 if (!hash_equals($expected, $signature)) {
-    http_response_code(401);
-    exit;
+    rejectAuthentication('signature-mismatch');
 }
 
 try {
@@ -53,9 +80,24 @@ try {
     )->fetchAll();
     $regions = $pdo->query('SELECT id, name_ru, name_uz, name_en FROM regions ORDER BY id')->fetchAll();
     $spheres = $pdo->query('SELECT id, name_ru, name_uz, name_en FROM spheres ORDER BY id')->fetchAll();
+} catch (PDOException $error) {
+    error_log('workspace-members bridge failed: ' . $error->getMessage());
+    http_response_code(502);
+    $driverCode = isset($error->errorInfo[1]) ? (string) $error->errorInfo[1] : '';
+    if ($driverCode === '1045') {
+        header('X-Yuksalish-Bridge-Error: source-authentication');
+    } elseif ($driverCode === '1049') {
+        header('X-Yuksalish-Bridge-Error: source-database');
+    } else {
+        header('X-Yuksalish-Bridge-Error: source-query');
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['detail' => 'Source database is unavailable.']);
+    exit;
 } catch (Throwable $error) {
     error_log('workspace-members bridge failed: ' . $error->getMessage());
     http_response_code(502);
+    header('X-Yuksalish-Bridge-Error: bridge-runtime');
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['detail' => 'Source database is unavailable.']);
     exit;
