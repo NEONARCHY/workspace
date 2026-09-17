@@ -1093,7 +1093,9 @@ class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
 
 
-NotificationKind = Literal["message", "task", "approval", "trip", "calendar", "absence"]
+NotificationKind = Literal[
+    "message", "task", "approval", "trip", "calendar", "absence", "zoom"
+]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
     "messenger",
@@ -1102,6 +1104,7 @@ NotificationSection = Literal[
     "trip_approvals",
     "calendar",
     "absences",
+    "zoom_meetings",
 ]
 
 
@@ -1129,6 +1132,7 @@ class NotificationPreferencesResponse(ApiModel):
     trips_enabled: bool = True
     calendar_enabled: bool = True
     absences_enabled: bool = True
+    zoom_enabled: bool = True
     reminders_enabled: bool = True
 
 
@@ -1140,6 +1144,7 @@ class NotificationPreferencesUpdate(ApiModel):
     trips_enabled: bool
     calendar_enabled: bool
     absences_enabled: bool = True
+    zoom_enabled: bool = True
     reminders_enabled: bool
 
 
