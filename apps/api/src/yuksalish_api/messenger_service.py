@@ -50,8 +50,15 @@ FULL_PERMISSIONS = ChatPermissions(
     manage_messages=True,
 )
 REACTION_EMOJIS = (
-    "👍", "👎", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗",
-    "🥰", "😍", "🤔", "🤩", "🥳", "😎", "🤯", "😡", "💩", "👌", "💪", "🙌", "🚀",
+    "👍", "😄", "❤️", "🤝", "👏", "💔", "😔", "🔥", "👎", "🥳", "🤔", "🤯", "😱", "😡",
+    "🎉", "🤩", "🤢", "💩", "🙏", "👌", "🐇", "🤡", "😭", "😌", "✅", "💯", "❗", "😂",
+    "😮", "😢", "👀", "🥰", "😍", "😎", "💪", "🙌", "🚀", "😉", "😊", "🙂", "🙃", "😋",
+    "😛", "😜", "🤪", "🧐", "🤓", "😇", "🤗", "🤭", "🤫", "🤥", "😐", "😑", "😶", "😏",
+    "😒", "🙄", "😬", "🤐", "😪", "😴", "🤤", "😷", "🤒", "🤕", "🤑", "😈", "👿", "👻",
+    "💀", "☠️", "👽", "🤖", "🎃", "😺", "😸", "😹", "😻", "😼", "😽", "🙀", "😿", "😾",
+    "👋", "🤚", "🖐️", "✋", "🖖", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉", "👆",
+    "👇", "☝️", "✍️", "💅", "🤳", "💃", "🕺", "🎊", "🎈", "💡", "⭐", "🌟", "⚡", "💥",
+    "💦", "🎯", "🏆", "🥇", "📌", "📎", "🧠", "💬",
 )
 
 
@@ -799,6 +806,8 @@ async def toggle_message_reaction(
     message_id: UUID,
     payload: MessageReactionRequest,
 ) -> ChatMessageResponse:
+    if payload.emoji not in REACTION_EMOJIS:
+        raise WorkspaceRepositoryError(422, "Unsupported reaction")
     row = (
         (await connection.execute(select(messages).where(messages.c.id == message_id)))
         .mappings()

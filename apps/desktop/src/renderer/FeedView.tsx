@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { FeedComment, FeedPost, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Textarea } from "@fluentui/react-components";
+import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
 import {
   Comment24Regular,
   Pin24Filled,
@@ -10,17 +10,16 @@ import {
   Send24Regular,
   Add24Regular,
   ArrowReply24Regular,
-  EmojiAdd24Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
-
-const feedReactionOptions = ["👍", "👎", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗", "🥰", "😍", "🤔", "🤩", "🥳", "😎", "🤯", "😡", "💩", "👌", "💪", "🙌", "🚀"] as const;
+import { ReactionPicker } from "./ReactionPicker";
 
 interface FeedViewProps {
   readonly posts: readonly FeedPost[];
   readonly people: readonly WorkspacePerson[];
   readonly token: string;
+  readonly currentUserId: string;
   readonly onCreate: (title: string, body: string) => Promise<FeedPost | undefined>;
   readonly onComment: (post: FeedPost, body: string, parentCommentId?: string) => Promise<FeedPost | undefined>;
   readonly onReact: (post: FeedPost, emoji: string, reacted: boolean, commentId?: string) => Promise<FeedPost | undefined>;
@@ -38,17 +37,16 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-export function FeedReactions({ reactions, disabled, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
+export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
   return <div className="feed-reactions" aria-label="Реакции">
     {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled} onClick={() => onToggle(reaction.emoji, !reaction.reactedByCurrentUser)}>{reaction.emoji} {reaction.count}</Button>)}
-    <Menu><MenuTrigger disableButtonEnhancement><Button className="feed-reaction-trigger" size="small" appearance="subtle" icon={<EmojiAdd24Regular />} aria-label="Добавить реакцию" disabled={disabled} /></MenuTrigger><MenuPopover className="feed-reaction-popover"><MenuList className="feed-reaction-grid">{feedReactionOptions.map((emoji) => {
-      const active = reactions.some((item) => item.emoji === emoji && item.reactedByCurrentUser);
-      return <MenuItem aria-label={emoji} key={emoji} onClick={() => onToggle(emoji, !active)}>{emoji}</MenuItem>;
-    })}</MenuList></MenuPopover></Menu>
+    <ReactionPicker userId={currentUserId} disabled={disabled} className="feed-reaction-trigger"
+      active={reactions.filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
+      onSelect={(emoji) => onToggle(emoji, !reactions.some((item) => item.emoji === emoji && item.reactedByCurrentUser))} />
   </div>;
 }
 
-export function FeedView({ posts, people, token, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete }: FeedViewProps) {
+export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete }: FeedViewProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -139,7 +137,7 @@ export function FeedView({ posts, people, token, onCreate, onComment, onReact, o
                 <h2>{post.title}</h2>
                 <p className="feed-copy">{post.body}</p>
                 <div className="feed-actions">
-                  <FeedReactions reactions={post.reactions ?? []} disabled={busy} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
+                  <FeedReactions reactions={post.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
                 {post.comments.length > 0 ? (
@@ -158,7 +156,7 @@ export function FeedView({ posts, people, token, onCreate, onComment, onReact, o
                             <span className="feed-comment-meta">
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => setReplying((current) => ({ ...current, [post.id]: item }))}>Ответить</Button>
-                              <FeedReactions reactions={item.reactions ?? []} disabled={busy} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                              <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
                               {item.canDelete ? <Button size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
                                 if (window.confirm("Удалить этот комментарий?")) void onDeleteComment(post, item.id);
                               }} /> : null}

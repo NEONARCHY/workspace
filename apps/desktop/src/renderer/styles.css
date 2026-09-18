@@ -1069,6 +1069,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-reaction-popover.fui-MenuPopover { width: 248px; padding: 8px; border-radius: 18px; }
 .feed-reaction-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .feed-reaction-grid .fui-MenuItem { display: grid; place-items: center; min-width: 30px; min-height: 34px; padding: 4px; border-radius: 9px; font-size: 18px; }
+.reaction-picker-popover.fui-MenuPopover { width: 344px; padding: 10px; border: 1px solid rgb(41 58 85 / 10%); border-radius: 18px; background: rgb(255 255 255 / 98%); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); }
+.reaction-picker-grid.fui-MenuList { display: grid !important; grid-template-columns: repeat(8, 38px); grid-auto-rows: 38px; gap: 3px; max-height: 120px; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.reaction-picker-grid .fui-MenuItem { display: grid; place-items: center; min-width: 38px; width: 38px; min-height: 38px; height: 38px; padding: 0; border-radius: 10px; font-size: 20px; line-height: 1; }
+.reaction-picker-grid .fui-MenuItem[aria-checked="true"] { background: var(--ws-accent-wash); box-shadow: inset 0 0 0 1px rgb(0 145 168 / 25%); }
 .feed-side { align-self: start; padding: 17px; }
 .feed-side strong { color: #20364a; font-size: 12px; }
 .feed-side p { color: #66798b; font-size: 11px; line-height: 1.55; }

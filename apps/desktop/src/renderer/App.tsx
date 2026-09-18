@@ -1761,6 +1761,7 @@ export function App() {
                 posts={workspace.feedPosts}
                 people={workspace.people}
                 token={session.accessToken}
+                currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateFeedPost}
                 onComment={handleFeedComment}
                 onReact={handleFeedReaction}

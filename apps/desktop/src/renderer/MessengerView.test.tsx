@@ -464,7 +464,7 @@ describe("Private messenger", () => {
     const onPinMessage = vi.fn().mockResolvedValue(undefined);
     renderMessenger({ messages: [message], onReactMessage, onPinMessage });
 
-    fireEvent.click(screen.getByRole("button", { name: "Нравится: 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "👍: 3" }));
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(message, "👍"));
     openMessageMenu("Важное решение по бюджету");
     const unpin = screen.getByRole("button", { name: "Открепить" });
@@ -495,7 +495,7 @@ describe("Private messenger", () => {
     expect(message).not.toBeNull();
     fireEvent.focus(message!);
     expect(screen.getByRole("button", { name: "Добавить реакцию" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Нравится: 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "👍: 1" }));
 
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(ownMessage, "👍"));
   });

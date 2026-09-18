@@ -17,11 +17,6 @@ import {
   Avatar,
   Button,
   Input,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
   Textarea,
   Tooltip,
   useRestoreFocusTarget,
@@ -29,7 +24,6 @@ import {
 import {
   Add24Regular,
   Attach24Regular,
-  EmojiAdd24Regular,
   Mic24Regular,
   Pin24Regular,
   PinOff24Regular,
@@ -45,37 +39,7 @@ import { TaskComposer } from "./TaskComposer";
 import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
-
-const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
-  { emoji: "👍", label: "Нравится" },
-  { emoji: "👎", label: "Не нравится" },
-  { emoji: "❤️", label: "Сердце" },
-  { emoji: "👏", label: "Аплодисменты" },
-  { emoji: "🎉", label: "Праздник" },
-  { emoji: "👀", label: "Смотрю" },
-  { emoji: "✅", label: "Готово" },
-  { emoji: "🔥", label: "Огонь" },
-  { emoji: "😂", label: "Смешно" },
-  { emoji: "😮", label: "Удивление" },
-  { emoji: "😢", label: "Грустно" },
-  { emoji: "🙏", label: "Спасибо" },
-  { emoji: "🤝", label: "Договорились" },
-  { emoji: "💯", label: "Сто процентов" },
-  { emoji: "❗", label: "Важно" },
-  { emoji: "🥰", label: "Мило" },
-  { emoji: "😍", label: "В восторге" },
-  { emoji: "🤔", label: "Думаю" },
-  { emoji: "🤩", label: "Впечатляет" },
-  { emoji: "🥳", label: "Поздравляю" },
-  { emoji: "😎", label: "Круто" },
-  { emoji: "🤯", label: "Невероятно" },
-  { emoji: "😡", label: "Злюсь" },
-  { emoji: "💩", label: "Плохо" },
-  { emoji: "👌", label: "Хорошо" },
-  { emoji: "💪", label: "Сила" },
-  { emoji: "🙌", label: "Ура" },
-  { emoji: "🚀", label: "Вперёд" },
-];
+import { ReactionPicker } from "./ReactionPicker";
 
 interface MessengerViewProps {
   readonly token: string;
@@ -595,7 +559,7 @@ function Conversation({
                           size="small"
                           appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"}
                           disabled={!canSend || busy}
-                          aria-label={`${reactionOptions.find((item) => item.emoji === reaction.emoji)?.label ?? "Реакция"}: ${reaction.count}`}
+                          aria-label={`${reaction.emoji}: ${reaction.count}`}
                           onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
                         >
                           {reaction.emoji} {reaction.count}
@@ -605,30 +569,9 @@ function Conversation({
                   )}
                   {!message.deletedAt && (
                     <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
-                      <Menu>
-                        <MenuTrigger disableButtonEnhancement>
-                          <Button
-                            appearance="subtle"
-                            size="small"
-                            icon={<EmojiAdd24Regular />}
-                            disabled={!canSend || busy}
-                            aria-label="Добавить реакцию"
-                          />
-                        </MenuTrigger>
-                        <MenuPopover className="message-reaction-popover">
-                          <MenuList className="message-reaction-grid">
-                            {reactionOptions.map((reaction) => (
-                              <MenuItem
-                                aria-label={reaction.label}
-                                key={reaction.emoji}
-                                onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
-                              >
-                                {reaction.emoji}
-                              </MenuItem>
-                            ))}
-                          </MenuList>
-                        </MenuPopover>
-                      </Menu>
+                      <ReactionPicker userId={currentUserId} disabled={!canSend || busy}
+                        active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
+                        onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
                     </div>
                   )}
                 </div>

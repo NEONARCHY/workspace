@@ -239,7 +239,7 @@ export interface ChatMessage {
   readonly canPin?: boolean;
 }
 
-export type MessageReactionEmoji = "👍" | "👎" | "❤️" | "👏" | "🎉" | "👀" | "✅" | "🔥" | "😂" | "😮" | "😢" | "🙏" | "🤝" | "💯" | "❗" | "🥰" | "😍" | "🤔" | "🤩" | "🥳" | "😎" | "🤯" | "😡" | "💩" | "👌" | "💪" | "🙌" | "🚀";
+export type MessageReactionEmoji = string;
 
 export interface MessageReaction {
   readonly emoji: MessageReactionEmoji;
