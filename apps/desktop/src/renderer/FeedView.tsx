@@ -37,6 +37,19 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
+function commentThreadRootId(comment: FeedComment, comments: readonly FeedComment[]): string {
+  const commentsById = new Map(comments.map((item) => [item.id, item]));
+  const visited = new Set<string>();
+  let rootId = comment.id;
+  let parentId = comment.parentCommentId;
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId);
+    rootId = parentId;
+    parentId = commentsById.get(parentId)?.parentCommentId;
+  }
+  return rootId;
+}
+
 export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
   return <div className="feed-reactions" aria-label="Реакции">
     {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled} onClick={() => onToggle(reaction.emoji, !reaction.reactedByCurrentUser)}>{reaction.emoji} {reaction.count}</Button>)}
@@ -145,8 +158,11 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                     {post.comments.map((item, index) => {
                       const commentAuthor = person(item.authorUserId);
                       const depth = item.parentCommentId ? 1 : 0;
-                      const hasReplies = post.comments[index + 1]?.parentCommentId === item.id;
-                      const isLastReply = Boolean(item.parentCommentId) && post.comments[index + 1]?.parentCommentId !== item.parentCommentId;
+                      const threadRootId = commentThreadRootId(item, post.comments);
+                      const nextComment = post.comments[index + 1];
+                      const nextThreadRootId = nextComment ? commentThreadRootId(nextComment, post.comments) : undefined;
+                      const hasReplies = !depth && nextThreadRootId === item.id;
+                      const isLastReply = Boolean(depth) && nextThreadRootId !== threadRootId;
                       return (
                         <div className={`feed-comment ${depth ? "is-reply" : ""} ${hasReplies ? "has-replies" : ""} ${isLastReply ? "is-last-reply" : ""}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
                           {commentAuthor ? <ProfileAvatar person={commentAuthor} token={token} size={28} /> : null}

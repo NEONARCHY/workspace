@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Button, Tooltip } from "@fluentui/react-components";
 import {
   Delete24Regular,
   Mic24Regular,
+  Pause24Filled,
+  Play24Filled,
   Send24Filled,
+  Speaker224Regular,
+  SpeakerMute24Regular,
   Stop24Filled,
 } from "@fluentui/react-icons";
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
@@ -283,6 +287,10 @@ export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerPro
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [currentTimeMs, setCurrentTimeMs] = useState(0);
+  const [durationMs, setDurationMs] = useState(attachment.mediaDurationMs ?? 0);
   const [preferences, setPreferences] = useState(getAudioDevicePreferences);
 
   useEffect(() => subscribeToAudioDevicePreferences(setPreferences), []);
@@ -312,19 +320,80 @@ export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerPro
     }
   };
 
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch {
+        setError("Не удалось начать воспроизведение.");
+      }
+    } else {
+      audio.pause();
+    }
+  };
+
+  const toggleMuted = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.muted = !audio.muted;
+    setMuted(audio.muted);
+  };
+
+  const progress = durationMs > 0 ? Math.min(100, currentTimeMs / durationMs * 100) : 0;
+
   return (
     <div className="voice-message">
-      <span className="voice-message-icon"><Mic24Regular /></span>
       {url ? (
-        <audio ref={audioRef} controls preload="metadata" src={url} aria-label="Голосовое сообщение" />
+        <>
+          <audio
+            ref={audioRef}
+            className="voice-message-audio"
+            preload="metadata"
+            src={url}
+            aria-label="Голосовое сообщение"
+            onLoadedMetadata={(event) => {
+              const seconds = event.currentTarget.duration;
+              if (Number.isFinite(seconds)) setDurationMs(seconds * 1_000);
+            }}
+            onTimeUpdate={(event) => setCurrentTimeMs(event.currentTarget.currentTime * 1_000)}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+          />
+          <div className="voice-player">
+            <Button className="voice-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={playing ? "Пауза" : "Воспроизвести"} onClick={() => void togglePlayback()} />
+            <span className="voice-player-time">{formatDuration(currentTimeMs)} <i>/</i> {formatDuration(durationMs)}</span>
+            <input
+              className="voice-player-progress"
+              type="range"
+              min="0"
+              max={Math.max(1, durationMs)}
+              step="100"
+              value={Math.min(currentTimeMs, Math.max(1, durationMs))}
+              style={{ "--voice-progress": `${progress}%` } as CSSProperties}
+              aria-label="Позиция голосового сообщения"
+              onChange={(event) => {
+                const nextMs = Number(event.currentTarget.value);
+                if (audioRef.current) audioRef.current.currentTime = nextMs / 1_000;
+                setCurrentTimeMs(nextMs);
+              }}
+            />
+            <Button className="voice-player-volume" appearance="subtle" icon={muted ? <SpeakerMute24Regular /> : <Speaker224Regular />} aria-label={muted ? "Включить звук" : "Выключить звук"} onClick={toggleMuted} />
+          </div>
+        </>
       ) : (
-        <Tooltip content="Файл загружается только при прослушивании" relationship="description">
-          <Button size="small" appearance="subtle" disabled={loading} onClick={() => void load()}>
-            {loading ? "Загрузка…" : "Прослушать"}
-          </Button>
-        </Tooltip>
+        <div className="voice-message-load">
+          <span className="voice-message-icon"><Mic24Regular /></span>
+          <Tooltip content="Файл загружается только при прослушивании" relationship="description">
+            <Button size="small" appearance="subtle" disabled={loading} onClick={() => void load()}>
+              {loading ? "Загрузка…" : "Прослушать"}
+            </Button>
+          </Tooltip>
+        </div>
       )}
-      <small>{formatDuration(attachment.mediaDurationMs ?? 0)} · {Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
+      <small className="voice-message-size">{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
       {error ? <span className="voice-message-error" role="status">{error}</span> : null}
     </div>
   );
