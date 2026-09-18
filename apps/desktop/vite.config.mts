@@ -10,6 +10,16 @@ const tabsterEsmPath = fileURLToPath(
 const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as {
   version: string;
 };
+const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", import.meta.url), "utf8")) as {
+  version: string;
+  title: string;
+  items: string[];
+};
+if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
+  || releaseNotes.items.length === 0 || releaseNotes.items.length > 6
+  || releaseNotes.items.some((item) => item.trim().length < 12 || item.length > 120)) {
+  throw new Error("release-notes.json must match package version and contain 1–6 concise user-facing changes");
+}
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
 
@@ -64,7 +74,14 @@ export default defineConfig(({ mode }) => ({
         this.emitFile({
           type: "asset",
           fileName: "version.json",
-          source: JSON.stringify({ buildId, version: packageJson.version, builtAt }),
+          source: JSON.stringify({
+            buildId,
+            version: packageJson.version,
+            builtAt,
+            title: releaseNotes.title,
+            notes: releaseNotes.items,
+            releaseUrl: `https://github.com/NEONARCHY/yuksalish-workspace/releases/tag/v${packageJson.version}`,
+          }),
         });
       },
     }],

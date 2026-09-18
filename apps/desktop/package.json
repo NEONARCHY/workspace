@@ -1,6 +1,6 @@
 {
   "name": "@yuksalish/desktop",
-  "version": "0.30.3",
+  "version": "1.0.0",
   "private": true,
   "main": "dist-electron/main/main.js",
   "scripts": {

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Button } from "@fluentui/react-components";
+import { ArrowClockwise24Regular, CheckmarkCircle24Filled, Dismiss20Regular } from "@fluentui/react-icons";
 
-import { requestWebReload, workspacePlatform } from "./platform-adapter";
+import { requestWebReload, workspacePlatform, type WebVersionManifest } from "./platform-adapter";
 import { hasPendingMutation } from "./workspace-api";
 
 export function WebUpdateNotice() {
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState<WebVersionManifest>();
   const [busy, setBusy] = useState(false);
   const [mutationPending, setMutationPending] = useState(false);
 
@@ -15,7 +16,7 @@ export function WebUpdateNotice() {
     const check = () => {
       void workspacePlatform.checkWebVersion()
         .then((manifest) => {
-          if (active && manifest && manifest.buildId !== workspacePlatform.buildId) setAvailable(true);
+          if (active && manifest && manifest.buildId !== workspacePlatform.buildId) setAvailable(manifest);
         })
         .catch(() => undefined);
     };
@@ -40,11 +41,21 @@ export function WebUpdateNotice() {
     setBusy(true);
     requestWebReload();
   };
-  return <aside className="web-update-notice" role="status" aria-live="polite">
-    <span>Доступна новая версия Workspace.</span>
-    <Button size="small" appearance="primary" disabled={busy || mutationPending} onClick={reload}>
-      {mutationPending ? "Дождитесь завершения операции" : "Обновить"}
-    </Button>
-    <Button size="small" appearance="subtle" onClick={() => setAvailable(false)}>Позже</Button>
+  return <aside className="web-update-notice">
+    <div className="web-update-dialog" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="web-update-title">
+      <Button className="web-update-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Напомнить позже" onClick={() => setAvailable(undefined)} />
+      <div className="web-update-mark" aria-hidden="true"><ArrowClockwise24Regular /></div>
+      <span className="web-update-kicker">Обновление Workspace</span>
+      <h2 id="web-update-title">{available.title || "Доступна новая версия"}</h2>
+      <p className="web-update-version"><span>Версия {workspacePlatform.version}</span><b>→</b><strong>{available.version}</strong></p>
+      {available.notes?.length ? <ul>{available.notes.map((note) => <li key={note}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul> : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
+      {mutationPending ? <p className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</p> : null}
+      <footer>
+        <Button appearance="subtle" onClick={() => setAvailable(undefined)}>Напомнить позже</Button>
+        <Button appearance="primary" icon={<ArrowClockwise24Regular />} disabled={busy || mutationPending} onClick={reload}>
+          {mutationPending ? "Операция выполняется" : `Обновить до ${available.version}`}
+        </Button>
+      </footer>
+    </div>
   </aside>;
 }
