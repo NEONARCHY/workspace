@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import type { LinkPreview } from "@yuksalish/contracts";
 
+import { InlineVideoPlayer } from "./AttachmentPanel";
 import { loadLinkPreview } from "./workspace-api";
 
 const URL_PATTERN = /https?:\/\/[^\s<>"']+/giu;
@@ -14,7 +15,7 @@ export function extractMessageLinks(body: string): readonly string[] {
 }
 
 function LinkPreviewCard({ preview }: { readonly preview: LinkPreview }) {
-  if (preview.kind === "youtube" || preview.kind === "instagram") {
+  if (preview.kind === "youtube") {
     return (
       <section className="message-link-preview message-link-preview-embed" aria-label={preview.title}>
         <iframe src={preview.embedUrl ?? preview.canonicalUrl} title={preview.title} loading="lazy" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
@@ -22,9 +23,17 @@ function LinkPreviewCard({ preview }: { readonly preview: LinkPreview }) {
       </section>
     );
   }
+  if (preview.kind === "instagram") {
+    return (
+      <a className="message-link-preview message-link-preview-instagram" href={preview.canonicalUrl} target="_blank" rel="noreferrer" aria-label={`Открыть в Instagram: ${preview.title}`}>
+        {preview.imageUrl ? <img src={preview.imageUrl} alt="" loading="lazy" /> : <span className="message-link-preview-platform" aria-hidden="true">Instagram</span>}
+        <div><span>{preview.siteName}</span><strong>{preview.title}</strong><p>Открыть публикацию в Instagram</p></div>
+      </a>
+    );
+  }
   if (preview.kind === "video") {
     return <section className="message-link-preview message-link-preview-video" aria-label={preview.title}>
-      <video src={preview.canonicalUrl} controls preload="metadata" />
+      <InlineVideoPlayer url={preview.canonicalUrl} fileName={preview.title} />
       <div><strong>{preview.title}</strong><span>{preview.siteName}</span></div>
     </section>;
   }

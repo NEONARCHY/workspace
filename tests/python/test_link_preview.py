@@ -14,6 +14,14 @@ def test_youtube_links_use_privacy_enhanced_embed() -> None:
     assert preview.embed_url == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
 
 
+def test_instagram_links_do_not_use_a_blocked_iframe() -> None:
+    preview = _platform_preview("https://www.instagram.com/reels/example/")
+
+    assert preview is not None
+    assert preview.kind == "instagram"
+    assert preview.embed_url is None
+
+
 def test_private_addresses_are_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         socket,

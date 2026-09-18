@@ -97,7 +97,6 @@ def _platform_preview(url: str) -> LinkPreviewResponse | None:
             kind="instagram",
             title="Публикация Instagram",
             site_name="Instagram",
-            embed_url=f"https://www.instagram.com/{parts[0]}/{parts[1]}/embed/captioned/",
         )
     return None
 

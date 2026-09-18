@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
-import { ArrowDownload24Regular, Attach24Regular, Document24Regular } from "@fluentui/react-icons";
+import { ArrowDownload24Regular, Attach24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
+import { MediaVolumeControl } from "./MediaVolumeControl";
 
 interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
@@ -14,6 +15,60 @@ function fileSize(value: number): string {
   if (value < 1024) return `${value} Б`;
   if (value < 1024 * 1024) return `${Math.ceil(value / 1024)} КБ`;
   return `${(value / (1024 * 1024)).toFixed(1)} МБ`;
+}
+
+function formatMediaTime(seconds: number): string {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+export function InlineVideoPlayer({ url, fileName }: { readonly url: string; readonly fileName: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+
+  const togglePlayback = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => undefined);
+    else video.pause();
+  };
+
+  return (
+    <div className="attachment-video-player">
+      <video
+        ref={videoRef}
+        src={url}
+        preload="metadata"
+        aria-label={fileName}
+        onClick={togglePlayback}
+        onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); setCurrentTime(0); }}
+      />
+      <div className="attachment-video-controls">
+        <Button className="media-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={playing ? "Пауза" : "Воспроизвести"} onClick={togglePlayback} />
+        <input
+          type="range"
+          min="0"
+          max={Math.max(0.1, duration)}
+          step="0.1"
+          value={Math.min(currentTime, Math.max(0.1, duration))}
+          aria-label="Позиция видео"
+          onChange={(event) => {
+            const nextTime = Number(event.currentTarget.value);
+            if (videoRef.current) videoRef.current.currentTime = nextTime;
+            setCurrentTime(nextTime);
+          }}
+        />
+        <span>{formatMediaTime(currentTime)} / {formatMediaTime(duration)}</span>
+        <MediaVolumeControl mediaRef={videoRef} />
+      </div>
+    </div>
+  );
 }
 
 function AttachmentPreview({ attachment, onLoad, onDownload }: {
@@ -36,7 +91,7 @@ function AttachmentPreview({ attachment, onLoad, onDownload }: {
   const image = attachment.contentType.startsWith("image/");
   return <article className="attachment-media-preview">
     {url && image ? <img src={url} alt={attachment.fileName} /> : null}
-    {url && !image ? <video src={url} controls preload="metadata" aria-label={attachment.fileName} /> : null}
+    {url && !image ? <InlineVideoPlayer url={url} fileName={attachment.fileName} /> : null}
     {!url ? <span>{failed ? "Превью недоступно" : "Загружаем превью…"}</span> : null}
     <button type="button" onClick={() => void onDownload(attachment)} title={`Скачать ${attachment.fileName}`}><ArrowDownload24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
   </article>;

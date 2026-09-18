@@ -6,8 +6,6 @@ import {
   Pause24Filled,
   Play24Filled,
   Send24Filled,
-  Speaker224Regular,
-  SpeakerMute24Regular,
   Stop24Filled,
 } from "@fluentui/react-icons";
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
@@ -18,6 +16,7 @@ import {
   resetAudioDevicePreference,
   subscribeToAudioDevicePreferences,
 } from "./AudioDeviceSettings";
+import { MediaVolumeControl } from "./MediaVolumeControl";
 
 export const VOICE_MIME_TYPE = "audio/webm;codecs=opus";
 const VOICE_MIME_FALLBACK = "audio/webm";
@@ -64,7 +63,6 @@ interface VoicePlayerSurfaceProps {
 function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading = false, onRequestUrl, onDurationChange }: VoicePlayerSurfaceProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
-  const [muted, setMuted] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playWhenReady, setPlayWhenReady] = useState(false);
   const [error, setError] = useState("");
@@ -144,12 +142,7 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
         />
         <span className="voice-player-time">{formatDuration(currentTimeMs)} <i>/</i> {formatDuration(durationMs)}</span>
       </div>
-      <Button className="voice-player-volume" appearance="subtle" icon={muted ? <SpeakerMute24Regular /> : <Speaker224Regular />} aria-label={muted ? "Включить звук" : "Выключить звук"} disabled={!url} onClick={() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-        audio.muted = !audio.muted;
-        setMuted(audio.muted);
-      }} />
+      <MediaVolumeControl mediaRef={audioRef} disabled={!url} className="voice-player-volume" />
     </div>
     {error ? <span className="voice-message-error" role="status">{error}</span> : null}
   </>;
