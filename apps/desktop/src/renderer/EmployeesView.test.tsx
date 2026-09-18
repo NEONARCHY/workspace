@@ -37,8 +37,15 @@ afterEach(cleanup);
 describe("Employee list and retained access controls", () => {
   it("filters by role and pending activation without changing server data", async () => {
     mount(); await screen.findByRole("table");
-    fireEvent.change(screen.getByLabelText("Фильтр по роли сотрудника"), { target: { value: "manager" } });
-    fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), { target: { value: "invited" } });
+    fireEvent.change(screen.getByLabelText("Фильтр по роли сотрудника"), {
+      target: { value: "manager" },
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
+    });
+    fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), {
+      target: { value: "invited" },
+    });
     await waitFor(() => {
       expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
     });
