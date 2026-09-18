@@ -239,6 +239,17 @@ export interface ChatMessage {
   readonly canPin?: boolean;
 }
 
+export interface LinkPreview {
+  readonly url: string;
+  readonly canonicalUrl: string;
+  readonly kind: "page" | "video" | "youtube" | "instagram";
+  readonly title: string;
+  readonly description: string;
+  readonly siteName: string;
+  readonly imageUrl?: string | null;
+  readonly embedUrl?: string | null;
+}
+
 export type MessageReactionEmoji = string;
 
 export interface MessageReaction {

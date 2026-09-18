@@ -1,7 +1,8 @@
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api import messenger_service as service
@@ -9,6 +10,7 @@ from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.link_preview import UnsafePreviewUrl, load_link_preview
 from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
     ChatMessageResponse,
@@ -16,6 +18,7 @@ from yuksalish_api.workspace_schemas import (
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    LinkPreviewResponse,
     MessageReactionRequest,
     PinMessageRequest,
     SetChatMemberRequest,
@@ -26,6 +29,27 @@ from yuksalish_api.workspace_schemas import (
 router = APIRouter(tags=["messenger"])
 User = Annotated[AuthenticatedUser, Depends(require_user)]
 Connection = Annotated[AsyncConnection, Depends(get_connection)]
+
+
+@router.get("/messenger/link-preview", response_model=LinkPreviewResponse)
+async def link_preview(
+    url: Annotated[str, Query(min_length=8, max_length=2048)], user: User
+) -> LinkPreviewResponse:
+    del user
+    try:
+        return await load_link_preview(url)
+    except UnsafePreviewUrl as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except httpx.HTTPError:
+        parsed = httpx.URL(url)
+        host = parsed.host or "Ссылка"
+        return LinkPreviewResponse(
+            url=url,
+            canonical_url=url,
+            kind="page",
+            title=host,
+            site_name=host.removeprefix("www."),
+        )
 
 
 async def changed(connection: AsyncConnection, request: Request) -> None:

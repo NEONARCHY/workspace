@@ -40,6 +40,7 @@ import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { MessageLinkPreviews } from "./MessageLinkPreviews";
 
 interface MessengerViewProps {
   readonly token: string;
@@ -530,6 +531,7 @@ function Conversation({
                         {voiceAttachments.map((attachment) => (
                           <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
                         ))}
+                        {message.body ? <MessageLinkPreviews body={message.body} token={token} /> : null}
                         <AttachmentChips
                           attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
                           onDownload={onDownloadAttachment}

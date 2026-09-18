@@ -160,6 +160,17 @@ class ChatMessageResponse(ApiModel):
     can_pin: bool = False
 
 
+class LinkPreviewResponse(ApiModel):
+    url: str
+    canonical_url: str
+    kind: Literal["page", "video", "youtube", "instagram"]
+    title: str
+    description: str = ""
+    site_name: str
+    image_url: str | None = None
+    embed_url: str | None = None
+
+
 AttachmentOwnerType = Literal["message", "task", "approval_request", "absence"]
 
 

@@ -18,6 +18,7 @@ import type {
   CreateChatInput,
   MessageOptions,
   MessageReactionEmoji,
+  LinkPreview,
   ModuleAccessRule,
   ModuleAccessSubject,
   ModulePermissionSet,
@@ -70,6 +71,14 @@ export const hasPendingMutation = () => pendingMutations > 0;
 
 export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePolicy> {
   return apiRequest<DesktopUpdatePolicy>("/updates/policy", {}, token);
+}
+
+export function loadLinkPreview(token: string, url: string): Promise<LinkPreview> {
+  return apiRequest<LinkPreview>(
+    `/messenger/link-preview?url=${encodeURIComponent(url)}`,
+    {},
+    token,
+  );
 }
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
