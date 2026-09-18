@@ -71,7 +71,6 @@ const webPlatform: WorkspacePlatform = {
   reportDiagnostic: async () => undefined,
   showNotification: async (payload) => {
     if (!("Notification" in window) || Notification.permission !== "granted") return false;
-    if (document.visibilityState === "visible") return false;
     const notification = new Notification(payload.title, { body: payload.body, tag: payload.id });
     notification.onclick = () => {
       window.focus();

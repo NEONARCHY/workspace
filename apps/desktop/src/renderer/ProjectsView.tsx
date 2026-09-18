@@ -225,7 +225,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         </div>
       </div>
 
-      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && nextStages[project.stage].includes(target as ProjectStage); }} onPick={id => updateSelectedId(id)} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
+      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && nextStages[project.stage].includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board" aria-label="Стадии проектов">
         {stages.map((stage) => {
           const items = visibleProjects.filter((project) => project.stage === stage);

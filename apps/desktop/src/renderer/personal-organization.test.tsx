@@ -26,12 +26,12 @@ describe("Personal organization", () => {
   it("edits navigation only after save, cancels, restores defaults and keeps the opening revision", async () => {
     const save = vi.fn().mockResolvedValue(undefined), close = vi.fn();
     const view = render(<NavigationEditor order={navigationKeys} revision={4} labels={labels} onSave={save} onClose={close} />);
-    expect(screen.getByRole("button", { name: "crm: выше" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "tasks: выше" }));
+    expect(screen.getByRole("button", { name: "Переставить: tasks" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /выше|ниже/i })).not.toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
     view.rerender(<NavigationEditor order={navigationKeys} revision={8} labels={labels} onSave={save} onClose={close} />);
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
-    await waitFor(() => expect(save).toHaveBeenCalledWith(["tasks", "crm", ...navigationKeys.slice(2)], 4));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 4));
     await waitFor(() => expect(close).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
     expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
@@ -41,11 +41,11 @@ describe("Personal organization", () => {
   it("retains the navigation draft and shows an error if saving is rejected", async () => {
     const close = vi.fn();
     render(<NavigationEditor order={navigationKeys} revision={0} labels={labels} onSave={vi.fn().mockRejectedValue(new Error("Конфликт версий"))} onClose={close} />);
-    fireEvent.click(screen.getByRole("button", { name: "tasks: выше" }));
+    expect(screen.getByRole("button", { name: "Переставить: tasks" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Конфликт версий");
     expect(close).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
   });
   it("sorts pinned chats, separates the archive, finds messages and restores without repinning", async () => {
     const first = initialChats[0]!, second = initialChats[1]!;

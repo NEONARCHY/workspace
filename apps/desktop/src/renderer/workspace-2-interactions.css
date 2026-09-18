@@ -184,9 +184,9 @@
 .app-provider .fui-Input { align-items: center; }
 .app-provider .fui-Input__input {
   min-height: 0;
-  height: 34px;
-  padding-block: 7px;
-  line-height: 20px;
+  height: 100%;
+  padding-block: 0;
+  line-height: normal;
   box-sizing: border-box;
 }
 

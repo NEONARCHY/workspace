@@ -56,7 +56,6 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
     return grouped;
   }, [tasks]);
   const unscheduled = tasks.filter((task) => !validDate(task.dueAt));
-  const scheduledCount = tasks.length - unscheduled.length;
   const selectedKey = localDateKey(selectedDay);
   const selectedTasks = tasksByDay.get(selectedKey) ?? [];
 
@@ -64,11 +63,6 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
     <div className="task-calendar-shell calendar-view task-calendar-embedded">
       <div className="calendar-main">
       <header className="calendar-toolbar">
-        <div className="calendar-title">
-          <span>Календарь задач</span>
-          <h1>{monthLabel}</h1>
-          <p>{scheduledCount} по сроку · {unscheduled.length} без срока</p>
-        </div>
         <div className="calendar-toolbar-actions">
           <div className="calendar-month-navigation" aria-label="Навигация по месяцам задач">
           <Button

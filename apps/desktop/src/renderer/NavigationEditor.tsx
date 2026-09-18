@@ -1,13 +1,14 @@
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
-import { ArrowDown16Regular, ArrowUp16Regular, ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
 import { moveBefore, normalizeNavigation } from "./personal-organization";
 
-export function NavigationEditor({ order, revision, labels, onSave, onClose }: {
+export function NavigationEditor({ order, revision, labels, icons, badges, onSave, onClose }: {
   readonly order: readonly NavigationKey[];
   readonly revision: number;
   readonly labels: Readonly<Record<NavigationKey, string>>;
+  readonly icons?: Readonly<Partial<Record<NavigationKey, ReactNode>>>;
+  readonly badges?: Readonly<Partial<Record<NavigationKey, number>>>;
   readonly onSave: (order: readonly NavigationKey[], revision: number) => Promise<void>;
   readonly onClose: () => void;
 }) {
@@ -22,15 +23,13 @@ export function NavigationEditor({ order, revision, labels, onSave, onClose }: {
     setAnnouncement(`${labels[source]}: позиция ${next.indexOf(source) + 1} из ${next.length}`);
   };
   return <section className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}>
-    <p>Перетащите раздел или используйте стрелки. Это ваше личное меню.</p>
     <SpatialSort ids={draft} onMove={(source, target) => move(source as NavigationKey, target as NavigationKey)}>
     <div role="list" aria-label="Разделы меню">
-      {draft.map((key, index) => <SpatialSortItem id={key} label={labels[key]} disabled={busy} key={key} role="listitem" className="navigation-edit-row"
+      {draft.map((key) => <SpatialSortItem id={key} label={labels[key]} disabled={busy} key={key} role="listitem" className="navigation-edit-row"
         data-navigation-key={key}>
-        <ReOrderDotsVertical16Regular aria-hidden="true" />
-        <span>{labels[key]}</span>
-        <button type="button" aria-label={`${labels[key]}: выше`} disabled={busy || index === 0} onClick={() => move(key, draft[index - 1]!)}><ArrowUp16Regular /></button>
-        <button type="button" aria-label={`${labels[key]}: ниже`} disabled={busy || index === draft.length - 1} onClick={() => move(key, draft[index + 1]!)}><ArrowDown16Regular /></button>
+        {icons?.[key] ? <span className="rail-icon">{icons[key]}</span> : null}
+        <span className="rail-label">{labels[key]}</span>
+        {badges?.[key] ? <span className="rail-badge">{badges[key]! > 99 ? "99+" : badges[key]}</span> : null}
       </SpatialSortItem>)}
     </div>
     </SpatialSort>

@@ -340,7 +340,7 @@ body { background: var(--ws-canvas); }
 .spatial-sort-item { position: relative; }
 .spatial-sort-grip { position: absolute; right: 3px; bottom: 2px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: #f1f7f6; color: #48737a; opacity: 0; cursor: grab; touch-action: none; }
 .spatial-sort-item:hover .spatial-sort-grip, .spatial-sort-item:focus-within .spatial-sort-grip { opacity: 1; }
-.navigation-edit-row .spatial-sort-grip { right: auto; left: 0; top: 0; height: 100%; opacity: 1; }
+.navigation-edit-row .spatial-sort-grip { position: static; grid-column: 4; width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; border-radius: 9px; opacity: 1; }
 .spatial-sort-preview { padding: 12px; border: 1px solid #fff; border-radius: 16px; background: #fff; box-shadow: var(--ws-shadow-lift); }
 .spatial-sort-preview .chat-more, .spatial-sort-preview > button:not(.chat-row) { display: none; }
 .record-table-frame { border: 0; }

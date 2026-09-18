@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
@@ -7,6 +7,7 @@ import { ArrowDownload24Regular, Attach24Regular, Document24Regular } from "@flu
 interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
   readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onLoad?: (attachment: WorkspaceAttachment) => Promise<Blob>;
 }
 
 function fileSize(value: number): string {
@@ -15,11 +16,39 @@ function fileSize(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
-export function AttachmentChips({ attachments, onDownload }: AttachmentChipsProps) {
+function AttachmentPreview({ attachment, onLoad, onDownload }: {
+  readonly attachment: WorkspaceAttachment;
+  readonly onLoad: (attachment: WorkspaceAttachment) => Promise<Blob>;
+  readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
+}) {
+  const [url, setUrl] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    void onLoad(attachment).then((blob) => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setUrl(objectUrl);
+    }).catch(() => active && setFailed(true));
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [attachment, onLoad]);
+  const image = attachment.contentType.startsWith("image/");
+  return <article className="attachment-media-preview">
+    {url && image ? <img src={url} alt={attachment.fileName} /> : null}
+    {url && !image ? <video src={url} controls preload="metadata" aria-label={attachment.fileName} /> : null}
+    {!url ? <span>{failed ? "Превью недоступно" : "Загружаем превью…"}</span> : null}
+    <button type="button" onClick={() => void onDownload(attachment)} title={`Скачать ${attachment.fileName}`}><ArrowDownload24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
+  </article>;
+}
+
+export function AttachmentChips({ attachments, onDownload, onLoad }: AttachmentChipsProps) {
   if (attachments.length === 0) return null;
   return (
     <div className="attachment-chips" aria-label="Вложения">
-      {attachments.map((attachment) => (
+      {attachments.map((attachment) => onLoad && (attachment.contentType.startsWith("image/") || attachment.contentType.startsWith("video/")) ? (
+        <AttachmentPreview key={attachment.id} attachment={attachment} onLoad={onLoad} onDownload={onDownload} />
+      ) : (
         <button
           key={attachment.id}
           type="button"

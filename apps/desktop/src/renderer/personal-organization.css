@@ -22,12 +22,13 @@
 @keyframes rail-more-enter { from { opacity: 0; transform: translateX(-8px) scale(.98); } to { opacity: 1; transform: translateX(0) scale(1); } }
 @media (prefers-reduced-motion: reduce) { .rail-more-drawer { animation: none; } }
 .navigation-editor { display: grid; gap: 10px; }
-.navigation-editor > p { margin: 0; padding-inline: 5px; color: #bad0e1; font-size: 11px; line-height: 1.5; }
-.navigation-edit-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px 24px; align-items: center; gap: 3px; min-height: 44px; padding: 4px 2px; border: 1px solid transparent; border-radius: 6px; color: #dce9f5; }
-.navigation-edit-row > span { overflow-wrap: anywhere; font-size: 11px; line-height: 1.35; }
+.navigation-edit-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto 26px; align-items: center; min-height: 44px; padding: 3px; border: 1px solid transparent; border-radius: 12px; color: var(--ws-text); background: transparent; }
+.navigation-edit-row > .rail-icon { grid-column: 1; }
+.navigation-edit-row > .rail-label { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.35; }
+.navigation-edit-row > .rail-badge { grid-column: 3; }
 .navigation-edit-row[draggable=true] { cursor: grab; }
 .navigation-edit-row[draggable=true]:active { cursor: grabbing; }
-.navigation-edit-row > svg { color: #9fc4df; }
+.navigation-edit-row .spatial-sort-grip { position: static; grid-column: 4; width: 26px; height: 26px; border-radius: 9px; opacity: 1; }
 .navigation-edit-row button, .navigation-edit-actions button { display: grid; place-items: center; min-height: 26px; padding: 2px; border: 1px solid #31536e; border-radius: 5px; background: #173f5f; color: white; cursor: pointer; }
 .navigation-edit-row button:disabled, .navigation-edit-actions button:disabled { opacity: .45; cursor: default; }
 .navigation-edit-actions { display: flex; flex-wrap: wrap; gap: 6px; }

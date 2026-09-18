@@ -1572,6 +1572,8 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
+            icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
+            badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
           /> : <AdaptiveNavigation items={orderedNavItems} renderItem={(item) => {

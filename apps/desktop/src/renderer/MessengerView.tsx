@@ -576,6 +576,7 @@ function Conversation({
                         <AttachmentChips
                           attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
                           onDownload={onDownloadAttachment}
+                          onLoad={onLoadAttachment}
                         />
                       </>
                     )}

@@ -185,7 +185,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
       {createPortal(<DragOverlay adjustScale={false} dropAnimation={settle}>
         {active && preview ? <article ref={previewRef} style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></article> : null}
-      </DragOverlay>, (interactionMode === "payment" ? document.querySelector(".approvals-view") : null) ?? document.querySelector(".app-provider") ?? document.body)}
+      </DragOverlay>, preview?.node.closest(".workspace-view") ?? document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
 }

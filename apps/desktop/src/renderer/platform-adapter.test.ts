@@ -53,4 +53,27 @@ describe("workspace platform adapter", () => {
     expect(await workspacePlatform.loadDraft("draft")).toBe("desktop draft");
     expect(loadDraft).toHaveBeenCalledWith("draft");
   });
+
+  it("delivers an allowed web notification even while the workspace is visible", async () => {
+    window.yuksalish = undefined;
+    const close = vi.fn();
+    const NotificationMock = vi.fn(function (this: { onclick: (() => void) | null; close: () => void }) {
+      this.onclick = null;
+      this.close = close;
+    });
+    Object.assign(NotificationMock, { permission: "granted", requestPermission: vi.fn() });
+    vi.stubGlobal("Notification", NotificationMock);
+    const { workspacePlatform } = await import("./platform-adapter");
+
+    await expect(workspacePlatform.showNotification({
+      id: "notification-1",
+      title: "Новая задача",
+      body: "Назначена задача",
+      section: "tasks",
+    })).resolves.toBe(true);
+    expect(NotificationMock).toHaveBeenCalledWith("Новая задача", {
+      body: "Назначена задача",
+      tag: "notification-1",
+    });
+  });
 });
