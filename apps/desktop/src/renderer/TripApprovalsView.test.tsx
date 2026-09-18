@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { TripRequest } from "@yuksalish/contracts";
 import { TripApprovalsView } from "./TripApprovalsView";
-import { people } from "./demo-data";
+import { people } from "./test-fixtures/demo-data";
 
 const request: TripRequest = {
   id: "test-trip", number: "TR-TEST", requesterUserId: people[0]!.id,

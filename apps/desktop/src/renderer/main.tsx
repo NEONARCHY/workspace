@@ -22,6 +22,7 @@ import "./workspace-2-projects-trips.css";
 import "./workspace-2-tasks.css";
 import "./workspace-2-interactions.css";
 import "./workspace-2-auth.css";
+import "./workspace-2-messenger.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";
 import "./web-platform.css";

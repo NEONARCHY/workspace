@@ -3,7 +3,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { TaskComposer } from "./TaskComposer";
-import { people } from "./demo-data";
+import { people } from "./test-fixtures/demo-data";
 
 afterEach(() => {
   cleanup();

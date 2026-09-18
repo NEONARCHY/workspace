@@ -240,10 +240,10 @@ function Conversation({
     }
   };
   const send = () => {
-    if (!canSend || busy || !draft.trim()) return;
+    if (!canSend || busy || (!draft.trim() && pendingFiles.length === 0)) return;
     focusAfterSend.current = true;
     void run(async () => {
-      const message = await onSendMessage(chat.id, draft.trim(), pendingFiles, {
+      const message = await onSendMessage(chat.id, draft.trim() || "Файл", pendingFiles, {
         replyToMessageId: reply?.id,
         mentionUserIds: mentions.filter((id) => activeMemberIds.has(id)),
       });
@@ -265,13 +265,16 @@ function Conversation({
     <article className="conversation-pane">
       <header className="conversation-header">
         <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button>
-        <div>
+        <div className="conversation-identity">
+          <Avatar name={chat.title} size={40} color="colorful" />
+          <div>
           <h2>{chat.title}</h2>
           <p>
             {chat.kind === "direct"
               ? "Личный диалог"
               : `${chat.members.length} участников · ${chat.kind === "group" ? "Закрытая группа" : "Рабочий чат"}`}
           </p>
+          </div>
         </div>
         <Button {...restoreFocusTarget} onClick={onManage}>
           {chat.kind === "group" ? "Участники и права" : "Участники"}
@@ -786,7 +789,7 @@ function Conversation({
               appearance="primary"
               icon={<Send24Filled />}
               aria-label="Отправить сообщение"
-              disabled={busy || !draft.trim()}
+              disabled={busy || (!draft.trim() && pendingFiles.length === 0)}
               onClick={send}
             />
           </div>}
@@ -814,10 +817,11 @@ export function MessengerView(props: MessengerViewProps) {
   return (
     <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane">
-        <div className="pane-heading">
+        <div className="pane-heading messenger-pane-heading">
           <div>
+            <span className="messenger-eyebrow">Рабочее пространство</span>
             <h1>Сообщения</h1>
-            <p>Все рабочие разговоры</p>
+            <p>Диалоги, группы и обсуждения задач</p>
           </div>
           <Tooltip content="Создать чат" relationship="label">
             <Button

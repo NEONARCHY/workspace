@@ -12,6 +12,7 @@ RUN groupadd --system yuksalish \
 COPY pyproject.toml README.md ./
 COPY apps ./apps
 COPY modules ./modules
+COPY scripts ./scripts
 
 RUN python -m pip install --no-cache-dir . \
     && mkdir -p /workspace/var/desktop-updates \

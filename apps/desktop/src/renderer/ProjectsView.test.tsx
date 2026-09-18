@@ -4,7 +4,7 @@ import { FluentProvider } from "@fluentui/react-components";
 import type { WorkspaceProject } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { ProjectsView } from "./ProjectsView";
-import { people } from "./demo-data";
+import { people } from "./test-fixtures/demo-data";
 
 const project: WorkspaceProject = { id: "qa-project", code: "YUK-26", title: "Региональная программа", description: "Описание",
   managerUserId: people[0]!.id, budget: 100000, spentBudget: 20000, remainingBudget: 80000, currency: "UZS",

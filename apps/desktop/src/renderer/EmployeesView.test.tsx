@@ -118,12 +118,12 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByLabelText("Выбрать сотрудников на странице"));
     fireEvent.click(screen.getByRole("button", { name: "Создать чат" }));
     const title = await screen.findByLabelText("Название новой группы");
+    const dialogSurface = title.closest(".fui-DialogSurface");
+    expect(dialogSurface).not.toBeNull();
+    const confirm = within(dialogSurface as HTMLElement).getByRole("button", {
+      name: "Создать и открыть",
+    });
     fireEvent.change(title, { target: { value: "Команда проекта" } });
-    const confirm = await screen.findByRole(
-      "button",
-      { name: "Создать и открыть" },
-      { timeout: 5_000 },
-    );
     await waitFor(() => expect(confirm).toBeEnabled());
     fireEvent.click(confirm);
     await waitFor(() => expect(onCreateChat).toHaveBeenCalledWith({ kind: "group", title: "Команда проекта", description: "Группа создана из списка сотрудников.", memberIds: ["one", "two"] }));

@@ -181,8 +181,8 @@ void app.whenReady().then(() => {
     const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
     const trustedMainFrame = isAllowedNavigation(webContents.getURL()) && details.isMainFrame;
     const audioOnly = permission === "media"
-      && mediaTypes?.length === 1
-      && mediaTypes[0] === "audio";
+      && (mediaTypes === undefined
+        || (mediaTypes.length === 1 && mediaTypes[0] === "audio"));
     callback(trustedMainFrame && (permission === "speaker-selection" || audioOnly));
   });
   createWindow();

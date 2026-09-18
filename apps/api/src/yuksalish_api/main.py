@@ -55,7 +55,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # One client keeps the OAuth token and the connection pool shared.
         zoom_client = ZoomClient(runtime_settings)
         lifespan_app.state.zoom_client = zoom_client
-        if runtime_settings.seed_demo_data:
+        # Demo fixtures are allowed only in the isolated test environment. A stale
+        # production/development flag must never recreate sample employees.
+        if runtime_settings.environment == "test" and runtime_settings.seed_demo_data:
             await seed_demo_data(engine, runtime_settings.demo_password)
 
         async def notification_scheduler() -> None:

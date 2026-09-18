@@ -68,4 +68,18 @@ describe("voice message media policy", () => {
     expect(VOICE_BITS_PER_SECOND * 60 / 8).toBeLessThanOrEqual(240_000);
     expect(VOICE_MAX_DURATION_MS).toBe(600_000);
   });
+
+  it("accepts Chromium WebM recording when the explicit codec alias is unavailable", () => {
+    class SupportedRecorder {
+      static isTypeSupported(type: string) {
+        return type === "audio/webm";
+      }
+    }
+    vi.stubGlobal("MediaRecorder", SupportedRecorder);
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia: vi.fn() },
+    });
+    expect(supportsCompressedVoiceRecording()).toBe(true);
+  });
 });
