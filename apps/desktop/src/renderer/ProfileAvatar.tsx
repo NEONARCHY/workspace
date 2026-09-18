@@ -25,13 +25,13 @@ function LoadedProfileAvatar({ person, token, size, cacheKey }: {
   useEffect(() => {
     let active = true;
     if (url) return;
-    void loadProfileAvatar(token, person.id).then((blob) => {
+    void loadProfileAvatar(token, person.id, person.avatarVersion).then((blob) => {
       if (!active) return;
       const next = URL.createObjectURL(blob);
       avatarUrls.set(cacheKey, next);
       setUrl(next);
     }).catch(() => { if (active) setUrl(undefined); });
     return () => { active = false; };
-  }, [cacheKey, person.id, token, url]);
+  }, [cacheKey, person.avatarVersion, person.id, token, url]);
   return <Avatar name={person.name} size={size} color="colorful" image={url ? { src: url } : undefined} />;
 }

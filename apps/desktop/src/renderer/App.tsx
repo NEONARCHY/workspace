@@ -142,6 +142,7 @@ import {
   sendWorkspaceMessage,
   createWorkspaceChat,
   updateWorkspaceChat,
+  deleteWorkspaceChat,
   addWorkspaceChatMembers,
   setWorkspaceChatMember,
   removeWorkspaceChatMember,
@@ -742,7 +743,7 @@ export function App() {
         void refreshWorkspace(session.accessToken).catch(reportError);
       }
       reportError(error);
-      return undefined;
+      throw error;
     }
   };
 
@@ -777,7 +778,7 @@ export function App() {
         void refreshWorkspace(session.accessToken).catch(reportError);
       }
       reportError(error);
-      return undefined;
+      throw error;
     }
   };
 
@@ -825,6 +826,7 @@ export function App() {
     setMember: (id, member) => messengerMutation((token) => setWorkspaceChatMember(token, id, member)),
     remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId)),
     transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
+    delete: (id) => messengerMutation((token) => deleteWorkspaceChat(token, id)),
   };
 
   const handleCreateTask = async (payload: WorkspaceTaskCreateInput) => {
@@ -1652,6 +1654,7 @@ export function App() {
             {displayedSection === "messenger" ? (
               <MessengerView
                 key={focusTarget?.revision}
+                token={session.accessToken}
                 chats={workspace.chats}
                 personalPreferences={workspace.personalPreferences}
                 onPersonalChat={(chatId, action) => personalMutation((token) => changePersonalChat(token, chatId, action))}
@@ -1665,6 +1668,7 @@ export function App() {
                 onReactMessage={handleMessageReaction}
                 onPinMessage={handleMessagePin}
                 currentUserId={workspace.currentUser.id}
+                currentUserRole={workspace.currentUser.role}
                 chatActions={chatActions}
                 onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}

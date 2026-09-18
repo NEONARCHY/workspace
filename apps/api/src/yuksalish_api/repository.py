@@ -2191,7 +2191,7 @@ async def load_workspace(
         (
             await connection.execute(
                 select(chats)
-                .where(chats.c.id.in_(accessible_chat_ids))
+                .where(chats.c.id.in_(accessible_chat_ids), chats.c.deleted_at.is_(None))
                 .order_by(chats.c.updated_at.desc())
             )
         )

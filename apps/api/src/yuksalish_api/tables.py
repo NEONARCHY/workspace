@@ -183,6 +183,8 @@ chats = sa.Table(
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_by_user_id", uuid_type),
 )
 
 chat_members = sa.Table(

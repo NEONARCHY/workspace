@@ -2,10 +2,10 @@
    normal flow so hover/focus never resizes a bubble or shifts the next message. */
 .message { align-items: flex-start; }
 .message > .fui-Avatar { flex: none; margin-top: 8px; }
-.message-content { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: calc(100% - 40px); }
-.message.own .message-content { align-items: flex-end; max-width: 100%; }
+.message-content { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: calc(100% - 78px); }
+.message.own .message-content { align-items: flex-end; max-width: calc(100% - 38px); }
 .message-content .message-body { width: fit-content; min-width: 0; max-width: 100%; }
-.message-content .message-actions { max-width: 100%; margin-top: 4px; }
+.message-content .message-actions { max-width: 100%; }
 .message.own .message-actions { justify-content: flex-end; }
 .message-content:has(.message-edit-form) { width: min(640px, 100%); }
 .message-content .message-body:has(.message-edit-form) { width: 100%; }

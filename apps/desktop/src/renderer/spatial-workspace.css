@@ -153,7 +153,7 @@ body { background: var(--ws-canvas); }
   pointer-events: none;
   transform-origin: 50% 72%;
   transform: translateY(var(--spatial-shift)) rotate(var(--spatial-tilt));
-  transition: transform 90ms linear;
+  transition: transform 55ms cubic-bezier(.18,.7,.2,1);
 }
 .spatial-drag-preview-shell {
   width: 100%;
@@ -167,26 +167,25 @@ body { background: var(--ws-canvas); }
 .spatial-drag-preview.is-payment-motion .spatial-drag-preview-shell { animation-name: spatial-payment-card-lift; animation-duration: var(--ws-motion-common); animation-timing-function: var(--ws-ease-physical); }
 .spatial-drag-preview.is-payment-motion.is-settling .spatial-drag-preview-shell { animation-name: spatial-payment-card-land; animation-duration: 280ms; animation-timing-function: var(--ws-ease-physical); }
 @keyframes spatial-card-lift {
-  from { opacity: .82; transform: scale(.99); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: .86; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes spatial-card-land {
-  from { opacity: 1; transform: rotate(-.45deg) scale(1.014); }
-  to { opacity: 1; transform: rotate(0) scale(1); }
+  from { opacity: 1; transform: rotate(-.45deg); }
+  to { opacity: 1; transform: rotate(0); }
 }
 @keyframes spatial-card-settle {
   from { opacity: .5; transform: scale(1.012); }
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes spatial-payment-card-lift {
-  from { opacity: .82; transform: scale(.99); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: .86; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 @keyframes spatial-payment-card-land {
-  0% { opacity: 1; transform: rotate(-.5deg) scale(1.02); }
-  58% { opacity: 1; transform: rotate(0) scale(.98); }
-  82% { opacity: 1; transform: rotate(0) scale(1.01); }
-  100% { opacity: 1; transform: rotate(0) scale(1); }
+  0% { opacity: 1; transform: rotate(-.8deg); }
+  62% { opacity: 1; transform: rotate(.35deg); }
+  100% { opacity: 1; transform: rotate(0); }
 }
 @keyframes spatial-payment-card-settle {
   0% { opacity: .72; transform: scale(.98); }

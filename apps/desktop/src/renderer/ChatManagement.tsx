@@ -32,6 +32,7 @@ export interface ChatActions {
   readonly setMember: (id: string, member: ChatMember) => Promise<ChatSummary>;
   readonly remove: (id: string, userId: string) => Promise<void>;
   readonly transfer: (id: string, userId: string) => Promise<ChatSummary>;
+  readonly delete: (id: string) => Promise<void>;
 }
 
 const permissionLabels: Record<keyof ChatPermissions, string> = {
@@ -204,6 +205,8 @@ export function ChatManagement({
   actions,
   onClose,
   onCreated,
+  onRequestDelete,
+  allowDelete = false,
 }: {
   readonly chat?: ChatSummary;
   readonly currentUserId: string;
@@ -211,6 +214,8 @@ export function ChatManagement({
   readonly actions: ChatActions;
   readonly onClose: () => void;
   readonly onCreated: (chat: ChatSummary) => void;
+  readonly onRequestDelete?: (chat: ChatSummary) => void;
+  readonly allowDelete?: boolean;
 }) {
   const [kind, setKind] = useState<"direct" | "group">("group");
   const [title, setTitle] = useState(chat?.title ?? "");
@@ -224,6 +229,7 @@ export function ChatManagement({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isOwner = chat?.ownerId === currentUserId;
+  const isCreator = chat?.members.some((member) => member.userId === currentUserId && member.role === "owner");
   const isGroup = chat?.kind === "group";
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
@@ -488,6 +494,11 @@ export function ChatManagement({
               </div>
             )}
             <div className="chat-dialog-actions">
+              {chat && onRequestDelete && (allowDelete || isOwner || isCreator) ? (
+                <Button appearance="primary" disabled={busy} onClick={() => onRequestDelete(chat)}>
+                  Удалить чат
+                </Button>
+              ) : null}
               {!chat && (
                 <Button
                   appearance="primary"

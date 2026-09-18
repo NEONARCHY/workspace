@@ -385,6 +385,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .tasks-view.efficiency-mode .section-toolbar { flex: none; }
 .efficiency-view { position: relative; min-width: 0; min-height: 0; flex: 1; padding: 0 20px 44px; overflow-y: auto; overscroll-behavior: contain; color: #24384b; background: radial-gradient(circle at 14% 5%, rgb(20 165 178 / 7%), transparent 27rem), radial-gradient(circle at 88% 22%, rgb(43 111 165 / 6%), transparent 24rem), #eef3f7; isolation: isolate; }
 .eff-commandbar { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: minmax(220px, 1fr) auto 36px; align-items: center; gap: 14px; min-height: 66px; margin: 0 -20px 16px; padding: 10px 20px; border-bottom: 1px solid rgb(192 208 219 / 84%); background: rgb(248 251 252 / 88%); box-shadow: 0 9px 28px rgb(27 69 96 / 5%); backdrop-filter: blur(18px) saturate(1.08); }
+.eff-commandbar.compact { grid-template-columns: auto 36px; justify-content: end; min-height: 50px; margin-bottom: 10px; padding-block: 7px; }
 .eff-commandbar > div { display: grid; gap: 3px; }
 .eff-commandbar > div strong { font-size: 14px; font-weight: 720; letter-spacing: -.01em; }
 .eff-commandbar > div span, .eff-commandbar label > span { color: #718397; font-size: 11px; }
@@ -1257,6 +1258,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .efficiency-view { padding-inline: 12px; }
   .eff-commandbar { grid-template-columns: minmax(0, 1fr) 34px; margin-inline: -12px; padding-inline: 12px; }
   .eff-commandbar label { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; padding-bottom: 8px; }
+  .eff-commandbar.compact { grid-template-columns: minmax(0, 1fr) 34px; }
+  .eff-commandbar.compact label { grid-column: auto; grid-row: auto; padding-bottom: 0; }
   .eff-commandbar select { min-width: 180px; }
   .eff-overview-grid { grid-template-columns: minmax(0, 1fr); }
   .eff-summary-lead { grid-template-columns: minmax(0, 1fr); justify-items: center; }

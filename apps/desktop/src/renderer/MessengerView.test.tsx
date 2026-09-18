@@ -21,13 +21,16 @@ function actions(): ChatActions {
     setMember: vi.fn(),
     remove: vi.fn(),
     transfer: vi.fn(),
+    delete: vi.fn(),
   };
 }
 function renderMessenger(
   overrides: Partial<Parameters<typeof MessengerView>[0]> = {},
 ) {
   const props: Parameters<typeof MessengerView>[0] = {
+    token: "access-token",
     currentUserId: "aziza",
+    currentUserRole: "employee",
     chats: initialChats,
     messages: initialMessages,
     tasks: initialTasks,
@@ -52,6 +55,12 @@ function renderMessenger(
     </FluentProvider>,
   );
   return { ...view, props };
+}
+
+function openMessageMenu(text: string) {
+  const message = screen.getByText(text).closest(".message");
+  if (!message) throw new Error(`Message not found: ${text}`);
+  fireEvent.contextMenu(message);
 }
 
 describe("Private messenger", () => {
@@ -194,11 +203,12 @@ describe("Private messenger", () => {
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
     const onSendMessage = vi.fn().mockResolvedValue({ id: "sent" });
     renderMessenger({ onSendMessage });
-    fireEvent.click(screen.getAllByRole("button", { name: /^Ответить:/ })[0]!);
+    openMessageMenu("Получил обновлённый счёт на ноутбуки. Сумма 84 600 000 сум, срок оплаты до пятницы.");
+    fireEvent.click(screen.getByRole("button", { name: "Ответить" }));
     fireEvent.click(
       screen.getByRole("button", { name: "Упомянуть участника" }),
     );
-    fireEvent.click(screen.getByRole("checkbox", { name: "@Бахтиёр Самугов" }));
+    fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
     fireEvent.change(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Посмотри, пожалуйста" },
     });
@@ -220,7 +230,8 @@ describe("Private messenger", () => {
     fireEvent.change(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Не отправлять другому" },
     });
-    fireEvent.click(screen.getAllByRole("button", { name: /^Ответить:/ })[0]!);
+    openMessageMenu("Получил обновлённый счёт на ноутбуки. Сумма 84 600 000 сум, срок оплаты до пятницы.");
+    fireEvent.click(screen.getByRole("button", { name: "Ответить" }));
     fireEvent.click(
       screen.getByRole("button", { name: /Бахтиёр Самугов.*Возьму задачу/ }),
     );
@@ -262,13 +273,12 @@ describe("Private messenger", () => {
     const onDeleteMessage = vi.fn().mockResolvedValue(undefined);
     renderMessenger({ messages: [message], onEditMessage, onDeleteMessage });
     const bubble = screen.getByText("Мой текст").closest(".message-body")!;
-    const controls = screen.getByRole("group", { name: "Действия с сообщением" });
+    const controls = screen.getByRole("group", { name: "Реакция на сообщение" });
     expect(bubble).not.toContainElement(controls);
     expect(bubble.parentElement).toContainElement(controls);
     expect(bubble.querySelector("time")).toHaveTextContent("12:00");
-    fireEvent.click(
-      screen.getByRole("button", { name: "Изменить сообщение: Мой текст" }),
-    );
+    openMessageMenu("Мой текст");
+    fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
     fireEvent.change(screen.getByLabelText("Изменить текст сообщения"), {
       target: { value: "Обновлённый текст" },
     });
@@ -285,12 +295,14 @@ describe("Private messenger", () => {
       "Обновлённый текст",
     );
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
-    fireEvent.click(
-      screen.getByRole("button", { name: "Удалить сообщение: Мой текст" }),
-    );
+    openMessageMenu("Мой текст");
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDeleteMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
-    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
+    expect(screen.getByText(/Сообщение будет удалено через/)).toBeInTheDocument();
+    expect(onDeleteMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть" }));
+    expect(onDeleteMessage).not.toHaveBeenCalled();
   });
 
   it("opens the last own message with ArrowUp, outside search results, then saves its revision", async () => {
@@ -414,7 +426,8 @@ describe("Private messenger", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Нравится: 3" }));
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(message, "👍"));
-    const unpin = screen.getByRole("button", { name: "Открепить сообщение" });
+    openMessageMenu("Важное решение по бюджету");
+    const unpin = screen.getByRole("button", { name: "Открепить" });
     await waitFor(() => expect(unpin).toBeEnabled());
     fireEvent.click(unpin);
     await waitFor(() => expect(onPinMessage).toHaveBeenCalledWith(message, false));
@@ -423,6 +436,47 @@ describe("Private messenger", () => {
     const panel = screen.getByRole("region", { name: "Закреплённые сообщения" });
     expect(panel).toHaveTextContent("Важное решение по бюджету");
     expect(within(panel).getByText("Бахтиёр Самугов")).toBeInTheDocument();
+  });
+
+  it("allows adding a reaction to the current user's own message", async () => {
+    const ownMessage: ChatMessage = {
+      id: "own-reaction",
+      chatId: "finance",
+      authorId: "aziza",
+      body: "Моё сообщение",
+      time: "14:22",
+      own: true,
+      reactions: [{ emoji: "👍", count: 1, reactedByCurrentUser: false }],
+    };
+    const onReactMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [ownMessage], onReactMessage });
+
+    const message = screen.getByText("Моё сообщение").closest(".message");
+    expect(message).not.toBeNull();
+    fireEvent.focus(message!);
+    expect(screen.getByRole("button", { name: "Добавить реакцию" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Нравится: 1" }));
+
+    await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(ownMessage, "👍"));
+  });
+
+  it("forwards a message to another writable chat", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ id: "forwarded" });
+    renderMessenger({ onSendMessage });
+    const source = initialMessages[0]!;
+
+    openMessageMenu(source.body);
+    fireEvent.click(screen.getByRole("button", { name: "Переслать" }));
+    const drawer = screen.getByRole("dialog", { name: "Переслать сообщение" });
+    fireEvent.click(within(drawer).getByRole("button", { name: /Бахтиёр Самугов/ }));
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(
+      "baxtiyor",
+      `Переслано от Дилшод Рахимов:\n${source.body}`,
+      [],
+      { mentionUserIds: [] },
+    ));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
 
   it("loads compressed voice data only when playback is requested", async () => {

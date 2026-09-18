@@ -179,8 +179,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
   const activeTitle = activeEmployee.userId === mine.userId ? "Моя эффективность" : "Сводка сотрудника";
 
   return <div className="efficiency-view">
-    <div className="eff-commandbar">
-      <div><strong>Выполнение задач в срок</strong><span>Календарный месяц · Asia/Tashkent</span></div>
+    <div className="eff-commandbar compact" aria-label="Настройки периода эффективности">
       <label><span>Период</span><WorkspaceSelect aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</WorkspaceSelect></label>
       <Button className="eff-help-button" appearance="secondary" aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>?</Button>
     </div>

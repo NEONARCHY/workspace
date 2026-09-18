@@ -212,6 +212,7 @@ export interface ChatSummary {
   readonly unread: number;
   readonly description: string;
   readonly ownerId?: string | null;
+  readonly canDelete?: boolean;
   readonly members: readonly ChatMember[];
   readonly permissions: ChatPermissions;
 }
@@ -237,7 +238,7 @@ export interface ChatMessage {
   readonly canPin?: boolean;
 }
 
-export type MessageReactionEmoji = "👍" | "❤️" | "👏" | "🎉" | "👀" | "✅";
+export type MessageReactionEmoji = "👍" | "❤️" | "👏" | "🎉" | "👀" | "✅" | "🔥" | "😂" | "😮" | "😢" | "🙏" | "🤝" | "💯" | "❗";
 
 export interface MessageReaction {
   readonly emoji: MessageReactionEmoji;

@@ -194,6 +194,11 @@
   box-shadow: 0 15px 30px -19px rgb(31 62 72 / 42%), 0 2px 5px rgb(31 62 72 / 6%);
   transform: translateY(-2px);
 }
+.approvals-view .approval-board-card.spatial-drag-preview,
+.approvals-view .approval-board-card.spatial-drag-preview:hover {
+  transform: translateY(var(--spatial-shift)) rotate(var(--spatial-tilt));
+}
+.approvals-view .spatial-drag-preview :is(.approval-card-quick-action, .spatial-grip) { display: none; }
 .approvals-view .approval-board-card.selected { border-color: #53a5a5; box-shadow: 0 0 0 2px rgb(0 145 168 / 12%), 0 14px 28px -20px rgb(31 62 72 / 38%); }
 .approvals-view .approval-card-open { position: relative; gap: 0; padding: 16px 15px 12px; }
 .approvals-view .approval-card-title {

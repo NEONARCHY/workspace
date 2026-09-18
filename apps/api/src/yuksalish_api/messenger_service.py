@@ -70,7 +70,7 @@ async def chat_access(
     *,
     lock: bool = False,
 ) -> tuple[Record, Record]:
-    statement = select(chats).where(chats.c.id == chat_id)
+    statement = select(chats).where(chats.c.id == chat_id, chats.c.deleted_at.is_(None))
     if lock:
         statement = statement.with_for_update()
     chat = (await connection.execute(statement)).mappings().first()
@@ -201,6 +201,11 @@ async def chat_summary(
         description=chat["description"] or "",
         kind=chat["kind"],
         owner_id=next((str(m["user_id"]) for m in members if m["member_role"] == "owner"), None),
+        can_delete=(
+            membership["member_role"] == "owner"
+            or chat["created_by_user_id"] == user.id
+            or user.role in {"admin", "superadmin"}
+        ),
         members=[
             ChatMemberResponse(
                 user_id=str(item["user_id"]),
@@ -232,7 +237,10 @@ async def create_chat(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:pair, 0))"), {"pair": direct_key}
         )
         existing = await connection.scalar(
-            select(chats.c.id).where(chats.c.direct_key == direct_key)
+            select(chats.c.id).where(
+                chats.c.direct_key == direct_key,
+                chats.c.deleted_at.is_(None),
+            )
         )
         if existing is None:
             candidates = (
@@ -330,6 +338,33 @@ async def update_chat(
     )
     await audit(connection, user, "chat.updated", chat_id, payload.model_dump())
     return await chat_summary(connection, user, chat_id)
+
+
+async def delete_chat(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    chat_id: UUID,
+) -> None:
+    chat, member = await chat_access(connection, user, chat_id, lock=True)
+    is_owner = member["member_role"] == "owner"
+    is_creator = chat["created_by_user_id"] == user.id
+    is_workspace_admin = user.role in {"admin", "superadmin"}
+    if not (is_owner or is_creator or is_workspace_admin):
+        raise WorkspaceRepositoryError(
+            403, "Удалить чат может его создатель или администратор"  # noqa: RUF001
+        )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(chats)
+        .where(chats.c.id == chat_id, chats.c.deleted_at.is_(None))
+        .values(
+            deleted_at=now,
+            deleted_by_user_id=user.id,
+            direct_key=None,
+            updated_at=now,
+        )
+    )
+    await audit(connection, user, "chat.deleted", chat_id, {"kind": chat["kind"]})
 
 
 async def add_chat_members(
@@ -882,11 +917,16 @@ async def change_message(
         .mappings()
         .one()
     )
-    if not message_response(row, user, can_send=member_permissions(member).send_messages).can_edit:
-        raise WorkspaceRepositoryError(403, "Можно менять только свои сообщения в течение 24 часов")
+    deleting = isinstance(payload, DeleteMessageRequest)
+    may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(chat, member)
+    may_edit_own = message_response(
+        row, user, can_send=member_permissions(member).send_messages
+    ).can_edit
+    if (deleting and not (may_edit_own or may_moderate)) or (not deleting and not may_edit_own):
+        raise WorkspaceRepositoryError(403, "Недостаточно прав для изменения сообщения")
     if payload.expected_revision != row["revision"]:
         raise WorkspaceRepositoryError(409, "Сообщение уже изменилось. Обновите переписку")
-    deleted = isinstance(payload, DeleteMessageRequest)
+    deleted = deleting
     if isinstance(payload, EditMessageRequest):
         mentions = await validate_mentions(connection, chat_id, payload.mention_user_ids)
         body = payload.body

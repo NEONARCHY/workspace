@@ -227,7 +227,15 @@
 }
 :is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
 .fui-MenuItem[aria-disabled="true"] { opacity: .48; }
-.fui-PopoverSurface.identity-popover { width: min(310px, calc(100vw - 28px)); padding: 10px; gap: 7px; border-radius: 22px; }
+.fui-PopoverSurface.identity-popover {
+  width: min(310px, calc(100vw - 28px));
+  padding: 10px;
+  gap: 7px;
+  border-radius: 22px;
+  animation: none;
+  transition: none;
+}
+.fui-PopoverSurface.identity-popover.is-closed { display: none; }
 .identity-popover-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

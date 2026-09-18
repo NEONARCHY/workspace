@@ -1155,7 +1155,8 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /Создать задачу из сообщения:/ })[0]!);
+    fireEvent.contextMenu(document.querySelector(".message")!);
+    fireEvent.click(screen.getByRole("button", { name: "В задачу" }));
     expect(screen.getByRole("dialog", { name: "Новая задача" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить счёт из переписки" },

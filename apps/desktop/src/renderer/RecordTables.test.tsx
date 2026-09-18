@@ -35,7 +35,8 @@ describe("Corporate record tables", () => {
   });
   it("resets pagination for a changed filter and keeps the chosen page size", () => {
     const view = render(wrap(<EmployeeRecords employees={employees} filterKey="all" {...employeeRecordProps()} />));
-    fireEvent.change(screen.getByLabelText("Строк на странице: сотрудники"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Количество строк на странице: сотрудники" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "10" }));
     fireEvent.click(screen.getByRole("button", { name: "Следующая страница: сотрудники" }));
     expect(screen.getByRole("status")).toHaveTextContent("11–20 из 31");
     view.rerender(wrap(<EmployeeRecords employees={employees} filterKey="active" {...employeeRecordProps()} />));

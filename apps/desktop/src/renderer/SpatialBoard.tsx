@@ -167,9 +167,9 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
         if (!element || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
         const velocity = delta.x - previousDragX.current;
         previousDragX.current = delta.x;
-        const tilt = Math.max(-2.2, Math.min(2.2, velocity * .16));
+        const tilt = Math.max(-5, Math.min(5, velocity * .34));
         element.style.setProperty("--spatial-tilt", `${tilt.toFixed(2)}deg`);
-        element.style.setProperty("--spatial-shift", `${Math.max(-2, Math.min(2, delta.y * .008)).toFixed(2)}px`);
+        element.style.setProperty("--spatial-shift", `${Math.max(-5, Math.min(5, delta.y * .018)).toFixed(2)}px`);
       }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
@@ -183,9 +183,9 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       } }}>
       {children}
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
-      {createPortal(<DragOverlay dropAnimation={settle}>
+      {createPortal(<DragOverlay adjustScale={false} dropAnimation={settle}>
         {active && preview ? <article ref={previewRef} style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></article> : null}
-      </DragOverlay>, document.querySelector(".app-provider") ?? document.body)}
+      </DragOverlay>, (interactionMode === "payment" ? document.querySelector(".approvals-view") : null) ?? document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
 }

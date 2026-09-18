@@ -60,6 +60,18 @@ async def update_chat(
     return result
 
 
+@router.delete("/chats/{chat_id}", status_code=204)
+async def delete_chat(
+    chat_id: UUID, user: User, connection: Connection, request: Request
+) -> Response:
+    try:
+        await service.delete_chat(connection, user, chat_id)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return Response(status_code=204)
+
+
 @router.post("/chats/{chat_id}/members", response_model=ChatSummaryResponse)
 async def add_members(
     chat_id: UUID,

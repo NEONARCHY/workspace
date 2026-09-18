@@ -15,7 +15,6 @@ import type {
 import {
   Avatar,
   Button,
-  Checkbox,
   Input,
   Menu,
   MenuItem,
@@ -44,6 +43,7 @@ import { defaultPersonalPreferences } from "./personal-organization";
 import { TaskComposer } from "./TaskComposer";
 import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
   { emoji: "👍", label: "Нравится" },
@@ -52,14 +52,24 @@ const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[]
   { emoji: "🎉", label: "Праздник" },
   { emoji: "👀", label: "Смотрю" },
   { emoji: "✅", label: "Готово" },
+  { emoji: "🔥", label: "Огонь" },
+  { emoji: "😂", label: "Смешно" },
+  { emoji: "😮", label: "Удивление" },
+  { emoji: "😢", label: "Грустно" },
+  { emoji: "🙏", label: "Спасибо" },
+  { emoji: "🤝", label: "Договорились" },
+  { emoji: "💯", label: "Сто процентов" },
+  { emoji: "❗", label: "Важно" },
 ];
 
 interface MessengerViewProps {
+  readonly token: string;
   readonly personalPreferences?: PersonalPreferences;
   readonly onPersonalChat?: (id: string, action: PersonalChatAction) => Promise<void>;
   readonly onPinnedOrder?: (order: readonly string[]) => Promise<void>;
   readonly focusChatId?: string;
   readonly currentUserId: string;
+  readonly currentUserRole: string;
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
@@ -94,12 +104,15 @@ interface MessengerViewProps {
 }
 
 function Conversation({
+  token,
   chat,
+  availableChats,
   messages,
   attachments,
   people,
   tasks,
   currentUserId,
+  currentUserRole,
   onSendMessage,
   onSendVoiceMessage,
   onReactMessage,
@@ -115,6 +128,7 @@ function Conversation({
   onPersonalChat,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
+  readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
   readonly onBack: () => void;
 }) {
@@ -127,9 +141,14 @@ function Conversation({
   const [mentionPicker, setMentionPicker] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
+  const [forwarding, setForwarding] = useState<ChatMessage>();
   const [editing, setEditing] = useState<ChatMessage>();
   const [editBody, setEditBody] = useState("");
   const [deleting, setDeleting] = useState<ChatMessage>();
+  const [pendingDeletion, setPendingDeletion] = useState<{ message: ChatMessage; deadline: number }>();
+  const [deleteSeconds, setDeleteSeconds] = useState(6);
+  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number }>();
+  const [reactionTargetId, setReactionTargetId] = useState<string>();
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -143,6 +162,7 @@ function Conversation({
   const restoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
+  const reactionTimer = useRef(0);
   const scrollInitialized = useRef(false);
   useEffect(() => {
     const bridge = workspacePlatform;
@@ -185,6 +205,13 @@ function Conversation({
         message.body.toLowerCase().includes(query.toLowerCase())),
   );
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
+  const mentionMatch = draft.match(/(?:^|\s)@([^\s@]*)$/u);
+  const mentionQuery = (mentionMatch?.[1] ?? "").toLocaleLowerCase("ru");
+  const mentionCandidates = chat.members.filter((member) => {
+    if (member.userId === currentUserId) return false;
+    const person = people.find((item) => item.id === member.userId);
+    return !mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery);
+  });
   const latestMessage = activeMessages.at(-1);
   const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
   const latestPinned = pinnedMessages.at(-1);
@@ -218,6 +245,32 @@ function Conversation({
       composerInputRef.current?.focus();
     }
   }, [busy, draft]);
+  useEffect(() => {
+    if (!pendingDeletion) return;
+    const tick = () => setDeleteSeconds(Math.max(0, Math.ceil((pendingDeletion.deadline - Date.now()) / 1_000)));
+    tick();
+    const interval = window.setInterval(tick, 200);
+    const timeout = window.setTimeout(() => {
+      setBusy(true);
+      setError("");
+      void onDeleteMessage(pendingDeletion.message)
+        .then(() => {
+          if (reply?.id === pendingDeletion.message.id) setReply(undefined);
+          setPendingDeletion(undefined);
+        })
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось удалить сообщение"))
+        .finally(() => setBusy(false));
+    }, Math.max(0, pendingDeletion.deadline - Date.now()));
+    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
+  }, [onDeleteMessage, pendingDeletion, reply?.id]);
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(undefined);
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("blur", close);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
+  }, [contextMenu]);
+  useEffect(() => () => window.clearTimeout(reactionTimer.current), []);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     setEditing(message);
@@ -346,8 +399,6 @@ function Conversation({
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
           );
           const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
-          const mayModify = own && message.canEdit && canSend && !message.deletedAt;
-          const mayEdit = mayModify && voiceAttachments.length === 0;
           return (
             <div key={message.id}>
               {(index === 0 || date !== previousDate) && (
@@ -355,7 +406,31 @@ function Conversation({
               )}
               <div
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}`}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""} ${pendingDeletion?.message.id === message.id ? "is-pending-delete" : ""}`}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setContextMenu({ message, x: event.clientX, y: event.clientY });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setContextMenu({ message, x: rect.left + 28, y: rect.top + 28 });
+                  }
+                }}
+                tabIndex={0}
+                onPointerEnter={() => {
+                  window.clearTimeout(reactionTimer.current);
+                  reactionTimer.current = window.setTimeout(() => setReactionTargetId(message.id), 1_000);
+                }}
+                onPointerLeave={() => {
+                  window.clearTimeout(reactionTimer.current);
+                  setReactionTargetId((current) => current === message.id ? undefined : current);
+                }}
+                onFocus={() => setReactionTargetId(message.id)}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
+                }}
               >
                 {!own && (
                   <Avatar
@@ -471,7 +546,7 @@ function Conversation({
                     </div>
                   )}
                   {!message.deletedAt && (
-                    <div className="message-actions" role="group" aria-label="Действия с сообщением">
+                    <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
                       <Menu>
                         <MenuTrigger disableButtonEnhancement>
                           <Button
@@ -482,8 +557,8 @@ function Conversation({
                             aria-label="Добавить реакцию"
                           />
                         </MenuTrigger>
-                        <MenuPopover>
-                          <MenuList>
+                        <MenuPopover className="message-reaction-popover">
+                          <MenuList className="message-reaction-grid">
                             {reactionOptions.map((reaction) => (
                               <MenuItem
                                 key={reaction.emoji}
@@ -495,61 +570,6 @@ function Conversation({
                           </MenuList>
                         </MenuPopover>
                       </Menu>
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        disabled={!canSend || busy}
-                        aria-label={`Ответить: ${message.body.slice(0, 40)}`}
-                        onClick={() => setReply(message)}
-                      >
-                        Ответить
-                      </Button>
-                      {message.canPin ? (
-                        <Button
-                          appearance="subtle"
-                          size="small"
-                          icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />}
-                          disabled={busy}
-                          aria-label={message.isPinned ? "Открепить сообщение" : "Закрепить сообщение"}
-                          onClick={() => void run(() => onPinMessage(message, !message.isPinned))}
-                        >
-                          {message.isPinned ? "Открепить" : "Закрепить"}
-                        </Button>
-                      ) : null}
-                      <Button
-                        className="message-task-action"
-                        appearance="subtle"
-                        size="small"
-                        icon={<TaskListSquareLtr24Regular />}
-                        aria-label={`Создать задачу из сообщения: ${message.body.slice(0, 40)}`}
-                        onClick={() => setTaskSource(message)}
-                      >
-                        В задачу
-                      </Button>
-                      {mayModify && (
-                        <>
-                          {mayEdit ? (
-                            <Button
-                              appearance="subtle"
-                              size="small"
-                              disabled={busy}
-                              aria-label={`Изменить сообщение: ${message.body.slice(0, 40)}`}
-                              onClick={() => startEditing(message)}
-                            >
-                              Изменить
-                            </Button>
-                          ) : null}
-                          <Button
-                            appearance="subtle"
-                            size="small"
-                            disabled={busy}
-                            aria-label={`Удалить сообщение: ${message.body.slice(0, 40)}`}
-                            onClick={() => setDeleting(message)}
-                          >
-                            Удалить
-                          </Button>
-                        </>
-                      )}
                     </div>
                   )}
                 </div>
@@ -558,6 +578,20 @@ function Conversation({
           );
         })}
       </div>
+      {contextMenu ? (() => {
+        const message = contextMenu.message;
+        const own = message.authorId === currentUserId;
+        const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
+        const mayDelete = (own && message.canEdit) || message.canPin || ["admin", "superadmin"].includes(currentUserRole);
+        return <div className="message-context-menu" role="menu" style={{ left: Math.min(contextMenu.x, window.innerWidth - 206), top: Math.min(contextMenu.y, window.innerHeight - 286) }} onPointerDown={(event) => event.stopPropagation()}>
+          <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
+          <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>
+          {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
+          <Button appearance="subtle" icon={<TaskListSquareLtr24Regular />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
+          {own && message.canEdit && !hasVoice ? <Button appearance="subtle" onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
+          {mayDelete ? <Button appearance="subtle" onClick={() => { setDeleting(message); setContextMenu(undefined); }}>Удалить</Button> : null}
+        </div>;
+      })() : null}
       {error && (
         <div className="messenger-error" role="alert">
           {error}
@@ -574,8 +608,7 @@ function Conversation({
             appearance="primary"
             onClick={() =>
               void run(async () => {
-                await onDeleteMessage(deleting);
-                if (reply?.id === deleting.id) setReply(undefined);
+                setPendingDeletion({ message: deleting, deadline: Date.now() + 6_000 });
                 setDeleting(undefined);
               })
             }
@@ -587,6 +620,10 @@ function Conversation({
           </Button>
         </div>
       )}
+      {pendingDeletion ? <div className="messenger-undo" role="status">
+        <span>Сообщение будет удалено через {deleteSeconds} сек.</span>
+        <Button size="small" appearance="primary" onClick={() => setPendingDeletion(undefined)}>Вернуть</Button>
+      </div> : null}
       {taskSource ? <TaskComposer
         open
         people={people}
@@ -602,6 +639,19 @@ function Conversation({
           return task;
         }}
       /> : null}
+      {forwarding ? <div className="message-forward-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setForwarding(undefined); }}>
+        <aside className="message-forward-drawer" role="dialog" aria-modal="true" aria-label="Переслать сообщение">
+          <header><div><small>Пересылка</small><strong>Выберите чат</strong></div><Button appearance="subtle" aria-label="Закрыть пересылку" onClick={() => setForwarding(undefined)}>×</Button></header>
+          <p>{forwarding.body.slice(0, 180)}</p>
+          <div className="message-forward-list">
+            {availableChats.filter((target) => target.id !== chat.id && target.permissions.sendMessages).map((target) => <button type="button" key={target.id} onClick={() => void run(async () => {
+              const forwarded = await onSendMessage(target.id, `Переслано от ${personName(forwarding.authorId)}:\n${forwarding.body}`, [], { mentionUserIds: [] });
+              if (!forwarded) throw new Error("Не удалось переслать сообщение");
+              setForwarding(undefined);
+            })}><Avatar name={target.title} size={32} color="colorful" /><span><strong>{target.title}</strong><small>{target.kind === "direct" ? "Личный диалог" : "Рабочий чат"}</small></span></button>)}
+          </div>
+        </aside>
+      </div> : null}
       {!canSend ? (
         <div className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец
@@ -637,23 +687,33 @@ function Conversation({
               aria-label="Упомянуть участников"
             >
               <small>Кому отправить уведомление об упоминании</small>
-              {chat.members
-                .filter((member) => member.userId !== currentUserId)
-                .map((member) => (
-                  <Checkbox
-                    key={member.userId}
-                    label={`@${personName(member.userId)}`}
-                    checked={mentions.includes(member.userId)}
-                    disabled={busy}
-                    onChange={(_, data) =>
-                      setMentions(
-                        data.checked
-                          ? [...mentions, member.userId]
-                          : mentions.filter((id) => id !== member.userId),
-                      )
+              {mentionCandidates.map((member) => {
+                const person = people.find((item) => item.id === member.userId);
+                if (!person) return null;
+                const selected = mentions.includes(member.userId);
+                return <button
+                  className="mention-person"
+                  type="button"
+                  key={member.userId}
+                  aria-label={`@${person.name}`}
+                  aria-pressed={selected}
+                  disabled={busy}
+                  onClick={() => {
+                    setMentions(selected ? mentions.filter((id) => id !== member.userId) : [...new Set([...mentions, member.userId])]);
+                    if (!selected && mentionMatch) {
+                      const handle = person.username || person.name.replace(/\s+/gu, "_");
+                      setDraft(`${draft.slice(0, mentionMatch.index! + mentionMatch[0].lastIndexOf("@"))}@${handle} `);
+                      setMentionPicker(false);
+                      requestAnimationFrame(() => composerInputRef.current?.focus());
                     }
-                  />
-                ))}
+                  }}
+                >
+                  <ProfileAvatar person={person} token={token} size={28} />
+                  <span><strong>{person.name}</strong><small>@{person.username || person.name.replace(/\s+/gu, "_")}</small></span>
+                  {selected ? <b aria-hidden="true">✓</b> : null}
+                </button>;
+              })}
+              {!mentionCandidates.length ? <span className="mention-empty">Участники не найдены</span> : null}
             </div>
           )}
           {voiceOpen ? (
@@ -752,7 +812,7 @@ function Conversation({
                 onChange={(_, data) => {
                   draftEdited.current = true;
                   setDraft(data.value);
-                  if (data.value.endsWith("@")) setMentionPicker(true);
+                  setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
                 }}
                 onKeyDown={(event) => {
                   if (
@@ -802,15 +862,30 @@ function Conversation({
 export function MessengerView(props: MessengerViewProps) {
   const restoreFocusTarget = useRestoreFocusTarget();
   const { chats, messages, focusChatId, onMarkRead } = props;
+  const [pendingChatDeletion, setPendingChatDeletion] = useState<{ chat: ChatSummary; deadline: number }>();
+  const [chatDeleteSeconds, setChatDeleteSeconds] = useState(6);
+  const visibleChats = chats.filter((chat) => chat.id !== pendingChatDeletion?.chat.id);
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
-  const firstActive = chats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? chats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
+  const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
   const [activeChatId, setActiveChatId] = useState(
     focusChatId ?? firstActive?.id ?? "",
   );
   const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
-  const activeChat = chats.find((chat) => chat.id === activeChatId) ?? firstActive;
+  const activeChat = visibleChats.find((chat) => chat.id === activeChatId) ?? firstActive;
+  useEffect(() => {
+    if (!pendingChatDeletion) return;
+    const tick = () => setChatDeleteSeconds(Math.max(0, Math.ceil((pendingChatDeletion.deadline - Date.now()) / 1_000)));
+    tick();
+    const interval = window.setInterval(tick, 200);
+    const timeout = window.setTimeout(() => {
+      void props.chatActions.delete(pendingChatDeletion.chat.id)
+        .then(() => setPendingChatDeletion(undefined))
+        .catch(() => setPendingChatDeletion(undefined));
+    }, Math.max(0, pendingChatDeletion.deadline - Date.now()));
+    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
+  }, [pendingChatDeletion, props.chatActions]);
   useEffect(() => {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
@@ -833,7 +908,7 @@ export function MessengerView(props: MessengerViewProps) {
             />
           </Tooltip>
         </div>
-        <OrganizedChatList key={listRevision} chats={chats} messages={messages} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          <OrganizedChatList key={listRevision} chats={visibleChats} messages={messages} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
       </aside>
@@ -842,6 +917,7 @@ export function MessengerView(props: MessengerViewProps) {
           key={`${props.currentUserId}:${activeChat.id}`}
           {...props}
           chat={activeChat}
+          availableChats={visibleChats}
           onManage={() => setPanel("manage")}
           onBack={() => setConversationOpen(false)}
         />
@@ -864,8 +940,19 @@ export function MessengerView(props: MessengerViewProps) {
             setListRevision((revision) => revision + 1);
             setPanel(undefined);
           }}
+          onRequestDelete={(chat) => {
+            setPendingChatDeletion({ chat, deadline: Date.now() + 6_000 });
+            setChatDeleteSeconds(6);
+            setPanel(undefined);
+            setConversationOpen(false);
+          }}
+          allowDelete={Boolean(activeChat?.canDelete)}
         />
       )}
+      {pendingChatDeletion ? <div className="messenger-undo" role="status">
+        <span>Чат будет удалён через {chatDeleteSeconds} сек.</span>
+        <Button size="small" appearance="primary" onClick={() => setPendingChatDeletion(undefined)}>Вернуть</Button>
+      </div> : null}
     </section>
   );
 }

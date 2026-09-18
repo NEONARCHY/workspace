@@ -27,6 +27,7 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
   const todayKey = localDateKey(new Date());
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
   const monthLabel = new Intl.DateTimeFormat("ru-RU", {
     month: "long",
     year: "numeric",
@@ -56,15 +57,20 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
   }, [tasks]);
   const unscheduled = tasks.filter((task) => !validDate(task.dueAt));
   const scheduledCount = tasks.length - unscheduled.length;
+  const selectedKey = localDateKey(selectedDay);
+  const selectedTasks = tasksByDay.get(selectedKey) ?? [];
 
   return (
-    <div className="task-calendar-shell">
-      <div className="task-calendar-toolbar">
-        <div>
-          <strong>{monthLabel}</strong>
-          <span>{scheduledCount} по сроку · {unscheduled.length} без срока</span>
+    <div className="task-calendar-shell calendar-view task-calendar-embedded">
+      <div className="calendar-main">
+      <header className="calendar-toolbar">
+        <div className="calendar-title">
+          <span>Календарь задач</span>
+          <h1>{monthLabel}</h1>
+          <p>{scheduledCount} по сроку · {unscheduled.length} без срока</p>
         </div>
-        <div>
+        <div className="calendar-toolbar-actions">
+          <div className="calendar-month-navigation" aria-label="Навигация по месяцам задач">
           <Button
             appearance="subtle"
             icon={<ChevronLeft24Regular />}
@@ -76,6 +82,7 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
             onClick={() => {
               const today = new Date();
               setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+              setSelectedDay(today);
             }}
           >
             Сегодня
@@ -86,8 +93,9 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
             aria-label="Следующий месяц задач"
             onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
           />
+          </div>
         </div>
-      </div>
+      </header>
       <div className="calendar-board task-calendar-board">
         <div className="calendar-weekdays" aria-hidden="true">
           {weekdayLabels.map((label) => <span key={label}>{label}</span>)}
@@ -102,11 +110,20 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
             const key = localDateKey(day);
             const dayTasks = tasksByDay.get(key) ?? [];
             return (
-              <section
-                className={`calendar-day task-calendar-day ${day.getMonth() === month.getMonth() ? "" : "muted"} ${key === todayKey ? "today" : ""}`}
+              <div
+                className={`calendar-day task-calendar-day ${day.getMonth() === month.getMonth() ? "" : "muted"} ${key === todayKey ? "today" : ""} ${key === selectedKey ? "selected" : ""}`}
                 key={key}
                 role="gridcell"
+                tabIndex={0}
                 aria-label={`${day.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}: ${dayTasks.length} задач`}
+                aria-selected={key === selectedKey}
+                onClick={() => setSelectedDay(day)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedDay(day);
+                  }
+                }}
               >
                 <div className="calendar-day-header">
                   <span className="calendar-day-number">{day.getDate()}</span>
@@ -120,7 +137,7 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
                       type="button"
                       key={task.id}
                       aria-label={`Открыть задачу: ${task.title}`}
-                      onClick={() => onSelect(task.id)}
+                      onClick={(event) => { event.stopPropagation(); onSelect(task.id); }}
                     >
                       <span>{new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
                       <strong>{task.title}</strong>
@@ -128,23 +145,32 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
                   ))}
                   {dayTasks.length > 4 ? <span className="calendar-more-events">Ещё {dayTasks.length - 4}</span> : null}
                 </div>
-              </section>
+              </div>
             );
           })}
         </div>
       </div>
-      {unscheduled.length ? (
-        <section className="task-calendar-unscheduled" aria-label="Задачи без срока">
+      </div>
+      <aside className="calendar-side" aria-label="Задачи выбранного дня">
+        <div className="calendar-side-heading calendar-day-heading">
+          <span>Выбранный день</span>
+          <h2>{selectedDay.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</h2>
+          <p>{selectedTasks.length ? `${selectedTasks.length} задач по сроку` : "На этот день задач нет"}</p>
+        </div>
+        <div className="calendar-day-summary">
+          <span>{selectedDay.getDate()}</span><p>{selectedDay.toLocaleDateString("ru-RU", { weekday: "long" })}</p><strong>{selectedTasks.length}</strong>
+        </div>
+        <div className="calendar-day-agenda">
+          {selectedTasks.map((task) => <button className={`calendar-agenda-card task status-${task.status}`} type="button" key={task.id} onClick={() => onSelect(task.id)}>
+            <span className="calendar-agenda-time">{new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+            <strong>{task.title}</strong><small>{task.project || "Без проекта"}</small>
+          </button>)}
+        </div>
+        {unscheduled.length ? <section className="task-calendar-unscheduled" aria-label="Задачи без срока">
           <div><strong>Без срока</strong><span>{unscheduled.length}</span></div>
-          <div>
-            {unscheduled.map((task) => (
-              <button type="button" key={task.id} onClick={() => onSelect(task.id)}>
-                <strong>{task.title}</strong><span>{task.project}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
+          <div>{unscheduled.map((task) => <button type="button" key={task.id} onClick={() => onSelect(task.id)}><strong>{task.title}</strong><span>{task.project || "Без проекта"}</span></button>)}</div>
+        </section> : null}
+      </aside>
     </div>
   );
 }

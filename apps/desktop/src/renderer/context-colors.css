@@ -13,10 +13,10 @@
 .amount-character { position: relative; display: inline-grid; height: 1.18em; overflow: hidden; place-items: center; line-height: 1.18; }
 .amount-character.is-rolling { min-width: .61em; }
 .amount-digit { grid-area: 1 / 1; display: block; will-change: transform, filter, opacity; }
-.amount-digit-old { animation: amount-digit-out 320ms cubic-bezier(.2,.72,.2,1) both; }
-.amount-digit-new { animation: amount-digit-in 320ms cubic-bezier(.2,.72,.2,1) both; }
-@keyframes amount-digit-out { from { opacity: 1; transform: translateY(0); filter: blur(0); } to { opacity: .2; transform: translateY(105%); filter: blur(.7px); } }
-@keyframes amount-digit-in { from { opacity: .2; transform: translateY(-105%); filter: blur(.7px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+.amount-digit-old { animation: amount-digit-out 480ms cubic-bezier(.18,.76,.22,1) both; }
+.amount-digit-new { animation: amount-digit-in 480ms cubic-bezier(.18,.76,.22,1) both; }
+@keyframes amount-digit-out { from { opacity: 1; transform: translateY(0); filter: blur(0); } to { opacity: .12; transform: translateY(112%); filter: blur(.8px); } }
+@keyframes amount-digit-in { from { opacity: .12; transform: translateY(-112%); filter: blur(.8px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .amount-digit-old { display: none; }
   .amount-digit-new { animation: none; }

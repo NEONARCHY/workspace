@@ -21,12 +21,12 @@ describe("Animated monetary totals", () => {
     }
   });
 
-  it("shows the exact value on mount without rolling digits", () => {
+  it("shows the exact accessible value and rolls changed digits on mount", () => {
     const formatted = formatMinorUnits(2500000019n, "UZS");
     const { container } = render(<AnimatedAmount currency="UZS" minorUnits={2500000019n} />);
     expect(container.querySelector(".animated-amount")).toHaveAttribute("data-total-value", formatted);
     expect(container.querySelector(".amount-accessible")?.textContent).toBe(formatted);
-    expect(container.querySelectorAll(".is-rolling")).toHaveLength(0);
+    expect(container.querySelectorAll(".is-rolling").length).toBeGreaterThan(0);
   });
 
   it("rolls only changed digits and keeps the exact target available to assistive technology", () => {
@@ -38,7 +38,7 @@ describe("Animated monetary totals", () => {
     expect(container.querySelector(".amount-visual")).toHaveAttribute("aria-hidden", "true");
     expect(container.querySelectorAll(".amount-digit-old").length).toBeGreaterThan(0);
     expect(container.querySelectorAll(".amount-digit-old")).toHaveLength(container.querySelectorAll(".amount-digit-new").length);
-    expect(amountAnimationMs).toBe(320);
+    expect(amountAnimationMs).toBe(480);
   });
 
   it("does not roll across currencies, invalid values, or unchanged props", () => {

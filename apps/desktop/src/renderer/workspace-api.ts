@@ -547,6 +547,10 @@ export function updateWorkspaceChat(token: string, id: string, title: string, de
   return apiRequest(`/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title, description }) }, token);
 }
 
+export function deleteWorkspaceChat(token: string, id: string): Promise<void> {
+  return apiRequest(`/chats/${id}`, { method: "DELETE" }, token);
+}
+
 export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[]): Promise<ChatSummary> {
   return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds }) }, token);
 }
@@ -1135,10 +1139,11 @@ export async function uploadProfileAvatar(token: string, file: File): Promise<{ 
     async (response) => await response.json() as { avatarVersion: string }, 120_000);
 }
 
-export function loadProfileAvatar(token: string, userId: string): Promise<Blob> {
+export function loadProfileAvatar(token: string, userId: string, avatarVersion?: string | null): Promise<Blob> {
   const headers = new Headers({ Authorization: `Bearer ${token}` });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
-  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar/${userId}`, { headers },
+  const version = avatarVersion ? `?version=${encodeURIComponent(avatarVersion)}` : "";
+  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar/${userId}${version}`, { headers, cache: "no-store" },
     async (response) => await response.blob());
 }
 

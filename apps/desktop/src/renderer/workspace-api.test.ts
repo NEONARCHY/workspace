@@ -15,7 +15,7 @@ describe("web API addresses and session restore", () => {
       configurable: true,
       get: () => "__Host-yuksalish_csrf=csrf-from-cookie",
     });
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({
       accessToken: "access",
       csrfToken: "csrf",
       tokenType: "bearer",
@@ -36,6 +36,12 @@ describe("web API addresses and session restore", () => {
     );
     const refreshOptions = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect(new Headers(refreshOptions.headers).get("X-CSRF-Token")).toBe("csrf-from-cookie");
+
+    await api.loadProfileAvatar("token", "person-1", "2026-09-19T12:00:00Z");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `${window.location.origin}/api/v1/profile/avatar/person-1?version=2026-09-19T12%3A00%3A00Z`,
+      expect.objectContaining({ cache: "no-store" }),
+    );
 
     class Socket {
       static lastUrl = "";

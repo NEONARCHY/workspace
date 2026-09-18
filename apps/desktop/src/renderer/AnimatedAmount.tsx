@@ -1,7 +1,7 @@
 import { memo, useLayoutEffect, useRef } from "react";
 import { formatMinorUnits } from "./approval-board";
 
-export const amountAnimationMs = 320;
+export const amountAnimationMs = 480;
 
 /** Interpolate integer hundredths, without converting the amount to a JS number. */
 export function interpolateMinorUnits(from: bigint, to: bigint, progress: number): bigint {
@@ -20,7 +20,11 @@ export const AnimatedAmount = memo(function AnimatedAmount({ minorUnits, currenc
   readonly currency: string;
 }) {
   const formatted = formatMinorUnits(minorUnits, currency);
-  const previous = useRef({ minorUnits, currency, formatted });
+  const previous = useRef({
+    minorUnits: minorUnits === null ? null : 0n,
+    currency,
+    formatted: minorUnits === null ? formatted : formatMinorUnits(0n, currency),
+  });
   const old = previous.current.currency === currency ? previous.current.formatted : formatted;
   const offset = old.length - formatted.length;
   const changed = minorUnits !== null && previous.current.minorUnits !== null

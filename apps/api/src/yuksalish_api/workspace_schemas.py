@@ -127,12 +127,15 @@ class ChatSummaryResponse(ApiModel):
     unread: int
     description: str = ""
     owner_id: str | None = None
+    can_delete: bool = False
     members: list[ChatMemberResponse] = Field(default_factory=list)
     permissions: ChatPermissions = Field(default_factory=ChatPermissions)
 
 
 class MessageReactionResponse(ApiModel):
-    emoji: Literal["👍", "❤️", "👏", "🎉", "👀", "✅"]
+    emoji: Literal[
+        "👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗"
+    ]
     count: int = Field(ge=1)
     reacted_by_current_user: bool = False
 
@@ -200,7 +203,9 @@ class DeleteMessageRequest(ApiModel):
 
 
 class MessageReactionRequest(ApiModel):
-    emoji: Literal["👍", "❤️", "👏", "🎉", "👀", "✅"]
+    emoji: Literal[
+        "👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗"
+    ]
 
 
 class PinMessageRequest(ApiModel):

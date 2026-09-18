@@ -152,6 +152,19 @@
 .task-card-progress small { color: var(--ws-text-muted, #607183); }
 .task-card-progress b { font-size: 11px; font-variant-numeric: tabular-nums; }
 
+.tasks-view .task-calendar-embedded {
+  grid-template-columns: minmax(650px, 1fr) 340px;
+  min-height: 650px;
+  padding: 0;
+  border-top: 1px solid rgb(41 58 85 / 6%);
+}
+.tasks-view .task-calendar-embedded .calendar-main { padding-top: 14px; }
+.tasks-view .task-calendar-embedded .calendar-title h1 { text-transform: capitalize; }
+.tasks-view .task-calendar-embedded .task-calendar-board { min-height: 520px; }
+.tasks-view .task-calendar-embedded .task-calendar-grid { min-width: 0; }
+.tasks-view .task-calendar-embedded .calendar-side { background: rgb(255 255 255 / 74%); }
+.tasks-view .task-calendar-embedded .task-calendar-unscheduled { margin-top: 22px; box-shadow: none; }
+
 .task-record-dialog {
   overflow: hidden;
   background: color-mix(in srgb, var(--ws-surface, #fff) 94%, #eaf4f3);
@@ -199,6 +212,8 @@
   .tasks-view .task-filters { margin-inline: 14px; }
   .tasks-view .record-table-frame.task-records { margin-inline: 14px; }
   .tasks-view.bp5-tasks .task-kanban { padding-inline: 14px; }
+  .tasks-view .task-calendar-embedded { grid-template-columns: 1fr; overflow: visible; }
+  .tasks-view .task-calendar-embedded .calendar-side { border-top: 1px solid var(--ws-line); border-left: 0; }
 }
 
 @media (max-width: 700px) {
