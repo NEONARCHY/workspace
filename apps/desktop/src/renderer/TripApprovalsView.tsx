@@ -150,7 +150,6 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
               <header><strong title={column.label}>{column.label}</strong><span className="approval-column-count" aria-label={`${items.length} поездок`}>{items.length}</span></header>
               <div className="approval-column-total" aria-label={`${items.length} поездок на этапе «${column.label}»`}><span>Поездок на этапе</span><strong>{items.length}</strong></div>
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
-                <div className="trip-column-command">{column.key === "launch" ? <Button {...restoreFocusTarget} size="small" appearance="subtle" icon={<Add24Regular />} onClick={create}>Создать поездку</Button> : null}</div>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
                   const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key));

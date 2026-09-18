@@ -992,8 +992,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .trip-feedback.error { color: #8b1a24; background: #fdecee; }
 .trip-board-help { color: #566d80; background: #f5f8fa; }
 .trip-kanban { grid-auto-columns: minmax(272px, 1fr); }
-.trip-column-command { display: flex; align-items: center; justify-content: center; min-height: 30px; color: #52697d; font-size: 11px; }
-.trip-column-command > button { width: 100%; }
 .trip-card-destination { color: #38566f; font-size: 12px; }
 .trip-board-card .approval-card-meta { align-items: start; font-size: 12px; }
 .trip-board-card .approval-card-meta > span:last-child { flex: none; }
