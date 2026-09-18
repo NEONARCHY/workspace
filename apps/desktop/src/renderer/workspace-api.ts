@@ -39,6 +39,7 @@ import type {
   TaskReturnReason,
   TaskStatus,
   TripAction,
+  TripStage,
   TripRequest,
   TripRequestInput,
   WorkflowDefinition,
@@ -1120,10 +1121,11 @@ export function actOnWorkspaceTripRequest(
   requestId: string,
   action: TripAction,
   comment = "",
+  targetStage?: TripStage,
 ): Promise<TripRequest> {
   return apiRequest<TripRequest>(
     `/trip-requests/${requestId}/actions`,
-    { method: "POST", body: JSON.stringify({ action, comment }) },
+    { method: "POST", body: JSON.stringify({ action, comment, targetStage }) },
     token,
   );
 }

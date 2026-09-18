@@ -9,10 +9,11 @@ import { people } from "./test-fixtures/demo-data";
 const project: WorkspaceProject = { id: "qa-project", code: "YUK-26", title: "Региональная программа", description: "Описание",
   managerUserId: people[0]!.id, budget: 100000, spentBudget: 20000, remainingBudget: 80000, currency: "UZS",
   status: "in_progress", stage: "approval", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, history: [] };
-function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = []) {
+function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = [], currentUser = people[0]!) {
   const onUpdate = vi.fn(async () => project);
-  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={people[0]!} onCreate={onCreate} onUpdate={onUpdate} onMove={vi.fn()} /></FluentProvider>);
-  return { onCreate, onUpdate };
+  const onMove = vi.fn(async () => undefined as WorkspaceProject | undefined);
+  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={onUpdate} onMove={onMove} /></FluentProvider>);
+  return { onCreate, onUpdate, onMove };
 }
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name, { exact: true }), { target: { value } });
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
@@ -61,5 +62,13 @@ describe("Project composer", () => {
     change("Название проекта", "Уточнённый проект"); fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1)); expect(onCreate).not.toHaveBeenCalled();
     expect(onUpdate).toHaveBeenCalledWith(project, { code: project.code, title: "Уточнённый проект", description: project.description, managerUserId: project.managerUserId, startDate: null, endDate: null, budget: 100000, spentBudget: 20000, currency: "UZS" });
+  });
+  it("offers every other stage to an administrator", () => {
+    const { onMove } = setup(undefined, [project], people[3]!);
+    fireEvent.click(screen.getByText(project.title));
+    fireEvent.click(screen.getByRole("button", { name: "Начало" }));
+    expect(onMove).toHaveBeenCalledWith(project, "start");
+    expect(screen.getByRole("button", { name: "Успех" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Провал" })).toBeInTheDocument();
   });
 });

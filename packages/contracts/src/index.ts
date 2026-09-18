@@ -750,7 +750,7 @@ export interface ProjectInput {
 
 export type TripStage = "launch" | "manager_approval" | "hr" | "approved" | "rejected";
 export type TripStatus = "draft" | "running" | "needs_revision" | "approved" | "rejected";
-export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit";
+export type TripAction = "submit" | "approve" | "return" | "reject" | "resubmit" | "move";
 
 export interface TripActionHistory {
   readonly id: string;

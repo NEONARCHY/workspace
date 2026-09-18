@@ -872,7 +872,7 @@ class ChangeProjectStageRequest(ApiModel):
 
 TripStage = Literal["launch", "manager_approval", "hr", "approved", "rejected"]
 TripStatus = Literal["draft", "running", "needs_revision", "approved", "rejected"]
-TripAction = Literal["submit", "approve", "return", "reject", "resubmit"]
+TripAction = Literal["submit", "approve", "return", "reject", "resubmit", "move"]
 
 AbsenceKind = Literal["vacation", "personal_time", "late_arrival", "sick_leave", "business_event"]
 AbsenceStatus = Literal["draft", "pending", "approved", "acknowledged", "rejected", "cancelled"]
@@ -942,7 +942,7 @@ class TripActionHistoryResponse(ApiModel):
     actor_user_id: str
     from_stage: TripStage | None
     to_stage: TripStage
-    action: Literal["created", "submit", "approve", "return", "reject", "resubmit"]
+    action: Literal["created", "submit", "approve", "return", "reject", "resubmit", "move"]
     comment: str | None
     created_at: datetime
 
@@ -1003,6 +1003,7 @@ class UpdateTripRequest(TripWriteRequest):
 class TripActionRequest(ApiModel):
     action: TripAction
     comment: str = Field(default="", max_length=4000)
+    target_stage: TripStage | None = None
 
 
 class FeedCommentResponse(ApiModel):

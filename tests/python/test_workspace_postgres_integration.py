@@ -956,6 +956,15 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert project.status == "completed"
             assert project.history[-1].to_stage == "success"
+            project = await change_project_stage(
+                connection,
+                admin,
+                UUID(project.id),
+                ChangeProjectStageRequest(stage="start", comment="Administrative restart"),
+            )
+            assert project.stage == "start"
+            assert project.status == "new"
+            assert project.history[-1].actor_user_id == str(admin.id)
             with pytest.raises(WorkspaceRepositoryError, match="Only managers"):
                 await create_project(
                     connection,
@@ -1035,6 +1044,28 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert trip.stage == "approved"
             assert trip.status == "approved"
             assert trip.finished_at is not None
+            with pytest.raises(WorkspaceRepositoryError, match="Only administrators"):
+                await act_on_trip_request(
+                    connection,
+                    aziza,
+                    UUID(trip.id),
+                    TripActionRequest(action="move", target_stage="manager_approval"),
+                )
+            trip = await act_on_trip_request(
+                connection,
+                admin,
+                UUID(trip.id),
+                TripActionRequest(
+                    action="move",
+                    target_stage="manager_approval",
+                    comment="Administrative reassignment",
+                ),
+            )
+            assert trip.stage == "manager_approval"
+            assert trip.status == "running"
+            assert trip.finished_at is None
+            assert trip.actions[-1].action == "move"
+            assert "approve" in trip.allowed_actions
             assert len(approval.versions) == 3
             assert approval.versions[-1].attachment_ids == [approval_attachment.id]
             approval = await act_on_request(

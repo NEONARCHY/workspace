@@ -26,6 +26,7 @@ import type {
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
   TripAction,
+  TripStage,
   TripRequest,
   TripRequestInput,
   PresenceSummaryItem,
@@ -1315,9 +1316,14 @@ export function App() {
   const handleUpdateTrip = (tripRequest: TripRequest, payload: TripRequestInput) =>
     runTripMutation((token) => updateWorkspaceTripRequest(token, tripRequest.id, payload));
 
-  const handleTripAction = (tripRequest: TripRequest, action: TripAction, comment = "") =>
+  const handleTripAction = (
+    tripRequest: TripRequest,
+    action: TripAction,
+    comment = "",
+    targetStage?: TripStage,
+  ) =>
     runTripMutation((token) =>
-      actOnWorkspaceTripRequest(token, tripRequest.id, action, comment));
+      actOnWorkspaceTripRequest(token, tripRequest.id, action, comment, targetStage));
 
   const mergeAbsenceRequest = (absenceRequest: AbsenceRequest) => {
     setWorkspace((current) => ({

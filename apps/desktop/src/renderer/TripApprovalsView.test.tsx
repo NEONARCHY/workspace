@@ -13,10 +13,10 @@ const request: TripRequest = {
   status: "running", statusLabel: "На согласовании", canEdit: false, allowedActions: ["approve", "return", "reject"],
   actions: [], createdAt: "2026-09-04T09:00:00Z", updatedAt: "2026-09-04T09:00:00Z",
 };
-function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined)) {
+function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined), currentUser = people[0]!) {
   installSpatialGeometry();
   const onCreate = vi.fn(async () => undefined);
-  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={people[0]!} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} /></FluentProvider>);
+  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} /></FluentProvider>);
   return { onAction, onCreate };
 }
 const column = (key: string) => document.querySelector(`.trip-column[data-stage-key="${key}"]`)!;
@@ -60,6 +60,17 @@ describe("Trip approvals interaction", async () => {
     expect(card().querySelector(".spatial-grip")).toBeNull();
     await drop("approved");
     expect(onAction).not.toHaveBeenCalled();
+  });
+  it("lets an administrator move a trip to any stage through the protected move action", async () => {
+    const onAction = vi.fn(async () => ({ ...request, stage: "approved" as const }));
+    setup({ ...request, allowedActions: [] }, onAction, people[3]!);
+    await drop("approved");
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith(
+      expect.objectContaining({ id: request.id }),
+      "move",
+      expect.stringContaining("Утверждено"),
+      "approved",
+    ));
   });
   it("requires a reason for a return, and cancelling leaves the card untouched", async () => {
     const onAction = vi.fn(async () => ({ ...request, stage: "launch" as const, stageLabel: "Запуск" }));

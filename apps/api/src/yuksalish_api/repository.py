@@ -113,6 +113,7 @@ from .workspace_schemas import (
     TripActionHistoryResponse,
     TripActionRequest,
     TripRequestResponse,
+    TripStatus,
     UpdateApprovalRequest,
     UpdateCalendarEventRequest,
     UpdateChecklistItemRequest,
@@ -5364,8 +5365,11 @@ async def change_project_stage(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Project was not found")
-    if payload.stage not in PROJECT_TRANSITIONS[row["stage"]]:
+    is_administrator = current_user.role in {"admin", "superadmin"}
+    if not is_administrator and payload.stage not in PROJECT_TRANSITIONS[row["stage"]]:
         raise WorkspaceRepositoryError(409, "Project cannot move between these stages")
+    if payload.stage == row["stage"]:
+        raise WorkspaceRepositoryError(409, "Project is already in this stage")
     comment = payload.comment.strip() or None
     if payload.stage == "failure" and comment is None:
         raise WorkspaceRepositoryError(422, "A failure comment is required")
@@ -5546,6 +5550,45 @@ async def act_on_trip_request(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Trip request was not found")
+    if payload.action == "move":
+        if current_user.role not in {"admin", "superadmin"}:
+            raise WorkspaceRepositoryError(403, "Only administrators can move a trip freely")
+        if payload.target_stage is None:
+            raise WorkspaceRepositoryError(422, "A destination trip stage is required")
+        if payload.target_stage == row["stage"]:
+            raise WorkspaceRepositoryError(409, "Trip request is already in this stage")
+        target_status: TripStatus
+        if payload.target_stage == "launch":
+            target_status = "needs_revision"
+        elif payload.target_stage in {"manager_approval", "hr"}:
+            target_status = "running"
+        else:
+            target_status = "approved" if payload.target_stage == "approved" else "rejected"
+        now = datetime.now(UTC)
+        finished_at = now if payload.target_stage in {"approved", "rejected"} else None
+        await connection.execute(
+            update(trip_requests)
+            .where(trip_requests.c.id == request_id)
+            .values(
+                stage=payload.target_stage,
+                status=target_status,
+                updated_at=now,
+                finished_at=finished_at,
+            )
+        )
+        await connection.execute(
+            insert(trip_request_actions).values(
+                id=uuid4(),
+                request_id=request_id,
+                actor_user_id=current_user.id,
+                from_stage=row["stage"],
+                to_stage=payload.target_stage,
+                action="move",
+                comment=payload.comment.strip() or None,
+                created_at=now,
+            )
+        )
+        return await _trip_response(connection, current_user, request_id)
     allowed = _trip_allowed_actions(row, current_user)
     if payload.action not in allowed:
         raise WorkspaceRepositoryError(403, "This trip action is not allowed for the user")

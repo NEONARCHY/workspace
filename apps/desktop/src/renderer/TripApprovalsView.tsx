@@ -10,11 +10,11 @@ import { Add24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
-  return: "Вернуть на доработку", reject: "Отклонить",
+  return: "Вернуть на доработку", reject: "Отклонить", move: "Перемещено администратором",
 };
 const moveLabels: Readonly<Record<TripAction, string>> = {
   submit: "Руководителю →", resubmit: "Повторно →", approve: "Согласовать →",
-  return: "На доработку", reject: "Отклонить",
+  return: "На доработку", reject: "Отклонить", move: "Переместить",
 };
 const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
@@ -26,7 +26,7 @@ interface TripApprovalsViewProps {
   readonly currentUser: WorkspacePerson;
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
-  readonly onAction: (request: TripRequest, action: TripAction, comment?: string) => Promise<TripRequest | undefined>;
+  readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
 }
 interface TripFormState {
   purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
@@ -53,6 +53,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [notice, setNotice] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
+  const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
@@ -86,11 +87,13 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     finally { busyRef.current = false; setBusy(false); }
   };
 
-  const commitAction = async (request: TripRequest, action: TripAction, comment?: string) => {
-    if (busyRef.current || !request.allowedActions.includes(action)) return false;
+  const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => {
+    if (busyRef.current || (action === "move" ? !isAdministrator || !targetStage : !request.allowedActions.includes(action))) return false;
     busyRef.current = true; setBusy(true); setError(""); setNotice("");
     try {
-      const updated = await onAction(request, action, comment);
+      const updated = action === "move"
+        ? await onAction(request, action, comment, targetStage)
+        : await onAction(request, action, comment);
       if (!updated) { setError("Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
       setNotice(`${request.number}: ${updated.stageLabel}.${isFinished(updated) && filter === "running" ? " Поездка доступна в фильтре «Завершённые»." : ""}`);
       return true;
@@ -140,7 +143,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       {notice ? <p className="trip-feedback" role="status">{notice}</p> : null}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
-        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const action = request && tripDropAction(request, target as TripStage); if (request && action) await act(request, action); }}>
+        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${tripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
         <div className="approval-kanban trip-kanban" aria-label="Стадии поездок" aria-busy={busy}>
           {tripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
@@ -152,7 +155,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
-                  const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key));
+                  const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key, isAdministrator));
                   return <SpatialCard id={request.id} lane={column.key} label={request.purpose} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
@@ -195,6 +198,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.allowedActions.map((action) => <Button disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
+              {isAdministrator ? tripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article> : formMode !== null ? (

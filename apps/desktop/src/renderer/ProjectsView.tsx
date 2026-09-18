@@ -142,6 +142,10 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   useModalFocus(detailRef, detailOpen && formMode === null, closeDetail);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
+  const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
+  const availableStages = (project: WorkspaceProject) => isAdministrator
+    ? stages.filter((stage) => stage !== project.stage)
+    : nextStages[project.stage];
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const activeCount = projects.filter((project) => project.status !== "completed").length;
   const completedCount = projects.length - activeCount;
@@ -225,7 +229,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         </div>
       </div>
 
-      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && nextStages[project.stage].includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
+      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board" aria-label="Стадии проектов">
         {stages.map((stage) => {
           const items = visibleProjects.filter((project) => project.stage === stage);
@@ -287,7 +291,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           </div>
           {selected.canMove ? (
             <div className="bp7-actions">
-              {nextStages[selected.stage].map((stage) => (
+              {availableStages(selected).map((stage) => (
                 <Button key={stage} icon={<ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
                   {stageLabels[stage]}
                 </Button>

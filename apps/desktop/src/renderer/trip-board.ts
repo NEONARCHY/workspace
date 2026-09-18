@@ -10,7 +10,8 @@ export const tripColumns: readonly { key: TripStage; label: string; color: strin
 ];
 
 // UI only proposes an existing action. The server remains the authority on permissions.
-export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions">, target: TripStage): TripAction | undefined {
+export function tripDropAction(request: Pick<TripRequest, "stage" | "status" | "allowedActions">, target: TripStage, administrator = false): TripAction | undefined {
+  if (administrator && request.stage !== target) return "move";
   let action: TripAction | undefined;
   if (request.stage === "launch" && target === "manager_approval") {
     action = request.status === "needs_revision" ? "resubmit" : "submit";
