@@ -760,6 +760,8 @@ def _feed_comment(
         body=row["body"],
         parent_comment_id=(str(row["parent_comment_id"]) if row["parent_comment_id"] else None),
         reactions=_reaction_summaries(reactions or {}, current_user),
+        can_delete=row["author_user_id"] == current_user.id
+        or current_user.role in {"admin", "superadmin"},
         created_at=row["created_at"],
     )
 
@@ -2737,6 +2739,47 @@ async def add_feed_comment(
     )
     await connection.execute(
         update(feed_posts).where(feed_posts.c.id == post_id).values(updated_at=now)
+    )
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def delete_feed_comment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+    comment_id: UUID,
+) -> FeedPostResponse:
+    comment = (
+        (
+            await connection.execute(
+                select(feed_comments.c.post_id, feed_comments.c.author_user_id).where(
+                    feed_comments.c.id == comment_id
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if comment is None or comment["post_id"] != post_id:
+        raise WorkspaceRepositoryError(404, "Feed comment was not found")
+    if comment["author_user_id"] != current_user.id and current_user.role not in {
+        "admin",
+        "superadmin",
+    }:
+        raise WorkspaceRepositoryError(403, "Недостаточно прав для удаления комментария")
+    await connection.execute(
+        update(feed_comments)
+        .where(feed_comments.c.parent_comment_id == comment_id)
+        .values(parent_comment_id=None)
+    )
+    await connection.execute(
+        delete(feed_comment_reactions).where(feed_comment_reactions.c.comment_id == comment_id)
+    )
+    await connection.execute(delete(feed_comments).where(feed_comments.c.id == comment_id))
+    await connection.execute(
+        update(feed_posts)
+        .where(feed_posts.c.id == post_id)
+        .values(updated_at=datetime.now(UTC))
     )
     return await _feed_post_response(connection, current_user, post_id)
 

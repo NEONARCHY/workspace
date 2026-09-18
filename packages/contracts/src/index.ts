@@ -231,6 +231,7 @@ export interface ChatMessage {
   readonly deletedAt?: string | null;
   readonly revision?: number;
   readonly canEdit?: boolean;
+  readonly canDelete?: boolean;
   readonly reactions?: readonly MessageReaction[];
   readonly isPinned?: boolean;
   readonly pinnedAt?: string | null;
@@ -238,7 +239,7 @@ export interface ChatMessage {
   readonly canPin?: boolean;
 }
 
-export type MessageReactionEmoji = "👍" | "❤️" | "👏" | "🎉" | "👀" | "✅" | "🔥" | "😂" | "😮" | "😢" | "🙏" | "🤝" | "💯" | "❗";
+export type MessageReactionEmoji = "👍" | "👎" | "❤️" | "👏" | "🎉" | "👀" | "✅" | "🔥" | "😂" | "😮" | "😢" | "🙏" | "🤝" | "💯" | "❗" | "🥰" | "😍" | "🤔" | "🤩" | "🥳" | "😎" | "🤯" | "😡" | "💩" | "👌" | "💪" | "🙌" | "🚀";
 
 export interface MessageReaction {
   readonly emoji: MessageReactionEmoji;
@@ -252,6 +253,7 @@ export interface FeedComment {
   readonly body: string;
   readonly parentCommentId?: string | null;
   readonly reactions?: readonly MessageReaction[];
+  readonly canDelete?: boolean;
   readonly createdAt: string;
 }
 

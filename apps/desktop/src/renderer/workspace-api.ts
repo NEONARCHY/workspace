@@ -641,6 +641,18 @@ export function addWorkspaceFeedComment(
   );
 }
 
+export function deleteWorkspaceFeedComment(
+  token: string,
+  postId: string,
+  commentId: string,
+): Promise<FeedPost> {
+  return apiRequest<FeedPost>(
+    `/feed/posts/${postId}/comments/${commentId}`,
+    { method: "DELETE" },
+    token,
+  );
+}
+
 export function setWorkspaceFeedReaction(
   token: string,
   postId: string,

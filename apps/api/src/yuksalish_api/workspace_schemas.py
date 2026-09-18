@@ -134,7 +134,8 @@ class ChatSummaryResponse(ApiModel):
 
 class MessageReactionResponse(ApiModel):
     emoji: Literal[
-        "👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗"
+        "👍", "👎", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗",
+        "🥰", "😍", "🤔", "🤩", "🥳", "😎", "🤯", "😡", "💩", "👌", "💪", "🙌", "🚀"
     ]
     count: int = Field(ge=1)
     reacted_by_current_user: bool = False
@@ -154,6 +155,7 @@ class ChatMessageResponse(ApiModel):
     deleted_at: datetime | None = None
     revision: int = 1
     can_edit: bool = False
+    can_delete: bool = False
     reactions: list[MessageReactionResponse] = Field(default_factory=list)
     is_pinned: bool = False
     pinned_at: datetime | None = None
@@ -1003,6 +1005,7 @@ class FeedCommentResponse(ApiModel):
     body: str
     parent_comment_id: str | None = None
     reactions: list[MessageReactionResponse] = Field(default_factory=list)
+    can_delete: bool = False
     created_at: datetime
 
 

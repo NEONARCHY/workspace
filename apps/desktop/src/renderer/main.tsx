@@ -27,6 +27,7 @@ import "./workspace-2-notifications.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";
 import "./web-platform.css";
+import "./workspace-2-focus.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

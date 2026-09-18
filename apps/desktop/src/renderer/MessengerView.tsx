@@ -50,6 +50,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 
 const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[] = [
   { emoji: "👍", label: "Нравится" },
+  { emoji: "👎", label: "Не нравится" },
   { emoji: "❤️", label: "Сердце" },
   { emoji: "👏", label: "Аплодисменты" },
   { emoji: "🎉", label: "Праздник" },
@@ -63,6 +64,19 @@ const reactionOptions: readonly { emoji: MessageReactionEmoji; label: string }[]
   { emoji: "🤝", label: "Договорились" },
   { emoji: "💯", label: "Сто процентов" },
   { emoji: "❗", label: "Важно" },
+  { emoji: "🥰", label: "Мило" },
+  { emoji: "😍", label: "В восторге" },
+  { emoji: "🤔", label: "Думаю" },
+  { emoji: "🤩", label: "Впечатляет" },
+  { emoji: "🥳", label: "Поздравляю" },
+  { emoji: "😎", label: "Круто" },
+  { emoji: "🤯", label: "Невероятно" },
+  { emoji: "😡", label: "Злюсь" },
+  { emoji: "💩", label: "Плохо" },
+  { emoji: "👌", label: "Хорошо" },
+  { emoji: "💪", label: "Сила" },
+  { emoji: "🙌", label: "Ура" },
+  { emoji: "🚀", label: "Вперёд" },
 ];
 
 interface MessengerViewProps {
@@ -477,6 +491,7 @@ function Conversation({
                 tabIndex={0}
                 onPointerEnter={() => {
                   window.clearTimeout(reactionTimer.current);
+                  setReactionTargetId(undefined);
                   reactionTimer.current = window.setTimeout(() => setReactionTargetId(message.id), 1_000);
                 }}
                 onPointerLeave={() => {
@@ -617,10 +632,11 @@ function Conversation({
                           <MenuList className="message-reaction-grid">
                             {reactionOptions.map((reaction) => (
                               <MenuItem
+                                aria-label={reaction.label}
                                 key={reaction.emoji}
                                 onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
                               >
-                                {reaction.emoji} {reaction.label}
+                                {reaction.emoji}
                               </MenuItem>
                             ))}
                           </MenuList>
@@ -642,7 +658,7 @@ function Conversation({
         const message = contextMenu.message;
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
-        const mayDelete = (own && message.canEdit) || message.canPin || ["admin", "superadmin"].includes(currentUserRole);
+        const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} onPointerDown={(event) => event.stopPropagation()}>
           <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
           <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>

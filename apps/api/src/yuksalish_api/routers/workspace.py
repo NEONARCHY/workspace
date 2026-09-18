@@ -60,6 +60,7 @@ from yuksalish_api.repository import (
     create_task,
     create_trip_request,
     delete_approval_request,
+    delete_feed_comment,
     delete_feed_post,
     delete_task,
     delete_task_checklist_item,
@@ -359,6 +360,24 @@ async def post_feed_comment(
 ) -> FeedPostResponse:
     try:
         result = await add_feed_comment(connection, current_user, post_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.delete(
+    "/feed/posts/{post_id}/comments/{comment_id}", response_model=FeedPostResponse
+)
+async def remove_feed_comment(
+    post_id: UUID,
+    comment_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await delete_feed_comment(connection, current_user, post_id, comment_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})

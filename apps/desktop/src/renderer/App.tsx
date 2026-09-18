@@ -168,6 +168,7 @@ import {
   toggleWorkspaceTaskChecklistItem,
   uploadWorkspaceAttachment,
   addWorkspaceFeedComment,
+  deleteWorkspaceFeedComment,
   type PaymentRequestInput,
   apiBaseUrl,
   loadDesktopUpdatePolicy,
@@ -1370,6 +1371,8 @@ export function App() {
     runFeedMutation((token) => addWorkspaceFeedComment(token, post.id, body, parentCommentId));
   const handleFeedReaction = (post: FeedPost, emoji: string, reacted: boolean, commentId?: string) =>
     runFeedMutation((token) => setWorkspaceFeedReaction(token, post.id, emoji, reacted, commentId));
+  const handleFeedCommentDelete = (post: FeedPost, commentId: string) =>
+    runFeedMutation((token) => deleteWorkspaceFeedComment(token, post.id, commentId));
   const handleFeedPin = (post: FeedPost, pinned: boolean) =>
     runFeedMutation((token) => pinWorkspaceFeedPost(token, post.id, pinned));
 
@@ -1759,6 +1762,7 @@ export function App() {
                 onCreate={handleCreateFeedPost}
                 onComment={handleFeedComment}
                 onReact={handleFeedReaction}
+                onDeleteComment={handleFeedCommentDelete}
                 onPin={handleFeedPin}
                 onDelete={handleFeedDelete}
               />

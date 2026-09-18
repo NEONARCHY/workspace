@@ -268,6 +268,11 @@
   transform: translateY(-50%);
   transition: opacity 120ms ease;
 }
+.messenger-view .message:hover .message-actions:not(.is-visible),
+.messenger-view .message:focus-within .message-actions:not(.is-visible) {
+  opacity: 0;
+  pointer-events: none;
+}
 .messenger-view .message.own .message-actions { right: calc(100% + 6px); left: auto; }
 
 .messenger-view .message-actions.is-visible {
@@ -275,7 +280,8 @@
   pointer-events: auto;
 }
 
-.messenger-view .message-actions .fui-Button { width: 30px; min-width: 30px; height: 30px; padding: 0; border: 1px solid #dce7e6; border-radius: 50%; background: #fff; box-shadow: 0 5px 14px rgb(41 58 85 / 10%); }
+.messenger-view .message-actions .fui-Button { box-sizing: border-box; flex: 0 0 32px; width: 32px; min-width: 32px; max-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 1px solid rgb(0 145 168 / 20%); border-radius: 50% !important; color: #006f82; background: linear-gradient(145deg, #fff 15%, #e5f6f3 100%); box-shadow: 0 6px 16px rgb(41 58 85 / 12%); }
+.messenger-view .message-actions .fui-Button:hover { color: #fff; background: linear-gradient(145deg, #11a8b9, #00869d); transform: rotate(-7deg) scale(1.05); }
 .message-context-hint { display: inline-flex; align-items: center; gap: 3px; height: 30px; padding: 0 8px; border: 1px solid #dce7e6; border-radius: 15px; color: var(--messenger-muted); background: #fff; box-shadow: 0 5px 14px rgb(41 58 85 / 10%); white-space: nowrap; }
 .message-context-hint small { font-size: 9px; font-weight: 600; letter-spacing: .04em; }
 .messenger-view .message.is-pending-delete { opacity: .45; }
@@ -294,9 +300,9 @@
 .message-forward-list > button > span { display: grid; }
 .message-forward-list strong { font-size: 12px; }
 .message-forward-list small { color: var(--ws-muted); font-size: 10px; }
-.message-reaction-popover.fui-MenuPopover { width: 276px; padding: 8px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 18px; background: rgb(255 255 255 / 97%); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
-.message-reaction-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px; }
-.message-reaction-grid .fui-MenuItem { min-height: 34px; border-radius: 10px; }
+.message-reaction-popover.fui-MenuPopover { width: 304px; padding: 9px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 18px; background: rgb(255 255 255 / 97%); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
+.message-reaction-grid { display: grid; grid-template-columns: repeat(7, 38px); gap: 3px; }
+.message-reaction-grid .fui-MenuItem { display: grid; place-items: center; min-width: 38px; min-height: 38px; padding: 0; border-radius: 10px; font-size: 20px; }
 .messenger-undo { position: absolute; z-index: 20; right: 22px; bottom: 78px; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border: 1px solid #d5e4e4; border-radius: 14px; color: var(--ws-text); background: #fff; box-shadow: 0 16px 42px rgb(41 58 85 / 16%); }
 .messenger-chat-delete-error { position: absolute; z-index: 20; right: 22px; bottom: 78px; display: flex; align-items: center; gap: 12px; }
 .mention-empty { padding: 4px 2px; color: var(--ws-muted); font-size: 12px; }

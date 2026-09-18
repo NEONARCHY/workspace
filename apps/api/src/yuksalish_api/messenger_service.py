@@ -50,7 +50,8 @@ FULL_PERMISSIONS = ChatPermissions(
     manage_messages=True,
 )
 REACTION_EMOJIS = (
-    "👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗",
+    "👍", "👎", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗",
+    "🥰", "😍", "🤔", "🤩", "🥳", "😎", "🤯", "😡", "💩", "👌", "💪", "🙌", "🚀",
 )
 
 
@@ -614,6 +615,7 @@ def message_response(
         and not deleted
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
+        can_delete=not deleted and (own or user.role in {"admin", "superadmin"} or can_pin),
         reactions=[] if deleted else (reactions or []),
         is_pinned=not deleted and pin is not None,
         pinned_at=None if deleted or pin is None else pin["pinned_at"],
@@ -921,10 +923,12 @@ async def change_message(
     )
     deleting = isinstance(payload, DeleteMessageRequest)
     may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(chat, member)
-    may_edit_own = message_response(
+    response = message_response(
         row, user, can_send=member_permissions(member).send_messages
-    ).can_edit
-    if (deleting and not (may_edit_own or may_moderate)) or (not deleting and not may_edit_own):
+    )
+    if (deleting and not (response.own or may_moderate)) or (
+        not deleting and not response.can_edit
+    ):
         raise WorkspaceRepositoryError(403, "Недостаточно прав для изменения сообщения")
     if payload.expected_revision != row["revision"]:
         raise WorkspaceRepositoryError(409, "Сообщение уже изменилось. Обновите переписку")

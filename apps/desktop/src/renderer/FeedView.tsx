@@ -15,7 +15,7 @@ import {
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 
-const feedReactionOptions = ["👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗"] as const;
+const feedReactionOptions = ["👍", "👎", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗", "🥰", "😍", "🤔", "🤩", "🥳", "😎", "🤯", "😡", "💩", "👌", "💪", "🙌", "🚀"] as const;
 
 interface FeedViewProps {
   readonly posts: readonly FeedPost[];
@@ -24,6 +24,7 @@ interface FeedViewProps {
   readonly onCreate: (title: string, body: string) => Promise<FeedPost | undefined>;
   readonly onComment: (post: FeedPost, body: string, parentCommentId?: string) => Promise<FeedPost | undefined>;
   readonly onReact: (post: FeedPost, emoji: string, reacted: boolean, commentId?: string) => Promise<FeedPost | undefined>;
+  readonly onDeleteComment: (post: FeedPost, commentId: string) => Promise<FeedPost | undefined>;
   readonly onPin: (post: FeedPost, pinned: boolean) => Promise<FeedPost | undefined>;
   readonly onDelete: (post: FeedPost) => Promise<boolean>;
 }
@@ -40,14 +41,14 @@ function dateLabel(value: string): string {
 export function FeedReactions({ reactions, disabled, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
   return <div className="feed-reactions" aria-label="Реакции">
     {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled} onClick={() => onToggle(reaction.emoji, !reaction.reactedByCurrentUser)}>{reaction.emoji} {reaction.count}</Button>)}
-    <Menu><MenuTrigger disableButtonEnhancement><Button size="small" appearance="subtle" icon={<EmojiAdd24Regular />} aria-label="Добавить реакцию" disabled={disabled} /></MenuTrigger><MenuPopover className="feed-reaction-popover"><MenuList className="feed-reaction-grid">{feedReactionOptions.map((emoji) => {
+    <Menu><MenuTrigger disableButtonEnhancement><Button className="feed-reaction-trigger" size="small" appearance="subtle" icon={<EmojiAdd24Regular />} aria-label="Добавить реакцию" disabled={disabled} /></MenuTrigger><MenuPopover className="feed-reaction-popover"><MenuList className="feed-reaction-grid">{feedReactionOptions.map((emoji) => {
       const active = reactions.some((item) => item.emoji === emoji && item.reactedByCurrentUser);
-      return <MenuItem key={emoji} onClick={() => onToggle(emoji, !active)}>{emoji}</MenuItem>;
+      return <MenuItem aria-label={emoji} key={emoji} onClick={() => onToggle(emoji, !active)}>{emoji}</MenuItem>;
     })}</MenuList></MenuPopover></Menu>
   </div>;
 }
 
-export function FeedView({ posts, people, token, onCreate, onComment, onReact, onPin, onDelete }: FeedViewProps) {
+export function FeedView({ posts, people, token, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete }: FeedViewProps) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -152,8 +153,14 @@ export function FeedView({ posts, people, token, onCreate, onComment, onReact, o
                           <span>
                             <strong>{commentAuthor?.name ?? "Сотрудник"}</strong>
                             <p>{item.body}</p>
-                            <span className="feed-comment-meta"><small>{dateLabel(item.createdAt)}</small><Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => setReplying((current) => ({ ...current, [post.id]: item }))}>Ответить</Button></span>
-                            <FeedReactions reactions={item.reactions ?? []} disabled={busy} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                            <span className="feed-comment-meta">
+                              <small>{dateLabel(item.createdAt)}</small>
+                              <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => setReplying((current) => ({ ...current, [post.id]: item }))}>Ответить</Button>
+                              <FeedReactions reactions={item.reactions ?? []} disabled={busy} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                              {item.canDelete ? <Button size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
+                                if (window.confirm("Удалить этот комментарий?")) void onDeleteComment(post, item.id);
+                              }} /> : null}
+                            </span>
                           </span>
                         </div>
                       );
