@@ -17,7 +17,7 @@ import type {
 } from "@yuksalish/contracts";
 
 import { App } from "./App";
-import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
+import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 
 const workflow = {
   id: "workflow",

@@ -5,7 +5,7 @@ import type { DirectoryEmployee } from "@yuksalish/contracts";
 import { TaskRecords } from "./TaskRecords";
 import { EmployeeRecords } from "./EmployeeRecords";
 import { workspaceTheme } from "./workspace-theme";
-import { initialTasks, people } from "./demo-data";
+import { initialTasks, people } from "./test-fixtures/demo-data";
 
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
   id: `e-${i}`, name: `Сотрудник ${i + 1}`, username: `employee-${i + 1}`, role: "employee", status: i === 30 ? "pending" : "active", jobTitle: "Mutaxassis",

@@ -22,10 +22,8 @@ export function LoginView({
   onAcceptInvitation,
   onCompletePasswordReset,
 }: LoginViewProps) {
-  const showDemoCredentials =
-    import.meta.env.DEV || import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === "true";
   const [mode, setMode] = useState<"login" | "invitation" | "recovery">("login");
-  const [username, setUsername] = useState(showDemoCredentials ? "aziza" : "");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [inviteToken, setInviteToken] = useState("");
@@ -66,13 +64,6 @@ export function LoginView({
         <p className="auth-kicker">Workspace</p>
         <h1>Рабочее пространство команды</h1>
         <p className="auth-minimal-copy">Войдите, чтобы продолжить работу.</p>
-        {showDemoCredentials ? (
-          <div className="auth-security-note">
-            <strong>Локальная alpha</strong>
-            <span>Тестовые пользователи: aziza, baxtiyor, dilshod, malika</span>
-            <span>Пароль: Yuksalish-Local-2026!</span>
-          </div>
-        ) : null}
       </section>
 
       <section className="auth-card" aria-label="Вход в Yuksalish Workspace">

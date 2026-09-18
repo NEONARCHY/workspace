@@ -10,7 +10,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
-import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
+import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { MessengerView } from "./MessengerView";
 
 function actions(): ChatActions {
@@ -226,6 +226,24 @@ describe("Private messenger", () => {
     );
     expect(screen.getByLabelText("Новое сообщение")).toHaveValue("");
     expect(screen.queryByLabelText("Отменить ответ")).not.toBeInTheDocument();
+  });
+
+  it("sends selected files without requiring placeholder text from the user", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ id: "sent-file" });
+    renderMessenger({ onSendMessage });
+    const file = new File(["report"], "report.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), {
+      target: { files: [file] },
+    });
+    const send = screen.getByRole("button", { name: "Отправить сообщение" });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(
+      "finance",
+      "Файл",
+      [file],
+      { replyToMessageId: undefined, mentionUserIds: [] },
+    ));
   });
 
   it("edits own messages, handles conflicts inline, and requires delete confirmation", async () => {

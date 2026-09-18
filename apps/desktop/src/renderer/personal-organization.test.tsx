@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NavigationEditor } from "./NavigationEditor";
 import { OrganizedChatList } from "./OrganizedChatList";
 import { defaultPersonalPreferences, latestPreferences, moveBefore, normalizeNavigation } from "./personal-organization";
-import { initialChats, initialMessages } from "./demo-data";
+import { initialChats, initialMessages } from "./test-fixtures/demo-data";
 
 afterEach(cleanup);
 const labels = Object.fromEntries(navigationKeys.map((key) => [key, key])) as Record<NavigationKey, string>;

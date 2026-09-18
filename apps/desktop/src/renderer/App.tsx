@@ -8,6 +8,7 @@ import type {
   AuthenticationSession,
   CalendarEvent,
   CalendarEventInput,
+  ChatSummary,
   ChatMessage,
   EfficiencyOverview,
   MessageOptions,
@@ -80,7 +81,6 @@ import { ZoomView } from "./ZoomView";
 import { NavigationEditor } from "./NavigationEditor";
 import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
-import { initialChats, initialMessages, initialTasks, people } from "./demo-data";
 import { EmployeesView } from "./EmployeesView";
 import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
@@ -183,7 +183,7 @@ interface WorkspaceState {
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly positions: readonly WorkflowPosition[];
-  readonly chats: typeof initialChats;
+  readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly tasks: readonly WorkspaceTask[];
   readonly requests: readonly ApprovalRequestSummary[];
@@ -207,14 +207,21 @@ const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((mo
 
 const initialWorkspace: WorkspaceState = {
   personalPreferences: defaultPersonalPreferences,
-  currentUser: people[0]!,
+  currentUser: {
+    id: "signed-out",
+    username: "signed-out",
+    name: "",
+    initials: "",
+    role: "employee",
+    color: "brand",
+  },
   moduleAccess: defaultModuleAccess,
-  canCreatePaymentRequests: true,
-  people,
+  canCreatePaymentRequests: false,
+  people: [],
   positions: [],
-  chats: initialChats,
-  messages: initialMessages,
-  tasks: initialTasks,
+  chats: [],
+  messages: [],
+  tasks: [],
   requests: [],
   requestWorkflows: [],
   projects: [],
@@ -718,16 +725,21 @@ export function App() {
 
   const handleSendMessage = async (chatId: string, body: string, files: readonly File[], options: MessageOptions) => {
     if (session === undefined) return undefined;
+    let message: ChatMessage | undefined;
     try {
-      const message = await sendWorkspaceMessage(session.accessToken, chatId, body, options);
+      message = await sendWorkspaceMessage(session.accessToken, chatId, body, options);
+      await uploadFiles("message", message.id, files);
       storeMessage(message);
-      try {
-        await uploadFiles("message", message.id, files);
-      } catch (error) {
-        reportError(new Error(`Сообщение отправлено, но часть файлов не загрузилась: ${error instanceof Error ? error.message : "ошибка загрузки"}`));
-      }
       return message;
     } catch (error) {
+      if (message && files.length > 0) {
+        try {
+          await deleteWorkspaceMessage(session.accessToken, message);
+        } catch {
+          // The refresh reconciles an uncertain cleanup without losing the draft/files.
+        }
+        void refreshWorkspace(session.accessToken).catch(reportError);
+      }
       reportError(error);
       return undefined;
     }

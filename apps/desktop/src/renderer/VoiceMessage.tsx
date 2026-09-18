@@ -16,6 +16,7 @@ import {
 } from "./AudioDeviceSettings";
 
 export const VOICE_MIME_TYPE = "audio/webm;codecs=opus";
+const VOICE_MIME_FALLBACK = "audio/webm";
 export const VOICE_BITS_PER_SECOND = 32_000;
 export const VOICE_MAX_DURATION_MS = 10 * 60 * 1_000;
 export const VOICE_MIN_DURATION_MS = 500;
@@ -28,8 +29,15 @@ function formatDuration(durationMs: number) {
 export function supportsCompressedVoiceRecording() {
   return typeof MediaRecorder !== "undefined"
     && typeof MediaRecorder.isTypeSupported === "function"
-    && MediaRecorder.isTypeSupported(VOICE_MIME_TYPE)
+    && (MediaRecorder.isTypeSupported(VOICE_MIME_TYPE)
+      || MediaRecorder.isTypeSupported(VOICE_MIME_FALLBACK))
     && Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
+function supportedVoiceMimeType() {
+  return MediaRecorder.isTypeSupported(VOICE_MIME_TYPE)
+    ? VOICE_MIME_TYPE
+    : VOICE_MIME_FALLBACK;
 }
 
 interface VoiceRecorderProps {
@@ -95,7 +103,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
         streamRef.current = stream;
         chunksRef.current = [];
         const recorder = new MediaRecorder(stream, {
-          mimeType: VOICE_MIME_TYPE,
+          mimeType: supportedVoiceMimeType(),
           audioBitsPerSecond: VOICE_BITS_PER_SECOND,
         });
         recorderRef.current = recorder;
@@ -116,7 +124,9 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
           if (!mountedRef.current) return;
           const elapsed = Math.min(VOICE_MAX_DURATION_MS, Math.max(0, performance.now() - startedAtRef.current));
           setDurationMs(elapsed);
-          const recorded = new Blob(chunksRef.current, { type: VOICE_MIME_TYPE });
+          const recorded = new Blob(chunksRef.current, {
+            type: recorder.mimeType || supportedVoiceMimeType(),
+          });
           if (elapsed < VOICE_MIN_DURATION_MS || !recorded.size) {
             setState("error");
             setError("Сообщение слишком короткое. Запишите хотя бы полсекунды.");
@@ -175,7 +185,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
       const file = new File(
         [blob],
         `voice-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`,
-        { type: VOICE_MIME_TYPE },
+        { type: blob.type || VOICE_MIME_TYPE },
       );
       if (await onSend(file, Math.round(durationMs))) onClose();
       else setError("Голосовое сообщение не отправлено. Запись сохранена на экране — попробуйте снова.");
