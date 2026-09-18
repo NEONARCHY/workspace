@@ -9,12 +9,13 @@ import type {
   WorkspacePerson,
   WorkspacePosition,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, Field, Input } from "@fluentui/react-components";
-import { Dismiss24Regular } from "@fluentui/react-icons";
+import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
+import { Camera24Regular, Dismiss24Regular } from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 import {
   changeOwnPassword,
@@ -27,6 +28,7 @@ import {
   loadSessions,
   revokeSession,
   setupTotp,
+  uploadProfileAvatar,
 } from "./workspace-api";
 
 interface AccountPanelProps {
@@ -35,9 +37,10 @@ interface AccountPanelProps {
   readonly user: WorkspacePerson;
   readonly onClose: () => void;
   readonly onLogout: () => void;
+  readonly onAvatarChanged?: (avatarVersion: string) => void;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout, initialSection }: AccountPanelProps) {
+export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   useModalFocus(panelRef, true, onClose);
   const inviteRef = useRef<HTMLElement>(null);
@@ -68,6 +71,7 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
   const [resetUsername, setResetUsername] = useState("");
   const [resetTotp, setResetTotp] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [avatarBusy, setAvatarBusy] = useState(false);
   const jumpToSection = (selector: string) => {
     const section = panelRef.current?.querySelector<HTMLElement>(selector);
     section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
@@ -226,12 +230,28 @@ export function AccountPanel({ token, user, onClose, onLogout, initialSection }:
         </nav>}
 
         {initialSection !== "invite" && <><section className="account-profile">
-          <Avatar name={user.name} size={48} color="colorful" />
+          <ProfileAvatar person={user} token={token} size={48} />
           <div>
             <strong>{user.name}</strong>
             <span>{user.jobTitle ?? user.role}</span>
             <small>@{user.username}</small>
           </div>
+          <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
+            <Camera24Regular />
+            <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
+            <input hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={avatarBusy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                setAvatarBusy(true);
+                void uploadProfileAvatar(token, file).then((result) => {
+                  onAvatarChanged?.(result.avatarVersion);
+                  setFeedback("Аватар обновлён и сохранён на сервере.");
+                }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
+                  .finally(() => setAvatarBusy(false));
+              }} />
+          </label>
         </section>
 
         <AudioDeviceSettings />

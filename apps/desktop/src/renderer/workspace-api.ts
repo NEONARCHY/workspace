@@ -1124,6 +1124,24 @@ export async function downloadWorkspaceAttachment(
   }, (response) => response.blob(), 120_000);
 }
 
+export async function uploadProfileAvatar(token: string, file: File): Promise<{ avatarVersion: string }> {
+  if (file.size > 15 * 1024 * 1024) throw new Error("Аватар должен быть не больше 15 МБ");
+  if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+    throw new Error("Поддерживаются JPG, PNG, WebP и GIF");
+  }
+  const headers = new Headers({ "Content-Type": file.type, Authorization: `Bearer ${token}` });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar`, { method: "PUT", headers, body: file },
+    async (response) => await response.json() as { avatarVersion: string }, 120_000);
+}
+
+export function loadProfileAvatar(token: string, userId: string): Promise<Blob> {
+  const headers = new Headers({ Authorization: `Bearer ${token}` });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar/${userId}`, { headers },
+    async (response) => await response.blob());
+}
+
 export function subscribeToWorkspaceEvents(
   token: string,
   onEvent: () => void,

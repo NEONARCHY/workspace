@@ -73,8 +73,8 @@ async def module_permissions_for_user(
     connection: AsyncConnection,
     user: AccessUser,
 ) -> dict[str, dict[ModuleAction, bool]]:
-    if user.role == "superadmin":
-        return {module_key: default_permissions("superadmin") for module_key in MODULE_KEYS}
+    if user.role in {"admin", "superadmin"}:
+        return {module_key: default_permissions(user.role) for module_key in MODULE_KEYS}
     department_keys = await _department_ancestry(connection, user.department_id)
     subject_pairs = [
         ("role", user.role),

@@ -9,10 +9,18 @@
 }
 .animated-amount { position: relative; display: block; font-variant-numeric: tabular-nums; }
 .amount-accessible { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.amount-visual { position: relative; }
-.animated-amount[data-animating="true"] .amount-visual { animation: amount-updated 220ms ease; }
-@keyframes amount-updated { from { opacity: .45; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .animated-amount .amount-visual { animation: none; } }
+.amount-visual { display: inline-flex; align-items: baseline; white-space: pre; }
+.amount-character { position: relative; display: inline-grid; height: 1.18em; overflow: hidden; place-items: center; line-height: 1.18; }
+.amount-character.is-rolling { min-width: .61em; }
+.amount-digit { grid-area: 1 / 1; display: block; will-change: transform, filter, opacity; }
+.amount-digit-old { animation: amount-digit-out 320ms cubic-bezier(.2,.72,.2,1) both; }
+.amount-digit-new { animation: amount-digit-in 320ms cubic-bezier(.2,.72,.2,1) both; }
+@keyframes amount-digit-out { from { opacity: 1; transform: translateY(0); filter: blur(0); } to { opacity: .2; transform: translateY(105%); filter: blur(.7px); } }
+@keyframes amount-digit-in { from { opacity: .2; transform: translateY(-105%); filter: blur(.7px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .amount-digit-old { display: none; }
+  .amount-digit-new { animation: none; }
+}
 @media (forced-colors: active) {
   .app-provider *, .app-provider *::before, .app-provider *::after { box-shadow: none !important; }
   :is(.rail-action.active,.chat-row.selected,.record-row.selected) { outline: 2px solid Highlight; outline-offset: -2px; }

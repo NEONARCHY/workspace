@@ -146,15 +146,18 @@ body { background: var(--ws-canvas); }
 .spatial-lane.is-payment-motion.is-unavailable .spatial-drop-marker { border-style: solid; border-color: #d9b8b9; color: #7b4d52; background: #fff8f7; }
 .spatial-drag-preview {
   box-sizing: border-box;
-  border: 1px solid #b0d1cf !important;
-  border-radius: 19px;
-  background: #fff;
+  --spatial-tilt: 0deg;
+  --spatial-shift: 0px;
   box-shadow: var(--ws-shadow-lift) !important;
   cursor: grabbing;
-  opacity: .98;
   pointer-events: none;
+  transform-origin: 50% 72%;
+  transform: translateY(var(--spatial-shift)) rotate(var(--spatial-tilt));
+  transition: transform 90ms linear;
 }
 .spatial-drag-preview-shell {
+  width: 100%;
+  height: 100%;
   transform-origin: center;
   animation: spatial-card-lift 180ms cubic-bezier(.18,.86,.25,1) both;
 }
@@ -164,8 +167,8 @@ body { background: var(--ws-canvas); }
 .spatial-drag-preview.is-payment-motion .spatial-drag-preview-shell { animation-name: spatial-payment-card-lift; animation-duration: var(--ws-motion-common); animation-timing-function: var(--ws-ease-physical); }
 .spatial-drag-preview.is-payment-motion.is-settling .spatial-drag-preview-shell { animation-name: spatial-payment-card-land; animation-duration: 280ms; animation-timing-function: var(--ws-ease-physical); }
 @keyframes spatial-card-lift {
-  from { opacity: .74; transform: rotate(0) scale(.985); }
-  to { opacity: 1; transform: rotate(-.45deg) scale(1.014); }
+  from { opacity: .82; transform: scale(.99); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes spatial-card-land {
   from { opacity: 1; transform: rotate(-.45deg) scale(1.014); }
@@ -176,8 +179,8 @@ body { background: var(--ws-canvas); }
   to { opacity: 1; transform: scale(1); }
 }
 @keyframes spatial-payment-card-lift {
-  from { opacity: .74; transform: rotate(0) scale(.985); }
-  to { opacity: 1; transform: rotate(-.5deg) scale(1.02); }
+  from { opacity: .82; transform: scale(.99); }
+  to { opacity: 1; transform: scale(1); }
 }
 @keyframes spatial-payment-card-land {
   0% { opacity: 1; transform: rotate(-.5deg) scale(1.02); }
@@ -513,6 +516,54 @@ body { background: var(--ws-canvas); }
 .absence-summary > div { min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(135deg, #fff, #f2fafb); box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
 .absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
 .absence-summary span { color: var(--ws-muted, #607086); font-size: 12px; }
+.absences-view { position: relative; display: flex; flex-direction: column; gap: 14px; }
+.absences-view .record-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.absences-view .record-header > div { flex: 1 1 280px; }
+.absences-view .record-header > button { flex: none; }
+.absence-canvas { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)) minmax(230px, .72fr); gap: 12px; min-height: 0; }
+.absence-column { display: flex; min-height: 260px; flex-direction: column; gap: 9px; padding: 14px; border: 1px solid rgb(210 225 226 / 76%); border-radius: 22px; background: rgb(249 252 252 / 72%); }
+.absence-column > header { padding: 2px 3px 8px; }
+.absence-column > header span { color: var(--ws-link); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.absence-column > header h2 { margin: 3px 0 0; color: var(--ws-text); font-size: 17px; }
+.absence-card { display: grid; grid-template-columns: 5px minmax(0,1fr); gap: 11px; width: 100%; padding: 13px; border: 1px solid rgb(218 229 232 / 86%); border-radius: 17px; color: var(--ws-text); background: #fff; box-shadow: 0 7px 18px rgb(41 58 85 / 6%); text-align: left; cursor: pointer; transition: transform 150ms var(--ws-ease), border-color 150ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
+.absence-card:hover { transform: translateY(-2px); border-color: #b9d6d8; box-shadow: 0 12px 24px rgb(41 58 85 / 10%); }
+.absence-kind-mark { width: 5px; min-height: 100%; border-radius: 4px; background: #82bac0; }
+.absence-kind-mark.is-sick_leave { background: #c97a88; }
+.absence-kind-mark.is-vacation { background: #e2b25d; }
+.absence-kind-mark.is-late_arrival { background: #a292c9; }
+.absence-card-main { display: grid; gap: 6px; }
+.absence-card-main > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.absence-card-main small { padding: 4px 7px; border-radius: 9px; color: #527176; background: #edf6f5; font-size: 10px; }
+.absence-card-main p { margin: 0; color: var(--ws-text); font-size: 13px; }
+.absence-card-main time, .absence-card-main em { color: var(--ws-muted); font-size: 11px; font-style: normal; }
+.absence-card-main b { color: #984657; font-size: 11px; }
+.absence-empty { display: grid; flex: 1; place-content: center; justify-items: center; padding: 22px; border: 1px dashed #d5e2e3; border-radius: 17px; color: #809094; text-align: center; }
+.absence-empty p { margin: 8px 0 3px; color: #52656c; font-weight: 650; }
+.absence-empty span { max-width: 190px; font-size: 11px; line-height: 1.45; }
+.absence-presence > button { display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 2px 8px; padding: 9px 8px; border: 0; border-bottom: 1px solid #e9efef; color: var(--ws-text); background: transparent; text-align: left; }
+.absence-presence > button strong { font-size: 12px; }
+.absence-presence > button small { grid-column: 2; color: var(--ws-muted); }
+.absence-presence-dot { grid-row: 1 / 3; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: #69ae82; }
+.absence-presence-dot:not(.is-working) { background: #e4aa63; }
+.absence-drawer-scrim { position: fixed; z-index: 55; inset: 0; display: flex; justify-content: flex-end; padding: 14px; background: rgb(27 44 57 / 18%); backdrop-filter: blur(3px); }
+.absence-drawer { display: flex; width: min(480px, 100%); height: 100%; flex-direction: column; padding: 22px; border: 1px solid rgb(255 255 255 / 85%); border-radius: 25px; background: #f9fbfb; box-shadow: -18px 0 48px rgb(41 58 85 / 16%); animation: absence-drawer-enter 260ms var(--ws-ease-physical) both; }
+.absence-drawer > header { display: flex; align-items: flex-start; justify-content: space-between; }
+.absence-drawer > header span { color: var(--ws-link); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.absence-drawer h2 { margin: 6px 0 18px; font-size: 24px; }
+.absence-drawer-status { display: flex; align-items: center; justify-content: space-between; padding: 14px; border-radius: 16px; background: linear-gradient(120deg, #e5f5f2, #eef3fa); }
+.absence-drawer dl { display: grid; gap: 9px; margin: 18px 0; }
+.absence-drawer dl > div { padding: 12px 14px; border-radius: 14px; background: #fff; }
+.absence-drawer dt { color: var(--ws-muted); font-size: 11px; }
+.absence-drawer dd { margin: 5px 0 0; color: var(--ws-text); }
+.absence-drawer > footer { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 16px; }
+@keyframes absence-drawer-enter { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: translateX(0); } }
+@container workspace (max-width: 980px) { .absence-canvas { grid-template-columns: 1fr 1fr; } .absence-presence { grid-column: 1 / -1; } }
+@container workspace (max-width: 650px) { .absence-canvas { grid-template-columns: 1fr; } .absence-presence { grid-column: auto; } }
+@container workspace (max-width: 560px) { .absences-view .record-header { flex-direction: column; } .absences-view .record-header > div { flex-basis: auto; } .absences-view .record-header > button { width: 100%; } }
+@media (max-width: 800px) { .absences-view .record-header { flex-direction: column; } .absences-view .record-header > div { flex-basis: auto; } .absences-view .record-header > button { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .absence-card, .absence-drawer { transition: none; animation: none; } }
+.account-avatar-action { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.account-avatar-action.is-busy { opacity: .65; pointer-events: none; }
 .absences-view .record-card { display: flex; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: var(--ws-surface, #fff); }
 .absences-view .record-card strong, .absences-view .record-card span, .absences-view .record-card small, .absences-view .record-card em { display: block; }
 .absences-view .record-card span, .absences-view .record-card small { margin-top: 4px; color: var(--ws-muted, #607086); }

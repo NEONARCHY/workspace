@@ -10,8 +10,9 @@ button:focus-visible, select:focus-visible { outline: 2px solid #0f6cbd; outline
 .workspace-view :where(button, input, select, textarea) { scroll-margin: 16px; }
 .app-shell { --rail-width: 236px; grid-template-columns: var(--rail-width) minmax(0, 1fr); }
 .app-shell.rail-collapsed { --rail-width: 64px; }
-.app-rail { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.app-rail { min-height: 0; overflow: visible; }
 .app-rail > * { flex-shrink: 0; }
+.app-rail > .adaptive-rail-nav { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .rail-toggle { display: grid; flex: none; width: 32px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 6px; color: #c8d9e8; background: transparent; cursor: pointer; }
 .rail-toggle:hover { background: #31536e; }
 .rail-toggle:focus-visible { outline-color: #fff; }

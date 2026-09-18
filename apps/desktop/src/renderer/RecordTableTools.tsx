@@ -37,9 +37,11 @@ export function RecordTablePager({ total, paging, label }: {
       <label>На странице<WorkspaceSelect aria-label={`Строк на странице: ${label}`} value={paging.size} onChange={event => paging.setSize(Number(event.target.value))}>
         {[10, 25, 50].map(value => <option key={value} value={value}>{value}</option>)}
       </WorkspaceSelect></label>
-      <button type="button" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
-      <span aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>{paging.page + 1} / {paging.pages}</span>
-      <button type="button" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
+      {paging.pages > 1 ? <>
+        <button type="button" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
+        <span aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>{paging.page + 1} / {paging.pages}</span>
+        <button type="button" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
+      </> : null}
     </div>
   </footer>;
 }

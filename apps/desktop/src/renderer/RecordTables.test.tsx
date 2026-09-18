@@ -86,7 +86,7 @@ describe("Corporate record tables", () => {
     expect(screen.getByText("Ожидает активации")).toBeInTheDocument();
     view.rerender(wrap(<EmployeeRecords employees={[]} filterKey="empty" {...employeeRecordProps()} />));
     expect(screen.getByText("Сотрудники не найдены")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Следующая страница: сотрудники" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Следующая страница: сотрудники" })).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Найдено: 0");
   });
 });

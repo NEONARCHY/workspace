@@ -181,6 +181,9 @@ def person_from_record(row: Record, color_index: int = 0) -> PersonResponse:
         position_id=(str(row["position_id"]) if row.get("position_id") else None),
         job_title=row["job_title"],
         color=PERSON_COLORS[color_index % len(PERSON_COLORS)],
+        avatar_version=(
+            row["avatar_updated_at"].isoformat() if row.get("avatar_updated_at") else None
+        ),
         # Some focused queries and test doubles predate the employment-status field.
         # Treat an omitted value as the legacy active state while preserving explicit
         # blocked/archived values for workspace people references.
@@ -536,7 +539,7 @@ def _can_act_from_config(
     node_key: str,
     config: Mapping[str, Any],
 ) -> bool:
-    if current_user.role == "superadmin":
+    if current_user.role in {"admin", "superadmin"}:
         return True
     override = (request_row.get("actor_overrides") or {}).get(node_key)
     if override is not None:

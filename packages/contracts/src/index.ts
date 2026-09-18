@@ -168,6 +168,7 @@ export interface WorkspacePerson {
   readonly jobTitle?: string | null;
   readonly color: string;
   readonly status?: "pending" | "active" | "blocked" | "archived";
+  readonly avatarVersion?: string | null;
 }
 
 export interface WorkflowPosition {

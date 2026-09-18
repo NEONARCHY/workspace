@@ -67,6 +67,9 @@ users = sa.Table(
     sa.Column("failed_login_count", sa.Integer()),
     sa.Column("locked_until", sa.DateTime(timezone=True)),
     sa.Column("password_changed_at", sa.DateTime(timezone=True)),
+    sa.Column("avatar_storage_key", sa.String(500)),
+    sa.Column("avatar_content_type", sa.String(80)),
+    sa.Column("avatar_updated_at", sa.DateTime(timezone=True)),
 )
 
 update_releases = sa.Table(

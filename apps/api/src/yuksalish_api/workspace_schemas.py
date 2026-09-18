@@ -25,6 +25,11 @@ class PersonResponse(ApiModel):
     job_title: str | None
     color: str
     status: Literal["pending", "active", "blocked", "archived"]
+    avatar_version: str | None = None
+
+
+class ProfileAvatarResponse(ApiModel):
+    avatar_version: str
 
 
 class ModulePermissionSet(ApiModel):

@@ -1,5 +1,7 @@
 import asyncio
 import hashlib
+from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
@@ -15,6 +17,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from yuksalish_api.absence_service import (
@@ -85,6 +88,7 @@ from yuksalish_api.repository import (
     update_trip_request,
     validate_attachment_owner,
 )
+from yuksalish_api.tables import users
 from yuksalish_api.web_security import is_allowed_web_origin
 from yuksalish_api.workspace_schemas import (
     AbsenceActionRequest,
@@ -113,6 +117,7 @@ from yuksalish_api.workspace_schemas import (
     NotificationPreferencesUpdate,
     NotificationResponse,
     PinFeedPostRequest,
+    ProfileAvatarResponse,
     ProjectResponse,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
@@ -134,6 +139,14 @@ from yuksalish_api.workspace_schemas import (
     WorkflowResponse,
     WorkspaceBootstrapResponse,
 )
+
+_PROFILE_AVATAR_MAX_BYTES = 15 * 1024 * 1024
+_PROFILE_AVATAR_SIGNATURES: dict[str, tuple[bytes, ...]] = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/webp": (b"RIFF",),
+    "image/gif": (b"GIF87a", b"GIF89a"),
+}
 
 router = APIRouter(tags=["workspace"])
 
@@ -940,6 +953,81 @@ async def post_trip_action(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "trip.updated", "entityId": result.id})
     return result
+
+
+@router.put("/profile/avatar", response_model=ProfileAvatarResponse)
+async def put_profile_avatar(
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ProfileAvatarResponse:
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    signatures = _PROFILE_AVATAR_SIGNATURES.get(content_type)
+    if signatures is None:
+        raise HTTPException(status_code=415, detail="Поддерживаются JPG, PNG, WebP и GIF")
+    content = bytearray()
+    async for chunk in request.stream():
+        content.extend(chunk)
+        if len(content) > _PROFILE_AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=413, detail="Аватар должен быть не больше 15 МБ")
+    if not content:
+        raise HTTPException(status_code=422, detail="Файл аватара пуст")
+    valid_signature = any(bytes(content).startswith(signature) for signature in signatures)
+    if content_type == "image/webp":
+        valid_signature = valid_signature and bytes(content[8:12]) == b"WEBP"
+    if not valid_signature:
+        raise HTTPException(
+            status_code=422,
+            detail="Содержимое файла не соответствует формату изображения",
+        )
+
+    row = (
+        (await connection.execute(select(users).where(users.c.id == current_user.id)))
+        .mappings()
+        .one()
+    )
+    old_key = row["avatar_storage_key"]
+    storage_key = f"profile-avatar/{current_user.id}/{uuid4()}"
+    storage = _object_storage(request)
+    try:
+        await storage.put(storage_key, bytes(content), content_type)
+        updated_at = datetime.now(UTC)
+        await connection.execute(update(users).where(users.c.id == current_user.id).values(
+            avatar_storage_key=storage_key,
+            avatar_content_type=content_type,
+            avatar_updated_at=updated_at,
+            updated_at=updated_at,
+        ))
+    except ObjectStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if old_key:
+        with suppress(ObjectStorageError):
+            await storage.delete(old_key)
+    return ProfileAvatarResponse(avatar_version=updated_at.isoformat())
+
+
+@router.get("/profile/avatar/{user_id}")
+async def get_profile_avatar(
+    user_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    del current_user
+    row = (await connection.execute(select(
+        users.c.avatar_storage_key,
+        users.c.avatar_content_type,
+    ).where(users.c.id == user_id, users.c.status == "active"))).mappings().one_or_none()
+    if row is None or not row["avatar_storage_key"]:
+        raise HTTPException(status_code=404, detail="Аватар не найден")
+    try:
+        content = await _object_storage(request).get(row["avatar_storage_key"])
+    except ObjectStorageError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    return Response(content=content, media_type=row["avatar_content_type"], headers={
+        "Cache-Control": "private, max-age=3600",
+        "X-Content-Type-Options": "nosniff",
+    })
 
 
 @router.put(

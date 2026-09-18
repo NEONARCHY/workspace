@@ -6,9 +6,21 @@
 .rail-toggle:disabled { opacity: .45; cursor: default; }
 .rail-collapsed .rail-customize { justify-content: center; padding: 0; }
 .rail-collapsed .rail-customize > span { display: none; }
-.personal-rail-nav { display: flex; flex-direction: column; flex: 1 0 auto; gap: 3px; }
+.personal-rail-nav { display: flex; flex-direction: column; flex: 1 1 auto; gap: 3px; }
 .personal-rail-nav > .rail-slot:nth-last-child(2) { margin-top: auto; padding-top: 12px; }
 .rail-bottom { margin-top: 0; }
+.adaptive-rail-nav > .rail-slot:nth-last-child(2) { margin-top: 0; padding-top: 0; }
+.rail-more-slot { position: relative; }
+.rail-more-count { display: grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 10px; color: var(--ws-link); background: #fff; font-size: 10px; font-weight: 700; }
+.rail-more-drawer { position: fixed; z-index: 60; left: calc(var(--rail-width) + 10px); bottom: 82px; width: min(284px, calc(100vw - var(--rail-width) - 28px)); max-height: min(520px, calc(100dvh - 110px)); padding: 10px; overflow: auto; border: 1px solid rgb(255 255 255 / 90%); border-radius: 22px; color: var(--ws-text); background: rgb(250 253 253 / 96%); box-shadow: 0 22px 55px rgb(41 58 85 / 22%); backdrop-filter: blur(16px); animation: rail-more-enter 200ms var(--ws-ease-physical) both; }
+.rail-more-drawer > header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; color: var(--ws-muted); font-size: 12px; }
+.rail-more-drawer > header small { display: grid; min-width: 22px; height: 22px; place-items: center; border-radius: 11px; background: var(--ws-accent-wash); color: var(--ws-link); }
+.rail-more-drawer > div { display: grid; gap: 3px; }
+.rail-more-drawer .rail-action { color: var(--ws-muted); }
+.rail-more-drawer .rail-action:hover, .rail-more-drawer .rail-action.active { color: var(--ws-text); }
+.rail-collapsed .rail-more-drawer .rail-label { display: block; }
+@keyframes rail-more-enter { from { opacity: 0; transform: translateX(-8px) scale(.98); } to { opacity: 1; transform: translateX(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .rail-more-drawer { animation: none; } }
 .navigation-editor { display: grid; gap: 10px; }
 .navigation-editor > p { margin: 0; padding-inline: 5px; color: #bad0e1; font-size: 11px; line-height: 1.5; }
 .navigation-edit-row { display: grid; grid-template-columns: 16px minmax(0, 1fr) 24px 24px; align-items: center; gap: 3px; min-height: 44px; padding: 4px 2px; border: 1px solid transparent; border-radius: 6px; color: #dce9f5; }

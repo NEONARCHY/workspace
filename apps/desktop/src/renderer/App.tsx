@@ -42,7 +42,6 @@ import type {
 } from "@yuksalish/contracts";
 import { moduleKeys } from "@yuksalish/contracts";
 import {
-  Avatar,
   Button,
   FluentProvider,
 } from "@fluentui/react-components";
@@ -90,8 +89,10 @@ import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
+import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { MembersView } from "./MembersView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
@@ -1559,8 +1560,7 @@ export function App() {
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <nav className="rail-nav personal-rail-nav">
-            {orderedNavItems.map((item) => {
+          /> : <AdaptiveNavigation items={orderedNavItems} renderItem={(item) => {
               const badge = badgeBySection[item.key];
               const icon = displayedSection === item.key && item.key === "messenger"
                 ? <Chat24Filled />
@@ -1585,11 +1585,10 @@ export function App() {
                   {badge ? <span className="rail-badge">{badge > 99 ? "99+" : badge}</span> : null}
                 </button></div>
               );
-            })}
-          </nav>}
+            }} />}
           <div className="rail-bottom">
             <button className="rail-profile" type="button" onClick={() => setAccountOpen(true)}>
-              <Avatar name={workspace.currentUser.name} size={32} color="colorful" />
+              <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
               <span>{workspace.currentUser.name}</span>
             </button>
           </div>
@@ -1604,7 +1603,7 @@ export function App() {
               if (key === "settings") { setAccountOpen(true); return; }
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} /><WorkspaceIdentity person={workspace.currentUser} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -1841,6 +1840,11 @@ export function App() {
           onClose={closeAccount}
           initialSection={accountInvite ? "invite" : undefined}
           onLogout={() => void handleLogout()}
+          onAvatarChanged={(avatarVersion) => setWorkspace((current) => ({
+            ...current,
+            currentUser: { ...current.currentUser, avatarVersion },
+            people: current.people.map((person) => person.id === current.currentUser.id ? { ...person, avatarVersion } : person),
+          }))}
         />
         </RecoveryBoundary>
       ) : null}
