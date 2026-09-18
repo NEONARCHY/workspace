@@ -457,6 +457,7 @@ export function TasksView(props: TasksViewProps) {
         <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
+            {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
             <div className="view-switch" aria-label="Представление задач">
               {privileged ? <button className={mode === "dashboard" ? "active" : ""} aria-label="Обзор команды" aria-pressed={mode === "dashboard"} onClick={() => { setDetailOpen(false); setMode("dashboard"); if (!efficiencyLoading) void onLoadEfficiency(); }} type="button"><Board24Regular aria-hidden="true" />Обзор</button> : null}
               <button className={mode === "list" ? "active" : ""} aria-pressed={mode === "list"} onClick={() => setMode("list")} type="button">Список</button>
@@ -464,7 +465,6 @@ export function TasksView(props: TasksViewProps) {
               <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
               <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
             </div>
-            {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null}
           </div>
         </header>
 

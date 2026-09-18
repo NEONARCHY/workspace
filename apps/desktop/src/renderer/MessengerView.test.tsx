@@ -81,17 +81,17 @@ describe("Private messenger", () => {
     expect(document.querySelector(".conversation-pane")?.contains(menu)).toBe(false);
   });
 
-  it("shows a right-click hint with the delayed message actions", () => {
+  it("keeps right-click actions available without a visible hint", () => {
     renderMessenger();
     const message = screen.getByText(initialMessages[0]!.body).closest(".message");
     expect(message).not.toBeNull();
 
     fireEvent.focus(message!);
 
-    expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).toBeVisible();
+    expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).not.toBeInTheDocument();
   });
 
-  it("exposes chat deletion in the header and delays it for undo", async () => {
+  it("exposes chat deletion in the row menu and delays it for undo", async () => {
     vi.useFakeTimers();
     const chatActions = actions();
     vi.mocked(chatActions.delete).mockResolvedValue(undefined);
@@ -100,7 +100,8 @@ describe("Private messenger", () => {
       chatActions,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Удалить чат" }));
+    fireEvent.click(screen.getByRole("button", { name: "Действия чата «Финансы и закупки»" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
     expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
     expect(chatActions.delete).not.toHaveBeenCalled();
 

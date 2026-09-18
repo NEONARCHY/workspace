@@ -16,7 +16,8 @@ export function SpatialSort({ ids, children, onMove }: { ids: string[]; children
 
 export function SpatialSortItem({ id, label, disabled, children, className = "", ...props }: HTMLAttributes<HTMLDivElement> & { id: string; label: string; disabled: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
-  return <div {...props} ref={setNodeRef} className={`${className} spatial-sort-item ${isDragging ? "is-lifted" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 2 : undefined }}>
+  const verticalTransform = transform ? { ...transform, x: 0 } : null;
+  return <div {...props} ref={setNodeRef} className={`${className} spatial-sort-item ${isDragging ? "is-lifted" : ""}`} style={{ transform: CSS.Transform.toString(verticalTransform), transition, zIndex: isDragging ? 2 : undefined }}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-sort-grip" aria-label={`Переставить: ${label}`}><ReOrderDotsVertical16Regular /></button> : null}
   </div>;

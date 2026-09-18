@@ -1040,9 +1040,17 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 9px; border-top: 1px solid #edf0f3; color: #607589; font-size: 11px; }
 .feed-actions > span { display: flex; align-items: center; gap: 4px; }
 .feed-comments { display: grid; gap: 8px; margin-top: 10px; }
-.feed-comment { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 13px; background: #f4f7f9; }
+.feed-comment { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 13px; background: #f4f7f9; animation: feed-comment-arrive 260ms var(--ws-ease-out, ease-out) both; }
 .feed-comment.is-reply { width: calc(100% - 38px); margin-left: 38px; background: #f7faf9; }
-.feed-comment.is-reply::before { position: absolute; top: -9px; bottom: 50%; left: -22px; width: 16px; border-bottom: 2px solid #b9d8d6; border-left: 2px solid #b9d8d6; border-radius: 0 0 0 10px; content: ""; }
+.feed-comment.is-reply::before { position: absolute; top: -10px; bottom: -10px; left: -22px; width: 16px; border-left: 2px solid #b9d8d6; content: ""; transform-origin: top; animation: feed-thread-grow 280ms var(--ws-ease-out, ease-out) both; }
+.feed-comment.is-reply::after { position: absolute; top: 50%; left: -22px; width: 16px; border-bottom: 2px solid #b9d8d6; border-radius: 0 0 0 10px; content: ""; }
+.feed-comment.is-reply.is-last-reply::before { bottom: 50%; border-radius: 0 0 0 10px; }
+.feed-comment.has-replies::after { position: absolute; top: 50%; bottom: -10px; left: 16px; border-left: 2px solid #b9d8d6; content: ""; transform-origin: top; animation: feed-thread-grow 280ms var(--ws-ease-out, ease-out) both; }
+@keyframes feed-comment-arrive { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes feed-thread-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .feed-comment, .feed-comment::before, .feed-comment::after { animation: none !important; }
+}
 .feed-comment > span { display: grid; gap: 2px; }
 .feed-comment p { margin: 0; color: #40586d; font-size: 11px; line-height: 1.4; }
 .feed-comment small { color: #84919e; font-size: 11px; }

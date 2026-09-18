@@ -110,7 +110,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
       }
       if (!supportsCompressedVoiceRecording()) {
         setState("error");
-        setError("Запись Opus не поддерживается на этом компьютере. Обновите приложение или Chromium.");
+        setError("Формат голосовой записи не поддерживается на этом компьютере. Обновите приложение или Chromium.");
         return;
       }
       try {
@@ -233,7 +233,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
         <div>
           <strong>{state === "requesting" ? "Подключаем микрофон" : state === "recording" ? "Идёт запись" : state === "ready" ? "Запись готова" : "Не удалось записать"}</strong>
           <small>{state === "recording" || state === "ready"
-            ? `${formatDuration(durationMs)} · Opus, экономный размер`
+            ? formatDuration(durationMs)
             : error || "Используется микрофон из настроек Workspace"}</small>
         </div>
       </div>
@@ -324,7 +324,7 @@ export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerPro
           </Button>
         </Tooltip>
       )}
-      <small>{formatDuration(attachment.mediaDurationMs ?? 0)} · Opus · {Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
+      <small>{formatDuration(attachment.mediaDurationMs ?? 0)} · {Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
       {error ? <span className="voice-message-error" role="status">{error}</span> : null}
     </div>
   );

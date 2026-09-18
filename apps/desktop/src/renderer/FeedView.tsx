@@ -144,11 +144,13 @@ export function FeedView({ posts, people, token, onCreate, onComment, onReact, o
                 </div>
                 {post.comments.length > 0 ? (
                   <div className="feed-comments">
-                    {post.comments.map((item) => {
+                    {post.comments.map((item, index) => {
                       const commentAuthor = person(item.authorUserId);
                       const depth = item.parentCommentId ? 1 : 0;
+                      const hasReplies = post.comments[index + 1]?.parentCommentId === item.id;
+                      const isLastReply = Boolean(item.parentCommentId) && post.comments[index + 1]?.parentCommentId !== item.parentCommentId;
                       return (
-                        <div className={`feed-comment ${depth ? "is-reply" : ""}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
+                        <div className={`feed-comment ${depth ? "is-reply" : ""} ${hasReplies ? "has-replies" : ""} ${isLastReply ? "is-last-reply" : ""}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
                           {commentAuthor ? <ProfileAvatar person={commentAuthor} token={token} size={28} /> : null}
                           <span>
                             <strong>{commentAuthor?.name ?? "Сотрудник"}</strong>

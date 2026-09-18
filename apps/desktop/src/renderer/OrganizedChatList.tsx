@@ -2,7 +2,7 @@ import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { Fragment, useMemo, useState } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
-import { Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
+import { Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 
 type ChatBucket = "chats" | "task-chats" | "archive";
@@ -13,7 +13,7 @@ const bucketLabel = (bucket: ChatBucket): string => bucket === "chats" ? "Чат
 
 const bucketEmptyMessage = (bucket: ChatBucket): string => bucket === "archive" ? "Архив пуст" : bucket === "task-chats" ? "Чатов задач не найдено" : "Все чаты в архиве";
 
-export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, preferences, onSelect, onChange, onReorder }: {
+export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, preferences, onSelect, onChange, onReorder, onDelete }: {
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly activeChatId?: string;
@@ -22,6 +22,7 @@ export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, 
   readonly onSelect: (id: string) => void;
   readonly onChange?: (id: string, action: PersonalChatAction) => Promise<void>;
   readonly onReorder?: (order: readonly string[]) => Promise<void>;
+  readonly onDelete?: (chat: ChatSummary) => void;
 }) {
   const initialBucket: ChatBucket = focusChatId && preferences.archivedChatIds.includes(focusChatId)
     ? "archive"
@@ -99,12 +100,13 @@ export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, 
             </button>
             <Menu>
               <MenuTrigger disableButtonEnhancement><Button className="chat-more" appearance="subtle" size="small" icon={<MoreHorizontal20Regular />}
-                aria-label={`Действия чата «${chat.title}»`} disabled={busy || !onChange} /></MenuTrigger>
+                aria-label={`Действия чата «${chat.title}»`} disabled={busy || (!onChange && !onDelete)} /></MenuTrigger>
               <MenuPopover><MenuList>
-                {!archive && <MenuItem icon={pinned ? <PinOff20Regular /> : <Pin20Regular />} onClick={() => void run(() => onChange!(chat.id, pinned ? "unpin" : "pin"), pinned ? "Чат откреплён" : "Чат закреплён")}>{pinned ? "Открепить" : "Закрепить"}</MenuItem>}
+                {!archive && onChange ? <MenuItem icon={pinned ? <PinOff20Regular /> : <Pin20Regular />} onClick={() => void run(() => onChange(chat.id, pinned ? "unpin" : "pin"), pinned ? "Чат откреплён" : "Чат закреплён")}>{pinned ? "Открепить" : "Закрепить"}</MenuItem> : null}
                 {pinned && <MenuItem icon={<ArrowUp20Regular />} disabled={!onReorder || pinIndex === 0 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex - 1]!)}>Переместить выше</MenuItem>}
                 {pinned && <MenuItem icon={<ArrowDown20Regular />} disabled={!onReorder || pinIndex === pinnedIds.length - 1 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex + 1]!)}>Переместить ниже</MenuItem>}
-                <MenuItem icon={<Archive20Regular />} onClick={() => void run(() => onChange!(chat.id, archive ? "unarchive" : "archive"), archive ? "Чат возвращён из архива" : "Чат убран в архив; переписка сохранена")}>{archive ? "Вернуть из архива" : "В архив"}</MenuItem>
+                {onChange ? <MenuItem icon={<Archive20Regular />} onClick={() => void run(() => onChange(chat.id, archive ? "unarchive" : "archive"), archive ? "Чат возвращён из архива" : "Чат убран в архив; переписка сохранена")}>{archive ? "Вернуть из архива" : "В архив"}</MenuItem> : null}
+                {chat.canDelete && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>Удалить чат</MenuItem> : null}
               </MenuList></MenuPopover>
             </Menu>
           </SpatialSortItem>

@@ -29,10 +29,8 @@ import {
 import {
   Add24Regular,
   Attach24Regular,
-  Delete24Regular,
   EmojiAdd24Regular,
   Mic24Regular,
-  MoreHorizontal20Regular,
   Pin24Regular,
   PinOff24Regular,
   Search24Regular,
@@ -179,7 +177,6 @@ function Conversation({
   onDownloadAttachment,
   onLoadAttachment,
   onManage,
-  onRequestDeleteChat,
   onBack,
   personalPreferences,
   onPersonalChat,
@@ -187,7 +184,6 @@ function Conversation({
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
-  readonly onRequestDeleteChat: (chat: ChatSummary) => void;
   readonly onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -391,16 +387,6 @@ function Conversation({
           <Button {...restoreFocusTarget} onClick={onManage}>
             {chat.kind === "group" ? "Участники и права" : "Участники"}
           </Button>
-          {chat.canDelete ? (
-            <Button
-              appearance="subtle"
-              icon={<Delete24Regular />}
-              aria-label="Удалить чат"
-              onClick={() => onRequestDeleteChat(chat)}
-            >
-              Удалить чат
-            </Button>
-          ) : null}
         </div>
       </header>
       {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
@@ -642,10 +628,6 @@ function Conversation({
                           </MenuList>
                         </MenuPopover>
                       </Menu>
-                      <span className="message-context-hint" title="Другие действия — правая кнопка мыши" aria-hidden="true">
-                        <MoreHorizontal20Regular />
-                        <small>ПКМ</small>
-                      </span>
                     </div>
                   )}
                 </div>
@@ -845,7 +827,7 @@ function Conversation({
             >
               @{mentions.length || ""}
             </Button>
-            <Tooltip content="Записать голосовое сообщение · Opus" relationship="label">
+            <Tooltip content="Записать голосовое сообщение" relationship="label">
               <Button
                 appearance="subtle"
                 icon={<Mic24Regular />}
@@ -1001,6 +983,7 @@ export function MessengerView(props: MessengerViewProps) {
         </div>
           <OrganizedChatList key={listRevision} chats={visibleChats} messages={messages} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
+          onDelete={requestChatDeletion}
           onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
       </aside>
       {activeChat ? (
@@ -1010,7 +993,6 @@ export function MessengerView(props: MessengerViewProps) {
           chat={activeChat}
           availableChats={visibleChats}
           onManage={() => setPanel("manage")}
-          onRequestDeleteChat={requestChatDeletion}
           onBack={() => setConversationOpen(false)}
         />
       ) : (
