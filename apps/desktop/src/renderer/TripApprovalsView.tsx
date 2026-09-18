@@ -110,8 +110,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const feedback = error ? <p className="trip-feedback error" role="alert">{error}</p> : null;
 
   return (
-    <section className="workspace-view bp7-view trips-view trip-view" aria-label="Согласование поездок">
-      <header className="bp7-header">
+    <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
+      <header className="bp7-header workflow-hero-header">
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p></div>
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>

@@ -194,8 +194,8 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   };
 
   return (
-    <section className={`workspace-view bp7-view projects-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Список проектов">
-      <header className="bp7-header">
+    <section className={`workspace-view bp7-view projects-view workflow-process-view ${detailOpen && selected ? "detail-open" : ""}`} aria-label="Список проектов">
+      <header className="bp7-header workflow-hero-header">
         <div>
           <span className="view-kicker">BP‑7 · Общая воронка</span>
           <h1>Список проектов</h1>

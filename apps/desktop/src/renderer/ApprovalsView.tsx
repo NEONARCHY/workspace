@@ -1366,9 +1366,10 @@ export function ApprovalsView({
   }, [canManage, mode, redoWorkflowChange, undoWorkflowChange]);
 
   return (
-    <section className="workspace-view approvals-view" aria-label="Согласования">
-      <header className="section-toolbar approvals-toolbar">
+    <section className="workspace-view approvals-view workflow-process-view" aria-label="Согласования">
+      <header className="section-toolbar approvals-toolbar workflow-hero-header">
         <div>
+          <span className="view-kicker">Финансовый маршрут · Рабочая очередь</span>
           <h1>{mode === "requests" ? "Заявки на оплату" : "Маршрут согласования"}</h1>
           <p>
             {mode === "requests"
