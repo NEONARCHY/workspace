@@ -221,6 +221,14 @@
   background: #edf3f2;
 }
 
+.messenger-view .conversation-search .fui-Input__input {
+  align-self: center;
+  height: 20px;
+  min-height: 20px;
+  padding-block: 0;
+  line-height: 20px;
+}
+
 .messenger-view .message-scroll {
   overflow-x: hidden;
   padding: 24px 24px 34px 14px;
