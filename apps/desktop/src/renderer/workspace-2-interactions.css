@@ -180,15 +180,20 @@
 .app-rail .rail-action.active .rail-icon { color: #007d91; transform: scale(1.04); }
 .app-rail .rail-action:active { transform: scale(.985); }
 
-/* Native text carets stay aligned with the font metrics. */
-.app-provider .fui-Input { align-items: center; }
+/* Keep every single-line Fluent field on the same optical axis. Gilroy's
+   metrics sit high when the input is stretched to the wrapper height; a real
+   line box plus symmetric vertical padding keeps text, placeholder and the
+   native caret centred in search, command and data-entry fields. */
+.app-provider .fui-Input { align-items: stretch; }
 .app-provider .fui-Input__input {
   min-height: 0;
-  height: 100%;
-  padding-block: 0;
-  line-height: normal;
+  height: auto;
+  padding-block: 7px;
+  line-height: 20px;
   box-sizing: border-box;
 }
+.app-provider .fui-Input__contentBefore,
+.app-provider .fui-Input__contentAfter { align-self: center; }
 
 /* The standalone calendar keeps its tools, but no longer reserves a tall
    empty header band above the month grid. */
