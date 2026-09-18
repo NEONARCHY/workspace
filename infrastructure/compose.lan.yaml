@@ -1,4 +1,16 @@
 services:
+  api:
+    env_file:
+      - ../.env.lan
+
+  worker:
+    env_file:
+      - ../.env.lan
+
+  scheduler:
+    env_file:
+      - ../.env.lan
+
   web:
     build:
       context: ..

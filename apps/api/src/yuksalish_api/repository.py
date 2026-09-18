@@ -32,6 +32,7 @@ from .tables import (
     calendar_events,
     chat_members,
     chats,
+    feed_comment_reactions,
     feed_comments,
     feed_posts,
     feed_reactions,
@@ -40,6 +41,7 @@ from .tables import (
     positions,
     project_stage_actions,
     task_checklist_items,
+    task_comment_reactions,
     task_comments,
     task_cycles,
     task_dependencies,
@@ -81,6 +83,7 @@ from .workspace_schemas import (
     EffectiveModuleAccessResponse,
     FeedCommentResponse,
     FeedPostResponse,
+    MessageReactionResponse,
     ModulePermissionSet,
     NotificationPreferencesResponse,
     NotificationPreferencesUpdate,
@@ -238,13 +241,22 @@ def _task_checklist_item(row: Record) -> TaskChecklistItemResponse:
     )
 
 
-def _task_comment(row: Record) -> TaskCommentResponse:
+def _task_comment(
+    row: Record,
+    current_user: AuthenticatedUser | None = None,
+    reactions: Mapping[str, set[UUID]] | None = None,
+) -> TaskCommentResponse:
     return TaskCommentResponse(
         id=str(row["id"]),
         author_user_id=str(row["author_user_id"]),
         body=row["body"],
         created_at=row["created_at"],
         edited_at=row["edited_at"],
+        reactions=(
+            _reaction_summaries(reactions or {}, current_user)
+            if current_user is not None
+            else []
+        ),
     )
 
 
@@ -722,11 +734,32 @@ async def _trip_detail_maps(
     return employees, actions
 
 
-def _feed_comment(row: Record) -> FeedCommentResponse:
+def _reaction_summaries(
+    grouped: Mapping[str, set[UUID]],
+    current_user: AuthenticatedUser,
+) -> list[MessageReactionResponse]:
+    return [
+        MessageReactionResponse(
+            emoji=cast(Any, emoji),
+            count=len(user_ids),
+            reacted_by_current_user=current_user.id in user_ids,
+        )
+        for emoji in messenger_service.REACTION_EMOJIS
+        if (user_ids := grouped.get(emoji))
+    ]
+
+
+def _feed_comment(
+    row: Record,
+    current_user: AuthenticatedUser,
+    reactions: Mapping[str, set[UUID]] | None = None,
+) -> FeedCommentResponse:
     return FeedCommentResponse(
         id=str(row["id"]),
         author_user_id=str(row["author_user_id"]),
         body=row["body"],
+        parent_comment_id=(str(row["parent_comment_id"]) if row["parent_comment_id"] else None),
+        reactions=_reaction_summaries(reactions or {}, current_user),
         created_at=row["created_at"],
     )
 
@@ -735,16 +768,19 @@ def _feed_post(
     row: Record,
     current_user: AuthenticatedUser,
     comments: Sequence[FeedCommentResponse] = (),
-    reaction_user_ids: Sequence[UUID] = (),
+    reactions: Mapping[str, set[UUID]] | None = None,
 ) -> FeedPostResponse:
+    grouped_reactions = reactions or {}
+    like_user_ids = grouped_reactions.get("👍", set())
     return FeedPostResponse(
         id=str(row["id"]),
         author_user_id=str(row["author_user_id"]),
         title=row["title"],
         body=row["body"],
         is_pinned=row["is_pinned"],
-        liked_by_current_user=current_user.id in reaction_user_ids,
-        like_count=len(reaction_user_ids),
+        liked_by_current_user=current_user.id in like_user_ids,
+        like_count=len(like_user_ids),
+        reactions=_reaction_summaries(grouped_reactions, current_user),
         can_edit=row["author_user_id"] == current_user.id or _is_privileged(current_user),
         can_delete=row["author_user_id"] == current_user.id
         or current_user.role in {"admin", "superadmin"},
@@ -758,8 +794,12 @@ def _feed_post(
 
 async def _feed_detail_maps(
     connection: AsyncConnection,
+    current_user: AuthenticatedUser,
     post_ids: Sequence[UUID],
-) -> tuple[dict[UUID, list[FeedCommentResponse]], dict[UUID, list[UUID]]]:
+) -> tuple[
+    dict[UUID, list[FeedCommentResponse]],
+    dict[UUID, dict[str, set[UUID]]],
+]:
     if not post_ids:
         return {}, {}
     comment_rows = (
@@ -773,7 +813,7 @@ async def _feed_detail_maps(
         .mappings()
         .all()
     )
-    reaction_rows = (
+    post_reaction_rows = (
         (
             await connection.execute(
                 select(feed_reactions).where(feed_reactions.c.post_id.in_(post_ids))
@@ -782,13 +822,34 @@ async def _feed_detail_maps(
         .mappings()
         .all()
     )
+    comment_ids = [row["id"] for row in comment_rows]
+    comment_reaction_rows = (
+        (
+            await connection.execute(
+                select(feed_comment_reactions).where(
+                    feed_comment_reactions.c.comment_id.in_(comment_ids)
+                )
+            )
+        ).mappings().all()
+        if comment_ids
+        else []
+    )
     comments: dict[UUID, list[FeedCommentResponse]] = {}
-    reactions: dict[UUID, list[UUID]] = {}
+    post_reactions: dict[UUID, dict[str, set[UUID]]] = {}
+    comment_reactions: dict[UUID, dict[str, set[UUID]]] = {}
+    for row in comment_reaction_rows:
+        comment_reactions.setdefault(row["comment_id"], {}).setdefault(
+            row["emoji"], set()
+        ).add(row["user_id"])
     for row in comment_rows:
-        comments.setdefault(row["post_id"], []).append(_feed_comment(row))
-    for row in reaction_rows:
-        reactions.setdefault(row["post_id"], []).append(row["user_id"])
-    return comments, reactions
+        comments.setdefault(row["post_id"], []).append(
+            _feed_comment(row, current_user, comment_reactions.get(row["id"]))
+        )
+    for row in post_reaction_rows:
+        post_reactions.setdefault(row["post_id"], {}).setdefault(
+            row["kind"], set()
+        ).add(row["user_id"])
+    return comments, post_reactions
 
 
 def _calendar_event(
@@ -1184,6 +1245,7 @@ async def _published_payment_template(connection: AsyncConnection) -> RowMapping
 async def _task_detail_maps(
     connection: AsyncConnection,
     task_rows: Sequence[Record],
+    current_user: AuthenticatedUser | None = None,
 ) -> tuple[
     dict[UUID, list[TaskParticipantResponse]],
     dict[UUID, list[TaskChecklistItemResponse]],
@@ -1249,8 +1311,27 @@ async def _task_detail_maps(
         .all()
     )
     comments: dict[UUID, list[TaskCommentResponse]] = {}
+    comment_ids = [row["id"] for row in comment_rows]
+    reaction_rows = (
+        (
+            await connection.execute(
+                select(task_comment_reactions).where(
+                    task_comment_reactions.c.comment_id.in_(comment_ids)
+                )
+            )
+        ).mappings().all()
+        if comment_ids
+        else []
+    )
+    comment_reactions: dict[UUID, dict[str, set[UUID]]] = {}
+    for reaction in reaction_rows:
+        comment_reactions.setdefault(reaction["comment_id"], {}).setdefault(
+            reaction["emoji"], set()
+        ).add(reaction["user_id"])
     for row in comment_rows:
-        comments.setdefault(row["task_id"], []).append(_task_comment(row))
+        comments.setdefault(row["task_id"], []).append(
+            _task_comment(row, current_user, comment_reactions.get(row["id"]))
+        )
 
     dependency_rows = (
         (
@@ -1353,7 +1434,11 @@ async def _task_detail_maps(
     )
 
 
-async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResponse:
+async def _task_response(
+    connection: AsyncConnection,
+    task_id: UUID,
+    current_user: AuthenticatedUser | None = None,
+) -> TaskResponse:
     row = (await connection.execute(select(tasks).where(tasks.c.id == task_id))).mappings().first()
     if row is None:
         raise WorkspaceRepositoryError(404, "Task was not found")
@@ -1366,7 +1451,7 @@ async def _task_response(connection: AsyncConnection, task_id: UUID) -> TaskResp
         parent_titles,
         task_chat_ids,
         latest_returns,
-    ) = await _task_detail_maps(connection, [row])
+    ) = await _task_detail_maps(connection, [row], current_user)
     return _task(
         row,
         participants=participants.get(task_id, []),
@@ -2256,7 +2341,7 @@ async def load_workspace(
         task_parent_titles,
         task_chat_ids,
         task_latest_returns,
-    ) = await _task_detail_maps(connection, task_rows)
+    ) = await _task_detail_maps(connection, task_rows, current_user)
 
     request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
     request_rows = (await connection.execute(request_statement)).mappings().all()
@@ -2330,6 +2415,7 @@ async def load_workspace(
     )
     feed_comment_map, feed_reaction_map = await _feed_detail_maps(
         connection,
+        current_user,
         [row["id"] for row in feed_rows],
     )
     calendar_rows = (
@@ -2591,7 +2677,7 @@ async def _feed_post_response(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
-    comments, reactions = await _feed_detail_maps(connection, [post_id])
+    comments, reactions = await _feed_detail_maps(connection, current_user, [post_id])
     return _feed_post(
         row,
         current_user,
@@ -2630,12 +2716,21 @@ async def add_feed_comment(
     exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
     if exists is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if payload.parent_comment_id is not None:
+        parent_post_id = await connection.scalar(
+            select(feed_comments.c.post_id).where(
+                feed_comments.c.id == payload.parent_comment_id
+            )
+        )
+        if parent_post_id != post_id:
+            raise WorkspaceRepositoryError(422, "Reply target must belong to the same feed post")
     now = datetime.now(UTC)
     await connection.execute(
         insert(feed_comments).values(
             id=uuid4(),
             post_id=post_id,
             author_user_id=current_user.id,
+            parent_comment_id=payload.parent_comment_id,
             body=payload.body,
             created_at=now,
         )
@@ -2659,6 +2754,7 @@ async def set_feed_like(
         delete(feed_reactions).where(
             feed_reactions.c.post_id == post_id,
             feed_reactions.c.user_id == current_user.id,
+            feed_reactions.c.kind == "👍",
         )
     )
     if liked:
@@ -2666,10 +2762,59 @@ async def set_feed_like(
             insert(feed_reactions).values(
                 post_id=post_id,
                 user_id=current_user.id,
-                kind="like",
+                kind="👍",
                 created_at=datetime.now(UTC),
             )
         )
+    return await _feed_post_response(connection, current_user, post_id)
+
+
+async def toggle_feed_reaction(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    post_id: UUID,
+    emoji: str,
+    reacted: bool,
+    comment_id: UUID | None = None,
+) -> FeedPostResponse:
+    if emoji not in messenger_service.REACTION_EMOJIS:
+        raise WorkspaceRepositoryError(422, "Unsupported reaction")
+    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    if exists is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if comment_id is None:
+        conditions = (
+            feed_reactions.c.post_id == post_id,
+            feed_reactions.c.user_id == current_user.id,
+            feed_reactions.c.kind == emoji,
+        )
+        await connection.execute(delete(feed_reactions).where(*conditions))
+        if reacted:
+            await connection.execute(insert(feed_reactions).values(
+                post_id=post_id,
+                user_id=current_user.id,
+                kind=emoji,
+                created_at=datetime.now(UTC),
+            ))
+    else:
+        comment_post_id = await connection.scalar(
+            select(feed_comments.c.post_id).where(feed_comments.c.id == comment_id)
+        )
+        if comment_post_id != post_id:
+            raise WorkspaceRepositoryError(404, "Feed comment was not found")
+        conditions = (
+            feed_comment_reactions.c.comment_id == comment_id,
+            feed_comment_reactions.c.user_id == current_user.id,
+            feed_comment_reactions.c.emoji == emoji,
+        )
+        await connection.execute(delete(feed_comment_reactions).where(*conditions))
+        if reacted:
+            await connection.execute(insert(feed_comment_reactions).values(
+                comment_id=comment_id,
+                user_id=current_user.id,
+                emoji=emoji,
+                created_at=datetime.now(UTC),
+            ))
     return await _feed_post_response(connection, current_user, post_id)
 
 
@@ -3898,7 +4043,39 @@ async def add_task_comment(
             edited_at=None,
         )
     )
-    return await _task_response(connection, task_id)
+    return await _task_response(connection, task_id, current_user)
+
+
+async def toggle_task_comment_reaction(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    comment_id: UUID,
+    emoji: str,
+    reacted: bool,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id)
+    comment_task_id = await connection.scalar(
+        select(task_comments.c.task_id).where(task_comments.c.id == comment_id)
+    )
+    if comment_task_id != task_id:
+        raise WorkspaceRepositoryError(404, "Task comment was not found")
+    if emoji not in messenger_service.REACTION_EMOJIS:
+        raise WorkspaceRepositoryError(422, "Unsupported reaction")
+    conditions = (
+        task_comment_reactions.c.comment_id == comment_id,
+        task_comment_reactions.c.user_id == current_user.id,
+        task_comment_reactions.c.emoji == emoji,
+    )
+    await connection.execute(delete(task_comment_reactions).where(*conditions))
+    if reacted:
+        await connection.execute(insert(task_comment_reactions).values(
+            comment_id=comment_id,
+            user_id=current_user.id,
+            emoji=emoji,
+            created_at=datetime.now(UTC),
+        ))
+    return await _task_response(connection, task_id, current_user)
 
 
 async def _would_create_dependency_cycle(

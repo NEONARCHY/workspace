@@ -250,6 +250,8 @@ export interface FeedComment {
   readonly id: string;
   readonly authorUserId: string;
   readonly body: string;
+  readonly parentCommentId?: string | null;
+  readonly reactions?: readonly MessageReaction[];
   readonly createdAt: string;
 }
 
@@ -261,6 +263,7 @@ export interface FeedPost {
   readonly isPinned: boolean;
   readonly likedByCurrentUser: boolean;
   readonly likeCount: number;
+  readonly reactions?: readonly MessageReaction[];
   readonly canEdit: boolean;
   readonly canDelete?: boolean;
   readonly canPin: boolean;
@@ -541,6 +544,7 @@ export interface TaskComment {
   readonly body: string;
   readonly createdAt: string;
   readonly editedAt?: string | null;
+  readonly reactions?: readonly MessageReaction[];
 }
 
 export interface TaskDependency {

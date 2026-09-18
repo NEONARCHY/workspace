@@ -576,7 +576,7 @@ async def seed_demo_data(
                 {
                     "post_id": feed_post_ids["launch"],
                     "user_id": person_ids["aziza"],
-                    "kind": "like",
+                    "kind": "👍",
                     "created_at": now - timedelta(hours=2),
                 }
             ],

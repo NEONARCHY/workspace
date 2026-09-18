@@ -239,7 +239,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
             <Camera24Regular />
             <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
-            <input hidden type="file" accept="image/jpeg,image/png,image/webp,image/gif" disabled={avatarBusy}
+            <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";

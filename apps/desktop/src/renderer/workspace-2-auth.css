@@ -144,6 +144,17 @@
 .auth-card .fui-Field__label { color: var(--ws-text); font-family: var(--ws-font); font-size: 13px; font-weight: 600; }
 .auth-card .fui-Field__validationMessage { font-size: 12px; }
 .auth-card .fui-Input { min-height: 46px; border-radius: 14px; }
+.auth-card .fui-Input__input {
+  background: transparent;
+  box-shadow: none;
+}
+.auth-card .fui-Input__input:-webkit-autofill,
+.auth-card .fui-Input__input:-webkit-autofill:hover,
+.auth-card .fui-Input__input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ws-text);
+  box-shadow: 0 0 0 1000px transparent inset;
+  transition: background-color 9999s ease-out 0s;
+}
 
 .auth-submit {
   min-height: 46px;

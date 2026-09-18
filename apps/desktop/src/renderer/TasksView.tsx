@@ -36,6 +36,7 @@ import {
 
 import { AttachmentPanel } from "./AttachmentPanel";
 import { EfficiencyView } from "./EfficiencyView";
+import { FeedReactions } from "./FeedView";
 import { TaskCalendarView } from "./TaskCalendarView";
 import { TaskComposer } from "./TaskComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
@@ -143,6 +144,7 @@ interface TasksViewProps {
   readonly onToggleChecklistItem: (task: WorkspaceTask, itemId: string, completed: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onDeleteChecklistItem: (task: WorkspaceTask, itemId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAddComment: (task: WorkspaceTask, body: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onReactToComment?: (task: WorkspaceTask, commentId: string, emoji: string, reacted: boolean) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetDependency: (task: WorkspaceTask, dependsOnTaskId: string, dependencyKind: "blocks" | "relates") => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveDependency: (task: WorkspaceTask, dependsOnTaskId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -168,7 +170,7 @@ export function TasksView(props: TasksViewProps) {
   const {
     tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
-    onDeleteChecklistItem, onAddComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
+    onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
     onSubmitResult, onAcceptResult,
@@ -570,7 +572,7 @@ export function TasksView(props: TasksViewProps) {
           </div> : null}
         </div>
 
-        <div className="detail-section task-comments-section"><div className="detail-section-line"><h3>Комментарии</h3><span>{selectedTask.comments.length}</span></div><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /><span><strong>{personById(comment.authorUserId)?.name}</strong><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p></span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
+        <div className="detail-section task-comments-section"><div className="detail-section-line"><h3>Комментарии</h3><span>{selectedTask.comments.length}</span></div><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /><span><strong>{personById(comment.authorUserId)?.name}</strong><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p>{onReactToComment ? <FeedReactions reactions={comment.reactions ?? []} disabled={false} onToggle={(emoji, reacted) => void onReactToComment(selectedTask, comment.id, emoji, reacted)} /> : null}</span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
 
         <div className="detail-section task-efficiency-actions"><div className="detail-section-line"><h3>Учёт сроков</h3><span>EFF-1.0</span></div><p>Мотивированный возврат фиксируется в истории отдельно и не уменьшает процент выполнения в срок.</p>{canManageParticipants ? <div className="task-editor-actions"><Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
         {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>

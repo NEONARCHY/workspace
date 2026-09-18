@@ -190,6 +190,19 @@
   box-sizing: border-box;
 }
 
+/* The standalone calendar keeps its tools, but no longer reserves a tall
+   empty header band above the month grid. */
+.calendar-view:not(.task-calendar-embedded) .calendar-main {
+  gap: 10px;
+  padding-top: 12px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-toolbar {
+  min-height: 54px;
+  margin-bottom: 8px;
+  padding-top: 4px;
+  padding-bottom: 8px;
+}
+
 .app-content > .workspace-view {
   animation: ws2-view-arrive 270ms var(--ws-ease) 35ms backwards;
 }

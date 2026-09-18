@@ -632,10 +632,26 @@ export function addWorkspaceFeedComment(
   token: string,
   postId: string,
   body: string,
+  parentCommentId?: string,
 ): Promise<FeedPost> {
   return apiRequest<FeedPost>(
     `/feed/posts/${postId}/comments`,
-    { method: "POST", body: JSON.stringify({ body }) },
+    { method: "POST", body: JSON.stringify({ body, parentCommentId }) },
+    token,
+  );
+}
+
+export function setWorkspaceFeedReaction(
+  token: string,
+  postId: string,
+  emoji: string,
+  reacted: boolean,
+  commentId?: string,
+): Promise<FeedPost> {
+  const target = commentId ? `/comments/${commentId}` : "";
+  return apiRequest<FeedPost>(
+    `/feed/posts/${postId}${target}/reactions/${encodeURIComponent(emoji)}`,
+    { method: reacted ? "PUT" : "DELETE" },
     token,
   );
 }
@@ -876,6 +892,20 @@ export function addWorkspaceTaskComment(
   return apiRequest<WorkspaceTask>(
     `/tasks/${taskId}/comments`,
     { method: "POST", body: JSON.stringify({ body }) },
+    token,
+  );
+}
+
+export function setWorkspaceTaskCommentReaction(
+  token: string,
+  taskId: string,
+  commentId: string,
+  emoji: string,
+  reacted: boolean,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(
+    `/tasks/${taskId}/comments/${commentId}/reactions/${encodeURIComponent(emoji)}`,
+    { method: reacted ? "PUT" : "DELETE" },
     token,
   );
 }
@@ -1130,10 +1160,14 @@ export async function downloadWorkspaceAttachment(
 
 export async function uploadProfileAvatar(token: string, file: File): Promise<{ avatarVersion: string }> {
   if (file.size > 15 * 1024 * 1024) throw new Error("Аватар должен быть не больше 15 МБ");
-  if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
-    throw new Error("Поддерживаются JPG, PNG, WebP и GIF");
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  const supportedTypes = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/svg+xml"];
+  const supportedExtensions = ["jpg", "jpeg", "png", "heic", "heif", "svg"];
+  if (!supportedTypes.includes(file.type.toLowerCase()) && !supportedExtensions.includes(extension ?? "")) {
+    throw new Error("Поддерживаются JPG, JPEG, PNG, HEIC и SVG");
   }
-  const headers = new Headers({ "Content-Type": file.type, Authorization: `Bearer ${token}` });
+  const inferredType = file.type || ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", heif: "image/heif", svg: "image/svg+xml" } as const)[extension as "jpg" | "jpeg" | "png" | "heic" | "heif" | "svg"];
+  const headers = new Headers({ "Content-Type": inferredType, Authorization: `Bearer ${token}` });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
   return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar`, { method: "PUT", headers, body: file },
     async (response) => await response.json() as { avatarVersion: string }, 120_000);

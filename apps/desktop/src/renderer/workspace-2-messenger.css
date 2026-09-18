@@ -120,13 +120,32 @@
   border: 1px solid transparent;
   border-radius: 17px;
   background: transparent;
-  transition: background-color 180ms var(--ws-ease-out), border-color 180ms var(--ws-ease-out), transform 180ms var(--ws-ease-out), box-shadow 180ms var(--ws-ease-out);
+  transition: background-color 180ms var(--ws-ease-out), border-color 180ms var(--ws-ease-out), box-shadow 180ms var(--ws-ease-out);
 }
 
 .messenger-view .chat-list-item .chat-row:hover {
-  transform: translateY(-1px);
-  background: rgb(255 255 255 / 72%);
+  background: rgb(0 145 168 / 7%);
+  border-color: rgb(0 145 168 / 12%);
 }
+
+.messenger-view .chat-list-item.is-lifted .chat-row {
+  background: rgb(0 145 168 / 10%);
+  border-color: rgb(0 145 168 / 22%);
+  box-shadow: 0 12px 28px rgb(35 69 80 / 12%);
+}
+
+.messenger-view .chat-list-item .chat-more,
+.messenger-view .chat-list-item .spatial-sort-grip {
+  right: 7px;
+  width: 27px;
+  height: 27px;
+  border: 1px solid rgb(0 145 168 / 10%);
+  border-radius: 9px;
+  background: rgb(241 248 247 / 94%);
+  color: var(--ws-link);
+}
+.messenger-view .chat-list-item .chat-more { top: 8px; }
+.messenger-view .chat-list-item .spatial-sort-grip { bottom: 8px; }
 
 .messenger-view .chat-list-item .chat-row.selected {
   border-color: rgb(101 200 197 / 26%);

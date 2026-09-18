@@ -386,6 +386,15 @@ task_comments = sa.Table(
     sa.Column("edited_at", sa.DateTime(timezone=True)),
 )
 
+task_comment_reactions = sa.Table(
+    "task_comment_reactions",
+    metadata,
+    sa.Column("comment_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("emoji", sa.String(16), primary_key=True),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 task_dependencies = sa.Table(
     "task_dependencies",
     metadata,
@@ -611,7 +620,17 @@ feed_comments = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("post_id", uuid_type),
     sa.Column("author_user_id", uuid_type),
+    sa.Column("parent_comment_id", uuid_type),
     sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+feed_comment_reactions = sa.Table(
+    "feed_comment_reactions",
+    metadata,
+    sa.Column("comment_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("emoji", sa.String(16), primary_key=True),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 

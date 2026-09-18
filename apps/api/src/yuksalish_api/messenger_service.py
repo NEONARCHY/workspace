@@ -49,7 +49,9 @@ FULL_PERMISSIONS = ChatPermissions(
     edit_info=True,
     manage_messages=True,
 )
-REACTION_EMOJIS = ("👍", "❤️", "👏", "🎉", "👀", "✅")
+REACTION_EMOJIS = (
+    "👍", "❤️", "👏", "🎉", "👀", "✅", "🔥", "😂", "😮", "😢", "🙏", "🤝", "💯", "❗",
+)
 
 
 def member_permissions(member: Record) -> ChatPermissions:

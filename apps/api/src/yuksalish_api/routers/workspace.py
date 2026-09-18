@@ -1,7 +1,9 @@
 import asyncio
 import hashlib
+import re
 from contextlib import suppress
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import PurePosixPath
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
@@ -17,6 +19,8 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
@@ -79,6 +83,8 @@ from yuksalish_api.repository import (
     set_task_efficiency_exclusion,
     set_task_participant,
     submit_task_result,
+    toggle_feed_reaction,
+    toggle_task_comment_reaction,
     update_approval_request,
     update_calendar_event,
     update_notification_preferences,
@@ -144,9 +150,39 @@ _PROFILE_AVATAR_MAX_BYTES = 15 * 1024 * 1024
 _PROFILE_AVATAR_SIGNATURES: dict[str, tuple[bytes, ...]] = {
     "image/jpeg": (b"\xff\xd8\xff",),
     "image/png": (b"\x89PNG\r\n\x1a\n",),
-    "image/webp": (b"RIFF",),
-    "image/gif": (b"GIF87a", b"GIF89a"),
+    "image/heic": (b"\x00\x00\x00",),
+    "image/heif": (b"\x00\x00\x00",),
+    "image/svg+xml": (b"<",),
 }
+_SVG_FORBIDDEN = re.compile(
+    rb"(?:<!DOCTYPE|<!ENTITY|<\s*script|<\s*foreignObject|\bon\w+\s*=|"
+    rb"(?:href|src)\s*=\s*['\"]\s*(?:https?:|//|data:))",
+    re.IGNORECASE,
+)
+
+register_heif_opener()
+
+
+def _normalize_profile_avatar(content: bytes, content_type: str) -> tuple[bytes, str]:
+    if content_type == "image/svg+xml":
+        normalized = content.lstrip(b"\xef\xbb\xbf\x00\t\r\n ")
+        if not normalized.startswith(b"<") or b"<svg" not in normalized[:1024].lower():
+            raise ValueError("Содержимое файла не соответствует формату SVG")
+        if _SVG_FORBIDDEN.search(content):
+            raise ValueError("SVG содержит небезопасные или внешние элементы")
+        return content, content_type
+    try:
+        with Image.open(BytesIO(content)) as source:
+            source.load()
+            image = ImageOps.exif_transpose(source)
+            image.thumbnail((1024, 1024), Image.Resampling.LANCZOS)
+            if image.mode not in {"RGB", "RGBA"}:
+                image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+            output = BytesIO()
+            image.save(output, format="PNG", optimize=True)
+            return output.getvalue(), "image/png"
+    except (UnidentifiedImageError, OSError, ValueError) as error:
+        raise ValueError("Содержимое файла не соответствует формату изображения") from error
 
 router = APIRouter(tags=["workspace"])
 
@@ -353,6 +389,82 @@ async def delete_feed_like(
 ) -> FeedPostResponse:
     try:
         result = await set_feed_like(connection, current_user, post_id, False)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.put("/feed/posts/{post_id}/reactions/{emoji}", response_model=FeedPostResponse)
+async def put_feed_reaction(
+    post_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await toggle_feed_reaction(connection, current_user, post_id, emoji, True)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.delete("/feed/posts/{post_id}/reactions/{emoji}", response_model=FeedPostResponse)
+async def delete_feed_reaction(
+    post_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await toggle_feed_reaction(connection, current_user, post_id, emoji, False)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.put(
+    "/feed/posts/{post_id}/comments/{comment_id}/reactions/{emoji}",
+    response_model=FeedPostResponse,
+)
+async def put_feed_comment_reaction(
+    post_id: UUID,
+    comment_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await toggle_feed_reaction(
+            connection, current_user, post_id, emoji, True, comment_id
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
+    return result
+
+
+@router.delete(
+    "/feed/posts/{post_id}/comments/{comment_id}/reactions/{emoji}",
+    response_model=FeedPostResponse,
+)
+async def delete_feed_comment_reaction(
+    post_id: UUID,
+    comment_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        result = await toggle_feed_reaction(
+            connection, current_user, post_id, emoji, False, comment_id
+        )
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "feed.updated", "entityId": result.id})
@@ -652,6 +764,50 @@ async def post_task_comment(
 ) -> TaskResponse:
     try:
         result = await add_task_comment(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.put(
+    "/tasks/{task_id}/comments/{comment_id}/reactions/{emoji}",
+    response_model=TaskResponse,
+)
+async def put_task_comment_reaction(
+    task_id: UUID,
+    comment_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await toggle_task_comment_reaction(
+            connection, current_user, task_id, comment_id, emoji, True
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.delete(
+    "/tasks/{task_id}/comments/{comment_id}/reactions/{emoji}",
+    response_model=TaskResponse,
+)
+async def delete_task_comment_reaction(
+    task_id: UUID,
+    comment_id: UUID,
+    emoji: str,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await toggle_task_comment_reaction(
+            connection, current_user, task_id, comment_id, emoji, False
+        )
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
@@ -964,7 +1120,7 @@ async def put_profile_avatar(
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     signatures = _PROFILE_AVATAR_SIGNATURES.get(content_type)
     if signatures is None:
-        raise HTTPException(status_code=415, detail="Поддерживаются JPG, PNG, WebP и GIF")
+        raise HTTPException(status_code=415, detail="Поддерживаются JPG, JPEG, PNG, HEIC и SVG")
     content = bytearray()
     async for chunk in request.stream():
         content.extend(chunk)
@@ -972,14 +1128,20 @@ async def put_profile_avatar(
             raise HTTPException(status_code=413, detail="Аватар должен быть не больше 15 МБ")
     if not content:
         raise HTTPException(status_code=422, detail="Файл аватара пуст")
-    valid_signature = any(bytes(content).startswith(signature) for signature in signatures)
-    if content_type == "image/webp":
-        valid_signature = valid_signature and bytes(content[8:12]) == b"WEBP"
+    valid_signature = any(bytes(content).lstrip().startswith(signature) for signature in signatures)
     if not valid_signature:
         raise HTTPException(
             status_code=422,
             detail="Содержимое файла не соответствует формату изображения",
         )
+    try:
+        stored_content, stored_content_type = await asyncio.to_thread(
+            _normalize_profile_avatar,
+            bytes(content),
+            content_type,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
     row = (
         (await connection.execute(select(users).where(users.c.id == current_user.id)))
@@ -990,11 +1152,15 @@ async def put_profile_avatar(
     storage_key = f"profile-avatar/{current_user.id}/{uuid4()}"
     storage = _object_storage(request)
     try:
-        await storage.put(storage_key, bytes(content), content_type)
+        await storage.put(storage_key, stored_content, stored_content_type)
+        # A successful PUT is not enough if the configured bucket/volume is inconsistent.
+        # Verify readability before publishing the new key through PostgreSQL.
+        if await storage.get(storage_key) != stored_content:
+            raise ObjectStorageError("Хранилище не подтвердило сохранение аватара")
         updated_at = datetime.now(UTC)
         await connection.execute(update(users).where(users.c.id == current_user.id).values(
             avatar_storage_key=storage_key,
-            avatar_content_type=content_type,
+            avatar_content_type=stored_content_type,
             avatar_updated_at=updated_at,
             updated_at=updated_at,
         ))

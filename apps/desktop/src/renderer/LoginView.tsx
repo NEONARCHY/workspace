@@ -63,7 +63,6 @@ export function LoginView({
         <CompanyLogo tone="color" className="auth-brand" />
         <p className="auth-kicker">Workspace</p>
         <h1>Рабочее пространство команды</h1>
-        <p className="auth-minimal-copy">Войдите, чтобы продолжить работу.</p>
       </section>
 
       <section className="auth-card" aria-label="Вход в Yuksalish Workspace">

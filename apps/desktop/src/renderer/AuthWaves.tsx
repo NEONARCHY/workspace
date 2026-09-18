@@ -12,6 +12,7 @@ interface WaveLayer {
 
 const maxPixelRatio = 1.5;
 const frameInterval = 1000 / 45;
+const motionSpeed = 1.1;
 const layers: readonly WaveLayer[] = [
   {
     amplitude: 42,
@@ -114,7 +115,13 @@ export function AuthWaves() {
       }
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, width, height);
-      layers.forEach((layer) => drawLayer(context, width, height, isReduced ? 0 : time, layer));
+      layers.forEach((layer) => drawLayer(
+        context,
+        width,
+        height,
+        isReduced ? 0 : time * motionSpeed,
+        layer,
+      ));
       canvas.dataset.motion = isReduced ? "reduced" : "active";
     };
 

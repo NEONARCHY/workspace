@@ -247,6 +247,7 @@ class TaskCommentResponse(ApiModel):
     body: str
     created_at: datetime
     edited_at: datetime | None
+    reactions: list[MessageReactionResponse] = Field(default_factory=list)
 
 
 class TaskDependencyResponse(ApiModel):
@@ -1000,6 +1001,8 @@ class FeedCommentResponse(ApiModel):
     id: str
     author_user_id: str
     body: str
+    parent_comment_id: str | None = None
+    reactions: list[MessageReactionResponse] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -1011,6 +1014,7 @@ class FeedPostResponse(ApiModel):
     is_pinned: bool
     liked_by_current_user: bool
     like_count: int
+    reactions: list[MessageReactionResponse] = Field(default_factory=list)
     can_edit: bool
     can_delete: bool
     can_pin: bool
@@ -1034,6 +1038,7 @@ class CreateFeedPostRequest(ApiModel):
 
 class CreateFeedCommentRequest(ApiModel):
     body: str = Field(min_length=1, max_length=4000)
+    parent_comment_id: UUID | None = None
 
     @field_validator("body")
     @classmethod

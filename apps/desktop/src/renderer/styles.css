@@ -1040,11 +1040,21 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-actions { display: flex; align-items: center; gap: 14px; margin-top: 14px; padding-top: 9px; border-top: 1px solid #edf0f3; color: #607589; font-size: 11px; }
 .feed-actions > span { display: flex; align-items: center; gap: 4px; }
 .feed-comments { display: grid; gap: 8px; margin-top: 10px; }
-.feed-comment { display: grid; grid-template-columns: auto 1fr; gap: 8px; padding: 9px; border-radius: 8px; background: #f4f7f9; }
+.feed-comment { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; padding: 10px; border-radius: 13px; background: #f4f7f9; }
+.feed-comment.is-reply { width: calc(100% - 38px); margin-left: 38px; background: #f7faf9; }
+.feed-comment.is-reply::before { position: absolute; top: -9px; bottom: 50%; left: -22px; width: 16px; border-bottom: 2px solid #b9d8d6; border-left: 2px solid #b9d8d6; border-radius: 0 0 0 10px; content: ""; }
 .feed-comment > span { display: grid; gap: 2px; }
 .feed-comment p { margin: 0; color: #40586d; font-size: 11px; line-height: 1.4; }
 .feed-comment small { color: #84919e; font-size: 11px; }
+.feed-comment-meta { display: flex; align-items: center; gap: 6px; }
+.feed-comment-meta .fui-Button { min-width: 0; min-height: 24px; padding: 2px 7px; font-size: 10px; }
 .feed-comment-composer { display: grid; grid-template-columns: 1fr auto; gap: 5px; margin-top: 10px; }
+.feed-reply-context { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px 6px 11px; border-left: 3px solid var(--ws-turquoise); border-radius: 8px; color: var(--ws-muted); background: #eef7f5; font-size: 11px; }
+.feed-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.feed-reactions .fui-Button { min-width: 28px; min-height: 26px; padding: 2px 7px; border-radius: 999px; }
+.feed-reaction-popover.fui-MenuPopover { width: 248px; padding: 8px; border-radius: 18px; }
+.feed-reaction-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.feed-reaction-grid .fui-MenuItem { min-width: 30px; min-height: 34px; padding: 4px; border-radius: 9px; }
 .feed-side { align-self: start; padding: 17px; }
 .feed-side strong { color: #20364a; font-size: 12px; }
 .feed-side p { color: #66798b; font-size: 11px; line-height: 1.55; }

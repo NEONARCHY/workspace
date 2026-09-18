@@ -151,7 +151,8 @@ import {
   deleteWorkspaceMessage,
   setWorkspaceMessagePinned,
   toggleWorkspaceMessageReaction,
-  setWorkspaceFeedLike,
+  setWorkspaceFeedReaction,
+  setWorkspaceTaskCommentReaction,
   setWorkspaceTaskCycle,
   setWorkspaceTaskDependency,
   setWorkspaceTaskParticipant,
@@ -1000,6 +1001,14 @@ export function App() {
   const handleAddTaskComment = (task: WorkspaceTask, body: string) =>
     runTaskMutation((token) => addWorkspaceTaskComment(token, task.id, body));
 
+  const handleTaskCommentReaction = (
+    task: WorkspaceTask,
+    commentId: string,
+    emoji: string,
+    reacted: boolean,
+  ) => runTaskMutation((token) =>
+    setWorkspaceTaskCommentReaction(token, task.id, commentId, emoji, reacted));
+
   const handleSetTaskDependency = (
     task: WorkspaceTask,
     dependsOnTaskId: string,
@@ -1357,10 +1366,10 @@ export function App() {
 
   const handleCreateFeedPost = (title: string, body: string) =>
     runFeedMutation((token) => createWorkspaceFeedPost(token, title, body));
-  const handleFeedComment = (post: FeedPost, body: string) =>
-    runFeedMutation((token) => addWorkspaceFeedComment(token, post.id, body));
-  const handleFeedLike = (post: FeedPost, liked: boolean) =>
-    runFeedMutation((token) => setWorkspaceFeedLike(token, post.id, liked));
+  const handleFeedComment = (post: FeedPost, body: string, parentCommentId?: string) =>
+    runFeedMutation((token) => addWorkspaceFeedComment(token, post.id, body, parentCommentId));
+  const handleFeedReaction = (post: FeedPost, emoji: string, reacted: boolean, commentId?: string) =>
+    runFeedMutation((token) => setWorkspaceFeedReaction(token, post.id, emoji, reacted, commentId));
   const handleFeedPin = (post: FeedPost, pinned: boolean) =>
     runFeedMutation((token) => pinWorkspaceFeedPost(token, post.id, pinned));
 
@@ -1702,6 +1711,7 @@ export function App() {
                 onToggleChecklistItem={handleToggleChecklistItem}
                 onDeleteChecklistItem={handleDeleteChecklistItem}
                 onAddComment={handleAddTaskComment}
+                onReactToComment={handleTaskCommentReaction}
                 onSetDependency={handleSetTaskDependency}
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
@@ -1745,9 +1755,10 @@ export function App() {
               <FeedView
                 posts={workspace.feedPosts}
                 people={workspace.people}
+                token={session.accessToken}
                 onCreate={handleCreateFeedPost}
                 onComment={handleFeedComment}
-                onLike={handleFeedLike}
+                onReact={handleFeedReaction}
                 onPin={handleFeedPin}
                 onDelete={handleFeedDelete}
               />
