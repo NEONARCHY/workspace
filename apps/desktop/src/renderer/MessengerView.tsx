@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { scrollToLatest } from "./message-scroll";
 import type {
   ChatMessage,
@@ -28,8 +29,10 @@ import {
 import {
   Add24Regular,
   Attach24Regular,
+  Delete24Regular,
   EmojiAdd24Regular,
   Mic24Regular,
+  MoreHorizontal20Regular,
   Pin24Regular,
   PinOff24Regular,
   Search24Regular,
@@ -103,6 +106,45 @@ interface MessengerViewProps {
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
 }
 
+function MessageContextMenu({
+  x,
+  y,
+  children,
+  onPointerDown,
+}: {
+  readonly x: number;
+  readonly y: number;
+  readonly children: React.ReactNode;
+  readonly onPointerDown: React.PointerEventHandler<HTMLDivElement>;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ x, y });
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) return;
+    const margin = 8;
+    const rect = menu.getBoundingClientRect();
+    setPosition({
+      x: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
+      y: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin)),
+    });
+  }, [x, y]);
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      className="message-context-menu"
+      role="menu"
+      style={{ left: position.x, top: position.y }}
+      onPointerDown={onPointerDown}
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
 function Conversation({
   token,
   chat,
@@ -123,6 +165,7 @@ function Conversation({
   onDownloadAttachment,
   onLoadAttachment,
   onManage,
+  onRequestDeleteChat,
   onBack,
   personalPreferences,
   onPersonalChat,
@@ -130,6 +173,7 @@ function Conversation({
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
+  readonly onRequestDeleteChat: (chat: ChatSummary) => void;
   readonly onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
@@ -329,9 +373,21 @@ function Conversation({
           </p>
           </div>
         </div>
-        <Button {...restoreFocusTarget} onClick={onManage}>
-          {chat.kind === "group" ? "Участники и права" : "Участники"}
-        </Button>
+        <div className="conversation-header-actions">
+          <Button {...restoreFocusTarget} onClick={onManage}>
+            {chat.kind === "group" ? "Участники и права" : "Участники"}
+          </Button>
+          {chat.canDelete ? (
+            <Button
+              appearance="subtle"
+              icon={<Delete24Regular />}
+              aria-label="Удалить чат"
+              onClick={() => onRequestDeleteChat(chat)}
+            >
+              Удалить чат
+            </Button>
+          ) : null}
+        </div>
       </header>
       {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
         <span>Этот чат в вашем архиве</span>
@@ -570,6 +626,10 @@ function Conversation({
                           </MenuList>
                         </MenuPopover>
                       </Menu>
+                      <span className="message-context-hint" title="Другие действия — правая кнопка мыши" aria-hidden="true">
+                        <MoreHorizontal20Regular />
+                        <small>ПКМ</small>
+                      </span>
                     </div>
                   )}
                 </div>
@@ -583,14 +643,14 @@ function Conversation({
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = (own && message.canEdit) || message.canPin || ["admin", "superadmin"].includes(currentUserRole);
-        return <div className="message-context-menu" role="menu" style={{ left: Math.min(contextMenu.x, window.innerWidth - 206), top: Math.min(contextMenu.y, window.innerHeight - 286) }} onPointerDown={(event) => event.stopPropagation()}>
+        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} onPointerDown={(event) => event.stopPropagation()}>
           <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
           <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>
           {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
           <Button appearance="subtle" icon={<TaskListSquareLtr24Regular />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
           {mayDelete ? <Button appearance="subtle" onClick={() => { setDeleting(message); setContextMenu(undefined); }}>Удалить</Button> : null}
-        </div>;
+        </MessageContextMenu>;
       })() : null}
       {error && (
         <div className="messenger-error" role="alert">
@@ -864,6 +924,7 @@ export function MessengerView(props: MessengerViewProps) {
   const { chats, messages, focusChatId, onMarkRead } = props;
   const [pendingChatDeletion, setPendingChatDeletion] = useState<{ chat: ChatSummary; deadline: number }>();
   const [chatDeleteSeconds, setChatDeleteSeconds] = useState(6);
+  const [chatDeletionError, setChatDeletionError] = useState("");
   const visibleChats = chats.filter((chat) => chat.id !== pendingChatDeletion?.chat.id);
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
   const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
@@ -874,6 +935,13 @@ export function MessengerView(props: MessengerViewProps) {
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
   const activeChat = visibleChats.find((chat) => chat.id === activeChatId) ?? firstActive;
+  const requestChatDeletion = (chat: ChatSummary) => {
+    setChatDeletionError("");
+    setPendingChatDeletion({ chat, deadline: Date.now() + 6_000 });
+    setChatDeleteSeconds(6);
+    setPanel(undefined);
+    setConversationOpen(false);
+  };
   useEffect(() => {
     if (!pendingChatDeletion) return;
     const tick = () => setChatDeleteSeconds(Math.max(0, Math.ceil((pendingChatDeletion.deadline - Date.now()) / 1_000)));
@@ -881,8 +949,15 @@ export function MessengerView(props: MessengerViewProps) {
     const interval = window.setInterval(tick, 200);
     const timeout = window.setTimeout(() => {
       void props.chatActions.delete(pendingChatDeletion.chat.id)
-        .then(() => setPendingChatDeletion(undefined))
-        .catch(() => setPendingChatDeletion(undefined));
+        .then(() => {
+          setPendingChatDeletion(undefined);
+          setChatDeletionError("");
+        })
+        .catch((cause: unknown) => {
+          setPendingChatDeletion(undefined);
+          setConversationOpen(true);
+          setChatDeletionError(cause instanceof Error ? cause.message : "Не удалось удалить чат");
+        });
     }, Math.max(0, pendingChatDeletion.deadline - Date.now()));
     return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
   }, [pendingChatDeletion, props.chatActions]);
@@ -919,6 +994,7 @@ export function MessengerView(props: MessengerViewProps) {
           chat={activeChat}
           availableChats={visibleChats}
           onManage={() => setPanel("manage")}
+          onRequestDeleteChat={requestChatDeletion}
           onBack={() => setConversationOpen(false)}
         />
       ) : (
@@ -940,12 +1016,7 @@ export function MessengerView(props: MessengerViewProps) {
             setListRevision((revision) => revision + 1);
             setPanel(undefined);
           }}
-          onRequestDelete={(chat) => {
-            setPendingChatDeletion({ chat, deadline: Date.now() + 6_000 });
-            setChatDeleteSeconds(6);
-            setPanel(undefined);
-            setConversationOpen(false);
-          }}
+          onRequestDelete={requestChatDeletion}
           allowDelete={Boolean(activeChat?.canDelete)}
         />
       )}
@@ -953,6 +1024,12 @@ export function MessengerView(props: MessengerViewProps) {
         <span>Чат будет удалён через {chatDeleteSeconds} сек.</span>
         <Button size="small" appearance="primary" onClick={() => setPendingChatDeletion(undefined)}>Вернуть</Button>
       </div> : null}
+      {chatDeletionError ? (
+        <div className="messenger-error messenger-chat-delete-error" role="alert">
+          <span>{chatDeletionError}</span>
+          <Button size="small" appearance="subtle" onClick={() => setChatDeletionError("")}>Закрыть</Button>
+        </div>
+      ) : null}
     </section>
   );
 }

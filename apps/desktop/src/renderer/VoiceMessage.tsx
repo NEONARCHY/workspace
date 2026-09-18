@@ -20,6 +20,7 @@ const VOICE_MIME_FALLBACK = "audio/webm";
 export const VOICE_BITS_PER_SECOND = 32_000;
 export const VOICE_MAX_DURATION_MS = 10 * 60 * 1_000;
 export const VOICE_MIN_DURATION_MS = 500;
+const MICROPHONE_REQUEST_TIMEOUT_MS = 12_000;
 
 function formatDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1_000));
@@ -53,6 +54,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
   const [previewUrl, setPreviewUrl] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [preferences, setPreferences] = useState(getAudioDevicePreferences);
   const recorderRef = useRef<MediaRecorder | undefined>(undefined);
   const streamRef = useRef<MediaStream | undefined>(undefined);
@@ -79,7 +81,33 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
   useEffect(() => {
     mountedRef.current = true;
     const requestId = ++requestIdRef.current;
+    const requestMicrophone = async (constraints: MediaTrackConstraints) => {
+      let expired = false;
+      let timeoutId = 0;
+      const request = navigator.mediaDevices.getUserMedia({ audio: constraints });
+      void request.then((lateStream) => {
+        if (expired) lateStream.getTracks().forEach((track) => track.stop());
+      }).catch(() => undefined);
+      const timeout = new Promise<never>((_, reject) => {
+        timeoutId = window.setTimeout(() => {
+          expired = true;
+          reject(new DOMException("Microphone request timed out", "AbortError"));
+        }, MICROPHONE_REQUEST_TIMEOUT_MS);
+      });
+      try {
+        return await Promise.race([request, timeout]);
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    };
     const start = async () => {
+      setState("requesting");
+      setError("");
+      if (!window.isSecureContext) {
+        setState("error");
+        setError("Браузер не разрешает микрофон на недоверенном адресе. Откройте защищённую LAN-ссылку или desktop-приложение.");
+        return;
+      }
       if (!supportsCompressedVoiceRecording()) {
         setState("error");
         setError("Запись Opus не поддерживается на этом компьютере. Обновите приложение или Chromium.");
@@ -88,13 +116,13 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
       try {
         let stream: MediaStream;
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints() });
+          stream = await requestMicrophone(microphoneConstraints());
         } catch (cause) {
           const selected = getAudioDevicePreferences().inputDeviceId;
           if (selected === "default" || !(cause instanceof DOMException) || !["NotFoundError", "OverconstrainedError"].includes(cause.name)) throw cause;
           const fallback = resetAudioDevicePreference("input");
           setPreferences(fallback);
-          stream = await navigator.mediaDevices.getUserMedia({ audio: microphoneConstraints(fallback) });
+          stream = await requestMicrophone(microphoneConstraints(fallback));
         }
         if (!mountedRef.current || requestId !== requestIdRef.current) {
           stream.getTracks().forEach((track) => track.stop());
@@ -151,8 +179,10 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
         if (!mountedRef.current) return;
         setState("error");
         setError(cause instanceof DOMException && cause.name === "NotAllowedError"
-          ? "Windows не разрешила доступ к микрофону. Разрешите его в параметрах конфиденциальности."
-          : "Микрофон недоступен. Проверьте подключение или выберите другой в настройках.");
+          ? "Доступ к микрофону запрещён. Разрешите его для Yuksalish Workspace и повторите."
+          : cause instanceof DOMException && cause.name === "AbortError"
+            ? "Браузер не ответил на запрос микрофона. Проверьте значок разрешения у адресной строки и повторите."
+            : "Микрофон недоступен. Проверьте подключение или выберите другой в настройках.");
       }
     };
     void start();
@@ -169,7 +199,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
       }
       releaseStream();
     };
-  }, []);
+  }, [attempt]);
 
   useEffect(() => subscribeToAudioDevicePreferences(setPreferences), []);
 
@@ -227,6 +257,11 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
         {state === "ready" ? (
           <Button icon={<Send24Filled />} appearance="primary" disabled={disabled || sending} onClick={() => void send()}>
             {sending ? "Отправляем…" : "Отправить"}
+          </Button>
+        ) : null}
+        {state === "error" ? (
+          <Button appearance="primary" disabled={disabled} onClick={() => setAttempt((value) => value + 1)}>
+            Повторить
           </Button>
         ) : null}
         <Button icon={<Delete24Regular />} appearance="subtle" disabled={sending} onClick={onClose}>

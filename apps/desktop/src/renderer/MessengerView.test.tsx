@@ -66,7 +66,46 @@ function openMessageMenu(text: string) {
 describe("Private messenger", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+  it("opens the message menu at the pointer in a viewport portal", () => {
+    renderMessenger();
+    const message = screen.getByText(initialMessages[0]!.body).closest(".message");
+    expect(message).not.toBeNull();
+
+    fireEvent.contextMenu(message!, { clientX: 420, clientY: 260 });
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveStyle({ left: "420px", top: "260px" });
+    expect(document.querySelector(".conversation-pane")?.contains(menu)).toBe(false);
+  });
+
+  it("shows a right-click hint with the delayed message actions", () => {
+    renderMessenger();
+    const message = screen.getByText(initialMessages[0]!.body).closest(".message");
+    expect(message).not.toBeNull();
+
+    fireEvent.focus(message!);
+
+    expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).toBeVisible();
+  });
+
+  it("exposes chat deletion in the header and delays it for undo", async () => {
+    vi.useFakeTimers();
+    const chatActions = actions();
+    vi.mocked(chatActions.delete).mockResolvedValue(undefined);
+    renderMessenger({
+      chats: [{ ...initialChats[0]!, canDelete: true }],
+      chatActions,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Удалить чат" }));
+    expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
+    expect(chatActions.delete).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(chatActions.delete).toHaveBeenCalledWith("finance");
   });
   it("removes an encrypted chat draft after restoring it into the composer", async () => {
     const loadDraft = vi.fn().mockResolvedValue("Текст до обновления");
