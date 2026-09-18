@@ -1490,6 +1490,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Заявки на оплату" }));
+    expect(screen.getByRole("navigation").closest(".app-shell")).not.toHaveClass("approval-shell");
     expect(screen.getByLabelText("Сводка заявок")).toHaveTextContent("В работе");
     expect(screen.queryByLabelText("Сводка заявок на оплату")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));

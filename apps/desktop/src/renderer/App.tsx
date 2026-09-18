@@ -1544,7 +1544,7 @@ export function App() {
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
-      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""} ${displayedSection === "payment_requests" ? "approval-shell" : ""}`}>
+      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
