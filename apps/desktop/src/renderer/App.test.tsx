@@ -1099,6 +1099,22 @@ describe("corporate workspace authentication alpha", () => {
     ));
   });
 
+  it("filters the notification queue by its source without losing history", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByRole("button", { name: /Вся история/ }));
+    expect(screen.getByText("Задача требует внимания")).toBeInTheDocument();
+    expect(screen.getByText("Новое сообщение · Финансы и закупки")).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Фильтр по разделу" }))
+      .getByRole("button", { name: "Мессенджер" }));
+    expect(screen.queryByText("Задача требует внимания")).not.toBeInTheDocument();
+    expect(screen.getByText("Новое сообщение · Финансы и закупки")).toBeInTheDocument();
+  });
+
   it("allows closing and reopening a request reached through a notification", async () => {
     mockServer({
       withReturnedRequest: true,

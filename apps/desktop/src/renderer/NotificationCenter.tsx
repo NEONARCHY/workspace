@@ -23,6 +23,7 @@ import {
 } from "@fluentui/react-icons";
 
 type NotificationFilter = "attention" | "unread" | "all";
+type NotificationKindFilter = NotificationKind | "all";
 
 interface NotificationCenterProps {
   readonly notifications: readonly WorkspaceNotification[];
@@ -77,6 +78,7 @@ export function NotificationCenter({
   onAbsenceAction,
 }: NotificationCenterProps) {
   const [filter, setFilter] = useState<NotificationFilter>("attention");
+  const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [contextId, setContextId] = useState<string>();
@@ -98,11 +100,19 @@ export function NotificationCenter({
     return notifications.filter((item) => {
       if (filter === "attention" && (!item.requiresAction || item.resolvedAt)) return false;
       if (filter === "unread" && item.readAt) return false;
+      if (kindFilter !== "all" && item.kind !== kindFilter) return false;
       return !normalized
         || item.title.toLocaleLowerCase("ru-RU").includes(normalized)
         || item.body.toLocaleLowerCase("ru-RU").includes(normalized);
     });
-  }, [filter, notifications, query]);
+  }, [filter, kindFilter, notifications, query]);
+  const availableKinds = useMemo(
+    () => [...new Set(notifications.map((item) => item.kind))],
+    [notifications],
+  );
+  const completionPercent = notifications.length === 0
+    ? 100
+    : Math.round(((notifications.length - attentionCount) / notifications.length) * 100);
 
   const updatePreference = async (
     key: keyof NotificationPreferences,
@@ -142,9 +152,9 @@ export function NotificationCenter({
     <section className="workspace-view notifications-view" aria-label="Центр уведомлений">
       <header className="notification-header">
         <div>
-          <span className="notification-kicker">Рабочая очередь</span>
+          <span className="notification-kicker">Центр внимания</span>
           <h1>Требует моего внимания</h1>
-          <p>Решения, сроки и сообщения из всех разделов Workspace.</p>
+          <p>Одна спокойная очередь для решений, сроков и важных обновлений.</p>
         </div>
         <div className="notification-head-actions">
           <Input
@@ -172,7 +182,7 @@ export function NotificationCenter({
           onClick={() => setFilter("attention")}
         >
           <strong>{attentionCount}</strong>
-          <span>требуют действия</span>
+          <span><b>Нужно решить</b><small>Рабочие действия</small></span>
         </button>
         <button
           className={filter === "unread" ? "active" : ""}
@@ -180,7 +190,7 @@ export function NotificationCenter({
           onClick={() => setFilter("unread")}
         >
           <strong>{unreadCount}</strong>
-          <span>не прочитано</span>
+          <span><b>Новые сигналы</b><small>Ещё не просмотрены</small></span>
         </button>
         <button
           className={filter === "all" ? "active" : ""}
@@ -188,12 +198,33 @@ export function NotificationCenter({
           onClick={() => setFilter("all")}
         >
           <strong>{notifications.length}</strong>
-          <span>всего событий</span>
+          <span><b>Вся история</b><small>Доступные события</small></span>
         </button>
+        <div className="notification-progress-card" aria-label={`Разобрано ${completionPercent}% уведомлений`}>
+          <span><b>Ритм очереди</b><small>Разобрано без активного действия</small></span>
+          <strong>{completionPercent}%</strong>
+          <i><span style={{ width: `${completionPercent}%` }} /></i>
+        </div>
       </div>
 
       <div className="notification-layout">
-        <div className="notification-stream" aria-live="polite">
+        <div className="notification-stream-shell">
+          <div className="notification-stream-toolbar">
+            <div>
+              <strong>{filter === "attention" ? "Очередь решений" : filter === "unread" ? "Непрочитанное" : "Все события"}</strong>
+              <span>{visible.length} {visible.length === 1 ? "событие" : "событий"}</span>
+            </div>
+            <div className="notification-kind-filters" role="group" aria-label="Фильтр по разделу">
+              <button type="button" aria-pressed={kindFilter === "all"} onClick={() => setKindFilter("all")}>Все разделы</button>
+              {availableKinds.map((kind) => (
+                <button key={kind} type="button" aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kind)}>
+                  <NotificationIcon kind={kind} />
+                  {kindLabels[kind]}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="notification-stream" aria-live="polite">
           {visible.length === 0 ? (
             <div className="notification-empty">
               <CheckmarkCircle24Regular />
@@ -220,6 +251,7 @@ export function NotificationCenter({
                 </span>
                 <b>{notification.title}</b>
                 <p>{notification.body}</p>
+                <span className="notification-open-label">Открыть рабочий контекст →</span>
               </button>
               <div className="notification-row-tail">
                 {notification.kind === "absence" && notification.requiresAction && !notification.resolvedAt
@@ -245,6 +277,7 @@ export function NotificationCenter({
               </div>
             </article>
           ))}
+          </div>
         </div>
 
         <aside className="notification-settings" aria-label="Настройки уведомлений">
@@ -255,7 +288,7 @@ export function NotificationCenter({
           </section> : null}
           <div className="notification-settings-title">
             <AlertOn24Regular />
-            <span><strong>Доставка</strong><small>Можно изменить в любой момент</small></span>
+            <span><strong>Каналы доставки</strong><small>Настройте уровень шума под себя</small></span>
           </div>
           <div className="notification-preference-list">
             {preferenceRows.map(([key, label, description]) => (
