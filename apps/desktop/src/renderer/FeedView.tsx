@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { FeedComment, FeedPost, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
@@ -66,7 +66,15 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
+  const commentInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const person = (id: string) => people.find((item) => item.id === id);
+
+  const beginReply = (postId: string, commentItem: FeedComment) => {
+    setReplying((current) => ({ ...current, [postId]: commentItem }));
+    const input = commentInputs.current[postId];
+    input?.focus();
+    input?.setSelectionRange(input.value.length, input.value.length);
+  };
 
   const create = async () => {
     if (!title.trim() || !body.trim()) return;
@@ -171,7 +179,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                             <p>{item.body}</p>
                             <span className="feed-comment-meta">
                               <small>{dateLabel(item.createdAt)}</small>
-                              <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => setReplying((current) => ({ ...current, [post.id]: item }))}>Ответить</Button>
+                              <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
                               <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
                               {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
                                 if (window.confirm("Удалить этот комментарий?")) void onDeleteComment(post, item.id);
@@ -186,6 +194,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 <div className="feed-comment-composer">
                   {replying[post.id] ? <div className="feed-reply-context"><span>Ответ для {person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}</span><Button size="small" appearance="subtle" aria-label="Отменить ответ" onClick={() => setReplying((current) => ({ ...current, [post.id]: undefined }))}>×</Button></div> : null}
                   <Input
+                    input={{ ref: (node) => { commentInputs.current[post.id] = node; } }}
                     aria-label={`Комментарий к публикации ${post.title}`}
                     placeholder="Написать комментарий"
                     value={commentDrafts[post.id] ?? ""}

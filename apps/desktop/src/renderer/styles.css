@@ -1068,7 +1068,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-comment-meta .feed-reactions { flex-wrap: nowrap; }
 .feed-comment-meta .fui-Button { min-width: 0; min-height: 24px; padding: 2px 7px; font-size: 10px; }
 .feed-comment-meta .feed-reaction-trigger,
-.feed-comment-meta .feed-comment-delete { box-sizing: border-box; flex: 0 0 22px; width: 22px; min-width: 22px; max-width: 22px; height: 22px; min-height: 22px; max-height: 22px; padding: 0; border-radius: 50% !important; }
+.feed-comment-meta .feed-comment-delete { box-sizing: border-box; flex: 0 0 22px; width: 22px !important; min-width: 22px !important; max-width: 22px; height: 22px !important; min-height: 22px !important; max-height: 22px; padding: 0 !important; border-radius: 50% !important; }
 .feed-comment-meta .feed-reaction-trigger svg,
 .feed-comment-meta .feed-comment-delete svg { width: 15px; height: 15px; }
 .feed-comment-meta .feed-comment-delete { border: 1px solid rgb(41 58 85 / 12%); color: #667b8e; background: #fff; box-shadow: 0 3px 9px rgb(41 58 85 / 7%); }
@@ -1077,7 +1077,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .feed-reply-context { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 8px 6px 11px; border-left: 3px solid var(--ws-turquoise); border-radius: 8px; color: var(--ws-muted); background: #eef7f5; font-size: 11px; }
 .feed-reactions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .feed-reactions .fui-Button { min-width: 28px; min-height: 26px; padding: 2px 7px; border-radius: 999px; }
-.feed-reactions .feed-reaction-trigger { box-sizing: border-box; flex: 0 0 30px; width: 30px; min-width: 30px; max-width: 30px; height: 30px; min-height: 30px; padding: 0; border: 1px solid rgb(0 145 168 / 18%); border-radius: 50% !important; color: #007b8e; background: linear-gradient(145deg, #fff, #e7f6f3); box-shadow: 0 4px 12px rgb(41 58 85 / 9%); }
+.feed-reactions .feed-reaction-trigger { box-sizing: border-box; flex: 0 0 30px; width: 30px !important; min-width: 30px !important; max-width: 30px; height: 30px !important; min-height: 30px !important; max-height: 30px; padding: 0 !important; border: 1px solid rgb(0 145 168 / 18%); border-radius: 50% !important; color: #007b8e; background: linear-gradient(145deg, #fff, #e7f6f3); box-shadow: 0 4px 12px rgb(41 58 85 / 9%); }
+.feed-comment-meta .feed-reaction-trigger { flex-basis: 22px; width: 22px !important; min-width: 22px !important; max-width: 22px; height: 22px !important; min-height: 22px !important; max-height: 22px; }
 .feed-reaction-popover.fui-MenuPopover { width: 248px; padding: 8px; border-radius: 18px; }
 .feed-reaction-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
 .feed-reaction-grid .fui-MenuItem { display: grid; place-items: center; min-width: 30px; min-height: 34px; padding: 4px; border-radius: 9px; font-size: 18px; }

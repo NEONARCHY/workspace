@@ -1475,6 +1475,14 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
     fireEvent.click(await screen.findByRole("button", { name: "Принять результат" }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
+    const replyButton = await screen.findByRole("button", { name: "Ответить" });
+    fireEvent.click(replyButton);
+    const replyInput = screen.getByRole("textbox", {
+      name: "Комментарий к публикации Итоги рабочего дня",
+    });
+    expect(replyInput).toHaveFocus();
+    fireEvent.change(replyInput, { target: { value: "Ответ без повторного клика" } });
+    expect(replyInput).toHaveValue("Ответ без повторного клика");
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),
       expect.objectContaining({ method: "POST" }),
