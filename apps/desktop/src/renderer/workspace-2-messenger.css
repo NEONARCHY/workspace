@@ -120,7 +120,7 @@
   border: 1px solid transparent;
   border-radius: 17px;
   background: transparent;
-  transition: background-color 180ms var(--ws-ease-out), border-color 180ms var(--ws-ease-out), box-shadow 180ms var(--ws-ease-out);
+  transition: transform 160ms var(--ws-ease-out, ease), background-color 160ms var(--ws-ease-out, ease), border-color 160ms var(--ws-ease-out, ease), box-shadow 160ms var(--ws-ease-out, ease);
 }
 .messenger-view :is(.pane-search, .conversation-search .fui-Input) .fui-Input__input {
   height: 100%;
@@ -129,8 +129,12 @@
 }
 
 .messenger-view .chat-list-item .chat-row:hover {
+  position: relative;
+  z-index: 1;
+  transform: translateY(-1px);
   background: rgb(0 145 168 / 7%);
   border-color: rgb(0 145 168 / 12%);
+  box-shadow: 0 8px 20px rgb(41 58 85 / 7%);
 }
 
 .messenger-view .chat-list-item.is-lifted .chat-row {

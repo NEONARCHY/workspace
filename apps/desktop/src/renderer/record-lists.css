@@ -55,6 +55,8 @@
 .record-table .record-selection-heading, .record-table .record-selection-cell { padding-right: 8px; padding-left: 13px; text-align: center; }
 .record-table .record-selection-heading .fui-Checkbox, .record-table .record-selection-cell .fui-Checkbox { display: inline-flex; }
 .employee-record-table .employee-row td:nth-child(2) { background: #f5fafb; }
+.employee-record-table .employee-row { transition: transform 160ms var(--ws-ease-out, ease), box-shadow 160ms ease; }
+.employee-record-table .employee-row:hover, .employee-record-table .employee-row:focus-within { position: relative; z-index: 1; transform: translateY(-1px); box-shadow: 0 8px 20px rgb(41 58 85 / 7%); }
 .employee-record-table .employee-row:hover td:nth-child(2), .employee-record-table .employee-row:focus-within td:nth-child(2) { background: #e5f3f6; }
 .employee-record-table .employee-row.selected td { background: #f2f9de; }
 .employee-record-table .employee-row.selected:hover td, .employee-record-table .employee-row.selected:focus-within td { background: #ebf6cd; }
@@ -133,4 +135,8 @@
   .employee-record-table .employee-row.selected td { background: Highlight; color: HighlightText; }
   .employee-selection-bar { border: 1px solid CanvasText; box-shadow: none; }
 }
-@media (prefers-reduced-motion: reduce) { .employee-selection-bar { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .employee-selection-bar { animation: none; }
+  .employee-record-table .employee-row { transition: none; }
+  .employee-record-table .employee-row:hover, .employee-record-table .employee-row:focus-within { transform: none; }
+}
