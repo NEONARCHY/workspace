@@ -623,8 +623,8 @@ export function App() {
       ) continue;
       void workspacePlatform.showNotification({
         id: notification.id,
-        title: notification.title,
-        body: notification.body,
+        title: "Yuksalish Workspace",
+        body: `${notification.title}\n${notification.body}`,
         section: notification.section,
         entityId: notification.entityId ?? undefined,
       }).then((shown) => {
