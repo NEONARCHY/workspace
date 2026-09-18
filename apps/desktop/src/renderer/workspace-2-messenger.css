@@ -266,15 +266,16 @@
 .messenger-view .message-actions {
   position: absolute;
   z-index: 3;
-  top: 50%;
+  top: auto;
+  bottom: 1px;
   right: auto;
   left: calc(100% + 6px);
   min-height: 30px;
   margin: 0;
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-50%);
-  transition: opacity 120ms ease;
+  transform: none;
+  transition: opacity 150ms var(--ws-ease);
 }
 .messenger-view .message:hover .message-actions:not(.is-visible),
 .messenger-view .message:focus-within .message-actions:not(.is-visible) {
@@ -289,7 +290,10 @@
 }
 
 .messenger-view .message-actions .fui-Button { box-sizing: border-box; flex: 0 0 32px; width: 32px; min-width: 32px; max-width: 32px; height: 32px; min-height: 32px; padding: 0; border: 1px solid rgb(0 145 168 / 20%); border-radius: 50% !important; color: #006f82; background: linear-gradient(145deg, #fff 15%, #e5f6f3 100%); box-shadow: 0 6px 16px rgb(41 58 85 / 12%); }
-.messenger-view .message-actions .fui-Button:hover { color: #fff; background: linear-gradient(145deg, #11a8b9, #00869d); transform: rotate(-7deg) scale(1.05); }
+.messenger-view .message-actions .reaction-picker-trigger:hover,
+.messenger-view .message-actions .reaction-picker-trigger:focus-visible { border-color: #00869d; color: #fff !important; background: linear-gradient(145deg, #11a8b9, #00869d) !important; transform: scale(1.04); }
+.messenger-view .message-actions .reaction-picker-trigger:hover .fui-Button__icon,
+.messenger-view .message-actions .reaction-picker-trigger:focus-visible .fui-Button__icon { color: #fff !important; }
 .messenger-view .message.is-pending-delete { opacity: .45; }
 .message-context-menu { position: fixed; z-index: 10000; display: grid; width: 190px; padding: 7px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 17px; background: rgb(255 255 255 / 97%); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
 .message-context-menu { gap: 3px; }

@@ -493,8 +493,12 @@ describe("Private messenger", () => {
 
     const message = screen.getByText("Моё сообщение").closest(".message");
     expect(message).not.toBeNull();
-    fireEvent.focus(message!);
+    fireEvent.pointerEnter(message!);
+    expect(message!.querySelector(".message-actions")).toHaveClass("is-visible");
     expect(screen.getByRole("button", { name: "Добавить реакцию" })).toBeEnabled();
+    fireEvent.pointerLeave(message!);
+    expect(message!.querySelector(".message-actions")).not.toHaveClass("is-visible");
+    fireEvent.focus(message!);
     fireEvent.click(screen.getByRole("button", { name: "👍: 1" }));
 
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(ownMessage, "👍"));

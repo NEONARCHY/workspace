@@ -180,7 +180,6 @@ function Conversation({
   const restoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
-  const reactionTimer = useRef(0);
   const scrollInitialized = useRef(false);
   useEffect(() => {
     const bridge = workspacePlatform;
@@ -288,7 +287,6 @@ function Conversation({
     window.addEventListener("blur", close);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
   }, [contextMenu]);
-  useEffect(() => () => window.clearTimeout(reactionTimer.current), []);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     setEditing(message);
@@ -439,13 +437,8 @@ function Conversation({
                   }
                 }}
                 tabIndex={0}
-                onPointerEnter={() => {
-                  window.clearTimeout(reactionTimer.current);
-                  setReactionTargetId(undefined);
-                  reactionTimer.current = window.setTimeout(() => setReactionTargetId(message.id), 1_000);
-                }}
+                onPointerEnter={() => setReactionTargetId(message.id)}
                 onPointerLeave={() => {
-                  window.clearTimeout(reactionTimer.current);
                   setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
                 onFocus={() => setReactionTargetId(message.id)}
