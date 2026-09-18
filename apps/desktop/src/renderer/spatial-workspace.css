@@ -118,10 +118,8 @@ body { background: var(--ws-canvas); }
   box-shadow: none;
   transition: opacity 160ms var(--ws-ease);
 }
-.spatial-card.is-arriving { animation: spatial-card-settle 220ms cubic-bezier(.22,.8,.22,1); }
-.spatial-card.is-payment-motion.is-arriving { animation-name: spatial-payment-card-settle; animation-duration: 280ms; animation-timing-function: var(--ws-ease-physical); }
-.spatial-grip { position: absolute; top: 9px; right: 6px; display: grid; place-items: center; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 9px; color: #557781; background: transparent; opacity: 0; cursor: grab; touch-action: none; }
-.spatial-card:hover .spatial-grip, .spatial-card:focus-within .spatial-grip { opacity: 1; }
+.spatial-grip { position: absolute; top: 9px; right: 6px; display: grid; place-items: center; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 9px; color: #557781; background: transparent; opacity: 0; pointer-events: none; cursor: grab; touch-action: none; transition: opacity 140ms var(--ws-ease-out); }
+.spatial-card:hover .spatial-grip, .spatial-card:focus-within .spatial-grip { opacity: 1; pointer-events: auto; }
 .spatial-grip:active { cursor: grabbing; }
 .spatial-drop-marker {
   position: absolute;
@@ -146,51 +144,9 @@ body { background: var(--ws-canvas); }
 .spatial-lane.is-payment-motion.is-unavailable .spatial-drop-marker { border-style: solid; border-color: #d9b8b9; color: #7b4d52; background: #fff8f7; }
 .spatial-drag-preview {
   box-sizing: border-box;
-  --spatial-tilt: 0deg;
-  --spatial-shift: 0px;
   box-shadow: var(--ws-shadow-lift) !important;
   cursor: grabbing;
   pointer-events: none;
-  transform-origin: 50% 72%;
-  transform: translateY(var(--spatial-shift)) rotate(var(--spatial-tilt));
-  transition: transform 55ms cubic-bezier(.18,.7,.2,1);
-}
-.spatial-drag-preview-shell {
-  width: 100%;
-  height: 100%;
-  transform-origin: center;
-  animation: spatial-card-lift 180ms cubic-bezier(.18,.86,.25,1) both;
-}
-.spatial-drag-preview.is-settling .spatial-drag-preview-shell {
-  animation: spatial-card-land 220ms cubic-bezier(.22,.8,.22,1) both;
-}
-.spatial-drag-preview.is-payment-motion .spatial-drag-preview-shell { animation-name: spatial-payment-card-lift; animation-duration: var(--ws-motion-common); animation-timing-function: var(--ws-ease-physical); }
-.spatial-drag-preview.is-payment-motion.is-settling .spatial-drag-preview-shell { animation-name: spatial-payment-card-land; animation-duration: 280ms; animation-timing-function: var(--ws-ease-physical); }
-@keyframes spatial-card-lift {
-  from { opacity: .86; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes spatial-card-land {
-  from { opacity: 1; transform: rotate(-.45deg); }
-  to { opacity: 1; transform: rotate(0); }
-}
-@keyframes spatial-card-settle {
-  from { opacity: .5; transform: scale(1.012); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes spatial-payment-card-lift {
-  from { opacity: .86; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes spatial-payment-card-land {
-  0% { opacity: 1; transform: rotate(-.8deg); }
-  62% { opacity: 1; transform: rotate(.35deg); }
-  100% { opacity: 1; transform: rotate(0); }
-}
-@keyframes spatial-payment-card-settle {
-  0% { opacity: .72; transform: scale(.98); }
-  68% { opacity: 1; transform: scale(1.01); }
-  100% { opacity: 1; transform: scale(1); }
 }
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }
 .spatial-card-open > strong { padding-right: 10px; font-size: 15px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
@@ -210,6 +166,9 @@ body { background: var(--ws-canvas); }
 .approval-column-stack, .project-stack, .kanban-stack { min-height: 0; gap: 12px; padding: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: auto; }
 .project-card, .kanban-card, .approval-board-card { border: 1px solid rgb(255 255 255 / 90%); border-radius: 17px; background: #fcfdfd; box-shadow: var(--ws-shadow-card); }
 .project-card.spatial-card, .kanban-card.spatial-card { padding: 0; }
+.project-card-topline > [data-tone] { transition: transform 160ms var(--ws-ease-out, cubic-bezier(.2, 0, 0, 1)); }
+.project-card:hover .project-card-topline > [data-tone], .project-card:focus-within .project-card-topline > [data-tone] { transform: translateX(-24px); }
+.spatial-drag-preview .spatial-grip { display: none; }
 .project-card:hover, .kanban-card:hover, .approval-board-card:hover { border-color: #a9c9c9; }
 .project-card.selected, .kanban-card.selected { border-color: #8ab9bc; box-shadow: 0 0 0 2px rgb(0 145 168 / 8%); background: #fff; }
 .approval-card-open { padding: 18px 16px 14px; gap: 12px; }
@@ -486,7 +445,6 @@ body { background: var(--ws-canvas); }
   .record-composer-footer > div { justify-content: flex-end; }
   .eff-summary { padding: 18px; }
   .eff-context-stack { grid-template-columns: 1fr; }
-  .spatial-grip { opacity: 1; }
   .department-workspace, .department-create-grid { grid-template-columns: minmax(0,1fr); }
   .department-management, .module-access-management { padding: 20px 14px; }
   .auth-screen { padding: 0; }

@@ -17,7 +17,6 @@ interface BoardContext {
   over: string | null;
   pending: boolean;
   pendingId: string | null;
-  arrivingId: string | null;
   interactionMode: "standard" | "payment";
   canDrop: (id: string, lane: string) => boolean;
 }
@@ -54,35 +53,23 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const [over, setOver] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [arrivingId, setArrivingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
   const drop = useRef<DropTransaction | null>(null);
-  const arrivalTimer = useRef(0);
   const releaseTimer = useRef(0);
   const [preview, setPreview] = useState<CardRecord | null>(null);
-  const previewRef = useRef<HTMLElement>(null);
-  const previousDragX = useRef(0);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }));
   const reset = () => { setActive(null); setOver(null); };
   const release = (transaction: DropTransaction) => {
     if (drop.current !== transaction) return;
-    window.clearTimeout(arrivalTimer.current);
     window.clearTimeout(releaseTimer.current);
-    if (transaction.outcome === "confirmed") {
-      setArrivingId(transaction.id);
-      arrivalTimer.current = window.setTimeout(() => {
-        setArrivingId((current) => current === transaction.id ? null : current);
-      }, 280);
-    }
     lock.current = false;
     setPending(false);
     setPendingId(null);
     drop.current = null;
   };
   useEffect(() => () => {
-    window.clearTimeout(arrivalTimer.current);
     window.clearTimeout(releaseTimer.current);
   }, []);
   const finish = ({ active: picked, over: target }: DragEndEvent) => {
@@ -158,19 +145,10 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       if (transaction) release(transaction);
     }
   };
-  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, arrivingId, interactionMode, canDrop }}>
+  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, interactionMode, canDrop }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
       autoScroll={{ threshold: { x: 0.12, y: 0.1 }, acceleration: 8, interval: 10 }}
-      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); previousDragX.current = 0; setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
-      onDragMove={({ delta }) => {
-        const element = previewRef.current;
-        if (!element || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-        const velocity = delta.x - previousDragX.current;
-        previousDragX.current = delta.x;
-        const tilt = Math.max(-5, Math.min(5, velocity * .34));
-        element.style.setProperty("--spatial-tilt", `${tilt.toFixed(2)}deg`);
-        element.style.setProperty("--spatial-shift", `${Math.max(-5, Math.min(5, delta.y * .018)).toFixed(2)}px`);
-      }}
+      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
         onDragStart: ({ active: picked }) => `Поднята карточка: ${cards.get(String(picked.id))?.label ?? ""}`,
@@ -184,7 +162,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       {children}
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
       {createPortal(<DragOverlay adjustScale={false} dropAnimation={settle}>
-        {active && preview ? <article ref={previewRef} style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert><div className="spatial-drag-preview-shell">{preview.content}</div></article> : null}
+        {active && preview ? <article style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert>{preview.content}</article> : null}
       </DragOverlay>, preview?.node.closest(".workspace-view") ?? document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
@@ -215,16 +193,16 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     movement.current?.cancel();
     const next = element.getBoundingClientRect(), previous = board.positions.get(id);
     board.positions.set(id, next);
-    if (!previous || !next.width || board.pendingId === id || board.arrivingId === id || board.active === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (!previous || !next.width || board.pendingId === id || board.active === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const x = previous.left - next.left, y = previous.top - next.top;
     if ((Math.abs(x) > 1 || Math.abs(y) > 1) && element.animate) movement.current = element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0, 0)" }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
-  }, [board.active, board.arrivingId, board.over, board.pendingId, board.positions, children, id, lane]);
+  }, [board.active, board.over, board.pendingId, board.positions, children, id, lane]);
   useLayoutEffect(() => {
     if (node.current) board.cards.set(id, { node: node.current, content: children, className, label, lane });
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
   return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging || board.pendingId === id ? "is-lifted" : ""} ${board.arrivingId === id ? "is-arriving" : ""}`} data-spatial-card={id}
+    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging || board.pendingId === id ? "is-lifted" : ""}`} data-spatial-card={id}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}
