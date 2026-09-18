@@ -1879,8 +1879,17 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
 
-    fireEvent.click(screen.getByRole("button", { name: "Календарь" }));
+    fireEvent.click(within(document.querySelector(".app-rail")!).getByRole("button", {
+      name: "Календарь",
+    }));
     expect(screen.getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {
+      name: `Открыть задачу: ${initialTasks[0]!.title}`,
+    }));
+    expect(await screen.findByRole("heading", { name: initialTasks[0]!.title })).toBeInTheDocument();
+    fireEvent.click(within(document.querySelector(".app-rail")!).getByRole("button", {
+      name: "Календарь",
+    }));
     fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },

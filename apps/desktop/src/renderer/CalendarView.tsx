@@ -5,6 +5,7 @@ import type {
   CalendarEventInput,
   CalendarEventType,
   WorkspacePerson,
+  WorkspaceTask,
   ZoomMeeting,
 } from "@yuksalish/contracts";
 import { Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
@@ -20,6 +21,9 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 interface CalendarViewProps {
   readonly focusEventId?: string;
   readonly events: readonly CalendarEvent[];
+  /** Task deadlines are a read-only calendar layer; editing stays in the task card. */
+  readonly tasks?: readonly WorkspaceTask[];
+  readonly onOpenTask?: (taskId: string) => void;
   /** Conferences of the shared Zoom host, shown read-only next to the events. */
   readonly zoomMeetings?: readonly ZoomMeeting[];
   readonly onOpenZoomMeeting?: (meetingId: string) => void;
@@ -112,6 +116,8 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
 export function CalendarView({
   focusEventId,
   events,
+  tasks,
+  onOpenTask,
   zoomMeetings,
   onOpenZoomMeeting,
   people,
@@ -173,9 +179,24 @@ export function CalendarView({
     }
     return grouped;
   }, [zoomMeetings]);
+  const tasksByDay = useMemo(() => {
+    const grouped = new Map<string, WorkspaceTask[]>();
+    for (const task of tasks ?? []) {
+      if (!task.dueAt) continue;
+      const dueAt = new Date(task.dueAt);
+      if (!Number.isFinite(dueAt.getTime())) continue;
+      const key = dayKey(dueAt);
+      grouped.set(key, [...(grouped.get(key) ?? []), task]);
+    }
+    for (const bucket of grouped.values()) {
+      bucket.sort((left, right) => new Date(left.dueAt ?? 0).getTime() - new Date(right.dueAt ?? 0).getTime());
+    }
+    return grouped;
+  }, [tasks]);
 
   const selectedDayEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
   const selectedDayZoom = zoomByDay.get(dayKey(selectedDay)) ?? [];
+  const selectedDayTasks = tasksByDay.get(dayKey(selectedDay)) ?? [];
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
     const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -306,6 +327,16 @@ export function CalendarView({
               const key = dayKey(day);
               const dayEvents = eventsByDay.get(key) ?? [];
               const dayZoom = zoomByDay.get(key) ?? [];
+              const dayTasks = tasksByDay.get(key) ?? [];
+              const dayItemCount = dayEvents.length + dayZoom.length + dayTasks.length;
+              const visibleEvents = dayEvents.slice(0, visibleEventsPerDay);
+              const zoomBudget = Math.max(0, visibleEventsPerDay - visibleEvents.length);
+              const visibleZoom = dayZoom.slice(0, zoomBudget);
+              const taskBudget = Math.max(
+                0,
+                visibleEventsPerDay - visibleEvents.length - visibleZoom.length,
+              );
+              const visibleTasks = dayTasks.slice(0, taskBudget);
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());
               const active = key === dayKey(selectedDay);
@@ -317,7 +348,7 @@ export function CalendarView({
                   key={key}
                   role="gridcell"
                   tabIndex={0}
-                  aria-label={`${label}, событий: ${dayEvents.length}`}
+                  aria-label={`${label}, событий: ${dayItemCount}`}
                   aria-selected={active}
                   onClick={() => chooseDay(day)}
                   onKeyDown={(event) => {
@@ -330,10 +361,10 @@ export function CalendarView({
                   <div className="calendar-day-header">
                     <span className="calendar-day-number">{day.getDate()}</span>
                     {today ? <span className="calendar-today-label">Сегодня</span> : null}
-                    {dayEvents.length > 0 ? <span className="calendar-day-count">{dayEvents.length}</span> : null}
+                    {dayItemCount > 0 ? <span className="calendar-day-count">{dayItemCount}</span> : null}
                   </div>
                   <div className="calendar-day-events">
-                    {dayEvents.slice(0, visibleEventsPerDay).map((event) => (
+                    {visibleEvents.map((event) => (
                       <button
                         className={`calendar-event-pill ${event.eventType} ${event.status}`}
                         key={event.id}
@@ -350,7 +381,7 @@ export function CalendarView({
                         <strong>{event.title}</strong>
                       </button>
                     ))}
-                    {dayZoom.slice(0, visibleEventsPerDay).map((meeting) => (
+                    {visibleZoom.map((meeting) => (
                       <button
                         className="calendar-event-pill zoom"
                         key={meeting.id}
@@ -364,7 +395,22 @@ export function CalendarView({
                         <strong>{meeting.topic}</strong>
                       </button>
                     ))}
-                    {dayEvents.length > visibleEventsPerDay ? <span className="calendar-more-events">Ещё {dayEvents.length - visibleEventsPerDay}</span> : null}
+                    {visibleTasks.map((task) => (
+                      <button
+                        className={`calendar-event-pill task status-${task.status}`}
+                        key={task.id}
+                        type="button"
+                        aria-label={`Открыть задачу: ${task.title}`}
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation();
+                          onOpenTask?.(task.id);
+                        }}
+                      >
+                        <span>{new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
+                        <strong>{task.title}</strong>
+                      </button>
+                    ))}
+                    {dayItemCount > visibleEventsPerDay ? <span className="calendar-more-events">Ещё {dayItemCount - visibleEventsPerDay}</span> : null}
                   </div>
                 </div>
               );
@@ -455,8 +501,8 @@ export function CalendarView({
               <p>{dateLabel(selectedDay).split(",")[0]}</p>
             </div>
             <div className="calendar-day-summary">
-              <span>{selectedDayEvents.length}</span>
-              <p>{selectedDayEvents.length === 1 ? "событие" : selectedDayEvents.length > 1 && selectedDayEvents.length < 5 ? "события" : "событий"}</p>
+              <span>{selectedDayEvents.length + selectedDayZoom.length + selectedDayTasks.length}</span>
+              <p>записей в расписании</p>
               {!selectedDayIsPast ? <Button appearance="primary" icon={<Add24Regular />} onClick={() => createForDay(selectedDay)}>Добавить</Button> : null}
             </div>
             {selectedDayIsPast ? <div className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</div> : null}
@@ -475,6 +521,20 @@ export function CalendarView({
                   <small>Zoom-конференция · {meeting.organizerName}</small>
                 </button>
               ))}
+              {selectedDayTasks.map((task) => (
+                <button
+                  className={`calendar-agenda-card task status-${task.status}`}
+                  key={task.id}
+                  type="button"
+                  onClick={() => onOpenTask?.(task.id)}
+                >
+                  <span className="calendar-agenda-time">
+                    {new Date(task.dueAt ?? 0).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                  <strong>{task.title}</strong>
+                  <small>Срок задачи · {task.project || "Без проекта"}</small>
+                </button>
+              ))}
               {selectedDayEvents.length > 0 ? selectedDayEvents.map((event) => (
                 <button className={`calendar-agenda-card ${event.eventType} ${event.status}`} key={event.id} type="button" onClick={() => { setSelected(event); setError(""); }}>
                   <span className="calendar-agenda-time">{eventTime(event)}</span>
@@ -482,7 +542,7 @@ export function CalendarView({
                   <small>{typeLabels[event.eventType]}{event.location ? ` · ${event.location}` : ""}</small>
                   {event.status === "cancelled" ? <em>Отменено</em> : null}
                 </button>
-              )) : selectedDayZoom.length > 0 ? null : (
+              )) : selectedDayZoom.length > 0 || selectedDayTasks.length > 0 ? null : (
                 <div className="calendar-empty">
                   <span aria-hidden="true">{selectedDayIsPast ? "✓" : "+"}</span>
                   <h3>{selectedDayIsPast ? "День без событий" : "Пока свободно"}</h3>

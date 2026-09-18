@@ -33,7 +33,9 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
   }).format(month);
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
-    return Array.from({ length: 42 }, (_unused, index) => (
+    const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
+    const visibleDayCount = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
+    return Array.from({ length: visibleDayCount }, (_unused, index) => (
       new Date(month.getFullYear(), month.getMonth(), index - firstWeekday + 1)
     ));
   }, [month]);
@@ -86,26 +88,35 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
           />
         </div>
       </div>
-      <div className="task-calendar-scroll">
-        <div className="task-calendar-weekdays" aria-hidden="true">
+      <div className="calendar-board task-calendar-board">
+        <div className="calendar-weekdays" aria-hidden="true">
           {weekdayLabels.map((label) => <span key={label}>{label}</span>)}
         </div>
-        <div className="task-calendar-grid" role="grid" aria-label={`Календарь задач: ${monthLabel}`}>
+        <div
+          className="calendar-grid task-calendar-grid"
+          role="grid"
+          aria-label={`Календарь задач: ${monthLabel}`}
+          style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(0, 1fr))` }}
+        >
           {days.map((day) => {
             const key = localDateKey(day);
             const dayTasks = tasksByDay.get(key) ?? [];
             return (
               <section
-                className={`task-calendar-day ${day.getMonth() === month.getMonth() ? "" : "muted"} ${key === todayKey ? "today" : ""}`}
+                className={`calendar-day task-calendar-day ${day.getMonth() === month.getMonth() ? "" : "muted"} ${key === todayKey ? "today" : ""}`}
                 key={key}
                 role="gridcell"
                 aria-label={`${day.toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}: ${dayTasks.length} задач`}
               >
-                <span className="task-calendar-day-number">{day.getDate()}</span>
-                <div className="task-calendar-day-items">
+                <div className="calendar-day-header">
+                  <span className="calendar-day-number">{day.getDate()}</span>
+                  {key === todayKey ? <span className="calendar-today-label">Сегодня</span> : null}
+                  {dayTasks.length > 0 ? <span className="calendar-day-count">{dayTasks.length}</span> : null}
+                </div>
+                <div className="calendar-day-events">
                   {dayTasks.slice(0, 4).map((task) => (
                     <button
-                      className={`task-calendar-item status-${task.status} priority-${task.priority}`}
+                      className={`calendar-event-pill task task-calendar-item status-${task.status} priority-${task.priority}`}
                       type="button"
                       key={task.id}
                       aria-label={`Открыть задачу: ${task.title}`}
@@ -115,7 +126,7 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
                       <strong>{task.title}</strong>
                     </button>
                   ))}
-                  {dayTasks.length > 4 ? <span className="task-calendar-more">Ещё {dayTasks.length - 4}</span> : null}
+                  {dayTasks.length > 4 ? <span className="calendar-more-events">Ещё {dayTasks.length - 4}</span> : null}
                 </div>
               </section>
             );

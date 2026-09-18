@@ -453,10 +453,7 @@ body { background: var(--ws-canvas); }
 .spatial-inspector .bp7-facts > div { background: transparent; border: 0; border-radius: 0; }
 .spatial-inspector .bp7-history { padding-top: 20px; }
 .task-calendar-shell { background: transparent; }
-.task-calendar-grid { gap: 4px; padding: 8px; border: 0; border-radius: 20px; background: #fbfdfc; }
-.task-calendar-day { border: 0; border-radius: 12px; }
-.task-calendar-day.today { background: #e1efeb; }
-.task-calendar-task { border-radius: 9px; }
+.task-calendar-board { background: #fcfdfd; }
 
 @keyframes spatial-appear { from { opacity: .3; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1100px) {
