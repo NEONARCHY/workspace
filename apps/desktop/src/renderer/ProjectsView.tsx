@@ -13,7 +13,7 @@ import type {
   WorkspaceProject,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -30,6 +30,11 @@ const nextStages: Readonly<Record<ProjectStage, readonly ProjectStage[]>> = {
   success: ["approval"],
   failure: ["approval"],
 };
+const stagePosition = new Map(stages.map((stage, index) => [stage, index]));
+
+function isBackwardStage(current: ProjectStage, target: ProjectStage): boolean {
+  return (stagePosition.get(target) ?? 0) < (stagePosition.get(current) ?? 0);
+}
 
 interface ProjectsViewProps {
   readonly projects: readonly WorkspaceProject[];
@@ -292,7 +297,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           {selected.canMove ? (
             <div className="bp7-actions">
               {availableStages(selected).map((stage) => (
-                <Button key={stage} icon={<ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
+                <Button key={stage} data-direction={isBackwardStage(selected.stage, stage) ? "back" : "forward"} icon={isBackwardStage(selected.stage, stage) ? <ArrowLeft24Regular /> : <ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
                   {stageLabels[stage]}
                 </Button>
               ))}

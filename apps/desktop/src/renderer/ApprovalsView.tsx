@@ -1902,11 +1902,11 @@ export function ApprovalsView({
                           <div key={stage.key}>
                             <strong>{stage.label}</strong>
                             <div>
-                              <Button appearance="primary" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "approve", { nodeKey: stage.key })}>Согласовать</Button>
-                              <Button appearance="subtle" disabled={actionBusy} onClick={() => { setReturnRequestId(selectedRequest.id); setReturnNodeKey(stage.key); }}>Вернуть</Button>
-                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "reject" })}>Отклонить</Button>
-                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "clarify" })}>Уточнить</Button>
-                              <Button appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
+                              <Button className="approval-decision-action action-approve" appearance="primary" disabled={actionBusy} onClick={() => void performAction(selectedRequest.id, "approve", { nodeKey: stage.key })}>Согласовать</Button>
+                              <Button className="approval-decision-action action-return" appearance="subtle" disabled={actionBusy} onClick={() => { setReturnRequestId(selectedRequest.id); setReturnNodeKey(stage.key); }}>Вернуть</Button>
+                              <Button className="approval-decision-action action-reject" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "reject" })}>Отклонить</Button>
+                              <Button className="approval-decision-action action-clarify" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "clarify" })}>Уточнить</Button>
+                              <Button className="approval-decision-action action-delegate" appearance="subtle" disabled={actionBusy} onClick={() => setDecision({ requestId: selectedRequest.id, nodeKey: stage.key, action: "delegate" })}>Делегировать</Button>
                             </div>
                           </div>
                         ))}

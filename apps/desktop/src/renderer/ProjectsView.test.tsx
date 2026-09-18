@@ -66,9 +66,12 @@ describe("Project composer", () => {
   it("offers every other stage to an administrator", () => {
     const { onMove } = setup(undefined, [project], people[3]!);
     fireEvent.click(screen.getByText(project.title));
-    fireEvent.click(screen.getByRole("button", { name: "Начало" }));
+    const start = screen.getByRole("button", { name: "Начало" });
+    expect(start).toHaveAttribute("data-direction", "back");
+    expect(screen.getByRole("button", { name: "Подготовка" })).toHaveAttribute("data-direction", "back");
+    expect(screen.getByRole("button", { name: "Успех" })).toHaveAttribute("data-direction", "forward");
+    expect(screen.getByRole("button", { name: "Провал" })).toHaveAttribute("data-direction", "forward");
+    fireEvent.click(start);
     expect(onMove).toHaveBeenCalledWith(project, "start");
-    expect(screen.getByRole("button", { name: "Успех" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Провал" })).toBeInTheDocument();
   });
 });
