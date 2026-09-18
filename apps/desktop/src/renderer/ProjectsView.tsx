@@ -297,7 +297,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           {selected.canMove ? (
             <div className="bp7-actions">
               {availableStages(selected).map((stage) => (
-                <Button key={stage} data-direction={isBackwardStage(selected.stage, stage) ? "back" : "forward"} icon={isBackwardStage(selected.stage, stage) ? <ArrowLeft24Regular /> : <ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
+                <Button key={stage} data-stage={stage} data-direction={isBackwardStage(selected.stage, stage) ? "back" : "forward"} icon={isBackwardStage(selected.stage, stage) ? <ArrowLeft24Regular /> : <ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
                   {stageLabels[stage]}
                 </Button>
               ))}

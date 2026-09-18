@@ -68,9 +68,12 @@ describe("Project composer", () => {
     fireEvent.click(screen.getByText(project.title));
     const start = screen.getByRole("button", { name: "Начало" });
     expect(start).toHaveAttribute("data-direction", "back");
+    expect(start).toHaveAttribute("data-stage", "start");
     expect(screen.getByRole("button", { name: "Подготовка" })).toHaveAttribute("data-direction", "back");
     expect(screen.getByRole("button", { name: "Успех" })).toHaveAttribute("data-direction", "forward");
+    expect(screen.getByRole("button", { name: "Успех" })).toHaveAttribute("data-stage", "success");
     expect(screen.getByRole("button", { name: "Провал" })).toHaveAttribute("data-direction", "forward");
+    expect(screen.getByRole("button", { name: "Провал" })).toHaveAttribute("data-stage", "failure");
     fireEvent.click(start);
     expect(onMove).toHaveBeenCalledWith(project, "start");
   });

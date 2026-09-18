@@ -225,6 +225,15 @@
 .project-detail-stage { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; scrollbar-width: thin; }
 .project-detail-stage > span { flex: 1 0 104px; padding: 9px 10px; border-radius: 10px; color: #536d78; background: #e8efee; font-size: 11px; font-weight: 600; text-align: center; }
 .project-detail-stage > span[aria-current="step"] { color: #fff; background: #276f7d; }
+.projects-view .bp7-actions > button[data-stage] {
+  transition: color 150ms var(--ws-ease-out, ease), background-color 150ms var(--ws-ease-out, ease), border-color 150ms var(--ws-ease-out, ease), box-shadow 150ms var(--ws-ease-out, ease), transform 150ms var(--ws-ease-out, ease);
+}
+.projects-view .bp7-actions > button[data-stage]:is(:hover, :focus-visible) { transform: translateY(-1px); }
+.projects-view .bp7-actions > button[data-stage="start"]:is(:hover, :focus-visible) { border-color: #a8bac3; color: #324f60; background: #edf2f4; box-shadow: 0 7px 16px -13px rgb(50 79 96 / 58%); }
+.projects-view .bp7-actions > button[data-stage="preparation"]:is(:hover, :focus-visible) { border-color: #d7ad58; color: #765718; background: #fff5db; box-shadow: 0 7px 16px -13px rgb(118 87 24 / 58%); }
+.projects-view .bp7-actions > button[data-stage="approval"]:is(:hover, :focus-visible) { border-color: #61b9c3; color: #075d69; background: #def3f4; box-shadow: 0 7px 16px -13px rgb(7 93 105 / 58%); }
+.projects-view .bp7-actions > button[data-stage="success"]:is(:hover, :focus-visible) { border-color: #73bd91; color: #17663a; background: #e1f5e8; box-shadow: 0 7px 16px -13px rgb(23 102 58 / 58%); }
+.projects-view .bp7-actions > button[data-stage="failure"]:is(:hover, :focus-visible) { border-color: #db858a; color: #92383e; background: #fde7e9; box-shadow: 0 7px 16px -13px rgb(146 56 62 / 58%); }
 .project-budget-detail { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; margin: 16px 0; padding: 16px; border-radius: 17px; background: linear-gradient(110deg, #e4f3ee, #edf4f5 58%, #eff2f8); color: #45616e; font-size: 12px; }
 .project-budget-detail > span:last-of-type { text-align: right; }
 .project-budget-detail > .budget-progress { grid-column: 1 / -1; margin: 0; }
@@ -289,6 +298,8 @@
 @media (prefers-reduced-motion: reduce) {
   .ws2-process-focus { transition: none; }
   .ws2-process-focus:hover { transform: none; }
+  .projects-view .bp7-actions > button[data-stage] { transition: none; }
+  .projects-view .bp7-actions > button[data-stage]:is(:hover, :focus-visible) { transform: none; }
   .projects-view .project-card,
   .trips-view .trip-board-card { transition-duration: 0ms; }
   .projects-view .spatial-inspector { animation: none; }
