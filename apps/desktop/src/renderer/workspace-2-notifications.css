@@ -62,12 +62,12 @@
 .notifications-view .notification-metrics small,
 .notification-progress-card small { color: var(--notification-muted); font-size: 10px; }
 
-.notification-progress-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; background: linear-gradient(135deg, #293a55, #344b6d); }
-.notification-progress-card b, .notification-progress-card strong { color: #fff; }
-.notification-progress-card small { color: #c8d6df; }
+.notification-progress-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; border-color: rgb(0 145 168 / 13%); background: linear-gradient(135deg, #f5fbfa, #e6f3f2); }
+.notification-progress-card b, .notification-progress-card strong { color: #172637; }
+.notification-progress-card small { color: #526875; }
 .notification-progress-card strong { font-size: 18px; }
-.notification-progress-card > i { grid-column: 1 / -1; height: 5px; overflow: hidden; border-radius: 5px; background: rgb(255 255 255 / 13%); }
-.notification-progress-card > i > span { display: block; height: 100%; border-radius: inherit; background: #61d0cf; transition: width 260ms ease; }
+.notification-progress-card > i { grid-column: 1 / -1; height: 5px; overflow: hidden; border-radius: 5px; background: rgb(41 58 85 / 11%); }
+.notification-progress-card > i > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0091a8, #48c4c2); transition: width 260ms ease; }
 
 .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr) 310px; gap: 12px; min-height: 0; }
 .notification-stream-shell { min-width: 0; overflow: hidden; border: 1px solid rgb(255 255 255 / 80%); border-radius: 25px; background: rgb(255 255 255 / 76%); box-shadow: 0 16px 42px rgb(41 58 85 / 7%); }
