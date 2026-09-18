@@ -1775,6 +1775,11 @@ export function App() {
               <CalendarView
                 key={focusTarget?.revision}
                 events={workspace.calendarEvents}
+                tasks={workspace.tasks}
+                onOpenTask={(taskId) => {
+                  setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("tasks");
+                }}
                 zoomMeetings={zoomRegistry?.meetings}
                 onOpenZoomMeeting={(meetingId) => {
                   setFocusTarget((current) => ({ section: "zoom_meetings", entityId: meetingId, revision: (current?.revision ?? 0) + 1 }));

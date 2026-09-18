@@ -26,7 +26,10 @@ Each task card contains:
 
 ## Access and automatic chats
 
-- Managers and administrators can read and edit all tasks.
+- Managers, administrators and superadministrators can read and edit all tasks.
+- An employee sees a task only when they are its author, primary assignee,
+  co-assignee or observer. This rule is enforced by the workspace query and every
+  task endpoint, not only by the desktop filters.
 - The author and primary assignee can read and edit their task.
 - A co-assignee can work on the card; an observer can read and comment.
 - Only the author, manager or administrator can change participants.

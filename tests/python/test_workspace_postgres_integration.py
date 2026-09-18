@@ -126,6 +126,33 @@ async def _exercise_live_workspace(database_url: str) -> None:
             admin = await load_authenticated_user(connection, admin_row["id"])
             assert admin is not None
 
+            employee_row = await find_active_user_by_username(connection, "dilshod")
+            assert employee_row is not None
+            employee = await load_authenticated_user(connection, employee_row["id"])
+            assert employee is not None
+
+            admin_only_task = await create_task(
+                connection,
+                admin,
+                CreateTaskRequest(
+                    title="Administrator private task",
+                    assignee_id=str(admin.id),
+                ),
+            )
+            manager_workspace = await load_workspace(connection, aziza)
+            assert admin_only_task.id in {task.id for task in manager_workspace.tasks}
+            admin_workspace = await load_workspace(connection, admin)
+            assert admin_only_task.id in {task.id for task in admin_workspace.tasks}
+            employee_workspace = await load_workspace(connection, employee)
+            assert admin_only_task.id not in {task.id for task in employee_workspace.tasks}
+            with pytest.raises(WorkspaceRepositoryError, match="Task was not found"):
+                await change_task_status(
+                    connection,
+                    employee,
+                    UUID(admin_only_task.id),
+                    ChangeTaskStatusRequest(status="in_progress"),
+                )
+
             initial = await load_workspace(connection, aziza)
             assert len(initial.people) == 4
             assert len(initial.chats) == 7
