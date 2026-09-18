@@ -157,7 +157,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => setReplying((current) => ({ ...current, [post.id]: item }))}>Ответить</Button>
                               <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
-                              {item.canDelete ? <Button size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
+                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
                                 if (window.confirm("Удалить этот комментарий?")) void onDeleteComment(post, item.id);
                               }} /> : null}
                             </span>
