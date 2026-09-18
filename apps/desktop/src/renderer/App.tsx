@@ -639,7 +639,11 @@ export function App() {
               item.id === delivered.id ? delivered : item,
             ),
           }));
-        }).catch(reportError);
+        }).catch(() => {
+          // The notification can be resolved by the same workflow update while
+          // the native toast is being shown. Delivery acknowledgement is
+          // best-effort and must not surface a stale 404 as a workspace error.
+        });
       }).catch(reportError);
     }
   }, [reportError, session, workspace.notificationPreferences, workspace.notifications]);

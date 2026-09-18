@@ -106,7 +106,6 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
     reset();
   };
   const settle: DropAnimation = async ({ active: picked, dragOverlay, transform }) => {
-    let destinationVisibility: Animation | undefined;
     const transaction = drop.current;
     const settleAtSource = async () => {
       if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !dragOverlay.node.animate) return;
@@ -129,7 +128,6 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       const destination = destinationNode?.getBoundingClientRect();
       const destinationLane = destinationNode?.closest<HTMLElement>("[data-spatial-lane]")?.dataset.spatialLane;
       if (destination && destinationLane === transaction.lane && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && dragOverlay.node.animate) {
-        destinationVisibility = destinationNode?.animate?.([{ opacity: 0 }, { opacity: 0 }], { duration: 260, fill: "forwards" });
         dragOverlay.node.classList.add("is-settling");
         const animation = dragOverlay.node.animate([
           { transform: CSS.Transform.toString(transform) },
@@ -140,7 +138,6 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
         await settleAtSource();
       }
     } finally {
-      destinationVisibility?.cancel();
       dragOverlay.node.classList.remove("is-settling");
       if (transaction) release(transaction);
     }
@@ -202,7 +199,7 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
   return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging || board.pendingId === id ? "is-lifted" : ""}`} data-spatial-card={id}
+    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""}`} data-spatial-card={id}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}

@@ -63,6 +63,8 @@ describe("Spatial object transfer", () => {
     render(<ConfirmedBoard />);
     await dropSpatialCard(document.querySelector('[data-spatial-card="one"]')!, document.querySelector('[data-spatial-lane="next"]')!);
     expect(document.querySelector('[data-spatial-lane="start"] [data-spatial-card="one"]')).not.toBeNull();
+    expect(document.querySelector('[data-spatial-card="one"]')).toHaveClass("is-committing");
+    expect(document.querySelector('[data-spatial-card="one"]')).not.toHaveClass("is-lifted");
     expect(screen.getByText("Сохраняем переход…")).toHaveAttribute("role", "status");
     await act(async () => { confirm(); await accepted; });
     await waitFor(() => expect(document.querySelector('[data-spatial-lane="next"] [data-spatial-card="one"]')).not.toBeNull());
@@ -74,6 +76,7 @@ describe("Spatial object transfer", () => {
     await dropSpatialCard(card, next);
     await waitFor(() => expect(screen.getByText(/Переход не подтверждён/)).toHaveAttribute("role", "status"));
     await waitFor(() => expect(card).not.toHaveClass("is-lifted"));
+    await waitFor(() => expect(card).not.toHaveClass("is-committing"));
     expect(card.closest("[data-spatial-lane]")).toHaveAttribute("data-spatial-lane", "start");
     await dropSpatialCard(card, next);
     expect(onMove).toHaveBeenCalledTimes(2);

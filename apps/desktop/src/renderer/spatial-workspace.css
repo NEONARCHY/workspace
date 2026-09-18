@@ -148,6 +148,7 @@ body { background: var(--ws-canvas); }
   cursor: grabbing;
   pointer-events: none;
 }
+.spatial-card.is-committing { opacity: 1; }
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }
 .spatial-card-open > strong { padding-right: 10px; font-size: 15px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
 .spatial-card-context, .spatial-card-open > small { color: var(--ws-muted); font-size: 11px; }

@@ -524,6 +524,7 @@ describe("Private messenger", () => {
   });
 
   it("loads compressed voice data only when playback is requested", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:voice");
     const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     const onLoadAttachment = vi.fn().mockResolvedValue(new Blob(["voice"], { type: "audio/webm" }));
@@ -548,7 +549,7 @@ describe("Private messenger", () => {
     });
     expect(screen.queryByText("Голосовое сообщение")).not.toBeInTheDocument();
     expect(onLoadAttachment).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Прослушать" }));
+    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести" }));
     await waitFor(() => expect(onLoadAttachment).toHaveBeenCalled());
     expect(await screen.findByLabelText("Голосовое сообщение")).toHaveAttribute("src", "blob:voice");
     createObjectURL.mockRestore();
