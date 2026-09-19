@@ -105,40 +105,26 @@ body { background: var(--ws-canvas); }
   opacity: 1;
   transform: scale(1);
 }
-@property --spatial-border-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
 .spatial-lane.spatial-lane.is-landing::after {
-  --spatial-border-angle: 0deg;
   z-index: 6;
   inset: 0;
   padding: 2px;
   border: 0;
   border-radius: inherit;
-  background: conic-gradient(
-    from var(--spatial-border-angle),
-    transparent 0 68%,
-    rgb(68 190 191 / 18%) 75%,
-    #20a6ad 82%,
-    rgb(128 230 216 / 72%) 86%,
-    transparent 94%
-  );
+  background: linear-gradient(135deg, #48b9b9, #20a6ad 48%, #80dfd2);
   opacity: 0;
-  transform: none;
   transition: none;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: spatial-lane-border-sweep 620ms cubic-bezier(.24,.78,.28,1) both;
+  animation: spatial-lane-border-breathe 700ms cubic-bezier(.2,.82,.2,1) both;
 }
-@keyframes spatial-lane-border-sweep {
-  0% { --spatial-border-angle: 0deg; opacity: 0; }
-  14% { opacity: 1; }
-  84% { opacity: 1; }
-  100% { --spatial-border-angle: 360deg; opacity: 0; }
+@keyframes spatial-lane-border-breathe {
+  0% { opacity: 0; transform: scale(.987); filter: drop-shadow(0 0 0 rgb(45 168 173 / 0%)); }
+  34% { opacity: 1; transform: scale(1); filter: drop-shadow(0 0 5px rgb(45 168 173 / 30%)); }
+  68% { opacity: .7; transform: scale(.994); filter: drop-shadow(0 0 8px rgb(45 168 173 / 16%)); }
+  100% { opacity: 0; transform: scale(1); filter: drop-shadow(0 0 11px rgb(45 168 173 / 0%)); }
 }
 .spatial-lane.is-payment-motion.is-unavailable::after {
   border-color: rgb(151 104 108 / 46%);
@@ -203,7 +189,7 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .project-board, .task-kanban, .approval-kanban { gap: 14px; padding: 12px 4px 16px; background: transparent; align-items: stretch; }
 .middle-pan-surface.is-middle-panning { cursor: grabbing; user-select: none; scroll-behavior: auto; }
 .middle-pan-surface.is-middle-panning * { cursor: grabbing !important; }
-.project-column, .kanban-column, .approval-column { display: flex; flex-direction: column; border: 0; border-radius: 22px; background: #e2e9ea; box-shadow: none; min-height: 0; }
+.project-column, .kanban-column, .approval-column { display: flex; flex-direction: column; border: 0; border-radius: 22px; background: #e5eced; box-shadow: none; min-height: 0; }
 .project-stack, .kanban-stack, .approval-column-stack { display: flex; flex-direction: column; flex: 1; }
 .project-column > header, .kanban-column > header, .approval-column > header { padding: 18px 16px 12px; min-height: 56px; color: var(--ws-text); background: transparent; border: 0; border-radius: 0; }
 .project-column > header strong, .kanban-column > header strong, .approval-column > header strong { font-size: 13px; font-weight: 600; }
