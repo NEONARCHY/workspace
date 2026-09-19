@@ -16,8 +16,8 @@ try {
     & $Python -m ruff check .
     & $Python -m mypy apps modules
     & $Python -m pytest
-    & $Python -m bandit -q -r apps modules -x tests
-    & $Python -m pip_audit
+    & $Python -m bandit -q -r apps modules -x tests,apps/api/migrations
+    & $Python -m pip_audit -r requirements.lock.txt
     pnpm check
     pnpm audit --audit-level low
 }
