@@ -78,6 +78,45 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
 type ApprovalBoardFilter = "all" | "actionable" | "revision" | "finished";
+
+export function AnimatedApprovalMoveHint({ text }: { text: string }) {
+  const [displayedText, setDisplayedText] = useState(text);
+  const [phase, setPhase] = useState<"idle" | "leaving" | "entering">("idle");
+  const displayedTextRef = useRef(text);
+
+  useEffect(() => {
+    if (text === displayedTextRef.current) return undefined;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      displayedTextRef.current = text;
+      setDisplayedText(text);
+      setPhase("idle");
+      return undefined;
+    }
+
+    setPhase("leaving");
+    const swapTimer = window.setTimeout(() => {
+      displayedTextRef.current = text;
+      setDisplayedText(text);
+      setPhase("entering");
+    }, 120);
+    const settleTimer = window.setTimeout(() => setPhase("idle"), 300);
+
+    return () => {
+      window.clearTimeout(swapTimer);
+      window.clearTimeout(settleTimer);
+    };
+  }, [text]);
+
+  return (
+    <span
+      className={`approval-move-hint${phase === "idle" ? "" : ` is-${phase}`}`}
+      aria-live="polite"
+      aria-atomic="true"
+    >
+      {displayedText}
+    </span>
+  );
+}
 type ApprovalDetailTab = "overview" | "route" | "files" | "activity";
 interface ApprovalEdgeData extends Record<string, unknown> {
   readonly outcome: string;
@@ -1634,11 +1673,9 @@ export function ApprovalsView({
                           ) : null}
                           {plan || canRevise ? <footer>
                             {plan ? (
-                              <span className="approval-move-hint">
-                                Перетащите → {plan.targetKeys.map((targetKey) =>
+                              <AnimatedApprovalMoveHint text={`Перетащите → ${plan.targetKeys.map((targetKey) =>
                                   boardColumns.find((candidate) => candidate.key === targetKey)?.label,
-                                ).filter(Boolean).join(" / ")}
-                              </span>
+                                ).filter(Boolean).join(" / ")}`} />
                             ) : (
                               <span className="approval-card-footer-context">Откройте для исправления</span>
                             )}

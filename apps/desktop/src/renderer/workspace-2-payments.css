@@ -308,7 +308,31 @@
 .approvals-view .approval-card-meta > span:last-child { flex: none; max-width: 67%; }
 .approvals-view .approval-board-card > footer { padding: 7px 14px 11px; border: 0; color: #58717e; background: transparent; font-size: 10px; }
 .approvals-view .approval-card-footer-context { color: #6f8188; }
-.approvals-view .approval-move-hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approvals-view .approval-move-hint {
+  display: block;
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms var(--ws-ease-out, ease-out),
+    transform 160ms var(--ws-ease-out, ease-out);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.approvals-view .approval-move-hint.is-leaving { opacity: 0; transform: translateY(-3px); }
+.approvals-view .approval-move-hint.is-entering {
+  animation: approval-move-hint-enter 180ms var(--ws-ease-out, ease-out) both;
+}
+
+@keyframes approval-move-hint-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approvals-view .approval-move-hint { transition: none; }
+  .approvals-view .approval-move-hint.is-entering { animation: none; }
+}
 
 /* The request stays in the same visual workspace: the board remains behind a bounded inspector. */
 .approvals-view .approval-detail-overlay { position: fixed; z-index: var(--ws-layer-overlay); inset: 0; display: grid; place-items: center; padding: 14px; overflow: hidden; background: rgb(29 49 62 / 16%); backdrop-filter: blur(2px); animation: ws2-detail-backdrop var(--ws-motion-micro) var(--ws-ease) both; }
