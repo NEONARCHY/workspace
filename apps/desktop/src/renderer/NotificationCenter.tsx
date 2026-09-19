@@ -200,8 +200,8 @@ export function NotificationCenter({
           <strong>{notifications.length}</strong>
           <span><b>Вся история</b><small>Доступные события</small></span>
         </button>
-        <div className="notification-progress-card" aria-label={`Разобрано ${completionPercent}% уведомлений`}>
-          <span><b>Ритм очереди</b><small>Разобрано без активного действия</small></span>
+        <div className="notification-progress-card" aria-label={`Обработано ${completionPercent}% уведомлений`}>
+          <span><b>Обработано уведомлений</b><small>Не требуют вашего решения</small></span>
           <strong>{completionPercent}%</strong>
           <i><span style={{ width: `${completionPercent}%` }} /></i>
         </div>
