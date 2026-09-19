@@ -59,7 +59,7 @@ body { background: var(--ws-canvas); }
 .connection-popover::before {
   position: absolute;
   top: -7px;
-  right: 18px;
+  right: 7px;
   width: 14px;
   height: 14px;
   border-top: 1px solid #fff;
