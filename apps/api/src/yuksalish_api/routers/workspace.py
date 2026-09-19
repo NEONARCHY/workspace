@@ -20,7 +20,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from PIL import Image, ImageOps, UnidentifiedImageError
-from pillow_heif import register_heif_opener
+from pillow_heif.as_plugin import register_heif_opener
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 

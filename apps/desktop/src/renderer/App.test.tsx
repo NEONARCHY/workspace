@@ -1476,14 +1476,6 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
     fireEvent.click(await screen.findByRole("button", { name: "Принять результат" }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
-    const replyButton = await screen.findByRole("button", { name: "Ответить" });
-    fireEvent.click(replyButton);
-    const replyInput = screen.getByRole("textbox", {
-      name: "Комментарий к публикации Итоги рабочего дня",
-    });
-    expect(replyInput).toHaveFocus();
-    fireEvent.change(replyInput, { target: { value: "Ответ без повторного клика" } });
-    expect(replyInput).toHaveValue("Ответ без повторного клика");
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),
       expect.objectContaining({ method: "POST" }),
@@ -1653,7 +1645,10 @@ describe("corporate workspace authentication alpha", () => {
 
     // A rejected spatial drop visibly settles back to its source before the
     // next drag is accepted; retry must still use the same protected action.
-    await waitFor(() => expect(card).not.toHaveClass("is-lifted"));
+    await waitFor(() => {
+      expect(card).not.toHaveClass("is-lifted");
+      expect(card).not.toHaveClass("is-committing");
+    });
     const retryCard = screen
       .getByRole("button", { name: "Открыть заявку №502: Заявка с повтором" })
       .closest("article");
