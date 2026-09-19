@@ -1831,6 +1831,18 @@ describe("corporate workspace authentication alpha", () => {
     ]);
   });
 
+  it("keeps the sidebar editor open after clicking the pencil", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Изменить порядок меню" }));
+
+    expect(screen.getByRole("form", { name: "Порядок главного меню" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить порядок меню" })).toHaveAttribute("type", "button");
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeInTheDocument();
+  });
+
   it("creates a project and moves it through the project board", async () => {
     const fetchMock = mockServer();
     render(<App />);

@@ -1633,10 +1633,17 @@ export function App() {
           </div>
           <div className="rail-customize">
             <span>Меню</span>
-            <button type={navigationEditing ? "submit" : "button"} form={navigationEditing ? "navigation-editor-form" : undefined}
+            <button type="button" form={navigationEditing ? "navigation-editor-form" : undefined}
               aria-label={navigationEditing ? "Сохранить порядок меню" : "Изменить порядок меню"}
               title={navigationEditing ? "Сохранить порядок меню" : "Изменить порядок меню"} aria-expanded={navigationEditing}
-              onClick={navigationEditing ? undefined : () => { setRailPreference(false); setNavigationEditing(true); }}><Edit16Regular /></button>
+              onClick={(event) => {
+                if (navigationEditing) {
+                  event.currentTarget.form?.requestSubmit();
+                  return;
+                }
+                setRailPreference(false);
+                setNavigationEditing(true);
+              }}><Edit16Regular /></button>
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
