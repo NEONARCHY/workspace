@@ -17,6 +17,7 @@ from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
+from .position_policy import is_executive_leader
 from .tables import (
     absence_requests,
     approval_actions,
@@ -579,6 +580,14 @@ def _is_privileged(current_user: AuthenticatedUser) -> bool:
     return current_user.role in {"manager", "admin", "superadmin"}
 
 
+def _can_manage_project(current_user: AuthenticatedUser, row: Record) -> bool:
+    if current_user.role in {"admin", "superadmin"}:
+        return True
+    if is_executive_leader(current_user.job_title):
+        return current_user.id in {row["manager_user_id"], row["created_by_user_id"]}
+    return current_user.role == "manager"
+
+
 def _project_action(row: Record) -> ProjectStageActionResponse:
     return ProjectStageActionResponse(
         id=str(row["id"]),
@@ -597,7 +606,7 @@ def _project(
     history: Sequence[ProjectStageActionResponse] = (),
     chat_id: UUID | None = None,
 ) -> ProjectResponse:
-    can_manage = _is_privileged(current_user)
+    can_manage = _can_manage_project(current_user, row)
     return ProjectResponse(
         id=str(row["id"]),
         code=row["code"],
@@ -2283,10 +2292,10 @@ async def load_workspace(
         chat_members.c.user_id == current_user.id
     )
     accessible_chat_ids = member_chat_ids
-    if current_user.role in {"manager", "admin", "superadmin"}:
-        leadership_contexts = ["project", "trip"]
-        if current_user.role in {"admin", "superadmin"}:
-            leadership_contexts.append("task")
+    if current_user.role in {"admin", "superadmin"} or is_executive_leader(
+        current_user.job_title
+    ):
+        leadership_contexts = ["project", "trip", "task"]
         accessible_chat_ids = select(chats.c.id).where(
             chats.c.id.in_(member_chat_ids)
             | chats.c.context_type.in_(leadership_contexts)
@@ -3148,10 +3157,14 @@ async def _task_access_row(
         .scalars()
         .all()
     )
-    privileged = current_user.role in {"manager", "admin", "superadmin"}
+    is_executive = is_executive_leader(current_user.job_title)
+    privileged = current_user.role in {"admin", "superadmin"} or (
+        current_user.role == "manager" and not is_executive
+    )
+    privileged_reader = privileged or is_executive
     is_author = row["author_user_id"] == current_user.id
     is_assignee = row["primary_assignee_user_id"] == current_user.id
-    can_read = privileged or is_author or is_assignee or bool(participant_roles)
+    can_read = privileged_reader or is_author or is_assignee or bool(participant_roles)
     can_edit = privileged or is_author or is_assignee or "co_assignee" in participant_roles
     can_manage = privileged or is_author
     if not can_read:
@@ -5493,8 +5506,6 @@ async def change_project_stage(
     project_id: UUID,
     payload: ChangeProjectStageRequest,
 ) -> ProjectResponse:
-    if not _is_privileged(current_user):
-        raise WorkspaceRepositoryError(403, "Only managers can move projects")
     row = (
         (
             await connection.execute(
@@ -5508,6 +5519,8 @@ async def change_project_stage(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Project was not found")
+    if not _can_manage_project(current_user, row):
+        raise WorkspaceRepositoryError(403, "Only the responsible manager can move this project")
     is_administrator = current_user.role in {"admin", "superadmin"}
     if not is_administrator and payload.stage not in PROJECT_TRANSITIONS[row["stage"]]:
         raise WorkspaceRepositoryError(409, "Project cannot move between these stages")

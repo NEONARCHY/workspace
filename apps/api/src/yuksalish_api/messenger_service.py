@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
+from .position_policy import is_executive_leader
 from .tables import (
     audit_events,
     chat_members,
@@ -105,14 +106,8 @@ async def chat_access(
         chat is not None
         and member is None
         and (
-            (
-                user.role in {"manager", "admin", "superadmin"}
-                and chat["context_type"] in {"project", "trip"}
-            )
-            or (
-                user.role in {"admin", "superadmin"}
-                and chat["context_type"] == "task"
-            )
+            (user.role in {"admin", "superadmin"} or is_executive_leader(user.job_title))
+            and chat["context_type"] in {"project", "trip", "task"}
         )
     ):
         member = cast(Record, {

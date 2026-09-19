@@ -11,6 +11,15 @@ PAYMENT_CREATOR_POSITION_NAMES = (
     '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi',
 )
 
+EXECUTIVE_LEADER_POSITION_NAME = (
+    '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi'
+)
+
+
+def is_executive_leader(job_title: str | None) -> bool:
+    """Return whether the employee holds the workspace-wide leadership position."""
+    return (job_title or "").strip().casefold() == EXECUTIVE_LEADER_POSITION_NAME.casefold()
+
 
 def latin_position_name(value: str) -> str:
     normalized = value.strip()
