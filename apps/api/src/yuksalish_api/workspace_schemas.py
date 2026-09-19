@@ -1274,3 +1274,5 @@ class WorkspaceBootstrapResponse(ApiModel):
     personal_preferences: PersonalPreferencesResponse
     attachments: list[AttachmentResponse]
     workflow: WorkflowResponse | None
+    project_workflow: WorkflowResponse | None
+    trip_workflow: WorkflowResponse | None

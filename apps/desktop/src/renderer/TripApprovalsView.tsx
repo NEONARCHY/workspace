@@ -1,10 +1,11 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
+import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripDropAction } from "./trip-board";
-import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
+import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
@@ -29,6 +30,10 @@ interface TripApprovalsViewProps {
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
+  readonly workflow?: WorkflowDefinition;
+  readonly canManageWorkflow?: boolean;
+  readonly onSaveWorkflow?: (workflow: WorkflowDefinition) => Promise<void> | void;
+  readonly onPublishWorkflow?: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition | undefined> | WorkflowDefinition | undefined;
 }
 interface TripFormState {
   purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
@@ -38,7 +43,7 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, workflow, canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -48,6 +53,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
   const [view, setView] = useState<"kanban" | "list">("kanban");
+  const [section, setSection] = useState<"requests" | "designer">("requests");
   const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
   const [query, setQuery] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -58,6 +64,15 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
+  const workflowTripNodes = workflow?.nodes
+    .filter((node) => tripColumns.some((column) => column.key === node.id))
+    .sort((left, right) => left.positionX - right.positionX);
+  const displayTripColumns = workflowTripNodes?.length === tripColumns.length
+    ? workflowTripNodes.map((node) => ({
+        ...tripColumns.find((column) => column.key === node.id)!,
+        label: node.label,
+      }))
+    : tripColumns;
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
@@ -117,10 +132,11 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   return (
     <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
       <header className="bp7-header workflow-hero-header">
-        <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p></div>
+        <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <div className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></div> : null}</div>
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
 
+      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <span>Ожидают действий</span>
@@ -148,9 +164,9 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       {notice ? <p className="trip-feedback" role="status">{notice}</p> : null}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
-        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${tripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
+        <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
         <div className="approval-kanban trip-kanban middle-pan-surface" aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
-          {tripColumns.map((column) => {
+          {displayTripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
             return <SpatialLane id={column.key} key={column.key} data-stage-key={column.key} className={`approval-column trip-column `}
               style={{ "--approval-stage-color": column.color, "--approval-stage-ink": "#111111" } as CSSProperties}
@@ -160,7 +176,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
               <div className="approval-column-stack" tabIndex={0} aria-label={`Поездки на этапе «${column.label}»`}>
                 {items.map((request) => {
                   const forward = request.allowedActions.find((action) => action === "submit" || action === "resubmit" || action === "approve");
-                  const movable = !busy && tripColumns.some((target) => tripDropAction(request, target.key, isAdministrator));
+                  const movable = !busy && displayTripColumns.some((target) => tripDropAction(request, target.key, isAdministrator));
                   return <SpatialCard id={request.id} lane={column.key} label={request.purpose} disabled={!movable} key={request.id} data-trip-id={request.id} className={`approval-board-card trip-board-card ${movable ? "movable" : ""}`}>
                     <button type="button" className="approval-card-open" aria-label={`Открыть поездку ${request.number}: ${request.purpose}`} onClick={() => openRequest(request.id)}>
                       <span className="approval-card-topline"><span>{request.number}</span>{request.status === "needs_revision" ? <em>Доработка</em> : null}</span>
@@ -184,6 +200,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
           <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b><p>{request.purpose}</p><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
         </button>)}</div>
       )}
+      </>}
       <Dialog open={(detailOpen && Boolean(selected)) || formOpen} onOpenChange={(_, data) => {
         if (!data.open && !busyRef.current) {
           if (formOpen) closeForm();
@@ -194,7 +211,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
           {formMode === null && selected ? <article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button autoFocus appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
-            <div className="trip-detail-stages" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
+            <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
@@ -204,14 +221,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.allowedActions.map((action) => <Button disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
-              {isAdministrator ? tripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
+              {isAdministrator ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
               hint="Сохранение не отправляет поездку на согласование. Отправить её можно из карточки."
-              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div><p>{form.purpose.trim() || "Добавьте цель поездки"}</p>
                   <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personName(selected.requesterUserId) : currentUser.name}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>

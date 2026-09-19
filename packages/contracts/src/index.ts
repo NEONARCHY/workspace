@@ -964,6 +964,8 @@ export interface WorkspaceBootstrap {
   readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition | null;
+  readonly projectWorkflow?: WorkflowDefinition | null;
+  readonly tripWorkflow?: WorkflowDefinition | null;
 }
 
 export interface DevelopmentSession {

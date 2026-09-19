@@ -1175,13 +1175,16 @@ async def _request_workflows(
     }
 
 
-async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
+async def get_workflow(
+    connection: AsyncConnection,
+    template_key: str = "payment",
+) -> WorkflowResponse:
     template = (
         (
             await connection.execute(
                 select(approval_templates)
                 .where(
-                    approval_templates.c.template_key == "payment",
+                    approval_templates.c.template_key == template_key,
                     approval_templates.c.status == "draft",
                 )
                 .order_by(approval_templates.c.version.desc())
@@ -1197,7 +1200,7 @@ async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
                 await connection.execute(
                     select(approval_templates)
                     .where(
-                        approval_templates.c.template_key == "payment",
+                        approval_templates.c.template_key == template_key,
                         approval_templates.c.status == "published",
                     )
                     .order_by(approval_templates.c.version.desc())
@@ -1208,7 +1211,7 @@ async def get_workflow(connection: AsyncConnection) -> WorkflowResponse:
             .first()
         )
     if template is None:
-        raise WorkspaceRepositoryError(503, "Payment workflow is not configured")
+        raise WorkspaceRepositoryError(503, f"{template_key.title()} workflow is not configured")
     return await _workflow_response(connection, template)
 
 
@@ -2603,7 +2606,11 @@ async def load_workspace(
         notification_preferences=notification_preferences,
         personal_preferences=await get_personal_preferences(connection, current_user),
         attachments=[_attachment(row) for row in attachment_rows],
-        workflow=await get_workflow(connection) if can("payment_requests") else None,
+        workflow=await get_workflow(connection, "payment") if can("payment_requests") else None,
+        project_workflow=await get_workflow(connection, "project") if can("projects") else None,
+        trip_workflow=(
+            await get_workflow(connection, "trip") if can("trip_approvals") else None
+        ),
     )
 
 

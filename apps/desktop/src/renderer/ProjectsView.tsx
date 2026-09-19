@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
+import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
@@ -12,6 +13,7 @@ import type {
   ProjectStage,
   WorkspacePerson,
   WorkspaceProject,
+  WorkflowDefinition,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
@@ -53,6 +55,10 @@ interface ProjectsViewProps {
   ) => Promise<WorkspaceProject | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly focusProjectId?: string;
+  readonly workflow?: WorkflowDefinition;
+  readonly canManageWorkflow?: boolean;
+  readonly onSaveWorkflow?: (workflow: WorkflowDefinition) => Promise<void> | void;
+  readonly onPublishWorkflow?: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition | undefined> | WorkflowDefinition | undefined;
 }
 
 interface ProjectFormState {
@@ -130,8 +136,9 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId, workflow, canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
+  const [view, setView] = useState<"board" | "designer">("board");
   const [selectedId, updateSelectedId] = useState(focusProjectId ?? projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusProjectId));
   const [failureId, setFailureId] = useState<string>();
@@ -150,6 +157,16 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   useModalFocus(formRef, formMode !== null, closeForm);
   useModalFocus(detailRef, detailOpen && formMode === null, closeDetail);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
+  const workflowStages = workflow?.nodes
+    .filter((node): node is typeof node & { id: ProjectStage } => stages.includes(node.id as ProjectStage))
+    .sort((left, right) => left.positionX - right.positionX);
+  const displayStages = workflowStages?.length === stages.length
+    ? workflowStages.map((node) => node.id)
+    : stages;
+  const projectStageLabels: Readonly<Record<ProjectStage, string>> = {
+    ...stageLabels,
+    ...Object.fromEntries(workflowStages?.map((node) => [node.id, node.label]) ?? []),
+  };
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
   const availableStages = (project: WorkspaceProject) => isAdministrator
@@ -204,6 +221,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           <span className="view-kicker">BP‑7 · Общая воронка</span>
           <h1>Список проектов</h1>
           <p>{projects.length} проектов · {activeCount} в работе · бюджеты сохраняются в валюте проекта</p>
+          {canManageWorkflow && workflow ? <div className="process-view-tabs" role="group" aria-label="Разделы проектов"><button type="button" className={view === "board" ? "active" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>Список проектов</button><button type="button" className={view === "designer" ? "active" : ""} aria-pressed={view === "designer"} onClick={() => setView("designer")}>Конструктор маршрутов</button></div> : null}
         </div>
         {canCreate ? (
           <Button appearance="primary" icon={<Add24Regular />} onClick={() => {
@@ -214,6 +232,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         ) : null}
       </header>
 
+      {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
           <span>Сейчас в работе</span>
@@ -240,15 +259,15 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
 
       <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board middle-pan-surface" aria-label="Стадии проектов" {...boardPan}>
-        {stages.map((stage) => {
+        {displayStages.map((stage) => {
           const items = visibleProjects.filter((project) => project.stage === stage);
           return (
             <SpatialLane id={stage}
               className={`project-column project-stage-${stage}`}
               key={stage}
             >
-              <header><strong>{stageLabels[stage]}</strong><Badge appearance="tint">{items.length}</Badge></header>
-              <div className="project-stack" tabIndex={0} aria-label={`Проекты на стадии «${stageLabels[stage]}»`}>
+              <header><strong>{projectStageLabels[stage]}</strong><Badge appearance="tint">{items.length}</Badge></header>
+              <div className="project-stack" tabIndex={0} aria-label={`Проекты на стадии «${projectStageLabels[stage]}»`}>
                 {items.map((project) => (
                   <SpatialCard id={project.id} lane={stage} label={project.title} disabled={!project.canMove}
                     className={`project-card ${detailOpen && project.id === selected?.id ? "selected" : ""}`}
@@ -271,6 +290,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         })}
       </div>
       </SpatialBoard>
+      </>}
 
       {selected !== undefined && detailOpen ? (
         <aside ref={detailRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="project-detail-title" className="bp7-detail spatial-inspector">
@@ -283,8 +303,8 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
               setFormMode("edit");
             }}>Изменить</Button> : null}
           </header>
-          <div className="project-detail-stage" aria-label={`Текущая стадия: ${stageLabels[selected.stage]}`}>
-            {stages.map((stage) => <span key={stage} aria-current={stage === selected.stage ? "step" : undefined}>{stageLabels[stage]}</span>)}
+          <div className="project-detail-stage" aria-label={`Текущая стадия: ${projectStageLabels[selected.stage]}`}>
+            {displayStages.map((stage) => <span key={stage} aria-current={stage === selected.stage ? "step" : undefined}>{projectStageLabels[stage]}</span>)}
           </div>
           <p>{selected.description || "Описание пока не добавлено."}</p>
           {selected.chatId && onOpenChat ? <Button className="inspector-chat-button" appearance="secondary" icon={<Chat24Regular />} onClick={() => onOpenChat(selected.chatId!)}>Открыть чат проекта</Button> : null}
@@ -304,7 +324,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             <div className="bp7-actions">
               {availableStages(selected).map((stage) => (
                 <Button key={stage} data-stage={stage} data-direction={isBackwardStage(selected.stage, stage) ? "back" : "forward"} icon={isBackwardStage(selected.stage, stage) ? <ArrowLeft24Regular /> : <ArrowRight24Regular />} onClick={() => void move(selected, stage)}>
-                  {stageLabels[stage]}
+                  {projectStageLabels[stage]}
                 </Button>
               ))}
             </div>
@@ -312,7 +332,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           <div className="bp7-history">
             <h3>История проекта</h3>
             {[...selected.history].reverse().map((entry) => (
-              <div key={entry.id}><i /><p><strong>{stageLabels[entry.toStage]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
+              <div key={entry.id}><i /><p><strong>{projectStageLabels[entry.toStage]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
             ))}
           </div>
         </aside>
@@ -323,10 +343,10 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           <form ref={formRef} noValidate tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="project-composer-title" aria-busy={saving} className="bp7-modal record-composer" onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать проект" : "Изменить проект"} titleId="project-composer-title" eyebrow="Список проектов" busy={saving} error={formError} onClose={closeForm} submitLabel="Сохранить"
               hint={formMode === "create" ? "Проект появится в колонке «Начало» после сохранения." : "Изменение полей не меняет стадию проекта."}
-              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии проекта">{stages.map((stage) => <span key={stage} aria-current={stage === formStage ? "step" : undefined}>{stageLabels[stage]}</span>)}</div>}
+              stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии проекта">{displayStages.map((stage) => <span key={stage} aria-current={stage === formStage ? "step" : undefined}>{projectStageLabels[stage]}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка проекта"><div className="record-summary-title">{form.title.trim() || "Новый проект"}</div><p>{form.code.trim() || "Код ещё не указан"}</p><strong className="record-summary-amount">{remaining}</strong><p>Оставшийся бюджет</p>
-                  <dl className="record-summary-facts"><div><dt>Руководитель</dt><dd>{personName(form.managerUserId)}</dd></div><div><dt>Период</dt><dd>{form.startDate || "Не указан"} — {form.endDate || "Не указан"}</dd></div><div><dt>Стадия</dt><dd>{stageLabels[formStage]}</dd></div></dl>
+                  <dl className="record-summary-facts"><div><dt>Руководитель</dt><dd>{personName(form.managerUserId)}</dd></div><div><dt>Период</dt><dd>{form.startDate || "Не указан"} — {form.endDate || "Не указан"}</dd></div><div><dt>Стадия</dt><dd>{projectStageLabels[formStage]}</dd></div></dl>
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>{formMode === "create" ? "Карточка ещё не сохранена" : "Редактирование карточки"}</h3><p>{formMode === "create" ? "После сохранения появится история проекта. Стадиями можно управлять на доске и в карточке проекта." : "История проекта и текущая стадия сохранятся. Бюджет и ответственного можно уточнить здесь."}</p></section>
               </>}>
@@ -335,7 +355,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
                   <label className="record-field-wide">Название проекта<Input aria-label="Название проекта" aria-required value={form.title} placeholder="Например, развитие региональных инициатив" onChange={(_, data) => setForm({ ...form, title: data.value })} /></label>
                   <label className="record-field-wide">Описание проекта<Textarea aria-label="Описание проекта" resize="vertical" value={form.description} onChange={(_, data) => setForm({ ...form, description: data.value })} /></label>
                   <label>Код проекта<Input aria-label="Код проекта" aria-required value={form.code} placeholder="Например, YUK-2026" onChange={(_, data) => setForm({ ...form, code: data.value })} /></label>
-                  <label>Статус проекта<output>{stageLabels[formStage]}</output><small>Стадия изменяется отдельно от полей.</small></label>
+                  <label>Статус проекта<output>{projectStageLabels[formStage]}</output><small>Стадия изменяется отдельно от полей.</small></label>
                 </div>
               </RecordSection>
               <RecordSection title="Сроки и ответственность"><div className="record-field-grid">

@@ -203,6 +203,8 @@ interface WorkspaceState {
   readonly notificationPreferences: NotificationPreferences;
   readonly attachments: readonly WorkspaceAttachment[];
   readonly workflow?: WorkflowDefinition | null;
+  readonly projectWorkflow?: WorkflowDefinition | null;
+  readonly tripWorkflow?: WorkflowDefinition | null;
 }
 
 const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((moduleKey) => ({
@@ -248,6 +250,8 @@ const initialWorkspace: WorkspaceState = {
     remindersEnabled: true,
   },
   attachments: [],
+  projectWorkflow: null,
+  tripWorkflow: null,
 };
 
 const navItems: readonly NavItem[] = [
@@ -1100,6 +1104,31 @@ export function App() {
     }
   };
 
+  const handleSaveProcessWorkflow = async (
+    key: "projectWorkflow" | "tripWorkflow",
+    workflow: WorkflowDefinition,
+  ) => {
+    if (session === undefined) return;
+    const saved = await saveWorkspaceWorkflow(session.accessToken, workflow);
+    setWorkspace((current) => ({ ...current, [key]: saved }));
+  };
+
+  const handlePublishProcessWorkflow = async (
+    key: "projectWorkflow" | "tripWorkflow",
+    workflow: WorkflowDefinition,
+  ) => {
+    if (session === undefined) return undefined;
+    try {
+      const nextDraft = await publishWorkspaceWorkflow(session.accessToken, workflow.id);
+      setWorkspace((current) => ({ ...current, [key]: nextDraft }));
+      setConnectionDetail(`Маршрут версии ${workflow.version} опубликован`);
+      return nextDraft;
+    } catch (error) {
+      reportError(error);
+      return undefined;
+    }
+  };
+
   const handleCreateApproval = async (
     payload: PaymentRequestInput,
     primaryFiles: readonly File[] = [],
@@ -1813,6 +1842,10 @@ export function App() {
                 projects={workspace.projects}
                 people={workspace.people}
                 currentUser={workspace.currentUser}
+                workflow={workspace.projectWorkflow ?? undefined}
+                canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.projects?.admin ?? true)}
+                onSaveWorkflow={(workflow) => handleSaveProcessWorkflow("projectWorkflow", workflow)}
+                onPublishWorkflow={(workflow) => handlePublishProcessWorkflow("projectWorkflow", workflow)}
                 onCreate={handleCreateProject}
                 onUpdate={handleUpdateProject}
                 onMove={handleMoveProject}
@@ -1826,6 +1859,10 @@ export function App() {
                 requests={workspace.tripRequests}
                 people={workspace.people}
                 currentUser={workspace.currentUser}
+                workflow={workspace.tripWorkflow ?? undefined}
+                canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.trip_approvals?.admin ?? true)}
+                onSaveWorkflow={(workflow) => handleSaveProcessWorkflow("tripWorkflow", workflow)}
+                onPublishWorkflow={(workflow) => handlePublishProcessWorkflow("tripWorkflow", workflow)}
                 onCreate={handleCreateTrip}
                 onUpdate={handleUpdateTrip}
                 onAction={handleTripAction}
