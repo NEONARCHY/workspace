@@ -1353,7 +1353,8 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Список" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
-    screen.getByRole("button", { name: "К списку задач" }).focus();
+    screen.getByRole("button", { name: "Закрыть задачу" }).focus();
+    expect(screen.queryByRole("button", { name: "К списку задач" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать карточку" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название в карточке" }), {
       target: { value: "Полная карточка BP-5" },

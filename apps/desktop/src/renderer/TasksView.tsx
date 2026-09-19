@@ -29,6 +29,7 @@ import {
   Calendar24Regular,
   Delete24Regular,
   Dismiss16Regular,
+  Dismiss24Regular,
   Edit24Regular,
   Search20Regular,
   Money24Regular,
@@ -523,7 +524,7 @@ export function TasksView(props: TasksViewProps) {
 
       {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
       <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
-        <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
+        <Button className="task-detail-close" appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть задачу" onClick={() => setDetailOpen(false)} />
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}{canDelete ? <Button className="task-delete-button" appearance="subtle" icon={<Delete24Regular />} disabled={deleting} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить"}</Button> : null}</div></div>
         {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <div className="source-link-note" role="status">
