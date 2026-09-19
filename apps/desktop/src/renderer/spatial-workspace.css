@@ -62,7 +62,7 @@ body { background: var(--ws-canvas); }
 .release-history-content { display: grid; gap: 14px; padding-right: 6px; overflow-y: auto; scrollbar-gutter: stable; }
 .release-version-picker { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 210px); align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 14px; color: var(--ws-text); background: rgb(255 255 255 / 94%); box-shadow: 0 10px 26px -24px rgb(41 58 85 / 45%); backdrop-filter: blur(12px); }
 .release-version-picker > span { font-size: 13px; font-weight: 600; }
-.release-version-picker select { width: 100%; min-height: 38px; padding: 0 34px 0 12px; border: 1px solid var(--ws-control-line); border-radius: 10px; color: var(--ws-text); background: #fff; font: inherit; cursor: pointer; }
+.app-provider .release-version-picker .workspace-select.workspace-select { width: 100%; min-height: 38px; border-radius: 10px; cursor: pointer; }
 .release-history-content section { padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: #f8fbfa; }
 .release-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .release-history-heading h3 { margin: 0; font-size: 16px; }

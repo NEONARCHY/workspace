@@ -10,6 +10,7 @@ import { CheckmarkCircle20Filled } from "@fluentui/react-icons";
 import { useMemo, useState } from "react";
 
 import { WorkspaceDialog } from "./WorkspaceDialog";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 
 export function ReleaseHistoryDialog({ open, onOpenChange }: {
   open: boolean;
@@ -31,9 +32,9 @@ export function ReleaseHistoryDialog({ open, onOpenChange }: {
           {selectedRelease ? <>
             <label className="release-version-picker">
               <span>Версия обновления</span>
-              <select aria-label="Версия обновления" value={selectedVersion} onChange={(event) => setSelectedVersion(event.target.value)}>
+              <WorkspaceSelect aria-label="Версия обновления" value={selectedVersion} onChange={(event) => setSelectedVersion(event.target.value)}>
                 {releases.map((release) => <option value={release.version} key={release.version}>Версия {release.version}</option>)}
-              </select>
+              </WorkspaceSelect>
             </label>
             <section key={selectedRelease.version}>
             <div className="release-history-heading">
