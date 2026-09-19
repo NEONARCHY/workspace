@@ -246,25 +246,12 @@
 :is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
 .fui-MenuItem[aria-disabled="true"] { opacity: .48; }
 .fui-PopoverSurface.identity-popover {
-  --identity-spring: linear(0, .015 1.7%, .124 3.8%, .895 11.2%, 1.06 15.4%, .984 20.3%, 1.004 27%, 1);
   width: min(310px, calc(100vw - 28px));
   padding: 10px;
   gap: 7px;
   border-radius: 22px;
-  transform-origin: calc(100% - var(--identity-origin-right, 24px)) 0;
-  will-change: transform, opacity;
 }
 .fui-PopoverSurface.identity-popover.is-closed { display: none; }
-.fui-PopoverSurface.identity-popover.is-opening { animation: identity-popover-open 280ms var(--identity-spring) both; }
-.fui-PopoverSurface.identity-popover.is-closing { animation: identity-popover-close 180ms cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
-@keyframes identity-popover-open {
-  from { opacity: 0; translate: 0 -8px; scale: .32 .2; }
-  to { opacity: 1; translate: 0 0; scale: 1; }
-}
-@keyframes identity-popover-close {
-  from { opacity: 1; translate: 0 0; scale: 1; }
-  to { opacity: 0; translate: 0 -7px; scale: .42 .28; }
-}
 .identity-popover-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -277,31 +264,10 @@
 }
 .identity-popover-avatar {
   display: inline-flex;
-  animation: identity-avatar-arrive 300ms var(--identity-spring) both;
-}
-.identity-popover.is-closing .identity-popover-avatar { animation: identity-avatar-leave 160ms ease-in both; }
-@keyframes identity-avatar-arrive {
-  from { opacity: 0; transform: translateY(-4px) scale(.92); }
-  to { opacity: 1; transform: translate(0, 0) scale(1); }
-}
-@keyframes identity-avatar-leave {
-  from { opacity: 1; transform: translate(0, 0) scale(1); }
-  to { opacity: 0; transform: translateY(-3px) scale(.94); }
 }
 .identity-popover-profile > span { min-width: 0; }
 .identity-popover-profile h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 .identity-popover-profile p { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.identity-popover-profile > span:last-child,
-.identity-popover-actions { animation: identity-content-arrive 190ms ease-out 105ms both; }
-.identity-popover.is-closing :is(.identity-popover-profile > span:last-child, .identity-popover-actions) { animation: identity-content-leave 100ms ease-in both; }
-@keyframes identity-content-arrive {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes identity-content-leave {
-  from { opacity: 1; transform: translateY(0); }
-  to { opacity: 0; transform: translateY(-3px); }
-}
 .identity-popover-actions { display: grid; gap: 3px; padding-top: 2px; }
 .identity-popover-actions .fui-Button { width: 100%; min-height: 42px; justify-content: flex-start; border-radius: 12px; }
 .identity-popover-actions .fui-Button:hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
@@ -313,11 +279,6 @@
   padding: 0;
   background: rgb(31 52 66 / 16%);
   backdrop-filter: blur(3px);
-  animation: account-anchor-scrim-in 220ms var(--ws-ease) both;
-}
-.account-scrim.account-profile-anchor.is-closing {
-  animation: account-anchor-scrim-out 180ms ease-in both;
-  pointer-events: none;
 }
 .account-profile-anchor .account-panel {
   position: absolute;
@@ -326,22 +287,7 @@
   width: min(600px, calc(100vw - 36px));
   height: min(760px, calc(100dvh - var(--account-anchor-top, 72px) - 18px));
   max-height: calc(100dvh - var(--account-anchor-top, 72px) - 18px);
-  transform-origin: calc(100% - var(--account-origin-right, 24px)) 0;
-  animation: account-anchor-open 320ms linear(0, .015 1.7%, .124 3.8%, .895 11.2%, 1.06 15.4%, .984 20.3%, 1.004 27%, 1) both;
 }
-.account-profile-anchor.is-closing .account-panel {
-  animation: account-anchor-close 180ms cubic-bezier(.4, 0, 1, 1) both;
-}
-@keyframes account-anchor-open {
-  from { opacity: 0; transform: translateY(-12px) scale(.18, .08); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes account-anchor-close {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-10px) scale(.28, .12); }
-}
-@keyframes account-anchor-scrim-in { from { background-color: transparent; } }
-@keyframes account-anchor-scrim-out { to { background-color: transparent; backdrop-filter: blur(0); } }
 @media (max-width: 720px), (max-height: 620px) {
   .account-profile-anchor .account-panel {
     top: var(--account-anchor-top, 58px);

@@ -30,7 +30,7 @@ afterEach(() => {
   api.changeUserPassword.mockReset();
 });
 
-it("opens settings from the top-right anchor and finishes the closing animation", async () => {
+it("opens settings at the top-right anchor and closes without a transition", () => {
   const onClose = vi.fn();
   render(
     <FluentProvider theme={webLightTheme}>
@@ -42,13 +42,12 @@ it("opens settings from the top-right anchor and finishes the closing animation"
   );
 
   const scrim = document.querySelector(".account-profile-anchor");
-  expect(scrim).toHaveClass("is-opening");
+  expect(scrim).not.toHaveClass("is-opening");
+  expect(scrim).not.toHaveClass("is-closing");
   expect(scrim).toHaveStyle({ "--account-anchor-top": "64px", "--account-anchor-right": "22px", "--account-origin-right": "48px" });
   expect(screen.getByRole("dialog", { name: "Настройки профиля" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
-  expect(scrim).toHaveClass("is-closing");
-  expect(onClose).not.toHaveBeenCalled();
-  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  expect(onClose).toHaveBeenCalledOnce();
 });
 
 it("uploads a profile avatar and reports the new server version", async () => {

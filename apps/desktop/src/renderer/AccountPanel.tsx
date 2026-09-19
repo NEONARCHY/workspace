@@ -46,20 +46,7 @@ interface AccountPanelProps {
 
 export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange, anchor }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
-  const closeTimerRef = useRef(0);
-  const [closing, setClosing] = useState(false);
-  const requestClose = () => {
-    if (closing) return;
-    window.clearTimeout(closeTimerRef.current);
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      onClose();
-      return;
-    }
-    setClosing(true);
-    closeTimerRef.current = window.setTimeout(onClose, 180);
-  };
-  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
-  useModalFocus(panelRef, true, requestClose);
+  useModalFocus(panelRef, true, onClose);
   const inviteRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (initialSection !== "invite") return;
@@ -225,7 +212,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   } as CSSProperties : undefined;
 
   return (
-    <div className={`account-scrim account-profile-anchor ${closing ? "is-closing" : "is-opening"}`} style={anchorStyle} role="presentation" onMouseDown={requestClose}>
+    <div className="account-scrim account-profile-anchor" style={anchorStyle} role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
         ref={panelRef}
@@ -240,7 +227,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
             <span>Настройки</span>
             <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Настройки профиля"}</h2>
           </div>
-          <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={requestClose} />
+          <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
         </header>
 
         {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">

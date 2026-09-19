@@ -1,6 +1,6 @@
 import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { ChevronDown16Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReleaseHistoryDialog } from "./ReleaseHistoryDialog";
@@ -13,25 +13,10 @@ export interface ProfilePanelAnchor {
 
 export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { person: WorkspacePerson; token: string; onSettings: (anchor: ProfilePanelAnchor) => void; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const [originRight, setOriginRight] = useState(24);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const closeTimerRef = useRef(0);
-  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
   const close = (afterClose?: () => void) => {
-    window.clearTimeout(closeTimerRef.current);
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      setOpen(false);
-      setClosing(false);
-      afterClose?.();
-      return;
-    }
-    setClosing(true);
-    closeTimerRef.current = window.setTimeout(() => {
-      setOpen(false);
-      setClosing(false);
-      afterClose?.();
-    }, 180);
+    setOpen(false);
+    afterClose?.();
   };
   const openSettings = () => {
     const bounds = triggerRef.current?.getBoundingClientRect();
@@ -44,14 +29,13 @@ export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { per
     } else {
       onSettings({ top: 72, offsetRight: 18, originRight: 24 });
     }
-    close();
+    setOpen(false);
   };
   return <Popover open={open} onOpenChange={(_event, data) => {
-    if (data.open) { setOriginRight((triggerRef.current?.getBoundingClientRect().width ?? 48) / 2); setOpen(true); setClosing(false); }
-    else if (open && !closing) close();
+    setOpen(data.open);
   }} positioning="below-end" withArrow>
     <PopoverTrigger disableButtonEnhancement><button ref={triggerRef} className={`workspace-identity${open ? " is-open" : ""}`} type="button" aria-label={`Профиль: ${person.name}`}><ProfileAvatar person={person} token={token} size={32} /><span>{person.name}</span><ChevronDown16Regular /></button></PopoverTrigger>
-    <PopoverSurface style={{ "--identity-origin-right": `${originRight}px` } as CSSProperties} className={`identity-popover${open ? "" : " is-closed"}${closing ? " is-closing" : " is-opening"}`}>
+    <PopoverSurface className={`identity-popover${open ? "" : " is-closed"}`}>
       {open ? <>
       <div className="identity-popover-profile"><span className="identity-popover-avatar"><ProfileAvatar person={person} token={token} size={48} /></span><span><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p></span></div>
       <div className="identity-popover-actions">

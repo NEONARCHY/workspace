@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -19,8 +19,7 @@ const person = {
 afterEach(() => vi.useRealTimers());
 
 describe("WorkspaceIdentity", () => {
-  it("morphs the identity button into the profile and finishes closing before navigation", () => {
-    vi.useFakeTimers();
+  it("opens the profile without morph animation and switches directly to settings", () => {
     const onSettings = vi.fn();
     render(
       <FluentProvider theme={workspaceTheme}>
@@ -29,12 +28,11 @@ describe("WorkspaceIdentity", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Профиль: Малика Нурова" }));
-    expect(document.querySelector(".identity-popover")).toHaveClass("is-opening");
+    expect(document.querySelector(".identity-popover")).not.toHaveClass("is-opening");
+    expect(document.querySelector(".identity-popover")).not.toHaveClass("is-closing");
     fireEvent.click(screen.getByRole("button", { name: "Настройки профиля" }));
-    expect(document.querySelector(".identity-popover")).toHaveClass("is-closing");
     expect(onSettings).toHaveBeenCalledOnce();
     expect(onSettings).toHaveBeenCalledWith({ top: 8, offsetRight: window.innerWidth, originRight: 0 });
-    act(() => vi.advanceTimersByTime(180));
   });
 
   it("opens versioned release history from the connection popover", () => {
