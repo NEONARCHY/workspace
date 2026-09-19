@@ -765,6 +765,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .attachment-chips button > small { color: #718096; font-size: 11px; }
 .attachment-chips svg { width: 14px; color: var(--ws-link, #0f6cbd); }
 .attachment-media-preview { display: grid; gap: 6px; width: fit-content; max-width: min(520px, 100%); overflow: hidden; border: 1px solid #cad8e4; border-radius: 12px; background: #f7fafc; }
+.attachment-media-preview:has(.attachment-audio-player) { overflow: visible; }
 .attachment-media-preview > img, .attachment-video-player > video { display: block; width: auto; height: auto; max-width: 100%; max-height: 420px; object-fit: contain; background: #18232f; }
 .attachment-video-player { position: relative; display: grid; width: fit-content; max-width: 100%; overflow: hidden; background: #18232f; }
 .attachment-video-player > video { width: 100%; cursor: pointer; }
