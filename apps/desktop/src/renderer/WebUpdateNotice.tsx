@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@fluentui/react-components";
-import { ArrowClockwise24Regular, CheckmarkCircle24Filled, Dismiss20Regular } from "@fluentui/react-icons";
+import { ArrowClockwise24Regular, CheckmarkCircle24Filled } from "@fluentui/react-icons";
 
 import { requestWebReload, workspacePlatform, type WebVersionManifest } from "./platform-adapter";
 import { hasPendingMutation } from "./workspace-api";
@@ -43,7 +43,6 @@ export function WebUpdateNotice() {
   };
   return <aside className="web-update-notice">
     <div className="web-update-dialog" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="web-update-title">
-      <Button className="web-update-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Напомнить позже" onClick={() => setAvailable(undefined)} />
       <div className="web-update-mark" aria-hidden="true"><ArrowClockwise24Regular /></div>
       <span className="web-update-kicker">Обновление Workspace</span>
       <h2 id="web-update-title">{available.title || "Доступна новая версия"}</h2>
@@ -51,9 +50,8 @@ export function WebUpdateNotice() {
       {available.notes?.length ? <ul>{available.notes.map((note) => <li key={note}><CheckmarkCircle24Filled /> <span>{note}</span></li>)}</ul> : <p className="web-update-summary">В новой версии улучшены стабильность и удобство работы.</p>}
       {mutationPending ? <p className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</p> : null}
       <footer>
-        <Button appearance="subtle" onClick={() => setAvailable(undefined)}>Напомнить позже</Button>
         <Button appearance="primary" icon={<ArrowClockwise24Regular />} disabled={busy || mutationPending} onClick={reload}>
-          {mutationPending ? "Операция выполняется" : `Обновить до ${available.version}`}
+          Обновить
         </Button>
       </footer>
     </div>

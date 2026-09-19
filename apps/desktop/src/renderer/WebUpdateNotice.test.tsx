@@ -1,10 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { checkWebVersion } = vi.hoisted(() => ({ checkWebVersion: vi.fn() }));
+const { checkWebVersion, requestWebReload } = vi.hoisted(() => ({
+  checkWebVersion: vi.fn(),
+  requestWebReload: vi.fn(),
+}));
 
 vi.mock("./platform-adapter", () => ({
-  requestWebReload: vi.fn(),
+  requestWebReload,
   workspacePlatform: {
     kind: "web",
     version: "0.30.3",
@@ -32,7 +35,11 @@ describe("WebUpdateNotice", () => {
     expect(await screen.findByRole("dialog", { name: "Workspace стал удобнее" })).toBeInTheDocument();
     expect(screen.getByText("1.0.0")).toBeInTheDocument();
     expect(screen.getByText("Обновили рабочие экраны.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Обновить до 1.0.0" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Обновить" })).toBeEnabled();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(screen.queryByText("Напомнить позже")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Обновить" }));
+    expect(requestWebReload).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(checkWebVersion).toHaveBeenCalledTimes(1));
   });
 });

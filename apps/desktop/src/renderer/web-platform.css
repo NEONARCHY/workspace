@@ -22,7 +22,6 @@
   box-shadow: 0 34px 90px -40px rgb(23 48 62 / 75%), inset 0 1px rgb(255 255 255 / 96%);
 }
 
-.web-update-close { position: absolute; top: 14px; right: 14px; border-radius: 50%; }
 .web-update-mark { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 18px; border-radius: 15px; color: #fff; background: linear-gradient(145deg, #293a55, #087f91); box-shadow: 0 16px 30px -18px rgb(8 127 145 / 72%); }
 .web-update-kicker { color: #08788a; font-size: 10px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .web-update-dialog h2 { margin: 7px 36px 7px 0; color: #203751; font-size: 25px; font-weight: 650; letter-spacing: -.03em; line-height: 1.1; }
