@@ -246,14 +246,25 @@
 :is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option):hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
 .fui-MenuItem[aria-disabled="true"] { opacity: .48; }
 .fui-PopoverSurface.identity-popover {
+  --identity-spring: linear(0, .015 1.7%, .124 3.8%, .895 11.2%, 1.06 15.4%, .984 20.3%, 1.004 27%, 1);
   width: min(310px, calc(100vw - 28px));
   padding: 10px;
   gap: 7px;
   border-radius: 22px;
-  animation: none;
-  transition: none;
+  transform-origin: calc(100% - 24px) -18px;
+  will-change: transform, opacity;
 }
 .fui-PopoverSurface.identity-popover.is-closed { display: none; }
+.fui-PopoverSurface.identity-popover.is-opening { animation: identity-popover-open 280ms var(--identity-spring) both; }
+.fui-PopoverSurface.identity-popover.is-closing { animation: identity-popover-close 180ms cubic-bezier(.4, 0, 1, 1) both; pointer-events: none; }
+@keyframes identity-popover-open {
+  from { opacity: 0; transform: translateY(-12px) scale(.22, .16); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes identity-popover-close {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-9px) scale(.42, .28); }
+}
 .identity-popover-profile {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -264,13 +275,43 @@
   border-radius: 15px;
   background: rgb(255 255 255 / 66%);
 }
+.identity-popover-avatar {
+  display: inline-flex;
+  animation: identity-avatar-arrive 300ms var(--identity-spring) both;
+}
+.identity-popover.is-closing .identity-popover-avatar { animation: identity-avatar-leave 160ms ease-in both; }
+@keyframes identity-avatar-arrive {
+  from { opacity: .3; transform: translate(214px, -58px) scale(.66); }
+  to { opacity: 1; transform: translate(0, 0) scale(1); }
+}
+@keyframes identity-avatar-leave {
+  from { opacity: 1; transform: translate(0, 0) scale(1); }
+  to { opacity: 0; transform: translate(214px, -58px) scale(.66); }
+}
 .identity-popover-profile > span { min-width: 0; }
 .identity-popover-profile h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 .identity-popover-profile p { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identity-popover-profile > span:last-child,
+.identity-popover-actions { animation: identity-content-arrive 190ms ease-out 105ms both; }
+.identity-popover.is-closing :is(.identity-popover-profile > span:last-child, .identity-popover-actions) { animation: identity-content-leave 100ms ease-in both; }
+@keyframes identity-content-arrive {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes identity-content-leave {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-3px); }
+}
 .identity-popover-actions { display: grid; gap: 3px; padding-top: 2px; }
 .identity-popover-actions .fui-Button { width: 100%; min-height: 42px; justify-content: flex-start; border-radius: 12px; }
 .identity-popover-actions .fui-Button:hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
 .identity-popover-actions .identity-signout { margin-top: 3px; border-top: 1px solid rgb(41 58 85 / 7%); border-radius: 0 0 12px 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .fui-PopoverSurface.identity-popover,
+  .identity-popover-avatar,
+  .identity-popover-profile > span:last-child,
+  .identity-popover-actions { animation: none !important; }
+}
 .fui-PopoverSurface.person-picker-surface { padding: 12px; border-radius: 20px; }
 .person-picker-list > button { border-radius: 13px; transition: background-color 160ms var(--ws-ease), transform 160ms var(--ws-ease); }
 .person-picker-list > button:hover { transform: translateX(2px); }
