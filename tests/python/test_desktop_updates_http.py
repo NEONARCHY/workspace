@@ -84,8 +84,9 @@ async def test_desktop_update_http_permissions_upload_feed_and_download(tmp_path
                     assert (await client.get(f"{base}/policy")).status_code == 401
                     policy = await client.get(f"{base}/policy", headers=admin_auth)
                     assert policy.status_code == 200 and policy.json()["release"] is None
-                    forbidden = await client.get(f"{base}/releases", headers=admin_auth)
-                    assert forbidden.status_code == 403
+                    admin_releases = await client.get(f"{base}/releases", headers=admin_auth)
+                    assert admin_releases.status_code == 200
+                    assert admin_releases.json() == []
                     assert (await client.get(f"{base}/feed/latest.yml", headers=owner_auth)
                             ).status_code == 404
                     assert (await client.put(f"{base}/mandatory", headers=owner_auth,

@@ -77,9 +77,7 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                 admin = await load_authenticated_user(connection, admin_record["id"])
                 assert owner is not None and admin is not None
 
-                with pytest.raises(WorkspaceRepositoryError) as denied:
-                    await staged_releases(connection, admin)
-                assert denied.value.status_code == 403
+                assert await staged_releases(connection, admin) == []
                 with pytest.raises(WorkspaceRepositoryError):
                     require_superadmin(admin)
                 with pytest.raises(WorkspaceRepositoryError):

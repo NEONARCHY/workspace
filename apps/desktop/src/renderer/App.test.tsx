@@ -1088,8 +1088,10 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/notifications/notification-task/read"),
       expect.objectContaining({ method: "PATCH" }),
     ));
-    fireEvent.click(screen.getByText(initialTasks[1]!.title, { selector: ".task-row strong" }));
-    expect(screen.getByRole("heading", { name: initialTasks[1]!.title })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {
+      name: `Открыть задачу: ${initialTasks[1]!.title}`,
+    }));
+    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
@@ -1429,7 +1431,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     const confirmation = await screen.findByRole("dialog", { name: "Удалить задачу?" });
-    fireEvent.click(within(confirmation).getByRole("button", { name: "Удалить" }));
+    fireEvent.click(within(confirmation).getByText("Удалить").closest("button")!);
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

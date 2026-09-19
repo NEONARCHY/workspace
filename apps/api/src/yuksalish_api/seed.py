@@ -155,6 +155,11 @@ async def seed_demo_data(
     ]
     template_id = demo_uuid("approval-template/payment-v6")
     draft_template_id = demo_uuid("approval-template/payment-v7")
+    process_template_ids = {
+        (process, version): demo_uuid(f"approval-template/{process}-v{version}")
+        for process in ("project", "trip")
+        for version in (1, 2)
+    }
     workflow_nodes: list[tuple[str, str, str, str, float, float, dict[str, object]]] = [
         (
             "start",
@@ -445,7 +450,7 @@ async def seed_demo_data(
                     "kind": "project",
                     "title": "Проект: новый офис",
                     "context_type": "project",
-                    "context_id": None,
+                    "context_id": demo_uuid("project/office"),
                     "created_by_user_id": person_ids["baxtiyor"],
                     "created_at": now,
                     "updated_at": now,
@@ -976,6 +981,22 @@ async def seed_demo_data(
                     "created_at": now,
                     "published_at": None,
                 },
+                *[
+                    {
+                        "id": process_template_ids[(process, version)],
+                        "template_key": process,
+                        "name": "Маршрут проектов" if process == "project" else "Маршрут поездок",
+                        "request_kind": "generic",
+                        "version": version,
+                        "status": "published" if version == 1 else "draft",
+                        "form_schema": {"process": process},
+                        "created_by_user_id": person_ids["aziza"],
+                        "created_at": now,
+                        "published_at": now if version == 1 else None,
+                    }
+                    for process in ("project", "trip")
+                    for version in (1, 2)
+                ],
             ],
         )
         await connection.execute(
@@ -1003,6 +1024,49 @@ async def seed_demo_data(
                 }
                 for current_template_id in (template_id, draft_template_id)
                 for node_key, kind, title, detail, x, y, config in workflow_nodes
+            ]
+            + [
+                {
+                    "id": demo_uuid(
+                        f"approval-node/{process_template_ids[(process, version)]}/{node_key}"
+                    ),
+                    "template_id": process_template_ids[(process, version)],
+                    "node_key": node_key,
+                    "kind": kind,
+                    "title": title,
+                    "config": {"detail": detail},
+                    "position_x": float(index * 260),
+                    "position_y": 120.0,
+                }
+                for process, nodes in (
+                    (
+                        "project",
+                        (
+                            ("start", "start", "Начало", "Регистрация нового проекта"),
+                            ("preparation", "approval", "Подготовка", "Подготовка плана и команды"),
+                            ("approval", "approval", "Согласование", "Решение по запуску проекта"),
+                            ("success", "end", "Успех", "Проект успешно завершён"),
+                            ("failure", "end", "Провал", "Проект остановлен с причиной"),  # noqa: RUF001
+                        ),
+                    ),
+                    (
+                        "trip",
+                        (
+                            ("launch", "start", "Запуск", "Создание и отправка поездки"),
+                            (
+                                "manager_approval",
+                                "approval",
+                                "Утверждение руководителем",
+                                "Решение руководителя",
+                            ),
+                            ("hr", "approval", "Кадровая служба", "Проверка кадровой службой"),
+                            ("approved", "end", "Утверждено", "Поездка согласована"),
+                            ("rejected", "end", "Отклонено", "Поездка отклонена с причиной"),  # noqa: RUF001
+                        ),
+                    ),
+                )
+                for version in (1, 2)
+                for index, (node_key, kind, title, detail) in enumerate(nodes)
             ],
         )
         await _insert_missing(
@@ -1023,6 +1087,46 @@ async def seed_demo_data(
                 }
                 for current_template_id in (template_id, draft_template_id)
                 for source, target, outcome, label, condition, sort_order in workflow_edges
+            ]
+            + [
+                {
+                    "id": demo_uuid(
+                        f"approval-edge/{process_template_ids[(process, version)]}/"
+                        f"{source}/{target}/{outcome}/{sort_order}"
+                    ),
+                    "template_id": process_template_ids[(process, version)],
+                    "source_node_key": source,
+                    "target_node_key": target,
+                    "outcome": outcome,
+                    "label": None,
+                    "condition": {},
+                    "sort_order": sort_order,
+                }
+                for process, edges in (
+                    (
+                        "project",
+                        (
+                            ("start", "preparation", "approve", 0),
+                            ("preparation", "approval", "approve", 0),
+                            ("approval", "success", "approve", 0),
+                            ("approval", "failure", "reject", 1),
+                        ),
+                    ),
+                    (
+                        "trip",
+                        (
+                            ("launch", "manager_approval", "submit", 0),
+                            ("manager_approval", "hr", "approve", 0),
+                            ("manager_approval", "launch", "return", 1),
+                            ("manager_approval", "rejected", "reject", 2),
+                            ("hr", "approved", "approve", 0),
+                            ("hr", "launch", "return", 1),
+                            ("hr", "rejected", "reject", 2),
+                        ),
+                    ),
+                )
+                for version in (1, 2)
+                for source, target, outcome, sort_order in edges
             ],
         )
         await _insert_missing(

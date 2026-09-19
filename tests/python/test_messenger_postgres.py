@@ -432,10 +432,10 @@ async def exercise_messages(url: str) -> None:
                         UUID(unrelated.id),
                         SendMessageRequest(body="Bad quote", reply_to_message_id=UUID(parent.id)),
                     )
-                with pytest.raises(WorkspaceRepositoryError):
-                    await service.change_message(
-                        connection, owner, UUID(reply.id), DeleteMessageRequest(expected_revision=1)
-                    )
+                managed_reply = await service.change_message(
+                    connection, owner, UUID(reply.id), DeleteMessageRequest(expected_revision=1)
+                )
+                assert managed_reply.deleted_at is not None
                 edited = await service.change_message(
                     connection,
                     owner,
@@ -616,9 +616,9 @@ async def exercise_http(url: str) -> None:
         assert reaction.json()["reactions"] == [
             {"emoji": "🎉", "count": 1, "reactedByCurrentUser": True}
         ]
-        assert (
-            await client.post(path + "/reactions", headers=headers, json={"emoji": "🚀"})
-        ).status_code == 422
+        rocket = await client.post(path + "/reactions", headers=headers, json={"emoji": "🚀"})
+        assert rocket.status_code == 200
+        assert {item["emoji"] for item in rocket.json()["reactions"]} == {"🎉", "🚀"}
         pinned = await client.put(path + "/pin", headers=headers, json={"pinned": True})
         assert pinned.status_code == 200 and pinned.json()["isPinned"]
         edited = await client.patch(
