@@ -42,7 +42,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 
-interface MessengerViewProps {
+export interface MessengerViewProps {
   readonly token: string;
   readonly personalPreferences?: PersonalPreferences;
   readonly onPersonalChat?: (id: string, action: PersonalChatAction) => Promise<void>;
@@ -145,11 +145,13 @@ function Conversation({
   onBack,
   personalPreferences,
   onPersonalChat,
+  embedded = false,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
   readonly onBack: () => void;
+  readonly embedded?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const draftKey = `chat:${currentUserId}:${chat.id}`;
@@ -332,9 +334,9 @@ function Conversation({
     });
   };
   return (
-    <article className="conversation-pane">
+    <article className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}>
       <header className="conversation-header">
-        <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button>
+        {!embedded ? <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
           <Avatar name={chat.title} size={40} color="colorful" />
           <div>
@@ -346,11 +348,11 @@ function Conversation({
           </p>
           </div>
         </div>
-        <div className="conversation-header-actions">
+        {!embedded ? <div className="conversation-header-actions">
           <Button {...restoreFocusTarget} onClick={onManage}>
             {chat.kind === "group" ? "Участники и права" : "Участники"}
           </Button>
-        </div>
+        </div> : null}
       </header>
       {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
         <span>Этот чат в вашем архиве</span>
@@ -854,6 +856,26 @@ function Conversation({
       )}
     </article>
   );
+}
+
+export function EmbeddedConversation(props: MessengerViewProps & { readonly chatId: string }) {
+  const { onMarkRead } = props;
+  const chat = props.chats.find((item) => item.id === props.chatId);
+  useEffect(() => {
+    if (chat?.unread) void onMarkRead(chat.id);
+  }, [chat?.id, chat?.unread, onMarkRead]);
+  if (!chat) return <div className="embedded-chat-unavailable">Чат задачи недоступен для вашей роли.</div>;
+  return <section className="messenger-view embedded-chat" aria-label={`Чат задачи: ${chat.title}`}>
+    <Conversation
+      key={`${props.currentUserId}:${chat.id}`}
+      {...props}
+      chat={chat}
+      availableChats={props.chats}
+      onManage={() => undefined}
+      onBack={() => undefined}
+      embedded
+    />
+  </section>;
 }
 
 export function MessengerView(props: MessengerViewProps) {

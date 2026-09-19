@@ -122,6 +122,7 @@ class ChatSummaryResponse(ApiModel):
     id: str
     title: str
     kind: Literal["direct", "group", "department", "project", "task", "approval"]
+    context_type: str | None = None
     preview: str
     time: str
     unread: int
@@ -822,6 +823,7 @@ class ProjectResponse(ApiModel):
     updated_at: datetime
     can_edit: bool
     can_move: bool
+    chat_id: str | None = None
     history: list[ProjectStageActionResponse] = Field(default_factory=list)
 
 
@@ -962,6 +964,7 @@ class TripRequestResponse(ApiModel):
     status_label: str
     can_edit: bool
     allowed_actions: list[TripAction]
+    chat_id: str | None = None
     actions: list[TripActionHistoryResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime

@@ -72,7 +72,7 @@
 
 .messenger-view .chat-buckets {
   display: grid;
-  grid-template-columns: 1fr 1.25fr .9fr;
+  grid-template-columns: .9fr 1.2fr .9fr .9fr;
   padding: 3px;
   border-radius: 13px;
   background: #e9efee;
@@ -121,6 +121,71 @@
   border-radius: 17px;
   background: transparent;
   transition: transform 160ms var(--ws-ease-out, ease), background-color 160ms var(--ws-ease-out, ease), border-color 160ms var(--ws-ease-out, ease), box-shadow 160ms var(--ws-ease-out, ease);
+}
+
+.messenger-view .messenger-more-backdrop {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  background: rgb(28 45 57 / 20%);
+  backdrop-filter: blur(3px);
+}
+
+.messenger-view .messenger-more-drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  width: min(430px, calc(100vw - 24px));
+  height: 100%;
+  padding: 22px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: 0 26px 26px 0;
+  background: rgb(248 252 251 / 98%);
+  box-shadow: 24px 0 60px rgb(41 58 85 / 20%);
+  animation: messenger-drawer-enter 220ms var(--ws-ease-physical, ease-out) both;
+}
+
+.messenger-view .messenger-more-drawer > header,
+.messenger-view .messenger-more-drawer h3,
+.messenger-view .messenger-context-chat-list > button {
+  display: flex;
+  align-items: center;
+}
+
+.messenger-view .messenger-more-drawer > header { justify-content: space-between; }
+.messenger-view .messenger-more-drawer h2 { margin: 3px 0 0; font-size: 24px; }
+.messenger-view .messenger-more-drawer section { min-height: 0; }
+.messenger-view .messenger-more-drawer h3 { gap: 8px; margin: 0 0 8px; font-size: 13px; }
+.messenger-view .messenger-more-drawer h3 span { margin-left: auto; color: var(--messenger-muted); }
+.messenger-view .messenger-context-chat-list { display: grid; gap: 4px; max-height: calc(100% - 30px); overflow: auto; }
+.messenger-view .messenger-context-chat-list > button {
+  gap: 10px;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  text-align: left;
+  background: transparent;
+  transition: transform 160ms var(--ws-ease-out, ease), background-color 160ms var(--ws-ease-out, ease), border-color 160ms var(--ws-ease-out, ease);
+}
+.messenger-view .messenger-context-chat-list > button:hover,
+.messenger-view .messenger-context-chat-list > button:focus-visible { transform: translateX(2px); border-color: rgb(0 145 168 / 14%); background: rgb(0 145 168 / 7%); }
+.messenger-view .messenger-context-chat-copy { display: grid; min-width: 0; flex: 1; }
+.messenger-view .messenger-context-chat-list strong,
+.messenger-view .messenger-context-chat-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.messenger-view .messenger-context-chat-list small,
+.messenger-view .messenger-context-chat-list p { color: var(--messenger-muted); }
+.messenger-view .messenger-context-chat-list p { margin: 14px 8px; font-size: 12px; }
+
+@keyframes messenger-drawer-enter { from { transform: translateX(-18px); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .messenger-view .messenger-more-drawer { animation: none; }
+  .messenger-view .messenger-context-chat-list > button { transition: none; }
 }
 .messenger-view :is(.pane-search, .conversation-search .fui-Input) .fui-Input__input {
   height: 100%;

@@ -8,12 +8,12 @@ import { people } from "./test-fixtures/demo-data";
 
 const project: WorkspaceProject = { id: "qa-project", code: "YUK-26", title: "Региональная программа", description: "Описание",
   managerUserId: people[0]!.id, budget: 100000, spentBudget: 20000, remainingBudget: 80000, currency: "UZS",
-  status: "in_progress", stage: "approval", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, history: [] };
-function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = [], currentUser = people[0]!) {
+  status: "in_progress", stage: "approval", chatId: "project-chat", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, history: [] };
+function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = [], currentUser = people[0]!, onOpenChat = vi.fn()) {
   const onUpdate = vi.fn(async () => project);
   const onMove = vi.fn(async () => undefined as WorkspaceProject | undefined);
-  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={onUpdate} onMove={onMove} /></FluentProvider>);
-  return { onCreate, onUpdate, onMove };
+  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={onUpdate} onMove={onMove} onOpenChat={onOpenChat} /></FluentProvider>);
+  return { onCreate, onUpdate, onMove, onOpenChat };
 }
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name, { exact: true }), { target: { value } });
 const open = () => fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
@@ -76,5 +76,11 @@ describe("Project composer", () => {
     expect(screen.getByRole("button", { name: "Провал" })).toHaveAttribute("data-stage", "failure");
     fireEvent.click(start);
     expect(onMove).toHaveBeenCalledWith(project, "start");
+  });
+  it("opens the chat linked to a project card", () => {
+    const onOpenChat = vi.fn();
+    setup(undefined, [project], people[0]!, onOpenChat);
+    fireEvent.click(screen.getByRole("button", { name: `Открыть чат проекта ${project.title}` }));
+    expect(onOpenChat).toHaveBeenCalledWith("project-chat");
   });
 });

@@ -210,6 +210,7 @@ async def chat_summary(
         title=title,
         description=chat["description"] or "",
         kind=chat["kind"],
+        context_type=chat["context_type"],
         owner_id=next((str(m["user_id"]) for m in members if m["member_role"] == "owner"), None),
         can_delete=(
             membership["member_role"] == "owner"
@@ -573,7 +574,7 @@ async def message_detail_maps(
     reactions = {
         message_id: [
             MessageReactionResponse(
-                emoji=emoji,  # type: ignore[arg-type]
+                emoji=emoji,
                 count=len(users_for_emoji),
                 reacted_by_current_user=user.id in users_for_emoji,
             )

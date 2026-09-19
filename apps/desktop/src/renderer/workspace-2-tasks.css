@@ -168,9 +168,18 @@
 .tasks-view .task-calendar-embedded .task-calendar-unscheduled { margin-top: 22px; box-shadow: none; }
 
 .task-record-dialog {
+  width: min(1480px, calc(100vw - 32px)) !important;
+  max-width: none !important;
   overflow: hidden;
   background: color-mix(in srgb, var(--ws-surface, #fff) 94%, #eaf4f3);
 }
+.task-record-workspace { display: grid; grid-template-columns: minmax(520px, 1.05fr) minmax(420px, .95fr); width: 100%; max-height: calc(100dvh - 32px); overflow: hidden; }
+.task-record-workspace > .task-detail { min-height: 0; }
+.task-record-workspace > .embedded-chat { display: block; min-width: 0; min-height: 0; padding: 0; border-left: 1px solid rgb(41 58 85 / 10%); background: #f7fbfa; }
+.task-record-workspace .embedded-conversation { height: calc(100dvh - 32px); border-radius: 0; }
+.task-record-workspace .embedded-conversation .conversation-header { min-height: 76px; padding-inline: 18px; }
+.task-record-workspace .embedded-conversation .message-scroll { padding-inline: 16px; }
+.embedded-chat-unavailable { display: grid; min-height: 320px; place-items: center; padding: 24px; color: var(--ws-muted); text-align: center; }
 .task-record-dialog .task-detail { gap: 0; max-height: calc(100dvh - 32px); padding: 24px 28px 0; overflow-y: auto; background: transparent; }
 .task-record-dialog .task-detail-heading h2 { max-width: 620px; margin-bottom: 10px; font-size: clamp(24px, 3vw, 32px); }
 .task-record-dialog .detail-meta { margin-top: 12px; }
@@ -210,6 +219,10 @@
 .task-delete-button:hover { color: #8f2833; background: #fff0f1; }
 
 @media (max-width: 900px) {
+  .task-record-workspace { grid-template-columns: 1fr; overflow-y: auto; }
+  .task-record-workspace > .task-detail { overflow: visible; }
+  .task-record-workspace > .embedded-chat { min-height: 620px; border-top: 1px solid rgb(41 58 85 / 10%); border-left: 0; }
+  .task-record-workspace .embedded-conversation { height: 620px; }
   .task-workbench-summary { padding-inline: 14px; }
   .tasks-view .task-filters { margin-inline: 14px; }
   .tasks-view .record-table-frame.task-records { margin-inline: 14px; }

@@ -207,6 +207,7 @@ export interface ChatSummary {
   readonly id: string;
   readonly title: string;
   readonly kind: "direct" | "group" | "department" | "project" | "task" | "approval";
+  readonly contextType?: string | null;
   readonly preview: string;
   readonly time: string;
   readonly unread: number;
@@ -733,6 +734,7 @@ export interface WorkspaceProject {
   readonly updatedAt: string;
   readonly canEdit: boolean;
   readonly canMove: boolean;
+  readonly chatId?: string | null;
   readonly history: readonly ProjectStageAction[];
 }
 
@@ -777,6 +779,7 @@ export interface TripRequest {
   readonly statusLabel: string;
   readonly canEdit: boolean;
   readonly allowedActions: readonly TripAction[];
+  readonly chatId?: string | null;
   readonly actions: readonly TripActionHistory[];
   readonly createdAt: string;
   readonly updatedAt: string;

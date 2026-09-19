@@ -1272,7 +1272,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
   });
 
-  it("shows filtered tasks in the calendar and opens their automatic chat", async () => {
+  it("shows filtered tasks in the calendar with their automatic chat beside the details", async () => {
     mockServer();
     render(<App />);
     await loginToWorkspace();
@@ -1285,15 +1285,12 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     }));
-    fireEvent.click(screen.getByRole("button", { name: "Открыть чат задачи" }));
     await waitFor(() => {
       expect(screen.getAllByText("Задача · Договор на поставку ноутбуков").length)
         .toBeGreaterThan(0);
     });
-    expect(screen.getByRole("button", { name: "Мессенджер" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.queryByRole("button", { name: "Открыть чат задачи" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Задачи" })).toHaveAttribute("aria-current", "page");
   });
 
   it("opens the team dashboard for a manager and hides it from an employee", async () => {

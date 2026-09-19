@@ -11,13 +11,14 @@ const request: TripRequest = {
   purpose: "Встреча с региональной командой", destination: "Самарканд", startDate: "2026-09-18", endDate: "2026-09-20",
   employeeIds: [people[0]!.id], stage: "manager_approval", stageLabel: "Утверждение руководителем",
   status: "running", statusLabel: "На согласовании", canEdit: false, allowedActions: ["approve", "return", "reject"],
+  chatId: "trip-chat",
   actions: [], createdAt: "2026-09-04T09:00:00Z", updatedAt: "2026-09-04T09:00:00Z",
 };
-function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined), currentUser = people[0]!) {
+function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined), currentUser = people[0]!, onOpenChat = vi.fn()) {
   installSpatialGeometry();
   const onCreate = vi.fn(async () => undefined);
-  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} /></FluentProvider>);
-  return { onAction, onCreate };
+  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} onOpenChat={onOpenChat} /></FluentProvider>);
+  return { onAction, onCreate, onOpenChat };
 }
 const column = (key: string) => document.querySelector(`.trip-column[data-stage-key="${key}"]`)!;
 const card = () => document.querySelector(".trip-board-card")!;
@@ -115,5 +116,11 @@ describe("Trip approvals interaction", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("Дата окончания не может быть раньше даты начала");
     expect(onCreate).not.toHaveBeenCalled();
+  });
+  it("opens the chat linked to a trip card", () => {
+    const onOpenChat = vi.fn();
+    setup(request, undefined, people[0]!, onOpenChat);
+    fireEvent.click(screen.getByRole("button", { name: `Открыть чат поездки ${request.number}` }));
+    expect(onOpenChat).toHaveBeenCalledWith("trip-chat");
   });
 });

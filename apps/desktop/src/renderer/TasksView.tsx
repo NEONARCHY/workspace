@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
@@ -27,7 +27,6 @@ import {
   Add24Regular,
   Board24Regular,
   Calendar24Regular,
-  Chat24Regular,
   Delete24Regular,
   Edit24Regular,
   Search20Regular,
@@ -128,7 +127,6 @@ interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
-  readonly accessibleChatIds: readonly string[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
   readonly efficiencyLoading: boolean;
@@ -149,7 +147,7 @@ interface TasksViewProps {
   readonly onSetDependency: (task: WorkspaceTask, dependsOnTaskId: string, dependencyKind: "blocks" | "relates") => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onRemoveDependency: (task: WorkspaceTask, dependsOnTaskId: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetCycle: (task: WorkspaceTask, payload: CyclePayload) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
-  readonly onOpenTaskChat: (task: WorkspaceTask) => void | Promise<void>;
+  readonly renderTaskChat: (task: WorkspaceTask) => ReactNode;
   readonly onReturnForRevision: (task: WorkspaceTask, reasonCode: TaskReturnReason, reasonText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSubmitResult: (task: WorkspaceTask, resultText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
@@ -169,9 +167,9 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, accessibleChatIds, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
+    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
-    onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, onOpenTaskChat,
+    onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, renderTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
     onSubmitResult, onAcceptResult,
@@ -266,12 +264,6 @@ export function TasksView(props: TasksViewProps) {
     && (privileged || selectedTask.assigneeId === currentUserId || coAssignee)
     && ["new", "in_progress", "overdue"].includes(selectedTask.status);
   const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
-  const canOpenTaskChat = selectedTask !== undefined && Boolean(selectedTask.chatId) && (
-    accessibleChatIds.includes(selectedTask.chatId ?? "")
-    || selectedTask.authorId === currentUserId
-    || selectedTask.assigneeId === currentUserId
-    || selectedTask.participants.some((item) => item.userId === currentUserId)
-  );
   const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
   const selectedParent = selectedTask?.parentTaskId ? tasks.find((task) => task.id === selectedTask.parentTaskId) : undefined;
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -513,7 +505,7 @@ export function TasksView(props: TasksViewProps) {
       /> : null}
 
       {!(["dashboard", "efficiency"] as TaskMode[]).includes(mode) && selectedTask !== undefined ? <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) setDetailOpen(false); }}>
-      <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><aside className="task-detail task-card-full">
+      <DialogSurface className="task-record-dialog" aria-label={selectedTask.title}><div className="task-record-workspace"><aside className="task-detail task-card-full">
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}{canDelete ? <Button className="task-delete-button" appearance="subtle" icon={<Delete24Regular />} disabled={deleting} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить"}</Button> : null}</div></div>
@@ -582,10 +574,9 @@ export function TasksView(props: TasksViewProps) {
         {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
         {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
         <div className="detail-footer">
-          <Button appearance="primary" icon={<Chat24Regular />} disabled={!canOpenTaskChat} title={canOpenTaskChat ? "Перейти в связанный чат" : "Чат доступен участникам задачи"} onClick={() => void onOpenTaskChat(selectedTask)}>Открыть чат задачи</Button>
           <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button>
         </div>
-      </aside></DialogSurface>
+      </aside>{renderTaskChat(selectedTask)}</div></DialogSurface>
       </Dialog> : null}
       <ConfirmActionDialog
         open={pendingTaskDelete !== undefined}

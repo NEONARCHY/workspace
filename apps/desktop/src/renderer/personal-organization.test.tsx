@@ -83,4 +83,19 @@ describe("Personal organization", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
     expect(within(screen.getByRole("list")).getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", first.id);
   });
+  it("keeps project and trip conversations in the More drawer", () => {
+    const select = vi.fn();
+    const contextChats = [
+      { ...initialChats[0]!, id: "project-chat", title: "Проект · Офис", contextType: "project" },
+      { ...initialChats[1]!, id: "trip-chat", title: "Поездка · Самарканд", contextType: "trip" },
+    ];
+    render(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={contextChats} messages={[]} onSelect={select}
+      preferences={defaultPersonalPreferences} /></FluentProvider>);
+    expect(screen.queryByText("Проект · Офис")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Ещё/ }));
+    expect(screen.getByRole("heading", { name: /^Чаты проектов/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Чаты поездок/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Проект · Офис/ }));
+    expect(select).toHaveBeenCalledWith("project-chat");
+  });
 });

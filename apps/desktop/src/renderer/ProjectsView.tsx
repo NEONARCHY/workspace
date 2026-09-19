@@ -13,7 +13,7 @@ import type {
   WorkspaceProject,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
-import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -50,6 +50,7 @@ interface ProjectsViewProps {
     stage: ProjectStage,
     comment?: string,
   ) => Promise<WorkspaceProject | undefined>;
+  readonly onOpenChat?: (chatId: string) => void;
 }
 
 interface ProjectFormState {
@@ -127,7 +128,7 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat }: ProjectsViewProps) {
   const [selectedId, updateSelectedId] = useState(projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(false);
   const [failureId, setFailureId] = useState<string>();
@@ -257,6 +258,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
                     <div className="budget-progress" role="progressbar" aria-label={`Использовано бюджета проекта ${project.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={project.budget ? Math.round(Math.min(100, project.spentBudget / project.budget * 100)) : 0}><i style={{ width: `${project.budget ? Math.min(100, project.spentBudget / project.budget * 100) : 0}%` }} /></div>
                     <small>{money(project.spentBudget, project.currency)} из {money(project.budget, project.currency)}</small>
                     </button>
+                    {project.chatId && onOpenChat ? <Button className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат проекта ${project.title}`} onClick={() => onOpenChat(project.chatId!)} /> : null}
                   </SpatialCard>
                 ))}
                 {items.length === 0 ? <p className="empty-column">{visibleProjects.length ? "Перетащите проект сюда" : "Нет проектов"}</p> : null}
@@ -282,6 +284,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             {stages.map((stage) => <span key={stage} aria-current={stage === selected.stage ? "step" : undefined}>{stageLabels[stage]}</span>)}
           </div>
           <p>{selected.description || "Описание пока не добавлено."}</p>
+          {selected.chatId && onOpenChat ? <Button className="inspector-chat-button" appearance="secondary" icon={<Chat24Regular />} onClick={() => onOpenChat(selected.chatId!)}>Открыть чат проекта</Button> : null}
           {failureId === selected.id ? <DecisionReason title="Причина провала проекта" onCancel={() => setFailureId(undefined)} onConfirm={async (reason) => Boolean(await onMove(selected, "failure", reason))} /> : null}
           <dl className="bp7-facts">
             <div><dt>Руководитель</dt><dd>{personName(selected.managerUserId)}</dd></div>

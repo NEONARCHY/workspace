@@ -6,7 +6,7 @@ import { tripColumns, tripDropAction } from "./trip-board";
 import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
-import { Add24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -27,6 +27,7 @@ interface TripApprovalsViewProps {
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
+  readonly onOpenChat?: (chatId: string) => void;
 }
 interface TripFormState {
   purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
@@ -36,7 +37,7 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat }: TripApprovalsViewProps) {
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
@@ -165,7 +166,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                       <span className="approval-card-owner"><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></span>
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
-                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
+                    <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
                   </SpatialCard>;
                 })}
                 {!items.length ? <div className="approval-column-empty">Нет поездок</div> : null}
@@ -195,6 +196,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
             <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
             <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personName(selected.requesterUserId)}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
             <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personName(id)}</span>)}</div>
+            {selected.chatId && onOpenChat ? <Button appearance="secondary" icon={<Chat24Regular />} onClick={() => onOpenChat(selected.chatId!)}>Открыть чат поездки</Button> : null}
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.allowedActions.map((action) => <Button disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}

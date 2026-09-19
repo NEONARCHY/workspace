@@ -84,7 +84,7 @@ import type { ChatActions } from "./ChatManagement";
 import { EmployeesView } from "./EmployeesView";
 import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
-import { MessengerView } from "./MessengerView";
+import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
@@ -1040,10 +1040,9 @@ export function App() {
     },
   ) => runTaskMutation((token) => setWorkspaceTaskCycle(token, task.id, payload));
 
-  const handleOpenTaskChat = async (task: WorkspaceTask) => {
-    const chatId = task.chatId;
-    if (!chatId) return;
-    if (session && !workspace.chats.some((chat) => chat.id === chatId)) {
+  const handleOpenContextChat = async (chatId: string) => {
+    if (!session) return;
+    if (!workspace.chats.some((chat) => chat.id === chatId)) {
       try {
         await refreshWorkspace(session.accessToken);
       } catch (error) {
@@ -1711,7 +1710,6 @@ export function App() {
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
-                accessibleChatIds={workspace.chats.map((chat) => chat.id)}
                 currentUserId={workspace.currentUser.id}
                 efficiency={efficiency}
                 efficiencyLoading={efficiencyLoading}
@@ -1732,7 +1730,29 @@ export function App() {
                 onSetDependency={handleSetTaskDependency}
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
-                onOpenTaskChat={handleOpenTaskChat}
+                renderTaskChat={(task) => task.chatId ? <EmbeddedConversation
+                  chatId={task.chatId}
+                  token={session.accessToken}
+                  chats={workspace.chats}
+                  personalPreferences={workspace.personalPreferences}
+                  messages={workspace.messages}
+                  tasks={workspace.tasks}
+                  attachments={workspace.attachments}
+                  people={workspace.people}
+                  onSendMessage={handleSendMessage}
+                  onSendVoiceMessage={handleSendVoiceMessage}
+                  onReactMessage={handleMessageReaction}
+                  onPinMessage={handleMessagePin}
+                  currentUserId={workspace.currentUser.id}
+                  currentUserRole={workspace.currentUser.role}
+                  chatActions={chatActions}
+                  onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
+                  onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
+                  onCreateTaskFromMessage={handleCreateTaskFromMessage}
+                  onDownloadAttachment={handleDownloadAttachment}
+                  onLoadAttachment={handleLoadAttachment}
+                  onMarkRead={handleMarkChatRead}
+                /> : <div className="embedded-chat-unavailable">Для этой задачи чат недоступен.</div>}
                 onReturnForRevision={handleReturnTaskForRevision}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
@@ -1790,6 +1810,7 @@ export function App() {
                 onCreate={handleCreateProject}
                 onUpdate={handleUpdateProject}
                 onMove={handleMoveProject}
+                onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
               />
             ) : null}
             {displayedSection === "trip_approvals" ? (
@@ -1801,6 +1822,7 @@ export function App() {
                 onCreate={handleCreateTrip}
                 onUpdate={handleUpdateTrip}
                 onAction={handleTripAction}
+                onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
                 focusRequestId={focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
               />
             ) : null}

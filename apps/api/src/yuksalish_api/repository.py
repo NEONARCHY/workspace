@@ -595,6 +595,7 @@ def _project(
     row: Record,
     current_user: AuthenticatedUser,
     history: Sequence[ProjectStageActionResponse] = (),
+    chat_id: UUID | None = None,
 ) -> ProjectResponse:
     can_manage = _is_privileged(current_user)
     return ProjectResponse(
@@ -616,6 +617,7 @@ def _project(
         updated_at=row["updated_at"],
         can_edit=can_manage,
         can_move=can_manage,
+        chat_id=str(chat_id) if chat_id else None,
         history=list(history),
     )
 
@@ -649,6 +651,7 @@ def _trip_request(
     current_user: AuthenticatedUser,
     employee_ids: Sequence[UUID] = (),
     actions: Sequence[TripActionHistoryResponse] = (),
+    chat_id: UUID | None = None,
 ) -> TripRequestResponse:
     return TripRequestResponse(
         id=str(row["id"]),
@@ -668,6 +671,7 @@ def _trip_request(
             and row["status"] in {"draft", "needs_revision"}
         ),
         allowed_actions=_trip_allowed_actions(row, current_user),
+        chat_id=str(chat_id) if chat_id else None,
         actions=list(actions),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -2380,6 +2384,16 @@ async def load_workspace(
         connection,
         [row["id"] for row in project_rows],
     )
+    project_chat_ids: dict[UUID, UUID] = {
+        cast(UUID, row[0]): cast(UUID, row[1])
+        for row in (await connection.execute(select(
+            chats.c.context_id, chats.c.id,
+        ).where(
+            chats.c.context_type == "project",
+            chats.c.context_id.in_([row["id"] for row in project_rows]),
+            chats.c.deleted_at.is_(None),
+        ))).all()
+    } if project_rows else {}
 
     trip_statement = select(trip_requests).order_by(trip_requests.c.updated_at.desc())
     if current_user.role == "employee":
@@ -2395,6 +2409,16 @@ async def load_workspace(
         connection,
         [row["id"] for row in trip_rows],
     )
+    trip_chat_ids: dict[UUID, UUID] = {
+        cast(UUID, row[0]): cast(UUID, row[1])
+        for row in (await connection.execute(select(
+            chats.c.context_id, chats.c.id,
+        ).where(
+            chats.c.context_type == "trip",
+            chats.c.context_id.in_([row["id"] for row in trip_rows]),
+            chats.c.deleted_at.is_(None),
+        ))).all()
+    } if trip_rows else {}
     absence_responses = (
         await visible_absences(connection, current_user, can("absences", "admin"))
         if can("absences")
@@ -2529,7 +2553,10 @@ async def load_workspace(
             list(request_workflows.values()) if can("payment_requests") else []
         ),
         projects=[
-            _project(row, current_user, project_history.get(row["id"], [])) for row in project_rows
+            _project(
+                row, current_user, project_history.get(row["id"], []),
+                project_chat_ids.get(row["id"]),
+            ) for row in project_rows
         ]
         if can("projects")
         else [],
@@ -2539,6 +2566,7 @@ async def load_workspace(
                 current_user,
                 trip_employee_ids.get(row["id"], []),
                 trip_actions.get(row["id"], []),
+                trip_chat_ids.get(row["id"]),
             )
             for row in trip_rows
         ]
@@ -2551,7 +2579,7 @@ async def load_workspace(
                 row,
                 current_user,
                 feed_comment_map.get(row["id"], []),
-                feed_reaction_map.get(row["id"], []),
+                feed_reaction_map.get(row["id"], {}),
             )
             for row in feed_rows
         ]
@@ -2685,7 +2713,7 @@ async def _feed_post_response(
         row,
         current_user,
         comments.get(post_id, []),
-        reactions.get(post_id, []),
+        reactions.get(post_id, {}),
     )
 
 
@@ -3135,6 +3163,77 @@ async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
     if not exists:
         raise WorkspaceRepositoryError(422, "User is not active")
     return user_id
+
+
+async def _sync_context_chat(
+    connection: AsyncConnection,
+    *,
+    context_type: Literal["project", "trip"],
+    context_id: UUID,
+    title: str,
+    description: str,
+    owner_user_id: UUID,
+    member_user_ids: Sequence[UUID],
+    occurred_at: datetime | None = None,
+) -> UUID:
+    """Create one managed object chat and reconcile its explicit participants."""
+    now = occurred_at or datetime.now(UTC)
+    chat_id = await connection.scalar(
+        select(chats.c.id).where(
+            chats.c.context_type == context_type,
+            chats.c.context_id == context_id,
+        )
+    )
+    kind = "project" if context_type == "project" else "approval"
+    label = "Проект" if context_type == "project" else "Поездка"
+    if chat_id is None:
+        chat_id = await connection.scalar(
+            pg_insert(chats)
+            .values(
+                id=uuid4(), kind=kind, title=f"{label} · {title}"[:240],
+                description=description[:4000], context_type=context_type,
+                context_id=context_id, direct_key=None, created_by_user_id=owner_user_id,
+                created_at=now, updated_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=[chats.c.context_type, chats.c.context_id],
+                index_where=and_(
+                    chats.c.context_type.is_not(None),
+                    chats.c.context_id.is_not(None),
+                ),
+            )
+            .returning(chats.c.id)
+        )
+        if chat_id is None:
+            chat_id = await connection.scalar(select(chats.c.id).where(
+                chats.c.context_type == context_type, chats.c.context_id == context_id,
+            ))
+    if chat_id is None:
+        raise WorkspaceRepositoryError(500, "Object chat could not be created")
+    await connection.execute(update(chats).where(chats.c.id == chat_id).values(
+        title=f"{label} · {title}"[:240], description=description[:4000], updated_at=now,
+    ))
+    desired_ids = set(member_user_ids) | {owner_user_id}
+    await connection.execute(delete(chat_members).where(
+        chat_members.c.chat_id == chat_id, chat_members.c.user_id.not_in(desired_ids),
+    ))
+    values = [{
+        "chat_id": chat_id, "user_id": user_id,
+        "member_role": "owner" if user_id == owner_user_id else "member",
+        "permissions": (
+            messenger_service.FULL_PERMISSIONS if user_id == owner_user_id else ChatPermissions()
+        ).model_dump(),
+        "joined_at": now, "muted_until": None,
+    } for user_id in sorted(desired_ids)]
+    member_insert = pg_insert(chat_members).values(values)
+    await connection.execute(member_insert.on_conflict_do_update(
+        index_elements=[chat_members.c.chat_id, chat_members.c.user_id],
+        set_={
+            "member_role": member_insert.excluded.member_role,
+            "permissions": member_insert.excluded.permissions,
+        },
+    ))
+    return cast(UUID, chat_id)
 
 
 async def _sync_task_chat(
@@ -5246,7 +5345,12 @@ async def _project_response(
     if row is None:
         raise WorkspaceRepositoryError(404, "Project was not found")
     history = await _project_action_map(connection, [project_id])
-    return _project(row, current_user, history.get(project_id, []))
+    chat_id = await connection.scalar(select(chats.c.id).where(
+        chats.c.context_type == "project",
+        chats.c.context_id == project_id,
+        chats.c.deleted_at.is_(None),
+    ))
+    return _project(row, current_user, history.get(project_id, []), chat_id)
 
 
 async def create_project(
@@ -5299,6 +5403,16 @@ async def create_project(
             created_at=now,
         )
     )
+    await _sync_context_chat(
+        connection,
+        context_type="project",
+        context_id=project_id,
+        title=payload.title,
+        description=payload.description,
+        owner_user_id=current_user.id,
+        member_user_ids=[manager_id],
+        occurred_at=now,
+    )
     return await _project_response(connection, current_user, project_id)
 
 
@@ -5341,6 +5455,19 @@ async def update_project(
             updated_at=datetime.now(UTC),
         )
     )
+    created_by_user_id = await connection.scalar(
+        select(workspace_projects.c.created_by_user_id).where(workspace_projects.c.id == project_id)
+    )
+    if created_by_user_id is not None:
+        await _sync_context_chat(
+            connection,
+            context_type="project",
+            context_id=project_id,
+            title=payload.title,
+            description=payload.description,
+            owner_user_id=created_by_user_id,
+            member_user_ids=[manager_id],
+        )
     return await _project_response(connection, current_user, project_id)
 
 
@@ -5422,6 +5549,11 @@ async def _trip_response(
         current_user,
         employees.get(request_id, []),
         actions.get(request_id, []),
+        await connection.scalar(select(chats.c.id).where(
+            chats.c.context_type == "trip",
+            chats.c.context_id == request_id,
+            chats.c.deleted_at.is_(None),
+        )),
     )
 
 
@@ -5487,6 +5619,16 @@ async def create_trip_request(
             created_at=now,
         )
     )
+    await _sync_context_chat(
+        connection,
+        context_type="trip",
+        context_id=request_id,
+        title=f"{payload.destination} · {payload.purpose}",
+        description=payload.purpose,
+        owner_user_id=current_user.id,
+        member_user_ids=employee_ids,
+        occurred_at=now,
+    )
     return await _trip_response(connection, current_user, request_id)
 
 
@@ -5529,6 +5671,15 @@ async def update_trip_request(
     await connection.execute(
         insert(trip_request_employees),
         [{"request_id": request_id, "user_id": user_id} for user_id in employee_ids],
+    )
+    await _sync_context_chat(
+        connection,
+        context_type="trip",
+        context_id=request_id,
+        title=f"{payload.destination} · {payload.purpose}",
+        description=payload.purpose,
+        owner_user_id=row["requester_user_id"],
+        member_user_ids=employee_ids,
     )
     return await _trip_response(connection, current_user, request_id)
 

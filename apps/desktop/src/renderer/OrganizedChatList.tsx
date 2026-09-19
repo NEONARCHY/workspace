@@ -1,13 +1,16 @@
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
-import { Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
+import { Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Dismiss20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 
 type ChatBucket = "chats" | "task-chats" | "archive";
 
 const isTaskChat = (chat: ChatSummary): boolean => chat.kind === "task";
+const isProjectChat = (chat: ChatSummary): boolean => chat.contextType === "project";
+const isTripChat = (chat: ChatSummary): boolean => chat.contextType === "trip";
+const isContextChat = (chat: ChatSummary): boolean => isProjectChat(chat) || isTripChat(chat);
 
 const bucketLabel = (bucket: ChatBucket): string => bucket === "chats" ? "Чаты" : bucket === "task-chats" ? "Чаты задач" : "Архив";
 
@@ -32,11 +35,22 @@ export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, 
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [bucket, setBucket] = useState<ChatBucket>(initialBucket);
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMoreOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [moreOpen]);
   const archive = bucket === "archive";
   const pinnedIds = preferences.pinnedChatIds.filter((id) => chats.some((chat) => chat.id === id) && !preferences.archivedChatIds.includes(id));
   const archivedChats = chats.filter((chat) => preferences.archivedChatIds.includes(chat.id));
-  const regularChats = chats.filter((chat) => !isTaskChat(chat) && !preferences.archivedChatIds.includes(chat.id));
+  const regularChats = chats.filter((chat) => !isTaskChat(chat) && !isContextChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const taskChats = chats.filter((chat) => isTaskChat(chat) && !preferences.archivedChatIds.includes(chat.id));
+  const projectChats = chats.filter((chat) => isProjectChat(chat) && !preferences.archivedChatIds.includes(chat.id));
+  const tripChats = chats.filter((chat) => isTripChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const archivedRegularChats = chats.filter((chat) => !isTaskChat(chat) && preferences.archivedChatIds.includes(chat.id));
   const archivedTaskChats = chats.filter((chat) => isTaskChat(chat) && preferences.archivedChatIds.includes(chat.id));
   const visibleChats = useMemo(() => {
@@ -73,7 +87,26 @@ export function OrganizedChatList({ chats, messages, activeChatId, focusChatId, 
       </button>
       <button type="button" aria-pressed={bucket === "archive"} onClick={() => { setBucket("archive"); }}><Archive20Regular />Архив <span>{archivedRegularChats.length + archivedTaskChats.length}</span>
         {archivedChats.some((chat) => chat.unread > 0) && <i aria-label="В архиве есть непрочитанные сообщения" />}</button>
+      <button type="button" className="chat-more-bucket" aria-expanded={moreOpen} aria-controls="messenger-more-drawer" onClick={() => setMoreOpen(true)}>
+        <MoreHorizontal20Regular />Ещё <span>{projectChats.length + tripChats.length}</span>
+      </button>
     </div>
+    {moreOpen ? <div className="messenger-more-backdrop" onMouseDown={() => setMoreOpen(false)}>
+      <aside id="messenger-more-drawer" className="messenger-more-drawer" role="dialog" aria-modal="true" aria-labelledby="messenger-more-title" onMouseDown={(event) => event.stopPropagation()}>
+        <header><div><span className="messenger-eyebrow">Связанные обсуждения</span><h2 id="messenger-more-title">Другие чаты</h2></div>
+          <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть другие чаты" onClick={() => setMoreOpen(false)} /></header>
+        {[{ title: "Чаты проектов", icon: <Folder20Regular />, chats: projectChats }, { title: "Чаты поездок", icon: <Airplane20Regular />, chats: tripChats }].map((section) => <section key={section.title}>
+          <h3>{section.icon}{section.title}<span>{section.chats.length}</span></h3>
+          <div className="messenger-context-chat-list">
+            {section.chats.map((chat) => <button key={chat.id} type="button" onClick={() => { onSelect(chat.id); setMoreOpen(false); }}>
+              <Avatar name={chat.title} size={36} color="colorful" /><span className="messenger-context-chat-copy"><strong>{chat.title}</strong><small>{chat.preview}</small></span>
+              {chat.unread > 0 ? <Badge appearance="filled" color="brand" size="small">{chat.unread}</Badge> : null}
+            </button>)}
+            {!section.chats.length ? <p>Пока нет доступных чатов</p> : null}
+          </div>
+        </section>)}
+      </aside>
+    </div> : null}
     {archive && <p className="chat-organization-hint">Архив только для вас. Переписка и уведомления сохраняются.</p>}
     {error && <div className="organization-error" role="alert">{error}</div>}
     <span className="organization-live" role="status">{busy ? "Сохраняем настройки чатов…" : notice}</span>

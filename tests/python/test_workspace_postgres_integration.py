@@ -910,6 +910,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert project.stage == "start"
+            assert project.chat_id is not None
             assert project.remaining_budget == 88_000_000
             assert project.history[-1].action == "created"
             project = await update_project(
@@ -929,6 +930,10 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert project.manager_user_id == str(admin.id)
+            project_member_ids = set((await connection.execute(select(
+                chat_members.c.user_id,
+            ).where(chat_members.c.chat_id == UUID(project.chat_id or "")))).scalars())
+            assert project_member_ids == {aziza.id, admin.id}
             project = await change_project_stage(
                 connection,
                 aziza,
@@ -988,6 +993,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert trip.stage == "launch"
+            assert trip.chat_id is not None
             assert trip.allowed_actions == ["submit"]
             trip = await act_on_trip_request(
                 connection,
