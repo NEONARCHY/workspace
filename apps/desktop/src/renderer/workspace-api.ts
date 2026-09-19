@@ -111,8 +111,10 @@ export function loadDesktopReleases(token: string): Promise<readonly DesktopRele
   return apiRequest<DesktopRelease[]>("/updates/releases", {}, token);
 }
 
-export function stageDesktopRelease(token: string, version: string, file: File): Promise<DesktopRelease> {
-  return boundedRequest(`${apiBaseUrl}/api/v1/updates/releases`, {
+export function stageDesktopRelease(token: string, version: string, file: File, title: string, notes: readonly string[]): Promise<DesktopRelease> {
+  const query = new URLSearchParams({ title });
+  notes.forEach((note) => query.append("notes", note));
+  return boundedRequest(`${apiBaseUrl}/api/v1/updates/releases?${query}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

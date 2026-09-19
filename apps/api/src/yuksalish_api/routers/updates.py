@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -50,9 +50,13 @@ async def upload_release(
     user: User,
     connection: Connection,
     version: Annotated[str, Header(alias="X-Release-Version")],
+    title: Annotated[str, Query(min_length=1, max_length=120)],
+    notes: Annotated[list[str], Query(min_length=1, max_length=6)],
 ) -> DesktopReleaseResponse:
     try:
-        return await stage_release(connection, user, request, request.app.state.settings, version)
+        return await stage_release(
+            connection, user, request, request.app.state.settings, version, title, notes,
+        )
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
 

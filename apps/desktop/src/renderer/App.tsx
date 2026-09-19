@@ -1537,6 +1537,8 @@ export function App() {
         requiredVersion={updatePolicy!.minimumVersion!}
         currentVersion={workspacePlatform.version}
         status={updateStatus}
+        title={updatePolicy?.release?.title}
+        notes={updatePolicy?.release?.notes}
         onRetry={() => void workspacePlatform.checkForDesktopUpdates?.().then(setUpdateStatus).catch((error: unknown) => {
           setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось проверить обновление" });
         })}

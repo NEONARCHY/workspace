@@ -7,19 +7,22 @@ interface DesktopUpdateGateProps {
   readonly requiredVersion: string;
   readonly currentVersion: string;
   readonly status: DesktopUpdateStatus;
+  readonly title?: string;
+  readonly notes?: readonly string[];
   readonly onRetry: () => void;
   readonly onInstall: () => void;
 }
 
-export function DesktopUpdateGate({ requiredVersion, currentVersion, status, onRetry, onInstall }: DesktopUpdateGateProps) {
+export function DesktopUpdateGate({ requiredVersion, currentVersion, status, title, notes, onRetry, onInstall }: DesktopUpdateGateProps) {
   const progress = Math.max(0, Math.min(100, status.percent ?? 0));
   return <main className="desktop-update-gate" aria-labelledby="desktop-update-title">
     <section className="desktop-update-gate-card" role="dialog" aria-modal="true" aria-labelledby="desktop-update-title">
       <CompanyLogo tone="color" />
       <span className="desktop-update-kicker">Обновление рабочего пространства</span>
-      <h1 id="desktop-update-title">Нужна новая версия Yuksalish</h1>
+      <h1 id="desktop-update-title">{title || "Нужна новая версия Yuksalish"}</h1>
       <p>Администратор включил обязательное обновление. Рабочие разделы откроются после установки версии {requiredVersion} или новее.</p>
       <div className="desktop-update-versions"><span>Сейчас {currentVersion}</span><span>Нужно {requiredVersion}+</span></div>
+      {notes?.length ? <ul className="desktop-update-notes">{notes.map((note) => <li key={note}>{note}</li>)}</ul> : null}
       {status.phase === "downloading" ? <div className="desktop-update-progress">
         <span>Загружаем установщик · {Math.round(progress)}%</span>
         <progress value={progress} max={100} aria-label="Загрузка обновления" />

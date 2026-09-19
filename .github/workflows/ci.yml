@@ -3,13 +3,27 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
+  release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.0"
+      - name: Require user-facing update text
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/validate-release-notes.mjs "$BASE_SHA" "$GITHUB_SHA"
+
   python:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -52,6 +66,7 @@ jobs:
       - run: pip-audit
 
   desktop:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +104,7 @@ jobs:
       - run: pnpm audit --audit-level low
 
   secrets:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read

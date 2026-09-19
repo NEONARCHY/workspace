@@ -75,6 +75,8 @@ users = sa.Table(
 update_releases = sa.Table(
     "workspace_update_releases", metadata,
     sa.Column("version", sa.String(32), primary_key=True),
+    sa.Column("title", sa.String(120)),
+    sa.Column("notes", postgresql.JSONB()),
     sa.Column("file_name", sa.String(160)),
     sa.Column("sha512", sa.String(128)),
     sa.Column("size_bytes", sa.BigInteger()),

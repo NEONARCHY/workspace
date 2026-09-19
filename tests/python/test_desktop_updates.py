@@ -88,12 +88,15 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                 payload = b"MZ" + b"test installer bytes"
                 with pytest.raises(WorkspaceRepositoryError) as forbidden_upload:
                     await stage_release(
-                        connection, admin, _upload_request(payload), settings, "0.30.0"
+                        connection, admin, _upload_request(payload), settings, "0.30.0",
+                        "Понятное обновление", ["Улучшили удобство ежедневной работы."],
                     )
                 assert forbidden_upload.value.status_code == 403
                 staged = await stage_release(
-                    connection, owner, _upload_request(payload), settings, "0.30.0"
+                    connection, owner, _upload_request(payload), settings, "0.30.0",
+                    "Понятное обновление", ["Улучшили удобство ежедневной работы."],
                 )
+                assert staged.title == "Понятное обновление"
                 assert staged.size_bytes == len(payload)
                 assert staged.published_at is None
                 with pytest.raises(WorkspaceRepositoryError) as forbidden_publish:

@@ -57,6 +57,8 @@ def _verify_release_file(path: Path, expected_sha512: str, expected_size: int) -
 def _release(row: Any) -> DesktopReleaseResponse:
     return DesktopReleaseResponse(
         version=row["version"],
+        title=row["title"],
+        notes=list(row["notes"]),
         file_name=row["file_name"],
         sha512=row["sha512"],
         size_bytes=row["size_bytes"],
@@ -126,9 +128,21 @@ async def stage_release(
     request: Request,
     settings: Settings,
     version: str,
+    title: str,
+    notes: list[str],
 ) -> DesktopReleaseResponse:
     require_superadmin(actor)
     file_name = release_file_name(version)
+    clean_title = title.strip()
+    clean_notes = [item.strip() for item in notes]
+    if not clean_title or len(clean_title) > 120:
+        raise WorkspaceRepositoryError(
+            422, "Заголовок обновления обязателен и не длиннее 120 символов"
+        )
+    if not 1 <= len(clean_notes) <= 6 or any(
+        len(item) < 12 or len(item) > 120 for item in clean_notes
+    ):
+        raise WorkspaceRepositoryError(422, "Укажите от 1 до 6 понятных пунктов обновления")
     content_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0]
     if content_type != "application/octet-stream":
         raise WorkspaceRepositoryError(415, "Передайте установщик как application/octet-stream")
@@ -167,6 +181,8 @@ async def stage_release(
         await connection.execute(
             insert(update_releases).values(
                 version=version,
+                title=clean_title,
+                notes=clean_notes,
                 file_name=file_name,
                 sha512=digest.hexdigest(),
                 size_bytes=total,
@@ -180,7 +196,8 @@ async def stage_release(
             {"version": version, "sizeBytes": total},
         )
         return DesktopReleaseResponse(
-            version=version, file_name=file_name, sha512=digest.hexdigest(),
+            version=version, title=clean_title, notes=clean_notes,
+            file_name=file_name, sha512=digest.hexdigest(),
             size_bytes=total, uploaded_at=now,
         )
     finally:

@@ -69,6 +69,10 @@ async def test_desktop_update_http_permissions_upload_feed_and_download(tmp_path
                     admin["id"], settings.auth_signing_key,
                 )}
                 base = "/api/v1/updates"
+                upload_url = (
+                    f"{base}/releases?title=Clear%20update%20notes"
+                    "&notes=Made%20daily%20work%20easier%20to%20understand."
+                )
                 payload = b"MZ" + b"small test installer"
                 upload_headers = {**owner_auth, "X-Release-Version": "0.30.9",
                                   "Content-Type": "application/octet-stream"}
@@ -86,33 +90,34 @@ async def test_desktop_update_http_permissions_upload_feed_and_download(tmp_path
                             ).status_code == 404
                     assert (await client.put(f"{base}/mandatory", headers=owner_auth,
                                              json={"mandatory": True})).status_code == 409
-                    assert (await client.post(f"{base}/releases", headers={
+                    assert (await client.post(upload_url, headers={
                         **admin_auth, "X-Release-Version": "0.30.9",
                         "Content-Type": "application/octet-stream",
                     }, content=payload)).status_code == 403
-                    assert (await client.post(f"{base}/releases", headers={
+                    assert (await client.post(upload_url, headers={
                         **owner_auth, "X-Release-Version": "0.30.9",
                         "Content-Type": "text/plain",
                     }, content=payload)).status_code == 415
-                    assert (await client.post(f"{base}/releases", headers={
+                    assert (await client.post(upload_url, headers={
                         **owner_auth, "X-Release-Version": "bad/version",
                         "Content-Type": "application/octet-stream",
                     }, content=payload)).status_code == 422
-                    assert (await client.post(f"{base}/releases", headers=upload_headers,
+                    assert (await client.post(upload_url, headers=upload_headers,
                                               content=b"MZ" + b"x" * 32)).status_code == 413
-                    assert (await client.post(f"{base}/releases", headers=upload_headers,
+                    assert (await client.post(upload_url, headers=upload_headers,
                                               content=b"not an exe")).status_code == 422
                     assert (await client.get(f"{base}/releases", headers=owner_auth)
                             ).json() == []
 
                     staged = await client.post(
-                        f"{base}/releases", headers=upload_headers, content=payload,
+                        upload_url, headers=upload_headers, content=payload,
                     )
                     assert staged.status_code == 201
+                    assert staged.json()["title"] == "Clear update notes"
                     assert staged.json()["sizeBytes"] == len(payload)
                     assert len((await client.get(f"{base}/releases", headers=owner_auth)
                                 ).json()) == 1
-                    assert (await client.post(f"{base}/releases", headers=upload_headers,
+                    assert (await client.post(upload_url, headers=upload_headers,
                                               content=payload)).status_code == 409
                     assert (await client.post(f"{base}/releases/0.30.9/publish",
                                               headers=admin_auth)).status_code == 403

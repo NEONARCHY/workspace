@@ -5,6 +5,8 @@ from .workspace_schemas import ApiModel
 
 class DesktopReleaseResponse(ApiModel):
     version: str
+    title: str
+    notes: list[str]
     file_name: str
     sha512: str
     size_bytes: int

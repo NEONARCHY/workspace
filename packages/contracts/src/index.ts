@@ -1010,6 +1010,8 @@ export interface SessionSummary {
 
 export interface DesktopRelease {
   readonly version: string;
+  readonly title: string;
+  readonly notes: readonly string[];
   readonly fileName: string;
   readonly sha512: string;
   readonly sizeBytes: number;

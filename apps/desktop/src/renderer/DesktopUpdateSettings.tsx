@@ -11,6 +11,7 @@ import {
   stageDesktopRelease,
 } from "./workspace-api";
 import { workspacePlatform } from "./platform-adapter";
+import releaseNotes from "../../release-notes.json";
 
 interface DesktopUpdateSettingsProps {
   readonly token: string;
@@ -87,7 +88,7 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
         onChange={(event) => setFile(event.target.files?.[0])} />
       {file && !fileVersion ? <small role="alert">Имя файла не содержит корректный номер версии.</small> : null}
       {fileVersion ? <Button disabled={busy} onClick={() => void run(async () => {
-        await stageDesktopRelease(token, fileVersion, file!);
+        await stageDesktopRelease(token, fileVersion, file!, releaseNotes.title, releaseNotes.items);
         setFile(undefined);
         setFeedback(`Версия ${fileVersion} загружена, но ещё не опубликована.`);
       })}>{busy ? "Загрузка…" : `Загрузить версию ${fileVersion}`}</Button> : null}
@@ -97,7 +98,7 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
       <strong>2. Опубликовать после проверки</strong>
       <p>Клиенты смогут скачать опубликованную версию. Принудительная блокировка включается отдельно.</p>
       {releases.filter((release) => !release.publishedAt).map((release) => <div key={release.version} className="desktop-update-release">
-        <span>{release.version} · {(release.sizeBytes / 1024 / 1024).toFixed(1)} МиБ</span>
+        <span>{release.version} · {release.title} · {(release.sizeBytes / 1024 / 1024).toFixed(1)} МиБ</span>
         <Button size="small" disabled={busy} onClick={() => { setSelectedVersion(release.version); setConfirmation("publish"); }}>Опубликовать</Button>
       </div>)}
       {releases.every((release) => release.publishedAt) ? <small>Неопубликованных сборок нет.</small> : null}
