@@ -1180,6 +1180,8 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
 
     expect(await screen.findByText("Создана из сообщения · связь сохранена")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть уведомление" }));
+    expect(screen.queryByText("Создана из сообщения · связь сохранена")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Новая задача" })).not.toBeInTheDocument();
     expect(screen.getAllByText("Проверить счёт из переписки").length).toBeGreaterThan(0);
   });

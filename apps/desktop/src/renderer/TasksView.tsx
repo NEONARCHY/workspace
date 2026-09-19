@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
@@ -28,6 +28,7 @@ import {
   Add24Regular,
   Calendar24Regular,
   Delete24Regular,
+  Dismiss16Regular,
   Edit24Regular,
   Search20Regular,
   Money24Regular,
@@ -181,6 +182,10 @@ export function TasksView(props: TasksViewProps) {
   const [roleFilter, setRoleFilter] = useState("all");
   const [selectedId, updateSelectedId] = useState(focusTaskId ?? tasks[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusTaskId));
+  const [sourceNoticeTaskId, setSourceNoticeTaskId] = useState<string | null>(() => {
+    const initialTask = tasks.find((task) => task.id === focusTaskId);
+    return initialTask?.sourceMessageId ? initialTask.id : null;
+  });
   const setSelectedId = (id: string) => {
     if (id !== selectedId) {
       setEditing(false); setCreatingApproval(false); setCycleEditing(false); setDateError("");
@@ -188,7 +193,9 @@ export function TasksView(props: TasksViewProps) {
       setEfficiencyAction(""); setEfficiencyReasonText("");
       setResultText(""); setCreatingSubtask(false); setSubtaskTitle(""); setSubtaskDueAt("");
     }
-    updateSelectedId(id); setDetailOpen(true);
+    updateSelectedId(id);
+    setSourceNoticeTaskId(tasks.find((task) => task.id === id)?.sourceMessageId ? id : null);
+    setDetailOpen(true);
   };
   const [dateError, setDateError] = useState("");
   const [creating, setCreating] = useState(false);
@@ -253,6 +260,13 @@ export function TasksView(props: TasksViewProps) {
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
+  useEffect(() => {
+    if (!sourceNoticeTaskId) return undefined;
+    const timer = window.setTimeout(() => setSourceNoticeTaskId((current) => (
+      current === sourceNoticeTaskId ? null : current
+    )), 4000);
+    return () => window.clearTimeout(timer);
+  }, [sourceNoticeTaskId]);
   const currentUser = people.find((person) => person.id === currentUserId);
   const privileged = ["manager", "admin", "superadmin"].includes(currentUser?.role ?? "");
   const coAssignee = selectedTask?.participants.some((item) => item.userId === currentUserId && item.role === "co_assignee") ?? false;
@@ -512,7 +526,10 @@ export function TasksView(props: TasksViewProps) {
         <Button className="compact-back" appearance="subtle" onClick={() => setDetailOpen(false)}>К списку задач</Button>
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
         <div className="task-detail-heading"><div><div className="detail-kicker">{selectedTask.project}</div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}{canDelete ? <Button className="task-delete-button" appearance="subtle" icon={<Delete24Regular />} disabled={deleting} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить"}</Button> : null}</div></div>
-        {selectedTask.sourceMessageId ? <div className="source-link-note">Создана из сообщения · связь сохранена</div> : null}
+        {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <div className="source-link-note" role="status">
+          <span>Создана из сообщения · связь сохранена</span>
+          <button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button>
+        </div> : null}
         <div className="detail-meta"><div><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></div><div><Calendar24Regular /><span><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
         <div className="task-lifecycle-summary"><span>Статус</span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
         <ol className="task-journey" aria-label="Маршрут задачи">

@@ -266,7 +266,10 @@ button { -webkit-tap-highlight-color: transparent; }
 .task-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 24px 22px; overflow-y: auto; border-left: 1px solid #d8dee7; background: #ffffff; }
 .detail-kicker { margin-bottom: 7px; color: var(--ws-link, #0f6cbd); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; }
 .task-detail h2 { margin-bottom: 22px; font-size: 19px; line-height: 1.35; }
-.source-link-note { margin: -14px 0 18px; padding: 7px 9px; border-radius: 7px; color: #17496d; background: #edf6fc; font-size: 12px; }
+.source-link-note { display: flex; align-items: center; gap: 8px; margin: -14px 0 18px; padding: 6px 7px 6px 9px; border-radius: 7px; color: #17496d; background: #edf6fc; font-size: 12px; }
+.source-link-note > span { min-width: 0; flex: 1; }
+.source-link-note > button { display: grid; width: 26px; height: 26px; flex: none; padding: 0; place-items: center; border: 0; border-radius: 7px; color: #356982; background: transparent; cursor: pointer; }
+.source-link-note > button:hover { color: #17496d; background: rgb(23 73 109 / 8%); }
 .detail-meta { display: grid; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid #e1e6ec; }
 .detail-meta > div { display: flex; align-items: center; gap: 10px; color: #506579; }
 .detail-meta > div > span { display: grid; gap: 2px; }
