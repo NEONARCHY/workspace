@@ -2284,9 +2284,12 @@ async def load_workspace(
     )
     accessible_chat_ids = member_chat_ids
     if current_user.role in {"manager", "admin", "superadmin"}:
+        leadership_contexts = ["project", "trip"]
+        if current_user.role in {"admin", "superadmin"}:
+            leadership_contexts.append("task")
         accessible_chat_ids = select(chats.c.id).where(
             chats.c.id.in_(member_chat_ids)
-            | chats.c.context_type.in_(["project", "trip"])
+            | chats.c.context_type.in_(leadership_contexts)
         )
     chat_rows = (
         (

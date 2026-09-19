@@ -104,8 +104,16 @@ async def chat_access(
     if (
         chat is not None
         and member is None
-        and user.role in {"manager", "admin", "superadmin"}
-        and chat["context_type"] in {"project", "trip"}
+        and (
+            (
+                user.role in {"manager", "admin", "superadmin"}
+                and chat["context_type"] in {"project", "trip"}
+            )
+            or (
+                user.role in {"admin", "superadmin"}
+                and chat["context_type"] == "task"
+            )
+        )
     ):
         member = cast(Record, {
             "chat_id": chat_id,

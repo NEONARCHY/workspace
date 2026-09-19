@@ -38,6 +38,9 @@ Each task card contains:
   while an audit event records who deleted the root task.
 - Chat membership consists of the author, current assignee, co-assignees and
   observers. Managerial task visibility alone does not reveal the conversation.
+  Workspace administrators and superadministrators have permanent read access to
+  every managed task chat without being added to its participant list; ordinary
+  managers still need task participation.
 
 Task creation and each generated recurrence create exactly one `kind=task` chat in
 the same transaction. The partial unique index on `(context_type, context_id)` makes
