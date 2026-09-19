@@ -208,6 +208,7 @@ export interface ChatSummary {
   readonly title: string;
   readonly kind: "direct" | "group" | "department" | "project" | "task" | "approval";
   readonly contextType?: string | null;
+  readonly contextId?: string | null;
   readonly preview: string;
   readonly time: string;
   readonly unread: number;

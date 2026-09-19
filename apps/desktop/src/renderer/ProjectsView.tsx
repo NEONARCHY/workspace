@@ -51,6 +51,7 @@ interface ProjectsViewProps {
     comment?: string,
   ) => Promise<WorkspaceProject | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
+  readonly focusProjectId?: string;
 }
 
 interface ProjectFormState {
@@ -128,9 +129,9 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat }: ProjectsViewProps) {
-  const [selectedId, updateSelectedId] = useState(projects[0]?.id ?? "");
-  const [detailOpen, setDetailOpen] = useState(false);
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId }: ProjectsViewProps) {
+  const [selectedId, updateSelectedId] = useState(focusProjectId ?? projects[0]?.id ?? "");
+  const [detailOpen, setDetailOpen] = useState(Boolean(focusProjectId));
   const [failureId, setFailureId] = useState<string>();
   const setSelectedId = (id: string) => { updateSelectedId(id); setDetailOpen(true); };
   const [form, setForm] = useState<ProjectFormState>(() => emptyForm(currentUser.id));

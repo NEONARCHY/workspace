@@ -1701,6 +1701,11 @@ export function App() {
                 onDownloadAttachment={handleDownloadAttachment}
                 onLoadAttachment={handleLoadAttachment}
                 onMarkRead={handleMarkChatRead}
+                onOpenContext={(contextType, contextId) => {
+                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : "trip_approvals";
+                  setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection(section);
+                }}
                 focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
               />
             ) : null}
@@ -1804,6 +1809,7 @@ export function App() {
             ) : null}
             {displayedSection === "projects" ? (
               <ProjectsView
+                key={focusTarget?.section === "projects" ? focusTarget.revision : undefined}
                 projects={workspace.projects}
                 people={workspace.people}
                 currentUser={workspace.currentUser}
@@ -1811,6 +1817,7 @@ export function App() {
                 onUpdate={handleUpdateProject}
                 onMove={handleMoveProject}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
+                focusProjectId={focusTarget?.section === "projects" ? focusTarget.entityId : undefined}
               />
             ) : null}
             {displayedSection === "trip_approvals" ? (

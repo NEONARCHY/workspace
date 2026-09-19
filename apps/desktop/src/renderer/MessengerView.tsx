@@ -81,6 +81,7 @@ export interface MessengerViewProps {
   ) => void | Promise<void>;
   readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
+  readonly onOpenContext?: (contextType: "task" | "project" | "trip", contextId: string) => void;
 }
 
 function MessageContextMenu({
@@ -145,6 +146,7 @@ function Conversation({
   onBack,
   personalPreferences,
   onPersonalChat,
+  onOpenContext,
   embedded = false,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
@@ -349,6 +351,9 @@ function Conversation({
           </div>
         </div>
         {!embedded ? <div className="conversation-header-actions">
+          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "trip", chat.contextId!)}>
+            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "project" ? "Открыть проект" : "Открыть поездку"}
+          </Button> : null}
           <Button {...restoreFocusTarget} onClick={onManage}>
             {chat.kind === "group" ? "Участники и права" : "Участники"}
           </Button>

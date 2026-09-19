@@ -1,6 +1,6 @@
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -49,6 +49,11 @@ FULL_PERMISSIONS = ChatPermissions(
     edit_info=True,
     manage_messages=True,
 )
+CONTEXT_LEADERSHIP_PERMISSIONS = ChatPermissions(
+    send_messages=True,
+    upload_files=True,
+    manage_messages=True,
+)
 REACTION_EMOJIS = (
     "👍", "😄", "❤️", "🤝", "👏", "💔", "😔", "🔥", "👎", "🥳", "🤔", "🤯", "😱", "😡",
     "🎉", "🤩", "🤢", "💩", "🙏", "👌", "🐇", "🤡", "😭", "😌", "✅", "💯", "❗", "😂",
@@ -84,7 +89,7 @@ async def chat_access(
     if lock:
         statement = statement.with_for_update()
     chat = (await connection.execute(statement)).mappings().first()
-    member = (
+    member: Record | None = (
         (
             await connection.execute(
                 select(chat_members).where(
@@ -96,6 +101,18 @@ async def chat_access(
         .mappings()
         .first()
     )
+    if (
+        chat is not None
+        and member is None
+        and user.role in {"manager", "admin", "superadmin"}
+        and chat["context_type"] in {"project", "trip"}
+    ):
+        member = cast(Record, {
+            "chat_id": chat_id,
+            "user_id": user.id,
+            "member_role": "member",
+            "permissions": CONTEXT_LEADERSHIP_PERMISSIONS.model_dump(),
+        })
     # Workspace-level admins are not implicitly members of a private conversation.
     if chat is None or member is None:
         raise WorkspaceRepositoryError(404, "Чат недоступен")
@@ -211,6 +228,7 @@ async def chat_summary(
         description=chat["description"] or "",
         kind=chat["kind"],
         context_type=chat["context_type"],
+        context_id=str(chat["context_id"]) if chat["context_id"] else None,
         owner_id=next((str(m["user_id"]) for m in members if m["member_role"] == "owner"), None),
         can_delete=(
             membership["member_role"] == "owner"

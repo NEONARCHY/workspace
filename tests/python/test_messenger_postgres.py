@@ -25,6 +25,7 @@ from yuksalish_api.repository import (
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.settings import Settings
 from yuksalish_api.tables import (
+    chats,
     message_reactions,
     message_versions,
     messages,
@@ -101,6 +102,16 @@ async def exercise_permissions(url: str) -> None:
                 with pytest.raises(WorkspaceRepositoryError) as denied:
                     await service.chat_summary(connection, admin, group_id)
                 assert denied.value.status_code == 404
+                project_chat_id = await connection.scalar(
+                    select(chats.c.id).where(chats.c.context_type == "project")
+                )
+                assert project_chat_id is not None
+                project_chat = await service.chat_summary(connection, admin, project_chat_id)
+                assert project_chat.context_type == "project"
+                assert project_chat.context_id is not None
+                admin_workspace = await load_workspace(connection, admin)
+                assert project_chat.id in {chat.id for chat in admin_workspace.chats}
+                assert str(group_id) not in {chat.id for chat in admin_workspace.chats}
                 with pytest.raises(WorkspaceRepositoryError):
                     await service.create_chat(
                         connection,

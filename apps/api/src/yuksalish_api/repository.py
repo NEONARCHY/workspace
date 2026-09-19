@@ -2276,9 +2276,15 @@ async def load_workspace(
     )
     published_payment_template = await _published_payment_template(connection)
 
-    accessible_chat_ids = select(chat_members.c.chat_id).where(
+    member_chat_ids = select(chat_members.c.chat_id).where(
         chat_members.c.user_id == current_user.id
     )
+    accessible_chat_ids = member_chat_ids
+    if current_user.role in {"manager", "admin", "superadmin"}:
+        accessible_chat_ids = select(chats.c.id).where(
+            chats.c.id.in_(member_chat_ids)
+            | chats.c.context_type.in_(["project", "trip"])
+        )
     chat_rows = (
         (
             await connection.execute(

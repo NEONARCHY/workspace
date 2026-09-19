@@ -91,6 +91,17 @@ describe("Private messenger", () => {
     expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).not.toBeInTheDocument();
   });
 
+  it("opens the source object from a linked chat", () => {
+    const onOpenContext = vi.fn();
+    renderMessenger({
+      chats: [{ ...initialChats[0]!, contextType: "project", contextId: "project-1" }],
+      messages: [],
+      onOpenContext,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
+    expect(onOpenContext).toHaveBeenCalledWith("project", "project-1");
+  });
+
   it("exposes chat deletion in the row menu and delays it for undo", async () => {
     vi.useFakeTimers();
     const chatActions = actions();

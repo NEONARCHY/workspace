@@ -123,6 +123,7 @@ class ChatSummaryResponse(ApiModel):
     title: str
     kind: Literal["direct", "group", "department", "project", "task", "approval"]
     context_type: str | None = None
+    context_id: str | None = None
     preview: str
     time: str
     unread: int
