@@ -384,8 +384,18 @@
   border-top: 1px solid rgb(40 75 88 / 9%);
 }
 
+.messenger-view .conversation-pane {
+  container-name: messenger-conversation;
+  container-type: inline-size;
+}
+
 .messenger-view .voice-recorder-ready {
-  grid-template-columns: minmax(170px, 220px) minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) auto;
+}
+
+.messenger-view .voice-preview,
+.messenger-view .voice-preview .voice-player {
+  min-width: 0;
 }
 
 .messenger-view .voice-message {
@@ -412,6 +422,45 @@
 
 @media (hover: none) {
   .messenger-view .message-actions { position: static; opacity: 1; pointer-events: auto; transform: none; transition-delay: 0s; }
+}
+
+@container messenger-conversation (max-width: 780px) {
+  .voice-recorder,
+  .voice-recorder-ready {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .voice-recorder-ready .voice-recorder-state {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .voice-recorder-ready .voice-recorder-actions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .voice-recorder-ready .voice-preview {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@container messenger-conversation (max-width: 520px) {
+  .voice-recorder,
+  .voice-recorder-ready {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .voice-recorder-ready .voice-recorder-state,
+  .voice-recorder-ready .voice-preview,
+  .voice-recorder-ready .voice-recorder-actions {
+    grid-column: 1;
+  }
+
+  .voice-recorder-ready .voice-recorder-state { grid-row: 1; }
+  .voice-recorder-ready .voice-preview { grid-row: 2; }
+  .voice-recorder-ready .voice-recorder-actions { grid-row: 3; }
 }
 
 @media (prefers-reduced-motion: reduce) {
