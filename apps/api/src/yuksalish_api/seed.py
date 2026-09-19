@@ -999,6 +999,23 @@ async def seed_demo_data(
                 ],
             ],
         )
+        seeded_process_templates = (
+            (
+                await connection.execute(
+                    select(
+                        approval_templates.c.id,
+                        approval_templates.c.template_key,
+                        approval_templates.c.version,
+                    ).where(approval_templates.c.template_key.in_(("project", "trip")))
+                )
+            )
+            .mappings()
+            .all()
+        )
+        process_template_ids = {
+            (row["template_key"], row["version"]): row["id"]
+            for row in seeded_process_templates
+        }
         await connection.execute(
             update(approval_templates)
             .where(
