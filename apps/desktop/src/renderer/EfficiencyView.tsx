@@ -180,7 +180,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
 
   return <div className="efficiency-view">
     <div className="eff-commandbar compact" aria-label="Настройки периода эффективности">
-      <label><span>Период</span><WorkspaceSelect aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</WorkspaceSelect></label>
+      <label className="eff-period-control"><span>Период</span><WorkspaceSelect aria-label="Период эффективности" value={overview.period} onChange={(event) => void onPeriodChange(event.target.value)}>{monthOptions().map((period) => <option key={period} value={period}>{monthLabel(period)}</option>)}</WorkspaceSelect></label>
       <Button className="eff-help-button" appearance="secondary" aria-haspopup="dialog" aria-expanded={helpOpen} onClick={() => setHelpOpen(true)}>?</Button>
     </div>
     {error ? <div className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</div> : null}

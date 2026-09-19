@@ -400,6 +400,9 @@ button { -webkit-tap-highlight-color: transparent; }
 .eff-commandbar > div strong { font-size: 14px; font-weight: 720; letter-spacing: -.01em; }
 .eff-commandbar > div span, .eff-commandbar label > span { color: #718397; font-size: 11px; }
 .eff-commandbar label { display: flex; align-items: center; gap: 8px; }
+.eff-commandbar .eff-period-control { display: grid; grid-template-columns: max-content minmax(164px, 184px); align-items: center; gap: 10px; }
+.eff-commandbar .eff-period-control > span { min-width: max-content; white-space: nowrap; }
+.app-provider .eff-commandbar .eff-period-control .workspace-select.workspace-select { width: 100%; min-width: 164px; }
 .eff-commandbar select { min-height: 34px; padding: 5px 32px 5px 11px; border: 1px solid #bfd0dc; border-radius: 9px; color: #274157; background: #fff; text-transform: capitalize; transition: border-color 160ms ease, box-shadow 160ms ease; }
 .eff-commandbar select:hover { border-color: #8eafbf; }
 .eff-commandbar select:focus-visible { outline: 0; border-color: #13889a; box-shadow: 0 0 0 3px rgb(19 136 154 / 13%); }
@@ -1346,6 +1349,8 @@ button { -webkit-tap-highlight-color: transparent; }
   .eff-commandbar label { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; padding-bottom: 8px; }
   .eff-commandbar.compact { grid-template-columns: minmax(0, 1fr) 34px; }
   .eff-commandbar.compact label { grid-column: auto; grid-row: auto; padding-bottom: 0; }
+  .eff-commandbar.compact .eff-period-control { grid-template-columns: max-content minmax(150px, 1fr); }
+  .app-provider .eff-commandbar .eff-period-control .workspace-select.workspace-select { min-width: 150px; }
   .eff-commandbar select { min-width: 180px; }
   .eff-overview-grid { grid-template-columns: minmax(0, 1fr); }
   .eff-summary-lead { grid-template-columns: minmax(0, 1fr); justify-items: center; }
