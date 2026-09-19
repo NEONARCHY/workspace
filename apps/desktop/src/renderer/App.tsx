@@ -42,6 +42,7 @@ import type {
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
 import { moduleKeys } from "@yuksalish/contracts";
+import { setInterfaceLocale } from "@yuksalish/i18n";
 import {
   Button,
   FluentProvider,
@@ -100,6 +101,7 @@ import {
   acceptInvitation,
   acceptWorkspaceTaskResult,
   changePersonalChat,
+  changeInterfaceLocale,
   reorderPinnedChats,
   reorderNavigation,
   actOnWorkspaceTripRequest,
@@ -681,6 +683,8 @@ export function App() {
       throw error;
     }
   };
+
+  useEffect(() => setInterfaceLocale(workspace.personalPreferences.locale), [workspace.personalPreferences.locale]);
 
   const uploadFiles = async (
     ownerType: "message" | "task" | "approval_request" | "absence",
@@ -1937,6 +1941,8 @@ export function App() {
         <AccountPanel
           token={session.accessToken}
           user={workspace.currentUser}
+          locale={workspace.personalPreferences.locale}
+          onLocaleChange={(locale) => personalMutation((token) => changeInterfaceLocale(token, locale, workspace.personalPreferences.revision))}
           onClose={closeAccount}
           initialSection={accountInvite ? "invite" : undefined}
           onLogout={() => void handleLogout()}

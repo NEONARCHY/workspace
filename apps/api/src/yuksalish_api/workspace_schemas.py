@@ -1215,7 +1215,14 @@ class PersonalPreferencesResponse(ApiModel):
     pinned_chat_ids: list[str] = Field(default_factory=list)
     archived_chat_ids: list[str] = Field(default_factory=list)
     navigation_order: list[NavigationKey] = Field(default_factory=lambda: list(DEFAULT_NAVIGATION))
+    locale: Literal["ru", "uz_cyrl", "uz_latn"] = "ru"
     revision: int = 0
+
+
+class InterfaceLocaleUpdate(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    locale: Literal["ru", "uz_cyrl", "uz_latn"]
+    revision: int = Field(ge=0)
 
 
 class PersonalChatAction(ApiModel):

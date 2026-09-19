@@ -10,6 +10,7 @@ from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.workspace_schemas import (
+    InterfaceLocaleUpdate,
     NavigationOrder,
     PersonalChatAction,
     PersonalPreferencesResponse,
@@ -74,6 +75,21 @@ async def reorder_navigation(
 ) -> PersonalPreferencesResponse:
     try:
         result = await service.reorder_navigation(connection, user, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request, user)
+    return result
+
+
+@router.put("/locale", response_model=PersonalPreferencesResponse)
+async def change_locale(
+    payload: InterfaceLocaleUpdate,
+    user: User,
+    connection: Connection,
+    request: Request,
+) -> PersonalPreferencesResponse:
+    try:
+        result = await service.change_locale(connection, user, payload)
     except WorkspaceRepositoryError as error:
         raise HTTPException(error.status_code, error.detail) from error
     await changed(connection, request, user)

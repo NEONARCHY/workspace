@@ -8,6 +8,7 @@ import type {
   TotpSetup,
   WorkspacePerson,
   WorkspacePosition,
+  InterfaceLocale,
 } from "@yuksalish/contracts";
 import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
 import { Camera24Regular, Dismiss24Regular } from "@fluentui/react-icons";
@@ -38,9 +39,11 @@ interface AccountPanelProps {
   readonly onClose: () => void;
   readonly onLogout: () => void;
   readonly onAvatarChanged?: (avatarVersion: string) => void;
+  readonly locale?: InterfaceLocale;
+  readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection }: AccountPanelProps) {
+export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   useModalFocus(panelRef, true, onClose);
   const inviteRef = useRef<HTMLElement>(null);
@@ -72,6 +75,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [resetTotp, setResetTotp] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [localeBusy, setLocaleBusy] = useState(false);
   const jumpToSection = (selector: string) => {
     const section = panelRef.current?.querySelector<HTMLElement>(selector);
     section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
@@ -221,6 +225,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
           <button type="button" onClick={() => jumpToSection(".audio-device-settings")}>Звук</button>
+          <button type="button" onClick={() => jumpToSection("[data-account-section=language]")}>Язык</button>
           <button type="button" onClick={() => jumpToSection("[data-account-section=security]")}>Защита</button>
           <button type="button" onClick={() => jumpToSection("[data-account-section=password]")}>Пароль</button>
           <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
@@ -252,6 +257,26 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   .finally(() => setAvatarBusy(false));
               }} />
           </label>
+        </section>
+
+        <section className="account-section" data-account-section="language">
+          <div className="account-section-title"><div>
+            <h3>Язык интерфейса</h3>
+            <p>Выберите язык интерфейса. Настройка сохранится для всех ваших устройств.</p>
+          </div></div>
+          <Field label="Язык">
+            <Select value={locale} disabled={localeBusy} onChange={(event) => {
+              const nextLocale = event.target.value as InterfaceLocale;
+              setLocaleBusy(true);
+              void (onLocaleChange?.(nextLocale) ?? Promise.resolve())
+                .catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось сменить язык"))
+                .finally(() => setLocaleBusy(false));
+            }}>
+              <option value="ru">Русский</option>
+              <option value="uz_cyrl">Ўзбекча</option>
+              <option value="uz_latn">O‘zbekcha</option>
+            </Select>
+          </Field>
         </section>
 
         <AudioDeviceSettings />

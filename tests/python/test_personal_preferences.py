@@ -15,6 +15,7 @@ from yuksalish_api.settings import Settings
 from yuksalish_api.tables import personal_preferences
 from yuksalish_api.workspace_schemas import (
     DEFAULT_NAVIGATION,
+    InterfaceLocaleUpdate,
     NavigationOrder,
     PersonalChatAction,
     PinnedChatOrder,
@@ -31,6 +32,8 @@ def test_personal_payloads_reject_unknown_fields_duplicates_and_missing_modules(
             NavigationOrder.model_validate({"order": order, "revision": 0})
     with pytest.raises(ValidationError):
         PersonalChatAction.model_validate({"action": "archive", "userId": str(uuid4())})
+    with pytest.raises(ValidationError):
+        InterfaceLocaleUpdate.model_validate({"locale": "en", "revision": 0})
 
 
 async def exercise_personal_preferences(url: str) -> None:
@@ -159,7 +162,14 @@ async def exercise_personal_preferences(url: str) -> None:
             json={"order": DEFAULT_NAVIGATION[::-1], "revision": restored["revision"]},
         )
         assert nav.status_code == 200, nav.text
-        assert (await client.get(base, headers=await login("dilshod"))).json() == nav.json()
+        localized = await client.put(
+            f"{base}/locale",
+            headers=owner,
+            json={"locale": "uz_latn", "revision": nav.json()["revision"]},
+        )
+        assert localized.status_code == 200, localized.text
+        assert localized.json()["locale"] == "uz_latn"
+        assert (await client.get(base, headers=await login("dilshod"))).json() == localized.json()
         assert (await client.get(base, headers=peer)).json()[
             "navigationOrder"
         ] == DEFAULT_NAVIGATION

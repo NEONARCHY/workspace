@@ -17,10 +17,13 @@ export type ModuleKey = (typeof moduleKeys)[number];
 export const navigationKeys = [...moduleKeys, "notifications", "settings"] as const;
 export type NavigationKey = (typeof navigationKeys)[number];
 export type PersonalChatAction = "pin" | "unpin" | "archive" | "unarchive";
+export const interfaceLocales = ["ru", "uz_cyrl", "uz_latn"] as const;
+export type InterfaceLocale = (typeof interfaceLocales)[number];
 export interface PersonalPreferences {
   readonly pinnedChatIds: readonly string[];
   readonly archivedChatIds: readonly string[];
   readonly navigationOrder: readonly NavigationKey[];
+  readonly locale: InterfaceLocale;
   readonly revision: number;
 }
 export type ModuleStatus = "placeholder" | "available";

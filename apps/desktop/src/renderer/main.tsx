@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { InterfaceLocalization } from "./InterfaceLocalization";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
 import "./responsive.css";
@@ -44,6 +45,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><App /></RecoveryBoundary>
+    <RecoveryBoundary><InterfaceLocalization /><App /></RecoveryBoundary>
   </StrictMode>,
 );

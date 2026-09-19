@@ -1,7 +1,7 @@
 import { navigationKeys, type NavigationKey, type PersonalPreferences } from "@yuksalish/contracts";
 
 export const defaultPersonalPreferences: PersonalPreferences = {
-  pinnedChatIds: [], archivedChatIds: [], navigationOrder: navigationKeys, revision: 0,
+  pinnedChatIds: [], archivedChatIds: [], navigationOrder: navigationKeys, locale: "ru", revision: 0,
 };
 
 export function normalizeNavigation(order: readonly NavigationKey[]): NavigationKey[] {

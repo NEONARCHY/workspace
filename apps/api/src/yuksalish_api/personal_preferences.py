@@ -7,6 +7,7 @@ from .errors import WorkspaceRepositoryError
 from .tables import chat_members, personal_preferences
 from .workspace_schemas import (
     DEFAULT_NAVIGATION,
+    InterfaceLocaleUpdate,
     NavigationOrder,
     PersonalPreferencesResponse,
     PinnedChatOrder,
@@ -52,6 +53,7 @@ async def get_preferences(
         pinned_chat_ids=pinned,
         archived_chat_ids=archived,
         navigation_order=navigation,
+        locale=row["locale"],
         revision=row["revision"],
     )
 
@@ -134,4 +136,15 @@ async def reorder_navigation(
     value = await get_preferences(connection, user, lock=True)
     check_revision(value, payload.revision)
     value.navigation_order = payload.order
+    return await save_preferences(connection, user, value)
+
+
+async def change_locale(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    payload: InterfaceLocaleUpdate,
+) -> PersonalPreferencesResponse:
+    value = await get_preferences(connection, user, lock=True)
+    check_revision(value, payload.revision)
+    value.locale = payload.locale
     return await save_preferences(connection, user, value)

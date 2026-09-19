@@ -10,6 +10,7 @@ personal_preferences = sa.Table(
     sa.Column("pinned_chat_ids", postgresql.JSONB()),
     sa.Column("archived_chat_ids", postgresql.JSONB()),
     sa.Column("navigation_order", postgresql.JSONB()),
+    sa.Column("locale", sa.String(16)),
     sa.Column("revision", sa.Integer()),
 )
 

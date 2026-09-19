@@ -7,6 +7,7 @@ import type {
   AdministrativeChatInspection,
   PersonalChatAction,
   PersonalPreferences,
+  InterfaceLocale,
   ApprovalRequestSummary,
   AttachmentOwnerType,
   AuthenticationSession,
@@ -152,6 +153,12 @@ export function reorderPinnedChats(token: string, chatIds: readonly string[], re
 export function reorderNavigation(token: string, order: readonly NavigationKey[], revision: number) {
   return apiRequest<PersonalPreferences>("/personal-preferences/navigation", {
     method: "PUT", body: JSON.stringify({ order, revision }),
+  }, token);
+}
+
+export function changeInterfaceLocale(token: string, locale: InterfaceLocale, revision: number) {
+  return apiRequest<PersonalPreferences>("/personal-preferences/locale", {
+    method: "PUT", body: JSON.stringify({ locale, revision }),
   }, token);
 }
 
