@@ -24,9 +24,29 @@ vi.mock("./workspace-api", () => api);
 vi.mock("./AudioDeviceSettings", () => ({ AudioDeviceSettings: () => null }));
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   api.changeOwnPassword.mockReset();
   api.changeUserPassword.mockReset();
+});
+
+it("opens settings from the top-right anchor and finishes the closing animation", async () => {
+  const onClose = vi.fn();
+  render(
+    <FluentProvider theme={webLightTheme}>
+      <AccountPanel token="test-token"
+        user={{ id: "admin-1", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "#0091a8" }}
+        onClose={onClose} onLogout={vi.fn()} />
+    </FluentProvider>,
+  );
+
+  const scrim = document.querySelector(".account-profile-anchor");
+  expect(scrim).toHaveClass("is-opening");
+  expect(screen.getByRole("dialog", { name: "Настройки профиля" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
+  expect(scrim).toHaveClass("is-closing");
+  expect(onClose).not.toHaveBeenCalled();
+  await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
 });
 
 it("uploads a profile avatar and reports the new server version", async () => {

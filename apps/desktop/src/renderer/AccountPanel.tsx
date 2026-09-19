@@ -45,7 +45,20 @@ interface AccountPanelProps {
 
 export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
-  useModalFocus(panelRef, true, onClose);
+  const closeTimerRef = useRef(0);
+  const [closing, setClosing] = useState(false);
+  const requestClose = () => {
+    if (closing) return;
+    window.clearTimeout(closeTimerRef.current);
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      onClose();
+      return;
+    }
+    setClosing(true);
+    closeTimerRef.current = window.setTimeout(onClose, 180);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimerRef.current), []);
+  useModalFocus(panelRef, true, requestClose);
   const inviteRef = useRef<HTMLElement>(null);
   useEffect(() => {
     if (initialSection !== "invite") return;
@@ -205,22 +218,22 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   );
 
   return (
-    <div className="account-scrim" role="presentation" onMouseDown={onClose}>
+    <div className={`account-scrim account-profile-anchor ${closing ? "is-closing" : "is-opening"}`} role="presentation" onMouseDown={requestClose}>
       <aside
         className="account-panel"
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Безопасность аккаунта"}
+        aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Настройки профиля"}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
           <div>
             <span>Настройки</span>
-            <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Аккаунт и безопасность"}</h2>
+            <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Настройки профиля"}</h2>
           </div>
-          <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
+          <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={requestClose} />
         </header>
 
         {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
