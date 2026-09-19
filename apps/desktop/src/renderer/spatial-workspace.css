@@ -149,9 +149,9 @@ body { background: var(--ws-canvas); }
   box-shadow: var(--ws-shadow-lift) !important;
   cursor: grabbing;
   pointer-events: none;
-  transform: translateY(var(--spatial-shift, 0)) rotate(var(--spatial-tilt, 0deg));
+  transform: translate3d(var(--spatial-drift-x, 0), var(--spatial-shift, 0), 0) rotate(var(--spatial-tilt, 0deg)) scale(var(--spatial-stretch-x, 1), var(--spatial-stretch-y, 1));
   transform-origin: 50% 72%;
-  transition: transform 70ms linear;
+  transition: transform 105ms cubic-bezier(.2, 1.45, .35, 1);
 }
 .spatial-card.is-committing { opacity: 1; }
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }

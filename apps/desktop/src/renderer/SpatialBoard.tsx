@@ -81,7 +81,10 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const resetPreviewMotion = () => {
     previousDelta.current = { x: 0, y: 0 };
     previewNode.current?.style.setProperty("--spatial-tilt", "0deg");
+    previewNode.current?.style.setProperty("--spatial-drift-x", "0px");
     previewNode.current?.style.setProperty("--spatial-shift", "0px");
+    previewNode.current?.style.setProperty("--spatial-stretch-x", "1");
+    previewNode.current?.style.setProperty("--spatial-stretch-y", "1");
   };
   const finish = ({ active: picked, over: target }: DragEndEvent) => {
     const id = String(picked.id), lane = target ? String(target.id) : null;
@@ -163,11 +166,15 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
         previousDelta.current = delta;
         window.cancelAnimationFrame(motionFrame.current);
         motionFrame.current = window.requestAnimationFrame(() => {
-          previewNode.current?.style.setProperty("--spatial-tilt", `${Math.max(-3.2, Math.min(3.2, velocityX * 0.42))}deg`);
-          previewNode.current?.style.setProperty("--spatial-shift", `${Math.max(-2, Math.min(2, velocityY * 0.18))}px`);
+          const speed = Math.min(18, Math.hypot(velocityX, velocityY));
+          previewNode.current?.style.setProperty("--spatial-tilt", `${Math.max(-4.8, Math.min(4.8, velocityX * 0.58))}deg`);
+          previewNode.current?.style.setProperty("--spatial-drift-x", `${Math.max(-3.5, Math.min(3.5, velocityX * 0.24))}px`);
+          previewNode.current?.style.setProperty("--spatial-shift", `${Math.max(-4, Math.min(4, velocityY * 0.28))}px`);
+          previewNode.current?.style.setProperty("--spatial-stretch-x", `${1 + speed * 0.0017}`);
+          previewNode.current?.style.setProperty("--spatial-stretch-y", `${1 - speed * 0.0009}`);
         });
         window.clearTimeout(motionReleaseTimer.current);
-        motionReleaseTimer.current = window.setTimeout(resetPreviewMotion, 90);
+        motionReleaseTimer.current = window.setTimeout(resetPreviewMotion, 115);
       }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
