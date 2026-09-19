@@ -154,6 +154,8 @@ body { background: var(--ws-canvas); }
 .spatial-card-context, .spatial-card-open > small { color: var(--ws-muted); font-size: 11px; }
 .spatial-person { display: flex; align-items: center; gap: 8px; color: var(--ws-muted); font-size: 12px; }
 .project-board, .task-kanban, .approval-kanban { gap: 14px; padding: 12px 4px 16px; background: transparent; align-items: stretch; }
+.middle-pan-surface.is-middle-panning { cursor: grabbing; user-select: none; scroll-behavior: auto; }
+.middle-pan-surface.is-middle-panning * { cursor: grabbing !important; }
 .project-column, .kanban-column, .approval-column { display: flex; flex-direction: column; border: 0; border-radius: 22px; background: #e5eced; box-shadow: none; min-height: 0; }
 .project-stack, .kanban-stack, .approval-column-stack { display: flex; flex-direction: column; flex: 1; }
 .project-column > header, .kanban-column > header, .approval-column > header { padding: 18px 16px 12px; min-height: 56px; color: var(--ws-text); background: transparent; border: 0; border-radius: 0; }

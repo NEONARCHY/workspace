@@ -3,6 +3,7 @@ import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
+import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { Avatar } from "@fluentui/react-components";
 
@@ -130,6 +131,7 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
 }
 
 export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId }: ProjectsViewProps) {
+  const boardPan = useMiddleMousePan<HTMLDivElement>();
   const [selectedId, updateSelectedId] = useState(focusProjectId ?? projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusProjectId));
   const [failureId, setFailureId] = useState<string>();
@@ -237,7 +239,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       </div>
 
       <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
-      <div className="project-board" aria-label="Стадии проектов">
+      <div className="project-board middle-pan-surface" aria-label="Стадии проектов" {...boardPan}>
         {stages.map((stage) => {
           const items = visibleProjects.filter((project) => project.stage === stage);
           return (

@@ -142,7 +142,7 @@
 .projects-view .project-board,
 .trips-view .trip-kanban {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: min(520px, 58vh);
   gap: 12px;
   padding: 2px 4px 16px;
   scrollbar-gutter: stable;

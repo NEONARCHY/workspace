@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
+import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 
 import type {
@@ -825,6 +826,7 @@ export function ApprovalsView({
   onUploadAttachments,
   onDownloadAttachment,
 }: ApprovalsViewProps) {
+  const boardPan = useMiddleMousePan<HTMLDivElement>();
   const [mode, setMode] = useState<ApprovalMode>("requests");
   const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
   const [edges, setEdges, onEdgesChange] = useEdgesState<ApprovalEdge>(flowEdges(workflow));
@@ -1534,7 +1536,7 @@ export function ApprovalsView({
               && (canManage || request.activeStages.some((stage) => stage.canAct));
             return canAdvance || canManuallyMove;
           }} onMove={moveRequest}>
-          <div className="approval-kanban" aria-label="Доска заявок по стадиям">
+          <div className="approval-kanban middle-pan-surface" aria-label="Доска заявок по стадиям" {...boardPan}>
             {boardColumns.map((column) => {
               const columnRequests = filteredRequests.filter((request) =>
                 requestBoardColumn(request, boardColumns) === column.key,

@@ -11,6 +11,7 @@
     radial-gradient(ellipse 42rem 21rem at 92% -8%, rgb(101 200 197 / 8%), transparent 72%),
     radial-gradient(ellipse 34rem 18rem at 36% -12%, rgb(202 215 241 / 7%), transparent 74%),
     transparent;
+  grid-template-rows: auto minmax(0, 1fr);
 }
 .approvals-view .approvals-toolbar {
   min-height: 148px;
