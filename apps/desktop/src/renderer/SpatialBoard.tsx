@@ -84,6 +84,10 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
     window.clearTimeout(motionReleaseTimer.current);
     window.cancelAnimationFrame(motionFrame.current);
   }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle("spatial-drag-active", active !== null);
+    return () => document.documentElement.classList.remove("spatial-drag-active");
+  }, [active]);
   const resetPreviewMotion = () => {
     previousDelta.current = { x: 0, y: 0 };
     previewNode.current?.style.setProperty("--spatial-tilt", "0deg");

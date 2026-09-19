@@ -19,10 +19,12 @@ describe("Spatial object transfer", () => {
     await startSpatialDrag(card, next);
     expect(document.querySelector(".spatial-drag-preview")).not.toBeNull();
     expect(card).toHaveClass("is-lifted");
+    expect(document.documentElement).toHaveClass("spatial-drag-active");
     expect(next).toHaveClass("is-target");
     expect(document.querySelector('[data-spatial-lane="closed"]')).not.toHaveClass("is-receptive");
     expect(document.querySelector('[draggable="true"]')).toBeNull();
     fireEvent.keyDown(document, { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(document.documentElement).not.toHaveClass("spatial-drag-active"));
     expect(onMove).not.toHaveBeenCalled();
   });
   it("shows restrained feedback over an unavailable destination and never executes it", async () => {

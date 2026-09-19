@@ -125,7 +125,8 @@ body { background: var(--ws-canvas); }
 }
 .spatial-card { position: relative; flex: none; touch-action: pan-y; }
 .spatial-card.is-draggable, .spatial-card.is-draggable .spatial-card-open, .spatial-card.is-draggable .approval-card-open { cursor: grab; }
-.spatial-card.is-draggable:active, .spatial-card.is-draggable:active .spatial-card-open, .spatial-card.is-draggable:active .approval-card-open { cursor: grabbing; }
+.spatial-card.is-draggable:active, .spatial-card.is-draggable:active .spatial-card-open, .spatial-card.is-draggable:active .approval-card-open { cursor: grab; }
+html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; }
 .spatial-card.is-lifted {
   opacity: .28;
   outline: 1px dashed #72959b;
@@ -134,7 +135,7 @@ body { background: var(--ws-canvas); }
 }
 .spatial-grip { position: absolute; top: 9px; right: 6px; display: grid; place-items: center; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 9px; color: #557781; background: transparent; opacity: 0; pointer-events: none; cursor: grab; touch-action: none; transition: opacity 140ms var(--ws-ease-out); }
 .spatial-card:hover .spatial-grip, .spatial-card:focus-within .spatial-grip { opacity: 1; pointer-events: auto; }
-.spatial-grip:active { cursor: grabbing; }
+.spatial-grip:active { cursor: grab; }
 .spatial-drop-marker {
   position: absolute;
   z-index: 5;
@@ -163,7 +164,7 @@ body { background: var(--ws-canvas); }
 .spatial-drag-preview {
   box-sizing: border-box;
   box-shadow: var(--ws-shadow-lift) !important;
-  cursor: grabbing;
+  cursor: grab;
   pointer-events: none;
   transform: translate3d(var(--spatial-drift-x, 0), var(--spatial-shift, 0), 0) rotate(var(--spatial-tilt, 0deg)) scale(var(--spatial-stretch-x, 1), var(--spatial-stretch-y, 1));
   transform-origin: 50% 72%;
