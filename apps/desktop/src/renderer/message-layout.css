@@ -60,9 +60,9 @@
 .voice-message-error { grid-column: 1 / -1; color: #9c1827; font-size: 11px; }
 
 .voice-recorder { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 360px) auto; align-items: center; gap: 12px; flex: none; padding: 12px 20px; border-top: 1px solid #b8dfe4; background: #f4fbfc; box-shadow: 0 -8px 22px rgb(41 58 85 / 5%); }
-.voice-recorder-ready { grid-template-columns: minmax(260px, 420px) minmax(160px, 1fr) auto; }
-.voice-recorder-ready .voice-preview { grid-column: 1; grid-row: 1; }
-.voice-recorder-ready .voice-recorder-state { grid-column: 2; grid-row: 1; }
+.voice-recorder-ready { grid-template-columns: minmax(170px, 220px) minmax(260px, 1fr) auto; }
+.voice-recorder-ready .voice-recorder-state { grid-column: 1; grid-row: 1; }
+.voice-recorder-ready .voice-preview { grid-column: 2; grid-row: 1; }
 .voice-recorder-state { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .voice-recorder-state > div { display: grid; min-width: 0; gap: 2px; }
 .voice-recorder-state strong { color: var(--ws-navy); font-size: 13px; }

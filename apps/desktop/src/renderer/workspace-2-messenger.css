@@ -448,6 +448,10 @@
   border-top: 1px solid rgb(40 75 88 / 9%);
 }
 
+.messenger-view .voice-recorder-ready {
+  grid-template-columns: minmax(170px, 220px) minmax(320px, 1fr) auto;
+}
+
 .messenger-view .voice-message {
   min-width: min(330px, 62vw);
   padding: 5px 0 2px;
