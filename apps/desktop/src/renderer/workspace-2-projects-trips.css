@@ -277,6 +277,16 @@
 .projects-view .bp7-actions > button[data-stage="approval"]:is(:hover, :focus-visible) { border-color: #61b9c3; color: #075d69; background: #def3f4; box-shadow: 0 7px 16px -13px rgb(7 93 105 / 58%); }
 .projects-view .bp7-actions > button[data-stage="success"]:is(:hover, :focus-visible) { border-color: #73bd91; color: #17663a; background: #e1f5e8; box-shadow: 0 7px 16px -13px rgb(23 102 58 / 58%); }
 .projects-view .bp7-actions > button[data-stage="failure"]:is(:hover, :focus-visible) { border-color: #db858a; color: #92383e; background: #fde7e9; box-shadow: 0 7px 16px -13px rgb(146 56 62 / 58%); }
+.trip-view .bp7-actions > button { transition: color 160ms var(--ws-ease), background-color 160ms var(--ws-ease), border-color 160ms var(--ws-ease), box-shadow 180ms var(--ws-ease), transform 150ms var(--ws-ease); }
+.trip-view .bp7-actions > button:is(:hover, :focus-visible) { transform: translateY(-1px); }
+.trip-view .trip-decision-action.action-approve:is(:hover, :focus-visible), .trip-view .trip-decision-action.action-submit:is(:hover, :focus-visible), .trip-view .trip-decision-action.action-resubmit:is(:hover, :focus-visible) { color: #fff; background: #20745f; border-color: #20745f; box-shadow: 0 7px 17px -11px rgb(32 116 95 / 72%); }
+.trip-view .trip-decision-action.action-return:is(:hover, :focus-visible) { color: #704413; background: #fff0d7; border-color: #ddb36e; }
+.trip-view .trip-decision-action.action-reject:is(:hover, :focus-visible) { color: #8b2733; background: #ffe8e9; border-color: #db858a; }
+.trip-view .bp7-actions > button[data-stage="launch"]:is(:hover, :focus-visible) { color: #31546a; background: #eaf2f5; border-color: #9db7c5; }
+.trip-view .bp7-actions > button[data-stage="manager_approval"]:is(:hover, :focus-visible) { color: #4b568d; background: #eeeffb; border-color: #929bd0; }
+.trip-view .bp7-actions > button[data-stage="hr_review"]:is(:hover, :focus-visible) { color: #075d69; background: #def3f4; border-color: #61b9c3; }
+.trip-view .bp7-actions > button[data-stage="approved"]:is(:hover, :focus-visible) { color: #17663a; background: #e1f5e8; border-color: #73bd91; }
+.trip-view .bp7-actions > button[data-stage="rejected"]:is(:hover, :focus-visible) { color: #92383e; background: #fde7e9; border-color: #db858a; }
 .project-budget-detail { display: grid; grid-template-columns: 1fr auto; gap: 8px 14px; margin: 16px 0; padding: 16px; border-radius: 17px; background: linear-gradient(110deg, #e4f3ee, #edf4f5 58%, #eff2f8); color: #45616e; font-size: 12px; }
 .project-budget-detail > span:last-of-type { text-align: right; }
 .project-budget-detail > .budget-progress { grid-column: 1 / -1; margin: 0; }
