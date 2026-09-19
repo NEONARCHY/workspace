@@ -32,4 +32,17 @@ describe("ProcessWorkflowDesigner", () => {
       nodes: expect.arrayContaining([expect.objectContaining({ id: "start", label: "Регистрация" })]),
     }));
   });
+
+  it("uses the full graph editor while preserving an independent trip template", async () => {
+    const tripWorkflow: WorkflowDefinition = { ...workflow, id: "trip-draft", name: "Маршрут поездок", formSchema: { process: "trip" } };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ProcessWorkflowDesigner workflow={tripWorkflow} processName="Маршрут поездок" accent="trip" onSave={onSave} onPublish={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Условие" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Параллельные ветки" })).toBeInTheDocument();
+    fireEvent.change(screen.getAllByRole("textbox")[0]!, { target: { value: "Старт поездки" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: "trip-draft", formSchema: { process: "trip" } }));
+  });
 });

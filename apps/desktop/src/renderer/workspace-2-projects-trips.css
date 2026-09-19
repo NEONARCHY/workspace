@@ -32,6 +32,20 @@
 .process-workflow-order { display: flex; gap: 4px; margin-top: 2px; }
 .process-workflow-order .fui-Button { width: 34px; min-width: 34px; }
 
+.process-workflow-graph { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: clamp(560px, calc(100dvh - 250px), 780px); overflow: hidden; border: 1px solid rgb(255 255 255 / 80%); border-radius: 24px; background: linear-gradient(145deg, rgb(255 255 255 / 78%), rgb(235 245 243 / 72%)); }
+.process-workflow-graph.tone-trip { background: linear-gradient(145deg, rgb(255 255 255 / 80%), rgb(236 243 250 / 74%)); }
+.process-workflow-graph-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px 22px; border-bottom: 1px solid var(--ws-line); }
+.process-workflow-graph-toolbar > div:first-child > span { color: var(--ws-link); font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.process-workflow-graph-toolbar h2 { margin: 3px 0; font-size: 22px; }
+.process-workflow-graph-toolbar p { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.process-workflow-graph .workflow-layout { min-height: 0; }
+
+@container workspace (max-width: 760px) {
+  .process-workflow-graph { min-height: 980px; overflow: auto; }
+  .process-workflow-graph-toolbar { align-items: flex-start; flex-direction: column; }
+  .process-workflow-actions { justify-content: flex-start; flex-wrap: wrap; }
+}
+
 /* Shared process cockpit: payments, projects and trips use one predictable hierarchy. */
 .workflow-process-view { --workflow-hero-accent: #65c8c5; --workflow-hero-glow: rgb(101 200 197 / 17%); }
 .projects-view.workflow-process-view { --workflow-hero-accent: #68b8a5; --workflow-hero-glow: rgb(104 184 165 / 18%); }

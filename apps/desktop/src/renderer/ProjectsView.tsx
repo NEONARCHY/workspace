@@ -14,6 +14,7 @@ import type {
   WorkspacePerson,
   WorkspaceProject,
   WorkflowDefinition,
+  WorkflowPosition,
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
@@ -56,6 +57,7 @@ interface ProjectsViewProps {
   readonly onOpenChat?: (chatId: string) => void;
   readonly focusProjectId?: string;
   readonly workflow?: WorkflowDefinition;
+  readonly positions?: readonly WorkflowPosition[];
   readonly canManageWorkflow?: boolean;
   readonly onSaveWorkflow?: (workflow: WorkflowDefinition) => Promise<void> | void;
   readonly onPublishWorkflow?: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition | undefined> | WorkflowDefinition | undefined;
@@ -136,7 +138,7 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId, workflow, canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const [view, setView] = useState<"board" | "designer">("board");
   const [selectedId, updateSelectedId] = useState(focusProjectId ?? projects[0]?.id ?? "");
@@ -232,7 +234,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         ) : null}
       </header>
 
-      {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
+      {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
           <span>Сейчас в работе</span>

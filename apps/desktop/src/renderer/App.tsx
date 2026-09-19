@@ -1847,6 +1847,7 @@ export function App() {
                 people={workspace.people}
                 currentUser={workspace.currentUser}
                 workflow={workspace.projectWorkflow ?? undefined}
+                positions={workspace.positions}
                 canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.projects?.admin ?? true)}
                 onSaveWorkflow={(workflow) => handleSaveProcessWorkflow("projectWorkflow", workflow)}
                 onPublishWorkflow={(workflow) => handlePublishProcessWorkflow("projectWorkflow", workflow)}
@@ -1864,6 +1865,7 @@ export function App() {
                 people={workspace.people}
                 currentUser={workspace.currentUser}
                 workflow={workspace.tripWorkflow ?? undefined}
+                positions={workspace.positions}
                 canManageWorkflow={["admin", "superadmin"].includes(workspace.currentUser.role) && (modulePermissions.trip_approvals?.admin ?? true)}
                 onSaveWorkflow={(workflow) => handleSaveProcessWorkflow("tripWorkflow", workflow)}
                 onPublishWorkflow={(workflow) => handlePublishProcessWorkflow("tripWorkflow", workflow)}

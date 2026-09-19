@@ -5,7 +5,7 @@ import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripDropAction } from "./trip-board";
-import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkspacePerson } from "@yuksalish/contracts";
+import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
@@ -31,6 +31,7 @@ interface TripApprovalsViewProps {
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
   readonly workflow?: WorkflowDefinition;
+  readonly positions?: readonly WorkflowPosition[];
   readonly canManageWorkflow?: boolean;
   readonly onSaveWorkflow?: (workflow: WorkflowDefinition) => Promise<void> | void;
   readonly onPublishWorkflow?: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition | undefined> | WorkflowDefinition | undefined;
@@ -43,7 +44,7 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, workflow, canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -136,7 +137,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
 
-      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
+      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <span>Ожидают действий</span>
