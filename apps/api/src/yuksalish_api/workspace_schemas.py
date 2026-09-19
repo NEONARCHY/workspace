@@ -1198,6 +1198,7 @@ NavigationKey = Literal[
 DEFAULT_NAVIGATION: list[NavigationKey] = [
     "crm",
     "tasks",
+    "team_overview",
     "payment_requests",
     "feed",
     "projects",
