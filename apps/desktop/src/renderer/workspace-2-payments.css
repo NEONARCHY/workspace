@@ -1,6 +1,6 @@
 /* Workspace 2.0, payment-board slice. The stage palette and workflow remain data-driven. */
 .approvals-view {
-  --approval-lane-surface: rgb(238 243 242 / 78%);
+  --approval-lane-surface: rgb(232 239 238 / 88%);
   --approval-lane-surface-active: rgb(235 246 244 / 88%);
   --approval-lane-border: rgb(78 109 118 / 10%);
   --approval-lane-divider: rgb(72 102 111 / 9%);
