@@ -26,6 +26,9 @@ class AccessUser(Protocol):
     @property
     def department_id(self) -> UUID | None: ...
 
+    @property
+    def position_id(self) -> UUID | None: ...
+
 
 def default_permissions(role: str) -> dict[ModuleAction, bool]:
     if role in {"superadmin", "admin"}:
@@ -76,9 +79,13 @@ async def module_permissions_for_user(
     if user.role in {"admin", "superadmin"}:
         return {module_key: default_permissions(user.role) for module_key in MODULE_KEYS}
     department_keys = await _department_ancestry(connection, user.department_id)
+    position_subjects = (
+        [("position", str(user.position_id))] if user.position_id is not None else []
+    )
     subject_pairs = [
         ("role", user.role),
         *(("department", key) for key in department_keys),
+        *position_subjects,
         ("user", str(user.id)),
     ]
     rows = (
@@ -98,9 +105,12 @@ async def module_permissions_for_user(
         for row in rows
     }
     result = {module_key: default_permissions(user.role) for module_key in MODULE_KEYS}
+    if user.role not in {"admin", "superadmin"}:
+        result["team_overview"] = {action: False for action in MODULE_ACTIONS}
     ordered_subjects = [
         ("role", user.role),
         *(("department", key) for key in department_keys),
+        *position_subjects,
         ("user", str(user.id)),
     ]
     for subject_type, subject_key in ordered_subjects:
@@ -138,7 +148,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/members",), "members"),
         (("/feed",), "feed"),
         (("/calendar",), "calendar"),
-        (("/efficiency",), "employees"),
+        (("/efficiency",), "team_overview"),
     )
     module_key = next(
         (

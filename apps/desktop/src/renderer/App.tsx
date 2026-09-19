@@ -50,6 +50,7 @@ import {
 import {
   Alert24Regular,
   ApprovalsApp24Regular,
+  Board24Regular,
   Building24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
@@ -89,6 +90,7 @@ import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
+import { TeamDashboardView } from "./TeamDashboardView";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
@@ -211,8 +213,24 @@ interface WorkspaceState {
 
 const defaultModuleAccess: readonly EffectiveModuleAccess[] = moduleKeys.map((moduleKey) => ({
   moduleKey,
-  permissions: { view: true, create: true, edit: true, approve: true, admin: true },
+  permissions: moduleKey === "team_overview"
+    ? { view: false, create: false, edit: false, approve: false, admin: false }
+    : { view: true, create: true, edit: true, approve: true, admin: true },
 }));
+
+const teamOverviewPositions = new Set([
+  '"Yuksalish" harakati raisi, Qonunchilik palatasi qo\'mita raisi',
+  "Rais birinchi o‘rinbosari – ijrochi direktor",
+  "Rais o‘rinbosari",
+]);
+
+function fallbackModuleAccess(user: WorkspacePerson): readonly EffectiveModuleAccess[] {
+  const mayViewOverview = ["admin", "superadmin"].includes(user.role)
+    || teamOverviewPositions.has(user.jobTitle ?? "");
+  return defaultModuleAccess.map((item) => item.moduleKey === "team_overview"
+    ? { ...item, permissions: { ...item.permissions, view: mayViewOverview } }
+    : item);
+}
 
 const initialWorkspace: WorkspaceState = {
   personalPreferences: defaultPersonalPreferences,
@@ -263,6 +281,7 @@ const navItems: readonly NavItem[] = [
     label: "Задачи",
     icon: <TaskListSquareLtr24Regular />,
   },
+  { key: "team_overview", label: "Обзор команды", icon: <Board24Regular /> },
   {
     key: "payment_requests",
     label: "Заявки на оплату",
@@ -365,7 +384,7 @@ export function App() {
   // Factory stores the reader; it is invoked only after an asynchronous response.
   // eslint-disable-next-line react-hooks/refs
   const [refreshWorkspace] = useState(() => createRefreshQueue(loadWorkspace, (loaded) => {
-    setWorkspace((current) => ({ ...loaded, moduleAccess: loaded.moduleAccess ?? defaultModuleAccess, personalPreferences: current.currentUser.id === loaded.currentUser.id
+    setWorkspace((current) => ({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: current.currentUser.id === loaded.currentUser.id
       ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
       : loaded.personalPreferences ?? defaultPersonalPreferences }));
     setBackgroundError("");
@@ -382,7 +401,7 @@ export function App() {
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
-    setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? defaultModuleAccess, personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setEfficiency(undefined);
     setEfficiencyError(undefined);
     setMembersRegistry(undefined);
@@ -1636,6 +1655,7 @@ export function App() {
                   aria-current={displayedSection === item.key ? "page" : undefined}
                   onClick={() => {
                     if (item.key === "settings") { setAccountOpen(true); return; }
+                    if (item.key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
                     setFocusTarget(undefined);
                     setActiveSection(item.key);
                   }}
@@ -1661,6 +1681,7 @@ export function App() {
               ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
             ]} onNavigate={(key) => {
               if (key === "settings") { setAccountOpen(true); return; }
+              if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
             <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
@@ -1800,6 +1821,22 @@ export function App() {
                 onDownloadAttachment={handleDownloadAttachment}
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />
+            ) : null}
+            {displayedSection === "team_overview" ? (
+              <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">
+                <TeamDashboardView
+                  tasks={workspace.tasks}
+                  people={workspace.people}
+                  currentUserId={workspace.currentUser.id}
+                  efficiency={efficiency}
+                  efficiencyLoading={efficiencyLoading}
+                  efficiencyError={efficiencyError}
+                  onSelectTask={(taskId) => {
+                    setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
+                    setActiveSection("tasks");
+                  }}
+                />
+              </section>
             ) : null}
             {displayedSection === "payment_requests" && workspace.workflow ? (
               <ApprovalsView

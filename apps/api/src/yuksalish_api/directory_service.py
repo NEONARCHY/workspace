@@ -423,7 +423,13 @@ async def _validate_access_subject(
         subject_id = UUID(subject_key)
     except ValueError as error:
         raise DirectoryServiceError(422, "Access subject is invalid") from error
-    table = departments if subject_type == "department" else users
+    table = (
+        departments
+        if subject_type == "department"
+        else positions
+        if subject_type == "position"
+        else users
+    )
     if await connection.scalar(select(table.c.id).where(table.c.id == subject_id)) is None:
         raise DirectoryServiceError(404, "Access subject was not found")
 
@@ -437,7 +443,7 @@ async def set_module_access_rule(
     payload: ModuleAccessRuleUpdateRequest,
 ) -> ModuleAccessRuleResponse:
     _require_admin(actor)
-    if subject_type not in {"role", "department", "user"}:
+    if subject_type not in {"role", "department", "position", "user"}:
         raise DirectoryServiceError(422, "Access subject type is invalid")
     if module_key not in MODULE_KEYS:
         raise DirectoryServiceError(422, "Module is invalid")

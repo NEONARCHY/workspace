@@ -1293,21 +1293,19 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByRole("button", { name: "Задачи" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("opens the team dashboard for a manager and hides it from an employee", async () => {
+  it("opens the standalone team overview for an authorized position and hides it from an employee", async () => {
     mockServer();
     render(<App />);
-    await loginToWorkspace();
-    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    await loginToWorkspace("malika");
     fireEvent.click(screen.getByRole("button", { name: "Обзор команды" }));
 
-    expect(await screen.findByRole("heading", { name: "Добрый день, Азиза" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Добрый день, Малика" })).toBeInTheDocument();
     expect(screen.getByText(/не норму и не оценку сотрудника/i)).toBeInTheDocument();
 
     cleanup();
     mockServer();
     render(<App />);
-    await loginToWorkspace("dilshod");
-    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    await loginToWorkspace("baxtiyor");
     expect(screen.queryByRole("button", { name: "Обзор команды" })).not.toBeInTheDocument();
   });
 

@@ -17,6 +17,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="team_overview",
+        label=LocalizedLabel(
+            ru="Обзор команды",
+            uz_cyrl="Жамоа шарҳи",
+            uz_latn="Jamoa sharhi",
+        ),
+        route="/team-overview",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="payment_requests",
         label=LocalizedLabel(
             ru="Заявки на оплату",

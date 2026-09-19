@@ -1,6 +1,7 @@
 export const moduleKeys = [
   "crm",
   "tasks",
+  "team_overview",
   "payment_requests",
   "feed",
   "projects",
@@ -49,7 +50,7 @@ export type WorkspaceSection = ModuleKey;
 
 export type WorkspaceRole = "superadmin" | "admin" | "manager" | "employee";
 export type ModuleAccessAction = "view" | "create" | "edit" | "approve" | "admin";
-export type ModuleAccessSubject = "role" | "department" | "user";
+export type ModuleAccessSubject = "role" | "department" | "position" | "user";
 
 export interface ModulePermissionSet {
   readonly view: boolean;

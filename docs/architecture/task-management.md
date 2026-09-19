@@ -6,7 +6,10 @@
 
 A task is a persistent PostgreSQL object with an author, primary assignee, project,
 priority, deadline and lifecycle status. The desktop client presents one filtered
-dataset as a table, a Kanban board or a monthly task calendar. Selecting a task in
+dataset as a table, a Kanban board or a monthly task calendar. The former toolbar
+overview is a separate `team_overview` page in the main sidebar. Its initial visibility
+is granted to three executive positions and remains configurable through position-level
+module access rules. Selecting a task in
 any view opens the same full card; changing a Kanban column uses the normal status
 API, so server-side access and dependency rules cannot be bypassed by the UI.
 

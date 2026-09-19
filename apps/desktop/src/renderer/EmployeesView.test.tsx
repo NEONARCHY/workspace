@@ -26,7 +26,10 @@ const data: DirectoryBootstrap = {
     { id: "one", name: "Азиза Каримова", username: "aziza", role: "employee", departmentId: "d1", jobTitle: "Mutaxassis", positionId: "p1", status: "active" },
     { id: "two", name: "Бахтиёр Самугов", username: "baxtiyor", role: "manager", status: "pending" },
   ],
-  modules: [{ key: "tasks", label: "Задачи", status: "available" }],
+  modules: [
+    { key: "tasks", label: "Задачи", status: "available" },
+    { key: "team_overview", label: "Обзор команды", status: "available" },
+  ],
   accessRules: [],
 };
 const createdChat: ChatSummary = { id: "chat-one", title: "Азиза Каримова", kind: "direct", preview: "", time: "", unread: 0, description: "", members: [], permissions: { sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false } };
@@ -185,5 +188,26 @@ describe("Employee list and retained access controls", () => {
       { view: false, create: true, edit: true, approve: true, admin: false },
     ));
     expect(await screen.findByText("Права сохранены и уже применяются сервером.")).toBeInTheDocument();
+  });
+  it("configures page visibility for a position", async () => {
+    vi.mocked(setModuleAccessRule).mockResolvedValue({
+      id: "position-rule",
+      subjectType: "position",
+      subjectKey: data.positions[0]!.id,
+      moduleKey: "team_overview",
+      permissions: { view: true, create: false, edit: false, approve: false, admin: false },
+    });
+    mount();
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Права модулей" }));
+    fireEvent.change(screen.getByLabelText("Уровень правила доступа"), { target: { value: "position" } });
+    fireEvent.click(screen.getByLabelText("Обзор команды: Просмотр"));
+    await waitFor(() => expect(setModuleAccessRule).toHaveBeenCalledWith(
+      "test-token",
+      "position",
+      data.positions[0]!.id,
+      "team_overview",
+      { view: true, create: false, edit: false, approve: false, admin: false },
+    ));
   });
 });

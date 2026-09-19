@@ -7,7 +7,7 @@ from .position_policy import latin_position_name
 from .workspace_schemas import ApiModel, ModulePermissionSet
 
 EditableRole = Literal["admin", "manager", "employee"]
-ModuleAccessSubject = Literal["role", "department", "user"]
+ModuleAccessSubject = Literal["role", "department", "position", "user"]
 
 
 class RoleDescriptorResponse(ApiModel):

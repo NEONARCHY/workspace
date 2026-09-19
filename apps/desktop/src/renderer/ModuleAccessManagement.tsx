@@ -15,8 +15,11 @@ const actionLabels: { key: keyof ModulePermissionSet; label: string }[] = [
   { key: "admin", label: "Настройка" },
 ];
 
-function defaults(role = "employee"): ModulePermissionSet {
+function defaults(role = "employee", moduleKey = ""): ModulePermissionSet {
   const admin = role === "admin" || role === "superadmin";
+  if (moduleKey === "team_overview" && !admin) {
+    return { view: false, create: false, edit: false, approve: false, admin: false };
+  }
   return { view: true, create: true, edit: true, approve: true, admin };
 }
 
@@ -58,22 +61,27 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     ? directory.roles.map((item) => ({ key: item.key, label: item.label }))
     : subjectType === "department"
       ? directory.departments.map((item) => ({ key: item.id, label: item.name }))
+      : subjectType === "position"
+        ? directory.positions.filter((item) => item.isActive).map((item) => ({ key: item.id, label: item.name }))
       : directory.employees.filter((item) => item.role !== "superadmin").map((item) => ({ key: item.id, label: item.name })), [directory, subjectType]);
   const selectedKey = subjects.some((item) => item.key === subjectKey) ? subjectKey : subjects[0]?.key ?? "";
   const selectedEmployee = directory.employees.find((item) => item.id === selectedKey);
 
   const selectType = (value: ModuleAccessSubject) => {
     setSubjectType(value);
-    const next = value === "role" ? directory.roles[0]?.key : value === "department" ? directory.departments[0]?.id : directory.employees.find((item) => item.role !== "superadmin")?.id;
+    const next = value === "role" ? directory.roles[0]?.key
+      : value === "department" ? directory.departments[0]?.id
+      : value === "position" ? directory.positions.find((item) => item.isActive)?.id
+      : directory.employees.find((item) => item.role !== "superadmin")?.id;
     setSubjectKey(next ?? "");
     setFeedback("");
   };
 
   const explicitRule = (moduleKey: string) => matchingRule(directory, subjectType, selectedKey, moduleKey);
   const inherited = (moduleKey: string) => {
-    if (subjectType === "role") return defaults(selectedKey);
+    if (subjectType === "role") return defaults(selectedKey, moduleKey);
     const role = subjectType === "user" ? selectedEmployee?.role ?? "employee" : "employee";
-    let permissions = defaults(role);
+    let permissions = defaults(role, moduleKey);
     const roleRule = matchingRule(directory, "role", role, moduleKey);
     if (roleRule) permissions = roleRule.permissions;
     const departmentId = subjectType === "department" ? selectedKey : selectedEmployee?.departmentId ?? undefined;
@@ -82,6 +90,10 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     for (const id of inheritedDepartments) {
       const rule = matchingRule(directory, "department", id, moduleKey);
       if (rule) permissions = rule.permissions;
+    }
+    if (subjectType === "user" && selectedEmployee?.positionId) {
+      const positionRule = matchingRule(directory, "position", selectedEmployee.positionId, moduleKey);
+      if (positionRule) permissions = positionRule.permissions;
     }
     return permissions;
   };
@@ -119,7 +131,7 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
   return <section className="module-access-management" aria-label="Модульные разрешения">
     <header className="directory-subheading"><LockClosed20Regular /><div><h2>Права модулей</h2><p>Приоритет: роль → подразделение → персональное исключение</p></div></header>
     <div className="access-subject-controls">
-      <label>Уровень<Select aria-label="Уровень правила доступа" value={subjectType} disabled={!!busyKey} onChange={(event) => selectType(event.target.value as ModuleAccessSubject)}><option value="role">Роль</option><option value="department">Подразделение</option><option value="user">Сотрудник</option></Select></label>
+      <label>Уровень<Select aria-label="Уровень правила доступа" value={subjectType} disabled={!!busyKey} onChange={(event) => selectType(event.target.value as ModuleAccessSubject)}><option value="role">Роль</option><option value="department">Подразделение</option><option value="position">Должность</option><option value="user">Сотрудник</option></Select></label>
       <label>Кому<Select aria-label="Получатель правила доступа" value={selectedKey} disabled={!!busyKey || !subjects.length} onChange={(event) => setSubjectKey(event.target.value)}>{subjects.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</Select></label>
     </div>
     {feedback ? <div className="directory-feedback" role="status">{feedback}</div> : null}
@@ -135,6 +147,6 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
         </div>;
       })}
     </div>}
-    <p className="access-help">«Просмотр» скрывает модуль и блокирует его API. «Настройка» включает все действия. Для подразделения без собственного правила показана база обычного сотрудника с учётом родительских подразделений; итог администратора может отличаться его базовой ролью. Объектные ограничения — например, участие в задаче или назначение согласующим — продолжают действовать дополнительно.</p>
+    <p className="access-help">«Просмотр» скрывает страницу и блокирует её API. «Создание», «Изменение», «Согласование» и «Настройка» задают доступные действия; должность применяется после подразделения, а персональное правило остаётся самым приоритетным. Объектные ограничения — например, участие в задаче или назначение согласующим — продолжают действовать дополнительно.</p>
   </section>;
 }

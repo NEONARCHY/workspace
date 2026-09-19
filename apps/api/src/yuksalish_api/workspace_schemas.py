@@ -1129,6 +1129,7 @@ NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
     "messenger",
     "tasks",
+    "team_overview",
     "payment_requests",
     "trip_approvals",
     "calendar",
@@ -1180,6 +1181,7 @@ class NotificationPreferencesUpdate(ApiModel):
 NavigationKey = Literal[
     "crm",
     "tasks",
+    "team_overview",
     "payment_requests",
     "feed",
     "projects",
