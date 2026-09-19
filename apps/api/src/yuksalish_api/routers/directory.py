@@ -9,6 +9,7 @@ from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.directory_schemas import (
     DepartmentCreateRequest,
+    DepartmentMembersUpdateRequest,
     DepartmentResponse,
     DepartmentUpdateRequest,
     DirectoryBootstrapResponse,
@@ -29,6 +30,7 @@ from yuksalish_api.directory_service import (
     load_directory,
     set_module_access_rule,
     update_department,
+    update_department_members,
     update_employee_access,
     update_employee_status,
     update_position,
@@ -63,6 +65,24 @@ async def post_department(
         raise _translate(error) from error
     await request.app.state.event_bus.publish(
         {"type": "directory.department_created", "entityId": result.id}
+    )
+    return result
+
+
+@router.put("/departments/{department_id}/members", response_model=DepartmentResponse)
+async def put_department_members(
+    department_id: UUID,
+    payload: DepartmentMembersUpdateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> DepartmentResponse:
+    try:
+        result = await update_department_members(connection, current_user, department_id, payload)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.department_members_updated", "entityId": result.id}
     )
     return result
 

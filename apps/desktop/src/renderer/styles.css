@@ -1406,6 +1406,22 @@ button { -webkit-tap-highlight-color: transparent; }
   overflow: hidden;
 }
 
+.department-members-heading { border-top: 1px solid var(--ws-border); padding-top: 14px; }
+.department-members-heading > div { display: flex; align-items: center; gap: 10px; }
+.department-members-heading span { display: grid; gap: 2px; }
+.department-members-heading small, .department-members-heading p { color: var(--ws-text-muted); }
+.department-members-heading p { margin: 8px 0 0; font-size: 12px; }
+.department-member-list { display: grid; max-height: 220px; overflow: auto; gap: 4px; padding: 4px; border: 1px solid var(--ws-border); border-radius: 14px; background: rgba(255,255,255,.7); }
+.department-member-row { display: grid; grid-template-columns: auto auto minmax(0,1fr); align-items: center; gap: 9px; padding: 7px 8px; border-radius: 10px; cursor: pointer; }
+.department-member-row:hover { background: var(--ws-surface-hover); }
+.department-member-row > span:last-child { display: grid; min-width: 0; }
+.department-member-row strong, .department-member-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.department-member-row small { color: var(--ws-text-muted); }
+
+.task-composer-department-row { display: grid; grid-template-columns: minmax(180px,1fr) auto auto; gap: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--ws-border); border-radius: 14px; background: var(--ws-surface-soft); }
+.task-composer-department-row > small { grid-column: 1 / -1; color: var(--ws-text-muted); }
+@media (max-width: 900px) { .task-composer-department-row { grid-template-columns: 1fr; } .task-composer-department-row > small { grid-column: auto; } }
+
 .department-tree {
   padding: 8px;
   overflow: auto;

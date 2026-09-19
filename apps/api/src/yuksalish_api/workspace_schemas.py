@@ -1266,6 +1266,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     module_access: list[EffectiveModuleAccessResponse]
     can_create_payment_requests: bool
     people: list[PersonResponse]
+    departments: list["WorkspaceDepartmentResponse"]
     positions: list[WorkflowPositionResponse]
     chats: list[ChatSummaryResponse]
     messages: list[ChatMessageResponse]
@@ -1285,3 +1286,13 @@ class WorkspaceBootstrapResponse(ApiModel):
     workflow: WorkflowResponse | None
     project_workflow: WorkflowResponse | None
     trip_workflow: WorkflowResponse | None
+
+
+class WorkspaceDepartmentResponse(ApiModel):
+    id: str
+    code: str
+    name: str
+    parent_id: str | None = None
+    assigned_users_count: int
+    member_ids: list[str] = Field(default_factory=list)
+    chat_id: str | None = None

@@ -32,6 +32,7 @@ import type {
   PresenceSummaryItem,
   WorkflowDefinition,
   WorkspaceAttachment,
+  WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceProject,
   WorkspaceNotification,
@@ -191,6 +192,7 @@ interface WorkspaceState {
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
@@ -245,6 +247,7 @@ const initialWorkspace: WorkspaceState = {
   moduleAccess: defaultModuleAccess,
   canCreatePaymentRequests: false,
   people: [],
+  departments: [],
   positions: [],
   chats: [],
   messages: [],
@@ -1744,6 +1747,7 @@ export function App() {
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
+                departments={workspace.departments}
                 onSendMessage={handleSendMessage}
                 onSendVoiceMessage={handleSendVoiceMessage}
                 onReactMessage={handleMessageReaction}
@@ -1771,6 +1775,7 @@ export function App() {
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 efficiency={efficiency}
                 efficiencyLoading={efficiencyLoading}

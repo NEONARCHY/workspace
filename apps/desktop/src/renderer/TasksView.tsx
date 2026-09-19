@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   WorkspaceAttachment,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
@@ -125,6 +126,7 @@ interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
   readonly efficiencyLoading: boolean;
@@ -165,7 +167,7 @@ function localDateTime(value?: string | null): string {
 
 export function TasksView(props: TasksViewProps) {
   const {
-    tasks, attachments, people, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
+    tasks, attachments, people, departments, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, renderTaskChat,
     onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
@@ -498,6 +500,7 @@ export function TasksView(props: TasksViewProps) {
       {creating ? <TaskComposer
         open
         people={people}
+        departments={departments}
         tasks={tasks}
         currentUserId={currentUserId}
         onClose={() => setCreating(false)}

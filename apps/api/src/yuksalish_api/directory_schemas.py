@@ -52,6 +52,12 @@ class DepartmentResponse(ApiModel):
     name: str
     parent_id: str | None
     assigned_users_count: int
+    member_ids: list[str] = Field(default_factory=list)
+    chat_id: str | None = None
+
+
+class DepartmentMembersUpdateRequest(ApiModel):
+    member_ids: list[UUID] = Field(default_factory=list, max_length=500)
 
 
 class DepartmentCreateRequest(ApiModel):

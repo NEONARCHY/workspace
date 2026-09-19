@@ -114,6 +114,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const positionFocusTarget = useRestoreFocusTarget();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
+  const canManageDepartments = canManage
+    || currentUser.role === "manager"
+    || (currentUser.jobTitle ?? "").toLocaleLowerCase("uz").includes("kadr")
+    || (currentUser.jobTitle ?? "").includes("Yuksalish");
 
   useEffect(() => {
     let active = true;
@@ -399,7 +403,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
         </div>
         <div className="toolbar-actions">
-          {canManage ? <Button onClick={() => setDepartmentsOpen(true)}>Подразделения</Button> : null}
+          {canManageDepartments ? <Button onClick={() => setDepartmentsOpen(true)}>Отделы и подразделения</Button> : null}
           {canManage ? <Button onClick={() => setAccessOpen(true)}>Права модулей</Button> : null}
           {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
           <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
@@ -645,7 +649,15 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       {departmentsOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setDepartmentsOpen(false); }}>
         <DialogSurface className="directory-management-dialog" aria-label="Подразделения">
           <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть подразделения" onClick={() => setDepartmentsOpen(false)} /></div>
-          <DepartmentManagement token={token} departments={directory.departments} onChanged={(department) => setDirectory((current) => current ? replaceDepartment(current, department) : current)} />
+          <DepartmentManagement token={token} departments={directory.departments} employees={directory.employees} onChanged={(department) => setDirectory((current) => current ? {
+            ...replaceDepartment(current, department),
+            employees: current.employees.map((employee) => ({
+              ...employee,
+              departmentId: department.memberIds?.includes(employee.id)
+                ? department.id
+                : employee.departmentId === department.id ? null : employee.departmentId,
+            })),
+          } : current)} />
         </DialogSurface>
       </Dialog> : null}
       {accessOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setAccessOpen(false); }}>

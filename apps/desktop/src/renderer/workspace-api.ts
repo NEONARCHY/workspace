@@ -399,6 +399,18 @@ export function updateDepartment(
   );
 }
 
+export function updateDepartmentMembers(
+  token: string,
+  departmentId: string,
+  memberIds: readonly string[],
+): Promise<WorkspaceDepartment> {
+  return apiRequest<WorkspaceDepartment>(
+    `/directory/departments/${departmentId}/members`,
+    { method: "PUT", body: JSON.stringify({ memberIds }) },
+    token,
+  );
+}
+
 export function setModuleAccessRule(
   token: string,
   subjectType: ModuleAccessSubject,

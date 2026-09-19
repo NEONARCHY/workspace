@@ -85,6 +85,8 @@ export interface WorkspaceDepartment {
   readonly name: string;
   readonly parentId?: string | null;
   readonly assignedUsersCount: number;
+  readonly memberIds?: readonly string[];
+  readonly chatId?: string | null;
 }
 
 export interface RoleDescriptor {
@@ -952,6 +954,7 @@ export interface WorkspaceBootstrap {
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];

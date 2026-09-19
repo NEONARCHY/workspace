@@ -10,6 +10,7 @@ import type {
   MessageOptions,
   WorkspaceAttachment,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
@@ -54,6 +55,7 @@ export interface MessengerViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly chatActions: ChatActions;
   readonly onSendMessage: (
     chatId: string,
@@ -129,6 +131,7 @@ function Conversation({
   messages,
   attachments,
   people,
+  departments,
   tasks,
   currentUserId,
   currentUserRole,
@@ -609,6 +612,7 @@ function Conversation({
       {taskSource ? <TaskComposer
         open
         people={people}
+        departments={departments}
         tasks={tasks}
         currentUserId={currentUserId}
         initialTitle={taskSource.body.slice(0, 160)}

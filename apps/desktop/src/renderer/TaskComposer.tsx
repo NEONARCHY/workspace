@@ -4,6 +4,7 @@ import type {
   TaskCycleInput,
   TaskParticipantRole,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
 } from "@yuksalish/contracts";
@@ -35,6 +36,7 @@ type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[num
 interface TaskComposerProps {
   readonly open: boolean;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly tasks: readonly WorkspaceTask[];
   readonly currentUserId: string;
   readonly initialTitle?: string;
@@ -71,6 +73,7 @@ function dateTimeLabel(value: string): string {
 export function TaskComposer({
   open,
   people,
+  departments = [],
   tasks,
   currentUserId,
   initialTitle = "",
@@ -88,6 +91,7 @@ export function TaskComposer({
   const [participants, setParticipants] = useState<readonly DraftParticipant[]>([]);
   const [participantId, setParticipantId] = useState("");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");
+  const [departmentId, setDepartmentId] = useState("");
   const [checklist, setChecklist] = useState<readonly string[]>([]);
   const [checklistTitle, setChecklistTitle] = useState("");
   const [dependencies, setDependencies] = useState<readonly DraftDependency[]>([]);
@@ -183,6 +187,22 @@ export function TaskComposer({
       { userId: participantId, role: participantRole },
     ]);
     setParticipantId("");
+  };
+
+  const addDepartment = (asResponsible = false) => {
+    const department = departments.find((item) => item.id === departmentId);
+    if (!department) return;
+    const activeIds = (department.memberIds ?? []).filter((id) => activePeople.some((person) => person.id === id));
+    if (!activeIds.length) { setError("В этом отделе пока нет активных сотрудников."); return; }
+    const coordinatorId = asResponsible ? activeIds[0]! : assigneeId;
+    if (asResponsible) setAssigneeId(coordinatorId);
+    setParticipants((current) => {
+      const next = new Map(current.map((item) => [item.userId, item]));
+      for (const userId of activeIds) if (userId !== coordinatorId) next.set(userId, { userId, role: asResponsible ? "co_assignee" : participantRole });
+      next.delete(coordinatorId);
+      return [...next.values()];
+    });
+    setDepartmentId(""); setError("");
   };
 
   const addChecklistItem = () => {
@@ -418,6 +438,7 @@ export function TaskComposer({
             </RecordSection>
 
             <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
+              {departments.length ? <div className="task-composer-department-row"><WorkspaceSelect aria-label="Отдел или подразделение" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Выберите отдел</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.assignedUsersCount}</option>)}</WorkspaceSelect><Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить отдел как {participantRole === "observer" ? "наблюдателей" : "соисполнителей"}</Button><Button type="button" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить ответственным</Button><small>У ответственного отдела первый сотрудник становится координатором, остальные — соисполнителями.</small></div> : null}
               <div className="task-composer-add-row participant-add-row">
                 <PersonPicker label="Участник новой задачи" people={availableParticipants} value={participantId} onChange={setParticipantId} disabled={busy} />
                 <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>

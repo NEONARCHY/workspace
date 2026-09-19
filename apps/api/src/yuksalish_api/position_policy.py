@@ -21,6 +21,12 @@ def is_executive_leader(job_title: str | None) -> bool:
     return (job_title or "").strip().casefold() == EXECUTIVE_LEADER_POSITION_NAME.casefold()
 
 
+def is_human_resources_position(job_title: str | None) -> bool:
+    """Return whether the title belongs to the personnel/HR function."""
+    normalized = (job_title or "").strip().casefold()
+    return "kadr" in normalized or "персонал" in normalized
+
+
 def latin_position_name(value: str) -> str:
     normalized = value.strip()
     if not normalized:

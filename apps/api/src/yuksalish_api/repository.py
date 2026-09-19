@@ -33,6 +33,7 @@ from .tables import (
     calendar_events,
     chat_members,
     chats,
+    departments,
     feed_comment_reactions,
     feed_comments,
     feed_posts,
@@ -126,6 +127,7 @@ from .workspace_schemas import (
     WorkflowPositionResponse,
     WorkflowResponse,
     WorkspaceBootstrapResponse,
+    WorkspaceDepartmentResponse,
 )
 
 PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
@@ -2519,6 +2521,22 @@ async def load_workspace(
             .all()
         )
 
+    department_rows = (await connection.execute(
+        select(departments).order_by(departments.c.name)
+    )).mappings().all()
+    department_member_rows = (await connection.execute(
+        select(users.c.department_id, users.c.id).where(
+            users.c.department_id.is_not(None), users.c.status == "active"
+        )
+    )).all()
+    department_members: dict[UUID, list[str]] = {}
+    for department_id, user_id in department_member_rows:
+        department_members.setdefault(department_id, []).append(str(user_id))
+    department_chat_rows = (await connection.execute(select(
+        chats.c.context_id, chats.c.id
+    ).where(chats.c.context_type == "department", chats.c.deleted_at.is_(None)))).all()
+    department_chats = {context_id: str(chat_id) for context_id, chat_id in department_chat_rows}
+
     return WorkspaceBootstrapResponse(
         current_user=current,
         module_access=[
@@ -2537,6 +2555,13 @@ async def load_workspace(
             )
         ),
         people=people,
+        departments=[WorkspaceDepartmentResponse(
+            id=str(row["id"]), code=row["code"], name=row["name"],
+            parent_id=str(row["parent_id"]) if row["parent_id"] else None,
+            assigned_users_count=len(department_members.get(row["id"], [])),
+            member_ids=department_members.get(row["id"], []),
+            chat_id=department_chats.get(row["id"]),
+        ) for row in department_rows],
         positions=[
             WorkflowPositionResponse(id=str(row["id"]), name=row["name"]) for row in position_rows
         ],

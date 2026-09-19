@@ -13,6 +13,7 @@ from .auth import AuthenticatedUser
 from .catalog import MODULE_CATALOG
 from .directory_schemas import (
     DepartmentCreateRequest,
+    DepartmentMembersUpdateRequest,
     DepartmentResponse,
     DepartmentUpdateRequest,
     DirectoryBootstrapResponse,
@@ -26,10 +27,13 @@ from .directory_schemas import (
     PositionUpdateRequest,
     RoleDescriptorResponse,
 )
+from .position_policy import is_executive_leader, is_human_resources_position
 from .tables import (
     audit_events,
     auth_invitations,
     auth_sessions,
+    chat_members,
+    chats,
     departments,
     module_access_rules,
     positions,
@@ -67,6 +71,15 @@ ROLE_DESCRIPTORS = [
 def _require_admin(user: AuthenticatedUser) -> None:
     if user.role not in {"admin", "superadmin"}:
         raise DirectoryServiceError(403, "Administrator role required")
+
+
+def _require_department_manager(user: AuthenticatedUser) -> None:
+    if not (
+        user.role in {"admin", "superadmin", "manager"}
+        or is_executive_leader(user.job_title)
+        or is_human_resources_position(user.job_title)
+    ):
+        raise DirectoryServiceError(403, "Department management permission required")
 
 
 async def _audit(
@@ -142,12 +155,21 @@ async def _department_response(
     )
     if row is None:
         raise DirectoryServiceError(404, "Department was not found")
+    member_ids = list((await connection.execute(
+        select(users.c.id).where(users.c.department_id == department_id).order_by(users.c.full_name)
+    )).scalars().all())
+    chat_id = await connection.scalar(select(chats.c.id).where(
+        chats.c.context_type == "department", chats.c.context_id == department_id,
+        chats.c.deleted_at.is_(None),
+    ))
     return DepartmentResponse(
         id=str(row["id"]),
         code=row["code"],
         name=row["name"],
         parent_id=str(row["parent_id"]) if row["parent_id"] else None,
         assigned_users_count=row["assigned_users_count"],
+        member_ids=[str(value) for value in member_ids],
+        chat_id=str(chat_id) if chat_id else None,
     )
 
 
@@ -235,16 +257,7 @@ async def load_directory(
         )
     return DirectoryBootstrapResponse(
         roles=ROLE_DESCRIPTORS,
-        departments=[
-            DepartmentResponse(
-                id=str(row["id"]),
-                code=row["code"],
-                name=row["name"],
-                parent_id=str(row["parent_id"]) if row["parent_id"] else None,
-                assigned_users_count=row["assigned_users_count"],
-            )
-            for row in department_rows
-        ],
+        departments=[await _department_response(connection, row["id"]) for row in department_rows],
         positions=[
             PositionResponse(
                 id=str(row["id"]),
@@ -289,7 +302,7 @@ async def create_department(
     actor: AuthenticatedUser,
     payload: DepartmentCreateRequest,
 ) -> DepartmentResponse:
-    _require_admin(actor)
+    _require_department_manager(actor)
     duplicate = await connection.scalar(
         select(departments.c.id).where(func.lower(departments.c.code) == payload.code.lower())
     )
@@ -311,6 +324,15 @@ async def create_department(
             created_at=datetime.now(UTC),
         )
     )
+    now = datetime.now(UTC)
+    chat_id = uuid4()
+    await connection.execute(insert(chats).values(
+        id=chat_id, kind="group", direct_key=None,
+        description="Служебная группа подразделения. Состав обновляется автоматически.",
+        title=payload.name, context_type="department", context_id=department_id,
+        created_by_user_id=actor.id, created_at=now, updated_at=now,
+        deleted_at=None, deleted_by_user_id=None,
+    ))
     await _audit(
         connection,
         actor,
@@ -332,7 +354,7 @@ async def update_department(
     department_id: UUID,
     payload: DepartmentUpdateRequest,
 ) -> DepartmentResponse:
-    _require_admin(actor)
+    _require_department_manager(actor)
     existing = (
         (
             await connection.execute(
@@ -384,6 +406,11 @@ async def update_department(
         await connection.execute(
             update(departments).where(departments.c.id == department_id).values(**values)
         )
+        if "name" in values:
+            await connection.execute(update(chats).where(
+                chats.c.context_type == "department", chats.c.context_id == department_id,
+                chats.c.deleted_at.is_(None),
+            ).values(title=values["name"], updated_at=datetime.now(UTC)))
     await _audit(
         connection,
         actor,
@@ -407,6 +434,81 @@ async def update_department(
             },
         },
     )
+    return await _department_response(connection, department_id)
+
+
+async def update_department_members(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    department_id: UUID,
+    payload: DepartmentMembersUpdateRequest,
+) -> DepartmentResponse:
+    _require_department_manager(actor)
+    department = (await connection.execute(
+        select(departments).where(departments.c.id == department_id).with_for_update()
+    )).mappings().first()
+    if department is None:
+        raise DirectoryServiceError(404, "Department was not found")
+    requested = set(payload.member_ids)
+    if requested:
+        active_ids = set((await connection.execute(select(users.c.id).where(
+            users.c.id.in_(requested), users.c.status == "active"
+        ))).scalars().all())
+        if active_ids != requested:
+            raise DirectoryServiceError(422, "Only active employees can join a department")
+    previous = set((await connection.execute(
+        select(users.c.id).where(users.c.department_id == department_id)
+    )).scalars().all())
+    removed = previous - requested
+    if removed:
+        await connection.execute(update(users).where(users.c.id.in_(removed)).values(
+            department_id=None, updated_at=datetime.now(UTC)
+        ))
+    if requested:
+        await connection.execute(update(users).where(users.c.id.in_(requested)).values(
+            department_id=department_id, updated_at=datetime.now(UTC)
+        ))
+        other_department_chat_ids = select(chats.c.id).where(
+            chats.c.context_type == "department",
+            chats.c.context_id != department_id,
+            chats.c.deleted_at.is_(None),
+        )
+        await connection.execute(delete(chat_members).where(
+            chat_members.c.chat_id.in_(other_department_chat_ids),
+            chat_members.c.user_id.in_(requested),
+        ))
+    now = datetime.now(UTC)
+    chat_id = await connection.scalar(select(chats.c.id).where(
+        chats.c.context_type == "department", chats.c.context_id == department_id,
+        chats.c.deleted_at.is_(None),
+    ))
+    if chat_id is None:
+        chat_id = uuid4()
+        await connection.execute(insert(chats).values(
+            id=chat_id, kind="group", direct_key=None,
+            description="Служебная группа подразделения. Состав обновляется автоматически.",
+            title=department["name"], context_type="department", context_id=department_id,
+            created_by_user_id=actor.id, created_at=now, updated_at=now,
+            deleted_at=None, deleted_by_user_id=None,
+        ))
+    await connection.execute(delete(chat_members).where(chat_members.c.chat_id == chat_id))
+    if requested:
+        await connection.execute(insert(chat_members).values([{
+            "chat_id": chat_id, "user_id": member_id, "member_role": "member",
+            "permissions": {
+                "send_messages": True,
+                "upload_files": True,
+                "add_members": False,
+                "remove_members": False,
+                "manage_messages": False,
+                "manage_chat": False,
+            },
+            "joined_at": now, "muted_until": None,
+        } for member_id in requested]))
+    await _audit(connection, actor, "department.members_updated", "department", department_id, {
+        "before": [str(value) for value in sorted(previous)],
+        "after": [str(value) for value in sorted(requested)],
+    })
     return await _department_response(connection, department_id)
 
 
