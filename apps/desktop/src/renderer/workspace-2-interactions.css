@@ -251,7 +251,7 @@
   padding: 10px;
   gap: 7px;
   border-radius: 22px;
-  transform-origin: 100% 0;
+  transform-origin: calc(100% - var(--identity-origin-right, 24px)) 0;
   will-change: transform, opacity;
 }
 .fui-PopoverSurface.identity-popover.is-closed { display: none; }
@@ -281,12 +281,12 @@
 }
 .identity-popover.is-closing .identity-popover-avatar { animation: identity-avatar-leave 160ms ease-in both; }
 @keyframes identity-avatar-arrive {
-  from { opacity: .3; transform: translate(214px, -58px) scale(.66); }
+  from { opacity: 0; transform: translateY(-4px) scale(.92); }
   to { opacity: 1; transform: translate(0, 0) scale(1); }
 }
 @keyframes identity-avatar-leave {
   from { opacity: 1; transform: translate(0, 0) scale(1); }
-  to { opacity: 0; transform: translate(214px, -58px) scale(.66); }
+  to { opacity: 0; transform: translateY(-3px) scale(.94); }
 }
 .identity-popover-profile > span { min-width: 0; }
 .identity-popover-profile h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
@@ -309,9 +309,8 @@
 
 /* Profile settings grow from the same top-right identity point as the compact menu. */
 .account-scrim.account-profile-anchor {
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 72px 18px 18px;
+  display: block;
+  padding: 0;
   background: rgb(31 52 66 / 16%);
   backdrop-filter: blur(3px);
   animation: account-anchor-scrim-in 220ms var(--ws-ease) both;
@@ -321,10 +320,13 @@
   pointer-events: none;
 }
 .account-profile-anchor .account-panel {
+  position: absolute;
+  top: var(--account-anchor-top, 72px);
+  right: var(--account-anchor-right, 18px);
   width: min(600px, calc(100vw - 36px));
-  height: min(760px, calc(100dvh - 90px));
-  max-height: calc(100dvh - 90px);
-  transform-origin: 100% 0;
+  height: min(760px, calc(100dvh - var(--account-anchor-top, 72px) - 18px));
+  max-height: calc(100dvh - var(--account-anchor-top, 72px) - 18px);
+  transform-origin: calc(100% - var(--account-origin-right, 24px)) 0;
   animation: account-anchor-open 320ms linear(0, .015 1.7%, .124 3.8%, .895 11.2%, 1.06 15.4%, .984 20.3%, 1.004 27%, 1) both;
 }
 .account-profile-anchor.is-closing .account-panel {
@@ -341,11 +343,12 @@
 @keyframes account-anchor-scrim-in { from { background-color: transparent; } }
 @keyframes account-anchor-scrim-out { to { background-color: transparent; backdrop-filter: blur(0); } }
 @media (max-width: 720px), (max-height: 620px) {
-  .account-scrim.account-profile-anchor { padding: 58px 10px 10px; }
   .account-profile-anchor .account-panel {
+    top: var(--account-anchor-top, 58px);
+    right: 10px;
     width: min(600px, calc(100vw - 20px));
-    height: calc(100dvh - 68px);
-    max-height: calc(100dvh - 68px);
+    height: calc(100dvh - var(--account-anchor-top, 58px) - 10px);
+    max-height: calc(100dvh - var(--account-anchor-top, 58px) - 10px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

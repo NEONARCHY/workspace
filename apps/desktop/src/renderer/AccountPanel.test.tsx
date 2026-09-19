@@ -35,6 +35,7 @@ it("opens settings from the top-right anchor and finishes the closing animation"
   render(
     <FluentProvider theme={webLightTheme}>
       <AccountPanel token="test-token"
+        anchor={{ top: 64, offsetRight: 22, originRight: 48 }}
         user={{ id: "admin-1", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "#0091a8" }}
         onClose={onClose} onLogout={vi.fn()} />
     </FluentProvider>,
@@ -42,6 +43,7 @@ it("opens settings from the top-right anchor and finishes the closing animation"
 
   const scrim = document.querySelector(".account-profile-anchor");
   expect(scrim).toHaveClass("is-opening");
+  expect(scrim).toHaveStyle({ "--account-anchor-top": "64px", "--account-anchor-right": "22px", "--account-origin-right": "48px" });
   expect(screen.getByRole("dialog", { name: "Настройки профиля" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
   expect(scrim).toHaveClass("is-closing");

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
 
 import type {
   DirectoryEmployee,
@@ -33,6 +33,7 @@ import {
 } from "./workspace-api";
 
 interface AccountPanelProps {
+  readonly anchor?: { readonly offsetRight: number; readonly originRight: number; readonly top: number };
   readonly initialSection?: "invite";
   readonly token: string;
   readonly user: WorkspacePerson;
@@ -43,7 +44,7 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
+export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange, anchor }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const closeTimerRef = useRef(0);
   const [closing, setClosing] = useState(false);
@@ -217,8 +218,14 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
     (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
   );
 
+  const anchorStyle = anchor ? {
+    "--account-anchor-top": `${anchor.top}px`,
+    "--account-anchor-right": `${anchor.offsetRight}px`,
+    "--account-origin-right": `${anchor.originRight}px`,
+  } as CSSProperties : undefined;
+
   return (
-    <div className={`account-scrim account-profile-anchor ${closing ? "is-closing" : "is-opening"}`} role="presentation" onMouseDown={requestClose}>
+    <div className={`account-scrim account-profile-anchor ${closing ? "is-closing" : "is-opening"}`} style={anchorStyle} role="presentation" onMouseDown={requestClose}>
       <aside
         className="account-panel"
         ref={panelRef}

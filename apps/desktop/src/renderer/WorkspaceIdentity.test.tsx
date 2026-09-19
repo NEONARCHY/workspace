@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { workspaceTheme } from "./workspace-theme";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
+import releaseNotes from "../../release-notes.json";
 
 const person = {
   id: "person-1",
@@ -31,10 +32,9 @@ describe("WorkspaceIdentity", () => {
     expect(document.querySelector(".identity-popover")).toHaveClass("is-opening");
     fireEvent.click(screen.getByRole("button", { name: "Настройки профиля" }));
     expect(document.querySelector(".identity-popover")).toHaveClass("is-closing");
-    expect(onSettings).not.toHaveBeenCalled();
-
-    act(() => vi.advanceTimersByTime(180));
     expect(onSettings).toHaveBeenCalledOnce();
+    expect(onSettings).toHaveBeenCalledWith({ top: 8, offsetRight: window.innerWidth, originRight: 0 });
+    act(() => vi.advanceTimersByTime(180));
   });
 
   it("opens versioned release history from the connection popover", () => {
@@ -42,7 +42,7 @@ describe("WorkspaceIdentity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Подключение: Сервер подключён" }));
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Версия обновления" })).toHaveValue("1.0.3");
+    expect(screen.getByRole("combobox", { name: "Версия обновления" })).toHaveValue(releaseNotes.version);
     fireEvent.change(screen.getByRole("combobox", { name: "Версия обновления" }), { target: { value: "1.0.0" } });
     expect(screen.getAllByText("Версия 1.0.0")).toHaveLength(2);
   });
