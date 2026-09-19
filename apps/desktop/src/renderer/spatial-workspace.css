@@ -105,6 +105,18 @@ body { background: var(--ws-canvas); }
   opacity: 1;
   transform: scale(1);
 }
+.spatial-lane.is-landing::after {
+  border-style: solid;
+  border-color: #2da8ad;
+  background: rgb(218 247 241 / 34%);
+  animation: spatial-lane-landing 700ms cubic-bezier(.2,.82,.2,1) both;
+}
+@keyframes spatial-lane-landing {
+  0% { opacity: 0; transform: scale(.982); box-shadow: 0 0 0 0 rgb(45 168 173 / 0%); }
+  34% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 4px rgb(45 168 173 / 18%); }
+  68% { opacity: .72; transform: scale(.993); box-shadow: 0 0 0 7px rgb(45 168 173 / 7%); }
+  100% { opacity: 0; transform: scale(1); box-shadow: 0 0 0 10px rgb(45 168 173 / 0%); }
+}
 .spatial-lane.is-payment-motion.is-unavailable::after {
   border-color: rgb(151 104 108 / 46%);
   background: rgb(255 246 245 / 34%);
@@ -144,6 +156,10 @@ body { background: var(--ws-canvas); }
 .spatial-lane.is-target .spatial-drop-marker,
 .spatial-lane.is-payment-motion.is-unavailable .spatial-drop-marker { opacity: 1; transform: translateY(0); }
 .spatial-lane.is-payment-motion.is-unavailable .spatial-drop-marker { border-style: solid; border-color: #d9b8b9; color: #7b4d52; background: #fff8f7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .spatial-lane.is-landing::after { animation: none; opacity: 1; }
+}
 .spatial-drag-preview {
   box-sizing: border-box;
   box-shadow: var(--ws-shadow-lift) !important;

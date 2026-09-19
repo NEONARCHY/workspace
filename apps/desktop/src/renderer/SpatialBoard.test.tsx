@@ -68,6 +68,7 @@ describe("Spatial object transfer", () => {
     expect(screen.getByText("Сохраняем переход…")).toHaveAttribute("role", "status");
     await act(async () => { confirm(); await accepted; });
     await waitFor(() => expect(document.querySelector('[data-spatial-lane="next"] [data-spatial-card="one"]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[data-spatial-lane="next"]')).toHaveClass("is-landing"));
     await waitFor(() => expect(document.querySelector('[data-spatial-card="one"]')).not.toHaveClass("is-lifted"));
   });
   it("restores the source and permits retry after a server rejection", async () => {
@@ -77,6 +78,7 @@ describe("Spatial object transfer", () => {
     await waitFor(() => expect(screen.getByText(/Переход не подтверждён/)).toHaveAttribute("role", "status"));
     await waitFor(() => expect(card).not.toHaveClass("is-lifted"));
     await waitFor(() => expect(card).not.toHaveClass("is-committing"));
+    expect(next).not.toHaveClass("is-landing");
     expect(card.closest("[data-spatial-lane]")).toHaveAttribute("data-spatial-lane", "start");
     await dropSpatialCard(card, next);
     expect(onMove).toHaveBeenCalledTimes(2);

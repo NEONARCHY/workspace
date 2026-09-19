@@ -17,6 +17,7 @@ interface BoardContext {
   over: string | null;
   pending: boolean;
   pendingId: string | null;
+  landingLane: string | null;
   interactionMode: "standard" | "payment";
   canDrop: (id: string, lane: string) => boolean;
 }
@@ -53,6 +54,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const [over, setOver] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [landingLane, setLandingLane] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
@@ -62,12 +64,16 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const motionFrame = useRef(0);
   const motionReleaseTimer = useRef(0);
   const releaseTimer = useRef(0);
+  const landingStartTimer = useRef(0);
+  const landingReleaseTimer = useRef(0);
   const [preview, setPreview] = useState<CardRecord | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }));
   const reset = () => { setActive(null); setOver(null); };
   const release = (transaction: DropTransaction) => {
     if (drop.current !== transaction) return;
     window.clearTimeout(releaseTimer.current);
+    window.clearTimeout(landingStartTimer.current);
+    window.clearTimeout(landingReleaseTimer.current);
     lock.current = false;
     setPending(false);
     setPendingId(null);
@@ -105,6 +111,13 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       () => {
         transaction.outcome = "confirmed";
         setNotice("Данные доски обновлены. Текущий этап указан на карточке.");
+        window.clearTimeout(landingStartTimer.current);
+        window.clearTimeout(landingReleaseTimer.current);
+        setLandingLane(null);
+        landingStartTimer.current = window.setTimeout(() => {
+          setLandingLane(lane);
+          landingReleaseTimer.current = window.setTimeout(() => setLandingLane(null), 720);
+        }, 20);
       },
       () => {
         transaction.outcome = "rejected";
@@ -156,7 +169,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       if (transaction) release(transaction);
     }
   };
-  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, interactionMode, canDrop }}>
+  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, landingLane, interactionMode, canDrop }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
       autoScroll={{ threshold: { x: 0.12, y: 0.1 }, acceleration: 8, interval: 10 }}
       onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); resetPreviewMotion(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
@@ -202,7 +215,7 @@ export function SpatialLane({ id, children, className = "", ...props }: HTMLAttr
   const { setNodeRef, isOver } = useDroppable({ id, disabled: !board.active || board.pending || (!showUnavailable && !allowed) });
   const unavailable = showUnavailable && !!board.active && isOver && !allowed;
   return <section {...props} ref={setNodeRef}
-    className={`${className} spatial-lane ${showUnavailable ? "is-payment-motion" : ""} ${allowed ? "is-receptive" : ""} ${isOver && allowed ? "is-target" : ""} ${unavailable ? "is-unavailable" : ""}`}
+    className={`${className} spatial-lane ${showUnavailable ? "is-payment-motion" : ""} ${allowed ? "is-receptive" : ""} ${isOver && allowed ? "is-target" : ""} ${unavailable ? "is-unavailable" : ""} ${board.landingLane === id ? "is-landing" : ""}`}
     data-spatial-lane={id} data-drop-state={unavailable ? "unavailable" : isOver && allowed ? "target" : allowed ? "available" : undefined}>
     {children}
     <div className="spatial-drop-marker" aria-hidden="true">{unavailable ? "Недоступно для переноса" : "Переместить сюда"}</div>
