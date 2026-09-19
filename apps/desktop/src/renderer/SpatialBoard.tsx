@@ -57,6 +57,10 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const lock = useRef(false);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
   const drop = useRef<DropTransaction | null>(null);
+  const previewNode = useRef<HTMLElement | null>(null);
+  const previousDelta = useRef({ x: 0, y: 0 });
+  const motionFrame = useRef(0);
+  const motionReleaseTimer = useRef(0);
   const releaseTimer = useRef(0);
   const [preview, setPreview] = useState<CardRecord | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }));
@@ -71,7 +75,14 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   };
   useEffect(() => () => {
     window.clearTimeout(releaseTimer.current);
+    window.clearTimeout(motionReleaseTimer.current);
+    window.cancelAnimationFrame(motionFrame.current);
   }, []);
+  const resetPreviewMotion = () => {
+    previousDelta.current = { x: 0, y: 0 };
+    previewNode.current?.style.setProperty("--spatial-tilt", "0deg");
+    previewNode.current?.style.setProperty("--spatial-shift", "0px");
+  };
   const finish = ({ active: picked, over: target }: DragEndEvent) => {
     const id = String(picked.id), lane = target ? String(target.id) : null;
     if (lock.current || !lane || !canDrop(id, lane)) {
@@ -145,7 +156,19 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, interactionMode, canDrop }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
       autoScroll={{ threshold: { x: 0.12, y: 0.1 }, acceleration: 8, interval: 10 }}
-      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
+      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); resetPreviewMotion(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
+      onDragMove={({ delta }) => {
+        const velocityX = delta.x - previousDelta.current.x;
+        const velocityY = delta.y - previousDelta.current.y;
+        previousDelta.current = delta;
+        window.cancelAnimationFrame(motionFrame.current);
+        motionFrame.current = window.requestAnimationFrame(() => {
+          previewNode.current?.style.setProperty("--spatial-tilt", `${Math.max(-3.2, Math.min(3.2, velocityX * 0.42))}deg`);
+          previewNode.current?.style.setProperty("--spatial-shift", `${Math.max(-2, Math.min(2, velocityY * 0.18))}px`);
+        });
+        window.clearTimeout(motionReleaseTimer.current);
+        motionReleaseTimer.current = window.setTimeout(resetPreviewMotion, 90);
+      }}
       onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
         onDragStart: ({ active: picked }) => `Поднята карточка: ${cards.get(String(picked.id))?.label ?? ""}`,
@@ -159,7 +182,7 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       {children}
       {notice ? <span className="sr-only" role="status">{notice}</span> : null}
       {createPortal(<DragOverlay adjustScale={false} dropAnimation={settle}>
-        {active && preview ? <article style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert>{preview.content}</article> : null}
+        {active && preview ? <article ref={previewNode} style={{ width: preview.node.getBoundingClientRect().width, height: preview.node.getBoundingClientRect().height }} className={`${preview.className} spatial-card spatial-drag-preview ${interactionMode === "payment" ? "is-payment-motion" : ""}`} aria-hidden="true" inert>{preview.content}</article> : null}
       </DragOverlay>, preview?.node.closest(".workspace-view") ?? document.querySelector(".app-provider") ?? document.body)}
     </DndContext>
   </Context.Provider>;
@@ -199,7 +222,7 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
   return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""}`} data-spatial-card={id}
+    className={`${className} spatial-card ${disabled ? "" : "is-draggable"} ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""}`} data-spatial-card={id}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}

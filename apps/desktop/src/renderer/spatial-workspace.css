@@ -112,6 +112,8 @@ body { background: var(--ws-canvas); }
   transform: scale(.994);
 }
 .spatial-card { position: relative; flex: none; touch-action: pan-y; }
+.spatial-card.is-draggable, .spatial-card.is-draggable .spatial-card-open, .spatial-card.is-draggable .approval-card-open { cursor: grab; }
+.spatial-card.is-draggable:active, .spatial-card.is-draggable:active .spatial-card-open, .spatial-card.is-draggable:active .approval-card-open { cursor: grabbing; }
 .spatial-card.is-lifted {
   opacity: .28;
   outline: 1px dashed #72959b;
@@ -147,6 +149,9 @@ body { background: var(--ws-canvas); }
   box-shadow: var(--ws-shadow-lift) !important;
   cursor: grabbing;
   pointer-events: none;
+  transform: translateY(var(--spatial-shift, 0)) rotate(var(--spatial-tilt, 0deg));
+  transform-origin: 50% 72%;
+  transition: transform 70ms linear;
 }
 .spatial-card.is-committing { opacity: 1; }
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }
@@ -303,6 +308,12 @@ body { background: var(--ws-canvas); }
 .spatial-sort-grip { position: absolute; right: 3px; bottom: 2px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: #f1f7f6; color: #48737a; opacity: 0; cursor: grab; touch-action: none; }
 .spatial-sort-item:hover .spatial-sort-grip, .spatial-sort-item:focus-within .spatial-sort-grip { opacity: 1; }
 .navigation-edit-row .spatial-sort-grip { position: static; grid-column: 4; width: 26px; min-width: 26px; height: 26px; min-height: 26px; padding: 0; border-radius: 9px; opacity: 1; }
+.app-rail .navigation-edit-row { min-height: 45px; padding: 7px 5px 7px 12px; border-radius: 14px; }
+.app-rail .navigation-edit-row > .rail-label { font-size: 13px; font-weight: 500; }
+.app-rail .navigation-edit-row .spatial-sort-grip { width: 28px; min-width: 28px; height: 30px; min-height: 30px; border-radius: 10px; cursor: grab; }
+.app-rail .navigation-edit-row .spatial-sort-grip:active { cursor: grabbing; }
+.app-rail .navigation-edit-actions button { min-height: 34px; border-radius: 11px; }
+.app-rail .navigation-edit-actions .navigation-save { min-height: 38px; border-color: var(--ws-navy); color: #fff; background: var(--ws-navy); }
 .spatial-sort-preview { padding: 12px; border: 1px solid #fff; border-radius: 16px; background: #fff; box-shadow: var(--ws-shadow-lift); }
 .spatial-sort-preview .chat-more, .spatial-sort-preview > button:not(.chat-row) { display: none; }
 .record-table-frame { border: 0; }

@@ -22,7 +22,13 @@ export function NavigationEditor({ order, revision, labels, icons, badges, onSav
     setDraft(next);
     setAnnouncement(`${labels[source]}: позиция ${next.indexOf(source) + 1} из ${next.length}`);
   };
-  return <section className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}>
+  const save = () => {
+    if (busy) return;
+    setBusy(true); setError("");
+    void onSave(draft, baseRevision).then(onClose).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось сохранить меню")).finally(() => setBusy(false));
+  };
+  return <form id="navigation-editor-form" className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}
+    onSubmit={(event) => { event.preventDefault(); save(); }}>
     <SpatialSort ids={draft} onMove={(source, target) => move(source as NavigationKey, target as NavigationKey)}>
     <div role="list" aria-label="Разделы меню">
       {draft.map((key) => <SpatialSortItem id={key} label={labels[key]} disabled={busy} key={key} role="listitem" className="navigation-edit-row"
@@ -36,12 +42,9 @@ export function NavigationEditor({ order, revision, labels, icons, badges, onSav
     <span className="organization-live" role="status">{announcement}</span>
     {error && <div className="organization-error" role="alert">{error}</div>}
     <div className="navigation-edit-actions">
-      <button type="button" disabled={busy} onClick={() => { setDraft([...navigationKeys]); setAnnouncement("Восстановлен стандартный порядок. Нажмите «Сохранить»."); }}>По умолчанию</button>
-      <button type="button" disabled={busy} onClick={onClose}>Отмена</button>
-      <button type="button" className="navigation-save" disabled={busy} onClick={() => {
-        setBusy(true); setError("");
-        void onSave(draft, baseRevision).then(onClose).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось сохранить меню")).finally(() => setBusy(false));
-      }}>{busy ? "Сохраняем…" : "Сохранить"}</button>
+      <button type="button" className="navigation-reset" disabled={busy} onClick={() => { setDraft([...navigationKeys]); setAnnouncement("Восстановлен стандартный порядок. Нажмите «Сохранить»."); }}>По умолчанию</button>
+      <button type="button" className="navigation-cancel" disabled={busy} onClick={onClose}>Отмена</button>
+      <button type="submit" className="navigation-save" disabled={busy}>{busy ? "Сохраняем…" : "Сохранить"}</button>
     </div>
-  </section>;
+  </form>;
 }
