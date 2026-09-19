@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import type { WorkspaceTask } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -7,6 +7,7 @@ import { ChevronLeft24Regular, ChevronRight24Regular } from "@fluentui/react-ico
 interface TaskCalendarViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly onSelect: (taskId: string) => void;
+  readonly actions?: ReactNode;
 }
 
 const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -21,7 +22,7 @@ function validDate(value?: string | null): Date | undefined {
   return Number.isFinite(date.getTime()) ? date : undefined;
 }
 
-export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
+export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewProps) {
   const [month, setMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -63,6 +64,11 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
     <div className="task-calendar-shell calendar-view task-calendar-embedded">
       <div className="calendar-main">
       <header className="calendar-toolbar">
+        <div className="calendar-title">
+          <span>Рабочий календарь</span>
+          <h1>Календарь задач</h1>
+          <p>{monthLabel}</p>
+        </div>
         <div className="calendar-toolbar-actions">
           <div className="calendar-month-navigation" aria-label="Навигация по месяцам задач">
           <Button
@@ -88,6 +94,7 @@ export function TaskCalendarView({ tasks, onSelect }: TaskCalendarViewProps) {
             onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
           />
           </div>
+          {actions}
         </div>
       </header>
       <div className="calendar-board task-calendar-board">

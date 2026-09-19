@@ -1279,6 +1279,8 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
+    expect(screen.getByRole("heading", { name: "Календарь задач" })).toBeInTheDocument();
+    expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar")).toBeNull();
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
     expect(document.querySelectorAll(".task-calendar-item")).toHaveLength(initialTasks.length);
 

@@ -154,17 +154,18 @@
 
 .tasks-view .task-calendar-embedded {
   grid-template-columns: minmax(650px, 1fr) 360px;
-  min-height: 650px;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 0;
-  border-top: 1px solid rgb(41 58 85 / 6%);
 }
-.tasks-view .task-calendar-embedded .calendar-main { padding: 20px 22px 22px; }
-.tasks-view .task-calendar-embedded .calendar-toolbar { min-height: 48px; }
+.tasks-view.calendar-mode .tasks-main { overflow: hidden; }
+.tasks-view .task-calendar-embedded .calendar-main { gap: 10px; padding: 12px 22px 22px; }
+.tasks-view .task-calendar-embedded .calendar-toolbar { min-height: 54px; margin-bottom: 8px; padding-top: 4px; padding-bottom: 8px; }
 .tasks-view .task-calendar-embedded .calendar-toolbar-actions { margin-left: auto; }
 .tasks-view .task-calendar-embedded .calendar-title h1 { text-transform: capitalize; }
-.tasks-view .task-calendar-embedded .task-calendar-board { min-height: 520px; }
+.tasks-view .task-calendar-embedded .task-calendar-board { min-height: 0; }
 .tasks-view .task-calendar-embedded .task-calendar-grid { min-width: 0; }
-.tasks-view .task-calendar-embedded .calendar-side { background: var(--ws-muted-surface); }
+.tasks-view .task-calendar-embedded .calendar-side { background: #fff; }
 .tasks-view .task-calendar-embedded .task-calendar-unscheduled { margin-top: 22px; box-shadow: none; }
 
 .task-record-dialog {
