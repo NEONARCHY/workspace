@@ -17,7 +17,6 @@ import {
   Avatar,
   Button,
   Input,
-  Textarea,
   Tooltip,
   useRestoreFocusTarget,
 } from "@fluentui/react-components";
@@ -179,7 +178,6 @@ function Conversation({
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
-  const editInputRef = useRef<HTMLTextAreaElement>(null);
   const wasEditing = useRef(false);
   const focusAfterSend = useRef(false);
   const restoreFocusTarget = useRestoreFocusTarget();
@@ -252,10 +250,9 @@ function Conversation({
   }, [latestMessage?.id, latestMessage?.authorId, currentUserId]);
   useEffect(() => {
     if (editing) {
-      const input = editInputRef.current;
+      const input = composerInputRef.current;
       input?.focus();
       input?.setSelectionRange(input.value.length, input.value.length);
-      input?.scrollIntoView?.({ block: "nearest" });
     } else if (wasEditing.current) {
       composerInputRef.current?.focus();
     }
@@ -333,6 +330,15 @@ function Conversation({
       setMentionPicker(false);
       setPendingFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    });
+  };
+  const saveEdit = () => {
+    if (!editing || busy || !editBody.trim()) return;
+    focusAfterSend.current = true;
+    void run(async () => {
+      await onEditMessage(editing, editBody.trim());
+      setEditing(undefined);
+      setEditBody("");
     });
   };
   return (
@@ -478,46 +484,7 @@ function Conversation({
                         </span>
                       </blockquote>
                     )}
-                    {editing?.id === message.id ? (
-                      <div className="message-edit-form">
-                        <Textarea
-                          textarea={{ ref: editInputRef }}
-                          aria-label="Изменить текст сообщения"
-                          value={editBody}
-                          maxLength={20000}
-                          disabled={busy}
-                          onChange={(_, data) => setEditBody(data.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Escape" && !busy && !event.nativeEvent.isComposing) {
-                              event.preventDefault();
-                              setEditing(undefined);
-                            }
-                          }}
-                        />
-                        <div className="chat-dialog-actions">
-                          <Button
-                            size="small"
-                            appearance="primary"
-                            disabled={busy || !editBody.trim()}
-                            onClick={() =>
-                              void run(async () => {
-                                await onEditMessage(editing, editBody.trim());
-                                setEditing(undefined);
-                              })
-                            }
-                          >
-                            Сохранить сообщение
-                          </Button>
-                          <Button
-                            size="small"
-                            disabled={busy}
-                            onClick={() => setEditing(undefined)}
-                          >
-                            Отмена
-                          </Button>
-                        </div>
-                      </div>
-                    ) : message.deletedAt || voiceAttachments.length === 0 ? (
+                    {message.deletedAt || voiceAttachments.length === 0 ? (
                       <p
                         className={
                           message.deletedAt ? "message-deleted" : undefined
@@ -684,6 +651,18 @@ function Conversation({
               </Button>
             </div>
           )}
+          {editing ? (
+            <div className="composer-context composer-edit-context">
+              <div>
+                <small>Редактирование сообщения</small>
+                <p>Изменения будут сохранены в сообщении от {editing.time}</p>
+              </div>
+              <Button appearance="subtle" aria-label="Отменить редактирование" disabled={busy} onClick={() => {
+                setEditing(undefined);
+                setEditBody("");
+              }}>×</Button>
+            </div>
+          ) : null}
           {mentionPicker && (
             <div
               className="mention-picker"
@@ -760,7 +739,7 @@ function Conversation({
                 appearance="subtle"
                 icon={<Attach24Regular />}
                 aria-label="Прикрепить файл"
-                disabled={busy || !chat.permissions.uploadFiles}
+                disabled={busy || Boolean(editing) || !chat.permissions.uploadFiles}
                 onClick={() => fileInputRef.current?.click()}
               />
             </Tooltip>
@@ -768,7 +747,7 @@ function Conversation({
               appearance="subtle"
               aria-label="Упомянуть участника"
               aria-expanded={mentionPicker}
-              disabled={busy}
+              disabled={busy || Boolean(editing)}
               onClick={() => setMentionPicker(!mentionPicker)}
             >
               @{mentions.length || ""}
@@ -778,7 +757,7 @@ function Conversation({
                 appearance="subtle"
                 icon={<Mic24Regular />}
                 aria-label="Записать голосовое сообщение"
-                disabled={busy || Boolean(draft.trim()) || pendingFiles.length > 0}
+                disabled={busy || Boolean(editing) || Boolean(draft.trim()) || pendingFiles.length > 0}
                 onClick={() => setVoiceOpen(true)}
               />
             </Tooltip>
@@ -807,13 +786,17 @@ function Conversation({
               )}
               <Input
                 input={{ ref: composerInputRef }}
-                aria-label="Новое сообщение"
+                aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}
                 aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
-                placeholder="Напишите сообщение · @ упомянуть"
+                placeholder={editing ? "Измените сообщение" : "Напишите сообщение · @ упомянуть"}
                 maxLength={20000}
-                value={draft}
+                value={editing ? editBody : draft}
                 disabled={busy}
                 onChange={(_, data) => {
+                  if (editing) {
+                    setEditBody(data.value);
+                    return;
+                  }
                   draftEdited.current = true;
                   setDraft(data.value);
                   setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
@@ -823,7 +806,8 @@ function Conversation({
                     event.key === "ArrowUp" &&
                     !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
                     !event.nativeEvent.isComposing &&
-                    draft.length === 0 && !editing && !deleting && !taskSource && !busy
+                    draft.length === 0 && pendingFiles.length === 0 && !reply &&
+                    !editing && !deleting && !taskSource && !busy
                   ) {
                     // Use the full conversation, not the search results. Do not skip
                     // a newer non-editable message in favour of an older one.
@@ -844,7 +828,13 @@ function Conversation({
                     !event.nativeEvent.isComposing
                   ) {
                     event.preventDefault();
-                    send();
+                    if (editing) saveEdit();
+                    else send();
+                  }
+                  if (event.key === "Escape" && editing && !busy && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    setEditing(undefined);
+                    setEditBody("");
                   }
                 }}
               />
@@ -852,9 +842,9 @@ function Conversation({
             <Button
               appearance="primary"
               icon={<Send24Filled />}
-              aria-label="Отправить сообщение"
-              disabled={busy || (!draft.trim() && pendingFiles.length === 0)}
-              onClick={send}
+              aria-label={editing ? "Сохранить изменения" : "Отправить сообщение"}
+              disabled={busy || (editing ? !editBody.trim() : (!draft.trim() && pendingFiles.length === 0))}
+              onClick={editing ? saveEdit : send}
             />
           </div>}
         </>

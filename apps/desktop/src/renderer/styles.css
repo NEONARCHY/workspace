@@ -201,8 +201,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .message-mentions span { padding: 2px 6px; border-radius: 4px; background: #dbeeff; }
 .message-mentioned .message-body { border-color: var(--ws-link, #0f6cbd); }
 .message-body .message-deleted { color: #62768a; font-style: italic; }
-.message-edit-form { display: grid; gap: 8px; min-width: min(360px, 100%); }
-.message-edit-form textarea { min-height: 78px; }
 .composer-context { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 18px; border-top: 1px solid #d8dee7; background: #eff6fc; }
 .composer-context p { margin: 3px 0 0; font-size: 12px; overflow-wrap: anywhere; }
 .composer-context small { color: var(--ws-link, #0f6cbd); }

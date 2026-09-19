@@ -330,22 +330,20 @@ describe("Private messenger", () => {
     expect(bubble.querySelector("time")).toHaveTextContent("12:00");
     openMessageMenu("Мой текст");
     fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-    fireEvent.change(screen.getByLabelText("Изменить текст сообщения"), {
+    fireEvent.change(screen.getByLabelText("Редактирование сообщения"), {
       target: { value: "Обновлённый текст" },
     });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Сохранить сообщение" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить изменения" }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
         "Сообщение уже изменилось",
       ),
     );
     expect(onEditMessage).toHaveBeenCalledWith(message, "Обновлённый текст");
-    expect(screen.getByLabelText("Изменить текст сообщения")).toHaveValue(
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(
       "Обновлённый текст",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    fireEvent.click(screen.getByRole("button", { name: "Отменить редактирование" }));
     openMessageMenu("Мой текст");
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDeleteMessage).not.toHaveBeenCalled();
@@ -356,7 +354,7 @@ describe("Private messenger", () => {
     expect(onDeleteMessage).not.toHaveBeenCalled();
   });
 
-  it("opens the last own message with ArrowUp, outside search results, then saves its revision", async () => {
+  it("copies the last own message into the composer with ArrowUp and saves it with Enter", async () => {
     const own: ChatMessage = { id: "latest-own", chatId: "finance", authorId: "aziza", body: "Последнее своё", time: "12:00", canEdit: true, revision: 3 };
     const onEditMessage = vi.fn().mockResolvedValue(undefined);
     renderMessenger({ messages: [
@@ -371,14 +369,14 @@ describe("Private messenger", () => {
     const composer = screen.getByLabelText("Новое сообщение");
     composer.focus();
     fireEvent.keyDown(composer, { key: "ArrowUp" });
-    const editor = screen.getByLabelText("Изменить текст сообщения");
+    const editor = screen.getByLabelText("Редактирование сообщения");
     expect(editor).toHaveValue(own.body);
     expect(editor).toHaveFocus();
-    expect((editor as HTMLTextAreaElement).selectionStart).toBe(own.body.length);
+    expect((editor as HTMLInputElement).selectionStart).toBe(own.body.length);
     fireEvent.change(editor, { target: { value: "Исправленный текст" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить сообщение" }));
+    fireEvent.keyDown(editor, { key: "Enter" });
     await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст"));
-    await waitFor(() => expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument());
     expect(composer).toHaveFocus();
     expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
   });
@@ -390,34 +388,34 @@ describe("Private messenger", () => {
     for (const draft of ["Черновик", " "]) {
       fireEvent.change(composer, { target: { value: draft } });
       fireEvent.keyDown(composer, { key: "ArrowUp" });
-      expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
       expect(composer).toHaveValue(draft);
     }
     fireEvent.change(composer, { target: { value: "" } });
     fireEvent.keyDown(composer, { key: "ArrowUp" });
-    const editor = screen.getByLabelText("Изменить текст сообщения");
+    const editor = screen.getByLabelText("Редактирование сообщения");
     fireEvent.change(editor, { target: { value: "Несохранённое изменение" } });
-    fireEvent.keyDown(composer, { key: "ArrowUp" });
+    fireEvent.keyDown(editor, { key: "ArrowUp" });
     expect(editor).toHaveValue("Несохранённое изменение");
     fireEvent.keyDown(editor, { key: "Escape" });
-    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
     expect(composer).toHaveFocus();
     expect(props.onEditMessage).not.toHaveBeenCalled();
     fireEvent.keyDown(composer, { key: "ArrowUp" });
-    expect(screen.getByLabelText("Изменить текст сообщения")).toHaveValue(own.body);
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
   });
 
   it.each(["ctrlKey", "altKey", "metaKey", "shiftKey", "isComposing"])("ignores ArrowUp with %s", (modifier) => {
     renderMessenger({ messages: [{ id: "own", chatId: "finance", authorId: "aziza", body: "Мой текст", time: "12:00", canEdit: true }] });
     fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp", [modifier]: true });
-    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
   });
 
   it("does not fall back to older messages when the latest own message cannot be edited", () => {
     const own: ChatMessage = { id: "old", chatId: "finance", authorId: "aziza", body: "Старое", time: "12:00", canEdit: true };
     renderMessenger({ messages: [own, { ...own, id: "last", body: "Новое", canEdit: false }] });
     fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
-    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
   });
 
   it("does nothing when there are no own messages in the active chat", () => {
@@ -426,7 +424,7 @@ describe("Private messenger", () => {
       { id: "other", chatId: "other", authorId: "aziza", body: "Другое", time: "12:00", canEdit: true },
     ] });
     fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
-    expect(screen.queryByLabelText("Изменить текст сообщения")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Изменить сообщение:/ })).not.toBeInTheDocument();
   });
 

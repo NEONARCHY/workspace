@@ -7,8 +7,6 @@
 .message-content .message-body { width: fit-content; min-width: 0; max-width: 100%; }
 .message-content .message-actions { max-width: 100%; }
 .message.own .message-actions { justify-content: flex-end; }
-.message-content:has(.message-edit-form) { width: min(640px, 100%); }
-.message-content .message-body:has(.message-edit-form) { width: 100%; }
 .conversation-pane .composer { grid-template-columns: auto auto auto minmax(0, 1fr) auto; }
 
 .conversation-search { display: flex; align-items: center; gap: 8px; }
