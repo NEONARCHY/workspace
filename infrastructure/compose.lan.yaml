@@ -1,15 +1,15 @@
 services:
   api:
     env_file:
-      - ../.env.lan
+      - ${YUKSALISH_ENV_FILE:-../.env.lan}
 
   worker:
     env_file:
-      - ../.env.lan
+      - ${YUKSALISH_ENV_FILE:-../.env.lan}
 
   scheduler:
     env_file:
-      - ../.env.lan
+      - ${YUKSALISH_ENV_FILE:-../.env.lan}
 
   web:
     build:
