@@ -75,9 +75,10 @@
 .notification-stream-toolbar > div:first-child { display: grid; gap: 3px; white-space: nowrap; }
 .notification-stream-toolbar strong { color: var(--notification-ink); font-size: 14px; }
 .notification-stream-toolbar span { color: var(--notification-muted); font-size: 10px; }
-.notification-kind-filters { display: flex; justify-content: flex-end; gap: 5px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.notification-kind-filters { display: flex; justify-content: flex-start; gap: 5px; min-width: 0; overflow-x: auto; padding-inline: 1px; scroll-padding-inline: 1px; scrollbar-width: none; }
 .notification-kind-filters::-webkit-scrollbar { display: none; }
 .notification-kind-filters button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 9px; border: 1px solid transparent; border-radius: 11px; color: var(--notification-muted); background: transparent; font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; }
+.notification-kind-filters button:first-child { position: sticky; left: 1px; z-index: 1; flex: 0 0 auto; margin-left: auto; background: rgb(255 255 255 / 96%); box-shadow: 13px 0 14px -14px rgb(41 58 85 / 70%); }
 .notification-kind-filters button:hover { background: #f0f6f5; }
 .notification-kind-filters button[aria-pressed="true"] { border-color: #c9e2df; color: var(--ws-link); background: #e8f4f2; }
 .notification-kind-filters svg { font-size: 15px; }
@@ -112,7 +113,7 @@
   .notification-progress-card { grid-column: 1 / -1; min-height: 62px; }
   .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr) 280px; }
   .notification-stream-toolbar { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .notification-kind-filters { justify-content: flex-start; }
+  .notification-kind-filters button:first-child { margin-left: 0; }
 }
 
 @media (max-width: 900px) {
