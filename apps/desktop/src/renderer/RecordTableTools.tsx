@@ -35,9 +35,9 @@ export function RecordTablePager({ total, paging, label }: {
   return <footer className="record-table-footer">
     <span role="status">{total ? `${paging.start + 1}–${Math.min(total, paging.start + paging.size)} из ${total}` : "Найдено: 0"}</span>
     <div className="record-table-paging">
-      <span className="record-page-size">Показывать по<Menu positioning="above-end">
+      <span className="record-page-size"><span className="record-page-size-label">Показывать по</span><Menu positioning="above-end">
         <MenuTrigger disableButtonEnhancement>
-          <button type="button" className="record-page-size-trigger" aria-label={`Количество строк на странице: ${label}`} aria-haspopup="menu">
+          <button type="button" className="record-page-size-trigger" aria-label={`Количество строк на странице: ${paging.size}. ${label}`} aria-haspopup="menu">
             {paging.size}<ChevronDown16Regular aria-hidden="true" />
           </button>
         </MenuTrigger>
@@ -46,9 +46,9 @@ export function RecordTablePager({ total, paging, label }: {
         </MenuPopover>
       </Menu></span>
       {paging.pages > 1 ? <>
-        <button type="button" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
+        <button type="button" className="record-page-nav" aria-label={`Предыдущая страница: ${label}`} disabled={paging.page === 0} onClick={() => paging.setPage(paging.page - 1)}><ChevronLeft20Regular /></button>
         <span className="record-page-position" aria-label={`Страница ${paging.page + 1} из ${paging.pages}`}>Страница {paging.page + 1} из {paging.pages}</span>
-        <button type="button" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
+        <button type="button" className="record-page-nav" aria-label={`Следующая страница: ${label}`} disabled={paging.page === paging.pages - 1} onClick={() => paging.setPage(paging.page + 1)}><ChevronRight20Regular /></button>
       </> : null}
     </div>
   </footer>;

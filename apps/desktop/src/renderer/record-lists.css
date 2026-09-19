@@ -80,17 +80,22 @@
 .role-mark { display: inline-block; font-size: 12px; color: var(--ws-muted); }
 .role-admin, .role-superadmin { color: var(--ws-link); font-weight: 600; }
 .record-table-footer { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; min-height: 58px; padding: 10px 14px; border-top: 1px solid var(--ws-line); background: white; color: var(--ws-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.record-table-paging { display: flex; align-items: center; gap: 7px; }
+.record-table-paging { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
 .record-table-paging label { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
-.record-page-size-trigger { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 60px; min-height: 32px; padding: 3px 8px 3px 11px; border: 1px solid var(--ws-control-line); border-radius: 10px; color: var(--ws-text); background: white; font: inherit; cursor: pointer; }
-.record-page-size-trigger:hover { border-color: #8abfc5; background: #f7fbfb; }
+.record-page-size { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; white-space: nowrap; }
+.record-page-size-label { color: var(--ws-muted); line-height: 1; }
+.record-page-size-trigger { display: inline-flex; width: auto; min-width: 68px; height: 36px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 9px 0 12px; border: 1px solid var(--ws-control-line); border-radius: 11px; color: var(--ws-text); background: #f8fbfb; font: inherit; font-weight: 600; line-height: 1; cursor: pointer; transition: border-color 150ms var(--ws-ease), background-color 150ms var(--ws-ease), box-shadow 150ms var(--ws-ease); }
+.record-page-size-trigger svg { flex: none; color: var(--ws-link); transition: transform 150ms var(--ws-ease); }
+.record-page-size-trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
+.record-page-size-trigger:hover { border-color: #78b3bb; background: #eef7f6; box-shadow: 0 5px 14px -10px rgb(0 103 121 / 45%); }
 .record-page-size-trigger:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 2px; }
 .record-page-size-popover.fui-MenuPopover { min-width: 92px; padding: 6px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 14px; background: rgb(255 255 255 / 96%); box-shadow: 0 16px 36px rgb(41 58 85 / 16%); backdrop-filter: blur(16px); }
 .record-page-size-popover .fui-MenuItem { min-height: 34px; border-radius: 9px; }
 .record-page-size-popover .fui-MenuItem[aria-current="true"] { color: #006779; background: #e8f5f3; font-weight: 600; }
 .record-page-position { min-width: 104px; text-align: center; }
-.record-table-paging button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--ws-line); border-radius: 8px; color: var(--ws-link); background: white; cursor: pointer; }
-.record-table-paging button:disabled { color: #81909d; background: var(--ws-muted-surface); cursor: default; }
+.record-table-paging .record-page-nav { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--ws-line); border-radius: 10px; color: var(--ws-link); background: white; cursor: pointer; }
+.record-table-paging .record-page-nav:hover:not(:disabled) { border-color: #8abfc5; background: #eef7f6; }
+.record-table-paging .record-page-nav:disabled { color: #81909d; background: var(--ws-muted-surface); cursor: default; }
 .record-table-empty { display: grid; gap: 8px; padding: 40px 24px; text-align: center; color: var(--ws-muted); font-size: 14px; }
 .record-table-empty strong { color: var(--ws-text); }
 .fui-DialogSurface.task-record-dialog, .fui-DialogSurface.directory-record-dialog { width: min(840px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; margin: auto !important; }
