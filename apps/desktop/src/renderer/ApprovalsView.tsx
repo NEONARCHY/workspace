@@ -78,60 +78,8 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
 type ApprovalBoardFilter = "all" | "actionable" | "revision" | "finished";
-const approvalMoveHintCache = new Map<string, string>();
-const rememberApprovalMoveHint = (requestId: string, text: string) => {
-  if (!approvalMoveHintCache.has(requestId) && approvalMoveHintCache.size >= 500) {
-    const oldestRequestId = approvalMoveHintCache.keys().next().value;
-    if (oldestRequestId !== undefined) approvalMoveHintCache.delete(oldestRequestId);
-  }
-  approvalMoveHintCache.set(requestId, text);
-};
-
-export function AnimatedApprovalMoveHint({ requestId, text }: { requestId: string; text: string }) {
-  const [displayedText, setDisplayedText] = useState(() => approvalMoveHintCache.get(requestId) ?? text);
-  const [phase, setPhase] = useState<"idle" | "leaving" | "entering">("idle");
-  const displayedTextRef = useRef(displayedText);
-
-  useEffect(() => {
-    if (text === displayedTextRef.current) {
-      rememberApprovalMoveHint(requestId, text);
-      return undefined;
-    }
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      const reducedMotionTimer = window.setTimeout(() => {
-        displayedTextRef.current = text;
-        rememberApprovalMoveHint(requestId, text);
-        setDisplayedText(text);
-        setPhase("idle");
-      }, 0);
-      return () => window.clearTimeout(reducedMotionTimer);
-    }
-
-    const leaveTimer = window.setTimeout(() => setPhase("leaving"), 0);
-    const swapTimer = window.setTimeout(() => {
-      displayedTextRef.current = text;
-      rememberApprovalMoveHint(requestId, text);
-      setDisplayedText(text);
-      setPhase("entering");
-    }, 120);
-    const settleTimer = window.setTimeout(() => setPhase("idle"), 300);
-
-    return () => {
-      window.clearTimeout(leaveTimer);
-      window.clearTimeout(swapTimer);
-      window.clearTimeout(settleTimer);
-    };
-  }, [requestId, text]);
-
-  return (
-    <span
-      className={`approval-move-hint${phase === "idle" ? "" : ` is-${phase}`}`}
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {displayedText}
-    </span>
-  );
+export function ApprovalMoveHint({ text }: { text: string }) {
+  return <span className="approval-move-hint" aria-live="polite" aria-atomic="true">{text}</span>;
 }
 type ApprovalDetailTab = "overview" | "route" | "files" | "activity";
 interface ApprovalEdgeData extends Record<string, unknown> {
@@ -1689,7 +1637,7 @@ export function ApprovalsView({
                           ) : null}
                           {plan || canRevise ? <footer>
                             {plan ? (
-                              <AnimatedApprovalMoveHint requestId={request.id} text={`Перетащите → ${plan.targetKeys.map((targetKey) =>
+                              <ApprovalMoveHint text={`Перетащите → ${plan.targetKeys.map((targetKey) =>
                                   boardColumns.find((candidate) => candidate.key === targetKey)?.label,
                                 ).filter(Boolean).join(" / ")}`} />
                             ) : (

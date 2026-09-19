@@ -1,38 +1,15 @@
-import { act, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 
-import { AnimatedApprovalMoveHint } from "./ApprovalsView";
+import { ApprovalMoveHint } from "./ApprovalsView";
 
-describe("AnimatedApprovalMoveHint", () => {
-  afterEach(() => vi.useRealTimers());
+describe("ApprovalMoveHint", () => {
+  it("immediately replaces the destination after a confirmed stage update", () => {
+    const { rerender } = render(<ApprovalMoveHint text="Перетащите → Согласование" />);
 
-  it("softly replaces the destination after a confirmed stage update", () => {
-    vi.useFakeTimers();
-    const { rerender } = render(<AnimatedApprovalMoveHint requestId="request-1" text="Перетащите → Согласование" />);
-
-    rerender(<AnimatedApprovalMoveHint requestId="request-1" text="Перетащите → Оплата" />);
-    act(() => vi.advanceTimersByTime(0));
-    expect(screen.getByText("Перетащите → Согласование")).toHaveClass("is-leaving");
-
-    act(() => vi.advanceTimersByTime(120));
-    expect(screen.getByText("Перетащите → Оплата")).toHaveClass("is-entering");
-
-    act(() => vi.advanceTimersByTime(180));
-    expect(screen.getByText("Перетащите → Оплата")).not.toHaveClass("is-entering");
-  });
-
-  it("preserves the previous hint while a card remounts in its new lane", () => {
-    vi.useFakeTimers();
-    const first = render(
-      <AnimatedApprovalMoveHint requestId="request-remounted" text="Перетащите → Руководитель" />,
-    );
-    first.unmount();
-
-    render(<AnimatedApprovalMoveHint requestId="request-remounted" text="Перетащите → Бухгалтер" />);
-    act(() => vi.advanceTimersByTime(0));
-    expect(screen.getByText("Перетащите → Руководитель")).toHaveClass("is-leaving");
-
-    act(() => vi.advanceTimersByTime(120));
-    expect(screen.getByText("Перетащите → Бухгалтер")).toHaveClass("is-entering");
+    rerender(<ApprovalMoveHint text="Перетащите → Оплата" />);
+    expect(screen.queryByText("Перетащите → Согласование")).not.toBeInTheDocument();
+    expect(screen.getByText("Перетащите → Оплата")).toHaveClass("approval-move-hint");
+    expect(screen.getByText("Перетащите → Оплата")).not.toHaveClass("is-entering", "is-leaving");
   });
 });
