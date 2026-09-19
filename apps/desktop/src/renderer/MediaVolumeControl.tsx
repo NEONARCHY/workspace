@@ -59,6 +59,7 @@ export function MediaVolumeControl({ mediaRef, disabled = false, className = "" 
             step="1"
             value={Math.round(volume * 100)}
             aria-label="Уровень громкости"
+            aria-orientation="vertical"
             onChange={(event) => changeVolume(Number(event.currentTarget.value) / 100)}
           />
           <output aria-hidden="true">{Math.round(volume * 100)}%</output>

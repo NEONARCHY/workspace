@@ -20,6 +20,7 @@ describe("MediaVolumeControl", () => {
     fireEvent.click(trigger);
 
     const slider = screen.getByRole("slider", { name: "Уровень громкости" });
+    expect(slider).toHaveAttribute("aria-orientation", "vertical");
     fireEvent.change(slider, { target: { value: "35" } });
 
     expect(trigger).toHaveAttribute("aria-expanded", "true");

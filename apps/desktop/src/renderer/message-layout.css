@@ -48,9 +48,10 @@
 .media-volume-control { position: relative; display: grid; place-items: center; }
 .media-volume-trigger { width: 30px; min-width: 30px !important; height: 30px; color: #536b80 !important; }
 .media-volume-trigger:hover { color: var(--ws-turquoise) !important; background: rgb(0 145 168 / 9%) !important; }
-.media-volume-popover { position: absolute; z-index: 12; right: 0; bottom: calc(100% + 7px); display: grid; grid-template-columns: minmax(88px, 1fr) auto; align-items: center; gap: 7px; width: 148px; padding: 8px 10px; border: 1px solid rgb(41 58 85 / 12%); border-radius: 12px; background: rgb(255 255 255 / 98%); box-shadow: 0 10px 26px rgb(41 58 85 / 16%); }
-.media-volume-popover input { width: 100%; accent-color: var(--ws-turquoise); cursor: pointer; }
-.media-volume-popover output { min-width: 30px; color: var(--ws-muted); font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
+.media-volume-popover { position: absolute; z-index: 12; left: 50%; bottom: calc(100% + 9px); display: grid; grid-template-rows: 104px auto; justify-items: center; gap: 7px; width: 48px; padding: 10px 6px 8px; border: 1px solid rgb(41 58 85 / 12%); border-radius: 14px; background: rgb(255 255 255 / 98%); box-shadow: 0 10px 26px rgb(41 58 85 / 16%); transform: translateX(-50%); }
+.media-volume-popover::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 9px; height: 9px; border-right: 1px solid rgb(41 58 85 / 12%); border-bottom: 1px solid rgb(41 58 85 / 12%); background: #fff; transform: translateX(-50%) rotate(45deg); }
+.media-volume-popover input { width: 22px; height: 104px; margin: 0; accent-color: var(--ws-turquoise); cursor: pointer; direction: rtl; writing-mode: vertical-lr; }
+.media-volume-popover output { color: var(--ws-muted); font-size: 10px; line-height: 12px; font-variant-numeric: tabular-nums; text-align: center; }
 .voice-message-size { justify-self: end; color: var(--ws-muted); font-size: 10px; }
 .voice-preview { width: 100%; min-width: 0; }
 .voice-message-error { grid-column: 1 / -1; color: #9c1827; font-size: 11px; }
