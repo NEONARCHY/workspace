@@ -36,6 +36,13 @@ describe("Trip approvals interaction", async () => {
     expect(screen.getByRole("checkbox", { name: new RegExp(people[0]!.name) })).toBeChecked();
     expect(onCreate).not.toHaveBeenCalled();
   });
+  it("keeps the full composer surface mounted while its exit animation finishes", () => {
+    setup();
+    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть форму создания" }));
+    const exitingSurface = document.querySelector(".fui-DialogSurface");
+    expect(exitingSurface === null || exitingSurface.classList.contains("record-composer-dialog")).toBe(true);
+  });
   it("starts on the coloured board and filters the same cards in list view", async () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();

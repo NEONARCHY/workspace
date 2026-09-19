@@ -43,6 +43,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
   const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
@@ -68,9 +69,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       .join(" ").toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"));
   });
 
-  const openRequest = (id: string) => { setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
+  const openRequest = (id: string) => { setFormOpen(false); setFormMode(null); setSelectedId(id); setDetailOpen(true); setPendingDecision(undefined); setError(""); };
   const closeDetail = () => { if (!busyRef.current) { setDetailOpen(false); setPendingDecision(undefined); setError(""); } };
-  const create = () => { setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setError(""); };
+  const closeForm = () => { if (!busyRef.current) { setFormOpen(false); setError(""); } };
+  const create = () => { setDetailOpen(false); setForm(emptyForm(currentUser.id)); setEmployeeQuery(""); setFormMode("create"); setFormOpen(true); setError(""); };
 
   const save = async () => {
     if (busyRef.current) return;
@@ -82,7 +84,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     try {
       const payload: TripRequestInput = { ...form, purpose: form.purpose.trim(), destination: form.destination.trim() };
       const saved = formMode === "edit" && selected ? await onUpdate(selected, payload) : await onCreate(payload);
-      if (saved) { setSelectedId(saved.id); setDetailOpen(true); setFormMode(null); }
+      if (saved) { setSelectedId(saved.id); setFormOpen(false); setDetailOpen(true); setFormMode(null); }
       else setError("Не удалось сохранить поездку. Проверьте данные и подключение к серверу.");
     } catch { setError("Не удалось сохранить поездку. Попробуйте ещё раз."); }
     finally { busyRef.current = false; setBusy(false); }
@@ -180,9 +182,9 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
           <span><strong>{request.number}</strong><Badge appearance="tint">{request.stageLabel}</Badge></span><b>{request.destination}</b><p>{request.purpose}</p><small>{request.startDate} — {request.endDate} · {request.employeeIds.length} сотруд. · {request.statusLabel}</small>
         </button>)}</div>
       )}
-      <Dialog open={(detailOpen && Boolean(selected)) || formMode !== null} onOpenChange={(_, data) => {
+      <Dialog open={(detailOpen && Boolean(selected)) || formOpen} onOpenChange={(_, data) => {
         if (!data.open && !busyRef.current) {
-          if (formMode !== null) { setFormMode(null); setError(""); }
+          if (formOpen) closeForm();
           else closeDetail();
         }
       }}>
@@ -205,7 +207,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
             <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
           </article> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
-            <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={() => { if (!busyRef.current) { setFormMode(null); setError(""); } }}
+            <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
               hint="Сохранение не отправляет поездку на согласование. Отправить её можно из карточки."
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{tripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
