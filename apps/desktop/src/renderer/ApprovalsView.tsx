@@ -1382,6 +1382,28 @@ export function ApprovalsView({
               ? "Рабочая очередь по стадиям — от запуска до оплаты"
               : "Настройка логики процесса без изменения кода"}
           </p>
+          <div className="approvals-tabs">
+            <div className="approval-mode-switch" aria-label="Разделы согласований">
+              <button
+                type="button"
+                aria-pressed={mode === "requests"}
+                className={mode === "requests" ? "active" : ""}
+                onClick={() => setMode("requests")}
+              >
+                Текущие заявки
+              </button>
+              {canManage ? (
+                <button
+                  type="button"
+                  aria-pressed={mode === "designer"}
+                  className={mode === "designer" ? "active" : ""}
+                  onClick={() => setMode("designer")}
+                >
+                  Конструктор маршрутов
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
         <div className="toolbar-actions">
           {mode === "requests" ? (
@@ -1448,29 +1470,6 @@ export function ApprovalsView({
           )}
         </div>
       </header>
-
-      <div className="approvals-tabs">
-        <div className="approval-mode-switch" aria-label="Разделы согласований">
-          <button
-            type="button"
-            aria-pressed={mode === "requests"}
-            className={mode === "requests" ? "active" : ""}
-            onClick={() => setMode("requests")}
-          >
-            Текущие заявки
-          </button>
-          {canManage ? (
-            <button
-              type="button"
-              aria-pressed={mode === "designer"}
-              className={mode === "designer" ? "active" : ""}
-              onClick={() => setMode("designer")}
-            >
-              Конструктор маршрутов
-            </button>
-          ) : null}
-        </div>
-      </div>
 
       {mode === "requests" ? (
         <div className="approval-workspace">

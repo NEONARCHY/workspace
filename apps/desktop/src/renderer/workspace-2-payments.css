@@ -13,16 +13,16 @@
     transparent;
 }
 .approvals-view .approvals-toolbar {
-  min-height: 116px;
-  padding-bottom: 50px;
+  min-height: 148px;
 }
+.approvals-view .approvals-toolbar > div:first-child { align-content: start; }
 .approvals-view .approvals-toolbar h1 { color: #142b43; }
 .approvals-view .approvals-toolbar p { margin-top: 4px; }
 .approvals-view .approvals-tabs {
   position: relative;
   z-index: 2;
   width: fit-content;
-  margin: -49px 0 8px 27px;
+  margin-top: 13px;
   padding: 0;
   background: transparent;
 }
