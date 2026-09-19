@@ -1,5 +1,5 @@
 import react from "@vitejs/plugin-react";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -13,12 +13,19 @@ const packageJson = JSON.parse(readFileSync(new URL("./package.json", import.met
 const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", import.meta.url), "utf8")) as {
   version: string;
   title: string;
-  items: string[];
 };
+const releaseNoteEntries = readdirSync(new URL("./release-notes/pending/", import.meta.url))
+  .filter((name) => name.endsWith(".json"))
+  .sort()
+  .map((name) => JSON.parse(readFileSync(new URL(`./release-notes/pending/${name}`, import.meta.url), "utf8")) as {
+    id: string;
+    items: string[];
+  });
+const releaseNoteItems = releaseNoteEntries.flatMap((entry) => entry.items);
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
-  || releaseNotes.items.length === 0 || releaseNotes.items.length > 6
-  || releaseNotes.items.some((item) => item.trim().length < 12 || item.length > 120)) {
-  throw new Error("release-notes.json must match package version and contain 1–6 concise user-facing changes");
+  || releaseNoteItems.length === 0 || releaseNoteItems.length > 50
+  || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
+  throw new Error("pending release notes must match package version and contain 1–50 concise user-facing changes");
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
@@ -30,6 +37,7 @@ export default defineConfig(({ mode }) => ({
   define: {
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
     __YUKSALISH_APP_VERSION__: JSON.stringify(packageJson.version),
+    __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
   },
   resolve: {
     alias: {
@@ -79,7 +87,7 @@ export default defineConfig(({ mode }) => ({
             version: packageJson.version,
             builtAt,
             title: releaseNotes.title,
-            notes: releaseNotes.items,
+            notes: releaseNoteItems,
             releaseUrl: `https://github.com/NEONARCHY/yuksalish-workspace/releases/tag/v${packageJson.version}`,
           }),
         });

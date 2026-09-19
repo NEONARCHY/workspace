@@ -1,5 +1,5 @@
 .desktop-update-gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 50% 20%, #e2f4ef 0, #f5f9f7 52%, #edf3f5 100%); color: var(--ws-text); }
-.desktop-update-gate-card { width: min(520px, 100%); display: grid; gap: 16px; padding: clamp(24px, 5vw, 44px); border: 1px solid #fff; border-radius: 28px; background: #fff; box-shadow: var(--ws-shadow-float); }
+.desktop-update-gate-card { width: min(520px, 100%); max-height: calc(100dvh - 48px); display: grid; gap: 16px; overflow-y: auto; padding: clamp(24px, 5vw, 44px); border: 1px solid #fff; border-radius: 28px; background: #fff; box-shadow: var(--ws-shadow-float); }
 .desktop-update-gate-card .company-logo { max-width: 155px; }
 .desktop-update-kicker { color: var(--ws-link); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .desktop-update-gate-card h1 { margin: 0; color: var(--ws-navy); font-size: clamp(24px, 4vw, 32px); line-height: 1.15; }

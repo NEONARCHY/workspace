@@ -11,7 +11,6 @@ import {
   stageDesktopRelease,
 } from "./workspace-api";
 import { workspacePlatform } from "./platform-adapter";
-import releaseNotes from "../../release-notes.json";
 
 interface DesktopUpdateSettingsProps {
   readonly token: string;
@@ -88,7 +87,10 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
         onChange={(event) => setFile(event.target.files?.[0])} />
       {file && !fileVersion ? <small role="alert">Имя файла не содержит корректный номер версии.</small> : null}
       {fileVersion ? <Button disabled={busy} onClick={() => void run(async () => {
-        await stageDesktopRelease(token, fileVersion, file!, releaseNotes.title, releaseNotes.items);
+        await stageDesktopRelease(
+          token, fileVersion, file!,
+          __YUKSALISH_RELEASE_NOTES__.title, __YUKSALISH_RELEASE_NOTES__.items,
+        );
         setFile(undefined);
         setFeedback(`Версия ${fileVersion} загружена, но ещё не опубликована.`);
       })}>{busy ? "Загрузка…" : `Загрузить версию ${fileVersion}`}</Button> : null}

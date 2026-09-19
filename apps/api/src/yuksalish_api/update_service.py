@@ -139,10 +139,10 @@ async def stage_release(
         raise WorkspaceRepositoryError(
             422, "Заголовок обновления обязателен и не длиннее 120 символов"
         )
-    if not 1 <= len(clean_notes) <= 6 or any(
-        len(item) < 12 or len(item) > 120 for item in clean_notes
+    if not 1 <= len(clean_notes) <= 50 or any(
+        len(item) < 12 or len(item) > 160 for item in clean_notes
     ):
-        raise WorkspaceRepositoryError(422, "Укажите от 1 до 6 понятных пунктов обновления")
+        raise WorkspaceRepositoryError(422, "Укажите от 1 до 50 понятных пунктов обновления")
     content_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0]
     if content_type != "application/octet-stream":
         raise WorkspaceRepositoryError(415, "Передайте установщик как application/octet-stream")

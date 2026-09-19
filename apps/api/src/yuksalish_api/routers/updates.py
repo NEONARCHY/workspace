@@ -51,7 +51,7 @@ async def upload_release(
     connection: Connection,
     version: Annotated[str, Header(alias="X-Release-Version")],
     title: Annotated[str, Query(min_length=1, max_length=120)],
-    notes: Annotated[list[str], Query(min_length=1, max_length=6)],
+    notes: Annotated[list[str], Query(min_length=1, max_length=50)],
 ) -> DesktopReleaseResponse:
     try:
         return await stage_release(
