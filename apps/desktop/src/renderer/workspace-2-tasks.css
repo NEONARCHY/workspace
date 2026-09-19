@@ -11,6 +11,17 @@
   background: transparent;
 }
 
+.tasks-view.efficiency-mode .section-toolbar {
+  min-height: 72px;
+  padding-block: 10px 8px;
+}
+
+.tasks-view.efficiency-mode .eff-commandbar.compact {
+  min-height: 42px;
+  margin-bottom: 6px;
+  padding-block: 3px;
+}
+
 .task-workbench-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
