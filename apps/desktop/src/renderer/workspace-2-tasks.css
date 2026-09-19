@@ -149,10 +149,18 @@
 .tasks-view .kanban-card.priority-urgent { box-shadow: inset 3px 0 #b94f4a, 0 8px 20px rgb(41 58 85 / 7%); }
 .tasks-view .kanban-card.priority-high { box-shadow: inset 3px 0 #d39b2c, 0 8px 20px rgb(41 58 85 / 7%); }
 .tasks-view .spatial-card-open { gap: 10px; padding: 14px; }
+.tasks-view .spatial-grip { top: 8px; right: 5px; }
+.tasks-view .task-card-topline { min-width: 0; padding-right: 27px; }
+.tasks-view .task-card-topline .spatial-card-context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .task-card-topline,
 .task-card-footer,
 .task-card-progress > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.task-card-priority { padding: 3px 7px; border-radius: 999px; color: #8e5520; background: #fff1d0; font-size: 10px; font-weight: 700; }
+.task-card-priority { flex: none; padding: 3px 7px; border-radius: 999px; color: #8e5520; background: #fff1d0; font-size: 10px; font-weight: 700; }
 .priority-urgent .task-card-priority { color: #943d3a; background: #fbe4e2; }
 .task-card-footer { margin-top: 3px; }
 .task-card-footer .spatial-person { min-width: 0; }
