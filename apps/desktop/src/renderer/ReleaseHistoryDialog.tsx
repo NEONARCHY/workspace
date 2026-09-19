@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@fluentui/react-components";
 import { CheckmarkCircle20Filled } from "@fluentui/react-icons";
+import { useMemo, useState } from "react";
 
 import { WorkspaceDialog } from "./WorkspaceDialog";
 
@@ -14,18 +15,34 @@ export function ReleaseHistoryDialog({ open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const releases = useMemo(() => [{
+    version: __YUKSALISH_APP_VERSION__,
+    title: __YUKSALISH_RELEASE_NOTES__.title,
+    items: __YUKSALISH_RELEASE_NOTES__.items,
+  }, ...__YUKSALISH_RELEASE_HISTORY__.filter((release) => release.version !== __YUKSALISH_APP_VERSION__)], []);
+  const [selectedVersion, setSelectedVersion] = useState(releases[0]?.version ?? "");
+  const selectedRelease = releases.find((release) => release.version === selectedVersion) ?? releases[0];
+
   return <WorkspaceDialog open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
     <DialogSurface className="release-history-dialog">
       <DialogBody>
         <DialogTitle>Ранние обновления</DialogTitle>
         <DialogContent className="release-history-content">
-          {__YUKSALISH_RELEASE_HISTORY__.length ? __YUKSALISH_RELEASE_HISTORY__.map((release) => <section key={release.version}>
+          {selectedRelease ? <>
+            <label className="release-version-picker">
+              <span>Версия обновления</span>
+              <select aria-label="Версия обновления" value={selectedVersion} onChange={(event) => setSelectedVersion(event.target.value)}>
+                {releases.map((release) => <option value={release.version} key={release.version}>Версия {release.version}</option>)}
+              </select>
+            </label>
+            <section key={selectedRelease.version}>
             <div className="release-history-heading">
-              <h3>{release.title}</h3>
-              <span>Версия {release.version}</span>
+              <h3>{selectedRelease.title}</h3>
+              <span>Версия {selectedRelease.version}</span>
             </div>
-            <ul>{release.items.map((item) => <li key={item}><CheckmarkCircle20Filled /><span>{item}</span></li>)}</ul>
-          </section>) : <p>История обновлений пока пуста.</p>}
+            <ul>{selectedRelease.items.map((item) => <li key={item}><CheckmarkCircle20Filled /><span>{item}</span></li>)}</ul>
+            </section>
+          </> : <p>История обновлений пока пуста.</p>}
         </DialogContent>
         <DialogActions><Button appearance="primary" onClick={() => onOpenChange(false)}>Закрыть</Button></DialogActions>
       </DialogBody>
