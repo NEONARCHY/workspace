@@ -38,6 +38,10 @@ function orderedReactions(usage: ReactionUsageMap): readonly string[] {
     .map((item) => item.emoji);
 }
 
+export function orderedReactionsForUser(userId: string): readonly string[] {
+  return orderedReactions(readUsage(userId));
+}
+
 export function ReactionPicker({ userId, disabled = false, active = [], onSelect, className = "" }: {
   readonly userId: string; readonly disabled?: boolean; readonly active?: readonly string[];
   readonly onSelect: (emoji: string) => void; readonly className?: string;

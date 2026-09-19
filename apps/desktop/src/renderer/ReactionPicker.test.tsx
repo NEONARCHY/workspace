@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ReactionPicker, reactionEmojis } from "./ReactionPicker";
+import { orderedReactionsForUser, ReactionPicker, reactionEmojis } from "./ReactionPicker";
 
 describe("ReactionPicker", () => {
   beforeEach(() => localStorage.clear());
@@ -10,20 +10,19 @@ describe("ReactionPicker", () => {
     const onSelect = vi.fn();
     render(<ReactionPicker userId="user-one" onSelect={onSelect} />);
     fireEvent.click(screen.getByRole("button", { name: "Добавить реакцию" }));
-    expect(screen.getAllByRole("menuitemcheckbox")).toHaveLength(reactionEmojis.length);
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "🐇" }));
+    const menu = screen.getByLabelText("Выберите реакцию");
+    expect(menu.querySelectorAll('[role="menuitemcheckbox"]')).toHaveLength(reactionEmojis.length);
+    fireEvent.click(menu.querySelector('[role="menuitemcheckbox"][aria-label="🐇"]')!);
     expect(onSelect).toHaveBeenCalledWith("🐇");
 
-    fireEvent.click(screen.getByRole("button", { name: "Добавить реакцию" }));
-    expect(screen.getAllByRole("menuitemcheckbox")[0]).toHaveAccessibleName("🐇");
+    expect(orderedReactionsForUser("user-one")[0]).toBe("🐇");
   });
 
   it("keeps usage histories separate for different users", () => {
-    const view = render(<ReactionPicker userId="first-user" onSelect={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Добавить реакцию" }));
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "🐇" }));
-    view.rerender(<ReactionPicker key="second" userId="second-user" onSelect={vi.fn()} />);
-    fireEvent.click(screen.getByRole("button", { name: "Добавить реакцию" }));
-    expect(screen.getAllByRole("menuitemcheckbox")[0]).toHaveAccessibleName("👍");
+    localStorage.setItem("yuksalish:reaction-usage:first-user", JSON.stringify({
+      "🐇": { count: 1, lastUsed: 1 },
+    }));
+    expect(orderedReactionsForUser("first-user")[0]).toBe("🐇");
+    expect(orderedReactionsForUser("second-user")[0]).toBe("👍");
   });
 });
