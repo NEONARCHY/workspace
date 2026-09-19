@@ -237,10 +237,13 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     movement.current?.cancel();
     const next = element.getBoundingClientRect(), previous = board.positions.get(id);
     board.positions.set(id, next);
-    if (!previous || !next.width || board.pendingId === id || board.active === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (!previous || !next.width || board.pendingId === id || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const x = previous.left - next.left, y = previous.top - next.top;
     if ((Math.abs(x) > 1 || Math.abs(y) > 1) && element.animate) movement.current = element.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "translate(0, 0)" }], { duration: 240, easing: "cubic-bezier(.2,.8,.2,1)" });
-  }, [board.active, board.over, board.pendingId, board.positions, children, id, lane]);
+  // Re-measure only when the card itself is laid out elsewhere. Hovering across
+  // lanes changes board state many times per second and must not restart FLIP
+  // animations for every stationary card.
+  }, [board.pendingId, board.positions, children, id, lane]);
   useLayoutEffect(() => {
     if (node.current) board.cards.set(id, { node: node.current, content: children, className, label, lane });
     return () => { board.cards.delete(id); };

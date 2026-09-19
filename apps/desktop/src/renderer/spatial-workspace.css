@@ -199,7 +199,7 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .approval-column-total { margin: 0; padding: 0 16px 14px; background: transparent; border: 0; border-bottom: 1px solid #d7e2e3; border-radius: 0; box-shadow: none; flex: none; }
 .approval-column-total > span { font-size: 10px; color: var(--ws-muted); }
 .approval-column-total strong { font-size: 18px; color: var(--ws-text); }
-.approval-column-stack, .project-stack, .kanban-stack { min-height: 0; gap: 12px; padding: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: auto; }
+.approval-column-stack, .project-stack, .kanban-stack { min-height: 0; gap: 12px; padding: 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .project-card, .kanban-card, .approval-board-card { border: 1px solid rgb(255 255 255 / 90%); border-radius: 17px; background: #fcfdfd; box-shadow: var(--ws-shadow-card); }
 .project-card.spatial-card, .kanban-card.spatial-card { padding: 0; }
 .project-card-topline > [data-tone] { transition: transform 160ms var(--ws-ease-out, cubic-bezier(.2, 0, 0, 1)); }
