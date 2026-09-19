@@ -163,12 +163,14 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 }
 .spatial-drag-preview {
   box-sizing: border-box;
+  contain: layout paint;
   box-shadow: var(--ws-shadow-lift) !important;
   cursor: grab;
   pointer-events: none;
   transform: translate3d(var(--spatial-drift-x, 0), var(--spatial-shift, 0), 0) rotate(var(--spatial-tilt, 0deg)) scale(var(--spatial-stretch-x, 1), var(--spatial-stretch-y, 1));
   transform-origin: 50% 72%;
   transition: transform 105ms cubic-bezier(.2, 1.45, .35, 1);
+  will-change: transform;
 }
 .spatial-card.is-committing { opacity: 1; }
 .spatial-card-open { display: grid; gap: 12px; width: 100%; padding: 18px; border: 0; border-radius: inherit; text-align: left; background: transparent; color: var(--ws-text); cursor: pointer; }

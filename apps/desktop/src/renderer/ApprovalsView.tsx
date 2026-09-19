@@ -78,34 +78,50 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
 type ApprovalBoardFilter = "all" | "actionable" | "revision" | "finished";
+const approvalMoveHintCache = new Map<string, string>();
+const rememberApprovalMoveHint = (requestId: string, text: string) => {
+  if (!approvalMoveHintCache.has(requestId) && approvalMoveHintCache.size >= 500) {
+    const oldestRequestId = approvalMoveHintCache.keys().next().value;
+    if (oldestRequestId !== undefined) approvalMoveHintCache.delete(oldestRequestId);
+  }
+  approvalMoveHintCache.set(requestId, text);
+};
 
-export function AnimatedApprovalMoveHint({ text }: { text: string }) {
-  const [displayedText, setDisplayedText] = useState(text);
+export function AnimatedApprovalMoveHint({ requestId, text }: { requestId: string; text: string }) {
+  const [displayedText, setDisplayedText] = useState(() => approvalMoveHintCache.get(requestId) ?? text);
   const [phase, setPhase] = useState<"idle" | "leaving" | "entering">("idle");
-  const displayedTextRef = useRef(text);
+  const displayedTextRef = useRef(displayedText);
 
   useEffect(() => {
-    if (text === displayedTextRef.current) return undefined;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      displayedTextRef.current = text;
-      setDisplayedText(text);
-      setPhase("idle");
+    if (text === displayedTextRef.current) {
+      rememberApprovalMoveHint(requestId, text);
       return undefined;
     }
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      const reducedMotionTimer = window.setTimeout(() => {
+        displayedTextRef.current = text;
+        rememberApprovalMoveHint(requestId, text);
+        setDisplayedText(text);
+        setPhase("idle");
+      }, 0);
+      return () => window.clearTimeout(reducedMotionTimer);
+    }
 
-    setPhase("leaving");
+    const leaveTimer = window.setTimeout(() => setPhase("leaving"), 0);
     const swapTimer = window.setTimeout(() => {
       displayedTextRef.current = text;
+      rememberApprovalMoveHint(requestId, text);
       setDisplayedText(text);
       setPhase("entering");
     }, 120);
     const settleTimer = window.setTimeout(() => setPhase("idle"), 300);
 
     return () => {
+      window.clearTimeout(leaveTimer);
       window.clearTimeout(swapTimer);
       window.clearTimeout(settleTimer);
     };
-  }, [text]);
+  }, [requestId, text]);
 
   return (
     <span
@@ -1673,7 +1689,7 @@ export function ApprovalsView({
                           ) : null}
                           {plan || canRevise ? <footer>
                             {plan ? (
-                              <AnimatedApprovalMoveHint text={`Перетащите → ${plan.targetKeys.map((targetKey) =>
+                              <AnimatedApprovalMoveHint requestId={request.id} text={`Перетащите → ${plan.targetKeys.map((targetKey) =>
                                   boardColumns.find((candidate) => candidate.key === targetKey)?.label,
                                 ).filter(Boolean).join(" / ")}`} />
                             ) : (
