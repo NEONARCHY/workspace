@@ -114,10 +114,7 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                     await set_mandatory(connection, owner, settings, True)
                 assert damaged.value.status_code == 409
                 release_path.write_bytes(payload)
-                with pytest.raises(WorkspaceRepositoryError) as forbidden_gate:
-                    await set_mandatory(connection, admin, settings, True)
-                assert forbidden_gate.value.status_code == 403
-                required = await set_mandatory(connection, owner, settings, True)
+                required = await set_mandatory(connection, admin, settings, True)
                 assert required.mandatory and required.minimum_version == "0.30.0"
                 assert (await policy_snapshot(connection)).mandatory
                 disabled = await set_mandatory(connection, owner, settings, False)

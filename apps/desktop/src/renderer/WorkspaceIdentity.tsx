@@ -47,15 +47,16 @@ export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { per
   </Popover>;
 }
 
-export function ConnectionIndicator({ detail, error }: { detail: string; error: boolean }) {
+export function ConnectionIndicator({ detail, error, updateAvailable = false }: { detail: string; error: boolean; updateAvailable?: boolean }) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   return <>
-    <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end" withArrow>
+    <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end">
       <PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`}><i /><span>{detail}</span></button></PopoverTrigger>
       <PopoverSurface className="connection-popover">
         <strong>Связь с рабочим сервером</strong><p>{detail}</p>
         <small>Изменения появляются в рабочем пространстве после подтверждения сервером.</small>
+        {updateAvailable ? <Button appearance="primary" onClick={() => { setPopoverOpen(false); window.dispatchEvent(new Event("yuksalish:show-web-update")); }}>Обновить</Button> : null}
         <Button appearance="subtle" onClick={() => { setPopoverOpen(false); setHistoryOpen(true); }}>Ранние обновления</Button>
       </PopoverSurface>
     </Popover>

@@ -16,6 +16,11 @@ const api = vi.hoisted(() => ({
       { id: "admin-2", username: "otheradmin", name: "Другой администратор", role: "admin", status: "active" },
     ],
   }),
+  loadDesktopUpdatePolicy: vi.fn().mockResolvedValue({ publishedVersion: null, minimumVersion: null, mandatory: false, updatedAt: null, release: null }),
+  loadDesktopReleases: vi.fn().mockResolvedValue([]),
+  publishDesktopRelease: vi.fn(),
+  setMandatoryDesktopUpdate: vi.fn(),
+  stageDesktopRelease: vi.fn(),
   uploadProfileAvatar: vi.fn(),
   loadProfileAvatar: vi.fn(),
 }));

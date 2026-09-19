@@ -379,6 +379,7 @@ export function App() {
   const [backgroundError, setBackgroundError] = useState("");
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
+  const [webUpdateAvailable, setWebUpdateAvailable] = useState(false);
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
@@ -570,7 +571,7 @@ export function App() {
   }, [establishSession]);
 
   useEffect(() => {
-    if (!session || workspacePlatform.kind !== "electron") return;
+    if (!session) return;
     let active = true;
     const refreshPolicy = () => {
       void loadDesktopUpdatePolicy(session.accessToken)
@@ -1697,7 +1698,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -2009,7 +2010,7 @@ export function App() {
         />
         </RecoveryBoundary>
       ) : null}
-      <WebUpdateNotice />
+      <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
     </FluentProvider>
   );
 }

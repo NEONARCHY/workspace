@@ -14,13 +14,14 @@ import { workspacePlatform } from "./platform-adapter";
 
 interface DesktopUpdateSettingsProps {
   readonly token: string;
+  readonly canPublish: boolean;
 }
 
 function versionFromFile(file: File): string | null {
   return /^Yuksalish-Workspace-Setup-(\d+\.\d+\.\d+)\.exe$/.exec(file.name)?.[1] ?? null;
 }
 
-export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
+export function DesktopUpdateSettings({ token, canPublish }: DesktopUpdateSettingsProps) {
   const [policy, setPolicy] = useState<DesktopUpdatePolicy>();
   const [releases, setReleases] = useState<readonly DesktopRelease[]>([]);
   const [file, setFile] = useState<File>();
@@ -71,7 +72,7 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
     <div className="account-section-title">
       <div>
         <h3>Обновления приложения</h3>
-        <p>Только суперадминистратор может загрузить сборку, опубликовать её и включить обязательное обновление.</p>
+        <p>{canPublish ? "Загрузите и опубликуйте проверенную сборку, затем выберите режим обновления." : "Администратор может переключить режим уже опубликованного обновления."}</p>
       </div>
       <span className={policy?.mandatory ? "security-warning" : "security-ok"}>
         {policy?.mandatory ? "Обязательно" : "Свободный режим"}
@@ -80,7 +81,7 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
     <p>На сервере: <strong>{policy?.publishedVersion ?? "нет опубликованной версии"}</strong>. Текущий клиент: <strong>{workspacePlatform.kind === "web" ? `web ${workspacePlatform.version}` : workspacePlatform.version}</strong>.</p>
     {workspacePlatform.kind === "web" ? <p className="security-ok">Установщики относятся только к Electron. Браузерная версия обновляется отдельной web-выкладкой.</p> : null}
 
-    <div className="desktop-update-step">
+    {canPublish ? <><div className="desktop-update-step">
       <strong>1. Загрузить готовый установщик</strong>
       <p>Сначала проверьте сборку на тестовом ПК. Имя файла должно быть вида Yuksalish-Workspace-Setup-1.2.3.exe.</p>
       <input type="file" accept=".exe" aria-label="Готовый установщик Yuksalish" disabled={busy}
@@ -104,10 +105,10 @@ export function DesktopUpdateSettings({ token }: DesktopUpdateSettingsProps) {
         <Button size="small" disabled={busy} onClick={() => { setSelectedVersion(release.version); setConfirmation("publish"); }}>Опубликовать</Button>
       </div>)}
       {releases.every((release) => release.publishedAt) ? <small>Неопубликованных сборок нет.</small> : null}
-    </div>
+    </div></> : null}
 
     <div className="desktop-update-step">
-      <strong>3. Обязательное обновление</strong>
+      <strong>{canPublish ? "3. Обязательное обновление" : "Режим обновления"}</strong>
       <p>На старых версиях появится экран обновления, который закроет рабочие разделы. Включайте режим только после проверки установки и доступности файла для коллег.</p>
       <Button disabled={busy || !policy?.publishedVersion} onClick={() => setConfirmation(policy?.mandatory ? "disable" : "mandatory")}>
         {policy?.mandatory ? "Выключить обязательное обновление" : "Сделать обновление обязательным"}

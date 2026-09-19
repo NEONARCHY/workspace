@@ -34,6 +34,11 @@ def require_superadmin(actor: AuthenticatedUser) -> None:
         raise WorkspaceRepositoryError(403, "Только суперадминистратор управляет обновлениями")
 
 
+def require_update_policy_admin(actor: AuthenticatedUser) -> None:
+    if actor.role not in {"admin", "superadmin"}:
+        raise WorkspaceRepositoryError(403, "Только администратор управляет режимом обновления")
+
+
 def release_file_name(version: str) -> str:
     if not _VERSION.fullmatch(version) or len(version) > 32:
         raise WorkspaceRepositoryError(422, "Номер версии должен иметь вид 1.2.3")
@@ -93,7 +98,7 @@ async def policy_snapshot(connection: AsyncConnection) -> DesktopUpdatePolicyRes
 async def staged_releases(
     connection: AsyncConnection, actor: AuthenticatedUser,
 ) -> list[DesktopReleaseResponse]:
-    require_superadmin(actor)
+    require_update_policy_admin(actor)
     rows = (
         await connection.execute(
             select(update_releases).order_by(update_releases.c.uploaded_at.desc())
@@ -249,7 +254,7 @@ async def set_mandatory(
     settings: Settings,
     mandatory: bool,
 ) -> DesktopUpdatePolicyResponse:
-    require_superadmin(actor)
+    require_update_policy_admin(actor)
     policy = await policy_snapshot(connection)
     if mandatory and (
         policy.published_version is None

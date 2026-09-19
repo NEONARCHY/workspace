@@ -148,10 +148,8 @@ async def test_desktop_update_http_permissions_upload_feed_and_download(tmp_path
                     assert (await client.put(f"{base}/mandatory", headers=owner_auth,
                                              json={"mandatory": True})).status_code == 409
                     file_path.write_bytes(payload)
-                    assert (await client.put(f"{base}/mandatory", headers=admin_auth,
-                                             json={"mandatory": True})).status_code == 403
                     required = await client.put(
-                        f"{base}/mandatory", headers=owner_auth, json={"mandatory": True},
+                        f"{base}/mandatory", headers=admin_auth, json={"mandatory": True},
                     )
                     assert required.status_code == 200
                     assert required.json()["minimumVersion"] == "0.30.9"

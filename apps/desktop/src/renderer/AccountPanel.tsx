@@ -238,7 +238,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
           {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=invite]")}>Доступ сотрудников</button>}
           {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=managed-password]")}>Пароли сотрудников</button>}
-          {user.role === "superadmin" && <button type="button" onClick={() => jumpToSection("[data-account-section=updates]")}>Обновления</button>}
+          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=updates]")}>Обновления</button>}
         </nav>}
 
         {initialSection !== "invite" && <><section className="account-profile">
@@ -287,7 +287,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         </section>
 
         <AudioDeviceSettings />
-        {user.role === "superadmin" && <DesktopUpdateSettings token={token} />}
+        {["admin", "superadmin"].includes(user.role) && <DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} />}
 
         <section className="account-section" data-account-section="password">
           <div className="account-section-title">

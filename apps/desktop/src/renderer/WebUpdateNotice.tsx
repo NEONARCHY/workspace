@@ -1,12 +1,32 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@fluentui/react-components";
 import { ArrowClockwise24Regular, CheckmarkCircle24Filled } from "@fluentui/react-icons";
 
 import { requestWebReload, workspacePlatform, type WebVersionManifest } from "./platform-adapter";
 import { hasPendingMutation } from "./workspace-api";
 
-export function WebUpdateNotice() {
+const SNOOZE_KEY = "yuksalish:web:update-snooze";
+
+interface UpdateSnooze {
+  readonly version: string;
+  readonly count: number;
+  readonly until: number;
+}
+
+function readSnooze(version: string): UpdateSnooze | undefined {
+  try {
+    const value = JSON.parse(localStorage.getItem(SNOOZE_KEY) ?? "null") as Partial<UpdateSnooze> | null;
+    return value?.version === version && typeof value.count === "number" && typeof value.until === "number"
+      ? value as UpdateSnooze : undefined;
+  } catch { return undefined; }
+}
+
+export function WebUpdateNotice({ mandatory = false, onAvailabilityChange }: {
+  readonly mandatory?: boolean;
+  readonly onAvailabilityChange?: (available: boolean) => void;
+}) {
   const [available, setAvailable] = useState<WebVersionManifest>();
+  const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [mutationPending, setMutationPending] = useState(false);
 
@@ -16,14 +36,26 @@ export function WebUpdateNotice() {
     const check = () => {
       void workspacePlatform.checkWebVersion()
         .then((manifest) => {
-          if (active && manifest && manifest.version !== workspacePlatform.version) setAvailable(manifest);
+          if (!active) return;
+          const next = manifest && manifest.version !== workspacePlatform.version ? manifest : undefined;
+          setAvailable(next);
+          onAvailabilityChange?.(Boolean(next));
+          setVisible(Boolean(next && (mandatory || (readSnooze(next.version)?.until ?? 0) <= Date.now())));
         })
         .catch(() => undefined);
     };
     check();
     const timer = window.setInterval(check, 60_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [mandatory, onAvailabilityChange]);
+
+  const showUpdate = useCallback(() => {
+    if (available) setVisible(true);
+  }, [available]);
+  useEffect(() => {
+    window.addEventListener("yuksalish:show-web-update", showUpdate);
+    return () => window.removeEventListener("yuksalish:show-web-update", showUpdate);
+  }, [showUpdate]);
 
   useEffect(() => {
     if (!available) return;
@@ -32,7 +64,7 @@ export function WebUpdateNotice() {
     return () => window.clearInterval(timer);
   }, [available]);
 
-  if (!available) return null;
+  if (!available || !visible) return null;
   const reload = () => {
     if (hasPendingMutation()) {
       setMutationPending(true);
@@ -40,6 +72,14 @@ export function WebUpdateNotice() {
     }
     setBusy(true);
     requestWebReload();
+  };
+  const remindLater = () => {
+    const previous = readSnooze(available.version);
+    const count = (previous?.count ?? 0) + 1;
+    const delayMinutes = count * 30;
+    try { localStorage.setItem(SNOOZE_KEY, JSON.stringify({ version: available.version, count, until: Date.now() + delayMinutes * 60_000 })); }
+    catch { /* storage may be unavailable */ }
+    setVisible(false);
   };
   return <aside className="web-update-notice">
     <div className="web-update-dialog" role="dialog" aria-modal="true" aria-live="polite" aria-labelledby="web-update-title">
@@ -52,6 +92,7 @@ export function WebUpdateNotice() {
         {mutationPending ? <p className="web-update-warning" role="alert">Сначала дождитесь завершения текущей операции — введённые данные не потеряются.</p> : null}
       </div>
       <footer>
+        {!mandatory ? <Button appearance="subtle" disabled={busy} onClick={remindLater}>Напомнить позже</Button> : null}
         <Button appearance="primary" icon={<ArrowClockwise24Regular />} disabled={busy || mutationPending} onClick={reload}>
           Обновить
         </Button>

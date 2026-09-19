@@ -55,7 +55,20 @@ body { background: var(--ws-canvas); }
 .identity-popover { display: grid; gap: 8px; }
 .identity-popover h3, .identity-popover p { margin: 0; }
 .identity-popover p, .connection-popover small { color: var(--ws-muted); font-size: 12px; }
-.connection-popover { display: grid; gap: 10px; }
+.connection-popover { position: relative; display: grid; gap: 10px; overflow: visible; }
+.connection-popover::before {
+  position: absolute;
+  top: -7px;
+  right: 18px;
+  width: 14px;
+  height: 14px;
+  border-top: 1px solid #fff;
+  border-left: 1px solid #fff;
+  background: inherit;
+  box-shadow: -3px -3px 8px -7px rgb(41 58 85 / 35%);
+  transform: rotate(45deg);
+  content: "";
+}
 .connection-popover :is(p,small) { margin: 0; }
 .connection-popover .fui-Button { justify-content: flex-start; margin: 4px -8px -8px; }
 .release-history-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border-radius: 24px; }
