@@ -61,7 +61,6 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const selected = requests.find((request) => request.id === selectedId);
   const canChooseOthers = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
@@ -110,13 +109,12 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
 
   const commitAction = async (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => {
     if (busyRef.current || (action === "move" ? !isAdministrator || !targetStage : !request.allowedActions.includes(action))) return false;
-    busyRef.current = true; setBusy(true); setError(""); setNotice("");
+    busyRef.current = true; setBusy(true); setError("");
     try {
       const updated = action === "move"
         ? await onAction(request, action, comment, targetStage)
         : await onAction(request, action, comment);
       if (!updated) { setError("Не удалось изменить стадию. Проверьте подключение и актуальные права на заявку."); return false; }
-      setNotice(`${request.number}: ${updated.stageLabel}.${isFinished(updated) && filter === "running" ? " Поездка доступна в фильтре «Завершённые»." : ""}`);
       return true;
     } catch { setError("Не удалось изменить стадию. Карточка остаётся на прежнем месте."); return false; }
     finally { busyRef.current = false; setBusy(false); }
@@ -162,7 +160,6 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
         </div>
       </div>
       {feedback}
-      {notice ? <p className="trip-feedback" role="status">{notice}</p> : null}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
         <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>

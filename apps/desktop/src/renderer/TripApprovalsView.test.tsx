@@ -79,6 +79,7 @@ describe("Trip approvals interaction", async () => {
       expect.stringContaining("Утверждено"),
       "approved",
     ));
+    expect(document.querySelector(".trip-feedback:not(.error)")).toBeNull();
   });
   it("requires a reason for a return, and cancelling leaves the card untouched", async () => {
     const onAction = vi.fn(async () => ({ ...request, stage: "launch" as const, stageLabel: "Запуск" }));
