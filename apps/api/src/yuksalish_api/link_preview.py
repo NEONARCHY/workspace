@@ -85,18 +85,23 @@ def _platform_preview(url: str) -> LinkPreviewResponse | None:
             title="Видео YouTube",
             site_name="YouTube",
             image_url=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
-            embed_url=f"https://www.youtube-nocookie.com/embed/{video_id}",
+            embed_url=f"https://www.youtube.com/embed/{video_id}",
         )
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
     parts = [part for part in parsed.path.split("/") if part]
     if host == "instagram.com" and len(parts) >= 2 and parts[0] in {"reel", "reels", "p"}:
+        media_kind = "reel" if parts[0] in {"reel", "reels"} else "p"
+        shortcode = parts[1]
         return LinkPreviewResponse(
             url=url,
-            canonical_url=url,
+            canonical_url=f"https://www.instagram.com/{media_kind}/{shortcode}/",
             kind="instagram",
             title="Публикация Instagram",
             site_name="Instagram",
+            embed_url=(
+                f"https://www.instagram.com/{media_kind}/{shortcode}/embed/captioned/"
+            ),
         )
     return None
 

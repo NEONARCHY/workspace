@@ -6,20 +6,21 @@ import pytest
 from yuksalish_api.link_preview import UnsafePreviewUrl, _assert_public_url, _platform_preview
 
 
-def test_youtube_links_use_privacy_enhanced_embed() -> None:
+def test_youtube_links_use_official_embed() -> None:
     preview = _platform_preview("https://youtu.be/dQw4w9WgXcQ")
 
     assert preview is not None
     assert preview.kind == "youtube"
-    assert preview.embed_url == "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"
+    assert preview.embed_url == "https://www.youtube.com/embed/dQw4w9WgXcQ"
 
 
-def test_instagram_links_do_not_use_a_blocked_iframe() -> None:
+def test_instagram_links_use_official_public_embed() -> None:
     preview = _platform_preview("https://www.instagram.com/reels/example/")
 
     assert preview is not None
     assert preview.kind == "instagram"
-    assert preview.embed_url is None
+    assert preview.canonical_url == "https://www.instagram.com/reel/example/"
+    assert preview.embed_url == "https://www.instagram.com/reel/example/embed/captioned/"
 
 
 def test_private_addresses_are_rejected(monkeypatch: pytest.MonkeyPatch) -> None:

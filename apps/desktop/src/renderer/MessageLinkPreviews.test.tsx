@@ -17,7 +17,7 @@ describe("message link previews", () => {
       .toHaveLength(3);
   });
 
-  it("renders Instagram as an external card instead of a blocked iframe", async () => {
+  it("renders an official Instagram embed with an external fallback", async () => {
     vi.mocked(loadLinkPreview).mockResolvedValue({
       url: "https://www.instagram.com/reels/example/",
       canonicalUrl: "https://www.instagram.com/reels/example/",
@@ -26,13 +26,36 @@ describe("message link previews", () => {
       description: "",
       siteName: "Instagram",
       imageUrl: null,
-      embedUrl: null,
+      embedUrl: "https://www.instagram.com/reel/example/embed/captioned/",
     });
 
     render(<MessageLinkPreviews body="https://www.instagram.com/reels/example/" token="token" />);
 
-    const card = await screen.findByRole("link", { name: "Открыть в Instagram: Публикация Instagram" });
-    expect(card).toHaveAttribute("href", "https://www.instagram.com/reels/example/");
-    expect(card.querySelector("iframe")).toBeNull();
+    expect(await screen.findByTitle("Публикация Instagram")).toHaveAttribute(
+      "src", "https://www.instagram.com/reel/example/embed/captioned/",
+    );
+    expect(screen.getByRole("link", { name: /Открыть в Instagram/u }))
+      .toHaveAttribute("href", "https://www.instagram.com/reels/example/");
+  });
+
+  it("adds origin and player API parameters to YouTube embeds", async () => {
+    vi.mocked(loadLinkPreview).mockResolvedValue({
+      url: "https://youtu.be/dQw4w9WgXcQ",
+      canonicalUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      kind: "youtube",
+      title: "Видео YouTube",
+      description: "",
+      siteName: "YouTube",
+      imageUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      embedUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
+    });
+
+    render(<MessageLinkPreviews body="https://youtu.be/dQw4w9WgXcQ" token="token" />);
+
+    const frame = await screen.findByTitle("Видео YouTube");
+    expect(frame.getAttribute("src")).toContain("enablejsapi=1");
+    expect(frame.getAttribute("src")).toContain("playsinline=1");
+    expect(screen.getByRole("link", { name: /Открыть на YouTube/u }))
+      .toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
   });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { LinkPreview } from "@yuksalish/contracts";
 
@@ -14,22 +14,78 @@ export function extractMessageLinks(body: string): readonly string[] {
     .slice(0, 3);
 }
 
+function SourceFallback({ preview, label }: { readonly preview: LinkPreview; readonly label: string }) {
+  return <a className="message-link-preview-source" href={preview.canonicalUrl} target="_blank" rel="noreferrer">
+    {label}<span aria-hidden="true">↗</span>
+  </a>;
+}
+
+function YouTubePreview({ preview }: { readonly preview: LinkPreview }) {
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [failed, setFailed] = useState(false);
+  const embedUrl = useMemo(() => {
+    const value = new URL(preview.embedUrl ?? preview.canonicalUrl);
+    value.searchParams.set("enablejsapi", "1");
+    value.searchParams.set("playsinline", "1");
+    if (window.location.origin.startsWith("http")) value.searchParams.set("origin", window.location.origin);
+    return value.toString();
+  }, [preview]);
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (!new Set(["https://www.youtube.com", "https://www.youtube-nocookie.com"]).has(event.origin)) return;
+      try {
+        const payload = typeof event.data === "string" ? JSON.parse(event.data) as { event?: string } : event.data as { event?: string };
+        if (payload.event === "onError") setFailed(true);
+      } catch { /* Ignore unrelated iframe messages. */ }
+    };
+    window.addEventListener("message", receive);
+    return () => window.removeEventListener("message", receive);
+  }, []);
+  return <section className="message-link-preview message-link-preview-embed" aria-label={preview.title}>
+    {failed ? <div className="message-link-preview-fallback">
+      {preview.imageUrl ? <img src={preview.imageUrl} alt="" /> : null}
+      <strong>Видео нельзя воспроизвести внутри Workspace</strong>
+      <span>Автор или YouTube ограничил встраивание.</span>
+    </div> : <iframe
+      ref={frameRef}
+      src={embedUrl}
+      title={preview.title}
+      loading="lazy"
+      allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
+      onLoad={() => frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening" }), "https://www.youtube.com")}
+      onError={() => setFailed(true)}
+    />}
+    <div><strong>{preview.title}</strong><span>{preview.siteName}</span><SourceFallback preview={preview} label="Открыть на YouTube" /></div>
+  </section>;
+}
+
+function InstagramPreview({ preview }: { readonly preview: LinkPreview }) {
+  const [failed, setFailed] = useState(false);
+  return <section className="message-link-preview message-link-preview-instagram" aria-label={preview.title}>
+    {preview.embedUrl && !failed ? <iframe
+      src={preview.embedUrl}
+      title={preview.title}
+      loading="lazy"
+      allow="autoplay; encrypted-media; picture-in-picture"
+      referrerPolicy="strict-origin-when-cross-origin"
+      allowFullScreen
+      onError={() => setFailed(true)}
+    /> : <div className="message-link-preview-fallback message-link-preview-instagram-fallback">
+      {preview.imageUrl ? <img src={preview.imageUrl} alt="" loading="lazy" /> : <span className="message-link-preview-platform" aria-hidden="true">Instagram</span>}
+      <strong>Публикация недоступна для встроенного просмотра</strong>
+    </div>}
+    <div><span>{preview.siteName}</span><strong>{preview.title}</strong><SourceFallback preview={preview} label="Открыть в Instagram" /></div>
+  </section>;
+}
+
 function LinkPreviewCard({ preview }: { readonly preview: LinkPreview }) {
   if (preview.kind === "youtube") {
-    return (
-      <section className="message-link-preview message-link-preview-embed" aria-label={preview.title}>
-        <iframe src={preview.embedUrl ?? preview.canonicalUrl} title={preview.title} loading="lazy" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen />
-        <div><strong>{preview.title}</strong><span>{preview.siteName}</span></div>
-      </section>
-    );
+    return <YouTubePreview preview={preview} />;
   }
   if (preview.kind === "instagram") {
-    return (
-      <a className="message-link-preview message-link-preview-instagram" href={preview.canonicalUrl} target="_blank" rel="noreferrer" aria-label={`Открыть в Instagram: ${preview.title}`}>
-        {preview.imageUrl ? <img src={preview.imageUrl} alt="" loading="lazy" /> : <span className="message-link-preview-platform" aria-hidden="true">Instagram</span>}
-        <div><span>{preview.siteName}</span><strong>{preview.title}</strong><p>Открыть публикацию в Instagram</p></div>
-      </a>
-    );
+    return <InstagramPreview preview={preview} />;
   }
   if (preview.kind === "video") {
     return <section className="message-link-preview message-link-preview-video" aria-label={preview.title}>
