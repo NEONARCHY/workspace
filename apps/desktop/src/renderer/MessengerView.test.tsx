@@ -339,7 +339,7 @@ describe("Private messenger", () => {
         "Сообщение уже изменилось",
       ),
     );
-    expect(onEditMessage).toHaveBeenCalledWith(message, "Обновлённый текст");
+    expect(onEditMessage).toHaveBeenCalledWith(message, "Обновлённый текст", []);
     expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(
       "Обновлённый текст",
     );
@@ -375,10 +375,39 @@ describe("Private messenger", () => {
     expect((editor as HTMLInputElement).selectionStart).toBe(own.body.length);
     fireEvent.change(editor, { target: { value: "Исправленный текст" } });
     fireEvent.keyDown(editor, { key: "Enter" });
-    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст"));
+    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст", []));
     await waitFor(() => expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument());
     expect(composer).toHaveFocus();
     expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
+  });
+
+  it("suggests participants and saves new mentions while editing", async () => {
+    const own: ChatMessage = {
+      id: "own",
+      chatId: "finance",
+      authorId: "aziza",
+      body: "Проверьте документ",
+      time: "12:00",
+      canEdit: true,
+      mentionUserIds: [],
+    };
+    const onEditMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [own], onEditMessage });
+
+    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
+    const editor = screen.getByLabelText("Редактирование сообщения");
+    fireEvent.change(editor, { target: { value: "Проверьте документ @" } });
+
+    expect(screen.getByRole("region", { name: "Упомянуть участников" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
+    expect(editor).toHaveValue("Проверьте документ @baxtiyor ");
+
+    fireEvent.keyDown(editor, { key: "Enter" });
+    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(
+      own,
+      "Проверьте документ @baxtiyor",
+      ["baxtiyor"],
+    ));
   });
 
   it("preserves the composer draft and current edit; Escape returns focus without saving", () => {

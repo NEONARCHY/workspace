@@ -1728,7 +1728,7 @@ export function App() {
                 currentUserId={workspace.currentUser.id}
                 currentUserRole={workspace.currentUser.role}
                 chatActions={chatActions}
-                onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
+                onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
                 onDownloadAttachment={handleDownloadAttachment}
@@ -1784,7 +1784,7 @@ export function App() {
                   currentUserId={workspace.currentUser.id}
                   currentUserRole={workspace.currentUser.role}
                   chatActions={chatActions}
-                  onEditMessage={async (message, body) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body)); }}
+                  onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
                   onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                   onCreateTaskFromMessage={handleCreateTaskFromMessage}
                   onDownloadAttachment={handleDownloadAttachment}

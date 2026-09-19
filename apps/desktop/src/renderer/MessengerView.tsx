@@ -69,7 +69,7 @@ export interface MessengerViewProps {
   ) => Promise<ChatMessage | undefined>;
   readonly onReactMessage: (message: ChatMessage, emoji: MessageReactionEmoji) => Promise<void>;
   readonly onPinMessage: (message: ChatMessage, pinned: boolean) => Promise<void>;
-  readonly onEditMessage: (message: ChatMessage, body: string) => Promise<void>;
+  readonly onEditMessage: (message: ChatMessage, body: string, mentionUserIds: readonly string[]) => Promise<void>;
   readonly onDeleteMessage: (message: ChatMessage) => Promise<void>;
   readonly onCreateTaskFromMessage: (
     message: ChatMessage,
@@ -166,6 +166,7 @@ function Conversation({
   const [forwarding, setForwarding] = useState<ChatMessage>();
   const [editing, setEditing] = useState<ChatMessage>();
   const [editBody, setEditBody] = useState("");
+  const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
   const [pendingDeletion, setPendingDeletion] = useState<{ message: ChatMessage; deadline: number }>();
   const [deleteSeconds, setDeleteSeconds] = useState(6);
@@ -225,7 +226,9 @@ function Conversation({
         message.body.toLowerCase().includes(query.toLowerCase())),
   );
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
-  const mentionMatch = draft.match(/(?:^|\s)@([^\s@]*)$/u);
+  const activeComposerBody = editing ? editBody : draft;
+  const activeMentions = editing ? editMentions : mentions;
+  const mentionMatch = activeComposerBody.match(/(?:^|\s)@([^\s@]*)$/u);
   const mentionQuery = (mentionMatch?.[1] ?? "").toLocaleLowerCase("ru");
   const mentionCandidates = chat.members.filter((member) => {
     if (member.userId === currentUserId) return false;
@@ -293,6 +296,8 @@ function Conversation({
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     setEditing(message);
     setEditBody(message.body);
+    setEditMentions(message.mentionUserIds ?? []);
+    setMentionPicker(false);
     setError("");
   };
   const run = async (operation: () => Promise<void>) => {
@@ -336,9 +341,15 @@ function Conversation({
     if (!editing || busy || !editBody.trim()) return;
     focusAfterSend.current = true;
     void run(async () => {
-      await onEditMessage(editing, editBody.trim());
+      await onEditMessage(
+        editing,
+        editBody.trim(),
+        editMentions.filter((id) => activeMemberIds.has(id)),
+      );
       setEditing(undefined);
       setEditBody("");
+      setEditMentions([]);
+      setMentionPicker(false);
     });
   };
   return (
@@ -660,6 +671,8 @@ function Conversation({
               <Button appearance="subtle" aria-label="Отменить редактирование" disabled={busy} onClick={() => {
                 setEditing(undefined);
                 setEditBody("");
+                setEditMentions([]);
+                setMentionPicker(false);
               }}>×</Button>
             </div>
           ) : null}
@@ -673,7 +686,7 @@ function Conversation({
               {mentionCandidates.map((member) => {
                 const person = people.find((item) => item.id === member.userId);
                 if (!person) return null;
-                const selected = mentions.includes(member.userId);
+                const selected = activeMentions.includes(member.userId);
                 return <button
                   className="mention-person"
                   type="button"
@@ -682,10 +695,16 @@ function Conversation({
                   aria-pressed={selected}
                   disabled={busy}
                   onClick={() => {
-                    setMentions(selected ? mentions.filter((id) => id !== member.userId) : [...new Set([...mentions, member.userId])]);
+                    const nextMentions = selected
+                      ? activeMentions.filter((id) => id !== member.userId)
+                      : [...new Set([...activeMentions, member.userId])];
+                    if (editing) setEditMentions(nextMentions);
+                    else setMentions(nextMentions);
                     if (!selected && mentionMatch) {
                       const handle = person.username || person.name.replace(/\s+/gu, "_");
-                      setDraft(`${draft.slice(0, mentionMatch.index! + mentionMatch[0].lastIndexOf("@"))}@${handle} `);
+                      const nextBody = `${activeComposerBody.slice(0, mentionMatch.index! + mentionMatch[0].lastIndexOf("@"))}@${handle} `;
+                      if (editing) setEditBody(nextBody);
+                      else setDraft(nextBody);
                       setMentionPicker(false);
                       requestAnimationFrame(() => composerInputRef.current?.focus());
                     }
@@ -747,10 +766,10 @@ function Conversation({
               appearance="subtle"
               aria-label="Упомянуть участника"
               aria-expanded={mentionPicker}
-              disabled={busy || Boolean(editing)}
+              disabled={busy}
               onClick={() => setMentionPicker(!mentionPicker)}
             >
-              @{mentions.length || ""}
+              @{activeMentions.length || ""}
             </Button>
             <Tooltip content="Записать голосовое сообщение" relationship="label">
               <Button
@@ -795,6 +814,7 @@ function Conversation({
                 onChange={(_, data) => {
                   if (editing) {
                     setEditBody(data.value);
+                    setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
                     return;
                   }
                   draftEdited.current = true;
@@ -835,6 +855,8 @@ function Conversation({
                     event.preventDefault();
                     setEditing(undefined);
                     setEditBody("");
+                    setEditMentions([]);
+                    setMentionPicker(false);
                   }
                 }}
               />

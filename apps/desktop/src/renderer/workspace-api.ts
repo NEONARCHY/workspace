@@ -586,9 +586,14 @@ export function transferWorkspaceChatOwner(token: string, id: string, userId: st
   return apiRequest(`/chats/${id}/owner`, { method: "POST", body: JSON.stringify({ userId }) }, token);
 }
 
-export function editWorkspaceMessage(token: string, message: ChatMessage, body: string): Promise<ChatMessage> {
+export function editWorkspaceMessage(
+  token: string,
+  message: ChatMessage,
+  body: string,
+  mentionUserIds: readonly string[],
+): Promise<ChatMessage> {
   return apiRequest(`/messages/${message.id}`, {
-    method: "PATCH", body: JSON.stringify({ body, expectedRevision: message.revision ?? 1, mentionUserIds: message.mentionUserIds ?? [] }),
+    method: "PATCH", body: JSON.stringify({ body, expectedRevision: message.revision ?? 1, mentionUserIds }),
   }, token);
 }
 
