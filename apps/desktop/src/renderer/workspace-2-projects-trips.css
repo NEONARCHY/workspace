@@ -202,7 +202,13 @@
 .projects-view .project-column > header .fui-Badge,
 .trips-view .approval-column-count { min-width: 22px; min-height: 22px; border: 0; color: #456270; background: rgb(255 255 255 / 78%); font-size: 11px; }
 .projects-view .project-stack,
-.trips-view .approval-column-stack { gap: 10px; padding: 10px; overflow-y: auto; scrollbar-width: thin; }
+.trips-view .approval-column-stack {
+  gap: 10px;
+  padding: 10px;
+  overflow-y: auto;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+}
 .trips-view .approval-column-total { min-height: 46px; padding: 0 15px 10px; border-color: rgb(72 102 111 / 10%); }
 .trips-view .approval-column-total > span { color: #465e69; font-size: 10px; }
 .trips-view .approval-column-total > strong { color: #2d4757; font-size: 17px; }
@@ -247,11 +253,12 @@
 .projects-view .spatial-inspector {
   position: fixed;
   z-index: var(--ws-layer-overlay);
-  top: 14px;
-  right: 14px;
-  bottom: 14px;
-  left: auto;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  left: 50%;
   width: min(760px, 72vw);
+  max-height: min(760px, calc(100dvh - 80px));
   min-width: 0;
   margin: 0;
   padding: 24px 24px 34px;
@@ -260,9 +267,20 @@
   border-radius: 25px;
   background: #f8fbfa;
   box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
-  animation: ws2-process-inspector-in 240ms var(--ws-ease-spatial) both;
+  transform: translate(-50%, -50%);
+  animation: ws2-process-dialog-in 240ms var(--ws-ease-spatial) both;
 }
-.projects-view .project-inspector-close { position: absolute; z-index: 1; top: 18px; right: 18px; width: 36px; height: 36px; border-radius: 12px; background: #eaf1ef; }
+.projects-view .project-inspector-close {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  float: right;
+  width: 36px;
+  height: 36px;
+  margin-bottom: -36px;
+  border-radius: 12px;
+  background: #eaf1ef;
+}
 .projects-view .spatial-inspector > header { padding-right: 46px; border-color: #e2eae8; }
 .projects-view .spatial-inspector > header h2 { font-size: 24px; font-weight: 600; }
 .project-detail-stage { display: flex; gap: 5px; margin: 16px 0; overflow-x: auto; scrollbar-width: thin; }
@@ -293,14 +311,14 @@
 
 .fui-DialogSurface.trip-dialog:not(.record-composer-dialog) {
   width: min(840px, calc(100vw - 28px));
-  max-height: calc(100dvh - 28px);
+  max-height: min(760px, calc(100dvh - 80px));
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 92%);
   border-radius: 25px;
   background: #f7faf9;
   box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
 }
-.trip-dialog:not(.record-composer-dialog) .trip-detail { max-height: calc(100dvh - 28px); padding: 0 24px 34px; overflow-y: auto; background: transparent; scrollbar-width: thin; }
+.trip-dialog:not(.record-composer-dialog) .trip-detail { max-height: min(760px, calc(100dvh - 80px)); padding: 0 24px 34px; overflow-y: auto; background: transparent; scrollbar-width: thin; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header { position: sticky; z-index: 2; top: 0; min-height: 105px; margin: 0 -24px 14px; padding: 20px 24px 16px; border-color: #e1e9e7; background: rgb(250 252 251 / 94%); backdrop-filter: blur(8px); }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header span { color: #477681; font-size: 11px; letter-spacing: .02em; }
 .trip-dialog:not(.record-composer-dialog) .trip-detail > header h2 { margin-top: 4px; font-size: 27px; font-weight: 600; }
@@ -312,9 +330,9 @@
 .trip-dialog:not(.record-composer-dialog) .trip-purpose { padding: 18px; border: 0; border-radius: 17px; background: linear-gradient(110deg, #e5f1ef, #eef1f8); }
 .trip-dialog:not(.record-composer-dialog) .trip-purpose p { color: var(--ws-text); font-size: 16px; line-height: 1.45; }
 
-@keyframes ws2-process-inspector-in {
-  from { opacity: .82; transform: translateX(14px); }
-  to { opacity: 1; transform: translateX(0); }
+@keyframes ws2-process-dialog-in {
+  from { opacity: .82; transform: translate(-50%, calc(-50% + 14px)); }
+  to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 @container workspace (max-width: 900px) {
@@ -338,7 +356,14 @@
   .ws2-process-metrics span { font-size: 10px; }
   .ws2-segmented { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
   .ws2-segmented button { flex: none; }
-  .projects-view .spatial-inspector { inset: 8px; width: auto; padding: 20px 18px 28px; border-radius: 21px; }
+  .projects-view .spatial-inspector {
+    inset: 8px;
+    width: auto;
+    max-height: none;
+    padding: 20px 18px 28px;
+    border-radius: 21px;
+    transform: none;
+  }
 }
 
 @media (max-height: 700px) {
