@@ -269,8 +269,21 @@
 .identity-popover-profile h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
 .identity-popover-profile p { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .identity-popover-actions { display: grid; gap: 3px; padding-top: 2px; }
-.identity-popover-actions .fui-Button { width: 100%; min-height: 42px; justify-content: flex-start; border-radius: 12px; }
-.identity-popover-actions .fui-Button:hover { color: #006779; background: #e8f3f2; transform: translateX(2px); }
+.identity-popover-actions .fui-Button {
+  width: 100%;
+  min-height: 42px;
+  justify-content: flex-start;
+  border-radius: 12px;
+  transition: color 150ms var(--ws-ease-out), background-color 150ms var(--ws-ease-out),
+    box-shadow 180ms var(--ws-ease-out), transform 180ms var(--ws-ease-out);
+}
+.identity-popover-actions .fui-Button:is(:hover, :focus-visible) {
+  color: #006779;
+  background: #e8f3f2;
+  box-shadow: 0 8px 18px -14px rgb(41 58 85 / 48%);
+  transform: translateY(-2px);
+}
+.identity-popover-actions .fui-Button:active { box-shadow: none; transform: translateY(0); }
 .identity-popover-actions .identity-signout { margin-top: 3px; border-top: 1px solid rgb(41 58 85 / 7%); border-radius: 0 0 12px 12px; }
 
 /* Profile settings grow from the same top-right identity point as the compact menu. */
