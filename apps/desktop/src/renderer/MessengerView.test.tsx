@@ -558,6 +558,10 @@ describe("Private messenger", () => {
     });
     expect(screen.queryByText("Голосовое сообщение")).not.toBeInTheDocument();
     expect(onLoadAttachment).not.toHaveBeenCalled();
+    const speed = screen.getByRole("button", { name: "Скорость воспроизведения: 1×" });
+    fireEvent.click(speed);
+    expect(screen.getByRole("button", { name: "Скорость воспроизведения: 1.5×" })).toBeInTheDocument();
+    expect((screen.getByLabelText("Голосовое сообщение") as HTMLAudioElement).playbackRate).toBe(1.5);
     fireEvent.click(screen.getByRole("button", { name: "Воспроизвести" }));
     await waitFor(() => expect(onLoadAttachment).toHaveBeenCalled());
     expect(await screen.findByLabelText("Голосовое сообщение")).toHaveAttribute("src", "blob:voice");

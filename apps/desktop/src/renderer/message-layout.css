@@ -30,6 +30,7 @@
 .voice-message { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 7px; width: min(390px, 68vw); min-width: min(280px, 66vw); padding: 1px 0; }
 .voice-message-audio { display: none; }
 .voice-player { display: grid; grid-template-columns: 38px minmax(150px, 1fr) 28px; align-items: center; gap: 8px; min-height: 54px; padding: 6px 8px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 17px; background: linear-gradient(145deg, rgb(255 255 255 / 97%), rgb(231 245 243 / 97%)); box-shadow: 0 8px 22px rgb(41 58 85 / 9%), inset 0 1px 0 rgb(255 255 255 / 78%); }
+.voice-player.has-speed { grid-template-columns: 38px minmax(132px, 1fr) auto 28px; gap: 7px; }
 .voice-player .fui-Button { min-width: 0; padding: 0; border-radius: 50%; }
 .voice-player-play { width: 38px; height: 38px; color: #fff !important; background: linear-gradient(145deg, #293a55, #385473) !important; box-shadow: 0 5px 12px rgb(41 58 85 / 24%); transition: transform 150ms var(--ws-ease); }
 .voice-player-play:hover, .voice-player-play:focus-visible { color: #fff !important; background: linear-gradient(145deg, #293a55, #385473) !important; }
@@ -42,6 +43,8 @@
 .voice-player-time i { color: #a5b2bd; font-style: normal; }
 .voice-player-progress { position: absolute; inset: 0 0 13px; width: 100%; height: 27px; margin: 0; cursor: pointer; appearance: none; background: transparent; opacity: 0; }
 .voice-player-progress:disabled { cursor: default; }
+.voice-player-speed { width: auto !important; min-width: 34px !important; height: 28px; padding: 0 6px !important; border-radius: 9px !important; color: var(--ws-link) !important; background: rgb(0 145 168 / 8%) !important; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.voice-player-speed:hover, .voice-player-speed:focus-visible { background: rgb(0 145 168 / 14%) !important; }
 .voice-player-volume { width: 30px; height: 30px; }
 .media-volume-control { position: relative; display: grid; place-items: center; }
 .media-player-play, .media-volume-trigger { display: inline-grid !important; grid-template-columns: 1fr !important; place-items: center !important; align-content: center !important; justify-content: center !important; padding: 0 !important; line-height: 1 !important; }

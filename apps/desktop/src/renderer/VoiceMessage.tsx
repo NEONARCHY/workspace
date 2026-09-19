@@ -24,6 +24,14 @@ export const VOICE_BITS_PER_SECOND = 32_000;
 export const VOICE_MAX_DURATION_MS = 10 * 60 * 1_000;
 export const VOICE_MIN_DURATION_MS = 500;
 const MICROPHONE_REQUEST_TIMEOUT_MS = 12_000;
+export const VOICE_PLAYBACK_RATES = [1, 1.5, 2, 2.5] as const;
+type VoicePlaybackRate = typeof VOICE_PLAYBACK_RATES[number];
+let preferredVoicePlaybackRate: VoicePlaybackRate = 1;
+
+export function nextVoicePlaybackRate(current: VoicePlaybackRate): VoicePlaybackRate {
+  const index = VOICE_PLAYBACK_RATES.indexOf(current);
+  return VOICE_PLAYBACK_RATES[(index + 1) % VOICE_PLAYBACK_RATES.length]!;
+}
 
 function formatDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1_000));
@@ -58,18 +66,23 @@ interface VoicePlayerSurfaceProps {
   readonly loading?: boolean;
   readonly onRequestUrl?: () => Promise<string | undefined>;
   readonly onDurationChange?: (durationMs: number) => void;
+  readonly playbackRateControl?: boolean;
 }
 
-function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading = false, onRequestUrl, onDurationChange }: VoicePlayerSurfaceProps) {
+function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading = false, onRequestUrl, onDurationChange, playbackRateControl = false }: VoicePlayerSurfaceProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [playWhenReady, setPlayWhenReady] = useState(false);
   const [error, setError] = useState("");
+  const [playbackRate, setPlaybackRate] = useState<VoicePlaybackRate>(preferredVoicePlaybackRate);
   const [preferences, setPreferences] = useState(getAudioDevicePreferences);
   const progress = durationMs > 0 ? Math.min(100, currentTimeMs / durationMs * 100) : 0;
 
   useEffect(() => subscribeToAudioDevicePreferences(setPreferences), []);
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate, url]);
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !url) return;
@@ -119,7 +132,7 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
       onPause={() => setPlaying(false)}
       onEnded={() => { setPlaying(false); setCurrentTimeMs(0); }}
     />
-    <div className={`voice-player${loading ? " loading" : ""}`}>
+    <div className={`voice-player${loading ? " loading" : ""}${playbackRateControl ? " has-speed" : ""}`}>
       <Button className="voice-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={loading ? "Загрузка голосового сообщения" : playing ? "Пауза" : "Воспроизвести"} disabled={loading} onClick={() => void togglePlayback()} />
       <div className="voice-player-track">
         <div className="voice-waveform" aria-hidden="true">
@@ -142,6 +155,16 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
         />
         <span className="voice-player-time">{formatDuration(currentTimeMs)} <i>/</i> {formatDuration(durationMs)}</span>
       </div>
+      {playbackRateControl ? <Button
+        className="voice-player-speed"
+        appearance="subtle"
+        aria-label={`Скорость воспроизведения: ${playbackRate}×`}
+        onClick={() => {
+          const next = nextVoicePlaybackRate(playbackRate);
+          preferredVoicePlaybackRate = next;
+          setPlaybackRate(next);
+        }}
+      >{playbackRate}×</Button> : null}
       <MediaVolumeControl mediaRef={audioRef} disabled={!url} className="voice-player-volume" />
     </div>
     {error ? <span className="voice-message-error" role="status">{error}</span> : null}
@@ -465,7 +488,7 @@ export function VoiceMessagePlayer({ attachment, onLoad }: VoiceMessagePlayerPro
 
   return (
     <div className="voice-message">
-      <VoicePlayerSurface ariaLabel="Голосовое сообщение" durationMs={durationMs} waveform={waveform} url={url} loading={loading} onRequestUrl={load} onDurationChange={setDurationMs} />
+      <VoicePlayerSurface ariaLabel="Голосовое сообщение" durationMs={durationMs} waveform={waveform} url={url} loading={loading} onRequestUrl={load} onDurationChange={setDurationMs} playbackRateControl />
       <small className="voice-message-size">{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small>
       {error ? <span className="voice-message-error" role="status">{error}</span> : null}
     </div>

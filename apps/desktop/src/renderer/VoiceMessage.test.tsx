@@ -7,9 +7,11 @@ import {
 } from "./AudioDeviceSettings";
 import {
   supportsCompressedVoiceRecording,
+  nextVoicePlaybackRate,
   VOICE_BITS_PER_SECOND,
   VOICE_MAX_DURATION_MS,
   VOICE_MIME_TYPE,
+  VOICE_PLAYBACK_RATES,
 } from "./VoiceMessage";
 
 const storageKey = "yuksalish.audio-devices.v1";
@@ -67,6 +69,14 @@ describe("voice message media policy", () => {
     expect(supportsCompressedVoiceRecording()).toBe(true);
     expect(VOICE_BITS_PER_SECOND * 60 / 8).toBeLessThanOrEqual(240_000);
     expect(VOICE_MAX_DURATION_MS).toBe(600_000);
+  });
+
+  it("cycles through every supported voice playback speed", () => {
+    expect(VOICE_PLAYBACK_RATES).toEqual([1, 1.5, 2, 2.5]);
+    expect(nextVoicePlaybackRate(1)).toBe(1.5);
+    expect(nextVoicePlaybackRate(1.5)).toBe(2);
+    expect(nextVoicePlaybackRate(2)).toBe(2.5);
+    expect(nextVoicePlaybackRate(2.5)).toBe(1);
   });
 
   it("accepts Chromium WebM recording when the explicit codec alias is unavailable", () => {
