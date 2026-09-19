@@ -1264,6 +1264,7 @@ async def put_attachment(
         raise _translate(error) from error
 
     settings = request.app.state.settings
+    is_audio_hint = False
     if media_kind == "voice":
         if owner_type != "message" or document_role != "general":
             raise HTTPException(
@@ -1285,14 +1286,32 @@ async def put_attachment(
                 status_code=422,
                 detail="Медиапараметры допустимы только для голоса",
             )
-        limit = settings.attachment_max_bytes
+        audio_extensions = {
+            ".mp3", ".m4a", ".aac", ".wav", ".flac", ".ogg", ".oga", ".opus", ".webm"
+        }
+        content_type_hint = (
+            request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        )
+        is_audio_hint = (
+            content_type_hint.startswith("audio/")
+            or PurePosixPath(safe_name).suffix.lower() in audio_extensions
+        )
+        limit = (
+            settings.audio_attachment_max_bytes
+            if is_audio_hint
+            else settings.attachment_max_bytes
+        )
     content = bytearray()
     async for chunk in request.stream():
         content.extend(chunk)
         if len(content) > limit:
             raise HTTPException(
                 status_code=413,
-                detail="Attachment is larger than the allowed limit",
+                detail=(
+                    "Аудиофайл должен быть не больше 100 МБ"
+                    if media_kind == "file" and is_audio_hint
+                    else "Файл превышает допустимый размер"
+                ),
             )
     if not content:
         raise HTTPException(status_code=422, detail="Attachment must not be empty")

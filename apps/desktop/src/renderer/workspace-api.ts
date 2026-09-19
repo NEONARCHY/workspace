@@ -1154,6 +1154,12 @@ export async function uploadWorkspaceAttachment(
     readonly mediaCodec: "opus";
   },
 ): Promise<WorkspaceAttachment> {
+  const isAudioFile = file.type.toLowerCase().startsWith("audio/")
+    || /\.(?:mp3|m4a|aac|wav|flac|ogg|oga|opus|webm)$/i.test(file.name);
+  const maxBytes = media ? 4 * 1024 * 1024 : isAudioFile ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error(isAudioFile ? "Аудиофайл должен быть не больше 100 МБ" : "Файл должен быть не больше 25 МБ");
+  }
   const query = new URLSearchParams({ fileName: file.name, documentRole });
   if (media) {
     query.set("mediaKind", media.mediaKind);

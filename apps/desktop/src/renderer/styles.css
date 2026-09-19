@@ -230,6 +230,15 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-confirmation { padding: 14px 18px; border: 1px solid #e5c575; border-radius: 7px; color: #67490c; background: #fff8e5; }
 .chat-confirmation p { margin: 0 0 10px; line-height: 1.5; }
 .chat-confirmation button + button { margin-left: 8px; }
+.confirm-action-dialog { width: min(430px, calc(100vw - 32px)); border: 1px solid rgb(255 255 255 / 90%); border-radius: 24px; background: linear-gradient(145deg, #fff, #f8faf9); box-shadow: 0 30px 80px -38px rgb(24 42 57 / 72%); }
+.confirm-action-dialog .fui-DialogBody { gap: 10px; }
+.confirm-action-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 5px; border-radius: 14px; color: #a13e47; background: #fdebed; }
+.confirm-action-dialog .fui-DialogTitle { color: #253a53; font-size: 21px; font-weight: 650; letter-spacing: -.025em; }
+.confirm-action-dialog .fui-DialogContent { color: #5b6f7c; font-size: 13px; line-height: 1.55; }
+.confirm-action-dialog .fui-DialogActions { margin-top: 12px; }
+.confirm-action-dialog .confirm-action-danger { border-color: #bd5961; color: #fff; background: #a7434b; }
+.confirm-action-dialog .confirm-action-danger:hover { border-color: #a7434b; color: #fff; background: #923740; }
+@media (forced-colors: active) { .confirm-action-dialog { border: 2px solid CanvasText; background: Canvas; box-shadow: none; } }
 .pending-files { overflow: hidden; color: #52677a; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .linked-create-panel { display: grid; grid-template-columns: auto minmax(180px, 1fr) auto auto; align-items: center; gap: 8px; padding: 10px 18px; border-top: 1px solid #bdd8ed; background: #edf6fc; }
 .linked-create-panel > svg { color: var(--ws-link, #0f6cbd); }

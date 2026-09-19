@@ -19,6 +19,7 @@ import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./Empl
 import { DepartmentManagement } from "./DepartmentManagement";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
@@ -96,6 +97,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [newPositionName, setNewPositionName] = useState("");
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingPositionDelete, setPendingPositionDelete] = useState<WorkspacePosition>();
   const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "inactive">("all");
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
@@ -275,19 +277,19 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   const removePosition = async () => {
     if (busy || !canManage || directory === undefined || selectedPosition === undefined) return;
-    const assignedCount = selectedPosition.assignedUsersCount;
-    const assignmentNote = assignedCount > 0
-      ? ` Должность будет снята у ${assignedCount} ${assignedCount === 1 ? "сотрудника" : "сотрудников"}.`
-      : "";
-    if (!window.confirm(`Удалить должность «${selectedPosition.name}»?${assignmentNote}`)) return;
+    setPendingPositionDelete(selectedPosition);
+  };
+
+  const confirmPositionDelete = async () => {
+    if (busy || !canManage || directory === undefined || pendingPositionDelete === undefined) return;
     setBusy(true);
     try {
-      await deletePosition(token, selectedPosition.id);
-      const remaining = directory.positions.filter((position) => position.id !== selectedPosition.id);
+      await deletePosition(token, pendingPositionDelete.id);
+      const remaining = directory.positions.filter((position) => position.id !== pendingPositionDelete.id);
       setDirectory({
         ...directory,
         positions: remaining,
-        employees: directory.employees.map((employee) => employee.positionId === selectedPosition.id
+        employees: directory.employees.map((employee) => employee.positionId === pendingPositionDelete.id
           ? { ...employee, positionId: null, jobTitle: null }
           : employee),
       });
@@ -295,8 +297,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setSelectedPositionId(next?.id ?? "");
       setPositionName(next?.name ?? "");
       setPositionActive(next?.isActive ?? true);
-      setEmployeePositionId((current) => current === selectedPosition.id ? "" : current);
-      setFeedback(`Должность «${selectedPosition.name}» удалена. Связь с сотрудниками снята.`);
+      setEmployeePositionId((current) => current === pendingPositionDelete.id ? "" : current);
+      setFeedback(`Должность «${pendingPositionDelete.name}» удалена. Связь с сотрудниками снята.`);
+      setPendingPositionDelete(undefined);
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось удалить должность");
     } finally {
@@ -729,6 +732,14 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         </DialogSurface>
       </Dialog> : null}
       {feedback && !panel ? <div className="directory-feedback" role="status">{feedback}</div> : null}
+      <ConfirmActionDialog
+        open={pendingPositionDelete !== undefined}
+        title="Удалить должность?"
+        message={`Должность «${pendingPositionDelete?.name ?? ""}» будет удалена.${pendingPositionDelete?.assignedUsersCount ? ` Она будет снята у ${pendingPositionDelete.assignedUsersCount} ${pendingPositionDelete.assignedUsersCount === 1 ? "сотрудника" : "сотрудников"}.` : ""}`}
+        busy={busy}
+        onCancel={() => setPendingPositionDelete(undefined)}
+        onConfirm={confirmPositionDelete}
+      />
     </section>
   );
 }

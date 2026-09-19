@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     zoom_booking_horizon_days: int = 180
     zoom_availability_cache_seconds: int = 60
     attachment_max_bytes: int = 25 * 1024 * 1024
+    audio_attachment_max_bytes: int = 100 * 1024 * 1024
     voice_message_max_bytes: int = 4 * 1024 * 1024
     voice_message_max_duration_ms: int = 10 * 60 * 1000
     update_directory: Path = Path("var/desktop-updates")

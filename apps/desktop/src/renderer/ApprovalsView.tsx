@@ -72,6 +72,7 @@ import {
 } from "./approval-board";
 import { AnimatedAmount } from "./AnimatedAmount";
 import { AnimatedInteger } from "./AnimatedInteger";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 
 type ApprovalNode = Node<ApprovalNodeData>;
 type ApprovalMode = "requests" | "designer";
@@ -861,6 +862,7 @@ export function ApprovalsView({
   const [actionBusy, setActionBusy] = useState(false);
   const actionBusyRef = useRef(false);
   const [actionError, setActionError] = useState("");
+  const [pendingRequestDelete, setPendingRequestDelete] = useState<ApprovalRequestSummary>();
   const createPanelRef = useRef<HTMLFormElement>(null);
   const detailPanelRef = useRef<HTMLElement>(null);
   const stageRibbonRef = useRef<HTMLDivElement>(null);
@@ -869,13 +871,17 @@ export function ApprovalsView({
   const closeDetail = () => { setActionError(""); setSelectedRequestId(""); };
   const removeRequest = async (request: ApprovalRequestSummary) => {
     if (!canManage || actionBusyRef.current) return;
-    if (!window.confirm(`Удалить заявку №${request.number}? История согласования и документы будут удалены.`)) return;
+    setPendingRequestDelete(request);
+  };
+  const confirmRequestDelete = async () => {
+    if (!canManage || actionBusyRef.current || !pendingRequestDelete) return;
     setActionBusy(true);
     actionBusyRef.current = true;
     setActionError("");
     try {
-      await onDeleteRequest(request);
+      await onDeleteRequest(pendingRequestDelete);
       closeDetail();
+      setPendingRequestDelete(undefined);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Не удалось удалить заявку");
     } finally {
@@ -2252,6 +2258,14 @@ export function ApprovalsView({
           </aside>
         </div>
       )}
+      <ConfirmActionDialog
+        open={pendingRequestDelete !== undefined}
+        title="Удалить заявку?"
+        message={`Заявка №${pendingRequestDelete?.number ?? ""}, история согласования и документы будут удалены без возможности восстановления.`}
+        busy={actionBusy}
+        onCancel={() => setPendingRequestDelete(undefined)}
+        onConfirm={confirmRequestDelete}
+      />
     </section>
   );
 }

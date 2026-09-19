@@ -35,6 +35,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { AttachmentPanel } from "./AttachmentPanel";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EfficiencyView } from "./EfficiencyView";
 import { FeedReactions } from "./FeedView";
 import { TaskCalendarView } from "./TaskCalendarView";
@@ -195,6 +196,7 @@ export function TasksView(props: TasksViewProps) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [pendingTaskDelete, setPendingTaskDelete] = useState<WorkspaceTask>();
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
@@ -312,15 +314,17 @@ export function TasksView(props: TasksViewProps) {
 
   const deleteSelectedTask = async () => {
     if (selectedTask === undefined || deleting) return;
-    const confirmed = window.confirm(
-      `Удалить задачу «${selectedTask.title}» без возможности восстановления? Связанные подзадачи и чат задачи также будут удалены.`,
-    );
-    if (!confirmed) return;
+    setPendingTaskDelete(selectedTask);
+  };
+
+  const confirmTaskDelete = async () => {
+    if (pendingTaskDelete === undefined || deleting) return;
     setDeleting(true);
     try {
-      if (await onDeleteTask(selectedTask)) {
+      if (await onDeleteTask(pendingTaskDelete)) {
         setDetailOpen(false);
         updateSelectedId("");
+        setPendingTaskDelete(undefined);
       }
     } finally {
       setDeleting(false);
@@ -583,6 +587,14 @@ export function TasksView(props: TasksViewProps) {
         </div>
       </aside></DialogSurface>
       </Dialog> : null}
+      <ConfirmActionDialog
+        open={pendingTaskDelete !== undefined}
+        title="Удалить задачу?"
+        message={`Задача «${pendingTaskDelete?.title ?? ""}», связанные подзадачи и чат задачи будут удалены без возможности восстановления.`}
+        busy={deleting}
+        onCancel={() => setPendingTaskDelete(undefined)}
+        onConfirm={confirmTaskDelete}
+      />
     </section>
   );
 }

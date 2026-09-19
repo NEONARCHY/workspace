@@ -1422,13 +1422,14 @@ describe("corporate workspace authentication alpha", () => {
 
   it("lets an administrator delete an active task after confirmation", async () => {
     const fetchMock = mockServer();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<App />);
     await loginToWorkspace("malika");
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    const confirmation = await screen.findByRole("dialog", { name: "Удалить задачу?" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Удалить" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(

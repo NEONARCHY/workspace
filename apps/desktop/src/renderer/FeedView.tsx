@@ -12,6 +12,7 @@ import {
   ArrowReply24Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 
@@ -66,6 +67,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
+  const [pendingDelete, setPendingDelete] = useState<{ post: FeedPost; commentId?: string }>();
   const commentInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const person = (id: string) => people.find((item) => item.id === id);
 
@@ -105,10 +107,17 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   };
 
   const remove = async (post: FeedPost) => {
-    if (!post.canDelete || !window.confirm(`Удалить публикацию «${post.title}»?`)) return;
+    if (!post.canDelete) return;
+    setPendingDelete({ post });
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
     setBusy(true);
     try {
-      await onDelete(post);
+      if (pendingDelete.commentId) await onDeleteComment(pendingDelete.post, pendingDelete.commentId);
+      else await onDelete(pendingDelete.post);
+      setPendingDelete(undefined);
     } finally {
       setBusy(false);
     }
@@ -181,9 +190,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
                               <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
-                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => {
-                                if (window.confirm("Удалить этот комментарий?")) void onDeleteComment(post, item.id);
-                              }} /> : null}
+                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
                             </span>
                           </span>
                         </div>
@@ -243,6 +250,14 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           </DialogBody>
         </DialogSurface>
       </Dialog>
+      <ConfirmActionDialog
+        open={Boolean(pendingDelete)}
+        title={pendingDelete?.commentId ? "Удалить комментарий?" : "Удалить публикацию?"}
+        message={pendingDelete?.commentId ? "Комментарий исчезнет из обсуждения. Это действие нельзя отменить." : `Публикация «${pendingDelete?.post.title ?? ""}» и её обсуждение будут удалены без возможности восстановления.`}
+        busy={busy}
+        onCancel={() => setPendingDelete(undefined)}
+        onConfirm={confirmDelete}
+      />
     </section>
   );
 }
