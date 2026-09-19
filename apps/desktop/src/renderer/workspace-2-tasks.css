@@ -136,7 +136,10 @@
 }
 
 .tasks-view.bp5-tasks .kanban-column > header { padding: 14px 14px 10px; }
-.tasks-view.bp5-tasks .kanban-stack { padding: 3px 9px 12px; }
+.tasks-view.bp5-tasks .kanban-stack {
+  padding: 3px 9px 12px;
+  scrollbar-gutter: stable both-edges;
+}
 .tasks-view .kanban-card {
   border: 1px solid rgb(255 255 255 / 96%);
   border-radius: 16px;
