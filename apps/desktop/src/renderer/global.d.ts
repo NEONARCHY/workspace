@@ -46,3 +46,8 @@ interface Window {
 declare const __YUKSALISH_BUILD_ID__: string;
 declare const __YUKSALISH_APP_VERSION__: string;
 declare const __YUKSALISH_RELEASE_NOTES__: { readonly title: string; readonly items: readonly string[] };
+declare const __YUKSALISH_RELEASE_HISTORY__: readonly {
+  readonly version: string;
+  readonly title: string;
+  readonly items: readonly string[];
+}[];

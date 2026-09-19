@@ -55,6 +55,18 @@ body { background: var(--ws-canvas); }
 .identity-popover { display: grid; gap: 8px; }
 .identity-popover h3, .identity-popover p { margin: 0; }
 .identity-popover p, .connection-popover small { color: var(--ws-muted); font-size: 12px; }
+.connection-popover { display: grid; gap: 10px; }
+.connection-popover :is(p,small) { margin: 0; }
+.connection-popover .fui-Button { justify-content: flex-start; margin: 4px -8px -8px; }
+.release-history-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border-radius: 24px; }
+.release-history-content { display: grid; gap: 14px; padding-right: 6px; overflow-y: auto; scrollbar-gutter: stable; }
+.release-history-content section { padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: #f8fbfa; }
+.release-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.release-history-heading h3 { margin: 0; font-size: 16px; }
+.release-history-heading span { color: var(--ws-muted); font-size: 12px; white-space: nowrap; }
+.release-history-content ul { display: grid; gap: 9px; margin: 14px 0 0; padding: 0; list-style: none; }
+.release-history-content li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 11px; color: var(--ws-muted); font-size: 13px; line-height: 1.45; }
+.release-history-content li svg { margin-top: 1px; color: #3eaa83; }
 .app-content { border: 0; border-radius: 0; background: transparent; box-shadow: none; min-height: 0; }
 .workspace-view { background: transparent; }
 .workspace-view > header, .workspace-view .section-toolbar, .bp7-header, .calendar-toolbar, .notification-header { min-height: 90px; padding: 16px 12px 22px; background: transparent; border: 0; }

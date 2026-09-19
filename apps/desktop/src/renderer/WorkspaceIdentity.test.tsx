@@ -3,7 +3,7 @@ import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { workspaceTheme } from "./workspace-theme";
-import { WorkspaceIdentity } from "./WorkspaceIdentity";
+import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 
 const person = {
   id: "person-1",
@@ -35,5 +35,13 @@ describe("WorkspaceIdentity", () => {
 
     act(() => vi.advanceTimersByTime(180));
     expect(onSettings).toHaveBeenCalledOnce();
+  });
+
+  it("opens versioned release history from the connection popover", () => {
+    render(<FluentProvider theme={workspaceTheme}><ConnectionIndicator detail="Сервер подключён" error={false} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Подключение: Сервер подключён" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
+    expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
+    expect(screen.getByText("Версия 1.0.0")).toBeInTheDocument();
   });
 });

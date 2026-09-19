@@ -3,6 +3,7 @@ import { ChevronDown16Regular, Settings20Regular, SignOut20Regular } from "@flue
 import { useEffect, useRef, useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { ReleaseHistoryDialog } from "./ReleaseHistoryDialog";
 
 export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { person: WorkspacePerson; token: string; onSettings: () => void; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
@@ -42,5 +43,17 @@ export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { per
 }
 
 export function ConnectionIndicator({ detail, error }: { detail: string; error: boolean }) {
-  return <Popover positioning="below-end" withArrow><PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`}><i /><span>{detail}</span></button></PopoverTrigger><PopoverSurface className="connection-popover"><strong>Связь с рабочим сервером</strong><p>{detail}</p><small>Изменения появляются в рабочем пространстве после подтверждения сервером.</small></PopoverSurface></Popover>;
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  return <>
+    <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end" withArrow>
+      <PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`}><i /><span>{detail}</span></button></PopoverTrigger>
+      <PopoverSurface className="connection-popover">
+        <strong>Связь с рабочим сервером</strong><p>{detail}</p>
+        <small>Изменения появляются в рабочем пространстве после подтверждения сервером.</small>
+        <Button appearance="subtle" onClick={() => { setPopoverOpen(false); setHistoryOpen(true); }}>Ранние обновления</Button>
+      </PopoverSurface>
+    </Popover>
+    <ReleaseHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
+  </>;
 }

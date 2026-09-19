@@ -1,5 +1,5 @@
 import react from "@vitejs/plugin-react";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
@@ -14,14 +14,30 @@ const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", imp
   version: string;
   title: string;
 };
-const releaseNoteEntries = readdirSync(new URL("./release-notes/pending/", import.meta.url))
+type ReleaseNoteEntry = { id: string; items: string[] };
+type ReleaseHistoryEntry = { version: string; title: string; items: string[] };
+
+function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
+  if (!existsSync(directory)) return [];
+  return readdirSync(directory)
   .filter((name) => name.endsWith(".json"))
   .sort()
-  .map((name) => JSON.parse(readFileSync(new URL(`./release-notes/pending/${name}`, import.meta.url), "utf8")) as {
-    id: string;
-    items: string[];
-  });
-const releaseNoteItems = releaseNoteEntries.flatMap((entry) => entry.items);
+    .map((name) => JSON.parse(readFileSync(new URL(name, directory), "utf8")) as ReleaseNoteEntry);
+}
+
+const releasedRoot = new URL("./release-notes/released/", import.meta.url);
+const releaseHistory: ReleaseHistoryEntry[] = existsSync(releasedRoot)
+  ? readdirSync(releasedRoot).filter((name) => statSync(new URL(name, releasedRoot)).isDirectory()).sort().reverse()
+    .map((version) => ({
+      version,
+      title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,
+      items: readNoteEntries(new URL(`${version}/`, releasedRoot)).flatMap((entry) => entry.items),
+    })).filter((entry) => entry.items.length > 0)
+  : [];
+const pendingItems = readNoteEntries(new URL("./release-notes/pending/", import.meta.url))
+  .flatMap((entry) => entry.items);
+const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
+const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
   || releaseNoteItems.length === 0 || releaseNoteItems.length > 50
   || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
@@ -38,6 +54,7 @@ export default defineConfig(({ mode }) => ({
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
     __YUKSALISH_APP_VERSION__: JSON.stringify(packageJson.version),
     __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
+    __YUKSALISH_RELEASE_HISTORY__: JSON.stringify(releaseHistory),
   },
   resolve: {
     alias: {
@@ -88,6 +105,7 @@ export default defineConfig(({ mode }) => ({
             builtAt,
             title: releaseNotes.title,
             notes: releaseNoteItems,
+            history: releaseHistory,
             releaseUrl: `https://github.com/NEONARCHY/yuksalish-workspace/releases/tag/v${packageJson.version}`,
           }),
         });

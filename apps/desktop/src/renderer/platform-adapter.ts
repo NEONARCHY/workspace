@@ -25,7 +25,14 @@ export interface WebVersionManifest {
   readonly builtAt: string;
   readonly title?: string;
   readonly notes?: readonly string[];
+  readonly history?: readonly ReleaseHistoryEntry[];
   readonly releaseUrl?: string;
+}
+
+export interface ReleaseHistoryEntry {
+  readonly version: string;
+  readonly title: string;
+  readonly items: readonly string[];
 }
 
 export interface WorkspacePlatform {
@@ -119,6 +126,7 @@ const webPlatform: WorkspacePlatform = {
       && typeof manifest.builtAt === "string"
       && (manifest.title === undefined || typeof manifest.title === "string")
       && (manifest.notes === undefined || (Array.isArray(manifest.notes) && manifest.notes.every((note) => typeof note === "string")))
+      && (manifest.history === undefined || Array.isArray(manifest.history))
       && (manifest.releaseUrl === undefined || typeof manifest.releaseUrl === "string")
       ? manifest as WebVersionManifest
       : null;
