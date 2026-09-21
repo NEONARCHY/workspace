@@ -1752,7 +1752,10 @@ async def _sync_notifications_for_user(
         .all()
     )
     stale_ids = [
-        item["id"] for item in unresolved_rows if item["event_key"] not in active_attention_keys
+        item["id"]
+        for item in unresolved_rows
+        if item["event_key"] not in active_attention_keys
+        and not item["event_key"].startswith("hr:")
     ]
     if stale_ids:
         await connection.execute(
@@ -1798,6 +1801,7 @@ async def _sync_notifications_for_user(
                         ),
                         workspace_notifications.c.section == "calendar",
                         workspace_notifications.c.section == "absences",
+                        workspace_notifications.c.section == "hr",
                     ),
                 )
                 .order_by(workspace_notifications.c.occurred_at.desc())

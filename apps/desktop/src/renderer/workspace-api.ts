@@ -56,6 +56,10 @@ import type {
   WorkspaceRole,
   ManagedEmployeeStatus,
   MembersRegistry,
+  HrOverview,
+  HrProfile,
+  HrRegister,
+  HrSettings,
   ZoomAvailability,
   ZoomMeeting,
   ZoomMeetingInput,
@@ -85,6 +89,33 @@ export function loadLinkPreview(token: string, url: string): Promise<LinkPreview
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
+}
+
+export function loadHrOverview(token: string): Promise<HrOverview> {
+  return apiRequest<HrOverview>("/hr", {}, token);
+}
+
+export function saveHrSettings(token: string, payload: HrSettings): Promise<HrSettings> {
+  return apiRequest<HrSettings>("/hr/settings", { method: "PUT", body: JSON.stringify(payload) }, token);
+}
+
+export function saveHrProfile(token: string, userId: string, payload: {
+  employmentDate: string; serviceAnchorDate: string; serviceYears: number; serviceMonths: number;
+  serviceDays: number; serviceReason: string;
+}): Promise<HrProfile> {
+  return apiRequest<HrProfile>(`/hr/profiles/${userId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+}
+
+export function terminateHrProfile(token: string, userId: string, payload: { terminatedOn: string; terminationReason: string }): Promise<HrProfile> {
+  return apiRequest<HrProfile>(`/hr/profiles/${userId}/terminate`, { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function generateHrRegister(token: string, period: string): Promise<HrRegister> {
+  return apiRequest<HrRegister>(`/hr/registers/generate?period=${encodeURIComponent(period)}`, { method: "POST" }, token);
+}
+
+export function actHrRegister(token: string, registerId: string, action: "submit" | "approve" | "return" | "account", comment?: string): Promise<HrRegister> {
+  return apiRequest<HrRegister>(`/hr/registers/${registerId}/actions`, { method: "POST", body: JSON.stringify({ action, comment }) }, token);
 }
 
 export function loadZoomMeetings(token: string): Promise<ZoomMeetingsRegistry> {
