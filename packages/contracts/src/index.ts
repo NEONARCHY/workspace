@@ -173,6 +173,7 @@ export interface HrRegister {
 }
 export interface HrOverview {
   readonly settings: HrSettings;
+  readonly calculatedAt: string;
   readonly profiles: readonly HrProfile[];
   readonly registers: readonly HrRegister[];
 }

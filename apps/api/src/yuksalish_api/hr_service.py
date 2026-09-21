@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Literal, Protocol, cast
 from uuid import UUID, uuid4
@@ -72,34 +72,36 @@ def _add_months(value: date, months: int) -> date:
     return date(year, month, min(value.day, calendar.monthrange(year, month)[1]))
 
 
+def _add_years(value: date, years: int) -> date:
+    year = value.year + years
+    return date(year, value.month, min(value.day, calendar.monthrange(year, value.month)[1]))
+
+
+def _calendar_parts(start: date, end: date) -> tuple[int, int, int]:
+    years = end.year - start.year
+    anniversary = _add_years(start, years)
+    if end < anniversary:
+        years -= 1
+        anniversary = _add_years(start, years)
+    months = (end.year - anniversary.year) * 12 + end.month - anniversary.month
+    month_base = _add_months(anniversary, months)
+    if end < month_base:
+        months -= 1
+        month_base = _add_months(anniversary, months)
+    return years, months, (end - month_base).days
+
+
 def service_parts(
     anchor: date, years: int, months: int, days: int, at: date
 ) -> tuple[int, int, int]:
-    """Calendar arithmetic, not 30-day approximation; future anchors never add tenure."""
+    """Return calendar-normalized tenure; future anchors never add tenure."""
     at = max(anchor, at)
-    year_delta = at.year - anchor.year
-    anniversary = date(
-        anchor.year + year_delta,
-        anchor.month,
-        min(anchor.day, calendar.monthrange(anchor.year + year_delta, anchor.month)[1]),
-    )
-    if at < anniversary:
-        year_delta -= 1
-        anniversary = date(
-            anchor.year + year_delta,
-            anchor.month,
-            min(anchor.day, calendar.monthrange(anchor.year + year_delta, anchor.month)[1]),
-        )
-    month_delta = (
-        (at.year - anniversary.year) * 12
-        + at.month
-        - anniversary.month
-        - (at.day < anniversary.day)
-    )
-    month_base = _add_months(anniversary, month_delta)
-    extra_days = (at - month_base).days
-    total_months = months + month_delta
-    return years + year_delta + total_months // 12, total_months % 12, days + extra_days
+    if at == anchor:
+        return years, months, days
+    # HR confirms a human-readable duration at `anchor`. Reconstruct its calendar
+    # origin, then calculate the full duration again so days never exceed a month.
+    origin = _add_years(_add_months(anchor - timedelta(days=days), -months), -years)
+    return _calendar_parts(origin, at)
 
 
 def allowance(years: int, months: int) -> Decimal:
@@ -176,6 +178,7 @@ async def load_overview(
     connection: AsyncConnection, actor: AuthenticatedUser
 ) -> HrOverviewResponse:
     await ensure_module_action(connection, actor, "hr", "view")
+    calculated_at = datetime.now(ZoneInfo("Asia/Tashkent")).date()
     profile_query = select(hr_employee_profiles).order_by(hr_employee_profiles.c.full_name)
     rows = (await connection.execute(profile_query)).all()
     registers = (
@@ -221,7 +224,8 @@ async def load_overview(
         )
     return HrOverviewResponse(
         settings=await _settings(connection),
-        profiles=[_profile_response(row, date.today()) for row in rows],
+        calculated_at=calculated_at,
+        profiles=[_profile_response(row, calculated_at) for row in rows],
         registers=result,
     )
 

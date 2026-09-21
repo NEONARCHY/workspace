@@ -116,5 +116,6 @@ class HrRegisterAction(ApiModel):
 
 class HrOverviewResponse(ApiModel):
     settings: HrSettingsResponse
+    calculated_at: date = Field(default_factory=date.today)
     profiles: list[HrProfileResponse] = Field(default_factory=list)
     registers: list[HrRegisterResponse] = Field(default_factory=list)
