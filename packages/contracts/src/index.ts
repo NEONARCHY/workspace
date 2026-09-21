@@ -176,6 +176,22 @@ export interface HrOverview {
   readonly profiles: readonly HrProfile[];
   readonly registers: readonly HrRegister[];
 }
+export interface HrProfileImportRow {
+  readonly sourceRow: number;
+  readonly fullName: string;
+  readonly jobTitle?: string | null;
+  readonly employmentDate: string;
+  readonly serviceAnchorDate: string;
+  readonly serviceYears: number;
+  readonly serviceMonths: number;
+  readonly serviceDays: number;
+  readonly serviceReason: string;
+}
+export interface HrWorkbookPreview {
+  readonly sourceLabel: string;
+  readonly controlDate: string;
+  readonly rows: readonly HrProfileImportRow[];
+}
 
 export interface AdministrativeChatMember {
   readonly userId: string;

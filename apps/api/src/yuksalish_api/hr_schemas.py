@@ -48,6 +48,12 @@ class HrProfileImportResponse(ApiModel):
     already_imported: int
 
 
+class HrWorkbookPreviewResponse(ApiModel):
+    source_label: str
+    control_date: date
+    rows: list[HrProfileImportRow] = Field(default_factory=list)
+
+
 class HrTerminationWrite(ApiModel):
     terminated_on: date
     termination_reason: str = Field(min_length=3, max_length=2000)

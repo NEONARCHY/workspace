@@ -60,6 +60,8 @@ import type {
   HrProfile,
   HrRegister,
   HrSettings,
+  HrProfileImportRow,
+  HrWorkbookPreview,
   ZoomAvailability,
   ZoomMeeting,
   ZoomMeetingInput,
@@ -111,6 +113,32 @@ export function createHrProfile(token: string, payload: {
   serviceYears: number; serviceMonths: number; serviceDays: number; serviceReason: string;
 }): Promise<HrProfile> {
   return apiRequest<HrProfile>("/hr/profiles", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function previewHrWorkbook(token: string, file: File): Promise<HrWorkbookPreview> {
+  if (file.size > 10 * 1024 * 1024) throw new Error("Файл Excel должен быть не больше 10 МБ");
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  if (extension !== "xlsx") throw new Error("Выберите файл Excel формата .xlsx");
+  const headers = new Headers({
+    Accept: "application/json",
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(
+    `${apiBaseUrl}/api/v1/hr/profiles/import/preview?filename=${encodeURIComponent(file.name)}`,
+    { method: "POST", headers, body: file },
+    async (response) => await response.json() as HrWorkbookPreview,
+    120_000,
+  );
+}
+
+export function importHrProfiles(token: string, payload: {
+  sourceLabel: string; rows: readonly HrProfileImportRow[];
+}): Promise<{ created: number; alreadyImported: number }> {
+  return apiRequest<{ created: number; alreadyImported: number }>("/hr/profiles/import", {
+    method: "POST", body: JSON.stringify(payload),
+  }, token);
 }
 
 export function terminateHrProfile(token: string, profileId: string, payload: { terminatedOn: string; terminationReason: string }): Promise<HrProfile> {
