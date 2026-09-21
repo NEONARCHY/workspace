@@ -20,6 +20,32 @@ from yuksalish_api.directory_service import (
     update_employee_access,
     update_position,
 )
+from yuksalish_api.hr_schemas import (
+    HrProfileWrite,
+    HrRegisterAction,
+    HrSettingsWrite,
+    HrTerminationWrite,
+)
+from yuksalish_api.hr_service import (
+    HrError,
+    act_register,
+    generate_register,
+)
+from yuksalish_api.hr_service import (
+    history as load_hr_history,
+)
+from yuksalish_api.hr_service import (
+    load_overview as load_hr_overview,
+)
+from yuksalish_api.hr_service import (
+    save_profile as save_hr_profile,
+)
+from yuksalish_api.hr_service import (
+    save_settings as save_hr_settings,
+)
+from yuksalish_api.hr_service import (
+    terminate_profile as terminate_hr_profile,
+)
 from yuksalish_api.position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
@@ -1144,6 +1170,115 @@ def test_live_workspace_vertical_slice() -> None:
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     asyncio.run(_exercise_live_workspace(database_url))
+
+
+async def _exercise_hr_service_tenure(database_url: str) -> None:
+    engine = create_async_engine(database_url, pool_pre_ping=True)
+    await seed_demo_data(engine)
+    async with engine.connect() as connection:
+        transaction = await connection.begin()
+        try:
+            administrator_row = await find_active_user_by_username(connection, "malika")
+            employee_row = await find_active_user_by_username(connection, "aziza")
+            assert administrator_row is not None and employee_row is not None
+            administrator = await load_authenticated_user(connection, administrator_row["id"])
+            assert administrator is not None
+
+            settings = await save_hr_settings(
+                connection,
+                administrator,
+                HrSettingsWrite(
+                    hr_user_id=administrator.id,
+                    chair_user_id=administrator.id,
+                    accountant_user_id=administrator.id,
+                ),
+            )
+            assert settings.hr_user_id == administrator.id
+
+            profile = await save_hr_profile(
+                connection,
+                administrator,
+                employee_row["id"],
+                HrProfileWrite(
+                    employment_date=date(2024, 1, 1),
+                    service_anchor_date=date(2026, 8, 31),
+                    service_years=5,
+                    service_months=2,
+                    service_days=3,
+                    service_reason="Подтверждено трудовой книжкой",
+                ),
+            )
+            assert profile.allowance_percent == 30
+            history = await load_hr_history(connection, administrator, employee_row["id"])
+            assert history[0].reason == "Подтверждено трудовой книжкой"
+
+            register = await generate_register(connection, administrator, "2026-09")
+            assert register.status == "draft"
+            assert register.items[0].user_id == employee_row["id"]
+            assert (await generate_register(connection, administrator, "2026-09")).id == register.id
+            with pytest.raises(HrError, match="Этот переход недоступен"):
+                await act_register(
+                    connection,
+                    administrator,
+                    register.id,
+                    HrRegisterAction(action="approve"),
+                )
+            register = await act_register(
+                connection,
+                administrator,
+                register.id,
+                HrRegisterAction(action="submit"),
+            )
+            register = await act_register(
+                connection,
+                administrator,
+                register.id,
+                HrRegisterAction(action="return", comment="Нужна проверка даты"),
+            )
+            assert register.status == "returned"
+            register = await act_register(
+                connection,
+                administrator,
+                register.id,
+                HrRegisterAction(action="submit"),
+            )
+            register = await act_register(
+                connection,
+                administrator,
+                register.id,
+                HrRegisterAction(action="approve"),
+            )
+            register = await act_register(
+                connection,
+                administrator,
+                register.id,
+                HrRegisterAction(action="account"),
+            )
+            assert register.status == "closed"
+
+            terminated = await terminate_hr_profile(
+                connection,
+                administrator,
+                employee_row["id"],
+                HrTerminationWrite(
+                    terminated_on=date(2026, 9, 30),
+                    termination_reason="Трудовой договор прекращён",
+                ),
+            )
+            assert terminated.employment_status == "terminated"
+            overview = await load_hr_overview(connection, administrator)
+            assert overview.profiles[0].employment_status == "terminated"
+        finally:
+            await transaction.rollback()
+    await engine.dispose()
+
+
+@pytest.mark.postgres
+def test_hr_service_tenure_vertical_slice() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    asyncio.run(_exercise_hr_service_tenure(database_url))
 
 
 async def _exercise_parallel_workflow(database_url: str) -> None:

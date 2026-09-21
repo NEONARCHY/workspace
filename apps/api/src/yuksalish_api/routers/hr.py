@@ -98,7 +98,7 @@ async def get_history(
 
 @router.post("/registers/generate", response_model=HrRegisterResponse)
 async def post_generate(
-    period: Annotated[str, Query(pattern=r"^\\d{4}-(0[1-9]|1[0-2])$")],
+    period: Annotated[str, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")],
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> HrRegisterResponse:

@@ -58,6 +58,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "zoom_meetings",
         "absences",
         "members",
+        "hr",
         "employees",
     ]
     assert all(

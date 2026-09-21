@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { HrOverview, HrProfile, HrRegister, WorkspacePerson } from "@yuksalish/contracts";
 import { Badge, Button, Input, Spinner, Tab, TabList } from "@fluentui/react-components";
 import { Add20Regular, ArrowClockwise20Regular, Checkmark20Regular, DocumentArrowDown20Regular, PersonEdit20Regular } from "@fluentui/react-icons";
@@ -14,7 +14,7 @@ interface Props { readonly token: string; readonly people: readonly WorkspacePer
 
 function exportCsv(register: HrRegister) {
   const rows = [["ФИО", "Должность", "Стаж", "Надбавка"], ...register.items.map((item) => [item.fullName, item.jobTitle ?? "", `${item.serviceYears} г. ${item.serviceMonths} мес. ${item.serviceDays} дн.`, `${item.allowancePercent}%`])];
-  const blob = new Blob(["\uFEFF" + rows.map((row) => row.map((cell) => `\"${String(cell).replaceAll('\"', '\"\"')}\"`).join(";")).join("\n")], { type: "text/csv;charset=utf-8" });
+  const blob = new Blob(["\uFEFF" + rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(";")).join("\n")], { type: "text/csv;charset=utf-8" });
   const anchor = document.createElement("a"); anchor.href = URL.createObjectURL(blob); anchor.download = `реестр-стажа-${register.period}.csv`; anchor.click(); URL.revokeObjectURL(anchor.href);
 }
 
@@ -24,8 +24,8 @@ export function HrView({ token, people, currentUser }: Props) {
   const [editor, setEditor] = useState<WorkspacePerson>(); const [employmentDate, setEmploymentDate] = useState(today()); const [anchorDate, setAnchorDate] = useState(today());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [years, setYears] = useState("0"); const [months, setMonths] = useState("0"); const [days, setDays] = useState("0"); const [reason, setReason] = useState("");
-  const load = async () => { setBusy(true); setError(undefined); try { setData(await loadHrOverview(token)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось загрузить HR"); } finally { setBusy(false); } };
-  useEffect(() => { void load(); }, [token]);
+  const load = useCallback(async () => { setBusy(true); setError(undefined); try { setData(await loadHrOverview(token)); } catch (value) { setError(value instanceof Error ? value.message : "Не удалось загрузить HR"); } finally { setBusy(false); } }, [token]);
+  useEffect(() => { queueMicrotask(() => { void load(); }); }, [load]);
   const isConfigured = Boolean(data?.settings.hrUserId); const isHr = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.hrUserId === currentUser.id;
   const isChair = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.chairUserId === currentUser.id;
   const isAccountant = ["admin", "superadmin"].includes(currentUser.role) || data?.settings.accountantUserId === currentUser.id;
