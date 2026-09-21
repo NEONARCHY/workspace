@@ -106,8 +106,15 @@ export function saveHrProfile(token: string, userId: string, payload: {
   return apiRequest<HrProfile>(`/hr/profiles/${userId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }
 
-export function terminateHrProfile(token: string, userId: string, payload: { terminatedOn: string; terminationReason: string }): Promise<HrProfile> {
-  return apiRequest<HrProfile>(`/hr/profiles/${userId}/terminate`, { method: "POST", body: JSON.stringify(payload) }, token);
+export function createHrProfile(token: string, payload: {
+  fullName: string; jobTitle?: string | null; employmentDate: string; serviceAnchorDate: string;
+  serviceYears: number; serviceMonths: number; serviceDays: number; serviceReason: string;
+}): Promise<HrProfile> {
+  return apiRequest<HrProfile>("/hr/profiles", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function terminateHrProfile(token: string, profileId: string, payload: { terminatedOn: string; terminationReason: string }): Promise<HrProfile> {
+  return apiRequest<HrProfile>(`/hr/profiles/${profileId}/terminate`, { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
 export function generateHrRegister(token: string, period: string): Promise<HrRegister> {

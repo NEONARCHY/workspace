@@ -16,6 +16,9 @@ from .auth import AuthenticatedUser
 from .hr_schemas import (
     HrHistoryResponse,
     HrOverviewResponse,
+    HrProfileCreate,
+    HrProfileImport,
+    HrProfileImportResponse,
     HrProfileResponse,
     HrProfileWrite,
     HrRegisterAction,
@@ -45,7 +48,7 @@ class HrError(ValueError):
 
 class _ProfileRow(Protocol):
     id: UUID
-    user_id: UUID
+    user_id: UUID | None
     full_name: str
     job_title: str | None
     employment_date: date
@@ -170,13 +173,8 @@ async def load_overview(
     connection: AsyncConnection, actor: AuthenticatedUser
 ) -> HrOverviewResponse:
     await ensure_module_action(connection, actor, "hr", "view")
-    rows = (
-        await connection.execute(
-            select(hr_employee_profiles, users.c.full_name, users.c.job_title)
-            .join(users, users.c.id == hr_employee_profiles.c.user_id)
-            .order_by(users.c.full_name)
-        )
-    ).all()
+    profile_query = select(hr_employee_profiles).order_by(hr_employee_profiles.c.full_name)
+    rows = (await connection.execute(profile_query)).all()
     registers = (
         await connection.execute(
             select(hr_monthly_registers)
@@ -245,12 +243,17 @@ async def save_profile(
     connection: AsyncConnection, actor: AuthenticatedUser, user_id: UUID, payload: HrProfileWrite
 ) -> HrProfileResponse:
     await _require_actor(connection, actor, "hr", "edit")
-    if (
-        await connection.execute(select(users.c.id).where(users.c.id == user_id))
-    ).scalar_one_or_none() is None:
+    user = (
+        await connection.execute(
+            select(users.c.id, users.c.full_name, users.c.job_title).where(users.c.id == user_id)
+        )
+    ).one_or_none()
+    if user is None:
         raise HrError(404, "Сотрудник не найден")
     now, profile_id = datetime.now(UTC), uuid4()
     values = payload.model_dump() | {
+        "full_name": user.full_name,
+        "job_title": user.job_title,
         "employment_status": "active",
         "terminated_on": None,
         "termination_reason": None,
@@ -285,25 +288,122 @@ async def save_profile(
     await _audit(connection, actor.id, "hr.profile_saved", profile.id, {"userId": str(user_id)})
     row = (
         await connection.execute(
-            select(hr_employee_profiles, users.c.full_name, users.c.job_title)
-            .join(users, users.c.id == hr_employee_profiles.c.user_id)
-            .where(hr_employee_profiles.c.user_id == user_id)
+            select(hr_employee_profiles).where(hr_employee_profiles.c.user_id == user_id)
         )
     ).one()
     return _profile_response(row, date.today())
 
 
+async def create_profile(
+    connection: AsyncConnection, actor: AuthenticatedUser, payload: HrProfileCreate
+) -> HrProfileResponse:
+    await _require_actor(connection, actor, "hr", "edit")
+    now, profile_id = datetime.now(UTC), uuid4()
+    values = payload.model_dump() | {
+        "id": profile_id,
+        "user_id": None,
+        "employment_status": "active",
+        "terminated_on": None,
+        "termination_reason": None,
+        "hidden_after_year": False,
+        "created_by_user_id": actor.id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    await connection.execute(hr_employee_profiles.insert().values(**values))
+    await connection.execute(
+        hr_service_history.insert().values(
+            id=uuid4(),
+            profile_id=profile_id,
+            actor_user_id=actor.id,
+            created_at=now,
+            reason=payload.service_reason,
+            service_anchor_date=payload.service_anchor_date,
+            service_years=payload.service_years,
+            service_months=payload.service_months,
+            service_days=payload.service_days,
+        )
+    )
+    await _audit(connection, actor.id, "hr.profile_created", profile_id, {"source": "manual"})
+    row = (
+        await connection.execute(
+            select(hr_employee_profiles).where(hr_employee_profiles.c.id == profile_id)
+        )
+    ).one()
+    return _profile_response(row, date.today())
+
+
+async def import_profiles(
+    connection: AsyncConnection, actor: AuthenticatedUser, payload: HrProfileImport
+) -> HrProfileImportResponse:
+    await _require_actor(connection, actor, "hr", "edit")
+    now, created, already_imported = datetime.now(UTC), 0, 0
+    for row in payload.rows:
+        import_key = f"{payload.source_label}:{row.source_row}"
+        result = await connection.execute(
+            pg_insert(hr_employee_profiles)
+            .values(
+                id=uuid4(),
+                user_id=None,
+                full_name=row.full_name,
+                job_title=row.job_title,
+                import_key=import_key,
+                employment_date=row.employment_date,
+                service_anchor_date=row.service_anchor_date,
+                service_years=row.service_years,
+                service_months=row.service_months,
+                service_days=row.service_days,
+                service_reason=row.service_reason,
+                employment_status="active",
+                terminated_on=None,
+                termination_reason=None,
+                hidden_after_year=False,
+                created_by_user_id=actor.id,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=[hr_employee_profiles.c.import_key])
+            .returning(hr_employee_profiles.c.id)
+        )
+        profile_id = result.scalar_one_or_none()
+        if profile_id is None:
+            already_imported += 1
+            continue
+        created += 1
+        await connection.execute(
+            hr_service_history.insert().values(
+                id=uuid4(),
+                profile_id=profile_id,
+                actor_user_id=actor.id,
+                created_at=now,
+                reason=row.service_reason,
+                service_anchor_date=row.service_anchor_date,
+                service_years=row.service_years,
+                service_months=row.service_months,
+                service_days=row.service_days,
+            )
+        )
+    await _audit(
+        connection,
+        actor.id,
+        "hr.profiles_imported",
+        actor.id,
+        {"source": payload.source_label, "created": created, "alreadyImported": already_imported},
+    )
+    return HrProfileImportResponse(created=created, already_imported=already_imported)
+
+
 async def terminate_profile(
     connection: AsyncConnection,
     actor: AuthenticatedUser,
-    user_id: UUID,
+    profile_id: UUID,
     payload: HrTerminationWrite,
 ) -> HrProfileResponse:
     await _require_actor(connection, actor, "hr", "edit")
     now = datetime.now(UTC)
     result = await connection.execute(
         update(hr_employee_profiles)
-        .where(hr_employee_profiles.c.user_id == user_id)
+        .where(hr_employee_profiles.c.id == profile_id)
         .values(
             employment_status="terminated",
             terminated_on=payload.terminated_on,
@@ -313,22 +413,34 @@ async def terminate_profile(
     )
     if not result.rowcount:
         raise HrError(404, "Кадровая карточка не найдена")
-    await connection.execute(
-        update(users).where(users.c.id == user_id).values(status="archived", updated_at=now)
-    )
-    row = (
+    profile = (
         await connection.execute(
-            select(hr_employee_profiles, users.c.full_name, users.c.job_title)
-            .join(users, users.c.id == hr_employee_profiles.c.user_id)
-            .where(hr_employee_profiles.c.user_id == user_id)
+            select(hr_employee_profiles.c.user_id).where(hr_employee_profiles.c.id == profile_id)
         )
     ).one()
-    await _audit(connection, actor.id, "hr.employee_terminated", row.id, {"userId": str(user_id)})
+    if profile.user_id is not None:
+        await connection.execute(
+            update(users)
+            .where(users.c.id == profile.user_id)
+            .values(status="archived", updated_at=now)
+        )
+    row = (
+        await connection.execute(
+            select(hr_employee_profiles).where(hr_employee_profiles.c.id == profile_id)
+        )
+    ).one()
+    await _audit(
+        connection,
+        actor.id,
+        "hr.employee_terminated",
+        row.id,
+        {"userId": str(profile.user_id) if profile.user_id else None},
+    )
     return _profile_response(row, date.today())
 
 
 async def history(
-    connection: AsyncConnection, actor: AuthenticatedUser, user_id: UUID
+    connection: AsyncConnection, actor: AuthenticatedUser, profile_id: UUID
 ) -> list[HrHistoryResponse]:
     await ensure_module_action(connection, actor, "hr", "view")
     rows = (
@@ -337,7 +449,7 @@ async def history(
             .join(
                 hr_employee_profiles, hr_employee_profiles.c.id == hr_service_history.c.profile_id
             )
-            .where(hr_employee_profiles.c.user_id == user_id)
+            .where(hr_employee_profiles.c.id == profile_id)
             .order_by(hr_service_history.c.created_at.desc())
         )
     ).all()
@@ -394,8 +506,7 @@ async def generate_register(
     )
     profiles = (
         await connection.execute(
-            select(hr_employee_profiles, users.c.full_name, users.c.job_title)
-            .join(users, users.c.id == hr_employee_profiles.c.user_id)
+            select(hr_employee_profiles)
             .where(
                 and_(
                     hr_employee_profiles.c.employment_status == "active",

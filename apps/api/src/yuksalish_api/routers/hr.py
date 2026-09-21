@@ -9,6 +9,9 @@ from yuksalish_api.database import get_connection
 from yuksalish_api.hr_schemas import (
     HrHistoryResponse,
     HrOverviewResponse,
+    HrProfileCreate,
+    HrProfileImport,
+    HrProfileImportResponse,
     HrProfileResponse,
     HrProfileWrite,
     HrRegisterAction,
@@ -20,8 +23,10 @@ from yuksalish_api.hr_schemas import (
 from yuksalish_api.hr_service import (
     HrError,
     act_register,
+    create_profile,
     generate_register,
     history,
+    import_profiles,
     load_overview,
     save_profile,
     save_settings,
@@ -71,27 +76,51 @@ async def put_profile(
         raise _error(error) from error
 
 
-@router.post("/profiles/{user_id}/terminate", response_model=HrProfileResponse)
+@router.post("/profiles", response_model=HrProfileResponse)
+async def post_profile(
+    payload: HrProfileCreate,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> HrProfileResponse:
+    try:
+        return await create_profile(connection, current_user, payload)
+    except HrError as error:
+        raise _error(error) from error
+
+
+@router.post("/profiles/import", response_model=HrProfileImportResponse)
+async def post_profile_import(
+    payload: HrProfileImport,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> HrProfileImportResponse:
+    try:
+        return await import_profiles(connection, current_user, payload)
+    except HrError as error:
+        raise _error(error) from error
+
+
+@router.post("/profiles/{profile_id}/terminate", response_model=HrProfileResponse)
 async def post_termination(
-    user_id: UUID,
+    profile_id: UUID,
     payload: HrTerminationWrite,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> HrProfileResponse:
     try:
-        return await terminate_profile(connection, current_user, user_id, payload)
+        return await terminate_profile(connection, current_user, profile_id, payload)
     except HrError as error:
         raise _error(error) from error
 
 
-@router.get("/profiles/{user_id}/history", response_model=list[HrHistoryResponse])
+@router.get("/profiles/{profile_id}/history", response_model=list[HrHistoryResponse])
 async def get_history(
-    user_id: UUID,
+    profile_id: UUID,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> list[HrHistoryResponse]:
     try:
-        return await history(connection, current_user, user_id)
+        return await history(connection, current_user, profile_id)
     except HrError as error:
         raise _error(error) from error
 

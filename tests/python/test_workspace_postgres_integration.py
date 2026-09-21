@@ -21,6 +21,8 @@ from yuksalish_api.directory_service import (
     update_position,
 )
 from yuksalish_api.hr_schemas import (
+    HrProfileCreate,
+    HrProfileImport,
     HrProfileWrite,
     HrRegisterAction,
     HrSettingsWrite,
@@ -32,7 +34,13 @@ from yuksalish_api.hr_service import (
     generate_register,
 )
 from yuksalish_api.hr_service import (
+    create_profile as create_hr_profile,
+)
+from yuksalish_api.hr_service import (
     history as load_hr_history,
+)
+from yuksalish_api.hr_service import (
+    import_profiles as import_hr_profiles,
 )
 from yuksalish_api.hr_service import (
     load_overview as load_hr_overview,
@@ -1209,12 +1217,69 @@ async def _exercise_hr_service_tenure(database_url: str) -> None:
                 ),
             )
             assert profile.allowance_percent == 30
-            history = await load_hr_history(connection, administrator, employee_row["id"])
+            history = await load_hr_history(connection, administrator, profile.id)
             assert history[0].reason == "Подтверждено трудовой книжкой"
+            standalone = await create_hr_profile(
+                connection,
+                administrator,
+                HrProfileCreate(
+                    full_name="Импортируемый сотрудник",
+                    job_title="Специалист",
+                    employment_date=date(2025, 1, 1),
+                    service_anchor_date=date(2026, 8, 31),
+                    service_years=1,
+                    service_months=0,
+                    service_days=0,
+                    service_reason="Подтверждено импортом из кадровой таблицы",
+                ),
+            )
+            assert standalone.user_id is None
+            imported = await import_hr_profiles(
+                connection,
+                administrator,
+                HrProfileImport(
+                    source_label="2026.xlsx:сентябрь:2026-08-31",
+                    rows=[
+                        {
+                            "source_row": 13,
+                            "full_name": "Строка из Excel",
+                            "job_title": "Специалист",
+                            "employment_date": date(2025, 1, 1),
+                            "service_anchor_date": date(2026, 8, 31),
+                            "service_years": 3,
+                            "service_months": 0,
+                            "service_days": 0,
+                            "service_reason": "Импорт из контрольного листа",
+                        }
+                    ],
+                ),
+            )
+            assert imported.created == 1
+            assert (
+                await import_hr_profiles(
+                    connection,
+                    administrator,
+                    HrProfileImport(
+                        source_label="2026.xlsx:сентябрь:2026-08-31",
+                        rows=[
+                            {
+                                "source_row": 13,
+                                "full_name": "Строка из Excel",
+                                "employment_date": date(2025, 1, 1),
+                                "service_anchor_date": date(2026, 8, 31),
+                                "service_years": 3,
+                                "service_months": 0,
+                                "service_days": 0,
+                                "service_reason": "Импорт из контрольного листа",
+                            }
+                        ],
+                    ),
+                )
+            ).already_imported == 1
 
             register = await generate_register(connection, administrator, "2026-09")
             assert register.status == "draft"
-            assert register.items[0].user_id == employee_row["id"]
+            assert {item.user_id for item in register.items} == {employee_row["id"], None}
             assert (await generate_register(connection, administrator, "2026-09")).id == register.id
             with pytest.raises(HrError, match="Этот переход недоступен"):
                 await act_register(
@@ -1259,7 +1324,7 @@ async def _exercise_hr_service_tenure(database_url: str) -> None:
             terminated = await terminate_hr_profile(
                 connection,
                 administrator,
-                employee_row["id"],
+                profile.id,
                 HrTerminationWrite(
                     terminated_on=date(2026, 9, 30),
                     termination_reason="Трудовой договор прекращён",

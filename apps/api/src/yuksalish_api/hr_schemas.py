@@ -29,6 +29,25 @@ class HrProfileWrite(ApiModel):
     service_reason: str = Field(min_length=3, max_length=2000)
 
 
+class HrProfileCreate(HrProfileWrite):
+    full_name: str = Field(min_length=3, max_length=200)
+    job_title: str | None = Field(default=None, max_length=160)
+
+
+class HrProfileImportRow(HrProfileCreate):
+    source_row: int = Field(ge=1, le=10000)
+
+
+class HrProfileImport(ApiModel):
+    source_label: str = Field(min_length=3, max_length=120)
+    rows: list[HrProfileImportRow] = Field(min_length=1, max_length=500)
+
+
+class HrProfileImportResponse(ApiModel):
+    created: int
+    already_imported: int
+
+
 class HrTerminationWrite(ApiModel):
     terminated_on: date
     termination_reason: str = Field(min_length=3, max_length=2000)
@@ -36,7 +55,7 @@ class HrTerminationWrite(ApiModel):
 
 class HrProfileResponse(ApiModel):
     id: UUID
-    user_id: UUID
+    user_id: UUID | None = None
     full_name: str
     job_title: str | None = None
     employment_date: date
@@ -62,7 +81,7 @@ class HrHistoryResponse(ApiModel):
 
 
 class HrRegisterItemResponse(ApiModel):
-    user_id: UUID
+    user_id: UUID | None = None
     full_name: str
     job_title: str | None = None
     service_years: int
