@@ -17,6 +17,7 @@ from yuksalish_api.hr_schemas import (
     HrSettingsResponse,
     HrSettingsWrite,
     HrTerminationWrite,
+    HrWorkbookPreviewResponse,
 )
 from yuksalish_api.hr_service import HrError
 from yuksalish_api.routers import hr
@@ -74,6 +75,12 @@ async def test_hr_router_delegates_every_authorized_action(
         "import_profiles",
         AsyncMock(return_value=HrProfileImportResponse(created=1, already_imported=0)),
     )
+    preview = HrWorkbookPreviewResponse(
+        source_label="2026.xlsx:сентябрь:2026-08-31",
+        control_date=datetime(2026, 8, 31, tzinfo=UTC).date(),
+        rows=[],
+    )
+    monkeypatch.setattr(hr, "preview_workbook", AsyncMock(return_value=preview))
     monkeypatch.setattr(hr, "terminate_profile", AsyncMock(return_value=item))
     monkeypatch.setattr(hr, "history", AsyncMock(return_value=[]))
     monkeypatch.setattr(hr, "generate_register", AsyncMock(return_value=register))
@@ -100,6 +107,7 @@ async def test_hr_router_delegates_every_authorized_action(
     assert await hr.post_profile_import(imported, actor, connection) == HrProfileImportResponse(
         created=1, already_imported=0
     )
+    assert await hr.post_profile_import_preview("2026.xlsx", b"excel", actor, connection) == preview
     termination = HrTerminationWrite(
         terminated_on=datetime(2026, 9, 30, tzinfo=UTC).date(),
         termination_reason="Трудовой договор прекращён",

@@ -19,6 +19,7 @@ from .hr_schemas import (
     HrProfileCreate,
     HrProfileImport,
     HrProfileImportResponse,
+    HrProfileImportRow,
     HrProfileResponse,
     HrProfileWrite,
     HrRegisterAction,
@@ -27,7 +28,9 @@ from .hr_schemas import (
     HrSettingsResponse,
     HrSettingsWrite,
     HrTerminationWrite,
+    HrWorkbookPreviewResponse,
 )
+from .hr_workbook import HrWorkbookError, read_tenure_workbook
 from .tables import (
     audit_events,
     hr_employee_profiles,
@@ -391,6 +394,21 @@ async def import_profiles(
         {"source": payload.source_label, "created": created, "alreadyImported": already_imported},
     )
     return HrProfileImportResponse(created=created, already_imported=already_imported)
+
+
+async def preview_workbook(
+    connection: AsyncConnection, actor: AuthenticatedUser, filename: str, content: bytes
+) -> HrWorkbookPreviewResponse:
+    await _require_actor(connection, actor, "hr", "edit")
+    try:
+        source_label, control_date, rows = read_tenure_workbook(content, filename)
+    except HrWorkbookError as error:
+        raise HrError(422, str(error)) from error
+    return HrWorkbookPreviewResponse(
+        source_label=source_label,
+        control_date=control_date,
+        rows=[HrProfileImportRow.model_validate(row) for row in rows],
+    )
 
 
 async def terminate_profile(

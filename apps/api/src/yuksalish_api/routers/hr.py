@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.auth import AuthenticatedUser, require_user
@@ -19,6 +19,7 @@ from yuksalish_api.hr_schemas import (
     HrSettingsResponse,
     HrSettingsWrite,
     HrTerminationWrite,
+    HrWorkbookPreviewResponse,
 )
 from yuksalish_api.hr_service import (
     HrError,
@@ -28,6 +29,7 @@ from yuksalish_api.hr_service import (
     history,
     import_profiles,
     load_overview,
+    preview_workbook,
     save_profile,
     save_settings,
     terminate_profile,
@@ -96,6 +98,22 @@ async def post_profile_import(
 ) -> HrProfileImportResponse:
     try:
         return await import_profiles(connection, current_user, payload)
+    except HrError as error:
+        raise _error(error) from error
+
+
+@router.post("/profiles/import/preview", response_model=HrWorkbookPreviewResponse)
+async def post_profile_import_preview(
+    filename: Annotated[str, Query(min_length=1, max_length=255)],
+    content: Annotated[
+        bytes,
+        Body(media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    ],
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> HrWorkbookPreviewResponse:
+    try:
+        return await preview_workbook(connection, current_user, filename, content)
     except HrError as error:
         raise _error(error) from error
 
