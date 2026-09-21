@@ -13,6 +13,7 @@ from .absence_service import materialize_sick_document_notifications
 from .database import create_database_engine
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
+from .hr_service import materialize_previous_month_register
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
 from .repository import materialize_due_notifications
@@ -21,6 +22,7 @@ from .routers import (
     authentication,
     directory,
     health,
+    hr,
     members,
     messenger,
     modules,
@@ -67,6 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created = await materialize_due_notifications(connection)
                         created += await materialize_efficiency_digest_notifications(connection)
                         created += await materialize_sick_document_notifications(connection)
+                        created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
                     if runtime_settings.zoom_configured:
                         # Bookings a crash or a Zoom outage left half-finished.
@@ -130,6 +133,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
     application.include_router(members.router, prefix=runtime_settings.api_prefix)
+    application.include_router(hr.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)

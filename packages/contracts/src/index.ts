@@ -8,6 +8,7 @@ export const moduleKeys = [
   "trip_approvals",
   "absences",
   "members",
+  "hr",
   "messenger",
   "calendar",
   "zoom_meetings",
@@ -126,6 +127,55 @@ export interface DirectoryBootstrap {
 }
 
 export type ManagedEmployeeStatus = "active" | "blocked" | "archived";
+
+export interface HrSettings {
+  readonly hrUserId?: string | null;
+  readonly chairUserId?: string | null;
+  readonly accountantUserId?: string | null;
+}
+export interface HrProfile {
+  readonly id: string;
+  readonly userId: string;
+  readonly fullName: string;
+  readonly jobTitle?: string | null;
+  readonly employmentDate: string;
+  readonly serviceAnchorDate: string;
+  readonly serviceYears: number;
+  readonly serviceMonths: number;
+  readonly serviceDays: number;
+  readonly allowancePercent: number;
+  readonly employmentStatus: "active" | "terminated";
+  readonly terminatedOn?: string | null;
+  readonly terminationReason?: string | null;
+  readonly hiddenAfterYear: boolean;
+  readonly updatedAt: string;
+}
+export interface HrRegisterItem {
+  readonly userId: string;
+  readonly fullName: string;
+  readonly jobTitle?: string | null;
+  readonly serviceYears: number;
+  readonly serviceMonths: number;
+  readonly serviceDays: number;
+  readonly allowancePercent: number;
+}
+export interface HrRegister {
+  readonly id: string;
+  readonly period: string;
+  readonly version: number;
+  readonly status: string;
+  readonly returnComment?: string | null;
+  readonly createdAt: string;
+  readonly submittedAt?: string | null;
+  readonly approvedAt?: string | null;
+  readonly accountedAt?: string | null;
+  readonly items: readonly HrRegisterItem[];
+}
+export interface HrOverview {
+  readonly settings: HrSettings;
+  readonly profiles: readonly HrProfile[];
+  readonly registers: readonly HrRegister[];
+}
 
 export interface AdministrativeChatMember {
   readonly userId: string;
@@ -422,6 +472,7 @@ export type NotificationSection = Extract<
   | "calendar"
   | "absences"
   | "zoom_meetings"
+  | "hr"
 >;
 
 export interface WorkspaceNotification {

@@ -62,6 +62,7 @@ import {
   News24Regular,
   PeopleTeam24Regular,
   PersonAvailable24Regular,
+  PersonAccounts24Regular,
   Settings24Regular,
   Edit16Regular,
   TaskListSquareLtr24Filled,
@@ -96,6 +97,7 @@ import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { MembersView } from "./MembersView";
+import { HrView } from "./HrView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { createRefreshQueue } from "./refresh-queue";
@@ -306,6 +308,7 @@ const navItems: readonly NavItem[] = [
   { key: "zoom_meetings", label: "Zoom-конференции", icon: <Video24Regular /> },
   { key: "absences", label: "Отсутствия", icon: <PersonAvailable24Regular /> },
   { key: "members", label: "Работа с членами", icon: <PeopleTeam24Regular /> },
+  { key: "hr", label: "HR", icon: <PersonAccounts24Regular /> },
   { key: "employees", label: "Сотрудники", icon: <PeopleTeam24Regular /> },
   { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
   { key: "settings", label: "Настройки", icon: <Settings24Regular /> },
@@ -1971,6 +1974,13 @@ export function App() {
                 loading={membersLoading}
                 error={membersError}
                 onRefresh={() => void refreshMembers()}
+              />
+            ) : null}
+            {displayedSection === "hr" ? (
+              <HrView
+                token={session.accessToken}
+                people={workspace.people}
+                currentUser={workspace.currentUser}
               />
             ) : null}
             {displayedSection === "employees" ? (

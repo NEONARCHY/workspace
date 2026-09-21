@@ -706,6 +706,78 @@ workspace_notification_preferences = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+# HR service-tenure records deliberately live outside ``core_users``: an employee's
+# account can be archived without losing statutory personnel history.
+hr_settings = sa.Table(
+    "hr_settings", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("hr_user_id", uuid_type),
+    sa.Column("chair_user_id", uuid_type),
+    sa.Column("accountant_user_id", uuid_type),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hr_employee_profiles = sa.Table(
+    "hr_employee_profiles", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, unique=True),
+    sa.Column("employment_date", sa.Date()),
+    sa.Column("service_anchor_date", sa.Date()),
+    sa.Column("service_years", sa.Integer()),
+    sa.Column("service_months", sa.Integer()),
+    sa.Column("service_days", sa.Integer()),
+    sa.Column("service_reason", sa.Text()),
+    sa.Column("employment_status", sa.String(24)),
+    sa.Column("terminated_on", sa.Date()),
+    sa.Column("termination_reason", sa.Text()),
+    sa.Column("hidden_after_year", sa.Boolean()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hr_service_history = sa.Table(
+    "hr_service_history", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("profile_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("service_anchor_date", sa.Date()),
+    sa.Column("service_years", sa.Integer()),
+    sa.Column("service_months", sa.Integer()),
+    sa.Column("service_days", sa.Integer()),
+    sa.Column("reason", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+hr_monthly_registers = sa.Table(
+    "hr_monthly_registers", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("period", sa.String(7)),
+    sa.Column("version", sa.Integer()),
+    sa.Column("status", sa.String(32)),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("submitted_at", sa.DateTime(timezone=True)),
+    sa.Column("approved_at", sa.DateTime(timezone=True)),
+    sa.Column("accounted_at", sa.DateTime(timezone=True)),
+    sa.Column("return_comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hr_monthly_register_items = sa.Table(
+    "hr_monthly_register_items", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("register_id", uuid_type),
+    sa.Column("user_id", uuid_type),
+    sa.Column("full_name", sa.String(200)),
+    sa.Column("job_title", sa.String(160)),
+    sa.Column("service_years", sa.Integer()),
+    sa.Column("service_months", sa.Integer()),
+    sa.Column("service_days", sa.Integer()),
+    sa.Column("allowance_percent", sa.Numeric(5, 2)),
+)
+
 zoom_meetings = sa.Table(
     "zoom_meetings",
     metadata,

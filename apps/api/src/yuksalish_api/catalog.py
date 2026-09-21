@@ -105,6 +105,12 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="hr",
+        label=LocalizedLabel(ru="HR", uz_cyrl="Кадрлар", uz_latn="Kadrlar"),
+        route="/hr",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="employees",
         label=LocalizedLabel(ru="Сотрудники", uz_cyrl="Ходимлар", uz_latn="Xodimlar"),
         route="/employees",

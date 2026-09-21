@@ -13,6 +13,7 @@ import "./record-composer.css";
 import "./motion.css";
 import "./record-lists.css";
 import "./members.css";
+import "./hr.css";
 import "./zoom.css";
 import "./message-layout.css";
 import "./team-dashboard.css";

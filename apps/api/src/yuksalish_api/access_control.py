@@ -146,6 +146,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/absence-requests",), "absences"),
         (("/zoom-meetings",), "zoom_meetings"),
         (("/members",), "members"),
+        (("/hr",), "hr"),
         (("/feed",), "feed"),
         (("/calendar",), "calendar"),
         (("/efficiency",), "team_overview"),
@@ -183,6 +184,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/feed/posts",
         "/calendar/events",
         "/messenger/chats",
+        "/hr/registers/generate",
     }
     if upper_method == "POST" and normalized in collection_paths:
         return module_key, "create"

@@ -1135,6 +1135,7 @@ NotificationSection = Literal[
     "calendar",
     "absences",
     "zoom_meetings",
+    "hr",
 ]
 
 
