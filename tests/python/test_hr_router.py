@@ -7,6 +7,9 @@ from fastapi import HTTPException
 
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.hr_schemas import (
+    HrProfileCreate,
+    HrProfileImport,
+    HrProfileImportResponse,
     HrProfileResponse,
     HrProfileWrite,
     HrRegisterAction,
@@ -65,6 +68,12 @@ async def test_hr_router_delegates_every_authorized_action(
     monkeypatch.setattr(hr, "load_overview", AsyncMock(return_value=overview))
     monkeypatch.setattr(hr, "save_settings", AsyncMock(return_value=overview.settings))
     monkeypatch.setattr(hr, "save_profile", AsyncMock(return_value=item))
+    monkeypatch.setattr(hr, "create_profile", AsyncMock(return_value=item))
+    monkeypatch.setattr(
+        hr,
+        "import_profiles",
+        AsyncMock(return_value=HrProfileImportResponse(created=1, already_imported=0)),
+    )
     monkeypatch.setattr(hr, "terminate_profile", AsyncMock(return_value=item))
     monkeypatch.setattr(hr, "history", AsyncMock(return_value=[]))
     monkeypatch.setattr(hr, "generate_register", AsyncMock(return_value=register))
@@ -81,12 +90,22 @@ async def test_hr_router_delegates_every_authorized_action(
         service_reason="Подтверждено трудовой книжкой",
     )
     assert await hr.put_profile(actor.id, write, actor, connection) == item
+    create = HrProfileCreate(
+        full_name="Новый сотрудник", job_title="Специалист", **write.model_dump()
+    )
+    assert await hr.post_profile(create, actor, connection) == item
+    imported = HrProfileImport(
+        source_label="2026.xlsx:сентябрь", rows=[create.model_dump() | {"source_row": 13}]
+    )
+    assert await hr.post_profile_import(imported, actor, connection) == HrProfileImportResponse(
+        created=1, already_imported=0
+    )
     termination = HrTerminationWrite(
         terminated_on=datetime(2026, 9, 30, tzinfo=UTC).date(),
         termination_reason="Трудовой договор прекращён",
     )
-    assert await hr.post_termination(actor.id, termination, actor, connection) == item
-    assert await hr.get_history(actor.id, actor, connection) == []
+    assert await hr.post_termination(item.id, termination, actor, connection) == item
+    assert await hr.get_history(item.id, actor, connection) == []
     assert await hr.post_generate("2026-09", actor, connection) == register
     assert (
         await hr.post_action(register.id, HrRegisterAction(action="submit"), actor, connection)

@@ -135,7 +135,7 @@ export interface HrSettings {
 }
 export interface HrProfile {
   readonly id: string;
-  readonly userId: string;
+  readonly userId?: string | null;
   readonly fullName: string;
   readonly jobTitle?: string | null;
   readonly employmentDate: string;
@@ -151,7 +151,7 @@ export interface HrProfile {
   readonly updatedAt: string;
 }
 export interface HrRegisterItem {
-  readonly userId: string;
+  readonly userId?: string | null;
   readonly fullName: string;
   readonly jobTitle?: string | null;
   readonly serviceYears: number;
