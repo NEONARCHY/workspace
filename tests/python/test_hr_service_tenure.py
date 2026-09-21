@@ -14,6 +14,11 @@ def test_service_handles_leap_day_and_never_rewinds_before_anchor() -> None:
     assert service_parts(date(2026, 8, 31), 3, 0, 0, date(2020, 1, 1)) == (3, 0, 0)
 
 
+def test_service_normalizes_days_into_calendar_months() -> None:
+    assert service_parts(date(2026, 8, 31), 10, 6, 28, date(2026, 9, 21)) == (10, 7, 18)
+    assert service_parts(date(2026, 8, 31), 0, 11, 28, date(2026, 9, 21)) == (1, 0, 18)
+
+
 def test_allowance_thresholds_are_exact() -> None:
     assert allowance(0, 11) == Decimal("0")
     assert allowance(1, 0) == Decimal("10")
