@@ -19,6 +19,7 @@ from .object_storage import InMemoryObjectStorage, MinioObjectStorage
 from .repository import materialize_due_notifications
 from .routers import (
     administration,
+    ai_referent,
     authentication,
     directory,
     health,
@@ -140,6 +141,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     application.include_router(administration.router, prefix=runtime_settings.api_prefix)
+    application.include_router(ai_referent.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     application.include_router(zoom.router, prefix=runtime_settings.api_prefix)

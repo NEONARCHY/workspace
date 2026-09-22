@@ -1,4 +1,9 @@
 import type {
+  AIReferentAction,
+  AIReferentIncomingRegistry,
+  AIReferentLetter,
+  AIReferentLetterInput,
+  AIReferentRegistry,
   NavigationKey,
   AdministrativeChat,
   AbsenceAction,
@@ -91,6 +96,74 @@ export function loadLinkPreview(token: string, url: string): Promise<LinkPreview
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
+}
+
+export function loadAIReferentRegistry(
+  token: string,
+  filters: { readonly query?: string; readonly status?: string } = {},
+): Promise<AIReferentRegistry> {
+  const query = new URLSearchParams();
+  if (filters.query?.trim()) query.set("query", filters.query.trim());
+  if (filters.status) query.set("status", filters.status);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
+}
+
+export function loadAIReferentIncomingRegistry(
+  token: string,
+  filters: { readonly query?: string; readonly status?: string } = {},
+): Promise<AIReferentIncomingRegistry> {
+  const query = new URLSearchParams();
+  if (filters.query?.trim()) query.set("query", filters.query.trim());
+  if (filters.status) query.set("status", filters.status);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, {}, token);
+}
+
+export function downloadAIReferentJournal(token: string): Promise<Blob> {
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/journal/latest`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (response) => response.blob(), 120_000);
+}
+
+export function createAIReferentLetter(
+  token: string,
+  payload: AIReferentLetterInput,
+): Promise<AIReferentLetter> {
+  return apiRequest<AIReferentLetter>(
+    "/ai-referent/letters",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function updateAIReferentLetter(
+  token: string,
+  letterId: string,
+  payload: AIReferentLetterInput,
+  expectedRevision: number,
+): Promise<AIReferentLetter> {
+  return apiRequest<AIReferentLetter>(
+    `/ai-referent/letters/${letterId}`,
+    { method: "PATCH", body: JSON.stringify({ ...payload, expectedRevision }) },
+    token,
+  );
+}
+
+export function actOnAIReferentLetter(
+  token: string,
+  letter: Pick<AIReferentLetter, "id" | "revision">,
+  action: AIReferentAction,
+  comment = "",
+): Promise<AIReferentLetter> {
+  return apiRequest<AIReferentLetter>(
+    `/ai-referent/letters/${letter.id}/actions`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action, comment, expectedRevision: letter.revision }),
+    },
+    token,
+  );
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {

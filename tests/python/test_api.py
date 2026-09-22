@@ -50,6 +50,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "tasks",
         "team_overview",
         "payment_requests",
+        "ai_referent",
         "feed",
         "projects",
         "trip_approvals",

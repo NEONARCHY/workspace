@@ -3,6 +3,7 @@ export const moduleKeys = [
   "tasks",
   "team_overview",
   "payment_requests",
+  "ai_referent",
   "feed",
   "projects",
   "trip_approvals",
@@ -583,7 +584,12 @@ export interface ZoomAvailability {
   readonly intervals: readonly ZoomBusyInterval[];
 }
 
-export type AttachmentOwnerType = "message" | "task" | "approval_request" | "absence";
+export type AttachmentOwnerType =
+  | "message"
+  | "task"
+  | "approval_request"
+  | "absence"
+  | "ai_referent_letter";
 
 export interface WorkspaceAttachment {
   readonly id: string;
@@ -599,6 +605,134 @@ export interface WorkspaceAttachment {
   readonly mediaDurationMs?: number | null;
   readonly mediaCodec?: "opus" | null;
   readonly createdAt: string;
+}
+
+export type AIReferentRoute = "exat" | "webmail";
+export type AIReferentStatus =
+  | "draft"
+  | "pending_review"
+  | "needs_revision"
+  | "approved"
+  | "queued"
+  | "sending"
+  | "sent"
+  | "failed"
+  | "cancelled";
+export type AIReferentSource = "workspace" | "telegram" | "import";
+export type AIReferentAction =
+  | "submit"
+  | "approve"
+  | "return_for_revision"
+  | "cancel"
+  | "queue_delivery"
+  | "retry_delivery";
+
+export interface AIReferentEvent {
+  readonly id: string;
+  readonly eventType: string;
+  readonly actorUserId?: string | null;
+  readonly actorName: string;
+  readonly fromStatus?: AIReferentStatus | null;
+  readonly toStatus?: AIReferentStatus | null;
+  readonly comment: string;
+  readonly createdAt: string;
+}
+
+export interface AIReferentLetter {
+  readonly id: string;
+  readonly displayNumber?: string | null;
+  readonly outgoingNumber?: number | null;
+  readonly yearSuffix?: string | null;
+  readonly subject: string;
+  readonly recipientOrganization: string;
+  readonly recipientAddress: string;
+  readonly route: AIReferentRoute;
+  readonly note: string;
+  readonly status: AIReferentStatus;
+  readonly source: AIReferentSource;
+  readonly createdByUserId: string;
+  readonly createdByName: string;
+  readonly reviewerUserId?: string | null;
+  readonly reviewerName?: string | null;
+  readonly revision: number;
+  readonly sentAt?: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly attachments: readonly WorkspaceAttachment[];
+  readonly events: readonly AIReferentEvent[];
+  readonly availableActions: readonly AIReferentAction[];
+  readonly canEdit: boolean;
+}
+
+export interface AIReferentRegistry {
+  readonly letters: readonly AIReferentLetter[];
+  readonly totalCount: number;
+  readonly pendingReviewCount: number;
+  readonly readyCount: number;
+  readonly sentCount: number;
+}
+
+export interface AIReferentLetterInput {
+  readonly subject: string;
+  readonly recipientOrganization: string;
+  readonly recipientAddress: string;
+  readonly route: AIReferentRoute;
+  readonly note: string;
+  readonly reviewerUserId?: string | null;
+}
+
+export type AIReferentIncomingSource = "exat" | "webmail" | "import";
+
+export interface AIReferentIncomingLetter {
+  readonly id: string;
+  readonly agentId: string;
+  readonly externalId: string;
+  readonly sequenceNumber: string;
+  readonly platformIncomingNumber: string;
+  readonly senderLetterNumber: string;
+  readonly platformIncomingDate?: string | null;
+  readonly platformOutgoingDate?: string | null;
+  readonly receivedAt?: string | null;
+  readonly processedAt?: string | null;
+  readonly registeredAt?: string | null;
+  readonly senderOrganization: string;
+  readonly senderPerson: string;
+  readonly subject: string;
+  readonly responsibleExternalId: string;
+  readonly responsibleDisplayName: string;
+  readonly responsibleUserId?: string | null;
+  readonly responsibleUserName?: string | null;
+  readonly urgency: string;
+  readonly hasAttachments: boolean;
+  readonly attachmentsCount: number;
+  readonly mainDocumentFilename: string;
+  readonly platformRecordId: string;
+  readonly status: string;
+  readonly fallbackUsed: boolean;
+  readonly errorMessage: string;
+  readonly source: AIReferentIncomingSource;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AIReferentJournal {
+  readonly available: boolean;
+  readonly fileName?: string | null;
+  readonly byteSize?: number | null;
+  readonly sha256?: string | null;
+  readonly updatedAt?: string | null;
+  readonly agentName?: string | null;
+}
+
+export interface AIReferentIncomingRegistry {
+  readonly letters: readonly AIReferentIncomingLetter[];
+  readonly totalCount: number;
+  readonly registeredCount: number;
+  readonly attentionCount: number;
+  readonly withAttachmentsCount: number;
+  readonly lastSyncAt?: string | null;
+  readonly journal: AIReferentJournal;
 }
 
 export type TaskStatus =

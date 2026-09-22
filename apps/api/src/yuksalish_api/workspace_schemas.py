@@ -173,7 +173,9 @@ class LinkPreviewResponse(ApiModel):
     embed_url: str | None = None
 
 
-AttachmentOwnerType = Literal["message", "task", "approval_request", "absence"]
+AttachmentOwnerType = Literal[
+    "message", "task", "approval_request", "absence", "ai_referent_letter"
+]
 
 
 class AttachmentResponse(ApiModel):

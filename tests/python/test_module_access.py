@@ -62,6 +62,17 @@ def test_request_paths_map_to_server_enforced_module_actions() -> None:
         "view",
     )
     assert request_module_action("/api/v1/zoom-meetings", "POST") == ("zoom_meetings", "create")
+    assert request_module_action("/api/v1/ai-referent/letters", "GET") == (
+        "ai_referent",
+        "view",
+    )
+    assert request_module_action("/api/v1/ai-referent/letters", "POST") == (
+        "ai_referent",
+        "create",
+    )
+    assert request_module_action(
+        "/api/v1/ai-referent/letters/letter-id/actions", "POST"
+    ) == ("ai_referent", "view")
     assert request_module_action("/api/v1/zoom-meetings/meeting-id/cancel", "POST") == (
         "zoom_meetings",
         "edit",

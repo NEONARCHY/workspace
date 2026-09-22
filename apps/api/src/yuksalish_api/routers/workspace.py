@@ -1249,6 +1249,7 @@ async def put_attachment(
         "task": "tasks",
         "approval_request": "payment_requests",
         "absence": "absences",
+        "ai_referent_letter": "ai_referent",
     }[owner_type]
     await ensure_module_action(connection, current_user, attachment_module, "edit")
     safe_name = _safe_file_name(file_name)

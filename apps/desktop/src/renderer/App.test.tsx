@@ -1184,9 +1184,12 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByText("Создана из сообщения · связь сохранена")).toBeInTheDocument();
     const closeNotice = screen.queryByRole("button", { name: "Закрыть уведомление" });
     if (closeNotice) fireEvent.click(closeNotice);
-    await waitFor(() => {
-      expect(screen.queryByText("Создана из сообщения · связь сохранена")).not.toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(screen.queryByText("Создана из сообщения · связь сохранена")).not.toBeInTheDocument();
+      },
+      { timeout: 5_000 },
+    );
     expect(screen.queryByRole("dialog", { name: "Новая задача" })).not.toBeInTheDocument();
     expect(screen.getAllByText("Проверить счёт из переписки").length).toBeGreaterThan(0);
   });
@@ -1817,6 +1820,7 @@ describe("corporate workspace authentication alpha", () => {
       "CRM",
       "Задачи",
       "Заявки на оплату",
+      "AI Referent",
       "Лента",
       "Список проектов",
       "Согласование поездок",

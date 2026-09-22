@@ -37,6 +37,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="ai_referent",
+        label=LocalizedLabel(
+            ru="AI Referent",
+            uz_cyrl="AI Referent",
+            uz_latn="AI Referent",
+        ),
+        route="/ai-referent",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="feed",
         label=LocalizedLabel(ru="Лента", uz_cyrl="Лента", uz_latn="Lenta"),
         route="/feed",
