@@ -1,10 +1,12 @@
+# ruff: noqa: RUF001
 """The shared outgoing-letter register over HTTP."""
 
 import os
+from uuid import UUID
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from test_zoom_postgres import zoom_settings
@@ -53,7 +55,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         async with auth_engine.connect() as connection:
             records = {
                 username: await find_active_user_by_username(connection, username)
-                for username in ("dilshod", "aziza", "baxtiyor")
+                for username in ("dilshod", "aziza", "baxtiyor", "malika")
             }
         await auth_engine.dispose()
         assert all(record is not None for record in records.values())
@@ -67,6 +69,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         author = headers("dilshod")
         reviewer = headers("aziza")
         another_manager = headers("baxtiyor")
+        administrator = headers("malika")
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=author)
         people = {person["username"]: person["id"] for person in bootstrap.json()["people"]}
 
@@ -146,3 +149,312 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         assert registry.status_code == 200
         assert registry.json()["totalCount"] == 1
         assert registry.json()["readyCount"] == 1
+
+        invalid_reviewer = await client.post(
+            "/api/v1/ai-referent/letters",
+            headers=author,
+            json={
+                "subject": "Письмо с недоступным согласующим",
+                "recipientOrganization": "Адресат",
+                "route": "webmail",
+                "reviewerUserId": "00000000-0000-0000-0000-000000000001",
+            },
+        )
+        assert invalid_reviewer.status_code == 422
+
+        editable = await client.post(
+            "/api/v1/ai-referent/letters",
+            headers=author,
+            json={
+                "subject": "  Черновик для доработки  ",
+                "recipientOrganization": "  Второй адресат  ",
+                "recipientAddress": "  Приёмная  ",
+                "route": "webmail",
+                "note": "  Черновая заметка  ",
+            },
+        )
+        assert editable.status_code == 201, editable.text
+        editable_letter = editable.json()
+        assert editable_letter["subject"] == "Черновик для доработки"
+
+        hidden = await client.get(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+            headers=another_manager,
+        )
+        assert hidden.status_code == 404
+
+        submit_without_reviewer = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "submit",
+                "comment": "",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert submit_without_reviewer.status_code == 422
+
+        patched = await client.patch(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+            headers=author,
+            json={
+                "subject": "Обновлённый черновик",
+                "recipientOrganization": "Второй адресат",
+                "recipientAddress": "Приёмная",
+                "route": "webmail",
+                "note": "Готово к проверке",
+                "reviewerUserId": people["aziza"],
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert patched.status_code == 200, patched.text
+        editable_letter = patched.json()
+        assert editable_letter["revision"] == 2
+
+        stale_patch = await client.patch(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+            headers=author,
+            json={
+                "subject": "Устаревшая версия",
+                "recipientOrganization": "Второй адресат",
+                "recipientAddress": "",
+                "route": "webmail",
+                "note": "",
+                "reviewerUserId": people["aziza"],
+                "expectedRevision": 1,
+            },
+        )
+        assert stale_patch.status_code == 409
+
+        forbidden_patch = await client.patch(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+            headers=another_manager,
+            json={
+                "subject": "Чужое изменение",
+                "recipientOrganization": "Второй адресат",
+                "recipientAddress": "",
+                "route": "webmail",
+                "note": "",
+                "reviewerUserId": people["aziza"],
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert forbidden_patch.status_code == 403
+
+        submit_without_file = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "submit",
+                "comment": "",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert submit_without_file.status_code == 422
+
+        second_upload = await client.put(
+            f"/api/v1/attachments/ai_referent_letter/{editable_letter['id']}",
+            headers={**author, "Content-Type": "application/pdf"},
+            params={"fileName": "revised-letter.pdf", "documentRole": "primary"},
+            content=b"%PDF-1.4 revised outgoing letter",
+        )
+        assert second_upload.status_code == 201, second_upload.text
+
+        second_submit = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "submit",
+                "comment": "На согласование",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert second_submit.status_code == 200, second_submit.text
+        editable_letter = second_submit.json()
+
+        short_return = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "return_for_revision",
+                "comment": "x",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert short_return.status_code == 422
+
+        returned = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "return_for_revision",
+                "comment": "Уточните адрес получателя",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert returned.status_code == 200, returned.text
+        editable_letter = returned.json()
+        assert editable_letter["status"] == "needs_revision"
+
+        admin_patch = await client.patch(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+            headers=administrator,
+            json={
+                "subject": "Исправленное письмо",
+                "recipientOrganization": "Второй адресат",
+                "recipientAddress": "Канцелярия",
+                "route": "webmail",
+                "note": "Адрес уточнён",
+                "reviewerUserId": people["aziza"],
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert admin_patch.status_code == 200, admin_patch.text
+        editable_letter = admin_patch.json()
+
+        resubmitted = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "submit",
+                "comment": "Исправлено",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert resubmitted.status_code == 200, resubmitted.text
+        editable_letter = resubmitted.json()
+
+        second_approved = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=administrator,
+            json={
+                "action": "approve",
+                "comment": "Проверено администратором",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert second_approved.status_code == 200, second_approved.text
+        editable_letter = second_approved.json()
+
+        approve_again = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "approve",
+                "comment": "Повтор",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert approve_again.status_code == 409
+
+        second_queued = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "queue_delivery",
+                "comment": "Отправить",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert second_queued.status_code == 200, second_queued.text
+        editable_letter = second_queued.json()
+
+        queue_again = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "queue_delivery",
+                "comment": "Повтор",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert queue_again.status_code == 409
+
+        state_engine = create_async_engine(database_url)
+        async with state_engine.begin() as connection:
+            await connection.execute(
+                update(ai_referent_letters)
+                .where(ai_referent_letters.c.id == UUID(editable_letter["id"]))
+                .values(status="failed", revision=editable_letter["revision"] + 1)
+            )
+        await state_engine.dispose()
+
+        failed_letter = await client.get(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}", headers=reviewer
+        )
+        assert failed_letter.status_code == 200
+        editable_letter = failed_letter.json()
+        assert "retry_delivery" in editable_letter["availableActions"]
+        retried = await client.post(
+            f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
+            headers=reviewer,
+            json={
+                "action": "retry_delivery",
+                "comment": "Повторить отправку",
+                "expectedRevision": editable_letter["revision"],
+            },
+        )
+        assert retried.status_code == 200, retried.text
+        assert retried.json()["status"] == "queued"
+
+        cancellable = await client.post(
+            "/api/v1/ai-referent/letters",
+            headers=author,
+            json={
+                "subject": "Отменяемое письмо",
+                "recipientOrganization": "Третий адресат",
+                "route": "exat",
+                "reviewerUserId": people["aziza"],
+            },
+        )
+        assert cancellable.status_code == 201, cancellable.text
+        cancelled_letter = cancellable.json()
+
+        forbidden_cancel = await client.post(
+            f"/api/v1/ai-referent/letters/{cancelled_letter['id']}/actions",
+            headers=another_manager,
+            json={
+                "action": "cancel",
+                "comment": "",
+                "expectedRevision": cancelled_letter["revision"],
+            },
+        )
+        assert forbidden_cancel.status_code == 403
+
+        cancelled = await client.post(
+            f"/api/v1/ai-referent/letters/{cancelled_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "cancel",
+                "comment": "Больше не требуется",
+                "expectedRevision": cancelled_letter["revision"],
+            },
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        cancelled_letter = cancelled.json()
+        assert cancelled_letter["status"] == "cancelled"
+
+        cancel_again = await client.post(
+            f"/api/v1/ai-referent/letters/{cancelled_letter['id']}/actions",
+            headers=author,
+            json={
+                "action": "cancel",
+                "comment": "Повтор",
+                "expectedRevision": cancelled_letter["revision"],
+            },
+        )
+        assert cancel_again.status_code == 403
+
+        filtered = await client.get(
+            "/api/v1/ai-referent/letters",
+            headers=administrator,
+            params={"query": "Отменяемое", "status": "cancelled"},
+        )
+        assert filtered.status_code == 200
+        assert filtered.json()["totalCount"] == 1
+
+        missing = await client.get(
+            "/api/v1/ai-referent/letters/00000000-0000-0000-0000-000000000002",
+            headers=administrator,
+        )
+        assert missing.status_code == 404
