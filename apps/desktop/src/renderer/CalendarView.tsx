@@ -652,7 +652,7 @@ export function CalendarView({
               <div className="calendar-linked-records-heading">
                 <span>Внутренние задачи</span>
                 {selected.canEdit && selected.status === "scheduled" && onCreateTask ? (
-                  <Button appearance="subtle" size="small" onClick={() => setTaskComposerEvent(selected)}>Добавить задачу</Button>
+                  <Button appearance="secondary" size="small" onClick={() => setTaskComposerEvent(selected)}>+ Внутренняя задача</Button>
                 ) : null}
               </div>
               {linkedTasks.length ? linkedTasks.map((task) => (
@@ -666,7 +666,7 @@ export function CalendarView({
               <div className="calendar-linked-records-heading">
                 <span>Заявки на оплату</span>
                 {selected.canEdit && selected.status === "scheduled" && canCreatePaymentRequest && onCreatePayment ? (
-                  <Button appearance="subtle" size="small" onClick={() => openPaymentComposer(selected)}>Добавить заявку</Button>
+                  <Button appearance="secondary" size="small" onClick={() => openPaymentComposer(selected)}>+ Заявка на оплату</Button>
                 ) : null}
               </div>
               {linkedPayments.length ? linkedPayments.map((request) => (

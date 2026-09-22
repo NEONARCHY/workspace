@@ -24,6 +24,7 @@ import {
 import {
   Add24Regular,
   Attach24Regular,
+  CalendarLtr24Regular,
   Mic24Regular,
   Pin24Regular,
   PinOff24Regular,
@@ -375,6 +376,15 @@ function Conversation({
         {!embedded ? <div className="conversation-header-actions">
           {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "trip", chat.contextId!)}>
             {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "project" ? "Открыть проект" : "Открыть поездку"}
+          </Button> : null}
+          {onCreateCalendarEventFromChat ? <Button
+            className="conversation-calendar-action"
+            appearance="secondary"
+            icon={<CalendarLtr24Regular />}
+            disabled={busy}
+            onClick={() => onCreateCalendarEventFromChat(chat)}
+          >
+            Мероприятие
           </Button> : null}
           <Button {...restoreFocusTarget} onClick={onManage}>
             {chat.kind === "group" ? "Участники и права" : "Участники"}
@@ -771,7 +781,7 @@ function Conversation({
             <Tooltip content="Создать мероприятие с участниками этого чата" relationship="label">
               <Button
                 appearance="subtle"
-                icon={<Add24Regular />}
+                icon={<CalendarLtr24Regular />}
                 aria-label="Создать мероприятие из чата"
                 disabled={busy}
                 onClick={() => onCreateCalendarEventFromChat?.(chat)}
