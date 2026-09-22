@@ -681,6 +681,60 @@ export interface AIReferentLetterInput {
   readonly reviewerUserId?: string | null;
 }
 
+export type AIReferentIncomingSource = "exat" | "webmail" | "import";
+
+export interface AIReferentIncomingLetter {
+  readonly id: string;
+  readonly agentId: string;
+  readonly externalId: string;
+  readonly sequenceNumber: string;
+  readonly platformIncomingNumber: string;
+  readonly senderLetterNumber: string;
+  readonly platformIncomingDate?: string | null;
+  readonly platformOutgoingDate?: string | null;
+  readonly receivedAt?: string | null;
+  readonly processedAt?: string | null;
+  readonly registeredAt?: string | null;
+  readonly senderOrganization: string;
+  readonly senderPerson: string;
+  readonly subject: string;
+  readonly responsibleExternalId: string;
+  readonly responsibleDisplayName: string;
+  readonly responsibleUserId?: string | null;
+  readonly responsibleUserName?: string | null;
+  readonly urgency: string;
+  readonly hasAttachments: boolean;
+  readonly attachmentsCount: number;
+  readonly mainDocumentFilename: string;
+  readonly platformRecordId: string;
+  readonly status: string;
+  readonly fallbackUsed: boolean;
+  readonly errorMessage: string;
+  readonly source: AIReferentIncomingSource;
+  readonly revision: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface AIReferentJournal {
+  readonly available: boolean;
+  readonly fileName?: string | null;
+  readonly byteSize?: number | null;
+  readonly sha256?: string | null;
+  readonly updatedAt?: string | null;
+  readonly agentName?: string | null;
+}
+
+export interface AIReferentIncomingRegistry {
+  readonly letters: readonly AIReferentIncomingLetter[];
+  readonly totalCount: number;
+  readonly registeredCount: number;
+  readonly attentionCount: number;
+  readonly withAttachmentsCount: number;
+  readonly lastSyncAt?: string | null;
+  readonly journal: AIReferentJournal;
+}
+
 export type TaskStatus =
   | "new"
   | "in_progress"

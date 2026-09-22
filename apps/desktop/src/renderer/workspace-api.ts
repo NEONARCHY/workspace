@@ -1,5 +1,6 @@
 import type {
   AIReferentAction,
+  AIReferentIncomingRegistry,
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
@@ -106,6 +107,23 @@ export function loadAIReferentRegistry(
   if (filters.status) query.set("status", filters.status);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
+}
+
+export function loadAIReferentIncomingRegistry(
+  token: string,
+  filters: { readonly query?: string; readonly status?: string } = {},
+): Promise<AIReferentIncomingRegistry> {
+  const query = new URLSearchParams();
+  if (filters.query?.trim()) query.set("query", filters.query.trim());
+  if (filters.status) query.set("status", filters.status);
+  const suffix = query.size > 0 ? `?${query.toString()}` : "";
+  return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, {}, token);
+}
+
+export function downloadAIReferentJournal(token: string): Promise<Blob> {
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/journal/latest`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (response) => response.blob(), 120_000);
 }
 
 export function createAIReferentLetter(

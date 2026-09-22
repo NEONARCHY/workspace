@@ -38,6 +38,36 @@
   gap: 8px;
 }
 
+.ai-referent-register-tabs {
+  width: fit-content;
+  display: flex;
+  gap: 4px;
+  margin: -4px 0 14px;
+  padding: 4px;
+  border: 1px solid rgb(41 58 85 / 8%);
+  border-radius: 15px;
+  background: rgb(239 245 244 / 82%);
+}
+
+.ai-referent-register-tabs button {
+  min-width: 128px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: rgb(41 58 85 / 66%);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-referent-register-tabs button:hover { color: var(--ai-navy); }
+.ai-referent-register-tabs button.active {
+  background: white;
+  color: var(--ai-navy);
+  box-shadow: 0 7px 18px rgb(31 62 78 / 9%);
+}
+
 .ai-referent-summary {
   gap: 0;
   overflow: hidden;
@@ -305,6 +335,109 @@
   background: linear-gradient(transparent, white 24%);
 }
 
+.ai-incoming-toolbar > span { flex: 1; width: auto; min-width: 260px; }
+.ai-incoming-toolbar .ai-referent-filters { flex: 0 1 auto; }
+
+.ai-incoming-sync-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 3px 10px;
+  color: rgb(41 58 85 / 58%);
+  font-size: 12px;
+}
+
+.ai-incoming-sync-line > span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #9ba6b0;
+}
+
+.ai-incoming-sync-line > span.online { background: #2f9b69; }
+
+.ai-incoming-table-wrap {
+  margin-top: 4px;
+  overflow: auto;
+  border: 1px solid rgb(41 58 85 / 8%);
+  border-radius: 19px;
+  background: rgb(255 255 255 / 84%);
+  box-shadow: 0 12px 32px rgb(31 62 78 / 6%);
+}
+
+.ai-incoming-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+}
+
+.ai-incoming-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgb(41 58 85 / 8%);
+  background: #f1f6f5;
+  color: rgb(41 58 85 / 58%);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+
+.ai-incoming-table td {
+  max-width: 270px;
+  padding: 13px 14px;
+  border-bottom: 1px solid rgb(41 58 85 / 7%);
+  vertical-align: middle;
+}
+
+.ai-incoming-table tbody tr:last-child td { border-bottom: 0; }
+.ai-incoming-table tbody tr:hover { background: rgb(0 145 168 / 3%); }
+.ai-incoming-table tbody tr.needs-attention { background: rgb(181 77 92 / 3.5%); }
+.ai-incoming-table td > strong,
+.ai-incoming-table td > span,
+.ai-incoming-table td > small { display: block; }
+.ai-incoming-table td > small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: rgb(41 58 85 / 54%);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-incoming-table td:first-child { font-variant-numeric: tabular-nums; }
+.ai-incoming-subject strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ai-incoming-attachment-count {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-incoming-status {
+  width: fit-content;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e9f6f0;
+  color: #246f52;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ai-incoming-status.status-attention { background: #fff0f2; color: #9d3d4c; }
+
 @media (max-width: 1180px) {
   .ai-referent-row { grid-template-columns: 120px minmax(220px, 1.5fr) 1fr 120px 24px; }
   .ai-referent-row-person:nth-of-type(4) { display: none; }
@@ -322,6 +455,8 @@
   .ai-referent-detail-dialog { inset: 8px; width: auto; max-width: none; border-radius: 22px; }
   .ai-referent-form-grid { flex-direction: column; }
   .ai-referent-form-grid > label { width: 100%; }
+  .ai-referent-register-tabs { width: 100%; }
+  .ai-referent-register-tabs button { min-width: 0; flex: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -336,4 +471,5 @@
   .ai-referent-detail-card,
   .ai-referent-detail-people,
   .ai-referent-detail-section { border: 1px solid CanvasText; }
+  .ai-incoming-table-wrap { border: 1px solid CanvasText; }
 }

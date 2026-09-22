@@ -1,6 +1,6 @@
-"""Contracts for the outgoing-only AI Referent module."""
+"""Contracts for the shared incoming and outgoing AI Referent module."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -115,3 +115,131 @@ class AIReferentRegistryResponse(ApiModel):
     pending_review_count: int = 0
     ready_count: int = 0
     sent_count: int = 0
+
+
+AIReferentIncomingSource = Literal["exat", "webmail", "import"]
+
+
+class AIReferentIncomingSyncItem(ApiModel):
+    external_id: str = Field(min_length=1, max_length=160)
+    sequence_number: str = Field(min_length=1, max_length=32)
+    platform_incoming_number: str = Field(default="", max_length=80)
+    sender_letter_number: str = Field(default="", max_length=160)
+    platform_incoming_date: date | None = None
+    platform_outgoing_date: date | None = None
+    received_at: datetime | None = None
+    processed_at: datetime | None = None
+    registered_at: datetime | None = None
+    sender_organization: str = Field(default="", max_length=300)
+    sender_person: str = Field(default="", max_length=300)
+    subject: str = Field(default="", max_length=500)
+    responsible_external_id: str = Field(default="", max_length=160)
+    responsible_display_name: str = Field(default="", max_length=300)
+    urgency: str = Field(default="normal", min_length=1, max_length=32)
+    has_attachments: bool = False
+    attachments_count: int = Field(default=0, ge=0, le=10_000)
+    main_document_filename: str = Field(default="", max_length=500)
+    platform_record_id: str = Field(default="", max_length=160)
+    status: str = Field(min_length=1, max_length=64)
+    fallback_used: bool = False
+    error_message: str = Field(default="", max_length=5000)
+    source: AIReferentIncomingSource = "exat"
+
+    @field_validator(
+        "platform_incoming_number",
+        "sender_letter_number",
+        "sender_organization",
+        "sender_person",
+        "subject",
+        "responsible_external_id",
+        "responsible_display_name",
+        "urgency",
+        "main_document_filename",
+        "platform_record_id",
+        "error_message",
+    )
+    @classmethod
+    def incoming_text_is_trimmed(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("external_id", "sequence_number", "status")
+    @classmethod
+    def incoming_required_text_is_not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Поле не должно быть пустым")
+        return stripped
+
+
+class AIReferentIncomingSyncRequest(ApiModel):
+    agent_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$")
+    agent_name: str = Field(min_length=1, max_length=200)
+    letters: list[AIReferentIncomingSyncItem] = Field(default_factory=list, max_length=500)
+
+    @field_validator("agent_id", "agent_name")
+    @classmethod
+    def agent_text_is_trimmed(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Поле не должно быть пустым")
+        return stripped
+
+
+class AIReferentIncomingSyncResponse(ApiModel):
+    created_count: int
+    updated_count: int
+    unchanged_count: int
+    received_count: int
+    synced_at: datetime
+
+
+class AIReferentIncomingLetterResponse(ApiModel):
+    id: str
+    agent_id: str
+    external_id: str
+    sequence_number: str
+    platform_incoming_number: str
+    sender_letter_number: str
+    platform_incoming_date: date | None = None
+    platform_outgoing_date: date | None = None
+    received_at: datetime | None = None
+    processed_at: datetime | None = None
+    registered_at: datetime | None = None
+    sender_organization: str
+    sender_person: str
+    subject: str
+    responsible_external_id: str
+    responsible_display_name: str
+    responsible_user_id: str | None = None
+    responsible_user_name: str | None = None
+    urgency: str
+    has_attachments: bool
+    attachments_count: int
+    main_document_filename: str
+    platform_record_id: str
+    status: str
+    fallback_used: bool
+    error_message: str
+    source: AIReferentIncomingSource
+    revision: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AIReferentJournalResponse(ApiModel):
+    available: bool = False
+    file_name: str | None = None
+    byte_size: int | None = None
+    sha256: str | None = None
+    updated_at: datetime | None = None
+    agent_name: str | None = None
+
+
+class AIReferentIncomingRegistryResponse(ApiModel):
+    letters: list[AIReferentIncomingLetterResponse] = Field(default_factory=list)
+    total_count: int = 0
+    registered_count: int = 0
+    attention_count: int = 0
+    with_attachments_count: int = 0
+    last_sync_at: datetime | None = None
+    journal: AIReferentJournalResponse = Field(default_factory=AIReferentJournalResponse)

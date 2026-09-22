@@ -2,10 +2,13 @@
 """The shared outgoing-letter register over HTTP."""
 
 import os
+from io import BytesIO
 from uuid import UUID
+from zipfile import ZipFile
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -14,8 +17,10 @@ from yuksalish_api.auth import issue_access_token
 from yuksalish_api.main import create_app
 from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.tables import (
+    ai_referent_agents,
     ai_referent_delivery_commands,
     ai_referent_events,
+    ai_referent_incoming_letters,
     ai_referent_letters,
     ai_referent_number_counters,
     attachments,
@@ -458,3 +463,132 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             headers=administrator,
         )
         assert missing.status_code == 404
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_ai_referent_agent_syncs_incoming_registry_and_excel_journal() -> None:
+    database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not database_url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(database_url)
+    async with engine.begin() as connection:
+        await connection.execute(delete(ai_referent_incoming_letters))
+        await connection.execute(delete(ai_referent_agents))
+    await engine.dispose()
+
+    settings = zoom_settings(database_url)
+    settings.seed_demo_data = True
+    settings.ai_referent_agent_token = SecretStr("robot-secret")
+    app = create_app(settings)
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+    ):
+        auth_engine = create_async_engine(database_url)
+        async with auth_engine.connect() as connection:
+            administrator = await find_active_user_by_username(connection, "malika")
+        await auth_engine.dispose()
+        assert administrator is not None
+        access_token = issue_access_token(administrator["id"], settings.auth_signing_key)
+        admin_headers = {
+            "Authorization": f"Bearer {access_token}"
+        }
+        sync_payload = {
+            "agentId": "referent-pc",
+            "agentName": "ПК референта",
+            "letters": [
+                {
+                    "externalId": "42",
+                    "sequenceNumber": "000042",
+                    "platformIncomingNumber": "0042/26/AI",
+                    "senderLetterNumber": "17-04/88",
+                    "receivedAt": "2026-09-22T06:20:00Z",
+                    "processedAt": "2026-09-22T06:22:00Z",
+                    "registeredAt": "2026-09-22T06:25:00Z",
+                    "senderOrganization": "Тестовая организация",
+                    "senderPerson": "Канцелярия",
+                    "subject": "Письмо о рабочей встрече",
+                    "responsibleExternalId": "bobur",
+                    "responsibleDisplayName": "Бобур",
+                    "urgency": "normal",
+                    "hasAttachments": True,
+                    "attachmentsCount": 2,
+                    "mainDocumentFilename": "letter.pdf",
+                    "platformRecordId": "platform-42",
+                    "status": "platform_submitted",
+                    "source": "exat",
+                }
+            ],
+        }
+        unauthorized = await client.post(
+            "/api/v1/ai-referent/agent/incoming:sync", json=sync_payload
+        )
+        assert unauthorized.status_code == 401
+
+        agent_headers = {"X-AI-Referent-Agent-Token": "robot-secret"}
+        created = await client.post(
+            "/api/v1/ai-referent/agent/incoming:sync",
+            headers=agent_headers,
+            json=sync_payload,
+        )
+        assert created.status_code == 200, created.text
+        assert created.json()["createdCount"] == 1
+
+        unchanged = await client.post(
+            "/api/v1/ai-referent/agent/incoming:sync",
+            headers=agent_headers,
+            json=sync_payload,
+        )
+        assert unchanged.status_code == 200, unchanged.text
+        assert unchanged.json()["unchangedCount"] == 1
+
+        sync_payload["letters"][0]["status"] = "completed_with_errors"
+        sync_payload["letters"][0]["errorMessage"] = "Проверить карточку на платформе"
+        updated = await client.post(
+            "/api/v1/ai-referent/agent/incoming:sync",
+            headers=agent_headers,
+            json=sync_payload,
+        )
+        assert updated.status_code == 200, updated.text
+        assert updated.json()["updatedCount"] == 1
+
+        journal_buffer = BytesIO()
+        with ZipFile(journal_buffer, "w") as workbook:
+            workbook.writestr("[Content_Types].xml", "<Types />")
+            workbook.writestr("xl/workbook.xml", "<workbook />")
+        journal_content = journal_buffer.getvalue()
+        journal = await client.put(
+            "/api/v1/ai-referent/agent/journal",
+            headers={
+                **agent_headers,
+                "Content-Type": (
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                ),
+            },
+            params={
+                "agentId": "referent-pc",
+                "agentName": "ПК референта",
+                "fileName": "register.xlsx",
+                "updatedAt": "2026-09-22T06:30:00Z",
+            },
+            content=journal_content,
+        )
+        assert journal.status_code == 200, journal.text
+        assert journal.json()["available"] is True
+
+        registry = await client.get("/api/v1/ai-referent/incoming", headers=admin_headers)
+        assert registry.status_code == 200, registry.text
+        payload = registry.json()
+        assert payload["totalCount"] == 1
+        assert payload["attentionCount"] == 1
+        assert payload["withAttachmentsCount"] == 1
+        assert payload["letters"][0]["responsibleDisplayName"] == "Бобур"
+        assert payload["letters"][0]["responsibleUserId"] is None
+        assert payload["journal"]["fileName"] == "register.xlsx"
+
+        downloaded = await client.get(
+            "/api/v1/ai-referent/journal/latest", headers=admin_headers
+        )
+        assert downloaded.status_code == 200
+        assert downloaded.content == journal_content

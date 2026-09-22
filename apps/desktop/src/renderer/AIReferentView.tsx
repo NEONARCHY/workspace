@@ -32,6 +32,7 @@ import {
 
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import {
   actOnAIReferentLetter,
   createAIReferentLetter,
@@ -120,6 +121,7 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate }: AIReferentViewProps) {
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing">("incoming");
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -269,26 +271,50 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
     <section className="workspace-view ai-referent-view" aria-label="AI Referent">
       <header className="ai-referent-header">
         <div>
-          <span className="view-kicker">Исходящая корреспонденция</span>
+          <span className="view-kicker">Единая корреспонденция</span>
           <h1>AI Referent</h1>
-          <p>Единый реестр писем из Workspace и Telegram с контролируемой отправкой.</p>
+          <p>Входящие от робота и исходящие из Workspace и Telegram — в общей базе.</p>
         </div>
         <div className="ai-referent-header-actions">
-          <Button
-            appearance="subtle"
-            icon={<ArrowClockwise20Regular />}
-            disabled={loading || busy}
-            onClick={() => void refresh()}
-          >
-            Обновить
-          </Button>
-          {canCreate ? (
+          {registerKind === "outgoing" ? <Button
+              appearance="subtle"
+              icon={<ArrowClockwise20Regular />}
+              disabled={loading || busy}
+              onClick={() => void refresh()}
+            >
+              Обновить
+            </Button> : null}
+          {registerKind === "outgoing" && canCreate ? (
             <Button appearance="primary" icon={<Add24Regular />} onClick={openCreate}>
               Новое письмо
             </Button>
           ) : null}
         </div>
       </header>
+
+      <div className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={registerKind === "incoming"}
+          className={registerKind === "incoming" ? "active" : ""}
+          onClick={() => setRegisterKind("incoming")}
+        >
+          Входящие
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={registerKind === "outgoing"}
+          className={registerKind === "outgoing" ? "active" : ""}
+          onClick={() => setRegisterKind("outgoing")}
+        >
+          Исходящие
+        </button>
+      </div>
+
+      {registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
+        <>
 
       <section className="ai-referent-summary" aria-label="Сводка исходящих писем">
         <button type="button" className="primary" onClick={() => setFilter("pending_review")}>
@@ -375,6 +401,8 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
           ))}
         </div>
       ) : null}
+        </>
+      )}
 
       <Dialog open={formOpen} onOpenChange={(_event, data) => !busy && setFormOpen(data.open)}>
         <DialogSurface className="ai-referent-form-dialog">
