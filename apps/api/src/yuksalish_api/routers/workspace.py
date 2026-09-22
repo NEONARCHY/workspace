@@ -74,6 +74,7 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    respond_to_calendar_event,
     return_task_for_revision,
     save_workflow,
     search_messages,
@@ -126,6 +127,7 @@ from yuksalish_api.workspace_schemas import (
     PinFeedPostRequest,
     ProfileAvatarResponse,
     ProjectResponse,
+    RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -560,6 +562,22 @@ async def post_calendar_cancel(
 ) -> CalendarEventResponse:
     try:
         result = await cancel_calendar_event(connection, current_user, event_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await _event_bus(request).publish({"type": "calendar.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/calendar/events/{event_id}/response", response_model=CalendarEventResponse)
+async def post_calendar_response(
+    event_id: UUID,
+    payload: RespondCalendarEventRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> CalendarEventResponse:
+    try:
+        result = await respond_to_calendar_event(connection, current_user, event_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "calendar.updated", "entityId": result.id})

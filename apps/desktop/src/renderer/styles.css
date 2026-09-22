@@ -1252,6 +1252,17 @@ button { -webkit-tap-highlight-color: transparent; }
 .calendar-detail-list > div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 12px 0; border-bottom: 1px solid #e7edf1; }
 .calendar-detail-list dt { color: #83919e; font-size: 11px; }
 .calendar-detail-list dd { margin: 0; color: #354e63; font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.calendar-attendee-list { display: grid; gap: 5px; }
+.calendar-attendee-status { display: inline-flex; width: fit-content; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 999px; background: #eff4f6; color: #536f80; font-size: 11px; font-weight: 600; }
+.calendar-attendee-status.accepted { background: #e8f6ef; color: #147647; }
+.calendar-attendee-status.pending { background: #fff5df; color: #966300; }
+.calendar-attendee-status.declined { background: #fae9ea; color: #aa3f4a; }
+.calendar-linked-records { display: grid; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid #e7edf1; }
+.calendar-linked-records-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #83919e; font-size: 11px; font-weight: 700; }
+.calendar-linked-records > p { margin: 0; color: #607589; font-size: 12px; }
+.calendar-linked-task { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 10px; border: 1px solid #dce8ed; border-radius: 10px; background: #f8fbfc; color: #29455a; text-align: left; cursor: pointer; }
+.calendar-linked-task:hover, .calendar-linked-task:focus-visible { border-color: #0091a8; background: #eef9fa; outline: none; }
+.calendar-linked-task span { color: #637c8c; font-size: 11px; }
 .calendar-detail-description { margin-top: 16px; padding: 14px; border-radius: 10px; background: #f5f8fa; }
 .calendar-detail-description > span { color: #83919e; font-size: 11px; }
 .calendar-detail-description p, .calendar-empty p { margin: 6px 0 0; color: #607589; font-size: 11px; line-height: 1.55; white-space: pre-wrap; }

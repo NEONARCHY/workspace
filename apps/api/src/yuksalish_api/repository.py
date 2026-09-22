@@ -69,6 +69,7 @@ from .workspace_schemas import (
     ApprovalStageResponse,
     AttachmentOwnerType,
     AttachmentResponse,
+    CalendarEventAttendeeResponse,
     CalendarEventResponse,
     ChangeProjectStageRequest,
     ChangeTaskStatusRequest,
@@ -96,6 +97,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -302,6 +304,7 @@ def _task(
         checklist_done=checklist_done,
         checklist_total=len(checklist),
         source_message_id=(str(row["source_message_id"]) if row["source_message_id"] else None),
+        calendar_event_id=(str(row["calendar_event_id"]) if row.get("calendar_event_id") else None),
         result_text=row["result_text"],
         parent_task_id=(str(row["parent_task_id"]) if row.get("parent_task_id") else None),
         parent_task_title=parent_task_title,
@@ -422,6 +425,7 @@ def _approval_request(
         requester_id=str(row["requester_user_id"]),
         responsible_user_id=str(row.get("responsible_user_id") or row["requester_user_id"]),
         source_task_id=(str(row["source_task_id"]) if row["source_task_id"] else None),
+        calendar_event_id=(str(row["calendar_event_id"]) if row.get("calendar_event_id") else None),
         purpose=str(payload.get("purpose", "")),
         details=_payment_details(
             payload,
@@ -874,8 +878,10 @@ async def _feed_detail_maps(
 def _calendar_event(
     row: Record,
     current_user: AuthenticatedUser,
-    attendee_ids: Sequence[UUID] = (),
+    attendees: Sequence[Record] = (),
 ) -> CalendarEventResponse:
+    attendance_by_user = {attendee["user_id"]: attendee for attendee in attendees}
+    current_attendance = attendance_by_user.get(current_user.id)
     return CalendarEventResponse(
         id=str(row["id"]),
         organizer_user_id=str(row["organizer_user_id"]),
@@ -887,7 +893,23 @@ def _calendar_event(
         all_day=row["all_day"],
         location=row["location"] or "",
         status=row["status"],
-        attendee_ids=[str(value) for value in attendee_ids],
+        attendee_ids=[str(attendee["user_id"]) for attendee in attendees],
+        attendees=[
+            CalendarEventAttendeeResponse(
+                user_id=str(attendee["user_id"]),
+                status=attendee["status"],
+                responded_at=attendee["responded_at"],
+            )
+            for attendee in attendees
+        ],
+        current_user_attendance_status=(
+            current_attendance["status"] if current_attendance is not None else None
+        ),
+        can_respond=(
+            current_attendance is not None
+            and current_user.id != row["organizer_user_id"]
+            and row["status"] == "scheduled"
+        ),
         can_edit=row["organizer_user_id"] == current_user.id or _is_privileged(current_user),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -897,7 +919,7 @@ def _calendar_event(
 async def _calendar_attendee_map(
     connection: AsyncConnection,
     event_ids: Sequence[UUID],
-) -> dict[UUID, list[UUID]]:
+) -> dict[UUID, list[Record]]:
     if not event_ids:
         return {}
     rows = (
@@ -911,9 +933,9 @@ async def _calendar_attendee_map(
         .mappings()
         .all()
     )
-    result: dict[UUID, list[UUID]] = {}
+    result: dict[UUID, list[Record]] = {}
     for row in rows:
-        result.setdefault(row["event_id"], []).append(row["user_id"])
+        result.setdefault(row["event_id"], []).append(row)
     return result
 
 
@@ -2213,7 +2235,11 @@ async def materialize_due_notifications(
     )
     attendee_map = await _calendar_attendee_map(connection, [row["id"] for row in due_events])
     for row in due_events:
-        recipient_ids = set(attendee_map.get(row["id"], [])) | {row["organizer_user_id"]}
+        recipient_ids = {
+            attendee["user_id"]
+            for attendee in attendee_map.get(row["id"], [])
+            if attendee["status"] == "accepted"
+        } | {row["organizer_user_id"]}
         for user_id in recipient_ids:
             statement = (
                 pg_insert(workspace_notifications)
@@ -3052,6 +3078,7 @@ async def _replace_calendar_attendees(
     connection: AsyncConnection,
     event_id: UUID,
     attendee_ids: Sequence[UUID],
+    organizer_user_id: UUID,
 ) -> None:
     await connection.execute(
         delete(calendar_event_attendees).where(calendar_event_attendees.c.event_id == event_id)
@@ -3059,7 +3086,103 @@ async def _replace_calendar_attendees(
     if attendee_ids:
         await connection.execute(
             insert(calendar_event_attendees),
-            [{"event_id": event_id, "user_id": user_id} for user_id in attendee_ids],
+            [
+                {
+                    "event_id": event_id,
+                    "user_id": user_id,
+                    "status": "accepted" if user_id == organizer_user_id else "pending",
+                    "responded_at": datetime.now(UTC) if user_id == organizer_user_id else None,
+                }
+                for user_id in attendee_ids
+            ],
+        )
+
+
+def _calendar_participant_ids(organizer_user_id: UUID, attendee_ids: Sequence[UUID]) -> list[UUID]:
+    return list(dict.fromkeys([organizer_user_id, *attendee_ids]))
+
+
+async def _ensure_calendar_participants_are_available(
+    connection: AsyncConnection,
+    participant_ids: Sequence[UUID],
+    *,
+    starts_at: datetime,
+    ends_at: datetime,
+    excluding_event_id: UUID | None = None,
+) -> None:
+    """Serialise a person's invitations and reject overlaps without exposing event details."""
+    locked_ids = list(
+        (
+            await connection.execute(
+                select(users.c.id)
+                .where(users.c.id.in_(participant_ids))
+                .order_by(users.c.id)
+                .with_for_update()
+            )
+        ).scalars()
+    )
+    if len(locked_ids) != len(participant_ids):
+        raise WorkspaceRepositoryError(422, "Every calendar participant must be active")
+
+    statement = (
+        select(users.c.full_name)
+        .select_from(
+            calendar_event_attendees.join(
+                calendar_events,
+                calendar_events.c.id == calendar_event_attendees.c.event_id,
+            ).join(users, users.c.id == calendar_event_attendees.c.user_id)
+        )
+        .where(
+            calendar_event_attendees.c.user_id.in_(participant_ids),
+            calendar_event_attendees.c.status.in_(("pending", "accepted")),
+            calendar_events.c.status == "scheduled",
+            calendar_events.c.starts_at < ends_at,
+            calendar_events.c.ends_at > starts_at,
+        )
+        .distinct()
+    )
+    if excluding_event_id is not None:
+        statement = statement.where(calendar_events.c.id != excluding_event_id)
+    busy_names = list((await connection.execute(statement)).scalars())
+    if busy_names:
+        names = ", ".join(sorted(busy_names)[:3])
+        suffix = " и другие" if len(busy_names) > 3 else ""
+        raise WorkspaceRepositoryError(
+            409,
+            f"Невозможно назначить мероприятие: заняты {names}{suffix}. Выберите другое время.",
+        )
+
+
+async def _notify_calendar_invitees(
+    connection: AsyncConnection,
+    event_row: Record,
+    attendee_ids: Sequence[UUID],
+) -> None:
+    now = datetime.now(UTC)
+    starts_at = event_row["starts_at"].astimezone(ZoneInfo("Asia/Tashkent"))
+    for attendee_id in attendee_ids:
+        if attendee_id == event_row["organizer_user_id"]:
+            continue
+        await _upsert_notification(
+            connection,
+            user_id=attendee_id,
+            event_key=f"calendar:invitation:{event_row['id']}",
+            kind="calendar",
+            priority="attention",
+            title="Приглашение на мероприятие",
+            body=f"{event_row['title']} · {starts_at:%d.%m %H:%M} (Ташкент)",
+            section="calendar",
+            entity_id=event_row["id"],
+            requires_action=True,
+            occurred_at=now,
+        )
+        await connection.execute(
+            update(workspace_notifications)
+            .where(
+                workspace_notifications.c.user_id == attendee_id,
+                workspace_notifications.c.event_key == f"calendar:invitation:{event_row['id']}",
+            )
+            .values(requires_action=True, resolved_at=None, read_at=None)
         )
 
 
@@ -3080,6 +3203,13 @@ async def create_calendar_event(
             "New calendar events cannot be created for a past date",
         )
     attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    participant_ids = _calendar_participant_ids(current_user.id, attendee_ids)
+    await _ensure_calendar_participants_are_available(
+        connection,
+        participant_ids,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+    )
     event_id = uuid4()
     now = datetime.now(UTC)
     await connection.execute(
@@ -3098,7 +3228,13 @@ async def create_calendar_event(
             updated_at=now,
         )
     )
-    await _replace_calendar_attendees(connection, event_id, attendee_ids)
+    await _replace_calendar_attendees(connection, event_id, participant_ids, current_user.id)
+    event_row = (
+        (await connection.execute(select(calendar_events).where(calendar_events.c.id == event_id)))
+        .mappings()
+        .one()
+    )
+    await _notify_calendar_invitees(connection, event_row, participant_ids)
     return await _calendar_event_response(connection, current_user, event_id)
 
 
@@ -3124,6 +3260,14 @@ async def update_calendar_event(
     if row["status"] == "cancelled":
         raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot be edited")
     attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    participant_ids = _calendar_participant_ids(row["organizer_user_id"], attendee_ids)
+    await _ensure_calendar_participants_are_available(
+        connection,
+        participant_ids,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+        excluding_event_id=event_id,
+    )
     await connection.execute(
         update(calendar_events)
         .where(calendar_events.c.id == event_id)
@@ -3138,7 +3282,18 @@ async def update_calendar_event(
             updated_at=datetime.now(UTC),
         )
     )
-    await _replace_calendar_attendees(connection, event_id, attendee_ids)
+    await _replace_calendar_attendees(
+        connection,
+        event_id,
+        participant_ids,
+        row["organizer_user_id"],
+    )
+    updated_row = (
+        (await connection.execute(select(calendar_events).where(calendar_events.c.id == event_id)))
+        .mappings()
+        .one()
+    )
+    await _notify_calendar_invitees(connection, updated_row, participant_ids)
     return await _calendar_event_response(connection, current_user, event_id)
 
 
@@ -3160,6 +3315,97 @@ async def cancel_calendar_event(
         update(calendar_events)
         .where(calendar_events.c.id == event_id)
         .values(status="cancelled", updated_at=datetime.now(UTC))
+    )
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.section == "calendar",
+            workspace_notifications.c.entity_id == event_id,
+            workspace_notifications.c.resolved_at.is_(None),
+        )
+        .values(resolved_at=datetime.now(UTC))
+    )
+    return await _calendar_event_response(connection, current_user, event_id)
+
+
+async def respond_to_calendar_event(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    event_id: UUID,
+    payload: RespondCalendarEventRequest,
+) -> CalendarEventResponse:
+    event_row = (
+        (
+            await connection.execute(
+                select(calendar_events).where(calendar_events.c.id == event_id).with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if event_row is None:
+        raise WorkspaceRepositoryError(404, "Calendar event was not found")
+    if event_row["status"] != "scheduled":
+        raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot receive a response")
+    if event_row["organizer_user_id"] == current_user.id:
+        raise WorkspaceRepositoryError(409, "The organiser is already attending this event")
+    attendance = (
+        (
+            await connection.execute(
+                select(calendar_event_attendees)
+                .where(
+                    calendar_event_attendees.c.event_id == event_id,
+                    calendar_event_attendees.c.user_id == current_user.id,
+                )
+                .with_for_update()
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if attendance is None:
+        raise WorkspaceRepositoryError(403, "Only an invited colleague can respond to this event")
+    if payload.status == "accepted":
+        await _ensure_calendar_participants_are_available(
+            connection,
+            [current_user.id],
+            starts_at=event_row["starts_at"],
+            ends_at=event_row["ends_at"],
+            excluding_event_id=event_id,
+        )
+    now = datetime.now(UTC)
+    await connection.execute(
+        update(calendar_event_attendees)
+        .where(
+            calendar_event_attendees.c.event_id == event_id,
+            calendar_event_attendees.c.user_id == current_user.id,
+        )
+        .values(status=payload.status, responded_at=now)
+    )
+    await connection.execute(
+        update(workspace_notifications)
+        .where(
+            workspace_notifications.c.user_id == current_user.id,
+            workspace_notifications.c.event_key == f"calendar:invitation:{event_id}",
+            workspace_notifications.c.resolved_at.is_(None),
+        )
+        .values(resolved_at=now)
+    )
+    response_label = (
+        "подтвердил участие" if payload.status == "accepted" else "отказался от участия"
+    )
+    await _upsert_notification(
+        connection,
+        user_id=event_row["organizer_user_id"],
+        event_key=f"calendar:response:{event_id}:{current_user.id}:{payload.status}",
+        kind="calendar",
+        priority="normal",
+        title="Ответ на приглашение",
+        body=f"{current_user.full_name} {response_label}: {event_row['title']}",
+        section="calendar",
+        entity_id=event_id,
+        requires_action=False,
+        occurred_at=now,
     )
     return await _calendar_event_response(connection, current_user, event_id)
 
@@ -3427,6 +3673,7 @@ async def create_task(
     try:
         assignee_id = UUID(payload.assignee_id) if payload.assignee_id else current_user.id
         source_message_id = UUID(payload.source_message_id) if payload.source_message_id else None
+        calendar_event_id = UUID(payload.calendar_event_id) if payload.calendar_event_id else None
         parent_task_id = UUID(payload.parent_task_id) if payload.parent_task_id else None
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
@@ -3452,6 +3699,25 @@ async def create_task(
         )
         if not message_exists:
             raise WorkspaceRepositoryError(422, "Source message is not accessible")
+    if calendar_event_id is not None:
+        calendar_event = (
+            (
+                await connection.execute(
+                    select(calendar_events).where(calendar_events.c.id == calendar_event_id)
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if calendar_event is None:
+            raise WorkspaceRepositoryError(422, "Calendar event was not found")
+        if calendar_event["status"] != "scheduled":
+            raise WorkspaceRepositoryError(409, "A cancelled calendar event cannot receive a task")
+        if (
+            calendar_event["organizer_user_id"] != current_user.id
+            and not _is_privileged(current_user)
+        ):
+            raise WorkspaceRepositoryError(403, "Only the organiser can add tasks to this event")
     parent_row: Record | None = None
     if parent_task_id is not None:
         parent_row = await _task_access_row(connection, current_user, parent_task_id, edit=True)
@@ -3502,6 +3768,7 @@ async def create_task(
         "due_at": payload.due_at,
         "result_text": None,
         "source_message_id": source_message_id,
+        "calendar_event_id": calendar_event_id,
         "created_at": now,
         "updated_at": now,
     }
@@ -4963,13 +5230,35 @@ async def create_approval_request(
         )
     try:
         source_task_id = UUID(payload.source_task_id) if payload.source_task_id else None
+        calendar_event_id = UUID(payload.calendar_event_id) if payload.calendar_event_id else None
     except ValueError as error:
-        raise WorkspaceRepositoryError(422, "Invalid source task identifier") from error
+        raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
     if source_task_id is not None:
         try:
             await _task_access_row(connection, current_user, source_task_id)
         except WorkspaceRepositoryError as error:
             raise WorkspaceRepositoryError(422, "Source task is not accessible") from error
+    if calendar_event_id is not None:
+        calendar_event = (
+            (
+                await connection.execute(
+                    select(calendar_events).where(calendar_events.c.id == calendar_event_id)
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if calendar_event is None:
+            raise WorkspaceRepositoryError(422, "Calendar event was not found")
+        if calendar_event["status"] != "scheduled":
+            raise WorkspaceRepositoryError(
+                409, "A cancelled calendar event cannot receive a payment"
+            )
+        if (
+            calendar_event["organizer_user_id"] != current_user.id
+            and not _is_privileged(current_user)
+        ):
+            raise WorkspaceRepositoryError(403, "Only the organiser can add payments to this event")
     responsible_id, employee_ids = await _validate_request_people(
         connection,
         current_user,
@@ -5009,6 +5298,7 @@ async def create_approval_request(
         "active_node_keys": active_node_keys,
         "actor_overrides": {},
         "source_task_id": source_task_id,
+        "calendar_event_id": calendar_event_id,
         "current_version": 1,
         "created_at": now,
         "updated_at": now,

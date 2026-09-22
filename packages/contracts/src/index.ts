@@ -362,6 +362,13 @@ export interface FeedPost {
 }
 
 export type CalendarEventType = "meeting" | "deadline" | "trip" | "task" | "general";
+export type CalendarAttendanceStatus = "accepted" | "pending" | "declined";
+
+export interface CalendarEventAttendee {
+  readonly userId: string;
+  readonly status: CalendarAttendanceStatus;
+  readonly respondedAt?: string | null;
+}
 
 export interface CalendarEvent {
   readonly id: string;
@@ -375,6 +382,10 @@ export interface CalendarEvent {
   readonly location: string;
   readonly status: "scheduled" | "cancelled";
   readonly attendeeIds: readonly string[];
+  /** Includes the organiser and each invited colleague with their reply state. */
+  readonly attendees: readonly CalendarEventAttendee[];
+  readonly currentUserAttendanceStatus?: CalendarAttendanceStatus | null;
+  readonly canRespond: boolean;
   readonly canEdit: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -851,6 +862,7 @@ export interface WorkspaceTask {
   readonly checklistDone: number;
   readonly checklistTotal: number;
   readonly sourceMessageId?: string | null;
+  readonly calendarEventId?: string | null;
   readonly resultText?: string | null;
   readonly parentTaskId?: string | null;
   readonly parentTaskTitle?: string | null;
@@ -881,6 +893,7 @@ export interface WorkspaceTaskCreateInput {
   readonly project?: string;
   readonly assigneeId: string;
   readonly sourceMessageId?: string;
+  readonly calendarEventId?: string;
   readonly parentTaskId?: string;
   readonly priority?: WorkspaceTask["priority"];
   readonly dueAt?: string;
@@ -1148,6 +1161,7 @@ export interface ApprovalRequestSummary {
   readonly requesterId: string;
   readonly responsibleUserId: string;
   readonly sourceTaskId?: string | null;
+  readonly calendarEventId?: string | null;
   readonly purpose: string;
   readonly details: PaymentRequestDetails;
   readonly createdAt: string;

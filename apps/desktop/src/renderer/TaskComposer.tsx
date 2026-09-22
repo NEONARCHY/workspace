@@ -42,6 +42,7 @@ interface TaskComposerProps {
   readonly initialTitle?: string;
   readonly initialDescription?: string;
   readonly sourceLabel?: string;
+  readonly calendarEventId?: string;
   readonly onClose: () => void;
   readonly onSubmit: (
     payload: WorkspaceTaskCreateInput,
@@ -79,6 +80,7 @@ export function TaskComposer({
   initialTitle = "",
   initialDescription = "",
   sourceLabel,
+  calendarEventId,
   onClose,
   onSubmit,
 }: TaskComposerProps) {
@@ -304,6 +306,7 @@ export function TaskComposer({
         description: description.trim(),
         project: project.trim() || "Без проекта",
         assigneeId,
+        calendarEventId,
         priority,
         dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
         participants,

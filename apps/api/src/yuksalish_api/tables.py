@@ -292,6 +292,7 @@ tasks = sa.Table(
     sa.Column("due_at", sa.DateTime(timezone=True)),
     sa.Column("result_text", sa.Text()),
     sa.Column("source_message_id", uuid_type),
+    sa.Column("calendar_event_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
@@ -462,6 +463,7 @@ approval_requests = sa.Table(
     sa.Column("active_node_keys", postgresql.JSONB()),
     sa.Column("actor_overrides", postgresql.JSONB()),
     sa.Column("source_task_id", uuid_type),
+    sa.Column("calendar_event_id", uuid_type),
     sa.Column("current_version", sa.Integer()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
@@ -668,6 +670,8 @@ calendar_event_attendees = sa.Table(
     metadata,
     sa.Column("event_id", uuid_type, primary_key=True),
     sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("status", sa.String(16)),
+    sa.Column("responded_at", sa.DateTime(timezone=True)),
 )
 
 workspace_notifications = sa.Table(
