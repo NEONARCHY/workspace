@@ -8,7 +8,9 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from test_zoom_postgres import zoom_settings
+from yuksalish_api.auth import issue_access_token
 from yuksalish_api.main import create_app
+from yuksalish_api.repository import find_active_user_by_username
 from yuksalish_api.tables import (
     ai_referent_delivery_commands,
     ai_referent_events,
@@ -47,21 +49,24 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         app.router.lifespan_context(app),
         AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
     ):
-        async def login(username: str) -> dict[str, str]:
-            response = await client.post(
-                "/api/v1/auth/login",
-                json={
-                    "username": username,
-                    "password": "Yuksalish-Local-2026!",
-                    "deviceLabel": "test",
-                },
-            )
-            assert response.status_code == 200, response.text
-            return {"Authorization": f"Bearer {response.json()['accessToken']}"}
+        auth_engine = create_async_engine(database_url)
+        async with auth_engine.connect() as connection:
+            records = {
+                username: await find_active_user_by_username(connection, username)
+                for username in ("dilshod", "aziza", "baxtiyor")
+            }
+        await auth_engine.dispose()
+        assert all(record is not None for record in records.values())
 
-        author = await login("dilshod")
-        reviewer = await login("aziza")
-        another_manager = await login("baxtiyor")
+        def headers(username: str) -> dict[str, str]:
+            record = records[username]
+            assert record is not None
+            token = issue_access_token(record["id"], settings.auth_signing_key)
+            return {"Authorization": f"Bearer {token}"}
+
+        author = headers("dilshod")
+        reviewer = headers("aziza")
+        another_manager = headers("baxtiyor")
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=author)
         people = {person["username"]: person["id"] for person in bootstrap.json()["people"]}
 
