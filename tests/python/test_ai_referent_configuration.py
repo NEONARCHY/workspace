@@ -335,6 +335,27 @@ def test_client_forbids_plain_http_credentials_and_redirects(adapter):
         client_module.NoRedirect().redirect_request(None, None, 302, "", {}, "https://other.test")
 
 
+@pytest.mark.parametrize("role", ["employee", "admin", "superadmin"])
+def test_client_closes_session_if_logged_in_user_is_not_admin(adapter, role):
+    client_module = importlib.import_module("workspace_integration.client")
+    client = client_module.WorkspaceClient(
+        settings={"api_url": "https://workspace.test"}, token="test-agent"
+    )
+    client.request = Mock(return_value={"accessToken": "test-session", "user": {"role": role}})
+    client.logout = Mock()
+    if role == "employee":
+        with pytest.raises(client_module.WorkspaceError) as forbidden:
+            client.login("@account", "test-password")
+        assert forbidden.value.status == 403
+        client.logout.assert_called_once_with("test-session")
+        client.logout.side_effect = client_module.WorkspaceError("unavailable")
+        with pytest.raises(client_module.WorkspaceError, match="Ошибка закрытия сеанса"):
+            client.login("@account", "test-password")
+    else:
+        assert client.login("@account", "test-password") == "test-session"
+        client.logout.assert_not_called()
+
+
 def test_installer_rejects_unknown_source_without_writing(tmp_path, monkeypatch):
     monkeypatch.syspath_prepend(str(ROOT / "scripts"))
     installer = importlib.import_module("install_exat_workspace")

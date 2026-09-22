@@ -170,9 +170,18 @@ class WorkspaceClient:
             method="POST",
             agent=False,
         )
+        access = str(result["accessToken"])
         if result.get("user", {}).get("role") not in {"admin", "superadmin"}:
+            try:
+                self.logout(access)
+            except WorkspaceError:
+                raise WorkspaceError(
+                    "Недостаточно прав. Ошибка закрытия сеанса Exat; "
+                    "завершите сеанс через настройки безопасности Workspace.",
+                    403,
+                ) from None
             raise WorkspaceError("Войдите под аккаунтом администратора Workspace.", 403)
-        return str(result["accessToken"])
+        return access
 
     def save(self, payload: dict[str, Any], access_token: str) -> dict[str, Any]:
         return self.request(
