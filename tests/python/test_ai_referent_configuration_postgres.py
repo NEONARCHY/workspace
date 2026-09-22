@@ -174,7 +174,7 @@ async def test_shared_reviewer_configuration_access_conflicts_reassignment_and_a
                 == revision
             )
 
-        # Disable/re-enable and uniqueness validation never rewrite approved history.
+        # An approved-but-unsent letter follows the current role without losing its decision.
         initial["expectedRevision"] = revision
         initial["reviewers"][0]["enabled"] = False
         disabled = await client.put(base + "/configuration", headers=admin, json=initial)
@@ -191,8 +191,43 @@ async def test_shared_reviewer_configuration_access_conflicts_reassignment_and_a
                 .mappings()
                 .one()
             )
-            assert approved_row["reviewer_user_id"] == records["dilshod"]["id"]
+            assert approved_row["reviewer_user_id"] is None
             assert approved_row["status"] == "approved"
+        audit = (await client.get(base + f"/letters/{letter_id}", headers=admin)).json()
+        assert any(event["eventType"] == "letter.approve" for event in audit["events"])
+        initial["expectedRevision"] = disabled.json()["revision"]
+        initial["reviewers"][0]["enabled"] = True
+        reenabled = await client.put(base + "/configuration", headers=admin, json=initial)
+        assert reenabled.status_code == 200
+        async with engine.begin() as connection:
+            assert (
+                await connection.scalar(
+                    select(ai_referent_letters.c.reviewer_user_id).where(
+                        ai_referent_letters.c.id == letter_id,
+                    )
+                )
+                == records["dilshod"]["id"]
+            )
+            await connection.execute(
+                update(ai_referent_letters)
+                .where(
+                    ai_referent_letters.c.id == letter_id,
+                )
+                .values(status="sent")
+            )
+        initial["expectedRevision"] = reenabled.json()["revision"]
+        initial["reviewers"][0]["enabled"] = False
+        disabled = await client.put(base + "/configuration", headers=admin, json=initial)
+        assert disabled.status_code == 200
+        async with engine.connect() as connection:
+            assert (
+                await connection.scalar(
+                    select(ai_referent_letters.c.reviewer_user_id).where(
+                        ai_referent_letters.c.id == letter_id,
+                    )
+                )
+                == records["dilshod"]["id"]
+            )  # Completed correspondence keeps its identity.
         initial["expectedRevision"] = disabled.json()["revision"]
         initial["reviewers"][0]["enabled"] = True
         initial["reviewers"][1].update(username="dilshod", enabled=True)

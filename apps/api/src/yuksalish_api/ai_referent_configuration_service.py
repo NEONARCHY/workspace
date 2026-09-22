@@ -1,7 +1,7 @@
 """A versioned configuration shared by Workspace, robot GUI and running bot."""
 
 from datetime import UTC, datetime
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from fastapi import HTTPException
 from sqlalchemy import insert, select, update
@@ -26,6 +26,16 @@ from .tables import (
     audit_events,
     users,
 )
+
+_REASSIGNABLE_STATUSES = (
+    "draft",
+    "needs_revision",
+    "pending_review",
+    "approved",
+    "queued",
+    "failed",
+)
+_CONFIGURATION_AUDIT_ID = uuid5(NAMESPACE_URL, "urn:workspace:ai-referent:configuration:1")
 
 
 def require_configuration_admin(user: AuthenticatedUser) -> None:
@@ -181,7 +191,7 @@ async def save_configuration(
                 .where(
                     ai_referent_letters.c.reviewer_key.is_(None),
                     ai_referent_letters.c.reviewer_user_id == new_user_id,
-                    ai_referent_letters.c.status.in_(("draft", "needs_revision", "pending_review")),
+                    ai_referent_letters.c.status.in_(_REASSIGNABLE_STATUSES),
                 )
                 .values(reviewer_key=item.key)
             )
@@ -192,9 +202,7 @@ async def save_configuration(
                     select(ai_referent_letters)
                     .where(
                         ai_referent_letters.c.reviewer_key == item.key,
-                        ai_referent_letters.c.status.in_(
-                            ("draft", "needs_revision", "pending_review")
-                        ),
+                        ai_referent_letters.c.status.in_(_REASSIGNABLE_STATUSES),
                     )
                     .with_for_update()
                 )
@@ -239,7 +247,7 @@ async def save_configuration(
             actor_user_id=current_user.id,
             action="ai_referent.reviewers_updated",
             target_type="ai_referent_configuration",
-            target_id=None,
+            target_id=_CONFIGURATION_AUDIT_ID,
             details={
                 "before": [item.model_dump(mode="json") for item in before.reviewers],
                 "after": [item.model_dump(mode="json") for item in payload.reviewers],
