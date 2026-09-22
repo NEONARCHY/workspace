@@ -77,6 +77,7 @@ export interface MessengerViewProps {
     message: ChatMessage,
     payload: WorkspaceTaskCreateInput,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onCreateCalendarEventFromChat?: (chat: ChatSummary) => void;
   readonly onDownloadAttachment: (
     attachment: WorkspaceAttachment,
   ) => void | Promise<void>;
@@ -142,6 +143,7 @@ function Conversation({
   onEditMessage,
   onDeleteMessage,
   onCreateTaskFromMessage,
+  onCreateCalendarEventFromChat,
   onDownloadAttachment,
   onLoadAttachment,
   onManage,
@@ -764,6 +766,15 @@ function Conversation({
                 aria-label="Прикрепить файл"
                 disabled={busy || Boolean(editing) || !chat.permissions.uploadFiles}
                 onClick={() => fileInputRef.current?.click()}
+              />
+            </Tooltip>
+            <Tooltip content="Создать мероприятие с участниками этого чата" relationship="label">
+              <Button
+                appearance="subtle"
+                icon={<Add24Regular />}
+                aria-label="Создать мероприятие из чата"
+                disabled={busy}
+                onClick={() => onCreateCalendarEventFromChat?.(chat)}
               />
             </Tooltip>
             <Button

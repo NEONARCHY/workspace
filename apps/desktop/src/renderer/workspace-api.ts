@@ -905,6 +905,18 @@ export function cancelWorkspaceCalendarEvent(
   );
 }
 
+export function respondToWorkspaceCalendarEvent(
+  token: string,
+  eventId: string,
+  status: "accepted" | "declined",
+): Promise<CalendarEvent> {
+  return apiRequest<CalendarEvent>(
+    `/calendar/events/${eventId}/response`,
+    { method: "POST", body: JSON.stringify({ status }) },
+    token,
+  );
+}
+
 export function createWorkspaceTask(
   token: string,
   payload: WorkspaceTaskCreateInput,
@@ -1175,6 +1187,7 @@ export interface PaymentRequestInput extends PaymentRequestDetails {
   readonly currency: string;
   readonly purpose: string;
   readonly sourceTaskId?: string;
+  readonly calendarEventId?: string;
   readonly changeComment?: string;
 }
 

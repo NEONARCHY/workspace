@@ -171,6 +171,7 @@ import {
   submitWorkspaceTaskResult,
   updateWorkspaceApproval,
   updateWorkspaceCalendarEvent,
+  respondToWorkspaceCalendarEvent,
   updateWorkspaceProject,
   updateWorkspaceTask,
   updateWorkspaceTripRequest,
@@ -389,6 +390,11 @@ export function App() {
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
+  }>();
+  const [calendarChatDraft, setCalendarChatDraft] = useState<{
+    key: string;
+    title: string;
+    attendeeIds: readonly string[];
   }>();
   const knownNotificationIds = useRef<Set<string> | null>(null);
 
@@ -1491,6 +1497,8 @@ export function App() {
     runCalendarMutation((token) => updateWorkspaceCalendarEvent(token, event.id, payload));
   const handleCancelCalendarEvent = (event: CalendarEvent) =>
     runCalendarMutation((token) => cancelWorkspaceCalendarEvent(token, event.id));
+  const handleCalendarResponse = (event: CalendarEvent, status: "accepted" | "declined") =>
+    runCalendarMutation((token) => respondToWorkspaceCalendarEvent(token, event.id, status));
 
   const mergeNotification = (notification: WorkspaceNotification) => {
     setWorkspace((current) => ({
@@ -1773,6 +1781,14 @@ export function App() {
                 onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
+                onCreateCalendarEventFromChat={(chat) => {
+                  setCalendarChatDraft({
+                    key: `${chat.id}:${Date.now()}`,
+                    title: `Встреча: ${chat.title}`,
+                    attendeeIds: chat.members.map((member) => member.userId),
+                  });
+                  setActiveSection("calendar");
+                }}
                 onDownloadAttachment={handleDownloadAttachment}
                 onLoadAttachment={handleLoadAttachment}
                 onMarkRead={handleMarkChatRead}
@@ -1946,7 +1962,9 @@ export function App() {
               <CalendarView
                 key={focusTarget?.revision}
                 events={workspace.calendarEvents}
+                createFromChat={calendarChatDraft}
                 tasks={workspace.tasks}
+                requests={workspace.requests}
                 onOpenTask={(taskId) => {
                   setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
                   setActiveSection("tasks");
@@ -1961,6 +1979,10 @@ export function App() {
                 onCreate={handleCreateCalendarEvent}
                 onUpdate={handleUpdateCalendarEvent}
                 onCancel={handleCancelCalendarEvent}
+                onRespond={handleCalendarResponse}
+                onCreateTask={handleCreateTask}
+                canCreatePaymentRequest={workspace.canCreatePaymentRequests}
+                onCreatePayment={handleCreateApproval}
                 focusEventId={focusTarget?.section === "calendar" ? focusTarget.entityId : undefined}
               />
             ) : null}

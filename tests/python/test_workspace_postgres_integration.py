@@ -87,6 +87,7 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    respond_to_calendar_event,
     return_task_for_revision,
     save_workflow,
     search_messages,
@@ -121,6 +122,7 @@ from yuksalish_api.workspace_schemas import (
     CreateTripRequest,
     NotificationPreferencesUpdate,
     PinFeedPostRequest,
+    RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
     SendMessageRequest,
@@ -381,10 +383,32 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     event_type="meeting",
                     starts_at=datetime.now(UTC) + timedelta(days=11),
                     ends_at=datetime.now(UTC) + timedelta(days=11, hours=1),
-                    attendee_ids=[str(aziza.id)],
+                    attendee_ids=[str(aziza.id), str(admin.id)],
                 ),
             )
             assert calendar_event.title.endswith("updated")
+            assert calendar_event.current_user_attendance_status == "accepted"
+            assert any(
+                attendee.user_id == str(admin.id) and attendee.status == "pending"
+                for attendee in calendar_event.attendees
+            )
+            admin_response = await respond_to_calendar_event(
+                connection,
+                admin,
+                UUID(calendar_event.id),
+                RespondCalendarEventRequest(status="accepted"),
+            )
+            assert admin_response.current_user_attendance_status == "accepted"
+            with pytest.raises(WorkspaceRepositoryError, match="заняты"):
+                await create_calendar_event(
+                    connection,
+                    admin,
+                    CreateCalendarEventRequest(
+                        title="Overlapping planning",
+                        starts_at=datetime.now(UTC) + timedelta(days=11, minutes=30),
+                        ends_at=datetime.now(UTC) + timedelta(days=11, hours=2),
+                    ),
+                )
             calendar_event = await update_calendar_event(
                 connection,
                 aziza,
