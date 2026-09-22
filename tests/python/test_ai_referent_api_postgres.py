@@ -75,6 +75,18 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         reviewer = headers("aziza")
         another_manager = headers("baxtiyor")
         administrator = headers("malika")
+        configuration = (await client.get(
+            "/api/v1/ai-referent/configuration", headers=administrator,
+        )).json()
+        configured = await client.put(
+            "/api/v1/ai-referent/configuration", headers=administrator,
+            json={"expectedRevision": configuration["revision"], "reviewers": [
+                {"key": key, "username": "aziza" if key == "askar" else "",
+                 "enabled": key == "askar"}
+                for key in ("askar", "bobur", "umid", "davronbek")
+            ]},
+        )
+        assert configured.status_code == 200, configured.text
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=author)
         people = {person["username"]: person["id"] for person in bootstrap.json()["people"]}
 

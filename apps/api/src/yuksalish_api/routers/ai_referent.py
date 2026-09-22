@@ -10,6 +10,17 @@ from zipfile import BadZipFile, ZipFile
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from yuksalish_api.ai_referent_configuration_schemas import (
+    ReviewerConfigurationResponse,
+    ReviewerConfigurationUpdate,
+    ReviewerRuntimeAcknowledgement,
+)
+from yuksalish_api.ai_referent_configuration_service import (
+    acknowledge_configuration,
+    read_configuration,
+    require_configuration_admin,
+    save_configuration,
+)
 from yuksalish_api.ai_referent_incoming_service import (
     latest_journal,
     load_incoming_letters,
@@ -60,6 +71,57 @@ async def require_agent_token(
         raise HTTPException(status_code=503, detail="Синхронизация AI Referent не настроена.")
     if not supplied or not secrets.compare_digest(expected, supplied):
         raise HTTPException(status_code=401, detail="Недействительный ключ агента.")
+
+
+@router.get("/configuration", response_model=ReviewerConfigurationResponse)
+async def get_configuration(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ReviewerConfigurationResponse:
+    require_configuration_admin(current_user)
+    return await read_configuration(connection)
+
+
+@router.put("/configuration", response_model=ReviewerConfigurationResponse)
+async def put_configuration(
+    payload: ReviewerConfigurationUpdate,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ReviewerConfigurationResponse:
+    return await save_configuration(connection, current_user, payload)
+
+
+@router.get("/reviewers", response_model=ReviewerConfigurationResponse)
+async def get_reviewer_choices(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ReviewerConfigurationResponse:
+    result = await read_configuration(connection)
+    result.reviewers = [item.model_copy(update={"telegram_id": None})
+                        for item in result.reviewers if item.can_approve]
+    result.runtimes = []
+    return result
+
+
+@router.get(
+    "/agent/configuration", response_model=ReviewerConfigurationResponse,
+    dependencies=[Depends(require_agent_token)],
+)
+async def get_agent_configuration(
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> ReviewerConfigurationResponse:
+    return await read_configuration(connection)
+
+
+@router.post(
+    "/agent/configuration:ack", status_code=204, dependencies=[Depends(require_agent_token)],
+)
+async def post_configuration_ack(
+    payload: ReviewerRuntimeAcknowledgement,
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    await acknowledge_configuration(connection, payload)
+    return Response(status_code=204)
 
 
 @router.post(

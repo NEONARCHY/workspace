@@ -24,10 +24,12 @@ from .ai_referent_schemas import (
 )
 from .auth import AuthenticatedUser
 from .tables import (
+    ai_referent_configuration,
     ai_referent_delivery_commands,
     ai_referent_events,
     ai_referent_letters,
     ai_referent_number_counters,
+    ai_referent_reviewers,
     attachments,
     audit_events,
     users,
@@ -109,14 +111,29 @@ def _available_actions(
     return actions, can_edit
 
 
-async def _validate_reviewer(connection: AsyncConnection, reviewer_id: UUID | None) -> None:
+async def _validate_reviewer(
+    connection: AsyncConnection, reviewer_id: UUID | None
+) -> str | None:
     if reviewer_id is None:
-        return
-    exists = await connection.scalar(
-        select(users.c.id).where(users.c.id == reviewer_id, users.c.status == "active")
-    )
-    if exists is None:
+        return None
+    account = (await connection.execute(
+        select(users).where(users.c.id == reviewer_id, users.c.status == "active")
+    )).mappings().one_or_none()
+    if account is None:
         raise AIReferentServiceError(422, "Выбранный согласующий недоступен.")
+    key = await connection.scalar(select(ai_referent_reviewers.c.key).where(
+        ai_referent_reviewers.c.user_id == reviewer_id, ai_referent_reviewers.c.enabled.is_(True)
+    ))
+    if key is None:
+        raise AIReferentServiceError(422, "Аккаунт не назначен согласующим AI Referent.")
+    permissions = await module_permissions_for_user(connection, AuthenticatedUser(
+        id=account["id"], username=account["username"], full_name=account["full_name"],
+        role=account["role"], position_id=account["position_id"],
+        department_id=account["department_id"], job_title=None,
+    ))
+    if not permissions["ai_referent"]["approve"]:
+        raise AIReferentServiceError(422, "Согласующему запрещён доступ к модулю AI Referent.")
+    return str(key) if key else None
 
 
 async def _letter_row(
@@ -270,7 +287,8 @@ async def create_letter(
     current_user: AuthenticatedUser,
     payload: CreateAIReferentLetterRequest,
 ) -> AIReferentLetterResponse:
-    await _validate_reviewer(connection, payload.reviewer_user_id)
+    await connection.execute(select(ai_referent_configuration).with_for_update())
+    reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     now = datetime.now(UTC)
     letter_id = uuid4()
     await connection.execute(
@@ -287,6 +305,7 @@ async def create_letter(
             source="workspace",
             created_by_user_id=current_user.id,
             reviewer_user_id=payload.reviewer_user_id,
+            reviewer_key=reviewer_key,
             legacy_id=None,
             revision=1,
             sent_at=None,
@@ -383,6 +402,7 @@ async def update_letter(
     letter_id: UUID,
     payload: UpdateAIReferentLetterRequest,
 ) -> AIReferentLetterResponse:
+    await connection.execute(select(ai_referent_configuration).with_for_update())
     row = await _letter_row(connection, letter_id, lock=True)
     if row["revision"] != payload.expected_revision:
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
@@ -390,7 +410,7 @@ async def update_letter(
         raise AIReferentServiceError(409, "На текущем этапе письмо нельзя редактировать.")
     if row["created_by_user_id"] != current_user.id and not _is_privileged(current_user):
         raise AIReferentServiceError(403, "Редактировать письмо может его автор.")
-    await _validate_reviewer(connection, payload.reviewer_user_id)
+    reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     await connection.execute(
         update(ai_referent_letters)
         .where(ai_referent_letters.c.id == letter_id)
@@ -401,6 +421,7 @@ async def update_letter(
             route=payload.route,
             note=payload.note,
             reviewer_user_id=payload.reviewer_user_id,
+            reviewer_key=reviewer_key,
             revision=row["revision"] + 1,
             updated_at=datetime.now(UTC),
         )
@@ -451,6 +472,7 @@ async def act_on_letter(
     letter_id: UUID,
     payload: AIReferentActionRequest,
 ) -> AIReferentLetterResponse:
+    await connection.execute(select(ai_referent_configuration).with_for_update())
     row = await _letter_row(connection, letter_id, lock=True)
     if row["revision"] != payload.expected_revision:
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
@@ -468,6 +490,7 @@ async def act_on_letter(
             raise AIReferentServiceError(403, "Отправить письмо может его автор.")
         if row["reviewer_user_id"] is None:
             raise AIReferentServiceError(422, "Сначала выберите согласующего.")
+        values["reviewer_key"] = await _validate_reviewer(connection, row["reviewer_user_id"])
         file_count = await connection.scalar(
             select(func.count()).select_from(attachments).where(
                 attachments.c.owner_type == "ai_referent_letter",
@@ -481,6 +504,8 @@ async def act_on_letter(
         await ensure_module_action(connection, current_user, "ai_referent", "approve")
         if not (is_reviewer or privileged):
             raise AIReferentServiceError(403, "Действие доступно назначенному согласующему.")
+        if not privileged:
+            await _validate_reviewer(connection, current_user.id)
         if action == "approve":
             if current_status != "pending_review":
                 raise AIReferentServiceError(409, "Письмо не ожидает согласования.")
