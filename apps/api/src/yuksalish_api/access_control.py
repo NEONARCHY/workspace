@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .catalog import MODULE_CATALOG
-from .tables import departments, module_access_rules
+from .tables import ai_referent_reviewers, departments, module_access_rules
 
 ModuleAction = Literal["view", "create", "edit", "approve", "admin"]
 MODULE_ACTIONS: tuple[ModuleAction, ...] = ("view", "create", "edit", "approve", "admin")
@@ -114,6 +114,12 @@ async def module_permissions_for_user(
             "approve": user.role == "manager",
             "admin": False,
         }
+        assigned = await connection.scalar(select(ai_referent_reviewers.c.key).where(
+            ai_referent_reviewers.c.user_id == user.id,
+            ai_referent_reviewers.c.enabled.is_(True),
+        ).limit(1))
+        if assigned is not None:
+            result["ai_referent"]["approve"] = True
     ordered_subjects = [
         ("role", user.role),
         *(("department", key) for key in department_keys),

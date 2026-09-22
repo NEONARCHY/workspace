@@ -830,6 +830,7 @@ ai_referent_letters = sa.Table(
     sa.Column("source", sa.String(24)),
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("reviewer_user_id", uuid_type),
+    sa.Column("reviewer_key", sa.String(32)),
     sa.Column("legacy_id", sa.String(128)),
     sa.Column("revision", sa.Integer()),
     sa.Column("sent_at", sa.DateTime(timezone=True)),
@@ -882,6 +883,9 @@ ai_referent_agents = sa.Table(
     sa.Column("agent_id", sa.String(128), primary_key=True),
     sa.Column("display_name", sa.String(200)),
     sa.Column("last_seen_at", sa.DateTime(timezone=True)),
+    sa.Column("configuration_revision", sa.Integer()),
+    sa.Column("configuration_applied_at", sa.DateTime(timezone=True)),
+    sa.Column("configuration_error", sa.String(500)),
     sa.Column("journal_storage_key", sa.String(500)),
     sa.Column("journal_file_name", sa.String(255)),
     sa.Column("journal_content_type", sa.String(160)),
@@ -925,4 +929,22 @@ ai_referent_incoming_letters = sa.Table(
     sa.Column("revision", sa.Integer()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_configuration = sa.Table(
+    "ai_referent_configuration", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_reviewers = sa.Table(
+    "ai_referent_reviewers", metadata,
+    sa.Column("key", sa.String(32), primary_key=True),
+    sa.Column("label", sa.String(160)),
+    sa.Column("suggested_username", sa.String(64)),
+    sa.Column("user_id", uuid_type),
+    sa.Column("telegram_id", sa.String(20)),
+    sa.Column("enabled", sa.Boolean()),
 )

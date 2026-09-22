@@ -1906,6 +1906,7 @@ export function App() {
                 token={session.accessToken}
                 people={workspace.people}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
+                canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
               />
             ) : null}
             {displayedSection === "feed" ? (

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  AIReferentConfiguration,
   AIReferentAction,
   AIReferentLetter,
   AIReferentLetterInput,
@@ -33,11 +34,13 @@ import {
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
+import { AIReferentSettings } from "./AIReferentSettings";
 import {
   actOnAIReferentLetter,
   createAIReferentLetter,
   downloadWorkspaceAttachment,
   loadAIReferentRegistry,
+  loadAIReferentReviewers,
   updateAIReferentLetter,
   uploadWorkspaceAttachment,
 } from "./workspace-api";
@@ -46,6 +49,7 @@ interface AIReferentViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly canCreate: boolean;
+  readonly canAdmin?: boolean;
 }
 
 const statusLabels: Readonly<Record<AIReferentLetter["status"], string>> = {
@@ -120,8 +124,9 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate }: AIReferentViewProps) {
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing">("incoming");
+export function AIReferentView({ token, people, canCreate, canAdmin = false }: AIReferentViewProps) {
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "settings">("incoming");
+  const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -136,7 +141,8 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
   const [decisionComment, setDecisionComment] = useState("");
 
   const selected = registry?.letters.find((letter) => letter.id === selectedId);
-  const reviewers = people.filter((person) => person.status === "active");
+  const reviewers = reviewerConfig?.reviewers.flatMap((item) =>
+    item.canApprove && item.userId ? [{ id: item.userId, name: item.fullName }] : []) ?? [];
   const visibleLetters = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ru-RU");
     return (registry?.letters ?? []).filter((letter) => {
@@ -155,7 +161,10 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
     setLoading(true);
     setError("");
     try {
-      const next = await loadAIReferentRegistry(token);
+      const [next, nextReviewers] = await Promise.all([
+        loadAIReferentRegistry(token), loadAIReferentReviewers(token),
+      ]);
+      setReviewerConfig(nextReviewers);
       setRegistry(next);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
@@ -164,7 +173,9 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
     }
   }, [token]);
 
-  useEffect(() => { queueMicrotask(() => { void refresh(); }); }, [refresh]);
+  useEffect(() => {
+    if (registerKind !== "settings") queueMicrotask(() => { void refresh(); });
+  }, [refresh, registerKind]);
 
   const replaceLetter = (updated: AIReferentLetter) => {
     setRegistry((current) => current ? {
@@ -311,9 +322,13 @@ export function AIReferentView({ token, people, canCreate }: AIReferentViewProps
         >
           Исходящие
         </button>
+        {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
+          className={registerKind === "settings" ? "active" : ""}
+          onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
       </div>
 
-      {registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
+      {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} /> :
+        registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
         <>
 
       <section className="ai-referent-summary" aria-label="Сводка исходящих писем">

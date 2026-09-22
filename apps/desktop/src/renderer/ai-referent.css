@@ -438,6 +438,39 @@
 }
 .ai-incoming-status.status-attention { background: #fff0f2; color: #9d3d4c; }
 
+.ai-referent-settings {
+  display: grid;
+  gap: 18px;
+  max-width: 1100px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--ws-surface, #fff);
+  color: var(--ws-text, #293a55);
+}
+.ai-referent-settings h2,
+.ai-referent-settings h3 { margin: 0 0 8px; }
+.ai-referent-settings p { margin: 6px 0; line-height: 1.5; }
+.ai-referent-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.ai-referent-settings fieldset {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--ws-border, #dbe5e7);
+  border-radius: 16px;
+}
+.ai-referent-settings legend { padding: 0 6px; font-weight: 600; }
+.ai-referent-settings label { display: grid; gap: 6px; min-width: 0; }
+.ai-referent-settings small { color: var(--ws-text-muted, #52677d); line-height: 1.5; }
+.ai-referent-settings-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ai-referent-runtime-status { padding-top: 12px; border-top: 1px solid var(--ws-border, #dbe5e7); }
+
+@media (max-width: 760px) {
+  .ai-referent-settings-grid { grid-template-columns: 1fr; }
+  .ai-referent-settings { padding: 14px; }
+}
+
 @media (max-width: 1180px) {
   .ai-referent-row { grid-template-columns: 120px minmax(220px, 1.5fr) 1fr 120px 24px; }
   .ai-referent-row-person:nth-of-type(4) { display: none; }
