@@ -409,6 +409,33 @@ async def _exercise_live_workspace(database_url: str) -> None:
                         ends_at=datetime.now(UTC) + timedelta(days=11, hours=2),
                     ),
                 )
+            admin_response = await respond_to_calendar_event(
+                connection,
+                admin,
+                UUID(calendar_event.id),
+                RespondCalendarEventRequest(status="declined"),
+            )
+            assert admin_response.current_user_attendance_status == "declined"
+            linked_task = await create_task(
+                connection,
+                aziza,
+                CreateTaskRequest(
+                    title="Calendar preparation",
+                    assignee_id=str(aziza.id),
+                    calendar_event_id=calendar_event.id,
+                ),
+            )
+            assert linked_task.calendar_event_id == calendar_event.id
+            linked_payment = await create_approval_request(
+                connection,
+                aziza,
+                CreateApprovalRequest(
+                    title="Calendar venue payment",
+                    amount=200_000,
+                    calendar_event_id=calendar_event.id,
+                ),
+            )
+            assert linked_payment.calendar_event_id == calendar_event.id
             calendar_event = await update_calendar_event(
                 connection,
                 aziza,
