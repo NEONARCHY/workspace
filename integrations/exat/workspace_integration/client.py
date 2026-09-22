@@ -72,7 +72,18 @@ def save_connection(
     api_url = validate_url(api_url)
     ssl.create_default_context(cafile=ca_file or None)
     if token:
-        write_windows_generic_credential(TOKEN_TARGET, "workspace-agent", token)
+        try:
+            from pywintypes import error as CredentialError
+        except ImportError:
+            raise WorkspaceError(
+                "Для хранения ключа установите зависимости Windows версии Exat."
+            ) from None
+        try:
+            write_windows_generic_credential(TOKEN_TARGET, "workspace-agent", token)
+        except (CredentialError, RuntimeError):
+            raise WorkspaceError(
+                "Windows не разрешила сохранить ключ в хранилище учётных данных."
+            ) from None
     path = connection_path()
     previous = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -256,6 +256,32 @@ def test_robot_never_guesses_an_unknown_historical_reviewer(adapter, service):
         )
 
 
+def test_robot_rejects_ambiguous_initial_roles_but_uses_saved_mapping(
+    adapter, service, monkeypatch
+):
+    monkeypatch.setattr(adapter, "legacy_bindings", lambda: {"askar": "1001", "bobur": "1001"})
+    with pytest.raises(adapter.WorkspaceError, match="назначен нескольким ролям"):
+        adapter.apply_configuration(service, configuration())
+    with service.database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT reviewer_name FROM outgoing_review_requests WHERE id=1"
+            ).fetchone()[0]
+            == "Old"
+        )
+    monkeypatch.setattr(adapter, "legacy_bindings", lambda: {"askar": "1001", "bobur": "1002"})
+    config = configuration()
+    adapter.apply_configuration(service, config)
+    # The stored explicit role snapshot takes precedence over obsolete local settings.
+    monkeypatch.setattr(adapter, "legacy_bindings", lambda: {"askar": "1002", "bobur": "1002"})
+    config["reviewers"][0]["telegramId"] = "2001"
+    adapter.apply_configuration(service, config)
+    with service.database.connect() as connection:
+        row = connection.execute("SELECT * FROM outgoing_review_requests WHERE id=1").fetchone()
+        assert row["reviewer_telegram_id"] == "2001"
+        assert row["final_reviewer_telegram_id"] == "1002"
+
+
 def test_reassignment_notification_retries_durably(adapter, service):
     config = configuration()
     adapter.apply_configuration(service, config)

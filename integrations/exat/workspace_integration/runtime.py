@@ -45,13 +45,6 @@ def apply_configuration(service: Any, config: dict[str, Any]) -> list[int]:
     old_by_id = {str(item["telegram_id"]): item["key"] for item in incoming}
     old_by_id.update(
         {
-            str(value): key
-            for key, value in legacy_bindings().items()
-            if key in REVIEWER_KEYS and value
-        }
-    )
-    old_by_id.update(
-        {
             str(item.get("telegram_id") or ""): item["key"]
             for item in original
             if item.get("key") in REVIEWER_KEYS
@@ -80,6 +73,18 @@ def apply_configuration(service: Any, config: dict[str, Any]) -> list[int]:
                     for item in previous["reviewers"]
                 }
             )
+        else:
+            initial = {
+                key: str(value)
+                for key, value in legacy_bindings().items()
+                if key in REVIEWER_KEYS and value
+            }
+            if len(set(initial.values())) != len(initial):
+                raise WorkspaceError(
+                    "Прежний Telegram ID назначен нескольким ролям. "
+                    "Уточните сопоставление перед синхронизацией."
+                )
+            old_by_id.update({value: key for key, value in initial.items()})
         old_by_id.update({f"disabled:{key}": key for key in REVIEWER_KEYS})
         rows = connection.execute("SELECT * FROM outgoing_review_requests").fetchall()
         now = datetime.now(UTC).isoformat()
