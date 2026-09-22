@@ -810,3 +810,64 @@ zoom_meeting_participants = sa.Table(
     sa.Column("meeting_id", uuid_type, primary_key=True),
     sa.Column("user_id", uuid_type, primary_key=True),
 )
+
+ai_referent_letters = sa.Table(
+    "ai_referent_letters",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("outgoing_number", sa.Integer()),
+    sa.Column("year_suffix", sa.String(2)),
+    sa.Column("subject", sa.String(300)),
+    sa.Column("recipient_organization", sa.String(300)),
+    sa.Column("recipient_address", sa.String(500)),
+    sa.Column("route", sa.String(16)),
+    sa.Column("note", sa.Text()),
+    sa.Column("status", sa.String(32)),
+    sa.Column("source", sa.String(24)),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("reviewer_user_id", uuid_type),
+    sa.Column("legacy_id", sa.String(128)),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("sent_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_number_counters = sa.Table(
+    "ai_referent_number_counters",
+    metadata,
+    sa.Column("year_suffix", sa.String(2), primary_key=True),
+    sa.Column("last_number", sa.Integer()),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_events = sa.Table(
+    "ai_referent_events",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("event_type", sa.String(64)),
+    sa.Column("from_status", sa.String(32)),
+    sa.Column("to_status", sa.String(32)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("metadata", postgresql.JSONB()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_delivery_commands = sa.Table(
+    "ai_referent_delivery_commands",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("route", sa.String(16)),
+    sa.Column("status", sa.String(24)),
+    sa.Column("idempotency_key", sa.String(160)),
+    sa.Column("claimed_by", sa.String(160)),
+    sa.Column("lease_until", sa.DateTime(timezone=True)),
+    sa.Column("attempt_count", sa.Integer()),
+    sa.Column("last_error", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("completed_at", sa.DateTime(timezone=True)),
+)

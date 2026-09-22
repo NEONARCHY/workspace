@@ -14,6 +14,7 @@ import "./motion.css";
 import "./record-lists.css";
 import "./members.css";
 import "./hr.css";
+import "./ai-referent.css";
 import "./zoom.css";
 import "./message-layout.css";
 import "./team-dashboard.css";

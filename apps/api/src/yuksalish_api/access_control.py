@@ -107,6 +107,13 @@ async def module_permissions_for_user(
     result = {module_key: default_permissions(user.role) for module_key in MODULE_KEYS}
     if user.role not in {"admin", "superadmin"}:
         result["team_overview"] = {action: False for action in MODULE_ACTIONS}
+        result["ai_referent"] = {
+            "view": True,
+            "create": True,
+            "edit": True,
+            "approve": user.role == "manager",
+            "admin": False,
+        }
     ordered_subjects = [
         ("role", user.role),
         *(("department", key) for key in department_keys),
@@ -141,6 +148,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         (("/tasks",), "tasks"),
         (("/approval-templates",), "payment_requests"),
         (("/approval-requests",), "payment_requests"),
+        (("/ai-referent",), "ai_referent"),
         (("/projects",), "projects"),
         (("/trip-requests",), "trip_approvals"),
         (("/absence-requests",), "absences"),
@@ -177,6 +185,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     collection_paths = {
         "/tasks",
         "/approval-requests",
+        "/ai-referent/letters",
         "/projects",
         "/trip-requests",
         "/absence-requests",

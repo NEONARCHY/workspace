@@ -57,6 +57,7 @@ import {
   Chat24Filled,
   Chat24Regular,
   DocumentBulletList24Regular,
+  Mail24Regular,
   FolderPeople24Regular,
   Navigation24Regular,
   News24Regular,
@@ -98,6 +99,7 @@ import { AbsencesView } from "./AbsencesView";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { MembersView } from "./MembersView";
 import { HrView } from "./HrView";
+import { AIReferentView } from "./AIReferentView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { createRefreshQueue } from "./refresh-queue";
@@ -292,6 +294,7 @@ const navItems: readonly NavItem[] = [
     label: "Заявки на оплату",
     icon: <DocumentBulletList24Regular />,
   },
+  { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
   {
@@ -1880,6 +1883,13 @@ export function App() {
                 onUploadAttachments={handleUploadApprovalAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
                 focusRequestId={focusTarget?.section === "payment_requests" ? focusTarget.entityId : undefined}
+              />
+            ) : null}
+            {displayedSection === "ai_referent" ? (
+              <AIReferentView
+                token={session.accessToken}
+                people={workspace.people}
+                canCreate={modulePermissions.ai_referent?.create ?? false}
               />
             ) : null}
             {displayedSection === "feed" ? (

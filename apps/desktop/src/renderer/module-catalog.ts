@@ -26,6 +26,12 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     status: "available",
   },
   {
+    key: "ai_referent",
+    label: { ru: "AI Referent", uz_cyrl: "AI Referent", uz_latn: "AI Referent" },
+    route: "/ai-referent",
+    status: "available",
+  },
+  {
     key: "feed",
     label: { ru: "Лента", uz_cyrl: "Лента", uz_latn: "Lenta" },
     route: "/feed",

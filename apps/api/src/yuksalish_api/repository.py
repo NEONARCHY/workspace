@@ -20,6 +20,7 @@ from .personal_preferences import get_preferences as get_personal_preferences
 from .position_policy import is_executive_leader
 from .tables import (
     absence_requests,
+    ai_referent_letters,
     approval_actions,
     approval_deadline_events,
     approval_edges,
@@ -5268,6 +5269,40 @@ async def validate_attachment_owner(
         )
         if not allowed or (write and not writable):
             raise WorkspaceRepositoryError(404, "Больничный документ не найден")
+        return
+
+    if owner_type == "ai_referent_letter":
+        letter = (
+            (
+                await connection.execute(
+                    select(ai_referent_letters).where(ai_referent_letters.c.id == owner_id)
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if letter is None:
+            raise WorkspaceRepositoryError(404, "Исходящее письмо не найдено")
+        module_access = await module_permissions_for_user(connection, current_user)
+        accessible = (
+            module_access.get("ai_referent", {}).get("view", False)
+            and (
+                current_user.role in {"admin", "superadmin"}
+                or letter["status"] == "sent"
+                or letter["created_by_user_id"] == current_user.id
+                or letter["reviewer_user_id"] == current_user.id
+            )
+        )
+        writable = (
+            module_access.get("ai_referent", {}).get("edit", False)
+            and letter["status"] in {"draft", "needs_revision"}
+            and (
+                letter["created_by_user_id"] == current_user.id
+                or current_user.role in {"admin", "superadmin"}
+            )
+        )
+        if not accessible or (write and not writable):
+            raise WorkspaceRepositoryError(404, "Исходящее письмо не найдено")
         return
 
     row = (
