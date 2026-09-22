@@ -17,6 +17,18 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    op.drop_constraint(
+        "ck_workspace_attachments_owner_type",
+        "workspace_attachments",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workspace_attachments_owner_type",
+        "workspace_attachments",
+        "owner_type IN ('message', 'task', 'approval_request', 'absence', "
+        "'ai_referent_letter')",
+    )
+
     op.create_table(
         "ai_referent_letters",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -134,3 +146,17 @@ def downgrade() -> None:
     op.drop_table("ai_referent_events")
     op.drop_table("ai_referent_number_counters")
     op.drop_table("ai_referent_letters")
+    op.execute(
+        "DELETE FROM workspace_attachments "
+        "WHERE owner_type = 'ai_referent_letter'"
+    )
+    op.drop_constraint(
+        "ck_workspace_attachments_owner_type",
+        "workspace_attachments",
+        type_="check",
+    )
+    op.create_check_constraint(
+        "ck_workspace_attachments_owner_type",
+        "workspace_attachments",
+        "owner_type IN ('message', 'task', 'approval_request', 'absence')",
+    )
