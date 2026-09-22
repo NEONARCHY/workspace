@@ -1,5 +1,7 @@
 import type {
   AIReferentAction,
+  AIReferentConfiguration,
+  AIReferentConfigurationUpdate,
   AIReferentIncomingRegistry,
   AIReferentLetter,
   AIReferentLetterInput,
@@ -107,6 +109,26 @@ export function loadAIReferentRegistry(
   if (filters.status) query.set("status", filters.status);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
+}
+
+export function loadAIReferentConfiguration(token: string) {
+  return apiRequest<AIReferentConfiguration>(
+    "/ai-referent/configuration", {}, token,
+  );
+}
+
+export function loadAIReferentReviewers(token: string) {
+  return apiRequest<AIReferentConfiguration>(
+    "/ai-referent/reviewers", {}, token,
+  );
+}
+
+export function saveAIReferentConfiguration(
+  token: string, payload: AIReferentConfigurationUpdate,
+) {
+  return apiRequest<AIReferentConfiguration>(
+    "/ai-referent/configuration", { method: "PUT", body: JSON.stringify(payload) }, token,
+  );
 }
 
 export function loadAIReferentIncomingRegistry(

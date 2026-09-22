@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AIReferentView } from "./AIReferentView";
 import { workspaceTheme } from "./workspace-theme";
-import { loadAIReferentIncomingRegistry, loadAIReferentRegistry } from "./workspace-api";
+import { loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -12,6 +12,7 @@ vi.mock("./workspace-api", () => ({
   downloadAIReferentJournal: vi.fn(),
   downloadWorkspaceAttachment: vi.fn(),
   loadAIReferentRegistry: vi.fn(),
+  loadAIReferentReviewers: vi.fn(),
   loadAIReferentIncomingRegistry: vi.fn(),
   updateAIReferentLetter: vi.fn(),
   uploadWorkspaceAttachment: vi.fn(),
@@ -88,6 +89,8 @@ describe("AIReferentView", () => {
   beforeEach(() => {
     vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
     vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue(incomingRegistry);
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue({ revision: 2, updatedAt: "2026-09-22T10:00:00Z",
+      reviewers: [], runtimes: [] });
   });
 
   it("shows incoming letters from the robot and keeps the outgoing register available", async () => {

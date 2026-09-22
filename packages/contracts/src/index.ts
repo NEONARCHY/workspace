@@ -725,6 +725,45 @@ export interface AIReferentJournal {
   readonly agentName?: string | null;
 }
 
+export type AIReferentReviewerKey = "askar" | "bobur" | "umid" | "davronbek";
+
+export interface AIReferentReviewerBinding {
+  readonly key: AIReferentReviewerKey;
+  readonly label: string;
+  readonly suggestedUsername: string;
+  readonly userId: string | null;
+  readonly username: string;
+  readonly fullName: string;
+  readonly telegramId: string | null;
+  readonly enabled: boolean;
+  readonly accountActive: boolean;
+  readonly canApprove: boolean;
+}
+
+export interface AIReferentConfiguration {
+  readonly revision: number;
+  readonly updatedAt: string;
+  readonly reviewers: readonly AIReferentReviewerBinding[];
+  readonly runtimes: readonly {
+    readonly agentId: string;
+    readonly agentName: string;
+    readonly appliedRevision: number | null;
+    readonly appliedAt: string | null;
+    readonly lastSeenAt: string;
+    readonly error: string | null;
+  }[];
+}
+
+export interface AIReferentConfigurationUpdate {
+  readonly expectedRevision: number;
+  readonly reviewers: readonly {
+    readonly key: AIReferentReviewerKey;
+    readonly username: string;
+    readonly telegramId: string | null;
+    readonly enabled: boolean;
+  }[];
+}
+
 export interface AIReferentIncomingRegistry {
   readonly letters: readonly AIReferentIncomingLetter[];
   readonly totalCount: number;
