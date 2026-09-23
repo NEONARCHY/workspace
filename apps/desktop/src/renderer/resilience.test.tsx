@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CalendarEvent } from "@yuksalish/contracts";
+import type { CalendarEvent, WorkspaceTask } from "@yuksalish/contracts";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { CalendarView } from "./CalendarView";
 import { DecisionReason } from "./DecisionReason";
@@ -62,6 +62,19 @@ describe("Window and UI recovery", () => {
     expect(screen.getByRole("button", { name: "Создать мероприятие" })).toBeEnabled();
   });
 
+  it("keeps the event card and its fields after a server error", async () => {
+    const create = vi.fn().mockRejectedValue(new Error("Сервер временно недоступен"));
+    render(<CalendarView events={[]} people={[]} currentUserId="tester" onCreate={create} onUpdate={vi.fn()} onCancel={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Совещание отдела" } });
+    fireEvent.click(screen.getByRole("button", { name: "Создать мероприятие" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Сервер временно недоступен");
+    expect(screen.getByRole("dialog", { name: "Новое мероприятие" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Название события" })).toHaveValue("Совещание отдела");
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
   it("opens the complete agenda for a day instead of hiding events after the third item", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-08T08:00:00+05:00"));
@@ -89,6 +102,42 @@ describe("Window and UI recovery", () => {
     const dayPanel = screen.getByLabelText("События выбранного дня");
     expect(within(dayPanel).getByText("Событие 4")).toBeInTheDocument();
     expect(within(dayPanel).getByText("4")).toBeInTheDocument();
+  });
+
+  it("shows meetings in the shared calendar and keeps linked tasks inside the event card", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-08T08:00:00+05:00"));
+    const meeting: CalendarEvent = {
+      id: "meeting-1", organizerUserId: "tester", title: "Планирование форума",
+      description: "", eventType: "meeting", startsAt: "2026-09-10T05:00:00Z",
+      endsAt: "2026-09-10T06:00:00Z", allDay: false, location: "",
+      status: "scheduled", attendeeIds: ["tester"],
+      attendees: [{ userId: "tester", status: "accepted", respondedAt: "2026-09-08T03:00:00Z" }],
+      currentUserAttendanceStatus: "accepted", canRespond: false, canEdit: true,
+      createdAt: "2026-09-08T03:00:00Z", updatedAt: "2026-09-08T03:00:00Z",
+    };
+    const legacyTaskEvent: CalendarEvent = {
+      ...meeting, id: "old-task-event", title: "Старый календарный срок", eventType: "task",
+    };
+    const forum: CalendarEvent = {
+      ...meeting, id: "forum-1", title: "Общий форум", eventType: "general",
+    };
+    const task: WorkspaceTask = {
+      id: "task-1", title: "Подготовить материалы", project: "", authorId: "tester",
+      assigneeId: "tester", dueLabel: "10 сентября", dueAt: "2026-09-10T04:00:00Z",
+      calendarEventId: meeting.id, status: "new", priority: "normal",
+      checklistDone: 0, checklistTotal: 0, participants: [], checklist: [], comments: [], dependencies: [],
+    };
+    render(<CalendarView events={[meeting, forum, legacyTaskEvent]} tasks={[task]} people={[]}
+      currentUserId="tester" onCreate={vi.fn()} onUpdate={vi.fn()} onCancel={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("gridcell", { name: /событий: 2/i }));
+    const dayPanel = screen.getByLabelText("События выбранного дня");
+    expect(within(dayPanel).getByText("Общий форум")).toBeInTheDocument();
+    expect(within(dayPanel).queryByText("Подготовить материалы")).not.toBeInTheDocument();
+    expect(screen.queryByText("Старый календарный срок")).not.toBeInTheDocument();
+    fireEvent.click(within(dayPanel).getByRole("button", { name: /Планирование форума/i }));
+    expect(within(dayPanel).getByRole("button", { name: /Подготовить материалы/i })).toBeInTheDocument();
   });
 
   it("blocks backdated creation but keeps past events editable", () => {

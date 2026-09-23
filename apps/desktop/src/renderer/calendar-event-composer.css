@@ -1,0 +1,28 @@
+.calendar-event-composer .record-composer-fields { gap: 18px; }
+.calendar-event-composer .record-section > .fui-Button { margin-top: 14px; }
+.calendar-event-composer .record-field-grid > label { min-width: 0; }
+.calendar-event-composer .record-field-grid .fui-Input,
+.calendar-event-composer .record-field-grid .fui-Textarea,
+.calendar-event-composer .record-field-grid .person-picker-trigger { width: 100%; }
+.calendar-composer-preview { display: grid; gap: 9px; }
+.calendar-composer-preview > span { color: var(--ws-link); font-size: 12px; font-weight: 600; }
+.calendar-composer-preview > strong { color: var(--ws-navy); font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
+.calendar-composer-preview > p { margin: 0; color: var(--ws-muted); line-height: 1.45; overflow-wrap: anywhere; }
+.calendar-composer-preview .record-summary-facts { margin-top: 8px; }
+.calendar-composer-attendees { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; max-height: 220px; margin-top: 12px; padding: 10px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); scrollbar-width: thin; }
+.calendar-composer-attendees .fui-Checkbox { min-width: 0; }
+.calendar-composer-attendees .fui-Checkbox__label { overflow-wrap: anywhere; }
+.calendar-composer-attendees > p { grid-column: 1 / -1; margin: 7px; color: var(--ws-muted); }
+.calendar-composer-tasks { display: grid; gap: 12px; margin-top: 14px; }
+.calendar-composer-task { min-width: 0; padding: 16px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
+.calendar-composer-task > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.calendar-composer-task > header strong { color: var(--ws-navy); font-size: 14px; }
+.calendar-composer-task .record-field-grid { gap: 12px; }
+.calendar-composer-empty { margin: 12px 0 0; color: var(--ws-muted); font-size: 13px; }
+@media (max-width: 700px) {
+  .calendar-composer-attendees { grid-template-columns: minmax(0, 1fr); }
+  .calendar-composer-task { padding: 12px; }
+}
+@media (forced-colors: active) {
+  .calendar-composer-attendees, .calendar-composer-task { border-color: CanvasText; }
+}

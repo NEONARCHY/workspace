@@ -1941,22 +1941,24 @@ describe("corporate workspace authentication alpha", () => {
       name: "Календарь",
     }));
     expect(screen.getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", {
+    expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
-    }));
-    expect(await screen.findByRole("heading", { name: initialTasks[0]!.title })).toBeInTheDocument();
-    fireEvent.click(within(document.querySelector(".app-rail")!).getByRole("button", {
-      name: "Календарь",
-    }));
+    })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    expect(screen.getByRole("dialog", { name: "Новое мероприятие" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "+ Добавить задачу" }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название внутренней задачи 1" }), {
       target: { value: "Подготовить материалы" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "+ Добавить заявку" }));
+    const dueDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+    const taskDueAt = new Date(dueDate.getTime() - dueDate.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    fireEvent.change(screen.getByLabelText("Срок внутренней задачи 1"), { target: { value: taskDueAt } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Приоритет внутренней задачи 1" }), { target: { value: "high" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание внутренней задачи 1" }), { target: { value: "Собрать презентацию" } });
+    fireEvent.click(screen.getByRole("button", { name: "Добавить заявку" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название подготовленной заявки" }), {
       target: { value: "Оплата площадки" },
     });
@@ -1975,6 +1977,9 @@ describe("corporate workspace authentication alpha", () => {
     expect(JSON.parse(String(taskRequest?.[1]?.body))).toMatchObject({
       title: "Подготовить материалы",
       calendarEventId: "calendar-created",
+      dueAt: new Date(taskDueAt).toISOString(),
+      priority: "high",
+      description: "Собрать презентацию",
     });
     const paymentRequest = fetchMock.mock.calls.find(([url, options]) => (
       String(url).endsWith("/approval-requests") && options?.method === "POST"
