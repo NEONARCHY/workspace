@@ -17,6 +17,7 @@ from yuksalish_api.ai_referent_configuration_schemas import (
     ReviewerConfigurationUpdate,
     ReviewerRuntimeAcknowledgement,
 )
+from yuksalish_api.ai_referent_files_service import packet_archive_filename
 from yuksalish_api.ai_referent_schemas import AIReferentActionRequest
 from yuksalish_api.auth import AuthenticatedUser
 
@@ -43,6 +44,13 @@ def mapped(value):
     result.mappings.return_value.one_or_none.return_value = value
     result.mappings.return_value.all.return_value = value
     return result
+
+
+def test_packet_archive_filename_is_readable_and_windows_safe():
+    assert packet_archive_filename("0439/26-AI", 'Материалы: проект "Навои"') == (
+        "0439-26-AI — Материалы проект Навои.zip"
+    )
+    assert packet_archive_filename("", "") == "Пакет документов.zip"
 
 
 @pytest.mark.anyio

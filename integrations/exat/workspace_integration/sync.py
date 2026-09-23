@@ -121,6 +121,7 @@ class ArchiveSync:
 
     def run(self) -> None:
         service = self.service
+        self.recipients()
         for raw in service.database.list_outgoing_letters():
             row = dict(raw)
             extra = json.loads(row.get("dry_run_json") or "{}")
@@ -186,6 +187,37 @@ class ArchiveSync:
             )["id"]
             self.folder("incoming", owner, Path(row["archive_folder"]), roots)
         self.journals()
+
+    def recipients(self) -> None:
+        # Use the exact catalog builder used by the Telegram bot. A missing catalog
+        # must never erase the last good server snapshot.
+        from src.outgoing.organization_catalog import OrganizationCatalog
+
+        catalog = OrganizationCatalog.from_project(
+            self.service.project_root,
+            self.service.outgoing_settings,
+            self.service.address_book,
+        )
+        if not catalog.entries:
+            raise WorkspaceError("Адресная книга Exat пуста; справочник Workspace не обновлён.")
+        entries = [
+            {
+                "id": entry.id,
+                "name": entry.name,
+                "categoryKey": entry.category_key,
+                "addresses": list(entry.addresses),
+                "route": entry.route,
+                "addressBookOrganization": entry.address_book_organization,
+            }
+            for entry in catalog.entries
+        ]
+        # Repeat the small snapshot on each sync. The server compares its digest,
+        # so a restored server database can recover without resetting local state.
+        self.client.request(
+            "/ai-referent/agent/recipients",
+            {"agentId": self.client.agent_id, "entries": entries},
+            method="PUT",
+        )
 
     def journals(self) -> None:
         from src.app.log_paths import incoming_logs_root

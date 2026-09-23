@@ -740,6 +740,21 @@ export interface AIReferentRegistry {
   readonly sentCount: number;
 }
 
+export interface AIReferentRecipient {
+  readonly id: string;
+  readonly name: string;
+  readonly categoryKey: "ministries" | "agencies" | "committees" | "other" | "international";
+  readonly addresses: readonly string[];
+  readonly route: AIReferentRoute;
+  readonly addressBookOrganization: string;
+}
+
+export interface AIReferentRecipientRegistry {
+  readonly entries: readonly AIReferentRecipient[];
+  readonly totalCount: number;
+  readonly updatedAt: string | null;
+}
+
 export interface AIReferentLetterInput {
   readonly finalReviewerUserId?: string | null;
   readonly operationId?: string;

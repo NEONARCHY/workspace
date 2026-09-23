@@ -21,11 +21,18 @@ from ..ai_referent_configuration_schemas import ReviewerConfigurationResponse
 from ..ai_referent_configuration_service import read_configuration
 from ..ai_referent_files_service import (
     file_metadata,
+    packet_download_filename,
     packet_entries,
     packet_zip,
     read_limited_packet,
     require_packet_access,
     store_packet_file,
+)
+from ..ai_referent_recipient_service import (
+    RecipientRegistry,
+    RecipientSnapshot,
+    load_recipients,
+    sync_recipients,
 )
 from ..ai_referent_schemas import (
     AIReferentActionRequest,
@@ -137,6 +144,28 @@ async def agent_actor(
 
 
 Actor = Annotated[AuthenticatedUser, Depends(agent_actor)]
+
+
+@router.put("/agent/recipients", dependencies=[Depends(require_agent_token)])
+async def put_agent_recipients(
+    payload: RecipientSnapshot, connection: Connection
+) -> dict[str, str]:
+    return {"revision": await sync_recipients(connection, payload)}
+
+
+@router.get("/recipients", response_model=RecipientRegistry)
+async def get_recipients(
+    connection: Connection,
+    user: User,
+    query: Annotated[str, Query(max_length=160)] = "",
+    category: Annotated[
+        str, Query(pattern=r"^(|ministries|agencies|committees|other|international)$")
+    ] = "",
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=30)] = 8,
+) -> RecipientRegistry:
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    return await load_recipients(connection, query, category, offset, limit)
 
 
 @router.get("/agent/reviewers", response_model=ReviewerConfigurationResponse)
@@ -284,11 +313,13 @@ async def download_packet(
     kind: Kind, owner_id: UUID, request: Request, connection: Connection, user: User
 ) -> Response:
     await require_packet_access(connection, user, kind, owner_id)
+    filename = await packet_download_filename(connection, kind, owner_id)
     return Response(
         await packet_zip(connection, _storage(request), kind, owner_id),
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="letter-{owner_id}.zip"',
+            "Content-Disposition": "attachment; filename=\"letter.zip\"; filename*=UTF-8''"
+            + quote(filename),
             "X-Content-Type-Options": "nosniff",
         },
     )

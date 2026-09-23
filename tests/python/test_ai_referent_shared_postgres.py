@@ -75,6 +75,19 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             return response.json() if response.content and expected != 204 else None
 
         admin, author = auth("malika"), auth("dilshod")
+        await call("GET", "/recipients", agent, expected=401)
+        await call("PUT", "/agent/recipients", author, expected=401, json={
+            "agentId": "referent-test", "entries": [],
+        })
+        await call("PUT", "/agent/recipients", json={
+            "agentId": "referent-test",
+            "entries": [{"id": "ministry-1", "name": "Министерство финансов",
+                         "categoryKey": "ministries", "addresses": ["FIN-01"],
+                         "route": "exat", "addressBookOrganization": "Минфин"}],
+        })
+        recipients = await call("GET", "/recipients?query=finans", author)
+        assert recipients["totalCount"] == 1
+        assert recipients["entries"][0]["addresses"] == ["FIN-01"]
         config = await call("GET", "/configuration", admin)
         bindings = [
             {"key": key, "username": name, "telegramId": identity, "enabled": bool(name)}
@@ -237,6 +250,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert len(packet["files"]) == 2
         response = await client.get(base + f"/packets/outgoing/{letter['id']}/zip", headers=author)
         assert response.status_code == 200, response.text
+        assert "Shared%20letter.zip" in response.headers["content-disposition"]
+        assert letter["id"] not in response.headers["content-disposition"]
         with ZipFile(BytesIO(response.content)) as bundle:
             assert len(bundle.namelist()) == 2
         pdf = next(item for item in packet["files"] if item["source"] == "packet")

@@ -76,11 +76,12 @@ export function AIReferentSettings({ token, people }: Props) {
     } finally { busyRef.current = false; setSaving(false); }
   };
 
-  return <section className="ai-referent-settings" aria-label="Настройки согласующих">
-    <div><h2>Согласующие и Telegram</h2>
-      <p>Назначение связано с аккаунтом сотрудника. Должность не определяет право согласования.</p>
-      <p>Изменения общие для Workspace и робота. Открытые письма маршрута получит новый согласующий; прежние решения останутся в истории.</p>
+  return <section className="ai-referent-page ai-referent-settings" aria-label="Настройки согласующих">
+    <div className="ai-referent-page-intro"><div><span className="ai-referent-eyebrow">Маршрут согласования</span><h2>Люди и каналы</h2>
+      <p>Каждая роль связана с аккаунтом Workspace и, при необходимости, с личным Telegram. Должность не определяет право согласования.</p></div>
+      {config ? <span className="ai-referent-page-aside">Действуют {config.reviewers.filter((item) => item.canApprove).length} из {config.reviewers.length} назначений</span> : null}
     </div>
+    <p className="ai-referent-settings-explain">Изменения общие для Workspace и робота. Открытые письма маршрута получит новый согласующий; прежние решения останутся в истории.</p>
     {error ? <p role="alert" className="ai-referent-feedback">{error}</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
     {!draft ? <><Spinner label="Загружаем настройки" /><Button onClick={() => void refresh()}>Повторить</Button></> : null}
@@ -92,8 +93,9 @@ export function AIReferentSettings({ token, people }: Props) {
         {draft.reviewers.map((item, index) => {
           const saved = config.reviewers.find((row) => row.key === item.key);
           const person = accounts.find((row) => row.username === item.username);
-          return <fieldset key={item.key} disabled={saving}>
-            <legend>Согласующий «{saved?.label}»</legend>
+          return <fieldset key={item.key} disabled={saving} className="ai-referent-reviewer-card">
+            <legend>{saved?.label || item.key}</legend>
+            <span className={`ai-referent-reviewer-state ${saved?.canApprove ? "active" : ""}`}>{saved?.canApprove ? "Может согласовывать" : "Пока недоступен"}</span>
             <label>Аккаунт Workspace<WorkspaceSelect aria-label={`Аккаунт ${saved?.label}`}
               value={item.username} onChange={(event) => change(index, { username: event.target.value })}>
               <option value="">Выберите сотрудника</option>

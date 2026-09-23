@@ -109,19 +109,19 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
   };
 
   return (
-    <div className="ai-incoming-register">
+    <div className="ai-incoming-register ai-referent-page">
       <section className="ai-referent-summary" aria-label="Сводка входящих писем">
-        <button type="button" className="primary" onClick={() => selectFilter("registered")}>
+        <button type="button" className="primary" aria-pressed={filter === "registered"} onClick={() => selectFilter("registered")}>
           <span>Зарегистрировано</span><strong>{registry?.registeredCount ?? 0}</strong>
           <small>Письма, внесённые роботом в платформу</small>
         </button>
-        <button type="button" onClick={() => selectFilter("all")}>
+        <button type="button" aria-pressed={filter === "all"} onClick={() => selectFilter("all")}>
           <strong>{registry?.totalCount ?? 0}</strong><span>всего входящих</span>
         </button>
-        <button type="button" onClick={() => selectFilter("attention")}>
+        <button type="button" aria-pressed={filter === "attention"} onClick={() => selectFilter("attention")}>
           <strong>{registry?.attentionCount ?? 0}</strong><span>требуют внимания</span>
         </button>
-        <button type="button" onClick={() => selectFilter("attachments")}>
+        <button type="button" aria-pressed={filter === "attachments"} onClick={() => selectFilter("attachments")}>
           <strong>{registry?.withAttachmentsCount ?? 0}</strong><span>с вложениями</span>
         </button>
       </section>
@@ -180,11 +180,11 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
 
       {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем входящие письма" /></div> : null}
-      {!loading && letters.length === 0 ? (
+      {!loading && !error && letters.length === 0 ? (
         <div className="ai-referent-empty">
           <MailInbox20Regular />
-          <h2>Входящих писем пока нет</h2>
-          <p>После первого запуска моста записи робота появятся здесь автоматически.</p>
+          <h2>{query || filter !== "all" ? "По этому запросу писем нет" : "Входящих писем пока нет"}</h2>
+          <p>{query || filter !== "all" ? "Попробуйте изменить поиск или фильтр." : "После синхронизации записи робота появятся здесь автоматически."}</p>
         </div>
       ) : null}
       {!loading && letters.length > 0 ? (
@@ -219,7 +219,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                   <td>
                     <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount}</span>
                     <small>{letter.mainDocumentFilename || "Нет файла"}</small>
-                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} />
+                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
                   </td>
                   <td>
                     <span className={`ai-incoming-status status-${isAttention(letter) ? "attention" : "ok"}`}>
@@ -233,7 +233,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
           </table>
         </div>
       ) : null}
-      <div role="group" aria-label="Страницы входящих писем">
+      <div className="ai-referent-pagination" role="group" aria-label="Страницы входящих писем">
         <Button disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Назад</Button>
         <span>Страница {page + 1} · Найдено {registry?.totalCount ?? 0}</span>
         <Button disabled={loading || (page + 1) * 100 >= (registry?.totalCount ?? 0)} onClick={() => setPage(page + 1)}>Далее</Button>
