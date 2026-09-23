@@ -386,6 +386,15 @@ function mockServer(
     if (url.endsWith("/directory") && options?.method === undefined) {
       return response(directory);
     }
+    if (url.endsWith("/workday/me") && options?.method === undefined) {
+      return response({
+        status: "not_started", schedule: { userId: currentUser.id, startsAt: "09:00:00", endsAt: "18:00:00" },
+        session: null, absenceKind: null, asOf: "2026-09-23T09:00:00Z",
+      });
+    }
+    if (url.endsWith("/workday/team") && options?.method === undefined) {
+      return response({ asOf: "2026-09-23T09:00:00Z", workingCount: 0, members: [] });
+    }
     if (url.includes("/efficiency") && options?.method === undefined) {
       return response({
         period: "2026-09",

@@ -18,6 +18,7 @@ import "./ai-referent.css";
 import "./zoom.css";
 import "./message-layout.css";
 import "./team-dashboard.css";
+import "./workday-presence.css";
 import "./spatial-workspace.css";
 import "./workspace-2-payments.css";
 import "./workspace-2-workflow.css";

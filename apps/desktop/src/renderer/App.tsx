@@ -94,6 +94,7 @@ import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
 import { TasksView } from "./TasksView";
 import { TeamDashboardView } from "./TeamDashboardView";
+import { WorkdayControl } from "./WorkdayControl";
 import { TripApprovalsView } from "./TripApprovalsView";
 import { AbsencesView } from "./AbsencesView";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
@@ -1712,7 +1713,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -1863,6 +1864,7 @@ export function App() {
             {displayedSection === "team_overview" ? (
               <section className="workspace-view tasks-view bp5-tasks dashboard-mode" aria-label="Обзор команды">
                 <TeamDashboardView
+                  token={session.accessToken}
                   tasks={workspace.tasks}
                   people={workspace.people}
                   currentUserId={workspace.currentUser.id}

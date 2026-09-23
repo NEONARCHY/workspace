@@ -7,6 +7,8 @@ import type { EfficiencyOverview, WorkspacePerson, WorkspaceTask } from "@yuksal
 import { TeamDashboardView } from "./TeamDashboardView";
 import { workspaceTheme } from "./workspace-theme";
 
+vi.mock("./TeamPresencePanel", () => ({ TeamPresencePanel: () => <div>Отметки рабочего дня</div> }));
+
 const people: readonly WorkspacePerson[] = [
   { id: "manager", name: "Азиза Каримова", initials: "АК", role: "manager", jobTitle: "Руководитель отдела", color: "#0f6cbd" },
   { id: "employee", name: "Дилшод Рахимов", initials: "ДР", role: "employee", jobTitle: "Специалист", color: "#107c10" },
@@ -76,7 +78,7 @@ describe("TeamDashboardView", () => {
       task({ id: "today", title: "Согласовать график", assigneeId: "employee", status: "new", dueAt: "2026-09-09T13:00:00Z" }),
       task({ id: "complete", title: "Закрытая задача", assigneeId: "calm", status: "completed", dueAt: "2026-09-08T09:00:00Z" }),
     ];
-    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView tasks={tasks} people={people} currentUserId="manager" efficiency={efficiency} efficiencyLoading={false} onSelectTask={onSelectTask} /></FluentProvider>);
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiency={efficiency} efficiencyLoading={false} onSelectTask={onSelectTask} /></FluentProvider>);
     return onSelectTask;
   }
 
@@ -112,7 +114,7 @@ describe("TeamDashboardView", () => {
 
   it("keeps EFF-1 optional when its API is unavailable", () => {
     const tasks = [task({ id: "one", title: "Обычная задача", assigneeId: "employee", status: "in_progress" })];
-    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView tasks={tasks} people={people} currentUserId="manager" efficiencyLoading={false} efficiencyError="Сервис недоступен" onSelectTask={vi.fn()} /></FluentProvider>);
+    render(<FluentProvider theme={workspaceTheme}><TeamDashboardView token="test-token" tasks={tasks} people={people} currentUserId="manager" efficiencyLoading={false} efficiencyError="Сервис недоступен" onSelectTask={vi.fn()} /></FluentProvider>);
 
     expect(screen.getByText(/Показана нагрузка по задачам/)).toHaveTextContent("Сервис недоступен");
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
