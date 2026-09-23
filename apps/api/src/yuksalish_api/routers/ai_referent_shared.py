@@ -23,6 +23,7 @@ from ..ai_referent_files_service import (
     file_metadata,
     packet_entries,
     packet_zip,
+    read_limited_packet,
     require_packet_access,
     store_packet_file,
 )
@@ -363,13 +364,9 @@ async def upload_packet_file(
         )
         if not exists:
             raise HTTPException(404, "Сначала синхронизируйте запись реестра.")
-    content = bytearray()
-    async for chunk in request.stream():
-        content.extend(chunk)
-        if len(content) > 50 * 1024 * 1024:
-            raise HTTPException(413, "Файл превышает 50 МБ.")
-    if not content:
-        raise HTTPException(422, "Пустой файл.")
+    content = await read_limited_packet(
+        request.stream(), request.app.state.settings.ai_referent_packet_max_bytes
+    )
     if kind == "outgoing" and name.startswith("signed/") and not content.startswith(b"%PDF-"):
         raise HTTPException(422, "Ожидается подписанный PDF.")
     return await store_packet_file(
@@ -378,7 +375,7 @@ async def upload_packet_file(
         kind=kind,
         owner_id=owner_id,
         name=name,
-        content=bytes(content),
+        content=content,
         content_type=request.headers.get("content-type", "application/octet-stream")[:160],
     )
 

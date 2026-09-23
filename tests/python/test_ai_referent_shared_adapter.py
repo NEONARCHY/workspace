@@ -1,5 +1,6 @@
 """Safety tests with fake Telegram/Office: never sends a real message or letter."""
 
+import asyncio
 import hashlib
 import importlib
 import threading
@@ -13,7 +14,8 @@ from zipfile import ZipFile
 import pytest
 from fastapi import HTTPException
 
-from yuksalish_api.ai_referent_files_service import safe_relative_path
+from yuksalish_api.ai_referent_files_service import read_limited_packet, safe_relative_path
+from yuksalish_api.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,6 +39,22 @@ def test_packet_paths_reject_escape_and_ambiguous_names(name):
         safe_relative_path(name)
     assert error.value.status_code == 422
     assert safe_relative_path("attachments/document.pdf") == "attachments/document.pdf"
+
+
+def test_packet_upload_limit_accepts_boundary_and_rejects_next_byte():
+    assert Settings(_env_file=None).ai_referent_packet_max_bytes == 200 * 1024 * 1024
+
+    async def chunks(*parts: bytes):
+        for part in parts:
+            yield part
+
+    assert asyncio.run(read_limited_packet(chunks(b"ab", b"cd"), 4)) == b"abcd"
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(read_limited_packet(chunks(b"ab", b"cde"), 4))
+    assert error.value.status_code == 413
+    with pytest.raises(HTTPException) as empty_error:
+        asyncio.run(read_limited_packet(chunks(), 4))
+    assert empty_error.value.status_code == 422
 
 
 def test_receipts_survive_restart_and_instance_lock_releases(modules, tmp_path):
