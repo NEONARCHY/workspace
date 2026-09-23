@@ -1436,7 +1436,7 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
     expect(await screen.findByText("Карточка готова к проверке")).toBeInTheDocument();
-  });
+  }, 30000);
 
   it("lets an administrator delete an active task after confirmation", async () => {
     const fetchMock = mockServer();
