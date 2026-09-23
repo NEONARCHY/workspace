@@ -127,12 +127,14 @@ describe("Employee list and retained access controls", () => {
     mount(user, { onCreateChat }); await screen.findByRole("table");
     fireEvent.click(screen.getByLabelText("Выбрать сотрудников на странице"));
     fireEvent.click(screen.getByRole("button", { name: "Создать чат" }));
-    const title = await screen.findByLabelText("Название новой группы");
-    const confirm = await screen.findByRole(
-      "button",
-      { name: "Создать и открыть" },
-      { timeout: 3000 },
+    const dialog = await screen.findByRole(
+      "dialog",
+      { name: "Действие с выбранными сотрудниками" },
+      { timeout: 10000 },
     );
+    const title = within(dialog).getByLabelText("Название новой группы");
+    title.focus();
+    const confirm = within(dialog).getByRole("button", { name: "Создать и открыть" });
     fireEvent.change(title, { target: { value: "Команда проекта" } });
     await waitFor(() => expect(confirm).toBeEnabled());
     fireEvent.click(confirm);
