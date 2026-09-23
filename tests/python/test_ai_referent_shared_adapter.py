@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import importlib
+import sys
 import threading
 from io import BytesIO
 from pathlib import Path
@@ -169,6 +170,39 @@ def test_sync_versions_files_and_never_accepts_partial_excel(modules, tmp_path):
         sync.folder("archive", "owner", tmp_path, [tmp_path])
     with pytest.raises(modules.client.WorkspaceError):
         sync.folder("archive", "owner", tmp_path.parent, [tmp_path])
+
+
+def test_recipient_catalog_uses_bot_source_and_retries_for_server_restore(
+    modules, monkeypatch, tmp_path
+):
+    entry = SimpleNamespace(
+        id="org-1", name="Example", category_key="other", addresses=("EX-01",),
+        route="exat", address_book_organization="Example in address book",
+    )
+    catalog = SimpleNamespace(entries=[entry])
+    source = SimpleNamespace(
+        OrganizationCatalog=SimpleNamespace(from_project=Mock(return_value=catalog))
+    )
+    monkeypatch.setitem(sys.modules, "src.outgoing.organization_catalog", source)
+    service = SimpleNamespace(project_root=tmp_path, outgoing_settings={}, address_book=Mock())
+    api = Mock(agent_id="test-agent")
+    sync = modules.sync.ArchiveSync(
+        service, api, modules.state.State(tmp_path / "state.sqlite")
+    )
+    sync.recipients()
+    sync.recipients()
+    assert api.request.call_count == 2
+    api.request.assert_called_with(
+        "/ai-referent/agent/recipients",
+        {"agentId": "test-agent", "entries": [{
+            "id": "org-1", "name": "Example", "categoryKey": "other",
+            "addresses": ["EX-01"], "route": "exat",
+            "addressBookOrganization": "Example in address book",
+        }]}, method="PUT",
+    )
+    catalog.entries = []
+    with pytest.raises(modules.client.WorkspaceError):
+        sync.recipients()
 
 
 def test_sync_rejects_old_pending_work_and_keeps_shared_rows(modules, tmp_path):

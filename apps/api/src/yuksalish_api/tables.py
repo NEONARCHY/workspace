@@ -970,6 +970,14 @@ ai_referent_configuration = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+ai_referent_recipient_catalog = sa.Table(
+    "ai_referent_recipient_catalog", metadata,
+    sa.Column("agent_id", sa.String(128), primary_key=True),
+    sa.Column("revision", sa.String(64), nullable=False),
+    sa.Column("entries", postgresql.JSONB(), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 ai_referent_reviewers = sa.Table(
     "ai_referent_reviewers", metadata,
     sa.Column("key", sa.String(32), primary_key=True),

@@ -3,8 +3,10 @@ import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AIReferentView } from "./AIReferentView";
+import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
+import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers } from "./workspace-api";
+import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -16,6 +18,7 @@ vi.mock("./workspace-api", () => ({
   loadAIReferentPacket: vi.fn(),
   downloadAIReferentPacket: vi.fn(),
   loadAIReferentReviewers: vi.fn(),
+  loadAIReferentRecipients: vi.fn(),
   loadAIReferentIncomingRegistry: vi.fn(),
   updateAIReferentLetter: vi.fn(),
   uploadWorkspaceAttachment: vi.fn(),
@@ -99,6 +102,40 @@ describe("AIReferentView", () => {
     vi.mocked(loadAIReferentLetter).mockResolvedValue(firstLetter);
     vi.mocked(loadAIReferentReviewers).mockResolvedValue({ revision: 2, updatedAt: "2026-09-22T10:00:00Z",
       reviewers: [], runtimes: [] });
+    vi.mocked(loadAIReferentRecipients).mockResolvedValue({
+      entries: [{ id: "ministry-1", name: "Министерство финансов", categoryKey: "ministries",
+        addresses: ["FIN-001"], route: "exat", addressBookOrganization: "Минфин" }],
+      totalCount: 1, updatedAt: "2026-09-22T10:00:00Z",
+    });
+  });
+
+  it("searches the shared address book and fills the selected destination", async () => {
+    const onSelect = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentRecipientPicker
+      token="token" organization="" address="" onSelect={onSelect} onManualChange={vi.fn()}
+    /></FluentProvider>);
+    const search = screen.getByRole("textbox", { name: "Поиск адресата" });
+    fireEvent.change(search, { target: { value: "финанс" } });
+    await waitFor(() => expect(loadAIReferentRecipients).toHaveBeenCalledWith("token", expect.objectContaining({ query: "финанс" })));
+    fireEvent.click(await screen.findByRole("button", { name: /Министерство финансов/ }));
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ addressBookOrganization: "Минфин", addresses: ["FIN-001"] }));
+  });
+
+  it("keeps manual address entry available when the catalog has not synced", async () => {
+    vi.mocked(loadAIReferentRecipients).mockResolvedValue({ entries: [], totalCount: 0, updatedAt: null });
+    const onManualChange = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentRecipientPicker
+      token="token" organization="" address="" onSelect={vi.fn()} onManualChange={onManualChange}
+    /></FluentProvider>);
+    expect(await screen.findByText("Справочник ещё не синхронизирован с ПК референта.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ввести вручную" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Новый адресат" } });
+    expect(onManualChange).toHaveBeenCalledWith("Новый адресат", "");
+  });
+
+  it("uses a readable Windows-safe packet name", () => {
+    expect(referentDownloadName('0439/26-AI — Материалы: "Навои"', "zip"))
+      .toBe("0439-26-AI — Материалы Навои.zip");
   });
 
   it("opens a notification target and requires a reason before returning a letter", async () => {

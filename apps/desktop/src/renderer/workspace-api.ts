@@ -10,6 +10,7 @@ import type {
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
+  AIReferentRecipientRegistry,
   NavigationKey,
   AdministrativeChat,
   AbsenceAction,
@@ -117,6 +118,18 @@ export function loadAIReferentRegistry(
   if (filters.offset) query.set("offset", String(filters.offset));
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
+}
+
+export function loadAIReferentRecipients(
+  token: string,
+  filters: { readonly query?: string; readonly category?: string; readonly offset?: number } = {},
+): Promise<AIReferentRecipientRegistry> {
+  const search = new URLSearchParams();
+  if (filters.query?.trim()) search.set("query", filters.query.trim());
+  if (filters.category) search.set("category", filters.category);
+  if (filters.offset) search.set("offset", String(filters.offset));
+  search.set("limit", "8");
+  return apiRequest<AIReferentRecipientRegistry>(`/ai-referent/recipients?${search}`, {}, token);
 }
 
 export function loadAIReferentConfiguration(token: string) {

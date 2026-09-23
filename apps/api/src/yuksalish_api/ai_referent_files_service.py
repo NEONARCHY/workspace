@@ -1,6 +1,7 @@
 """Versioned virtual folders: never expose a referent's local filesystem path."""
 
 import hashlib
+import re
 from collections.abc import AsyncIterable
 from datetime import UTC, datetime
 from io import BytesIO
@@ -22,6 +23,7 @@ from .tables import (
     ai_referent_archive,
     ai_referent_files,
     ai_referent_incoming_letters,
+    ai_referent_letters,
     attachments,
 )
 
@@ -134,6 +136,65 @@ async def packet_entries(
         for row in files
     )
     return result
+
+
+def packet_archive_filename(number: str, subject: str) -> str:
+    """A readable Windows-safe name; stored packet paths and IDs stay unchanged."""
+    parts = []
+    for value, limit, replacement in ((number, 36, "-"), (subject, 72, " ")):
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', replacement, value)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-")[:limit].rstrip(" .-")
+        if cleaned:
+            parts.append(cleaned)
+    stem = " — ".join(parts) or "Пакет документов"
+    if re.fullmatch(r"(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])", stem):
+        stem = f"Письмо {stem}"
+    return f"{stem}.zip"
+
+
+async def packet_download_filename(
+    connection: AsyncConnection, kind: str, owner_id: UUID
+) -> str:
+    if kind == "incoming":
+        row = (
+            await connection.execute(
+                select(
+                    ai_referent_incoming_letters.c.platform_incoming_number,
+                    ai_referent_incoming_letters.c.sequence_number,
+                    ai_referent_incoming_letters.c.subject,
+                ).where(ai_referent_incoming_letters.c.id == owner_id)
+            )
+        ).mappings().one_or_none()
+        return packet_archive_filename(
+            str(row["platform_incoming_number"] or row["sequence_number"] or "Входящее"),
+            str(row["subject"] or ""),
+        ) if row else "Пакет документов.zip"
+    if kind == "outgoing":
+        row = (
+            await connection.execute(
+                select(
+                    ai_referent_letters.c.outgoing_number,
+                    ai_referent_letters.c.year_suffix,
+                    ai_referent_letters.c.subject,
+                ).where(ai_referent_letters.c.id == owner_id)
+            )
+        ).mappings().one_or_none()
+        if row:
+            number = (
+                f"{int(row['outgoing_number']):04d}-{row['year_suffix']}-AI"
+                if row["outgoing_number"] is not None and row["year_suffix"] else "Черновик"
+            )
+            return packet_archive_filename(number, str(row["subject"] or ""))
+    if kind == "archive":
+        payload = await connection.scalar(
+            select(ai_referent_archive.c.payload).where(ai_referent_archive.c.id == owner_id)
+        )
+        if isinstance(payload, dict):
+            return packet_archive_filename(
+                str(payload.get("displayNumber") or "Архивное письмо"),
+                str(payload.get("subject") or ""),
+            )
+    return "Excel-журналы.zip" if kind == "journal" else "Пакет документов.zip"
 
 
 async def store_packet_file(

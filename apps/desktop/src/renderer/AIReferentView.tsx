@@ -22,10 +22,11 @@ import {
 import {
   Add24Regular,
   ArrowClockwise20Regular,
+  ArrowDownload20Regular,
   Attach20Regular,
   Checkmark20Regular,
   Dismiss20Regular,
-  DocumentArrowUp20Regular,
+  Document20Regular,
   Mail24Regular,
   Open20Regular,
   Search20Regular,
@@ -36,6 +37,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentFiles } from "./AIReferentFiles";
+import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import {
   actOnAIReferentLetter,
@@ -155,6 +157,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<AIReferentLetter>();
+  const [detailTab, setDetailTab] = useState<"overview" | "files" | "history">("overview");
   const editRevision = useRef(1);
   const saveOperation = useRef("");
   const requestSequence = useRef(0);
@@ -332,14 +335,16 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     }
   };
 
+  const selectedAdditionalFiles = form.additionalFiles ?? [];
   return (
     <section className="workspace-view ai-referent-view" aria-label="AI Referent">
       <header className="ai-referent-header">
         <div>
           <span className="view-kicker">Единая корреспонденция</span>
           <h1>AI Referent</h1>
-          <p>Входящие от робота и исходящие из Workspace и Telegram — в общей базе.</p>
+          <p>Письма, согласования и архив — в одном рабочем пространстве.</p>
         </div>
+        <div className="ai-referent-header-art" aria-hidden="true"><Mail24Regular /><span /><Mail24Regular /></div>
         <div className="ai-referent-header-actions">
           {registerKind === "outgoing" ? <Button
               appearance="subtle"
@@ -387,20 +392,20 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         registerKind === "archive" ? <AIReferentArchive token={token} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
-        <>
+        <div className="ai-referent-page ai-referent-outgoing-page">
 
       <section className="ai-referent-summary" aria-label="Сводка исходящих писем">
-        <button type="button" className="primary" onClick={() => setFilter("pending_review")}>
+        <button type="button" className="primary" aria-pressed={filter === "pending_review"} onClick={() => { setFilter("pending_review"); setPage(0); }}>
           <span>Ожидают решения</span><strong>{registry?.pendingReviewCount ?? 0}</strong>
           <small>Открыть очередь согласования</small>
         </button>
-        <button type="button" onClick={() => setFilter("all")}>
+        <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setPage(0); }}>
           <strong>{registry?.totalCount ?? 0}</strong><span>всего писем</span>
         </button>
-        <button type="button" onClick={() => setFilter("approved")}>
+        <button type="button" aria-pressed={filter === "approved"} onClick={() => { setFilter("approved"); setPage(0); }}>
           <strong>{registry?.readyCount ?? 0}</strong><span>готовы к отправке</span>
         </button>
-        <button type="button" onClick={() => setFilter("sent")}>
+        <button type="button" aria-pressed={filter === "sent"} onClick={() => { setFilter("sent"); setPage(0); }}>
           <strong>{registry?.sentCount ?? 0}</strong><span>отправлено</span>
         </button>
       </section>
@@ -437,21 +442,21 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       {registryError ? <p className="ai-referent-feedback" role="alert">{registryError}</p> : null}
       {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем письма" /></div> : null}
-      {!loading && visibleLetters.length === 0 ? (
+      {!loading && !registryError && visibleLetters.length === 0 ? (
         <div className="ai-referent-empty">
           <Mail24Regular />
-          <h2>Здесь пока нет писем</h2>
-          <p>Создайте черновик или измените фильтр поиска.</p>
+          <h2>{query || filter !== "all" ? "Письма не найдены" : "Исходящих писем пока нет"}</h2>
+          <p>{query || filter !== "all" ? "Попробуйте другой запрос или фильтр." : "Создайте первое письмо, чтобы начать согласование."}</p>
         </div>
       ) : null}
       {!loading && visibleLetters.length > 0 ? (
-        <div className="ai-referent-list" role="region" aria-label="Исходящие письма">
+        <div className="ai-referent-list" role="region" aria-label="Исходящие письма" tabIndex={0}>
           {visibleLetters.map((letter) => (
             <button
               type="button"
               key={letter.id}
               className="ai-referent-row"
-              onClick={() => { setSelectedId(letter.id); setDecisionComment(""); setError(""); }}
+              onClick={() => { setSelectedId(letter.id); setDetailTab("overview"); setDecisionComment(""); setError(""); }}
             >
               <span className={`ai-referent-status status-${letter.status}`}>
                 {statusLabels[letter.status]}
@@ -475,8 +480,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           ))}
         </div>
       ) : null}
-      <div className="ai-referent-header-actions"><Button disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Назад</Button><span>Страница {page + 1}</span><Button disabled={loading || (registry?.letters.length ?? 0) < 50} onClick={() => setPage((value) => value + 1)}>Далее</Button></div>
-        </>
+      <div className="ai-referent-pagination" role="group" aria-label="Страницы исходящих писем"><Button disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Назад</Button><span>Страница {page + 1}</span><Button disabled={loading || (registry?.letters.length ?? 0) < 50} onClick={() => setPage((value) => value + 1)}>Далее</Button></div>
+        </div>
       )}
 
       <Dialog open={formOpen} onOpenChange={(_event, data) => !busy && setFormOpen(data.open)}>
@@ -494,20 +499,38 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
             <DialogContent>
               <div className="ai-referent-form">
                 <label>Тема письма<Input value={form.subject} onChange={(_e, d) => setForm((current) => ({ ...current, subject: d.value }))} /></label>
-                <label>Организация-получатель<Input value={form.recipientOrganization} onChange={(_e, d) => setForm((current) => ({ ...current, recipientOrganization: d.value }))} /></label>
-                <label>Адрес или получатель<Input value={form.recipientAddress} onChange={(_e, d) => setForm((current) => ({ ...current, recipientAddress: d.value }))} /></label>
+                {formOpen ? <AIReferentRecipientPicker
+                  token={token}
+                  organization={form.recipientOrganization}
+                  address={form.recipientAddress}
+                  onSelect={(recipient) => setForm((current) => ({
+                    ...current,
+                    recipientOrganization: recipient.addressBookOrganization || recipient.name,
+                    recipientAddress: recipient.addresses[0] || "",
+                    route: recipient.route,
+                  }))}
+                  onManualChange={(recipientOrganization, recipientAddress) => setForm((current) => ({
+                    ...current, recipientOrganization, recipientAddress,
+                  }))}
+                /> : null}
                 <div className="ai-referent-form-grid">
                   <label>Канал отправки<Select value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></label>
                   <label>Согласующий<Select value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value }))}><option value="">Не назначен</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
                 </div>
                 <label>Второй согласующий (необязательно)<Select value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="">Без второго согласующего</option>{reviewers.filter((person) => person.id !== form.reviewerUserId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
-                <label className="ai-referent-file-field">
-                  <span><Attach20Regular /> Файл письма</span>
-                  <input type="file" accept=".docx" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
-                  <small>{form.file?.name ?? (editingId ? "Можно добавить новую версию DOCX" : "Основное письмо — DOCX; PDF и другие файлы добавьте во вложения")}</small>
+                <label className="ai-referent-upload-zone ai-referent-upload-primary">
+                  <input className="ai-referent-upload-input" type="file" accept=".docx" aria-label="Выбрать основной документ DOCX" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
+                  <span className="ai-referent-upload-icon"><Document20Regular aria-hidden="true" /></span>
+                  <span className="ai-referent-upload-copy"><strong>Основной документ</strong><small>{editingId ? "Новая версия письма в формате DOCX" : "Письмо в формате DOCX"}</small>{form.file ? <span className="ai-referent-upload-selected"><em title={form.file.name}>{form.file.name}</em></span> : null}</span>
+                  <span className="ai-referent-upload-action">{form.file ? "Заменить" : "Выбрать DOCX"}</span>
                 </label>
-                <label>Дополнительные вложения<input type="file" multiple onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} /></label>
+                <label className="ai-referent-upload-zone">
+                  <input className="ai-referent-upload-input" type="file" multiple aria-label="Выбрать дополнительные вложения" onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} />
+                  <span className="ai-referent-upload-icon"><Attach20Regular aria-hidden="true" /></span>
+                  <span className="ai-referent-upload-copy"><strong>Дополнительные вложения</strong><small>Приложения, таблицы и сопроводительные файлы</small>{selectedAdditionalFiles.length ? <span className="ai-referent-upload-selected">{selectedAdditionalFiles.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{selectedAdditionalFiles.length > 2 ? <em>+{selectedAdditionalFiles.length - 2}</em> : null}</span> : null}</span>
+                  <span className="ai-referent-upload-action">{selectedAdditionalFiles.length ? "Изменить" : "Добавить файлы"}</span>
+                </label>
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
                 <div className="ai-referent-form-actions">
                   <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
@@ -539,7 +562,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <span>{selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
-                <section className="ai-referent-detail-card">
+                <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
+                  {([ ["overview", "Обзор"], ["files", `Документы · ${selected.attachments.length}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
+                    <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
+                </div>
+                {detailTab === "overview" ? <>
+                <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>
                   <p>{selected.recipientAddress || "Адрес будет уточнён перед отправкой"}</p>
@@ -549,15 +577,18 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <div><small>Согласующий</small><strong>{selected.reviewerName ?? "Не назначен"}</strong></div>
                 </section>
                 {selected.note ? <section className="ai-referent-detail-card"><h3>Заметка</h3><p>{selected.note}</p></section> : null}
+                </> : null}
+                {detailTab === "files" ?
                 <section className="ai-referent-detail-section">
                   <h3>Файлы <span>{selected.attachments.length}</span></h3>
-                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} />
+                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} letterLabel={`${selected.displayNumber ?? "Черновик"} — ${selected.subject}`} />
                   {selected.attachments.length ? selected.attachments.map((attachment) => (
-                    <button type="button" key={attachment.id} className="ai-referent-file" onClick={() => void download(attachment.id, attachment.fileName)}>
-                      <DocumentArrowUp20Regular /><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small></span><Open20Regular />
+                    <button type="button" key={attachment.id} className="ai-referent-file" aria-label={`Скачать ${attachment.fileName}`} onClick={() => void download(attachment.id, attachment.fileName)}>
+                      <Document20Regular /><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small></span><ArrowDownload20Regular />
                     </button>
                   )) : <p className="ai-referent-muted">Файл письма ещё не приложен.</p>}
-                </section>
+                </section> : null}
+                {detailTab === "history" ?
                 <section className="ai-referent-detail-section">
                   <h3>Активность</h3>
                   <div className="ai-referent-timeline">
@@ -565,7 +596,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                       <div key={event.id}><i aria-hidden="true" /><span><strong>{event.actorName}</strong><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p></span></div>
                     ))}
                   </div>
-                </section>
+                </section> : null}
                 {selected.deliveryError ? <p role="alert">{selected.deliveryError}</p> : null}
                 {selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
