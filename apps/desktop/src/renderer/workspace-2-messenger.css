@@ -211,6 +211,10 @@
   border-radius: 12px;
   background: #f1f6f5;
 }
+.conversation-header-actions > .conversation-calendar-action {
+  color: var(--ws-link);
+  font-weight: 600;
+}
 
 .messenger-view .conversation-search {
   gap: 10px;
@@ -406,7 +410,8 @@
 @media (max-width: 1100px) {
   .messenger-view { grid-template-columns: 290px minmax(0, 1fr); }
   .messenger-view .conversation-header { padding-inline: 14px; }
-  .conversation-header-actions > .fui-Button { font-size: 0; min-width: 38px; }
+  .conversation-header-actions > .fui-Button:not(.conversation-calendar-action) { font-size: 0; min-width: 38px; }
+  .conversation-header-actions > .conversation-calendar-action { font-size: 12px; min-width: auto; }
   .messenger-view .voice-recorder { grid-template-columns: 1fr auto; }
   .messenger-view .voice-preview { grid-column: 1 / -1; }
 }
