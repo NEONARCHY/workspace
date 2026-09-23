@@ -1,6 +1,7 @@
 """Versioned virtual folders: never expose a referent's local filesystem path."""
 
 import hashlib
+from collections.abc import AsyncIterable
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import PurePosixPath
@@ -23,6 +24,17 @@ from .tables import (
     ai_referent_incoming_letters,
     attachments,
 )
+
+
+async def read_limited_packet(chunks: AsyncIterable[bytes], limit: int) -> bytes:
+    content = bytearray()
+    async for chunk in chunks:
+        if len(content) + len(chunk) > limit:
+            raise HTTPException(413, "Файл превышает допустимый размер.")
+        content.extend(chunk)
+    if not content:
+        raise HTTPException(422, "Пустой файл.")
+    return bytes(content)
 
 
 def safe_relative_path(value: str) -> str:
