@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AIReferentConfiguration,
@@ -149,6 +149,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
+  const [registryError, setRegistryError] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
@@ -167,30 +168,19 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const selected = detail?.id === selectedId ? detail : registry?.letters.find((letter) => letter.id === selectedId);
   const reviewers = reviewerConfig?.reviewers.flatMap((item) =>
     item.canApprove && item.userId ? [{ id: item.userId, name: item.fullName }] : []) ?? [];
-  const visibleLetters = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ru-RU");
-    return (registry?.letters ?? []).filter((letter) => {
-      if (filter !== "all" && letter.status !== filter) return false;
-      return !normalized || [
-        letter.displayNumber ?? "",
-        letter.subject,
-        letter.recipientOrganization,
-        letter.createdByName,
-        letter.reviewerName ?? "",
-      ].join(" ").toLocaleLowerCase("ru-RU").includes(normalized);
-    });
-  }, [filter, query, registry]);
+  // Search and counts use the same server-side selection across all pages.
+  const visibleLetters = registry?.letters ?? [];
 
   const refresh = useCallback(async (quiet = false) => {
     const sequence = ++requestSequence.current;
-    if (!quiet) { setLoading(true); setError(""); }
+    if (!quiet) { setLoading(true); setRegistryError(""); }
     try {
       const [next, nextReviewers] = await Promise.all([
         loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50 }), loadAIReferentReviewers(token),
       ]);
-      if (sequence === requestSequence.current) { setReviewerConfig(nextReviewers); setRegistry(next); }
+      if (sequence === requestSequence.current) { setReviewerConfig(nextReviewers); setRegistry(next); setRegistryError(""); }
     } catch (reason) {
-      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
+      if (sequence === requestSequence.current) setRegistryError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
@@ -444,6 +434,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div>
       </div>
 
+      {registryError ? <p className="ai-referent-feedback" role="alert">{registryError}</p> : null}
       {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем письма" /></div> : null}
       {!loading && visibleLetters.length === 0 ? (

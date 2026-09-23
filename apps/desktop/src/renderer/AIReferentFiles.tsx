@@ -44,7 +44,7 @@ export function AIReferentFiles({ token, kind, ownerId }: {
   return <>
     <Button icon={<FolderOpen20Regular />} onClick={() => setOpen(true)}>Пакет документов</Button>
     <WorkspaceDialog open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
-      <DialogSurface className="ai-referent-detail-dialog">
+      <DialogSurface className="ai-referent-detail-dialog" aria-label="Пакет документов">
         <DialogBody>
           <DialogTitle action={<Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть пакет" onClick={() => setOpen(false)} />}>Пакет документов</DialogTitle>
           <DialogContent className="ai-referent-detail-content">

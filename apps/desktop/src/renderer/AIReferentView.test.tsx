@@ -105,7 +105,9 @@ describe("AIReferentView", () => {
     vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Письмо уже изменилось"));
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
     const comment = await screen.findByLabelText("Комментарий к решению");
-    const action = screen.getByRole("button", { name: "Вернуть на доработку" });
+    // JSDOM has no layout for Tabster's initial focus search; model the user's focus.
+    comment.focus();
+    const action = await screen.findByRole("button", { name: "Вернуть на доработку" });
     expect(action).toBeDisabled();
     fireEvent.change(comment, { target: { value: "Уточните адрес" } });
     fireEvent.click(action);
@@ -118,10 +120,14 @@ describe("AIReferentView", () => {
     vi.mocked(loadAIReferentPacket).mockRejectedValueOnce(new Error("Хранилище недоступно"))
       .mockResolvedValue({ files: [] });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Пакет документов" }));
+    const opener = await screen.findByRole("button", { name: "Пакет документов" });
+    opener.focus();
+    fireEvent.click(opener);
+    (await screen.findByLabelText("Закрыть пакет")).focus();
     expect(await screen.findByText("Хранилище недоступно")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Скачать пакет ZIP" })).toBeDisabled();
-    fireEvent.click(within(screen.getByRole("dialog", { name: "Пакет документов" })).getByRole("button", { name: "Обновить" }));
+    expect(await screen.findByRole("button", { name: "Скачать пакет ZIP" })).toBeDisabled();
+    const packet = await screen.findByRole("dialog", { name: "Пакет документов" });
+    fireEvent.click(await within(packet).findByRole("button", { name: "Обновить" }));
     expect(await screen.findByText("Робот ещё не передал файлы этого письма.")).toBeInTheDocument();
     expect(loadAIReferentPacket).toHaveBeenLastCalledWith("token", "incoming", "incoming-1");
   });

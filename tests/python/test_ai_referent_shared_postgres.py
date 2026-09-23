@@ -4,7 +4,7 @@ import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from zipfile import ZipFile
 
 import pytest
@@ -169,14 +169,12 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             "PUT",
             "/agent" + path + "/attachment?fileName=letter.docx&role=primary",
             telegram("910003"),
-            201,
             content=data,
         )
         duplicate = await call(
             "PUT",
             "/agent" + path + "/attachment?fileName=letter.docx&role=primary",
             telegram("910003"),
-            201,
             content=data,
         )
         assert duplicate["id"] == file["id"]
@@ -203,6 +201,12 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("approve", telegram("910001"))
         assert letter["reviewerUserId"] == str(users["baxtiyor"]["id"])
         await action("approve", telegram("910001"), 409, revision=stale)
+        # Final review comments restart the original route, not just its last step.
+        await action("return_for_revision", telegram("910002"), comment="Update the subject")
+        assert letter["reviewerUserId"] == str(users["aziza"]["id"])
+        await action("submit", author)
+        await action("approve", telegram("910002"), 403)
+        await action("approve", telegram("910001"))
         await action("approve", telegram("910002"))
         assert letter["status"] == "approved" and int(letter["displayNumber"].split("/")[0]) > 420
         await action("queue_delivery", telegram("910002"))
@@ -300,4 +304,277 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await connection.execute(
             delete(ai_referent_letters).where(ai_referent_letters.c.id == UUID(letter["id"]))
         )
+    await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_reassignment_failed_preparation_and_operator_delivery():
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    settings = zoom_settings(url)
+    settings.seed_demo_data = True
+    settings.ai_referent_agent_token = SecretStr("shared-test-agent")
+    engine = create_async_engine(url)
+    async with engine.begin() as connection:
+        await connection.execute(delete(ai_referent_delivery_commands))
+        await connection.execute(delete(ai_referent_telegram_links))
+        await connection.execute(delete(ai_referent_telegram_outbox))
+        await connection.execute(update(ai_referent_configuration).values(execution_agent_id=None))
+    app = create_app(settings)
+    base = "/api/v1/ai-referent"
+    agent = {"X-AI-Referent-Agent-Token": "shared-test-agent"}
+    async with (
+        app.router.lifespan_context(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
+    ):
+        async with engine.connect() as connection:
+            accounts = {
+                name: await find_active_user_by_username(connection, name)
+                for name in ("dilshod", "aziza", "baxtiyor", "malika")
+            }
+
+        def auth(name):
+            return {
+                "Authorization": "Bearer "
+                + issue_access_token(accounts[name]["id"], settings.auth_signing_key)
+            }
+
+        def tg(identity):
+            return {**agent, "X-AI-Referent-Telegram-Id": identity}
+
+        async def call(method, path, headers=None, expected=200, **kwargs):
+            response = await client.request(method, base + path, headers=headers or agent, **kwargs)
+            assert response.status_code == expected, response.text
+            return response.json() if response.content and expected != 204 else None
+
+        admin, author = auth("malika"), auth("dilshod")
+        bindings = [
+            {"key": key, "username": name, "telegramId": tid, "enabled": bool(name)}
+            for key, name, tid in [
+                ("askar", "aziza", "920001"),
+                ("bobur", "baxtiyor", "920002"),
+                ("umid", "", None),
+                ("davronbek", "", None),
+            ]
+        ]
+
+        async def configure():
+            current = await call("GET", "/configuration", admin)
+            return await call(
+                "PUT",
+                "/configuration",
+                admin,
+                json={
+                    "expectedRevision": current["revision"],
+                    "reviewers": bindings,
+                },
+            )
+
+        await configure()
+        code = await call("POST", "/telegram-link", author)
+        await call(
+            "POST",
+            "/agent/telegram-link",
+            expected=409,
+            json={
+                "telegramId": "920001",
+                "code": code["code"],
+            },
+        )
+        await call(
+            "POST",
+            "/agent/telegram-link",
+            expected=204,
+            json={
+                "telegramId": "920003",
+                "code": code["code"],
+            },
+        )
+        # Old personal identity must not override a newly configured reviewer identity.
+        code = await call("POST", "/telegram-link", auth("aziza"))
+        await call(
+            "POST",
+            "/agent/telegram-link",
+            expected=204,
+            json={
+                "telegramId": "920001",
+                "code": code["code"],
+            },
+        )
+        payload = {
+            "subject": "Recovery scenario",
+            "recipientOrganization": "Recipient",
+            "recipientAddress": "office@example.test",
+            "route": "webmail",
+            "reviewerUserId": str(accounts["aziza"]["id"]),
+            "finalReviewerUserId": str(accounts["baxtiyor"]["id"]),
+            "operationId": str(uuid4()),
+        }
+        letter = await call("POST", "/agent/letters", tg("920003"), json=payload)
+        path = f"/letters/{letter['id']}"
+        edit = {
+            **payload,
+            "subject": "Updated recovery scenario",
+            "expectedRevision": letter["revision"],
+            "operationId": str(uuid4()),
+        }
+        letter = await call("PATCH", "/agent" + path, tg("920003"), json=edit)
+        assert (await call("PATCH", "/agent" + path, tg("920003"), json=edit))[
+            "revision"
+        ] == letter["revision"]
+        await call(
+            "PATCH", "/agent" + path, tg("920003"), 409, json={**edit, "operationId": str(uuid4())}
+        )
+        await call("GET", f"/packets/outgoing/{uuid4()}", author, 404)
+        await call("GET", f"/packets/archive/{uuid4()}", author, 404)
+        await call("GET", f"/packets/journal/{uuid4()}", author, 404)
+        await call(
+            "PUT",
+            "/agent" + path + "/attachment?fileName=source.docx&role=primary",
+            tg("920003"),
+            content=b"PK fixture",
+        )
+
+        async def action(name, headers=admin, expected=200, comment=""):
+            current = await call("GET", path, admin)
+            return await call(
+                "POST",
+                path + "/actions",
+                headers,
+                expected,
+                json={
+                    "action": name,
+                    "expectedRevision": current["revision"],
+                    "operationId": str(uuid4()),
+                    "comment": comment,
+                },
+            )
+
+        await action("submit", author)
+        bindings[1] = {**bindings[1], "enabled": False}
+        await configure()
+        await action("approve", auth("aziza"), 409)
+        bindings[1] = {**bindings[1], "enabled": True}
+        bindings[0] = {**bindings[0], "telegramId": "920011"}
+        await configure()
+        await call("GET", "/agent/letters", tg("920001"), 403)
+        await call("GET", "/agent/letters", tg("920011"))
+        await action("approve", auth("aziza"))
+        await action("approve", auth("baxtiyor"), 409)  # Archive not reconciled yet.
+        await call("POST", "/agent/ready?agentId=referent-test", expected=204)
+        await action("approve", auth("baxtiyor"))
+        await action("queue_delivery", auth("baxtiyor"))
+        await call("POST", "/agent/jobs/claim?agentId=wrong-robot", expected=409)
+        job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/heartbeat",
+            expected=409,
+            json={**lease, "leaseToken": str(uuid4())},
+        )
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=409,
+            json={**lease, "agentId": "other-robot", "outcome": "failed"},
+        )
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=422,
+            json={**lease, "outcome": "sent", "detail": "Wrong job kind"},
+        )
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=204,
+            json={**lease, "outcome": "failed", "detail": "Conversion unavailable"},
+        )
+        current = await call("GET", path, admin)
+        assert current["status"] == "failed" and "retry_delivery" in current["availableActions"]
+        await action("return_for_revision", auth("baxtiyor"), comment="Replace source document")
+        # Revisions preserve the allocated number while repeating the entire route.
+        await action("submit", author)
+        await action("approve", auth("aziza"))
+        again = await action("approve", auth("baxtiyor"))
+        assert again["displayNumber"] == current["displayNumber"]
+        await action("queue_delivery", auth("baxtiyor"))
+        job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+        params = {**lease, "jobId": job["id"], "name": f"signed/{job['id']}.pdf"}
+        await call(
+            "PUT",
+            f"/agent/files/outgoing/{letter['id']}",
+            expected=422,
+            params=params,
+            content=b"not PDF",
+        )
+        await call(
+            "PUT",
+            f"/agent/files/outgoing/{uuid4()}",
+            expected=403,
+            params=params,
+            content=b"%PDF-1.4",
+        )
+        await call(
+            "PUT", f"/agent/files/outgoing/{letter['id']}", params=params, content=b"%PDF-1.4"
+        )
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=204,
+            json={**lease, "outcome": "prepared"},
+        )
+        await action("release_delivery", auth("baxtiyor"))
+        await action("send")
+        job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=204,
+            json={**lease, "outcome": "unknown", "detail": "Transport disconnected"},
+        )
+        await action("confirm_not_sent", comment="Verified no sent record")
+        await action("send")
+        job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=422,
+            json={**lease, "outcome": "sent"},
+        )
+        await call(
+            "POST",
+            f"/agent/jobs/{job['id']}/result",
+            expected=204,
+            json={**lease, "outcome": "sent", "detail": "External record verified"},
+        )
+        assert (await call("GET", path, author))["status"] == "sent"
+        searched = await call("GET", "/letters", author, params={"query": again["displayNumber"]})
+        assert searched["totalCount"] == 1 and searched["letters"][0]["id"] == letter["id"]
+        # Versioned journals are shared files, not local paths exposed over HTTP.
+        journal_id = uuid5(NAMESPACE_URL, "ai-journal:referent-test")
+        await call(
+            "PUT",
+            f"/agent/files/journal/{uuid4()}",
+            expected=403,
+            params={"agentId": "referent-test", "name": "register.xlsx"},
+            content=b"PK",
+        )
+        journal = await call(
+            "PUT",
+            f"/agent/files/journal/{journal_id}",
+            params={"agentId": "referent-test", "name": "register.xlsx"},
+            content=b"PK journal",
+        )
+        assert len((await call("GET", f"/packets/journal/{journal_id}", author))["files"]) == 1
+        response = await client.get(
+            base + f"/packets/journal/{journal_id}/files/{journal['id']}", headers=author
+        )
+        assert response.content == b"PK journal"
     await engine.dispose()

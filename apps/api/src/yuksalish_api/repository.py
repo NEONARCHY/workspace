@@ -1797,6 +1797,7 @@ async def _sync_notifications_for_user(
             ai_referent_letters.c.created_by_user_id == current_user.id,
             ai_referent_letters.c.reviewer_user_id == current_user.id,
             ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+            ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
             ai_referent_letters.c.status == "sent",
         ))
     rows = (
@@ -5599,6 +5600,7 @@ async def validate_attachment_owner(
                 or letter["created_by_user_id"] == current_user.id
                 or letter["reviewer_user_id"] == current_user.id
                 or letter.get("final_reviewer_user_id") == current_user.id
+                or letter.get("initial_reviewer_user_id") == current_user.id
                 or module_access.get("ai_referent", {}).get("admin", False)
             )
         )

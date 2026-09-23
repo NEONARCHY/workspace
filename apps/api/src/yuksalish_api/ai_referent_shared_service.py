@@ -245,6 +245,7 @@ async def notify_letter(
         row["created_by_user_id"],
         row["reviewer_user_id"],
         row.get("final_reviewer_user_id"),
+        row.get("initial_reviewer_user_id"),
     }
     action_recipients = set()
     if row["status"] == "needs_revision":
@@ -396,6 +397,7 @@ async def claim_notifications(connection: AsyncConnection) -> list[dict[str, obj
                 letter["created_by_user_id"],
                 letter["reviewer_user_id"],
                 letter["final_reviewer_user_id"],
+                letter["initial_reviewer_user_id"],
             }
             or letter["status"] == "sent"
         ):

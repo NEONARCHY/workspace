@@ -833,6 +833,8 @@ ai_referent_letters = sa.Table(
     sa.Column("reviewer_key", sa.String(32)),
     sa.Column("final_reviewer_user_id", uuid_type),
     sa.Column("final_reviewer_key", sa.String(32)),
+    sa.Column("initial_reviewer_user_id", uuid_type),
+    sa.Column("initial_reviewer_key", sa.String(32)),
     sa.Column("delivery_error", sa.Text()),
     sa.Column("legacy_id", sa.String(128)),
     sa.Column("revision", sa.Integer()),

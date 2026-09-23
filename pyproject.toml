@@ -66,6 +66,9 @@ markers = [
 
 [tool.coverage.run]
 branch = true
+# SQLAlchemy's async bridge switches greenlets; plain thread tracing misses
+# executed branches after awaits. Keep both concurrency models measured.
+concurrency = ["thread", "greenlet"]
 source = ["yuksalish_api", "hisobot_import"]
 
 [tool.ruff]

@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, insert, or_, select, update
+from sqlalchemy import String, cast, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -60,6 +60,7 @@ def _may_view(row: RowMapping, user: AuthenticatedUser) -> bool:
         or row["created_by_user_id"] == user.id
         or row["reviewer_user_id"] == user.id
         or row.get("final_reviewer_user_id") == user.id
+        or row.get("initial_reviewer_user_id") == user.id
     )
 
 
@@ -364,6 +365,8 @@ async def create_letter(
             created_by_user_id=current_user.id,
             reviewer_user_id=payload.reviewer_user_id,
             reviewer_key=reviewer_key,
+            initial_reviewer_user_id=payload.reviewer_user_id,
+            initial_reviewer_key=reviewer_key,
             final_reviewer_user_id=payload.final_reviewer_user_id,
             final_reviewer_key=final_key,
             delivery_error="",
@@ -420,6 +423,7 @@ async def load_letters(
                 ai_referent_letters.c.created_by_user_id == current_user.id,
                 ai_referent_letters.c.reviewer_user_id == current_user.id,
                 ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+                ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
             )
         )
     if status:
@@ -432,6 +436,20 @@ async def load_letters(
                 ai_referent_letters.c.subject.ilike(pattern),
                 ai_referent_letters.c.recipient_organization.ilike(pattern),
                 ai_referent_letters.c.recipient_address.ilike(pattern),
+                func.concat(
+                    func.lpad(
+                        cast(ai_referent_letters.c.outgoing_number, String),
+                        func.greatest(
+                            4, func.length(cast(ai_referent_letters.c.outgoing_number, String))
+                        ),
+                        "0",
+                    ),
+                    "/",
+                    ai_referent_letters.c.year_suffix,
+                    "-AI",
+                ).ilike(pattern),
+                creator.c.full_name.ilike(pattern),
+                reviewer.c.full_name.ilike(pattern),
             )
         )
     matching = statement.subquery()
@@ -522,6 +540,8 @@ async def update_letter(
             note=payload.note,
             reviewer_user_id=payload.reviewer_user_id,
             reviewer_key=reviewer_key,
+            initial_reviewer_user_id=payload.reviewer_user_id,
+            initial_reviewer_key=reviewer_key,
             final_reviewer_user_id=payload.final_reviewer_user_id,
             final_reviewer_key=final_key,
             revision=row["revision"] + 1,
@@ -705,6 +725,12 @@ async def act_on_letter(
 
     now = datetime.now(UTC)
     next_revision = row["revision"] + 1
+    if next_status == "needs_revision" and row.get("initial_reviewer_key"):
+        # A changed document restarts the configured route, never skips preliminary review.
+        values.update(
+            reviewer_user_id=row.get("initial_reviewer_user_id"),
+            reviewer_key=row["initial_reviewer_key"],
+        )
     values.update(status=next_status, revision=next_revision, updated_at=now)
     await connection.execute(
         update(ai_referent_letters).where(ai_referent_letters.c.id == letter_id).values(**values)

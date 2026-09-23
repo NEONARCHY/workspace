@@ -33,6 +33,21 @@ def upgrade() -> None:
     )
     op.add_column("ai_referent_letters", sa.Column("final_reviewer_user_id", postgresql.UUID()))
     op.add_column("ai_referent_letters", sa.Column("final_reviewer_key", sa.String(32)))
+    op.add_column("ai_referent_letters", sa.Column("initial_reviewer_user_id", postgresql.UUID()))
+    op.add_column("ai_referent_letters", sa.Column("initial_reviewer_key", sa.String(32)))
+    op.create_foreign_key(
+        "fk_ai_initial_reviewer",
+        "ai_referent_letters",
+        "core_users",
+        ["initial_reviewer_user_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
+    # Prior versions only had a single reviewer: preserve that explicit assignment.
+    op.execute(
+        "UPDATE ai_referent_letters SET initial_reviewer_user_id = reviewer_user_id, "
+        "initial_reviewer_key = reviewer_key"
+    )
     op.add_column(
         "ai_referent_letters",
         sa.Column("delivery_error", sa.Text(), server_default="", nullable=False),
@@ -146,6 +161,9 @@ def downgrade() -> None:
     for column in ("kind", "lease_token", "result"):
         op.drop_column("ai_referent_delivery_commands", column)
     op.drop_constraint("fk_ai_final_reviewer", "ai_referent_letters", type_="foreignkey")
+    op.drop_constraint("fk_ai_initial_reviewer", "ai_referent_letters", type_="foreignkey")
+    op.drop_column("ai_referent_letters", "initial_reviewer_user_id")
+    op.drop_column("ai_referent_letters", "initial_reviewer_key")
     for column in ("final_reviewer_user_id", "final_reviewer_key", "delivery_error"):
         op.drop_column("ai_referent_letters", column)
     op.drop_constraint("ck_ai_letters_status", "ai_referent_letters", type_="check")

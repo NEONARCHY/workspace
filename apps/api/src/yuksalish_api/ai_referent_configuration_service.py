@@ -218,6 +218,7 @@ async def save_configuration(
                         or_(
                             ai_referent_letters.c.reviewer_key == item.key,
                             ai_referent_letters.c.final_reviewer_key == item.key,
+                            ai_referent_letters.c.initial_reviewer_key == item.key,
                         ),
                         ai_referent_letters.c.status.in_(_REASSIGNABLE_STATUSES),
                     )
@@ -240,6 +241,11 @@ async def save_configuration(
                 and letter.get("final_reviewer_user_id") != assigned_user
             ):
                 changes["final_reviewer_user_id"] = assigned_user
+            if (
+                letter.get("initial_reviewer_key") == item.key
+                and letter.get("initial_reviewer_user_id") != assigned_user
+            ):
+                changes["initial_reviewer_user_id"] = assigned_user
             if not changes:
                 continue
             await connection.execute(
