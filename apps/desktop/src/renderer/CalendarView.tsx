@@ -113,6 +113,17 @@ const attendanceLabels: Record<CalendarAttendanceStatus, string> = {
   declined: "Отказался",
 };
 
+interface PreparedEventTask {
+  readonly key: number;
+  readonly title: string;
+  readonly assigneeId: string;
+}
+
+interface PreparedEventPayment {
+  readonly title: string;
+  readonly amount: string;
+}
+
 function attendanceStatus(event: CalendarEvent, userId: string): CalendarAttendanceStatus | undefined {
   const attendee = event.attendees.find((item) => item.userId === userId);
   if (attendee) return attendee.status;
@@ -182,7 +193,10 @@ export function CalendarView({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [preparedTasks, setPreparedTasks] = useState<readonly PreparedEventTask[]>([]);
+  const [preparedPayment, setPreparedPayment] = useState<PreparedEventPayment>();
   const lastChatDraftKey = useRef<string | undefined>(undefined);
+  const nextPreparedTaskKey = useRef(1);
   const sideRef = useRef<HTMLElement>(null);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
@@ -297,6 +311,8 @@ export function CalendarView({
       title: createFromChat.title,
       attendeeIds: [...new Set([currentUserId, ...createFromChat.attendeeIds])],
     });
+    setPreparedTasks([]);
+    setPreparedPayment(undefined);
     setError("");
   }, [createFromChat, currentUserId]);
 
@@ -304,6 +320,8 @@ export function CalendarView({
     setSelectedDay(startOfDay(day));
     setSelected(undefined);
     setDraft(undefined);
+    setPreparedTasks([]);
+    setPreparedPayment(undefined);
     setError("");
     if (day.getMonth() !== month.getMonth() || day.getFullYear() !== month.getFullYear()) {
       setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
@@ -315,6 +333,8 @@ export function CalendarView({
     setSelectedDay(startOfDay(day));
     setSelected(undefined);
     setDraft(emptyDraft(currentUserId, day));
+    setPreparedTasks([]);
+    setPreparedPayment(undefined);
     setError("");
   };
 
@@ -322,6 +342,27 @@ export function CalendarView({
     const today = new Date();
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     chooseDay(today);
+  };
+
+  const addPreparedTask = () => {
+    setPreparedTasks((items) => [
+      ...items,
+      { key: nextPreparedTaskKey.current++, title: "", assigneeId: currentUserId },
+    ]);
+  };
+
+  const updatePreparedTask = (key: number, changes: Partial<PreparedEventTask>) => {
+    setPreparedTasks((items) => items.map((item) => (
+      item.key === key ? { ...item, ...changes } : item
+    )));
+  };
+
+  const closeDraft = () => {
+    setDraft(undefined);
+    if (!selected) {
+      setPreparedTasks([]);
+      setPreparedPayment(undefined);
+    }
   };
 
   const save = async () => {
@@ -336,6 +377,24 @@ export function CalendarView({
       setError("Нельзя создавать новые события на прошедшие дни. Выберите сегодня или будущую дату.");
       return;
     }
+    if (!selected && preparedTasks.some((task) => !task.title.trim())) {
+      setError("Укажите название каждой подготовленной внутренней задачи или удалите пустую строку.");
+      return;
+    }
+    const preparedPaymentAmount = preparedPayment
+      ? Number(preparedPayment.amount.replace(/\s/g, ""))
+      : undefined;
+    if (preparedPayment && !preparedPayment.title.trim()) {
+      setError("Укажите название подготовленной заявки на оплату.");
+      return;
+    }
+    if (
+      preparedPayment
+      && (!Number.isInteger(preparedPaymentAmount) || (preparedPaymentAmount ?? 0) <= 0)
+    ) {
+      setError("Укажите целую сумму подготовленной заявки больше нуля.");
+      return;
+    }
     setError("");
     setBusy(true);
     const payload = {
@@ -345,13 +404,70 @@ export function CalendarView({
       endsAt: end.toISOString(),
     };
     try {
+      const isNewEvent = !selected;
       const saved = selected ? await onUpdate(selected, payload) : await onCreate(payload);
       if (saved) {
+        const relatedCreationErrors: string[] = [];
+        if (isNewEvent && onCreateTask) {
+          for (const task of preparedTasks) {
+            try {
+              const createdTask = await onCreateTask({
+                title: task.title.trim(),
+                description: `Внутренняя задача мероприятия «${saved.title}».`,
+                assigneeId: task.assigneeId,
+                calendarEventId: saved.id,
+                dueAt: saved.endsAt,
+                priority: "normal",
+              });
+              if (!createdTask) relatedCreationErrors.push(`Задача «${task.title.trim()}» не создана.`);
+            } catch (taskError) {
+              relatedCreationErrors.push(
+                taskError instanceof Error
+                  ? `Задача «${task.title.trim()}»: ${taskError.message}`
+                  : `Задача «${task.title.trim()}» не создана.`,
+              );
+            }
+          }
+        }
+        if (isNewEvent && preparedPayment && onCreatePayment && preparedPaymentAmount) {
+          try {
+            const createdPayment = await onCreatePayment({
+              title: preparedPayment.title.trim(),
+              amount: preparedPaymentAmount,
+              currency: "UZS",
+              purpose: saved.title,
+              calendarEventId: saved.id,
+              projectName: "",
+              projectCode: "",
+              sourceAccount: "",
+              destinationAccount: "",
+              requestPriority: "normal",
+              comment: `Создано из мероприятия: ${saved.title}`,
+              tripPurpose: "",
+              employeeIds: saved.attendeeIds,
+              paymentPurpose: "Мероприятия",
+              paymentReason: saved.title,
+              responsibleUserId: currentUserId,
+            });
+            if (!createdPayment) relatedCreationErrors.push("Заявка на оплату не создана.");
+          } catch (paymentCreationError) {
+            relatedCreationErrors.push(
+              paymentCreationError instanceof Error
+                ? `Заявка на оплату: ${paymentCreationError.message}`
+                : "Заявка на оплату не создана.",
+            );
+          }
+        }
         const savedDate = new Date(saved.startsAt);
         setSelectedDay(startOfDay(savedDate));
         setMonth(new Date(savedDate.getFullYear(), savedDate.getMonth(), 1));
         setSelected(saved);
         setDraft(undefined);
+        setPreparedTasks([]);
+        setPreparedPayment(undefined);
+        if (relatedCreationErrors.length) {
+          setError(`Мероприятие создано. ${relatedCreationErrors.join(" ")}`);
+        }
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Не удалось сохранить событие.");
@@ -566,10 +682,10 @@ export function CalendarView({
       <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня">
         {error ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
         {draft ? (
-          <div className="calendar-form">
+          <div className={`calendar-form${selected ? "" : " calendar-create-card"}`}>
             <div className="calendar-side-nav">
-              <Button appearance="subtle" icon={<ArrowLeft20Regular />} onClick={() => setDraft(undefined)}>{selected ? "К событию" : "К событиям дня"}</Button>
-              <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть форму" onClick={() => setDraft(undefined)} />
+              <Button appearance="subtle" icon={<ArrowLeft20Regular />} onClick={closeDraft}>{selected ? "К событию" : "К событиям дня"}</Button>
+              <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть форму" onClick={closeDraft} />
             </div>
             <div className="calendar-side-heading">
               <span>{selected ? "Редактирование" : "Новое событие"}</span>
@@ -612,9 +728,97 @@ export function CalendarView({
                 />
               ))}
             </fieldset>
+            {!selected ? (
+              <section className="calendar-create-links" aria-labelledby="calendar-create-links-title">
+                <div className="calendar-create-links-heading">
+                  <div>
+                    <span>Связанные объекты</span>
+                    <h3 id="calendar-create-links-title">Подготовьте работу по мероприятию</h3>
+                  </div>
+                  <p>Они появятся сразу после создания мероприятия.</p>
+                </div>
+                {onCreateTask ? (
+                  <div className="calendar-create-link-group">
+                    <div className="calendar-create-link-group-heading">
+                      <span>Внутренние задачи</span>
+                      <Button appearance="secondary" size="small" onClick={addPreparedTask}>+ Добавить задачу</Button>
+                    </div>
+                    {preparedTasks.length ? preparedTasks.map((task, index) => (
+                      <div className="calendar-prepared-link" key={task.key}>
+                        <div className="calendar-prepared-link-heading">
+                          <span>Задача {index + 1}</span>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            aria-label={`Удалить задачу ${index + 1}`}
+                            onClick={() => setPreparedTasks((items) => items.filter((item) => item.key !== task.key))}
+                          >
+                            Убрать
+                          </Button>
+                        </div>
+                        <Input
+                          aria-label={`Название внутренней задачи ${index + 1}`}
+                          placeholder="Что нужно сделать"
+                          value={task.title}
+                          onChange={(_event, data) => updatePreparedTask(task.key, { title: data.value })}
+                        />
+                        <Select
+                          aria-label={`Ответственный за задачу ${index + 1}`}
+                          value={task.assigneeId}
+                          onChange={(event) => updatePreparedTask(task.key, { assigneeId: event.target.value })}
+                        >
+                          {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                        </Select>
+                      </div>
+                    )) : <p className="calendar-create-link-empty">Без задач. Их также можно добавить из карточки мероприятия.</p>}
+                  </div>
+                ) : null}
+                {canCreatePaymentRequest && onCreatePayment ? (
+                  <div className="calendar-create-link-group">
+                    <div className="calendar-create-link-group-heading">
+                      <span>Заявка на оплату</span>
+                      {!preparedPayment ? (
+                        <Button
+                          appearance="secondary"
+                          size="small"
+                          onClick={() => setPreparedPayment({
+                            title: `Оплата: ${draft.title.trim() || "мероприятие"}`,
+                            amount: "",
+                          })}
+                        >
+                          + Добавить заявку
+                        </Button>
+                      ) : null}
+                    </div>
+                    {preparedPayment ? (
+                      <div className="calendar-prepared-link">
+                        <div className="calendar-prepared-link-heading">
+                          <span>Черновик заявки</span>
+                          <Button appearance="subtle" size="small" onClick={() => setPreparedPayment(undefined)}>Убрать</Button>
+                        </div>
+                        <Input
+                          aria-label="Название подготовленной заявки"
+                          value={preparedPayment.title}
+                          onChange={(_event, data) => setPreparedPayment({ ...preparedPayment, title: data.value })}
+                        />
+                        <Input
+                          aria-label="Сумма подготовленной заявки в сумах"
+                          inputMode="numeric"
+                          placeholder="Сумма в UZS"
+                          value={preparedPayment.amount}
+                          onChange={(_event, data) => setPreparedPayment({ ...preparedPayment, amount: data.value })}
+                        />
+                      </div>
+                    ) : <p className="calendar-create-link-empty">Без заявки. После создания её можно добавить в карточке мероприятия.</p>}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
             <div className="calendar-form-actions">
-              <Button appearance="primary" disabled={busy || !draft.title.trim()} onClick={() => void save()}>Сохранить</Button>
-              <Button appearance="subtle" disabled={busy} onClick={() => setDraft(undefined)}>Отменить</Button>
+              <Button appearance="primary" disabled={busy || !draft.title.trim()} onClick={() => void save()}>
+                {selected ? "Сохранить" : "Создать мероприятие"}
+              </Button>
+              <Button appearance="subtle" disabled={busy} onClick={closeDraft}>Отменить</Button>
             </div>
           </div>
         ) : selected ? (

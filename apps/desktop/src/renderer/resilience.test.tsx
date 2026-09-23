@@ -56,10 +56,10 @@ describe("Window and UI recovery", () => {
     fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Проверка" } });
     fireEvent.change(screen.getByLabelText("Начало"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать мероприятие" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("корректные начало и окончание");
     expect(create).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Создать мероприятие" })).toBeEnabled();
   });
 
   it("opens the complete agenda for a day instead of hiding events after the third item", () => {
@@ -130,7 +130,7 @@ describe("Window and UI recovery", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Задним числом" } });
     fireEvent.change(screen.getByLabelText("Начало"), { target: { value: "2026-09-07T10:00" } });
     fireEvent.change(screen.getByLabelText("Окончание"), { target: { value: "2026-09-07T11:00" } });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать мероприятие" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Нельзя создавать новые события на прошедшие дни");
   });
 });

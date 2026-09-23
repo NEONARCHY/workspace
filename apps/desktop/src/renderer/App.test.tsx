@@ -563,6 +563,7 @@ function mockServer(
         description?: string;
         sourceMessageId?: string;
         parentTaskId?: string;
+        calendarEventId?: string;
         assigneeId?: string;
         project?: string;
         dueAt?: string;
@@ -597,6 +598,7 @@ function mockServer(
         checklistTotal: payload.checklist?.length ?? 0,
         sourceMessageId: payload.sourceMessageId,
         parentTaskId: payload.parentTaskId,
+        calendarEventId: payload.calendarEventId,
         parentTaskTitle: parent?.title,
         authorId: currentUser.id,
         participants: payload.participants ?? [],
@@ -875,6 +877,7 @@ function mockServer(
         amount: number;
         purpose: string;
         sourceTaskId?: string;
+        calendarEventId?: string;
         responsibleUserId?: string;
       };
       const created = {
@@ -893,6 +896,7 @@ function mockServer(
         requesterId: currentUser.id,
         responsibleUserId: payload.responsibleUserId ?? currentUser.id,
         sourceTaskId: payload.sourceTaskId,
+        calendarEventId: payload.calendarEventId,
         details: { ...paymentDetails, ...payload },
         createdAt: "2026-09-03T10:00:00Z",
         updatedAt: "2026-09-03T10:00:00Z",
@@ -1436,7 +1440,7 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить" }));
     expect(await screen.findByText("Карточка готова к проверке")).toBeInTheDocument();
-  }, 30000);
+  }, 30_000);
 
   it("lets an administrator delete an active task after confirmation", async () => {
     const fetchMock = mockServer();
@@ -1948,12 +1952,38 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Добавить задачу" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название внутренней задачи 1" }), {
+      target: { value: "Подготовить материалы" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "+ Добавить заявку" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Название подготовленной заявки" }), {
+      target: { value: "Оплата площадки" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сумма подготовленной заявки в сумах" }), {
+      target: { value: "250000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Создать мероприятие" }));
     expect(await screen.findByRole("heading", { name: "Встреча BP-8" })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/calendar/events"),
       expect.objectContaining({ method: "POST" }),
     );
+    const taskRequest = fetchMock.mock.calls.find(([url, options]) => (
+      String(url).endsWith("/tasks") && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(taskRequest?.[1]?.body))).toMatchObject({
+      title: "Подготовить материалы",
+      calendarEventId: "calendar-created",
+    });
+    const paymentRequest = fetchMock.mock.calls.find(([url, options]) => (
+      String(url).endsWith("/approval-requests") && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(paymentRequest?.[1]?.body))).toMatchObject({
+      title: "Оплата площадки",
+      amount: 250000,
+      calendarEventId: "calendar-created",
+    });
     fireEvent.click(screen.getByRole("button", { name: "Отменить событие" }));
     expect(await screen.findByText("Событие отменено")).toBeInTheDocument();
   });
