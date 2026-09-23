@@ -119,7 +119,9 @@ describe("Employee list and retained access controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть чат" }));
     await waitFor(() => expect(onCreateChat).toHaveBeenCalledWith({ kind: "direct", title: "", description: "", memberIds: ["one"] }));
     expect(onChatCreated).toHaveBeenCalledWith("chat-one");
-    expect(screen.queryByRole("complementary", { name: "Действия с выбранными сотрудниками" })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("complementary", {
+      name: "Действия с выбранными сотрудниками",
+    })).not.toBeInTheDocument());
   });
   it("asks for a group name when several active colleagues are selected", async () => {
     vi.mocked(loadDirectory).mockResolvedValueOnce({ ...data, employees: data.employees.map((employee) => ({ ...employee, status: "active" })) });
