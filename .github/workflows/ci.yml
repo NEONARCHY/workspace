@@ -65,7 +65,27 @@ jobs:
       # Applied Alembic migrations are immutable and contain reviewed, trusted SQL literals.
       # Scan executable application code while keeping historical migrations unchanged.
       - run: bandit -q -r apps modules -x tests,apps/api/migrations
-      - run: pip-audit
+      - name: Audit Python dependencies
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if audit_log="$(pip-audit 2>&1)"; then
+              printf '%s\n' "$audit_log"
+              exit 0
+            else
+              audit_status=$?
+            fi
+
+            printf '%s\n' "$audit_log" >&2
+            if ! grep -Eq '502 Server Error|503 Server Error|504 Server Error|429 Client Error|Temporary failure in name resolution|Name or service not known|ConnectionError|ReadTimeout|ConnectTimeout' <<< "$audit_log"; then
+              exit "$audit_status"
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit "$audit_status"
+            fi
+
+            sleep $((attempt * 10))
+          done
 
   desktop:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
