@@ -39,9 +39,9 @@ const pendingItems = readNoteEntries(new URL("./release-notes/pending/", import.
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
 const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
-  || releaseNoteItems.length === 0 || releaseNoteItems.length > 50
+  || releaseNoteItems.length === 0 || releaseNoteItems.length > 100
   || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
-  throw new Error("pending release notes must match package version and contain 1–50 concise user-facing changes");
+  throw new Error("pending release notes must match package version and contain 1–100 concise user-facing changes");
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;

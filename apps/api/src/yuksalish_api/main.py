@@ -31,11 +31,13 @@ from .routers import (
     modules,
     personal,
     updates,
+    workday,
     workspace,
     zoom,
 )
 from .seed import seed_demo_data
 from .settings import Settings, get_settings
+from .workday_service import close_overdue_sessions
 from .zoom_client import ZoomClient
 from .zoom_service import materialize_zoom_reminders, recover_zoom_meetings
 
@@ -74,6 +76,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_sick_document_notifications(connection)
                         created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
+                        await close_overdue_sessions(connection)
                     async with engine.begin() as connection:
                         created += await expire_jobs(connection)
                     if runtime_settings.zoom_configured:
@@ -143,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
+    application.include_router(workday.router, prefix=runtime_settings.api_prefix)
     application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     application.include_router(administration.router, prefix=runtime_settings.api_prefix)
     application.include_router(ai_referent.router, prefix=runtime_settings.api_prefix)

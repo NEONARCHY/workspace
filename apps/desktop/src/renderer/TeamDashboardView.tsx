@@ -17,7 +17,10 @@ import {
   Warning24Regular,
 } from "@fluentui/react-icons";
 
+import { TeamPresencePanel } from "./TeamPresencePanel";
+
 interface TeamDashboardViewProps {
+  readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
@@ -111,6 +114,7 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
 }
 
 export function TeamDashboardView({
+  token,
   tasks,
   people,
   currentUserId,
@@ -198,6 +202,9 @@ export function TeamDashboardView({
         <div><strong>{people.length}</strong><span>сотрудников в обзоре</span></div>
       </div>
     </section>
+
+    {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
+      ? <TeamPresencePanel token={token} /> : null}
 
     <div className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
       <button type="button" aria-pressed={!selectedPersonId} className="team-focus-all" onClick={() => setSelectedPersonId(undefined)}><PeopleTeam24Regular /><span>Вся команда</span></button>

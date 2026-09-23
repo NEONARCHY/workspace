@@ -446,6 +446,52 @@ export interface PresenceSummaryItem {
   readonly endsAt?: string | null;
 }
 
+export type WorkdayStatus = "working" | "finished" | "approved_absence" | "not_started" | "weekend_off";
+
+export interface WorkdaySchedule {
+  readonly userId: string;
+  readonly startsAt: string;
+  readonly endsAt: string;
+}
+
+export interface WorkdaySession {
+  readonly id: string;
+  readonly userId: string;
+  readonly workDate: string;
+  readonly startedAt: string;
+  readonly endedAt: string | null;
+  readonly scheduledStartAt: string;
+  readonly scheduledEndAt: string;
+  readonly closedAt: string | null;
+  readonly closeSource: "manual" | "automatic" | null;
+  readonly isWeekend: boolean;
+}
+
+export interface WorkdayMe {
+  readonly status: WorkdayStatus;
+  readonly schedule: WorkdaySchedule;
+  readonly session: WorkdaySession | null;
+  readonly absenceKind: string | null;
+  readonly asOf: string;
+}
+
+export interface WorkdayTeamMember {
+  readonly userId: string;
+  readonly name: string;
+  readonly jobTitle: string | null;
+  readonly status: WorkdayStatus;
+  readonly schedule: WorkdaySchedule;
+  readonly session: WorkdaySession | null;
+  readonly absenceKind: string | null;
+  readonly canEditSchedule: boolean;
+}
+
+export interface WorkdayTeam {
+  readonly asOf: string;
+  readonly workingCount: number;
+  readonly members: readonly WorkdayTeamMember[];
+}
+
 export interface MemberDirectoryItem {
   readonly id: number;
   readonly telegramId?: string | null;
