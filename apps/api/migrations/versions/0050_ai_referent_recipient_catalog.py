@@ -6,7 +6,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0050_ai_referent_recipient_catalog"
+revision: str = "0050_ai_referent_recipients"
 down_revision: str | None = "0049_workday_presence"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
