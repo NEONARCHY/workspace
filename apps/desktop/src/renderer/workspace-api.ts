@@ -1,4 +1,8 @@
 import type {
+  AIReferentArchiveLetter,
+  AIReferentJournalFile,
+  AIReferentPacketFile,
+  AIReferentPacketKind,
   AIReferentAction,
   AIReferentConfiguration,
   AIReferentConfigurationUpdate,
@@ -102,11 +106,12 @@ export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
 
 export function loadAIReferentRegistry(
   token: string,
-  filters: { readonly query?: string; readonly status?: string } = {},
+  filters: { readonly query?: string; readonly status?: string; readonly offset?: number } = {},
 ): Promise<AIReferentRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
   if (filters.status) query.set("status", filters.status);
+  if (filters.offset) query.set("offset", String(filters.offset));
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
 }
@@ -133,11 +138,13 @@ export function saveAIReferentConfiguration(
 
 export function loadAIReferentIncomingRegistry(
   token: string,
-  filters: { readonly query?: string; readonly status?: string } = {},
+  filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly category?: string } = {},
 ): Promise<AIReferentIncomingRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
   if (filters.status) query.set("status", filters.status);
+  if (filters.offset) query.set("offset", String(filters.offset));
+  if (filters.category) query.set("category", filters.category);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentIncomingRegistry>(`/ai-referent/incoming${suffix}`, {}, token);
 }
@@ -177,15 +184,48 @@ export function actOnAIReferentLetter(
   letter: Pick<AIReferentLetter, "id" | "revision">,
   action: AIReferentAction,
   comment = "",
+  operationId?: string,
 ): Promise<AIReferentLetter> {
   return apiRequest<AIReferentLetter>(
     `/ai-referent/letters/${letter.id}/actions`,
     {
       method: "POST",
-      body: JSON.stringify({ action, comment, expectedRevision: letter.revision }),
+      body: JSON.stringify({ action, comment, expectedRevision: letter.revision, operationId }),
     },
     token,
   );
+}
+
+export function loadAIReferentLetter(token: string, id: string) {
+  return apiRequest<AIReferentLetter>(`/ai-referent/letters/${id}`, {}, token);
+}
+
+export function loadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string) {
+  return apiRequest<{ readonly files: readonly AIReferentPacketFile[] }>(`/ai-referent/packets/${kind}/${owner}`, {}, token);
+}
+
+export function downloadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string, file?: AIReferentPacketFile) {
+  const suffix = file ? `/files/${file.id}?source=${file.source}` : "/zip";
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/packets/${kind}/${owner}${suffix}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (response) => response.blob(), 120_000);
+}
+
+export function loadAIReferentArchive(token: string, offset = 0, query = "") {
+  return apiRequest<{ readonly letters: readonly AIReferentArchiveLetter[] }>(
+    `/ai-referent/archive?${new URLSearchParams({ offset: String(offset), query })}`, {}, token);
+}
+
+export function loadAIReferentJournals(token: string) {
+  return apiRequest<{ readonly files: readonly AIReferentJournalFile[] }>("/ai-referent/journals", {}, token);
+}
+
+export function loadAIReferentTelegramLink(token: string) {
+  return apiRequest<{ readonly telegramId: string | null }>("/ai-referent/telegram-link", {}, token);
+}
+
+export function createAIReferentTelegramLink(token: string) {
+  return apiRequest<{ readonly code: string; readonly expiresAt: string }>("/ai-referent/telegram-link", { method: "POST" }, token);
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {

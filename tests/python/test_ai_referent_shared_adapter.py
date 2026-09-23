@@ -1,0 +1,208 @@
+"""Safety tests with fake Telegram/Office: never sends a real message or letter."""
+
+import hashlib
+import importlib
+import threading
+from io import BytesIO
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
+from uuid import uuid4
+from zipfile import ZipFile
+
+import pytest
+from fastapi import HTTPException
+
+from yuksalish_api.ai_referent_files_service import safe_relative_path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.fixture
+def modules(monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "integrations/exat"))
+    return SimpleNamespace(
+        **{
+            name: importlib.import_module("workspace_integration." + name)
+            for name in ("state", "worker", "sync", "shared_bot", "client", "authority")
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "name", ["../x", "/x", "a\\b", "C:/x", "a/../b", "a//b", "a/", "a\nx", "."]
+)
+def test_packet_paths_reject_escape_and_ambiguous_names(name):
+    with pytest.raises(HTTPException) as error:
+        safe_relative_path(name)
+    assert error.value.status_code == 422
+    assert safe_relative_path("attachments/document.pdf") == "attachments/document.pdf"
+
+
+def test_receipts_survive_restart_and_instance_lock_releases(modules, tmp_path):
+    path = tmp_path / "state.sqlite"
+    state = modules.state.State(path)
+    assert state.claim("started:1", {"job": 1})
+    restarted = modules.state.State(path)
+    assert not restarted.claim("started:1", {"job": 2})
+    assert restarted.get("started:1") == {"job": 1}
+    restarted.put("result:1", {"outcome": "sent"})
+    assert restarted.pending("result:") == [("result:1", {"outcome": "sent"})]
+    restarted.remove("result:1")
+    assert not restarted.pending("result:")
+    with (modules.state.single_instance(tmp_path / "bot.lock"),
+          pytest.raises(modules.client.WorkspaceError),
+          modules.state.single_instance(tmp_path / "bot.lock")):
+        pytest.fail("Second worker acquired the same lock")
+    with modules.state.single_instance(tmp_path / "bot.lock"):
+        pass
+
+
+def test_legacy_mutations_are_blocked_only_in_connected_mode(modules, monkeypatch):
+    monkeypatch.setattr(
+        modules.authority, "connection_settings", lambda: {"shared_workflow": "true"}
+    )
+    with pytest.raises(modules.client.WorkspaceError):
+        modules.authority.guard_legacy_mutation()
+    token = modules.authority.executing_server_job.set(True)
+    try:
+        modules.authority.guard_legacy_mutation()
+    finally:
+        modules.authority.executing_server_job.reset(token)
+    monkeypatch.setattr(modules.authority, "connection_settings", lambda: {})
+    modules.authority.guard_legacy_mutation()
+
+
+def test_worker_does_not_repeat_started_job_and_retains_rejected_ack(modules, tmp_path):
+    job = {"id": str(uuid4()), "letterId": str(uuid4()), "leaseToken": str(uuid4()), "kind": "send"}
+    state = modules.state.State(tmp_path / "state.sqlite")
+    api = Mock(agent_id="test")
+    api.configuration.return_value = {"revision": 7}
+    api.request.return_value = {"job": job}
+    service = Mock(archive_root=str(tmp_path))
+    worker = modules.worker.DeliveryWorker(service, api, state)
+    state.claim("started:" + job["id"], job)
+    worker.tick()
+    service.retry_outgoing_send.assert_not_called()
+    sent_result = api.request.call_args.args[1]
+    assert sent_result["outcome"] == "unknown"
+    api.acknowledge.assert_called_once_with(7)
+    state.put("result:" + job["id"], sent_result)
+    api.request.side_effect = modules.client.WorkspaceError("Expired lease", 409)
+    worker.flush_results()
+    assert state.get("unconfirmed:result:" + job["id"]) == sent_result
+    assert state.get("result:" + job["id"]) is None
+
+
+def test_worker_verifies_pdf_and_lease_before_external_send(modules, tmp_path):
+    state = modules.state.State(tmp_path / "state.sqlite")
+    pdf = tmp_path / "signed.pdf"
+    pdf.write_bytes(b"%PDF signed")
+    row = {"status": "signed", "signed_file_path": str(pdf)}
+    service = Mock(archive_root=str(tmp_path))
+    service.database.get_outgoing_letter.return_value = row
+    api = Mock(agent_id="test")
+    worker = modules.worker.DeliveryWorker(service, api, state)
+    job = {
+        "id": str(uuid4()),
+        "letterId": str(uuid4()),
+        "leaseToken": str(uuid4()),
+        "signedFile": {"sha256": "incorrect"},
+    }
+    state.put("letter:" + job["letterId"], 42)
+    with pytest.raises(modules.client.WorkspaceError):
+        worker.send(job, threading.Event())
+    service.retry_outgoing_send.assert_not_called()
+    job["signedFile"]["sha256"] = hashlib.sha256(pdf.read_bytes()).hexdigest()
+    api.request.side_effect = modules.client.WorkspaceError("Expired lease", 409)
+    with pytest.raises(modules.client.WorkspaceError):
+        worker.send(job, threading.Event())
+    service.retry_outgoing_send.assert_not_called()
+    api.request.side_effect = None
+    service.database.get_outgoing_letter.side_effect = [
+        row,
+        {"status": "webmail_dry_run_prepared"},
+        {"status": "webmail_sent"},
+    ]
+    result = worker.send(job, threading.Event())
+    assert result["outcome"] == "sent"
+    service.retry_outgoing_send.assert_called_once_with(42)
+    service.confirm_manual_send.assert_called_once_with(42)
+    assert api.request.call_count == 3  # rejected lease, then pre-compose and pre-send fences
+
+
+def test_sync_versions_files_and_never_accepts_partial_excel(modules, tmp_path):
+    api = Mock(agent_id="test")
+    state = modules.state.State(tmp_path / "state.sqlite")
+    sync = modules.sync.ArchiveSync(Mock(), api, state)
+    file = tmp_path / "journal.xlsx"
+    file.write_bytes(b"partial workbook")
+    with pytest.raises(modules.client.WorkspaceError):
+        sync.upload("journal", "owner", file, file.name)
+    api.transfer.assert_not_called()
+    buffer = BytesIO()
+    with ZipFile(buffer, "w") as archive:
+        archive.writestr("xl/workbook.xml", "<workbook/>")
+    file.write_bytes(buffer.getvalue())
+    sync.upload("journal", "owner", file, file.name)
+    sync.upload("journal", "owner", file, file.name)
+    api.transfer.assert_called_once()
+    with pytest.raises(modules.client.WorkspaceError):
+        sync.folder("archive", "owner", tmp_path, [tmp_path])
+    with pytest.raises(modules.client.WorkspaceError):
+        sync.folder("archive", "owner", tmp_path.parent, [tmp_path])
+
+
+def test_sync_rejects_old_pending_work_and_keeps_shared_rows(modules, tmp_path):
+    service = Mock()
+    service.database.list_outgoing_review_requests.return_value = []
+    service.database.list_outgoing_letters.return_value = [
+        {"status": "waiting_review", "dry_run_json": "{}"}
+    ]
+    sync = modules.sync.ArchiveSync(service, Mock(), modules.state.State(tmp_path / "state.sqlite"))
+    with pytest.raises(modules.client.WorkspaceError):
+        sync.assert_no_legacy_pending()
+    service.database.list_outgoing_letters.return_value = [
+        {"status": "waiting_review", "dry_run_json": '{"workspace_letter_id":"test"}'},
+        {"status": "exat_sent", "dry_run_json": "{}"},
+    ]
+    sync.assert_no_legacy_pending()
+
+
+def test_bot_uses_real_private_actor_and_server_revision(modules, tmp_path):
+    api, telegram = Mock(), Mock()
+    telegram.send_message.return_value = {"ok": True}
+    state = modules.state.State(tmp_path / "state.sqlite")
+    bot = modules.shared_bot.SharedBot(telegram, api, state)
+    letter_id = uuid4()
+    letter = {
+        "id": str(letter_id),
+        "revision": 9,
+        "subject": "Test",
+        "status": "approved",
+        "recipientOrganization": "Partner",
+        "availableActions": [],
+        "canEdit": False,
+    }
+    api.request.return_value = letter
+    callback = {
+        "update_id": 1,
+        "callback_query": {
+            "id": "query",
+            "from": {"id": 123},
+            "message": {"chat": {"type": "group", "id": 456}},
+            "data": f"a:a:{letter_id.hex}:8",
+        },
+    }
+    bot.handle(callback)
+    api.request.assert_not_called()
+    callback["callback_query"]["message"]["chat"] = {"type": "private", "id": 123}
+    bot.handle(callback)
+    action_call = api.request.call_args_list[0]
+    assert action_call.kwargs["telegram_id"] == "123"
+    assert action_call.args[1]["expectedRevision"] == 8
+    assert action_call.args[1]["action"] == "approve"
+    # Old callback cannot approve locally when the server rejects it.
+    api.request.side_effect = modules.client.WorkspaceError("Stale revision", 409)
+    bot.handle(callback)
+    assert "Stale revision" in telegram.send_message.call_args.args[1]

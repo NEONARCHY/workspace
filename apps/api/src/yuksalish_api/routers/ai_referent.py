@@ -97,14 +97,18 @@ async def get_reviewer_choices(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> ReviewerConfigurationResponse:
     result = await read_configuration(connection)
-    result.reviewers = [item.model_copy(update={"telegram_id": None})
-                        for item in result.reviewers if item.can_approve]
+    result.reviewers = [
+        item.model_copy(update={"telegram_id": None})
+        for item in result.reviewers
+        if item.can_approve
+    ]
     result.runtimes = []
     return result
 
 
 @router.get(
-    "/agent/configuration", response_model=ReviewerConfigurationResponse,
+    "/agent/configuration",
+    response_model=ReviewerConfigurationResponse,
     dependencies=[Depends(require_agent_token)],
 )
 async def get_agent_configuration(
@@ -114,7 +118,9 @@ async def get_agent_configuration(
 
 
 @router.post(
-    "/agent/configuration:ack", status_code=204, dependencies=[Depends(require_agent_token)],
+    "/agent/configuration:ack",
+    status_code=204,
+    dependencies=[Depends(require_agent_token)],
 )
 async def post_configuration_ack(
     payload: ReviewerRuntimeAcknowledgement,
@@ -148,9 +154,7 @@ async def put_incoming_journal(
         str,
         Query(alias="agentId", min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.-]+$"),
     ],
-    agent_name: Annotated[
-        str, Query(alias="agentName", min_length=1, max_length=200)
-    ],
+    agent_name: Annotated[str, Query(alias="agentName", min_length=1, max_length=200)],
     file_name: Annotated[
         str, Query(alias="fileName", min_length=1, max_length=255)
     ] = "register.xlsx",
@@ -216,8 +220,19 @@ async def get_incoming_letters(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
     query: Annotated[str, Query(max_length=200)] = "",
     status: Annotated[str | None, Query(max_length=64)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 100,
+    category: Annotated[str, Query(pattern="^(all|registered|attention|attachments)$")] = "all",
 ) -> AIReferentIncomingRegistryResponse:
-    return await load_incoming_letters(connection, current_user, query=query, status=status)
+    return await load_incoming_letters(
+        connection,
+        current_user,
+        query=query,
+        status=status,
+        offset=offset,
+        limit=limit,
+        category=category,
+    )
 
 
 @router.get("/journal/latest")
@@ -250,8 +265,12 @@ async def get_letters(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
     query: Annotated[str, Query(max_length=200)] = "",
     status: AIReferentStatus | None = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> AIReferentRegistryResponse:
-    return await load_letters(connection, current_user, query=query, status=status)
+    return await load_letters(
+        connection, current_user, query=query, status=status, offset=offset, limit=limit
+    )
 
 
 @router.get("/letters/{letter_id}", response_model=AIReferentLetterResponse)
@@ -299,6 +318,7 @@ async def patch_letter(
         {"type": "ai_referent.updated", "entityId": result.id}
     )
     return result
+
 
 @router.post("/letters/{letter_id}/actions", response_model=AIReferentLetterResponse)
 async def post_letter_action(

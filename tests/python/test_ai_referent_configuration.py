@@ -385,7 +385,9 @@ def test_installer_is_dry_by_default_backed_up_and_idempotent(tmp_path, monkeypa
             "        pass\n"
             "    def create_from_draft(self, request: OutgoingCreateRequest) -> dict[str, Any]:\n"
             "        pass\n"
-            "    def approve(self):\n"
+            "    def handle_review(self):\n        pass\n"
+            "    def confirm_manual_send(self):\n        pass\n"
+            "    def approve_review_request(self):\n"
             "        defer_send = bool(self.outgoing_settings.get("
             '"bobur_final_send_confirmation", False)) and (\n'
             '            str(row["reviewer_telegram_id"] or "").strip() '
@@ -397,7 +399,8 @@ def test_installer_is_dry_by_default_backed_up_and_idempotent(tmp_path, monkeypa
             "    def _is_allowed_actor(self, from_user: dict[str, Any] | None, "
             'chat_id: str = "") -> bool:\n'
             "        return False\n"
-            "    def poll(self):\n        last_exat_reconcile_check = 0.0\n        while True:\n"
+            "    def run_polling(self, max_updates=None, stop_after_idle_seconds=None):\n"
+            "        last_exat_reconcile_check = 0.0\n        while True:\n"
             "            for update in updates:\n                pass\n"
             "def _is_bobur_reviewer_entry(entry: dict[str, Any] | None) -> bool:\n    return True\n"
             "def _is_preliminary_reviewer_entry(entry: dict[str, Any] | None) -> bool:\n"
@@ -409,7 +412,7 @@ def test_installer_is_dry_by_default_backed_up_and_idempotent(tmp_path, monkeypa
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     preview = installer.install(tmp_path)
-    assert len(preview["changedFiles"]) == 7
+    assert len(preview["changedFiles"]) == 3 + len(list(installer.PACKAGE.glob("*.py")))
     assert not (tmp_path / "src/workspace_integration").exists()
     result = installer.install(tmp_path, apply=True)
     backup = Path(result["backup"])

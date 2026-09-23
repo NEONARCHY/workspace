@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AIReferentView } from "./AIReferentView";
 import { workspaceTheme } from "./workspace-theme";
-import { loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers } from "./workspace-api";
+import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -12,6 +12,9 @@ vi.mock("./workspace-api", () => ({
   downloadAIReferentJournal: vi.fn(),
   downloadWorkspaceAttachment: vi.fn(),
   loadAIReferentRegistry: vi.fn(),
+  loadAIReferentLetter: vi.fn(),
+  loadAIReferentPacket: vi.fn(),
+  downloadAIReferentPacket: vi.fn(),
   loadAIReferentReviewers: vi.fn(),
   loadAIReferentIncomingRegistry: vi.fn(),
   updateAIReferentLetter: vi.fn(),
@@ -86,11 +89,47 @@ const incomingRegistry = {
 };
 
 describe("AIReferentView", () => {
+  afterEach(cleanup);
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
     vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue(incomingRegistry);
+    const firstLetter = registry.letters[0];
+    if (!firstLetter) throw new Error("Missing letter fixture");
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(firstLetter);
     vi.mocked(loadAIReferentReviewers).mockResolvedValue({ revision: 2, updatedAt: "2026-09-22T10:00:00Z",
       reviewers: [], runtimes: [] });
+  });
+
+  it("opens a notification target and requires a reason before returning a letter", async () => {
+    vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Письмо уже изменилось"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    const comment = await screen.findByLabelText("Комментарий к решению");
+    // JSDOM has no layout for Tabster's initial focus search; model the user's focus.
+    comment.focus();
+    const action = await screen.findByRole("button", { name: "Вернуть на доработку" });
+    expect(action).toBeDisabled();
+    fireEvent.change(comment, { target: { value: "Уточните адрес" } });
+    fireEvent.click(action);
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ id: "letter-1", revision: 2 }), "return_for_revision", "Уточните адрес", expect.any(String)));
+    expect(await screen.findAllByText("Письмо уже изменилось")).not.toHaveLength(0);
+    expect(comment).toHaveValue("Уточните адрес");
+  });
+
+  it("opens the incoming packet and offers retry without pretending files exist", async () => {
+    vi.mocked(loadAIReferentPacket).mockRejectedValueOnce(new Error("Хранилище недоступно"))
+      .mockResolvedValue({ files: [] });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    const opener = await screen.findByRole("button", { name: "Пакет документов" });
+    opener.focus();
+    fireEvent.click(opener);
+    (await screen.findByLabelText("Закрыть пакет")).focus();
+    expect(await screen.findByText("Хранилище недоступно")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Скачать пакет ZIP" })).toBeDisabled();
+    const packet = await screen.findByRole("dialog", { name: "Пакет документов" });
+    fireEvent.click(await within(packet).findByRole("button", { name: "Обновить" }));
+    expect(await screen.findByText("Робот ещё не передал файлы этого письма.")).toBeInTheDocument();
+    expect(loadAIReferentPacket).toHaveBeenLastCalledWith("token", "incoming", "incoming-1");
   });
 
   it("shows incoming letters from the robot and keeps the outgoing register available", async () => {
