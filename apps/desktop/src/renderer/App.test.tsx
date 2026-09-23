@@ -1468,7 +1468,7 @@ describe("corporate workspace authentication alpha", () => {
         expect.objectContaining({ method: "DELETE" }),
       );
     });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryAllByRole("dialog")).toHaveLength(0));
   });
 
   it("creates a subtask and runs result review with a motivated return", async () => {
