@@ -1,0 +1,49 @@
+.workday-control { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.workday-control .fui-Button { white-space: nowrap; border-radius: 12px; font-size: 13px; }
+.workday-control-away { display: inline-flex; align-items: center; gap: 6px; color: var(--ws-muted); font-size: 12px; }
+.workday-control-error { border: 0; background: transparent; color: #a03d50; font: inherit; font-size: 12px; cursor: pointer; }
+
+.team-presence-panel { min-width: 0; padding: 22px 24px 12px; border: 1px solid var(--ws-line); border-radius: 24px; background: var(--ws-surface); box-shadow: var(--ws-shadow-card); }
+.team-presence-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }
+.team-presence-intro > span { color: var(--ws-link); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.team-presence-intro h3 { margin: 3px 0; color: var(--ws-navy); font-size: 22px; line-height: 1.25; }
+.team-presence-intro p { margin: 0; color: var(--ws-muted); font-size: 13px; }
+.team-presence-count { display: flex; align-items: center; gap: 8px; min-width: max-content; padding: 10px 16px; border-radius: 18px; background: var(--ws-selected); color: var(--ws-navy); }
+.team-presence-count strong { font-size: 27px; font-variant-numeric: tabular-nums; }
+.team-presence-count span { max-width: 74px; font-size: 12px; line-height: 1.2; }
+.team-presence-toolbar { display: flex; align-items: center; gap: 6px; margin-top: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--ws-line); }
+.team-presence-toolbar > button:not(.fui-Button) { padding: 7px 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ws-muted); font: inherit; cursor: pointer; }
+.team-presence-toolbar > button.active { border-color: var(--ws-line); background: var(--ws-muted-surface); color: var(--ws-navy); font-weight: 600; }
+.team-presence-toolbar small { margin-left: auto; color: var(--ws-muted); font-variant-numeric: tabular-nums; }
+.team-presence-people { max-height: 330px; overflow: auto; }
+.team-presence-person { display: grid; grid-template-columns: 36px minmax(145px, 1.7fr) minmax(125px, 1fr) minmax(120px, .8fr) minmax(105px, .8fr) auto; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--ws-line); }
+.team-presence-person:last-child { border-bottom: 0; }
+.team-presence-person-name { display: grid; min-width: 0; }
+.team-presence-person-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.team-presence-person-name small, .team-presence-times, .team-presence-schedule { color: var(--ws-muted); font-size: 12px; }
+.team-presence-schedule { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.team-presence-status { width: fit-content; padding: 5px 8px; border-radius: 9px; color: var(--ws-muted); background: var(--ws-muted-surface); font-size: 12px; font-weight: 600; }
+.team-presence-status.is-working { color: #276a52; background: #e7f5ee; }
+.team-presence-status.is-approved_absence { color: #705a1a; background: #fff3d8; }
+.team-presence-weekend { grid-column: 2 / -1; color: var(--ws-link); }
+.team-presence-empty { margin: 0; padding: 24px 4px; color: var(--ws-muted); }
+.team-presence-error { margin: 12px 0; color: #9b3048; font-size: 13px; }
+.workday-schedule-dialog .fui-DialogContent p { color: var(--ws-muted); }
+.workday-schedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
+
+@media (max-width: 1150px) {
+  .team-presence-person { grid-template-columns: 36px minmax(130px, 1.5fr) minmax(120px, 1fr) minmax(90px, .7fr) auto; }
+  .team-presence-schedule { grid-column: 2 / 4; }
+  .team-presence-weekend { grid-column: 4 / -1; }
+}
+@media (max-width: 800px) {
+  .workday-control .fui-Button { padding-inline: 8px; }
+  .team-presence-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .team-presence-person { grid-template-columns: 36px minmax(0, 1fr) auto; }
+  .team-presence-status, .team-presence-times, .team-presence-schedule { grid-column: 2 / -1; }
+  .team-presence-person .fui-Button { grid-column: 3; grid-row: 1; }
+  .team-presence-weekend { grid-column: 2 / -1; }
+}
+@media (forced-colors: active) {
+  .team-presence-status, .team-presence-count { border: 1px solid CanvasText; }
+}

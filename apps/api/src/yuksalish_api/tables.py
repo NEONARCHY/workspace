@@ -73,6 +73,28 @@ users = sa.Table(
     sa.Column("avatar_updated_at", sa.DateTime(timezone=True)),
 )
 
+workday_schedules = sa.Table(
+    "workday_schedules", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("starts_at", sa.Time()),
+    sa.Column("ends_at", sa.Time()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+workday_sessions = sa.Table(
+    "workday_sessions", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("work_date", sa.Date()),
+    sa.Column("started_at", sa.DateTime(timezone=True)),
+    sa.Column("ended_at", sa.DateTime(timezone=True)),
+    sa.Column("scheduled_start_at", sa.DateTime(timezone=True)),
+    sa.Column("scheduled_end_at", sa.DateTime(timezone=True)),
+    sa.Column("closed_at", sa.DateTime(timezone=True)),
+    sa.Column("close_source", sa.String(16)),
+)
+
 update_releases = sa.Table(
     "workspace_update_releases", metadata,
     sa.Column("version", sa.String(32), primary_key=True),

@@ -65,6 +65,9 @@ import type {
   WorkspaceProject,
   WorkspaceNotification,
   WorkspaceRole,
+  WorkdayMe,
+  WorkdaySchedule,
+  WorkdayTeam,
   ManagedEmployeeStatus,
   MembersRegistry,
   HrOverview,
@@ -1054,6 +1057,34 @@ export function loadWorkspaceEfficiency(
 ): Promise<EfficiencyOverview> {
   const suffix = period ? `?period=${encodeURIComponent(period)}` : "";
   return apiRequest<EfficiencyOverview>(`/efficiency${suffix}`, {}, token);
+}
+
+export function loadMyWorkday(token: string): Promise<WorkdayMe> {
+  return apiRequest<WorkdayMe>("/workday/me", {}, token);
+}
+
+export function startMyWorkday(token: string): Promise<WorkdayMe> {
+  return apiRequest<WorkdayMe>("/workday/start", { method: "POST" }, token);
+}
+
+export function finishMyWorkday(token: string): Promise<WorkdayMe> {
+  return apiRequest<WorkdayMe>("/workday/finish", { method: "POST" }, token);
+}
+
+export function loadTeamWorkday(token: string): Promise<WorkdayTeam> {
+  return apiRequest<WorkdayTeam>("/workday/team", {}, token);
+}
+
+export function saveWorkdaySchedule(
+  token: string,
+  userId: string,
+  startsAt: string,
+  endsAt: string,
+): Promise<WorkdaySchedule> {
+  return apiRequest<WorkdaySchedule>(`/workday/schedules/${encodeURIComponent(userId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ startsAt, endsAt }),
+  }, token);
 }
 
 export function returnWorkspaceTaskForRevision(
