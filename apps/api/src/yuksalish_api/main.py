@@ -10,6 +10,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
 from .absence_service import materialize_sick_document_notifications
+from .ai_referent_agent_service import expire_jobs
 from .database import create_database_engine
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
@@ -20,6 +21,7 @@ from .repository import materialize_due_notifications
 from .routers import (
     administration,
     ai_referent,
+    ai_referent_shared,
     authentication,
     directory,
     health,
@@ -72,6 +74,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_sick_document_notifications(connection)
                         created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
+                    async with engine.begin() as connection:
+                        created += await expire_jobs(connection)
                     if runtime_settings.zoom_configured:
                         # Bookings a crash or a Zoom outage left half-finished.
                         await recover_zoom_meetings(engine, zoom_client)
@@ -142,6 +146,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     application.include_router(administration.router, prefix=runtime_settings.api_prefix)
     application.include_router(ai_referent.router, prefix=runtime_settings.api_prefix)
+    application.include_router(ai_referent_shared.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     application.include_router(zoom.router, prefix=runtime_settings.api_prefix)

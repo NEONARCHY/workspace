@@ -110,16 +110,20 @@ async def sync_incoming_letters(
     existing = {}
     if external_ids:
         rows = (
-            await connection.execute(
-                select(
-                    ai_referent_incoming_letters.c.external_id,
-                    ai_referent_incoming_letters.c.payload_sha256,
-                ).where(
-                    ai_referent_incoming_letters.c.agent_id == payload.agent_id,
-                    ai_referent_incoming_letters.c.external_id.in_(external_ids),
+            (
+                await connection.execute(
+                    select(
+                        ai_referent_incoming_letters.c.external_id,
+                        ai_referent_incoming_letters.c.payload_sha256,
+                    ).where(
+                        ai_referent_incoming_letters.c.agent_id == payload.agent_id,
+                        ai_referent_incoming_letters.c.external_id.in_(external_ids),
+                    )
                 )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
         existing = {str(row["external_id"]): str(row["payload_sha256"]) for row in rows}
 
     created_count = 0
@@ -140,9 +144,7 @@ async def sync_incoming_letters(
             **values,
         )
         update_values = {
-            key: value
-            for key, value in values.items()
-            if key not in {"agent_id", "external_id"}
+            key: value for key, value in values.items() if key not in {"agent_id", "external_id"}
         }
         update_values["revision"] = ai_referent_incoming_letters.c.revision + 1
         await connection.execute(
@@ -209,6 +211,9 @@ async def load_incoming_letters(
     *,
     query: str = "",
     status: str | None = None,
+    offset: int = 0,
+    limit: int = 100,
+    category: str = "all",
 ) -> AIReferentIncomingRegistryResponse:
     await ensure_module_action(connection, current_user, "ai_referent", "view")
     responsible = users.alias("ai_incoming_responsible")
@@ -225,6 +230,17 @@ async def load_incoming_letters(
     conditions = []
     if status:
         conditions.append(ai_referent_incoming_letters.c.status == status)
+    if category == "registered":
+        conditions.append(ai_referent_incoming_letters.c.status.in_(_REGISTERED_STATUSES))
+    elif category == "attention":
+        conditions.append(
+            or_(
+                ai_referent_incoming_letters.c.status.in_(_ATTENTION_STATUSES),
+                ai_referent_incoming_letters.c.error_message != "",
+            )
+        )
+    elif category == "attachments":
+        conditions.append(ai_referent_incoming_letters.c.has_attachments.is_(True))
     cleaned = query.strip()
     if cleaned:
         pattern = f"%{cleaned}%"
@@ -242,21 +258,32 @@ async def load_incoming_letters(
     if conditions:
         statement = statement.where(*conditions)
     rows = (
-        await connection.execute(
-            statement.order_by(
-                ai_referent_incoming_letters.c.received_at.desc().nulls_last(),
-                ai_referent_incoming_letters.c.updated_at.desc(),
-            ).limit(500)
+        (
+            await connection.execute(
+                statement.order_by(
+                    ai_referent_incoming_letters.c.received_at.desc().nulls_last(),
+                    ai_referent_incoming_letters.c.updated_at.desc(),
+                    ai_referent_incoming_letters.c.id,
+                )
+                .offset(offset)
+                .limit(limit)
+            )
         )
-    ).mappings().all()
+        .mappings()
+        .all()
+    )
     agent = (
-        await connection.execute(
-            select(ai_referent_agents)
-            .where(ai_referent_agents.c.journal_storage_key.is_not(None))
-            .order_by(ai_referent_agents.c.journal_updated_at.desc().nulls_last())
-            .limit(1)
+        (
+            await connection.execute(
+                select(ai_referent_agents)
+                .where(ai_referent_agents.c.journal_storage_key.is_not(None))
+                .order_by(ai_referent_agents.c.journal_updated_at.desc().nulls_last())
+                .limit(1)
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     latest_seen = await connection.scalar(
         select(ai_referent_agents.c.last_seen_at)
         .order_by(ai_referent_agents.c.last_seen_at.desc())
@@ -264,18 +291,20 @@ async def load_incoming_letters(
     )
     counts_statement = select(
         func.count().label("total_count"),
-        func.count().filter(
-            ai_referent_incoming_letters.c.status.in_(_REGISTERED_STATUSES)
-        ).label("registered_count"),
-        func.count().filter(
+        func.count()
+        .filter(ai_referent_incoming_letters.c.status.in_(_REGISTERED_STATUSES))
+        .label("registered_count"),
+        func.count()
+        .filter(
             or_(
                 ai_referent_incoming_letters.c.status.in_(_ATTENTION_STATUSES),
                 ai_referent_incoming_letters.c.error_message != "",
             )
-        ).label("attention_count"),
-        func.count().filter(ai_referent_incoming_letters.c.has_attachments.is_(True)).label(
-            "with_attachments_count"
-        ),
+        )
+        .label("attention_count"),
+        func.count()
+        .filter(ai_referent_incoming_letters.c.has_attachments.is_(True))
+        .label("with_attachments_count"),
     )
     if conditions:
         counts_statement = counts_statement.where(*conditions)
@@ -349,13 +378,17 @@ async def latest_journal(
 ) -> RowMapping:
     await ensure_module_action(connection, current_user, "ai_referent", "view")
     row = (
-        await connection.execute(
-            select(ai_referent_agents)
-            .where(ai_referent_agents.c.journal_storage_key.is_not(None))
-            .order_by(ai_referent_agents.c.journal_updated_at.desc().nulls_last())
-            .limit(1)
+        (
+            await connection.execute(
+                select(ai_referent_agents)
+                .where(ai_referent_agents.c.journal_storage_key.is_not(None))
+                .order_by(ai_referent_agents.c.journal_updated_at.desc().nulls_last())
+                .limit(1)
+            )
         )
-    ).mappings().one_or_none()
+        .mappings()
+        .one_or_none()
+    )
     if row is None:
         raise LookupError("Excel-журнал ещё не синхронизирован.")
     return row
