@@ -51,6 +51,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
 
     settings = zoom_settings(database_url)
     settings.seed_demo_data = True
+    settings.ai_referent_agent_token = SecretStr("test-referent-agent-token")
     app = create_app(settings)
     async with (
         app.router.lifespan_context(app),
@@ -75,16 +76,31 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         reviewer = headers("aziza")
         another_manager = headers("baxtiyor")
         administrator = headers("malika")
-        configuration = (await client.get(
-            "/api/v1/ai-referent/configuration", headers=administrator,
-        )).json()
+        ready = await client.post(
+            "/api/v1/ai-referent/agent/ready?agentId=referent-test",
+            headers={"X-AI-Referent-Agent-Token": "test-referent-agent-token"},
+        )
+        assert ready.status_code == 204, ready.text
+        configuration = (
+            await client.get(
+                "/api/v1/ai-referent/configuration",
+                headers=administrator,
+            )
+        ).json()
         configured = await client.put(
-            "/api/v1/ai-referent/configuration", headers=administrator,
-            json={"expectedRevision": configuration["revision"], "reviewers": [
-                {"key": key, "username": "aziza" if key == "askar" else "",
-                 "enabled": key == "askar"}
-                for key in ("askar", "bobur", "umid", "davronbek")
-            ]},
+            "/api/v1/ai-referent/configuration",
+            headers=administrator,
+            json={
+                "expectedRevision": configuration["revision"],
+                "reviewers": [
+                    {
+                        "key": key,
+                        "username": "aziza" if key == "askar" else "",
+                        "enabled": key == "askar",
+                    }
+                    for key in ("askar", "bobur", "umid", "davronbek")
+                ],
+            },
         )
         assert configured.status_code == 200, configured.text
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=author)
@@ -110,15 +126,18 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
 
         uploaded = await client.put(
             f"/api/v1/attachments/ai_referent_letter/{letter['id']}",
-            headers={**author, "Content-Type": "application/pdf"},
-            params={"fileName": "letter.pdf", "documentRole": "primary"},
-            content=b"%PDF-1.4 outgoing letter",
+            headers={
+                **author,
+                "Content-Type": (
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                ),
+            },
+            params={"fileName": "letter.docx", "documentRole": "primary"},
+            content=b"PK outgoing letter test fixture",
         )
         assert uploaded.status_code == 201, uploaded.text
 
-        current = await client.get(
-            f"/api/v1/ai-referent/letters/{letter['id']}", headers=author
-        )
+        current = await client.get(f"/api/v1/ai-referent/letters/{letter['id']}", headers=author)
         letter = current.json()
         submitted = await client.post(
             f"/api/v1/ai-referent/letters/{letter['id']}/actions",
@@ -272,10 +291,16 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         second_upload = await client.put(
             f"/api/v1/attachments/ai_referent_letter/{editable_letter['id']}",
             headers={**author, "Content-Type": "application/pdf"},
-            params={"fileName": "revised-letter.pdf", "documentRole": "primary"},
+            params={"fileName": "revised-letter.docx", "documentRole": "primary"},
             content=b"%PDF-1.4 revised outgoing letter",
         )
         assert second_upload.status_code == 201, second_upload.text
+        editable_letter = (
+            await client.get(
+                f"/api/v1/ai-referent/letters/{editable_letter['id']}",
+                headers=author,
+            )
+        ).json()
 
         second_submit = await client.post(
             f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
@@ -503,9 +528,7 @@ async def test_ai_referent_agent_syncs_incoming_registry_and_excel_journal() -> 
         await auth_engine.dispose()
         assert administrator is not None
         access_token = issue_access_token(administrator["id"], settings.auth_signing_key)
-        admin_headers = {
-            "Authorization": f"Bearer {access_token}"
-        }
+        admin_headers = {"Authorization": f"Bearer {access_token}"}
         sync_payload = {
             "agentId": "referent-pc",
             "agentName": "ПК референта",
@@ -599,8 +622,6 @@ async def test_ai_referent_agent_syncs_incoming_registry_and_excel_journal() -> 
         assert payload["letters"][0]["responsibleUserId"] is None
         assert payload["journal"]["fileName"] == "register.xlsx"
 
-        downloaded = await client.get(
-            "/api/v1/ai-referent/journal/latest", headers=admin_headers
-        )
+        downloaded = await client.get("/api/v1/ai-referent/journal/latest", headers=admin_headers)
         assert downloaded.status_code == 200
         assert downloaded.content == journal_content

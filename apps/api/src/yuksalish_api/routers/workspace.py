@@ -1349,6 +1349,8 @@ async def put_attachment(
         if len(content) > duration_limit:
             raise HTTPException(status_code=413, detail="Запись имеет слишком высокий битрейт")
     storage_key = f"{owner_type}/{owner_id}/{uuid4()}"
+    if owner_type == "ai_referent_letter":
+        storage_key = f"{owner_type}/{owner_id}/{hashlib.sha256(content).hexdigest()}"
     storage = _object_storage(request)
     try:
         await storage.put(storage_key, bytes(content), content_type)
@@ -1368,7 +1370,9 @@ async def put_attachment(
             media_codec=media_codec,
         )
     except WorkspaceRepositoryError as error:
-        await storage.delete(storage_key)
+        # Content-addressed AI Referent objects may already back a previous upload.
+        if owner_type != "ai_referent_letter":
+            await storage.delete(storage_key)
         raise _translate(error) from error
     except ObjectStorageError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error

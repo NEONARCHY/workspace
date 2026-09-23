@@ -1779,6 +1779,7 @@ async def _sync_notifications_for_user(
         for item in unresolved_rows
         if item["event_key"] not in active_attention_keys
         and not item["event_key"].startswith("hr:")
+        and not item["event_key"].startswith("ai-letter:")
     ]
     if stale_ids:
         await connection.execute(
@@ -1787,6 +1788,18 @@ async def _sync_notifications_for_user(
             .values(resolved_at=now)
         )
 
+    referent_rights = (await module_permissions_for_user(connection, current_user)).get(
+        "ai_referent", {}
+    )
+    referent_letters = select(ai_referent_letters.c.id)
+    if not referent_rights.get("admin"):
+        referent_letters = referent_letters.where(or_(
+            ai_referent_letters.c.created_by_user_id == current_user.id,
+            ai_referent_letters.c.reviewer_user_id == current_user.id,
+            ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+            ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
+            ai_referent_letters.c.status == "sent",
+        ))
     rows = (
         (
             await connection.execute(
@@ -1825,6 +1838,8 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "calendar",
                         workspace_notifications.c.section == "absences",
                         workspace_notifications.c.section == "hr",
+                        and_(workspace_notifications.c.section == "ai_referent",
+                             workspace_notifications.c.entity_id.in_(referent_letters)),
                     ),
                 )
                 .order_by(workspace_notifications.c.occurred_at.desc())
@@ -5562,10 +5577,13 @@ async def validate_attachment_owner(
         return
 
     if owner_type == "ai_referent_letter":
+        query = select(ai_referent_letters).where(ai_referent_letters.c.id == owner_id)
+        if write:
+            query = query.with_for_update()
         letter = (
             (
                 await connection.execute(
-                    select(ai_referent_letters).where(ai_referent_letters.c.id == owner_id)
+                    query
                 )
             )
             .mappings()
@@ -5581,6 +5599,9 @@ async def validate_attachment_owner(
                 or letter["status"] == "sent"
                 or letter["created_by_user_id"] == current_user.id
                 or letter["reviewer_user_id"] == current_user.id
+                or letter.get("final_reviewer_user_id") == current_user.id
+                or letter.get("initial_reviewer_user_id") == current_user.id
+                or module_access.get("ai_referent", {}).get("admin", False)
             )
         )
         writable = (
@@ -5647,6 +5668,16 @@ async def create_attachment(
     media_codec: str | None = None,
 ) -> AttachmentResponse:
     await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
+    if owner_type == "ai_referent_letter":
+        existing = (await connection.execute(select(attachments).where(
+            attachments.c.owner_type == owner_type,
+            attachments.c.owner_id == owner_id,
+            attachments.c.sha256 == sha256,
+            attachments.c.file_name == file_name,
+            attachments.c.document_role == document_role,
+        ))).mappings().first()
+        if existing is not None:
+            return _attachment(existing)
     now = datetime.now(UTC)
     values = {
         "id": uuid4(),
@@ -5665,6 +5696,10 @@ async def create_attachment(
         "created_at": now,
     }
     await connection.execute(insert(attachments).values(**values))
+    if owner_type == "ai_referent_letter":
+        await connection.execute(update(ai_referent_letters).where(
+            ai_referent_letters.c.id == owner_id,
+        ).values(revision=ai_referent_letters.c.revision + 1, updated_at=now))
     if owner_type == "approval_request":
         request_row = (
             (

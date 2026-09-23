@@ -831,6 +831,11 @@ ai_referent_letters = sa.Table(
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("reviewer_user_id", uuid_type),
     sa.Column("reviewer_key", sa.String(32)),
+    sa.Column("final_reviewer_user_id", uuid_type),
+    sa.Column("final_reviewer_key", sa.String(32)),
+    sa.Column("initial_reviewer_user_id", uuid_type),
+    sa.Column("initial_reviewer_key", sa.String(32)),
+    sa.Column("delivery_error", sa.Text()),
     sa.Column("legacy_id", sa.String(128)),
     sa.Column("revision", sa.Integer()),
     sa.Column("sent_at", sa.DateTime(timezone=True)),
@@ -868,6 +873,9 @@ ai_referent_delivery_commands = sa.Table(
     sa.Column("route", sa.String(16)),
     sa.Column("status", sa.String(24)),
     sa.Column("idempotency_key", sa.String(160)),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("lease_token", uuid_type),
+    sa.Column("result", postgresql.JSONB()),
     sa.Column("claimed_by", sa.String(160)),
     sa.Column("lease_until", sa.DateTime(timezone=True)),
     sa.Column("attempt_count", sa.Integer()),
@@ -935,6 +943,7 @@ ai_referent_configuration = sa.Table(
     "ai_referent_configuration", metadata,
     sa.Column("id", sa.Integer(), primary_key=True),
     sa.Column("revision", sa.Integer()),
+    sa.Column("execution_agent_id", sa.String(128)),
     sa.Column("updated_by_user_id", uuid_type),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
@@ -947,4 +956,59 @@ ai_referent_reviewers = sa.Table(
     sa.Column("user_id", uuid_type),
     sa.Column("telegram_id", sa.String(20)),
     sa.Column("enabled", sa.Boolean()),
+)
+
+ai_referent_telegram_links = sa.Table(
+    "ai_referent_telegram_links", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("telegram_id", sa.String(20)),
+    sa.Column("code_hash", sa.String(64)),
+    sa.Column("code_expires_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_operations = sa.Table(
+    "ai_referent_operations", metadata,
+    sa.Column("operation_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("fingerprint", sa.String(64)),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_telegram_outbox = sa.Table(
+    "ai_referent_telegram_outbox", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("event_key", sa.String(160)),
+    sa.Column("text", sa.Text()),
+    sa.Column("lease_token", uuid_type),
+    sa.Column("lease_until", sa.DateTime(timezone=True)),
+    sa.Column("delivered_at", sa.DateTime(timezone=True)),
+    sa.Column("attempt_count", sa.Integer()),
+    sa.Column("last_error", sa.String(500)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_archive = sa.Table(
+    "ai_referent_archive", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128)),
+    sa.Column("external_id", sa.String(160)),
+    sa.Column("payload", postgresql.JSONB()),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_files = sa.Table(
+    "ai_referent_files", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("owner_id", uuid_type),
+    sa.Column("relative_path", sa.String(500)),
+    sa.Column("storage_key", sa.String(600)),
+    sa.Column("sha256", sa.String(64)),
+    sa.Column("byte_size", sa.BigInteger()),
+    sa.Column("content_type", sa.String(160)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )

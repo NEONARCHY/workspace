@@ -182,6 +182,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return module_key, "admin"
     if normalized.endswith("/actions"):
         return module_key, "view"
+    if normalized == "/ai-referent/telegram-link":
+        return module_key, "view"
     if module_key == "tasks" and normalized.endswith(
         ("/accept-result", "/return-for-revision")
     ):

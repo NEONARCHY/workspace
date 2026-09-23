@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001
 """Install the versioned Workspace reviewer adapter into an existing Exat source tree.
 
 Dry-run by default. No process, bot, database, container or server is started.
@@ -7,6 +8,7 @@ Unknown source anchors fail before any file is written. Original sources are bac
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import shutil
@@ -15,6 +17,87 @@ from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[1] / "integrations/exat/workspace_integration"
 MARKER = "# workspace-reviewers-v1"
+SHARED_MARKER = "# workspace-shared-v2"
+
+
+def patch_shared(relative: str, source: str) -> str:
+    if SHARED_MARKER in source or relative == "src/gui.py":
+        return source
+    tree = ast.parse(source)
+    lines = source.splitlines(keepends=True)
+    additions: list[tuple[int, str]] = []
+    if relative == "src/outgoing/telegram_bot.py":
+        methods = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "run_polling"
+        ]
+        if len(methods) != 1:
+            raise ValueError("Не найдена единственная точка запуска бота Exat.")
+        additions.append(
+            (
+                methods[0].body[0].lineno - 1,
+                f"        {SHARED_MARKER}\n"
+                "        from src.workspace_integration.shared_bot import enabled, run_shared\n"
+                "        if enabled():\n"
+                "            return run_shared(self, max_updates=max_updates,\n"
+                "                              stop_after_idle_seconds=stop_after_idle_seconds)\n",
+            )
+        )
+    elif relative == "src/outgoing/service.py":
+        protected = {
+            "create_review_request",
+            "create_from_draft",
+            "replace_review_request_draft",
+            "request_review_comment",
+            "submit_review_comment",
+            "reject_review_request",
+            "cancel_review_request_by_sender",
+            "approve_review_request",
+            "release_final_approval",
+            "confirm_manual_send_for_review_request",
+            "confirm_manual_send",
+            "handle_review",
+            "retry_outgoing_send",
+            "mark_review_request_manually_sent",
+            "mark_outgoing_manually_sent",
+            "retry_review_request_send",
+            "force_delete_review_request",
+            "renumber_prepared_letter",
+            "queue_review_request",
+            "queue_referent_manual_send",
+            "activate_next_queued_review_request",
+            "clear_stuck_queue_state",
+            "verify_prepared_exat_send",
+            "reconcile_prepared_exat_sends",
+            "reject_prepared_send_for_review_request",
+            "cleanup_returned_draft",
+            "prepare_exat_compose",
+            "mark_edo_delivered",
+            "mark_edo_delivery_failed",
+        }
+        found = {
+            node.name: node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name in protected
+        }
+        if not {"handle_review", "confirm_manual_send", "approve_review_request"} <= found.keys():
+            raise ValueError("Неизвестная версия жизненного цикла Exat.")
+        for node in found.values():
+            additions.append(
+                (
+                    node.body[0].lineno - 1,
+                    f"        {SHARED_MARKER}\n"
+                    "        from src.workspace_integration.authority import (\n"
+                    "            guard_legacy_mutation)\n"
+                    "        guard_legacy_mutation()\n",
+                )
+            )
+    for index, value in sorted(additions, reverse=True):
+        lines.insert(index, value)
+    result = "".join(lines)
+    compile(result, relative, "exec")
+    return result
 
 
 def replace_once(source: str, old: str, new: str) -> str:
@@ -146,7 +229,7 @@ def install(root: Path, *, apply: bool = False) -> dict[str, object]:
             raise ValueError("Путь исходников выходит за пределы Exat.")
         original = path.read_bytes()
         source = original.decode("utf-8-sig").replace("\r\n", "\n")
-        patched = patch_source(relative, source)
+        patched = patch_shared(relative, patch_source(relative, source))
         if patched != source:
             planned[path] = patched.replace("\n", "\r\n" if b"\r\n" in original else "\n").encode(
                 "utf-8"
