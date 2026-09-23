@@ -102,6 +102,16 @@ describe("Private messenger", () => {
     expect(onOpenContext).toHaveBeenCalledWith("project", "project-1");
   });
 
+  it("offers a labelled calendar action in the chat header", () => {
+    const onCreateCalendarEventFromChat = vi.fn();
+    renderMessenger({ onCreateCalendarEventFromChat });
+
+    fireEvent.click(screen.getByRole("button", { name: "Мероприятие" }));
+
+    expect(onCreateCalendarEventFromChat).toHaveBeenCalledWith(initialChats[0]);
+    expect(screen.getByRole("button", { name: "Создать мероприятие из чата" })).toBeVisible();
+  });
+
   it("exposes chat deletion in the row menu and delays it for undo", async () => {
     vi.useFakeTimers();
     const chatActions = actions();
