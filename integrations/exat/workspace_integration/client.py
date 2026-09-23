@@ -40,6 +40,9 @@ def connection_settings() -> dict[str, str]:
         "agent_id": os.environ.get(
             "YUKSALISH_AI_REFERENT_AGENT_ID", data.get("agent_id", "referent-pc")
         ),
+        "shared_workflow": os.environ.get(
+            "YUKSALISH_AI_REFERENT_SHARED_WORKFLOW", data.get("shared_workflow", "false")
+        ),
     }
 
 
@@ -128,19 +131,52 @@ class WorkspaceClient:
         method: str = "GET",
         access_token: str | None = None,
         agent: bool = True,
+        telegram_id: str | None = None,
     ) -> dict[str, Any]:
-        headers = {"Content-Type": "application/json"}
+        content = self.transfer(
+            path,
+            json.dumps(payload).encode("utf-8") if payload is not None else None,
+            method=method,
+            access_token=access_token,
+            agent=agent,
+            telegram_id=telegram_id,
+            content_type="application/json",
+        )
+        return json.loads(content) if content else {}
+
+    def transfer(
+        self,
+        path: str,
+        body: bytes | None = None,
+        *,
+        method: str = "GET",
+        access_token: str | None = None,
+        agent: bool = True,
+        telegram_id: str | None = None,
+        content_type: str = "application/octet-stream",
+        max_bytes: int = 50 * 1024 * 1024,
+    ) -> bytes:
+        if not path.startswith("/") or path.startswith("//") or "\\" in path:
+            raise WorkspaceError("Недопустимый путь API.")
+        headers = {"Content-Type": content_type}
         if access_token:
             headers["Authorization"] = f"Bearer {access_token}"
         elif agent:
             headers["X-AI-Referent-Agent-Token"] = self.token
-        body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        if telegram_id:
+            headers["X-AI-Referent-Telegram-Id"] = telegram_id
         request = Request(self.api_url + path, data=body, method=method, headers=headers)
         try:
-            with self.opener.open(request, timeout=12) as response:
-                content = response.read()
-                return json.loads(content) if content else {}
+            with self.opener.open(request, timeout=40) as response:
+                content = response.read(max_bytes + 1)
+                if len(content) > max_bytes:
+                    raise WorkspaceError("Файл превышает допустимый размер.")
+                return content
         except HTTPError as exc:
+            try:
+                detail = json.loads(exc.read(8192)).get("detail")
+            except (ValueError, OSError):
+                detail = None
             messages = {
                 401: "Сеанс или ключ недействителен. Подключитесь заново.",
                 403: "Изменять согласующих может только администратор Workspace.",
@@ -148,7 +184,10 @@ class WorkspaceClient:
                 422: "Проверьте логины и числовые Telegram ID: значения должны быть уникальны.",
             }
             raise WorkspaceError(
-                messages.get(exc.code, f"Ошибка API: HTTP {exc.code}"), exc.code
+                detail
+                if isinstance(detail, str)
+                else messages.get(exc.code, f"Ошибка API: HTTP {exc.code}"),
+                exc.code,
             ) from None
         except (URLError, TimeoutError, OSError) as exc:
             raise WorkspaceError(

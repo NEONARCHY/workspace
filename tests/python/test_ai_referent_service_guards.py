@@ -108,7 +108,13 @@ async def test_configuration_read_applies_account_and_explicit_module_denials(mo
 async def test_configuration_save_changes_current_assignment_not_decision(monkeypatch):
     admin = actor("admin")
     next_user = uuid4()
-    pending = {"id": uuid4(), "revision": 4, "reviewer_user_id": uuid4(), "status": "approved"}
+    pending = {
+        "id": uuid4(),
+        "revision": 4,
+        "reviewer_key": "askar",
+        "reviewer_user_id": uuid4(),
+        "status": "approved",
+    }
     statements = []
 
     async def execute(statement):
@@ -120,7 +126,9 @@ async def test_configuration_save_changes_current_assignment_not_decision(monkey
             if table == "core_users":
                 return mapped({"id": next_user})
             if table == "ai_referent_letters":
-                key = statement.compile().params["reviewer_key_1"]
+                key = statement.compile().params.get("reviewer_key_1")
+                if key is None:
+                    return mapped(pending)
                 return mapped(
                     [pending, {**pending, "reviewer_user_id": next_user}] if key == "askar" else []
                 )
@@ -128,6 +136,7 @@ async def test_configuration_save_changes_current_assignment_not_decision(monkey
 
     snapshot = ReviewerConfigurationResponse(revision=2, updatedAt=datetime.now(UTC), reviewers=[])
     monkeypatch.setattr(configuration, "read_configuration", AsyncMock(return_value=snapshot))
+    monkeypatch.setattr(configuration, "notify_letter", AsyncMock())
     payload = ReviewerConfigurationUpdate(
         expectedRevision=2,
         reviewers=[
@@ -283,6 +292,8 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
     monkeypatch.setattr(letters, "_reserve_number", AsyncMock(return_value=(42, "26")))
     event = AsyncMock()
     monkeypatch.setattr(letters, "_event", event)
+    notification = AsyncMock()
+    monkeypatch.setattr(letters, "notify_letter", notification)
     marker = object()
     monkeypatch.setattr(letters, "_response", AsyncMock(return_value=marker))
     result = await letters.act_on_letter(
@@ -296,6 +307,7 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
         ),
     )
     assert result is marker
+    notification.assert_awaited_once()
     mutations = [
         call.args[0]
         for call in connection.execute.call_args_list

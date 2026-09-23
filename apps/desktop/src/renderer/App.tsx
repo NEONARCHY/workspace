@@ -1891,6 +1891,8 @@ export function App() {
                 people={workspace.people}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
+                focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
+                focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
               />
             ) : null}
             {displayedSection === "feed" ? (

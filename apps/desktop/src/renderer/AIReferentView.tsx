@@ -35,11 +35,14 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
+import { AIReferentFiles } from "./AIReferentFiles";
+import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import {
   actOnAIReferentLetter,
   createAIReferentLetter,
   downloadWorkspaceAttachment,
   loadAIReferentRegistry,
+  loadAIReferentLetter,
   loadAIReferentReviewers,
   updateAIReferentLetter,
   uploadWorkspaceAttachment,
@@ -50,6 +53,8 @@ interface AIReferentViewProps {
   readonly people: readonly WorkspacePerson[];
   readonly canCreate: boolean;
   readonly canAdmin?: boolean;
+  readonly focusRequestId?: string;
+  readonly focusRevision?: number;
 }
 
 const statusLabels: Readonly<Record<AIReferentLetter["status"], string>> = {
@@ -62,6 +67,9 @@ const statusLabels: Readonly<Record<AIReferentLetter["status"], string>> = {
   sent: "Отправлено",
   failed: "Ошибка отправки",
   cancelled: "Отменено",
+  awaiting_final_send: "Подписанный PDF · финальное решение",
+  referent_review_pending: "Ожидает отправки референтом",
+  delivery_unknown: "Нужно проверить доставку",
 };
 
 const actionLabels: Readonly<Record<AIReferentAction, string>> = {
@@ -69,8 +77,12 @@ const actionLabels: Readonly<Record<AIReferentAction, string>> = {
   approve: "Согласовать",
   return_for_revision: "Вернуть на доработку",
   cancel: "Отменить письмо",
-  queue_delivery: "Поставить в очередь отправки",
-  retry_delivery: "Повторить отправку",
+  queue_delivery: "Подготовить подписанный PDF",
+  retry_delivery: "Повторить подготовку PDF",
+  release_delivery: "Разрешить отправку",
+  send: "Отправить письмо референтом",
+  confirm_sent: "Подтвердить доставку",
+  confirm_not_sent: "Подтвердить: не доставлено",
 };
 
 interface LetterForm {
@@ -80,7 +92,9 @@ interface LetterForm {
   route: "exat" | "webmail";
   note: string;
   reviewerUserId: string;
+  finalReviewerUserId: string;
   file?: File;
+  additionalFiles?: readonly File[];
 }
 
 const emptyForm = (): LetterForm => ({
@@ -90,6 +104,7 @@ const emptyForm = (): LetterForm => ({
   route: "exat",
   note: "",
   reviewerUserId: "",
+  finalReviewerUserId: "",
 });
 
 function letterForm(letter: AIReferentLetter): LetterForm {
@@ -100,6 +115,7 @@ function letterForm(letter: AIReferentLetter): LetterForm {
     route: letter.route,
     note: letter.note,
     reviewerUserId: letter.reviewerUserId ?? "",
+    finalReviewerUserId: letter.finalReviewerUserId ?? "",
   };
 }
 
@@ -111,6 +127,7 @@ function formPayload(form: LetterForm): AIReferentLetterInput {
     route: form.route,
     note: form.note.trim(),
     reviewerUserId: form.reviewerUserId || null,
+    finalReviewerUserId: form.finalReviewerUserId || null,
   };
 }
 
@@ -124,8 +141,8 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate, canAdmin = false }: AIReferentViewProps) {
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "settings">("incoming");
+export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusRevision }: AIReferentViewProps) {
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "settings" | "archive" | "telegram">("incoming");
   const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
@@ -133,14 +150,21 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
   const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
   const [selectedId, setSelectedId] = useState("");
+  const [detail, setDetail] = useState<AIReferentLetter>();
+  const editRevision = useRef(1);
+  const saveOperation = useRef("");
+  const requestSequence = useRef(0);
+  const savedMetadata = useRef<{ readonly id: string; readonly fingerprint: string } | undefined>(undefined);
+  const [confirmAction, setConfirmAction] = useState<AIReferentAction>();
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState<LetterForm>(emptyForm);
   const [decisionComment, setDecisionComment] = useState("");
 
-  const selected = registry?.letters.find((letter) => letter.id === selectedId);
+  const selected = detail?.id === selectedId ? detail : registry?.letters.find((letter) => letter.id === selectedId);
   const reviewers = reviewerConfig?.reviewers.flatMap((item) =>
     item.canApprove && item.userId ? [{ id: item.userId, name: item.fullName }] : []) ?? [];
   const visibleLetters = useMemo(() => {
@@ -157,27 +181,48 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
     });
   }, [filter, query, registry]);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setError("");
+  const refresh = useCallback(async (quiet = false) => {
+    const sequence = ++requestSequence.current;
+    if (!quiet) { setLoading(true); setError(""); }
     try {
       const [next, nextReviewers] = await Promise.all([
-        loadAIReferentRegistry(token), loadAIReferentReviewers(token),
+        loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50 }), loadAIReferentReviewers(token),
       ]);
-      setReviewerConfig(nextReviewers);
-      setRegistry(next);
+      if (sequence === requestSequence.current) { setReviewerConfig(nextReviewers); setRegistry(next); }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
+      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Не удалось загрузить письма.");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [token]);
+  }, [token, query, filter, page]);
 
   useEffect(() => {
-    if (registerKind !== "settings") queueMicrotask(() => { void refresh(); });
+    if (registerKind !== "outgoing") return;
+    const debounce = setTimeout(() => { void refresh(); }, 250);
+    const timer = setInterval(() => { if (!busyRef.current) void refresh(true); }, 15000);
+    return () => { clearTimeout(debounce); clearInterval(timer); requestSequence.current += 1; };
   }, [refresh, registerKind]);
 
+  useEffect(() => {
+    if (!focusRequestId) return;
+    queueMicrotask(() => { setRegisterKind("outgoing"); setSelectedId(focusRequestId); });
+  }, [focusRequestId, focusRevision]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    let alive = true;
+    const reload = () => {
+      if (busyRef.current) return;
+      void loadAIReferentLetter(token, selectedId).then((letter) => { if (alive) setDetail(letter); })
+        .catch((reason: unknown) => { if (alive) setError(reason instanceof Error ? reason.message : "Письмо недоступно."); });
+    };
+    reload();
+    const timer = setInterval(reload, 10000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [token, selectedId]);
+
   const replaceLetter = (updated: AIReferentLetter) => {
+    setDetail(updated);
     setRegistry((current) => current ? {
       ...current,
       letters: current.letters.map((letter) => letter.id === updated.id ? updated : letter),
@@ -185,6 +230,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
   };
 
   const openCreate = () => {
+    savedMetadata.current = undefined;
+    saveOperation.current = crypto.randomUUID();
     setEditingId("");
     setForm(emptyForm());
     setError("");
@@ -192,6 +239,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
   };
 
   const openEdit = (letter: AIReferentLetter) => {
+    savedMetadata.current = undefined;
+    editRevision.current = letter.revision;
+    saveOperation.current = crypto.randomUUID();
     setEditingId(letter.id);
     setForm(letterForm(letter));
     setError("");
@@ -209,11 +259,17 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
     setBusy(true);
     setError("");
     try {
-      const existing = registry?.letters.find((letter) => letter.id === editingId);
-      let saved = existing
-        ? await updateAIReferentLetter(token, existing.id, formPayload(form), existing.revision)
-        : await createAIReferentLetter(token, formPayload(form));
-      if (!existing) {
+      const existing = Boolean(editingId);
+      const fingerprint = JSON.stringify(formPayload(form));
+      let saved = savedMetadata.current?.fingerprint === fingerprint
+        ? await loadAIReferentLetter(token, savedMetadata.current.id)
+        : existing
+        ? await updateAIReferentLetter(token, editingId, { ...formPayload(form), operationId: saveOperation.current }, editRevision.current)
+        : await createAIReferentLetter(token, { ...formPayload(form), operationId: saveOperation.current });
+      savedMetadata.current = { id: saved.id, fingerprint };
+      editRevision.current = saved.revision;
+      saveOperation.current = crypto.randomUUID();
+      if (!editingId) {
         setEditingId(saved.id);
         setRegistry((current) => current ? {
           ...current,
@@ -235,8 +291,15 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
       } else if (existing) {
         replaceLetter(saved);
       }
+      for (const file of form.additionalFiles ?? []) {
+        await uploadWorkspaceAttachment(token, "ai_referent_letter", saved.id, file, "additional");
+      }
+      saved = await loadAIReferentLetter(token, saved.id);
+      replaceLetter(saved);
+      editRevision.current = saved.revision;
       setSelectedId(saved.id);
       setFormOpen(false);
+      savedMetadata.current = undefined;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось сохранить письмо.");
     } finally {
@@ -251,9 +314,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
     setBusy(true);
     setError("");
     try {
-      const updated = await actOnAIReferentLetter(token, letter, action, decisionComment);
+      const updated = await actOnAIReferentLetter(token, letter, action, decisionComment, crypto.randomUUID());
       replaceLetter(updated);
       setDecisionComment("");
+      setConfirmAction(undefined);
       void refresh();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось выполнить действие.");
@@ -325,9 +389,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
         {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
           className={registerKind === "settings" ? "active" : ""}
           onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
+        <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
+        <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
       </div>
 
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} /> :
+        registerKind === "archive" ? <AIReferentArchive token={token} /> :
+        registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
         <>
 
@@ -353,7 +421,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
           aria-label="Поиск исходящих писем"
           placeholder="Номер, тема, организация или сотрудник"
           value={query}
-          onChange={(_event, data) => setQuery(data.value)}
+          onChange={(_event, data) => { setQuery(data.value); setPage(0); }}
         />
         <div className="ai-referent-filters" role="group" aria-label="Фильтр писем">
           {([
@@ -368,7 +436,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
               key={key}
               className={filter === key ? "active" : ""}
               aria-pressed={filter === key}
-              onClick={() => setFilter(key)}
+              onClick={() => { setFilter(key); setPage(0); }}
             >
               {label}
             </button>
@@ -416,6 +484,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
           ))}
         </div>
       ) : null}
+      <div className="ai-referent-header-actions"><Button disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Назад</Button><span>Страница {page + 1}</span><Button disabled={loading || (registry?.letters.length ?? 0) < 50} onClick={() => setPage((value) => value + 1)}>Далее</Button></div>
         </>
       )}
 
@@ -440,12 +509,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
                   <label>Канал отправки<Select value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></label>
                   <label>Согласующий<Select value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value }))}><option value="">Не назначен</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
                 </div>
+                <label>Второй согласующий (необязательно)<Select value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="">Без второго согласующего</option>{reviewers.filter((person) => person.id !== form.reviewerUserId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
                 <label className="ai-referent-file-field">
                   <span><Attach20Regular /> Файл письма</span>
-                  <input type="file" accept=".doc,.docx,.pdf" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
-                  <small>{form.file?.name ?? (editingId ? "Можно добавить новую версию файла" : "DOC, DOCX или PDF · до 25 МБ")}</small>
+                  <input type="file" accept=".docx" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
+                  <small>{form.file?.name ?? (editingId ? "Можно добавить новую версию DOCX" : "Основное письмо — DOCX; PDF и другие файлы добавьте во вложения")}</small>
                 </label>
+                <label>Дополнительные вложения<input type="file" multiple onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} /></label>
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
                 <div className="ai-referent-form-actions">
                   <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
@@ -489,6 +560,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
                 {selected.note ? <section className="ai-referent-detail-card"><h3>Заметка</h3><p>{selected.note}</p></section> : null}
                 <section className="ai-referent-detail-section">
                   <h3>Файлы <span>{selected.attachments.length}</span></h3>
+                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} />
                   {selected.attachments.length ? selected.attachments.map((attachment) => (
                     <button type="button" key={attachment.id} className="ai-referent-file" onClick={() => void download(attachment.id, attachment.fileName)}>
                       <DocumentArrowUp20Regular /><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small></span><Open20Regular />
@@ -503,7 +575,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
                     ))}
                   </div>
                 </section>
-                {selected.availableActions.includes("return_for_revision") ? (
+                {selected.deliveryError ? <p role="alert">{selected.deliveryError}</p> : null}
+                {selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
                 ) : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
@@ -514,13 +587,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false }: A
                       key={action}
                       appearance={action === "approve" || action === "queue_delivery" || action === "submit" ? "primary" : "secondary"}
                       icon={action === "approve" ? <Checkmark20Regular /> : undefined}
-                      disabled={busy || (action === "return_for_revision" && decisionComment.trim().length < 3)}
-                      onClick={() => void act(selected, action)}
+                      disabled={busy || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3)}
+                      onClick={() => ["send", "cancel", "confirm_sent", "confirm_not_sent"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
                     >
                       {actionLabels[action]}
                     </Button>
                   ))}
                 </div>
+                {confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
               </DialogContent>
             </DialogBody>
           ) : null}

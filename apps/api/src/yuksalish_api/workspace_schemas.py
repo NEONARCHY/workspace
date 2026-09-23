@@ -1129,6 +1129,7 @@ NotificationKind = Literal[
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
+    "ai_referent",
     "messenger",
     "tasks",
     "team_overview",

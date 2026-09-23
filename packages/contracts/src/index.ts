@@ -491,6 +491,7 @@ export type NotificationSection = Extract<
   | "absences"
   | "zoom_meetings"
   | "hr"
+  | "ai_referent"
 >;
 
 export interface WorkspaceNotification {
@@ -609,6 +610,9 @@ export interface WorkspaceAttachment {
 
 export type AIReferentRoute = "exat" | "webmail";
 export type AIReferentStatus =
+  | "awaiting_final_send"
+  | "referent_review_pending"
+  | "delivery_unknown"
   | "draft"
   | "pending_review"
   | "needs_revision"
@@ -620,6 +624,10 @@ export type AIReferentStatus =
   | "cancelled";
 export type AIReferentSource = "workspace" | "telegram" | "import";
 export type AIReferentAction =
+  | "release_delivery"
+  | "send"
+  | "confirm_sent"
+  | "confirm_not_sent"
   | "submit"
   | "approve"
   | "return_for_revision"
@@ -639,6 +647,9 @@ export interface AIReferentEvent {
 }
 
 export interface AIReferentLetter {
+  readonly finalReviewerUserId?: string | null;
+  readonly finalReviewerName?: string | null;
+  readonly deliveryError?: string;
   readonly id: string;
   readonly displayNumber?: string | null;
   readonly outgoingNumber?: number | null;
@@ -673,12 +684,41 @@ export interface AIReferentRegistry {
 }
 
 export interface AIReferentLetterInput {
+  readonly finalReviewerUserId?: string | null;
+  readonly operationId?: string;
   readonly subject: string;
   readonly recipientOrganization: string;
   readonly recipientAddress: string;
   readonly route: AIReferentRoute;
   readonly note: string;
   readonly reviewerUserId?: string | null;
+}
+
+export type AIReferentPacketKind = "incoming" | "outgoing" | "archive" | "journal";
+export interface AIReferentPacketFile {
+  readonly id: string;
+  readonly name: string;
+  readonly byteSize: number;
+  readonly sha256: string;
+  readonly source: "packet" | "attachment";
+  readonly createdAt: string;
+}
+export interface AIReferentArchiveLetter {
+  readonly id: string;
+  readonly displayNumber: string;
+  readonly subject: string;
+  readonly senderName: string;
+  readonly recipientOrganization: string;
+  readonly route: string;
+  readonly status: string;
+  readonly sentAt?: string | null;
+}
+export interface AIReferentJournalFile {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly name: string;
+  readonly byteSize: number;
+  readonly createdAt: string;
 }
 
 export type AIReferentIncomingSource = "exat" | "webmail" | "import";

@@ -19,6 +19,9 @@ AIReferentStatus = Literal[
     "sent",
     "failed",
     "cancelled",
+    "awaiting_final_send",
+    "referent_review_pending",
+    "delivery_unknown",
 ]
 AIReferentSource = Literal["workspace", "telegram", "import"]
 AIReferentAction = Literal[
@@ -28,6 +31,10 @@ AIReferentAction = Literal[
     "cancel",
     "queue_delivery",
     "retry_delivery",
+    "release_delivery",
+    "send",
+    "confirm_sent",
+    "confirm_not_sent",
 ]
 
 
@@ -38,6 +45,7 @@ class AIReferentLetterFields(ApiModel):
     route: AIReferentRoute
     note: str = Field(default="", max_length=5000)
     reviewer_user_id: UUID | None = None
+    final_reviewer_user_id: UUID | None = None
 
     @field_validator("subject", "recipient_organization")
     @classmethod
@@ -54,17 +62,19 @@ class AIReferentLetterFields(ApiModel):
 
 
 class CreateAIReferentLetterRequest(AIReferentLetterFields):
-    pass
+    operation_id: UUID | None = None
 
 
 class UpdateAIReferentLetterRequest(AIReferentLetterFields):
     expected_revision: int = Field(ge=1)
+    operation_id: UUID | None = None
 
 
 class AIReferentActionRequest(ApiModel):
     action: AIReferentAction
     comment: str = Field(default="", max_length=2000)
     expected_revision: int = Field(ge=1)
+    operation_id: UUID | None = None
 
     @field_validator("comment")
     @classmethod
@@ -99,6 +109,9 @@ class AIReferentLetterResponse(ApiModel):
     created_by_name: str
     reviewer_user_id: str | None = None
     reviewer_name: str | None = None
+    final_reviewer_user_id: str | None = None
+    final_reviewer_name: str | None = None
+    delivery_error: str = ""
     revision: int
     sent_at: datetime | None = None
     created_at: datetime

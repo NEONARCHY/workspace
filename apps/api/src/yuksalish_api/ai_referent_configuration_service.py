@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
 from fastapi import HTTPException
-from sqlalchemy import insert, select, update
+from sqlalchemy import insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -16,6 +16,7 @@ from .ai_referent_configuration_schemas import (
     ReviewerRuntimeAcknowledgement,
     ReviewerRuntimeResponse,
 )
+from .ai_referent_shared_service import notify_letter
 from .auth import AuthenticatedUser
 from .tables import (
     ai_referent_agents,
@@ -23,6 +24,7 @@ from .tables import (
     ai_referent_events,
     ai_referent_letters,
     ai_referent_reviewers,
+    ai_referent_telegram_links,
     audit_events,
     users,
 )
@@ -33,7 +35,10 @@ _REASSIGNABLE_STATUSES = (
     "pending_review",
     "approved",
     "queued",
+    "sending",
     "failed",
+    "awaiting_final_send",
+    "referent_review_pending",
 )
 _CONFIGURATION_AUDIT_ID = uuid5(NAMESPACE_URL, "urn:workspace:ai-referent:configuration:1")
 
@@ -170,6 +175,15 @@ async def save_configuration(
         )
         if account is None:
             raise HTTPException(422, f"Активный аккаунт @{item.username} не найден.")
+        if item.telegram_id:
+            linked = await connection.scalar(
+                select(ai_referent_telegram_links.c.user_id).where(
+                    ai_referent_telegram_links.c.telegram_id == item.telegram_id,
+                    ai_referent_telegram_links.c.user_id != account["id"],
+                )
+            )
+            if linked is not None:
+                raise HTTPException(409, "Telegram уже привязан к другому аккаунту Workspace.")
         accounts[item.key] = account
     # Clear unique fields first: swapping two assignments is one atomic operation.
     await connection.execute(
@@ -201,7 +215,10 @@ async def save_configuration(
                 await connection.execute(
                     select(ai_referent_letters)
                     .where(
-                        ai_referent_letters.c.reviewer_key == item.key,
+                        or_(
+                            ai_referent_letters.c.reviewer_key == item.key,
+                            ai_referent_letters.c.final_reviewer_key == item.key,
+                        ),
                         ai_referent_letters.c.status.in_(_REASSIGNABLE_STATUSES),
                     )
                     .with_for_update()
@@ -212,13 +229,24 @@ async def save_configuration(
         )
         for letter in open_letters:
             assigned_user = new_user_id if item.enabled else None
-            if letter["reviewer_user_id"] == assigned_user:
+            changes = {}
+            if (
+                letter.get("reviewer_key") == item.key
+                and letter["reviewer_user_id"] != assigned_user
+            ):
+                changes["reviewer_user_id"] = assigned_user
+            if (
+                letter.get("final_reviewer_key") == item.key
+                and letter.get("final_reviewer_user_id") != assigned_user
+            ):
+                changes["final_reviewer_user_id"] = assigned_user
+            if not changes:
                 continue
             await connection.execute(
                 update(ai_referent_letters)
                 .where(ai_referent_letters.c.id == letter["id"])
                 .values(
-                    reviewer_user_id=assigned_user,
+                    **changes,
                     revision=letter["revision"] + 1,
                     updated_at=now,
                 )
@@ -236,6 +264,18 @@ async def save_configuration(
                     created_at=now,
                 )
             )
+            updated = (
+                (
+                    await connection.execute(
+                        select(ai_referent_letters).where(
+                            ai_referent_letters.c.id == letter["id"],
+                        )
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            await notify_letter(connection, updated, "Обновлён согласующий письма")
     await connection.execute(
         update(ai_referent_configuration)
         .where(ai_referent_configuration.c.id == 1)

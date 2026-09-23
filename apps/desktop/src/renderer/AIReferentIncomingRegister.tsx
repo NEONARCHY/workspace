@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AIReferentIncomingLetter,
@@ -18,6 +18,7 @@ import {
   downloadAIReferentJournal,
   loadAIReferentIncomingRegistry,
 } from "./workspace-api";
+import { AIReferentFiles } from "./AIReferentFiles";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
@@ -25,7 +26,6 @@ interface AIReferentIncomingRegisterProps {
 
 type IncomingFilter = "all" | "registered" | "attention" | "attachments";
 
-const registeredStatuses = new Set(["platform_submitted", "submitted", "completed"]);
 const attentionStatuses = new Set(["failed", "completed_with_errors", "needs_review"]);
 
 function statusLabel(letter: AIReferentIncomingLetter): string {
@@ -64,41 +64,30 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<IncomingFilter>("all");
+  const [page, setPage] = useState(0);
+  const requestSequence = useRef(0);
+  const selectFilter = (next: IncomingFilter) => { setPage(0); setFilter(next); };
 
-  const refresh = useCallback(async (search = "") => {
-    setLoading(true);
-    setError("");
+  const refresh = useCallback(async (search = "", quiet = false) => {
+    const sequence = ++requestSequence.current;
+    if (!quiet) { setLoading(true); setError(""); }
     try {
-      setRegistry(await loadAIReferentIncomingRegistry(token, { query: search }));
+      const next = await loadAIReferentIncomingRegistry(token, { query: search, category: filter, offset: page * 100 });
+      if (sequence === requestSequence.current) setRegistry(next);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
+      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [token]);
+  }, [token, filter, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { void refresh(query); }, 250);
-    return () => window.clearTimeout(timer);
+    const poll = window.setInterval(() => { void refresh(query, true); }, 15000);
+    return () => { window.clearTimeout(timer); window.clearInterval(poll); requestSequence.current += 1; };
   }, [query, refresh]);
 
-  const letters = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ru-RU");
-    return (registry?.letters ?? []).filter((letter) => {
-      if (filter === "registered" && !registeredStatuses.has(letter.status)) return false;
-      if (filter === "attention" && !isAttention(letter)) return false;
-      if (filter === "attachments" && !letter.hasAttachments) return false;
-      return !normalized || [
-        letter.sequenceNumber,
-        letter.platformIncomingNumber,
-        letter.senderLetterNumber,
-        letter.senderOrganization,
-        letter.senderPerson,
-        letter.subject,
-        letter.responsibleUserName ?? letter.responsibleDisplayName,
-      ].join(" ").toLocaleLowerCase("ru-RU").includes(normalized);
-    });
-  }, [filter, query, registry]);
+  const letters = registry?.letters ?? [];
 
   const downloadJournal = async () => {
     if (!registry?.journal.available || downloading) return;
@@ -122,17 +111,17 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
   return (
     <div className="ai-incoming-register">
       <section className="ai-referent-summary" aria-label="Сводка входящих писем">
-        <button type="button" className="primary" onClick={() => setFilter("registered")}>
+        <button type="button" className="primary" onClick={() => selectFilter("registered")}>
           <span>Зарегистрировано</span><strong>{registry?.registeredCount ?? 0}</strong>
           <small>Письма, внесённые роботом в платформу</small>
         </button>
-        <button type="button" onClick={() => setFilter("all")}>
+        <button type="button" onClick={() => selectFilter("all")}>
           <strong>{registry?.totalCount ?? 0}</strong><span>всего входящих</span>
         </button>
-        <button type="button" onClick={() => setFilter("attention")}>
+        <button type="button" onClick={() => selectFilter("attention")}>
           <strong>{registry?.attentionCount ?? 0}</strong><span>требуют внимания</span>
         </button>
-        <button type="button" onClick={() => setFilter("attachments")}>
+        <button type="button" onClick={() => selectFilter("attachments")}>
           <strong>{registry?.withAttachmentsCount ?? 0}</strong><span>с вложениями</span>
         </button>
       </section>
@@ -143,7 +132,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
           aria-label="Поиск входящих писем"
           placeholder="Номер, организация, тема или ответственный"
           value={query}
-          onChange={(_event, data) => setQuery(data.value)}
+          onChange={(_event, data) => { setPage(0); setQuery(data.value); }}
         />
         <div className="ai-referent-filters" role="group" aria-label="Фильтр входящих писем">
           {([
@@ -157,7 +146,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
               key={key}
               className={filter === key ? "active" : ""}
               aria-pressed={filter === key}
-              onClick={() => setFilter(key)}
+              onClick={() => selectFilter(key)}
             >
               {label}
             </button>
@@ -230,6 +219,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                   <td>
                     <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount}</span>
                     <small>{letter.mainDocumentFilename || "Нет файла"}</small>
+                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} />
                   </td>
                   <td>
                     <span className={`ai-incoming-status status-${isAttention(letter) ? "attention" : "ok"}`}>
@@ -243,6 +233,11 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
           </table>
         </div>
       ) : null}
+      <div role="group" aria-label="Страницы входящих писем">
+        <Button disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Назад</Button>
+        <span>Страница {page + 1} · Найдено {registry?.totalCount ?? 0}</span>
+        <Button disabled={loading || (page + 1) * 100 >= (registry?.totalCount ?? 0)} onClick={() => setPage(page + 1)}>Далее</Button>
+      </div>
     </div>
   );
 }
