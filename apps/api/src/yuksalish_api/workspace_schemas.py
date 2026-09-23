@@ -304,6 +304,7 @@ class TaskResponse(ApiModel):
     checklist_done: int = 0
     checklist_total: int = 0
     source_message_id: str | None = None
+    calendar_event_id: str | None = None
     result_text: str | None = None
     parent_task_id: str | None = None
     parent_task_title: str | None = None
@@ -377,6 +378,7 @@ class CreateTaskRequest(ApiModel):
     project: str = Field(default="Без проекта", max_length=96)
     assignee_id: str | None = None
     source_message_id: str | None = None
+    calendar_event_id: str | None = None
     parent_task_id: str | None = None
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     due_at: datetime | None = None
@@ -685,6 +687,7 @@ class ApprovalRequestResponse(ApiModel):
     requester_id: str
     responsible_user_id: str
     source_task_id: str | None = None
+    calendar_event_id: str | None = None
     purpose: str = ""
     details: PaymentRequestDetails = Field(default_factory=PaymentRequestDetails)
     created_at: datetime
@@ -715,6 +718,7 @@ class CreateApprovalRequest(PaymentRequestDetails):
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     source_task_id: str | None = None
+    calendar_event_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -1070,6 +1074,13 @@ class PinFeedPostRequest(ApiModel):
 
 
 CalendarEventType = Literal["meeting", "deadline", "trip", "task", "general"]
+CalendarAttendanceStatus = Literal["accepted", "pending", "declined"]
+
+
+class CalendarEventAttendeeResponse(ApiModel):
+    user_id: str
+    status: CalendarAttendanceStatus
+    responded_at: datetime | None
 
 
 class CalendarEventResponse(ApiModel):
@@ -1084,6 +1095,9 @@ class CalendarEventResponse(ApiModel):
     location: str
     status: Literal["scheduled", "cancelled"]
     attendee_ids: list[str]
+    attendees: list[CalendarEventAttendeeResponse]
+    current_user_attendance_status: CalendarAttendanceStatus | None
+    can_respond: bool
     can_edit: bool
     created_at: datetime
     updated_at: datetime
@@ -1122,6 +1136,10 @@ class CreateCalendarEventRequest(CalendarEventWriteRequest):
 
 class UpdateCalendarEventRequest(CalendarEventWriteRequest):
     pass
+
+
+class RespondCalendarEventRequest(ApiModel):
+    status: Literal["accepted", "declined"]
 
 
 NotificationKind = Literal[

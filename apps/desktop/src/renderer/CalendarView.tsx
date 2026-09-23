@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   CalendarEvent,
+  CalendarAttendanceStatus,
   CalendarEventInput,
   CalendarEventType,
+  ApprovalRequestSummary,
   WorkspacePerson,
   WorkspaceTask,
+  WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, Input, Textarea } from "@fluentui/react-components";
+import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
@@ -17,12 +20,21 @@ import {
   Dismiss20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { TaskComposer } from "./TaskComposer";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import type { PaymentRequestInput } from "./workspace-api";
 
 interface CalendarViewProps {
   readonly focusEventId?: string;
+  readonly createFromChat?: {
+    readonly key: string;
+    readonly title: string;
+    readonly attendeeIds: readonly string[];
+  };
   readonly events: readonly CalendarEvent[];
   /** Task deadlines are a read-only calendar layer; editing stays in the task card. */
   readonly tasks?: readonly WorkspaceTask[];
+  readonly requests?: readonly ApprovalRequestSummary[];
   readonly onOpenTask?: (taskId: string) => void;
   /** Conferences of the shared Zoom host, shown read-only next to the events. */
   readonly zoomMeetings?: readonly ZoomMeeting[];
@@ -35,6 +47,17 @@ interface CalendarViewProps {
     payload: CalendarEventInput,
   ) => Promise<CalendarEvent | undefined>;
   readonly onCancel: (event: CalendarEvent) => Promise<CalendarEvent | undefined>;
+  readonly onCreateTask?: (
+    payload: WorkspaceTaskCreateInput,
+  ) => Promise<WorkspaceTask | undefined>;
+  readonly canCreatePaymentRequest?: boolean;
+  readonly onCreatePayment?: (
+    payload: PaymentRequestInput,
+  ) => Promise<ApprovalRequestSummary | undefined>;
+  readonly onRespond?: (
+    event: CalendarEvent,
+    status: "accepted" | "declined",
+  ) => Promise<CalendarEvent | undefined>;
 }
 
 const typeLabels: Record<CalendarEventType, string> = {
@@ -84,6 +107,18 @@ function eventTime(event: CalendarEvent): string {
   return `${format.format(new Date(event.startsAt))}–${format.format(new Date(event.endsAt))}`;
 }
 
+const attendanceLabels: Record<CalendarAttendanceStatus, string> = {
+  accepted: "Участвует",
+  pending: "Ожидает ответа",
+  declined: "Отказался",
+};
+
+function attendanceStatus(event: CalendarEvent, userId: string): CalendarAttendanceStatus | undefined {
+  const attendee = event.attendees.find((item) => item.userId === userId);
+  if (attendee) return attendee.status;
+  return event.attendeeIds.includes(userId) ? "accepted" : undefined;
+}
+
 function emptyDraft(currentUserId: string, date = new Date()): CalendarEventInput {
   const start = new Date(date);
   start.setHours(10, 0, 0, 0);
@@ -115,8 +150,10 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
 
 export function CalendarView({
   focusEventId,
+  createFromChat,
   events,
   tasks,
+  requests,
   onOpenTask,
   zoomMeetings,
   onOpenZoomMeeting,
@@ -125,6 +162,10 @@ export function CalendarView({
   onCreate,
   onUpdate,
   onCancel,
+  onCreateTask,
+  canCreatePaymentRequest,
+  onCreatePayment,
+  onRespond,
 }: CalendarViewProps) {
   const focusedEvent = events.find((event) => event.id === focusEventId);
   const focusedDate = focusedEvent ? new Date(focusedEvent.startsAt) : new Date();
@@ -135,6 +176,13 @@ export function CalendarView({
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [taskComposerEvent, setTaskComposerEvent] = useState<CalendarEvent>();
+  const [paymentEvent, setPaymentEvent] = useState<CalendarEvent>();
+  const [paymentTitle, setPaymentTitle] = useState("");
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const lastChatDraftKey = useRef<string | undefined>(undefined);
   const sideRef = useRef<HTMLElement>(null);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
@@ -197,6 +245,31 @@ export function CalendarView({
   const selectedDayEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
   const selectedDayZoom = zoomByDay.get(dayKey(selectedDay)) ?? [];
   const selectedDayTasks = tasksByDay.get(dayKey(selectedDay)) ?? [];
+  const linkedTasks = selected
+    ? (tasks ?? []).filter((task) => task.calendarEventId === selected.id)
+    : [];
+  const linkedPayments = selected
+    ? (requests ?? []).filter((request) => request.calendarEventId === selected.id)
+    : [];
+  const busyAttendeeIds = useMemo(() => {
+    if (!draft) return new Set<string>();
+    const startsAt = new Date(draft.startsAt).getTime();
+    const endsAt = new Date(draft.endsAt).getTime();
+    if (!Number.isFinite(startsAt) || !Number.isFinite(endsAt) || endsAt <= startsAt) {
+      return new Set<string>();
+    }
+    const busyIds = new Set<string>();
+    for (const event of events) {
+      if (event.id === selected?.id || event.status !== "scheduled") continue;
+      if (new Date(event.startsAt).getTime() >= endsAt || new Date(event.endsAt).getTime() <= startsAt) {
+        continue;
+      }
+      for (const attendee of event.attendees) {
+        if (attendee.status !== "declined") busyIds.add(attendee.userId);
+      }
+    }
+    return busyIds;
+  }, [draft, events, selected?.id]);
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
     const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -211,6 +284,21 @@ export function CalendarView({
   useEffect(() => {
     if (draft || selected?.id) sideRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
   }, [draft, selected?.id]);
+
+  useEffect(() => {
+    if (!createFromChat || createFromChat.key === lastChatDraftKey.current) return;
+    lastChatDraftKey.current = createFromChat.key;
+    const today = new Date();
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedDay(startOfDay(today));
+    setSelected(undefined);
+    setDraft({
+      ...emptyDraft(currentUserId, today),
+      title: createFromChat.title,
+      attendeeIds: [...new Set([currentUserId, ...createFromChat.attendeeIds])],
+    });
+    setError("");
+  }, [createFromChat, currentUserId]);
 
   const chooseDay = (day: Date) => {
     setSelectedDay(startOfDay(day));
@@ -281,6 +369,62 @@ export function CalendarView({
       setError(cancelError instanceof Error ? cancelError.message : "Не удалось отменить событие.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const respond = async (event: CalendarEvent, status: "accepted" | "declined") => {
+    setBusy(true);
+    try {
+      const changed = await onRespond?.(event, status);
+      if (changed) setSelected(changed);
+    } catch (responseError) {
+      setError(responseError instanceof Error ? responseError.message : "Не удалось сохранить ответ.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openPaymentComposer = (event: CalendarEvent) => {
+    setPaymentEvent(event);
+    setPaymentTitle(`Оплата: ${event.title}`);
+    setPaymentAmount("");
+    setPaymentError("");
+  };
+
+  const createPayment = async () => {
+    if (!paymentEvent || !onCreatePayment) return;
+    const amount = Number(paymentAmount.replace(/\s/g, ""));
+    if (!Number.isInteger(amount) || amount <= 0) {
+      setPaymentError("Укажите сумму в сумах целым положительным числом.");
+      return;
+    }
+    setPaymentBusy(true);
+    setPaymentError("");
+    try {
+      const created = await onCreatePayment({
+        title: paymentTitle.trim(),
+        amount,
+        currency: "UZS",
+        purpose: paymentEvent.title,
+        calendarEventId: paymentEvent.id,
+        projectName: "",
+        projectCode: "",
+        sourceAccount: "",
+        destinationAccount: "",
+        requestPriority: "normal",
+        comment: `Создано из мероприятия: ${paymentEvent.title}`,
+        tripPurpose: "",
+        employeeIds: paymentEvent.attendeeIds,
+        paymentPurpose: "Мероприятия",
+        paymentReason: paymentEvent.title,
+        responsibleUserId: currentUserId,
+      });
+      if (created) setPaymentEvent(undefined);
+      else setPaymentError("Не удалось создать заявку. Проверьте права и подключение.");
+    } catch (paymentCreateError) {
+      setPaymentError(paymentCreateError instanceof Error ? paymentCreateError.message : "Не удалось создать заявку.");
+    } finally {
+      setPaymentBusy(false);
     }
   };
 
@@ -454,8 +598,13 @@ export function CalendarView({
               {people.map((person) => (
                 <Checkbox
                   key={person.id}
-                  label={person.name}
+                  label={`${person.name}${busyAttendeeIds.has(person.id) ? " · занят" : ""}`}
                   checked={draft.attendeeIds.includes(person.id)}
+                  disabled={
+                    person.id !== currentUserId
+                    && busyAttendeeIds.has(person.id)
+                    && !draft.attendeeIds.includes(person.id)
+                  }
                   onChange={(_event, data) => setDraft({
                     ...draft,
                     attendeeIds: data.checked ? [...draft.attendeeIds, person.id] : draft.attendeeIds.filter((id) => id !== person.id),
@@ -482,14 +631,62 @@ export function CalendarView({
             <dl className="calendar-detail-list">
               <div><dt>Дата</dt><dd>{dateLabel(new Date(selected.startsAt))}</dd></div>
               {selected.location ? <div><dt>Место</dt><dd>{selected.location}</dd></div> : null}
-              <div><dt>Участники</dt><dd>{selected.attendeeIds.map((id) => people.find((person) => person.id === id)?.name).filter(Boolean).join(", ") || "Не указаны"}</dd></div>
+              <div>
+                <dt>Участники</dt>
+                <dd className="calendar-attendee-list">
+                  {selected.attendeeIds.map((id) => {
+                    const status = attendanceStatus(selected, id);
+                    return (
+                      <span key={id} className={`calendar-attendee-status ${status ?? "pending"}`}>
+                        {people.find((person) => person.id === id)?.name ?? "Сотрудник"}
+                        {status ? ` · ${attendanceLabels[status]}` : ""}
+                      </span>
+                    );
+                  })}
+                  {selected.attendeeIds.length === 0 ? "Не указаны" : null}
+                </dd>
+              </div>
             </dl>
             {selected.description ? <div className="calendar-detail-description"><span>Описание</span><p>{selected.description}</p></div> : null}
+            <div className="calendar-linked-records">
+              <div className="calendar-linked-records-heading">
+                <span>Внутренние задачи</span>
+                {selected.canEdit && selected.status === "scheduled" && onCreateTask ? (
+                  <Button appearance="subtle" size="small" onClick={() => setTaskComposerEvent(selected)}>Добавить задачу</Button>
+                ) : null}
+              </div>
+              {linkedTasks.length ? linkedTasks.map((task) => (
+                <button key={task.id} type="button" className="calendar-linked-task" onClick={() => onOpenTask?.(task.id)}>
+                  <strong>{task.title}</strong>
+                  <span>{task.status === "completed" ? "Выполнена" : task.dueLabel}</span>
+                </button>
+              )) : <p>Задач пока нет.</p>}
+            </div>
+            <div className="calendar-linked-records">
+              <div className="calendar-linked-records-heading">
+                <span>Заявки на оплату</span>
+                {selected.canEdit && selected.status === "scheduled" && canCreatePaymentRequest && onCreatePayment ? (
+                  <Button appearance="subtle" size="small" onClick={() => openPaymentComposer(selected)}>Добавить заявку</Button>
+                ) : null}
+              </div>
+              {linkedPayments.length ? linkedPayments.map((request) => (
+                <div key={request.id} className="calendar-linked-task calendar-linked-payment">
+                  <strong>{request.title}</strong>
+                  <span>{request.stageLabel}</span>
+                </div>
+              )) : <p>Заявок пока нет.</p>}
+            </div>
             {selected.status === "cancelled" ? <span className="calendar-cancelled">Событие отменено</span> : null}
             {selected.canEdit && selected.status === "scheduled" ? (
               <div className="calendar-form-actions">
                 <Button appearance="primary" onClick={() => { setError(""); setDraft(editDraft(selected)); }}>Изменить</Button>
                 <Button appearance="subtle" disabled={busy} onClick={() => void cancel(selected)}>Отменить событие</Button>
+              </div>
+            ) : null}
+            {selected.canRespond && selected.status === "scheduled" ? (
+              <div className="calendar-form-actions" aria-label="Ответ на приглашение">
+                <Button appearance="primary" disabled={busy} onClick={() => void respond(selected, "accepted")}>Подтвердить участие</Button>
+                <Button appearance="subtle" disabled={busy} onClick={() => void respond(selected, "declined")}>Отказаться</Button>
               </div>
             ) : null}
           </div>
@@ -554,6 +751,41 @@ export function CalendarView({
           </div>
         )}
       </aside>
+      {taskComposerEvent && onCreateTask ? <TaskComposer
+        open
+        people={people}
+        tasks={tasks ?? []}
+        currentUserId={currentUserId}
+        initialTitle={`Подготовка: ${taskComposerEvent.title}`}
+        sourceLabel={`Мероприятие: ${taskComposerEvent.title}`}
+        calendarEventId={taskComposerEvent.id}
+        onClose={() => setTaskComposerEvent(undefined)}
+        onSubmit={async (payload) => {
+          const created = await onCreateTask(payload);
+          if (created) setTaskComposerEvent(undefined);
+          return created;
+        }}
+      /> : null}
+      {paymentEvent && onCreatePayment ? <Dialog open onOpenChange={(_event, data) => {
+        if (!data.open && !paymentBusy) setPaymentEvent(undefined);
+      }}>
+        <DialogSurface className="record-composer-dialog calendar-payment-dialog" aria-labelledby="calendar-payment-title">
+          <form className="record-composer" noValidate onSubmit={(event) => { event.preventDefault(); void createPayment(); }}>
+            <div className="calendar-side-heading">
+              <span>Заявка из мероприятия</span>
+              <h2 id="calendar-payment-title">Оплата мероприятия</h2>
+              <p>{paymentEvent.title}. После создания статус будет обновляться в этой карточке.</p>
+            </div>
+            {paymentError ? <div className="auth-error" role="alert">{paymentError}</div> : null}
+            <Input aria-label="Название заявки" value={paymentTitle} onChange={(_event, data) => setPaymentTitle(data.value)} />
+            <Input aria-label="Сумма заявки в сумах" inputMode="numeric" value={paymentAmount} onChange={(_event, data) => setPaymentAmount(data.value)} placeholder="Сумма в UZS" />
+            <div className="calendar-form-actions">
+              <Button appearance="primary" type="submit" disabled={paymentBusy || !paymentTitle.trim()}>Создать заявку</Button>
+              <Button appearance="subtle" disabled={paymentBusy} onClick={() => setPaymentEvent(undefined)}>Отмена</Button>
+            </div>
+          </form>
+        </DialogSurface>
+      </Dialog> : null}
     </section>
   );
 }
