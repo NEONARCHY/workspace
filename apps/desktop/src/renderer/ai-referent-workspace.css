@@ -649,3 +649,16 @@
   .ai-gooey-search-bubble { background: Field; color: FieldText; }
   .ai-gooey-search:focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
 }
+.ai-referent-sign-hint {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--ws-border, #d7e7eb);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ws-accent, #0091a8) 7%, white);
+  color: var(--ws-ink, #293a55);
+  line-height: 1.5;
+}
+.ai-referent-status.status-signed {
+  background: color-mix(in srgb, var(--ws-accent, #0091a8) 12%, white);
+  color: var(--ws-link, #006779);
+}

@@ -41,6 +41,7 @@ STATUSES = {
     "sent": "Отправлено",
     "failed": "Ошибка подготовки",
     "cancelled": "Отменено",
+    "signed": "Подписано · без отправки",
 }
 
 
@@ -81,14 +82,22 @@ class SharedBot:
         rows.append([button("Пакет документов", f"f:o:{compact}:0")])
         if letter["canEdit"]:
             rows.append([button("Заменить основной DOCX", f"e:{compact}")])
-            rows.append([button("Добавить вложение", f"x:{compact}")])
+            if letter.get("workflowKind") != "sign_only":
+                rows.append([button("Добавить вложение", f"x:{compact}")])
         latest = next(
             (event["comment"] for event in letter.get("events", []) if event.get("comment")), ""
         )
+        number = letter.get("displayNumber") or (
+            "На подпись" if letter.get("workflowKind") == "sign_only" else "Без номера"
+        )
+        destination = (
+            "Без отправки адресату\n" if letter.get("workflowKind") == "sign_only"
+            else f"Кому: {letter['recipientOrganization']}\n"
+        )
         self.say(
             actor,
-            f"{letter.get('displayNumber') or 'Без номера'} · {STATUSES[letter['status']]}\n"
-            f"{letter['subject']}\nКому: {letter['recipientOrganization']}\n"
+            f"{number} · {STATUSES[letter['status']]}\n"
+            f"{letter['subject']}\n{destination}"
             f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
             + (f"\nКомментарий: {latest}" if latest else "")
             + (f"\n{letter['deliveryError']}" if letter.get("deliveryError") else ""),
@@ -101,11 +110,51 @@ class SharedBot:
         ):
             delivered, error = False, ""
             try:
-                self.say(
-                    item["telegramId"],
-                    item["text"],
-                    [[button("Открыть актуальное письмо", "o:" + UUID(item["letterId"]).hex)]],
+                text_receipt = f"notice-text:{item['id']}"
+                if not self.state.get(text_receipt):
+                    self.say(
+                        item["telegramId"],
+                        item["text"],
+                        [[button("Открыть актуальное письмо", "o:" + UUID(item["letterId"]).hex)]],
+                    )
+                    self.state.put(text_receipt, True)
+                letter = self.api.request(
+                    f"/ai-referent/agent/letters/{item['letterId']}",
+                    telegram_id=item["telegramId"],
                 )
+                if letter.get("workflowKind") == "sign_only" and letter["status"] == "signed":
+                    packet = self.api.request(
+                        f"/ai-referent/agent/packets/outgoing/{item['letterId']}",
+                        telegram_id=item["telegramId"],
+                    )
+                    signed = sorted(
+                        (entry for entry in packet["files"]
+                         if entry["source"] == "packet"
+                         and entry["name"].startswith("signed/")),
+                        key=lambda entry: entry["name"],
+                    )
+                    for entry in signed:
+                        receipt_key = f"signed-notice:{item['id']}:{entry['id']}"
+                        if self.state.get(receipt_key):
+                            continue
+                        content = self.api.transfer(
+                            f"/ai-referent/agent/packets/outgoing/{item['letterId']}/files/"
+                            f"{entry['id']}?source=packet",
+                            telegram_id=item["telegramId"],
+                        )
+                        if len(content) > 20 * 1024 * 1024:
+                            raise WorkspaceError(
+                                "PDF больше лимита Telegram; откройте его в Workspace."
+                            )
+                        with tempfile.TemporaryDirectory(prefix="signed-letter-") as directory:
+                            path = Path(directory) / Path(entry["name"]).name
+                            path.write_bytes(content)
+                            response = self.telegram.send_document(
+                                item["telegramId"], path, caption="Подписанное письмо"
+                            )
+                            if response.get("ok") is False:
+                                raise WorkspaceError("Telegram не подтвердил доставку PDF.")
+                        self.state.put(receipt_key, True)
                 delivered = True
             except Exception as exc:
                 error = type(
@@ -153,6 +202,31 @@ class SharedBot:
                 data = str(callback.get("data") or "").split(":")
                 if data[0] == "o":
                     self.show(actor, data[1])
+                elif data[0] == "q":
+                    reviewers = self.request(actor, "/reviewers")["reviewers"]
+                    selected = next(
+                        (entry for entry in reviewers
+                         if entry["key"] == data[1] and entry["canApprove"]), None
+                    )
+                    if context.get("step") != "sign_reviewer" or selected is None:
+                        raise WorkspaceError("Начните новую заявку командой /sign.")
+                    letter = self.request(actor, "/letters", {
+                        "workflowKind": "sign_only",
+                        "subject": context["subject"],
+                        "recipientOrganization": "Подписание без отправки",
+                        "recipientAddress": "",
+                        "route": "exat",
+                        "note": "",
+                        "reviewerUserId": selected["userId"],
+                        "finalReviewerUserId": None,
+                        "operationId": context["createOperation"],
+                    }, "POST")
+                    self.state.put(key, {"step": "upload", "role": "primary",
+                                         "letterId": letter["id"]})
+                    self.say(
+                        actor,
+                        "Заявка создана. Пришлите DOCX: каждая страница — отдельное письмо.",
+                    )
                 elif data[0] == "a":
                     action = ACTIONS[data[1]][0]
                     payload = {
@@ -285,7 +359,8 @@ class SharedBot:
                 self.say(
                     actor,
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
-                    "/history — письма и согласования\n/archive — архив Exat\n"
+                    "/history — письма и согласования\n/sign — подписать без отправки\n"
+                    "/archive — архив Exat\n"
                     "/cancel — отменить ввод\nДоступ выдаёт администратор Workspace: "
                     "он указывает ваш Telegram ID и разрешает AI Referent. "
                     "Код привязки не требуется.",
@@ -304,7 +379,10 @@ class SharedBot:
                 rows = [
                     [
                         button(
-                            (letter.get("displayNumber") or "Черновик")
+                            (letter.get("displayNumber") or (
+                                "На подпись" if letter.get("workflowKind") == "sign_only"
+                                else "Черновик"
+                            ))
                             + " · "
                             + letter["subject"][:40],
                             f"f:a:{UUID(letter['id']).hex}:0"
@@ -324,6 +402,23 @@ class SharedBot:
                 self.request(actor, "/reviewers")
                 self.state.put(key, {"step": "subject", "createOperation": operation})
                 self.say(actor, "Укажите тему письма.")
+            elif text == "/sign":
+                self.request(actor, "/reviewers")
+                self.state.put(key, {"step": "sign_subject", "createOperation": operation})
+                self.say(
+                    actor,
+                    "Укажите тему пакета для подписи. Каждая страница DOCX станет отдельным PDF.",
+                )
+            elif context.get("step") == "sign_subject":
+                if not 1 <= len(text) <= 300:
+                    raise WorkspaceError("Тема должна содержать от 1 до 300 символов.")
+                context.update(subject=text, step="sign_reviewer")
+                self.state.put(key, context)
+                reviewers = self.request(actor, "/reviewers")["reviewers"]
+                self.say(actor, "Кто подпишет письма?", [
+                    [button(entry["fullName"], "q:" + entry["key"])]
+                    for entry in reviewers if entry["canApprove"]
+                ])
             elif context.get("step") == "comment":
                 if len(text) < 3:
                     raise WorkspaceError("Комментарий должен содержать не менее 3 символов.")
@@ -420,6 +515,19 @@ def _run_shared(
     controller = SharedBot(bot.client, client, state)
     worker = DeliveryWorker(bot.service, client, state)
     worker.bootstrap()  # Fail closed; do not fall back to independent legacy mutations.
+    try:
+        bot.client.set_my_commands(
+            [
+                {"command": "start", "description": "Открыть меню"},
+                {"command": "new", "description": "Новое исходящее письмо"},
+                {"command": "sign", "description": "Подписать DOCX без отправки"},
+                {"command": "history", "description": "История писем"},
+                {"command": "archive", "description": "Архив документов"},
+                {"command": "cancel", "description": "Отмена текущего действия"},
+            ]
+        )
+    except Exception as error:
+        bot._status_log("workspace_commands_failed", error=type(error).__name__)
     done = threading.Event()
 
     def execute() -> None:

@@ -27,7 +27,9 @@ def modules(monkeypatch):
     return SimpleNamespace(
         **{
             name: importlib.import_module("workspace_integration." + name)
-            for name in ("state", "worker", "sync", "shared_bot", "client", "authority")
+            for name in (
+                "state", "worker", "sync", "shared_bot", "client", "authority", "sign_only"
+            )
         }
     )
 
@@ -75,6 +77,41 @@ def test_receipts_survive_restart_and_instance_lock_releases(modules, tmp_path):
         pytest.fail("Second worker acquired the same lock")
     with modules.state.single_instance(tmp_path / "bot.lock"):
         pass
+
+
+def test_telegram_sign_command_creates_one_reviewer_without_delivery(modules, tmp_path):
+    telegram = Mock()
+    telegram.send_message.return_value = {"ok": True}
+    api = Mock()
+    letter_id = str(uuid4())
+
+    def request(path, payload=None, **_kwargs):
+        if path.endswith("/reviewers"):
+            return {"reviewers": [
+                {"key": "bobur", "userId": str(uuid4()), "fullName": "Reviewer",
+                 "canApprove": True},
+            ]}
+        if path.endswith("/letters"):
+            assert payload["workflowKind"] == "sign_only"
+            assert payload["finalReviewerUserId"] is None
+            assert payload["recipientOrganization"] == "Подписание без отправки"
+            return {"id": letter_id}
+        raise AssertionError(path)
+
+    api.request.side_effect = request
+    state = modules.state.State(tmp_path / "state.sqlite")
+    bot = modules.shared_bot.SharedBot(telegram, api, state)
+    actor = {"id": 123}
+    chat = {"id": 123, "type": "private"}
+    bot.handle({"update_id": 1, "message": {"from": actor, "chat": chat, "text": "/sign"}})
+    bot.handle({"update_id": 2, "message": {"from": actor, "chat": chat, "text": "Пакет"}})
+    bot.handle({"update_id": 3, "callback_query": {
+        "id": "callback", "from": actor, "message": {"chat": chat}, "data": "q:bobur",
+    }})
+    assert state.get("conversation:123") == {
+        "step": "upload", "role": "primary", "letterId": letter_id,
+    }
+    assert any(call.args[0] == "/ai-referent/agent/letters" for call in api.request.call_args_list)
 
 
 def test_legacy_mutations_are_blocked_only_in_connected_mode(modules, monkeypatch):
@@ -258,3 +295,36 @@ def test_bot_uses_real_private_actor_and_server_revision(modules, tmp_path):
     api.request.side_effect = modules.client.WorkspaceError("Stale revision", 409)
     bot.handle(callback)
     assert "Stale revision" in telegram.send_message.call_args.args[1]
+
+
+def test_sign_only_worker_uploads_one_pdf_per_page_without_send(modules, monkeypatch, tmp_path):
+    service = Mock(archive_root=str(tmp_path))
+    api = Mock(agent_id="referent")
+    state = modules.state.State(tmp_path / "state.sqlite")
+    worker = modules.worker.DeliveryWorker(service, api, state)
+    draft = tmp_path / "letters.docx"
+    draft.write_bytes(b"test")
+    monkeypatch.setattr(worker, "download", Mock(return_value=draft))
+    produced = []
+    for page in range(1, 8):
+        pdf = tmp_path / f"{page:03d}.pdf"
+        pdf.write_bytes(b"%PDF-test")
+        produced.append(pdf)
+    signer = Mock(return_value=produced)
+    monkeypatch.setattr(modules.sign_only, "sign_document_pages", signer)
+    upload = Mock()
+    monkeypatch.setattr(worker.sync, "upload", upload)
+    job = {
+        "id": str(uuid4()), "letterId": str(uuid4()),
+        "leaseToken": str(uuid4()), "reviewerName": "Approver",
+        "files": [{"id": str(uuid4()), "name": "letters.docx", "role": "primary"}],
+    }
+    receipt = worker.sign_only(job)
+    assert receipt["outcome"] == "prepared"
+    assert receipt["signedPages"] == 7
+    assert upload.call_count == 7
+    assert [call.args[3] for call in upload.call_args_list] == [
+        f"signed/{job['id']}/{page:03d}.pdf" for page in range(1, 8)
+    ]
+    service.handle_review.assert_not_called()
+    service.retry_outgoing_send.assert_not_called()

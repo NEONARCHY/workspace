@@ -1,6 +1,6 @@
 """Deterministic service guard tests complement real PostgreSQL/HTTP integration."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.sql import Insert, Select, Update
 
+from yuksalish_api import ai_referent_agent_service as agent
 from yuksalish_api import ai_referent_configuration_service as configuration
 from yuksalish_api import ai_referent_service as letters
 from yuksalish_api.ai_referent_configuration_schemas import (
@@ -286,6 +287,7 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
     letter_id = uuid4()
     row = {
         "id": letter_id,
+        "workflow_kind": "delivery",
         "revision": 3,
         "status": status,
         "created_by_user_id": user.id,
@@ -359,6 +361,7 @@ async def test_letter_action_rejection_never_mutates_data(
     assigned = user.id if owner else uuid4()
     row = {
         "revision": 3,
+        "workflow_kind": "delivery",
         "status": status,
         "created_by_user_id": assigned,
         "reviewer_user_id": assigned,
@@ -379,4 +382,111 @@ async def test_letter_action_rejection_never_mutates_data(
             ),
         )
     assert error.value.status_code == error_code
+    assert all(isinstance(call.args[0], Select) for call in connection.execute.call_args_list)
+
+
+@pytest.mark.anyio
+async def test_sign_only_approval_queues_signature_without_number_or_delivery(monkeypatch):
+    user = actor()
+    letter_id = uuid4()
+    row = {
+        "id": letter_id,
+        "revision": 2,
+        "workflow_kind": "sign_only",
+        "status": "pending_review",
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": user.id,
+        "route": "exat",
+    }
+    connection = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value="agent"))
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(letters, "_validate_reviewer", AsyncMock(return_value="bobur"))
+    reserve = AsyncMock()
+    monkeypatch.setattr(letters, "_reserve_number", reserve)
+    monkeypatch.setattr(letters, "_event", AsyncMock())
+    monkeypatch.setattr(letters, "notify_letter", AsyncMock())
+    monkeypatch.setattr(letters, "_response", AsyncMock(return_value=object()))
+    await letters.act_on_letter(
+        connection, user, letter_id,
+        AIReferentActionRequest(action="approve", expectedRevision=2),
+    )
+    reserve.assert_not_awaited()
+    statements = [call.args[0] for call in connection.execute.call_args_list]
+    commands = [statement for statement in statements if isinstance(statement, Insert)
+                and statement.table.name == "ai_referent_delivery_commands"]
+    assert len(commands) == 1
+    assert commands[0].compile().params["kind"] == "sign_only"
+    changes = [statement for statement in statements if isinstance(statement, Update)]
+    assert changes[0].compile().params["status"] == "queued"
+    assert "outgoing_number" not in changes[0].compile().params
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("action", ["send", "queue_delivery", "release_delivery", "confirm_sent"])
+async def test_sign_only_rejects_every_external_delivery_action(monkeypatch, action):
+    user = actor("admin")
+    row = {
+        "id": uuid4(), "revision": 2, "workflow_kind": "sign_only",
+        "status": "signed", "created_by_user_id": user.id,
+        "reviewer_user_id": user.id,
+    }
+    connection = SimpleNamespace(execute=AsyncMock())
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    with pytest.raises(letters.AIReferentServiceError) as error:
+        await letters.act_on_letter(
+            connection, user, row["id"],
+            AIReferentActionRequest(action=action, expectedRevision=2),
+        )
+    assert error.value.status_code == 422
+    assert all(isinstance(call.args[0], Select) for call in connection.execute.call_args_list)
+
+
+@pytest.mark.anyio
+async def test_sign_only_result_requires_complete_page_set_and_finishes_signed(monkeypatch):
+    letter_id, job_id, lease = uuid4(), uuid4(), uuid4()
+    job = {
+        "id": job_id, "letter_id": letter_id, "lease_token": lease,
+        "claimed_by": "referent", "status": "claimed", "kind": "sign_only",
+        "lease_until": datetime.now(UTC) + timedelta(minutes=2), "result": None,
+    }
+    row = {
+        "id": letter_id, "status": "sending", "workflow_kind": "sign_only",
+        "revision": 3, "sent_at": None,
+    }
+    command_rows = SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: job))
+    filenames = [f"signed/{job_id}/{page:03d}.pdf" for page in (1, 2)]
+    file_rows = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: filenames))
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[
+        Mock(), command_rows, file_rows, Mock(), Mock(),
+    ]))
+    monkeypatch.setattr(agent, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(agent, "_event", AsyncMock())
+    monkeypatch.setattr(agent, "notify_letter", AsyncMock())
+    await agent.complete_job(
+        connection, job_id, lease, "referent", "prepared", "two PDFs", signed_pages=2,
+    )
+    updates = [call.args[0] for call in connection.execute.call_args_list
+               if isinstance(call.args[0], Update)]
+    letter_update = next(query for query in updates if query.table.name == "ai_referent_letters")
+    assert letter_update.compile().params["status"] == "signed"
+    assert letter_update.compile().params["sent_at"] is None
+
+
+@pytest.mark.anyio
+async def test_sign_only_agent_cannot_report_external_send(monkeypatch):
+    letter_id, job_id, lease = uuid4(), uuid4(), uuid4()
+    job = {
+        "id": job_id, "letter_id": letter_id, "lease_token": lease,
+        "claimed_by": "referent", "status": "claimed", "kind": "sign_only",
+        "lease_until": datetime.now(UTC) + timedelta(minutes=2), "result": None,
+    }
+    command_rows = SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: job))
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[Mock(), command_rows]))
+    monkeypatch.setattr(agent, "_letter_row", AsyncMock(return_value={
+        "id": letter_id, "status": "sending", "workflow_kind": "sign_only",
+    }))
+    with pytest.raises(HTTPException) as error:
+        await agent.complete_job(connection, job_id, lease, "referent", "sent", "sent")
+    assert error.value.status_code == 422
     assert all(isinstance(call.args[0], Select) for call in connection.execute.call_args_list)

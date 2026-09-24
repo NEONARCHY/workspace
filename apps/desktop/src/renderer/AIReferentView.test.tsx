@@ -29,6 +29,7 @@ const registry = {
   pendingReviewCount: 1,
   readyCount: 0,
   sentCount: 0,
+  signedCount: 0,
   letters: [{
     id: "letter-1",
     subject: "Ответ партнёру",
@@ -37,6 +38,7 @@ const registry = {
     route: "exat" as const,
     note: "",
     status: "pending_review" as const,
+    workflowKind: "delivery" as const,
     source: "workspace" as const,
     createdByUserId: "user-1",
     createdByName: "Автор Письма",
@@ -192,5 +194,17 @@ describe("AIReferentView", () => {
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
+  });
+
+  it("creates a sign-only request without delivery controls", async () => {
+    render(<FluentProvider theme={workspaceTheme}>
+      <AIReferentView token="token" people={[]} canCreate />
+    </FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "На подпись" }));
+    const dialog = await screen.findByRole("dialog", { name: "Подписать без отправки" });
+    expect(within(dialog).getByText(/каждый лист отдельным подписанным PDF/)).toBeInTheDocument();
+    expect(within(dialog).queryByText("Канал отправки")).toBeNull();
+    expect(within(dialog).queryByText("Второй согласующий (необязательно)")).toBeNull();
+    expect(within(dialog).queryByText("Кому отправить")).toBeNull();
   });
 });
