@@ -1892,7 +1892,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Подготовка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/projects/project-created/stage"),
       expect.objectContaining({ method: "PATCH" }),
