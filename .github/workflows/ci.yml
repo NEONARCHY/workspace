@@ -89,7 +89,7 @@ jobs:
             sleep $((attempt * 10))
           done
 
-  desktop:
+  desktop-checks:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +114,9 @@ jobs:
           node-version: "20.20.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm build
       - run: pnpm build:web
       - name: Validate LAN web Compose
         shell: pwsh
@@ -125,6 +127,38 @@ jobs:
             -f infrastructure/compose.yaml `
             -f infrastructure/compose.lan.yaml config --quiet
       - run: pnpm audit --audit-level low
+
+  desktop-tests:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.0"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @yuksalish/desktop exec vitest run --shard=${{ matrix.shard }}/2
+
+  # Keep the existing required check name. A failed or cancelled shard cannot turn green.
+  desktop:
+    if: ${{ always() }}
+    needs: [desktop-checks, desktop-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all desktop checks and test shards
+        env:
+          CHECKS_RESULT: ${{ needs.desktop-checks.result }}
+          TESTS_RESULT: ${{ needs.desktop-tests.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$TESTS_RESULT" = success
 
   secrets:
     if: github.event_name == 'pull_request'
