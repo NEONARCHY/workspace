@@ -53,8 +53,6 @@
 .telegram-access-row-footer { display: flex; grid-column: 1 / -1; align-items: flex-end; justify-content: space-between; gap: 14px; min-height: 32px; padding-top: 10px; border-top: 1px solid #edf2f3; }
 .telegram-access-messages { display: grid; gap: 6px; min-width: 0; color: var(--telegram-muted); font-size: 12px; }
 .telegram-access-error { color: #a3444b; }
-.telegram-access-code { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.telegram-access-code code { padding: 5px 8px; border-radius: 7px; background: #eaf7f5; color: #005c6b; font-size: 12px; overflow-wrap: anywhere; user-select: all; }
 .telegram-access-actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; }
 .telegram-access-primary, .telegram-access-secondary { min-height: 34px; padding: 6px 13px; border: 1px solid #c5d6dc; border-radius: 10px; background: white; color: var(--telegram-ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .telegram-access-primary { border-color: #293a55; background: #293a55; color: white; }

@@ -44,7 +44,7 @@ _REASSIGNABLE_STATUSES = (
 _CONFIGURATION_AUDIT_ID = uuid5(NAMESPACE_URL, "urn:workspace:ai-referent:configuration:1")
 
 
-async def _stage_reviewer_telegram_id(
+async def _set_reviewer_telegram_id(
     connection: AsyncConnection, user_id: UUID, telegram_id: str, now: datetime
 ) -> None:
     """Keep legacy reviewer settings and the central identity registry in sync."""
@@ -53,16 +53,13 @@ async def _stage_reviewer_telegram_id(
             telegram_identities.c.user_id == user_id
         ).with_for_update())).mappings().one_or_none()
     )
-    if identity and (
-        (identity["telegram_id"] == telegram_id and identity["verified_at"])
-        or identity["pending_telegram_id"] == telegram_id
-    ):
+    if identity and identity["telegram_id"] == telegram_id and identity["verified_at"]:
         return
     values = {
-        "telegram_id": None,
-        "pending_telegram_id": telegram_id,
-        "verified_at": None,
-        "verification_source": None,
+        "telegram_id": telegram_id,
+        "pending_telegram_id": None,
+        "verified_at": now,
+        "verification_source": "admin",
         "code_hash": None,
         "code_expires_at": None,
         "updated_at": now,
@@ -230,7 +227,7 @@ async def save_configuration(
         account = accounts.get(item.key)
         new_user_id = account["id"] if account else None
         if new_user_id is not None and item.telegram_id:
-            await _stage_reviewer_telegram_id(connection, new_user_id, item.telegram_id, now)
+            await _set_reviewer_telegram_id(connection, new_user_id, item.telegram_id, now)
         await connection.execute(
             update(ai_referent_reviewers)
             .where(ai_referent_reviewers.c.key == item.key)

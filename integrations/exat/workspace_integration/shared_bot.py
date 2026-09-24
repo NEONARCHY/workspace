@@ -286,9 +286,9 @@ class SharedBot:
                     actor,
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
                     "/history — письма и согласования\n/archive — архив Exat\n"
-                    "/cancel — отменить ввод\nДля привязки получите код в "
-                    "Workspace → AI Referent → Мой Telegram или получите код "
-                    "от администратора и отправьте /link КОД.",
+                    "/cancel — отменить ввод\nДоступ выдаёт администратор Workspace: "
+                    "он указывает ваш Telegram ID и разрешает AI Referent. "
+                    "Код привязки не требуется.",
                 )
                 return
             # Any further data request is authenticated and authorized by the server.

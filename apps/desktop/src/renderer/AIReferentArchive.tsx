@@ -4,7 +4,7 @@ import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowClockwise20Regular, Chat20Regular } from "@fluentui/react-icons";
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
-import { loadAIReferentArchive, loadAIReferentJournals, loadAIReferentTelegramLink, createAIReferentTelegramLink } from "./workspace-api";
+import { loadAIReferentArchive, loadAIReferentJournals, loadAIReferentTelegramLink } from "./workspace-api";
 
 export function AIReferentArchive({ token }: { readonly token: string }) {
   const [letters, setLetters] = useState<readonly AIReferentArchiveLetter[]>([]);
@@ -62,8 +62,6 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
 
 export function AIReferentTelegram({ token }: { readonly token: string }) {
   const [telegramId, setTelegramId] = useState<string | null>();
-  const [link, setLink] = useState<{ readonly code: string; readonly expiresAt: string }>();
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
@@ -72,23 +70,15 @@ export function AIReferentTelegram({ token }: { readonly token: string }) {
     const timer = setInterval(refresh, 10000);
     return () => { alive = false; clearInterval(timer); };
   }, [token]);
-  const create = async () => {
-    setBusy(true); setError("");
-    try { setLink(await createAIReferentTelegramLink(token)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось создать код."); }
-    finally { setBusy(false); }
-  };
   return <div className="ai-referent-page ai-referent-telegram-page">
     <div className="ai-referent-page-intro"><div><span className="ai-referent-eyebrow">Личный канал</span><h2>Workspace и Telegram</h2>
       <p>Получайте уведомления и продолжайте работу с письмами через корпоративного бота.</p></div></div>
     <section className="ai-referent-telegram-card">
       <div className="ai-referent-telegram-illustration" aria-hidden="true"><span className="ai-referent-mail-shape">✉</span><span className="ai-referent-telegram-link">↗</span><Chat20Regular /></div>
       <div className="ai-referent-telegram-copy">
-        <span className="ai-referent-eyebrow">{telegramId ? "Подключено" : "Один раз для связи"}</span>
-        <h3>{telegramId ? "Бот связан с вашим аккаунтом" : "Подключите личный Telegram"}</h3>
-        <p>{telegramId ? `Telegram ID: ${telegramId}. Доступ к боту выдаёт администратор отдельно.` : "Сначала попросите администратора указать ваш Telegram ID и выдать доступ к AI Referent. Затем получите одноразовый код и отправьте его боту в личном чате в течение 10 минут."}</p>
-        <Button appearance="primary" disabled={busy} onClick={() => void create()}>{busy ? "Создаём код…" : telegramId ? "Получить новый код" : "Получить код привязки"}</Button>
-        {link ? <div className="ai-referent-telegram-code" role="status"><span>Команда для бота</span><code>/link {link.code}</code><small>Действует до {new Date(link.expiresAt).toLocaleTimeString("ru-RU")}. Не передавайте код другим.</small></div> : null}
+        <span className="ai-referent-eyebrow">{telegramId ? "ID назначен" : "Ожидает настройки"}</span>
+        <h3>{telegramId ? "Telegram ID указан администратором" : "Попросите администратора подключить Telegram"}</h3>
+        <p>{telegramId ? `Telegram ID: ${telegramId}. Дополнительная привязка не нужна. Откройте чат с ботом и нажмите «Старт»; доступ к боту администратор выдаёт отдельно.` : "Администратор укажет ваш Telegram ID и выдаст доступ к AI Referent. После сохранения откройте чат с ботом и нажмите «Старт» — код привязки не требуется."}</p>
         {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       </div>
     </section>

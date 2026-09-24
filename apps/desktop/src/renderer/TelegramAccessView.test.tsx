@@ -4,13 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TelegramAccessView } from "./TelegramAccessView";
 import {
-  createTelegramVerificationCode,
   loadTelegramAccess,
   saveTelegramAccess,
 } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
-  createTelegramVerificationCode: vi.fn(),
   loadTelegramAccess: vi.fn(),
   saveTelegramAccess: vi.fn(),
 }));
@@ -44,12 +42,10 @@ describe("Telegram bot access hub", () => {
     expect(saveTelegramAccess).not.toHaveBeenCalled();
   });
 
-  it("saves a staged grant and issues a one-time verification code", async () => {
+  it("saves an immediately active grant without a verification code", async () => {
     vi.mocked(saveTelegramAccess).mockResolvedValue({
-      ...employee, telegramId: "123456789", botKeys: ["ai_referent"], revision: 1,
-    });
-    vi.mocked(createTelegramVerificationCode).mockResolvedValue({
-      code: "one-time-code", expiresAt: "2026-09-24T12:00:00Z",
+      ...employee, telegramId: "123456789", verified: true,
+      verificationSource: "admin", botKeys: ["ai_referent"], revision: 1,
     });
     render(<TelegramAccessView token="token" />);
     fireEvent.change(await screen.findByRole("textbox", { name: "Telegram ID" }), {
@@ -60,8 +56,8 @@ describe("Telegram bot access hub", () => {
     await waitFor(() => expect(saveTelegramAccess).toHaveBeenCalledWith("token", "person-1", {
       telegramId: "123456789", botKeys: ["ai_referent"], expectedRevision: 0,
     }));
-    fireEvent.click(await screen.findByRole("button", { name: "Получить код" }));
-    expect(await screen.findByText("one-time-code")).toBeInTheDocument();
+    expect(await screen.findByText("Сохранено. Доступ к подключённым ботам действует сразу.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Получить код" })).not.toBeInTheDocument();
   });
 
   it("keeps the ID after a server conflict", async () => {

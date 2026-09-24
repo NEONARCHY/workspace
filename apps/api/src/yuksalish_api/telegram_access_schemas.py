@@ -45,8 +45,3 @@ class TelegramAccessUpdate(ApiModel):
         if len(self.bot_keys) != len(set(self.bot_keys)):
             raise ValueError("Бот не должен повторяться в списке доступа.")
         return self
-
-
-class TelegramVerificationCode(ApiModel):
-    code: str
-    expires_at: str
