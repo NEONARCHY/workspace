@@ -230,7 +230,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       if (saved !== undefined) {
         updateSelectedId(saved.id);
         setFormMode(null);
-        queueMicrotask(() => setDetailOpen(true));
+        setDetailOpen(true);
       }
       else setFormError("Не удалось сохранить проект. Проверьте подключение и повторите попытку.");
     } catch { setFormError("Не удалось сохранить проект. Введённые данные сохранены в форме."); }
