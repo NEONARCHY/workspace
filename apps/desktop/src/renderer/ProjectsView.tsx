@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -164,7 +164,9 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const [filter, setFilter] = useState<"active" | "all" | "completed">("active");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const openSavedProjectTimer = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => () => window.clearTimeout(openSavedProjectTimer.current), []);
   const closeForm = () => {
     if (savingRef.current) return;
     if (formMode === "edit") setDetailOpen(true);
@@ -230,7 +232,9 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       if (saved !== undefined) {
         updateSelectedId(saved.id);
         setFormMode(null);
-        setDetailOpen(true);
+        // Let the form's save click finish before Fluent handles outside-click dismissal.
+        window.clearTimeout(openSavedProjectTimer.current);
+        openSavedProjectTimer.current = window.setTimeout(() => setDetailOpen(true), 0);
       }
       else setFormError("Не удалось сохранить проект. Проверьте подключение и повторите попытку.");
     } catch { setFormError("Не удалось сохранить проект. Введённые данные сохранены в форме."); }
