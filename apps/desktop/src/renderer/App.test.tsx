@@ -1892,7 +1892,17 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 }));
+    const preparationAction = await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 })
+      .catch((error: unknown) => {
+        const detail = document.querySelector(".project-detail");
+        const actions = Array.from(detail?.querySelectorAll("[data-stage]") ?? []).map((action) => ({
+          stage: action.getAttribute("data-stage"),
+          label: action.textContent?.trim(),
+          hidden: action.closest('[aria-hidden="true"]') !== null,
+        }));
+        throw new Error(`Project stage actions: ${JSON.stringify(actions)}; detail=${Boolean(detail)}`, { cause: error });
+      });
+    fireEvent.click(preparationAction);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/projects/project-created/stage"),
       expect.objectContaining({ method: "PATCH" }),
