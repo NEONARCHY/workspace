@@ -80,6 +80,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         forbidden_registry = await client.get("/api/v1/telegram-access", headers=author)
         assert forbidden_registry.status_code == 403
         await call("GET", "/recipients", agent, expected=401)
+        await call("GET", "/agent/recipients", agent, expected=422)
         await call("PUT", "/agent/recipients", author, expected=401, json={
             "agentId": "referent-test", "entries": [],
         })
@@ -131,9 +132,14 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         )
         assert stale.status_code == 409
         await call("GET", "/agent/letters", telegram("910003"))
+        bot_recipients = await call(
+            "GET", "/agent/recipients?query=finans", telegram("910003")
+        )
+        assert bot_recipients["entries"][0]["addresses"] == ["FIN-01"]
         for headers, identity in [(author, "910003"), (admin, "910004")]:
             assert (await call("GET", "/telegram-link", headers))["telegramId"] == identity
         await call("GET", "/agent/letters", telegram("910099"), expected=403)
+        await call("GET", "/agent/recipients", telegram("910099"), expected=403)
         await call("GET", "/agent/letters", {"X-AI-Referent-Telegram-Id": "910003"}, expected=401)
         visible_config = await call("GET", "/agent/reviewers", telegram("910003"))
         assert all(item["telegramId"] is None for item in visible_config["reviewers"])

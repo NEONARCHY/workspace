@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import mimetypes
+import re
 import tempfile
 import threading
 import time
@@ -43,6 +44,35 @@ STATUSES = {
     "cancelled": "Отменено",
     "signed": "Подписано · без отправки",
 }
+CATEGORIES = {
+    "": "Все",
+    "ministries": "Министерства",
+    "agencies": "Агентства",
+    "committees": "Комитеты",
+    "international": "Международные",
+    "other": "Другие",
+}
+MENU = {
+    "отправить письмо": "new", "xat yuborish": "new", "новое письмо": "new",
+    "только подпись": "sign", "подписать без отправки": "sign",
+    "история": "history", "tarix": "history", "архив": "archive", "arxiv": "archive",
+    "отмена": "cancel", "bekor qilish": "cancel",
+    "поиск": "legacy", "qidirish": "legacy", "открыть очередь": "legacy",
+    "navbatni ochish": "legacy", "ошибки": "legacy", "xatolar": "legacy",
+    "входящие на проверку": "legacy", "tekshiruvdagi kiruvchi": "legacy",
+    "сменить язык": "legacy", "tilni almashtirish": "legacy",
+}
+EMAIL = re.compile(
+    r"[A-Za-z0-9_][A-Za-z0-9._%+\-]*@[A-Za-z0-9][A-Za-z0-9.\-]*\.[A-Za-z]{2,}"
+)
+
+
+def menu_action(text: str) -> str | None:
+    normalized = text.strip().casefold()
+    for label, action in MENU.items():
+        if normalized == label or normalized.endswith(" " + label):
+            return action
+    return None
 
 
 def enabled() -> bool:
@@ -65,8 +95,13 @@ class SharedBot:
         )
 
     def say(self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None) -> None:
+        menu = {"keyboard": [
+            [{"text": "📤 Новое письмо"}, {"text": "✍️ Только подпись"}],
+            [{"text": "📚 История"}, {"text": "🗂 Архив"}],
+            [{"text": "Отмена"}],
+        ], "resize_keyboard": True, "is_persistent": True}
         result = self.telegram.send_message(
-            actor, text, reply_markup={"inline_keyboard": rows} if rows else None
+            actor, text, reply_markup={"inline_keyboard": rows} if rows else menu
         )
         if result.get("ok") is False:
             raise WorkspaceError("Telegram не подтвердил доставку сообщения.")
@@ -184,6 +219,53 @@ class SharedBot:
             rows.append([button("Далее", f"f:{kind[0]}:{UUID(owner).hex}:{offset + 12}")])
         self.say(actor, "Пакет документов" if rows else "Файлы пока не синхронизированы.", rows)
 
+    def recipients(self, actor: str, context: dict[str, Any]) -> None:
+        params = urlencode({
+            "query": context.get("query", ""), "category": context.get("category", ""),
+            "offset": context.get("offset", 0), "limit": 8,
+        })
+        registry = self.request(actor, "/recipients?" + params)
+        entries = registry["entries"]
+        context.update(step="recipient", options=entries)
+        self.state.put("conversation:" + actor, context)
+        rows = [[button("🔎 Поиск по названию или адресу", "h:search")]]
+        rows.extend(
+            [button(label, "c:" + (category or "all"))]
+            for category, label in CATEGORIES.items()
+        )
+        rows.extend(
+            [button(entry["name"][:55], f"u:{index}")]
+            for index, entry in enumerate(entries)
+        )
+        if context.get("offset", 0) > 0:
+            rows.append([button("← Назад", f"p:{max(0, context['offset'] - 8)}")])
+        if context.get("offset", 0) + len(entries) < registry["totalCount"]:
+            rows.append([button("Далее →", f"p:{context['offset'] + 8}")])
+        rows.append([button("Другая организация", "m:organization")])
+        summary = "Выберите получателя из общего справочника Exat."
+        if registry["updatedAt"] is None:
+            summary = "Справочник ещё не синхронизирован. Укажите получателя вручную."
+        elif not entries:
+            summary = "Ничего не найдено. Измените поиск или укажите вручную."
+        self.say(actor, summary, rows)
+
+    def addresses(self, actor: str, context: dict[str, Any]) -> None:
+        rows = [
+            [button(str(address)[:55], f"b:{index}")]
+            for index, address in enumerate(context["addresses"])
+        ]
+        rows.append([button("Ввести свой адрес", "b:custom")])
+        self.say(actor, f"{context['recipientOrganization']}\nВыберите адрес доставки.", rows)
+
+    def reviewers(self, actor: str, context: dict[str, Any]) -> None:
+        context["step"] = "reviewer"
+        self.state.put("conversation:" + actor, context)
+        reviewers = self.request(actor, "/reviewers")["reviewers"]
+        self.say(actor, "Выберите первого согласующего.", [
+            [button(entry["fullName"], "r:" + entry["key"])]
+            for entry in reviewers if entry["canApprove"]
+        ])
+
     def handle(self, update: dict[str, Any]) -> None:
         callback = update.get("callback_query")
         message = update.get("message") or (callback or {}).get("message") or {}
@@ -202,6 +284,41 @@ class SharedBot:
                 data = str(callback.get("data") or "").split(":")
                 if data[0] == "o":
                     self.show(actor, data[1])
+                elif data[0] == "c" and context.get("step") == "recipient":
+                    category = "" if data[1] == "all" else data[1]
+                    if category not in CATEGORIES:
+                        raise WorkspaceError("Эта категория недоступна.")
+                    context.update(category=category, offset=0)
+                    self.recipients(actor, context)
+                elif data[0] == "p" and context.get("step") == "recipient":
+                    context["offset"] = max(0, int(data[1]))
+                    self.recipients(actor, context)
+                elif data[0] == "h" and data[1] == "search" and context.get("step") == "recipient":
+                    context["step"] = "recipient_search"
+                    self.state.put(key, context)
+                    self.say(actor, "Напишите название организации или адрес для поиска.")
+                elif (data[0] == "m" and data[1] == "organization"
+                      and context.get("step") == "recipient"):
+                    context["step"] = "custom_organization"
+                    self.state.put(key, context)
+                    self.say(actor, "Напишите название организации-получателя.")
+                elif data[0] == "u" and context.get("step") == "recipient":
+                    entry = context["options"][int(data[1])]
+                    context.update(
+                        recipientOrganization=entry.get("addressBookOrganization") or entry["name"],
+                        addresses=entry["addresses"], route=entry["route"],
+                        step="address_choice",
+                    )
+                    self.state.put(key, context)
+                    self.addresses(actor, context)
+                elif data[0] == "b" and context.get("step") == "address_choice":
+                    if data[1] == "custom":
+                        context["step"] = "custom_address"
+                        self.state.put(key, context)
+                        self.say(actor, "Введите свой адрес получателя.")
+                    else:
+                        context["recipientAddress"] = context["addresses"][int(data[1])]
+                        self.reviewers(actor, context)
                 elif data[0] == "q":
                     reviewers = self.request(actor, "/reviewers")["reviewers"]
                     selected = next(
@@ -355,6 +472,13 @@ class SharedBot:
                     "/new — письмо, /history — общая очередь.",
                 )
                 return
+            menu = menu_action(text)
+            if menu == "legacy":
+                self.say(actor, "Эта кнопка осталась от прежнего режима. Откройте «История» "
+                         "или «Архив»; для нового письма нажмите «Новое письмо».")
+                return
+            if menu:
+                text = "/" + menu
             if text in {"/start", "/help"}:
                 self.say(
                     actor,
@@ -454,33 +578,28 @@ class SharedBot:
                     )
                 self.state.remove(key)
                 self.show(actor, context["letterId"])
-            elif context.get("step") in {"subject", "organization", "route"}:
-                if not text or len(text) > 300:
-                    raise WorkspaceError("Введите текст длиной от 1 до 300 символов.")
-                if context["step"] == "subject":
-                    context.update(subject=text, step="organization")
-                    self.say(
-                        actor,
-                        "Укажите точное название получателя или адрес из адресной книги Exat.",
-                    )
-                elif context["step"] == "organization":
-                    context.update(recipientOrganization=text, recipientAddress="", step="route")
-                    self.say(actor, "Введите канал: exat или webmail.")
-                else:
-                    if text.lower() not in {"exat", "webmail"}:
-                        raise WorkspaceError("Укажите exat или webmail.")
-                    context.update(route=text.lower(), step="reviewer")
-                    reviewers = self.request(actor, "/reviewers")["reviewers"]
-                    self.say(
-                        actor,
-                        "Выберите первого согласующего.",
-                        [
-                            [button(entry["fullName"], "r:" + entry["key"])]
-                            for entry in reviewers
-                            if entry["canApprove"]
-                        ],
-                    )
+            elif context.get("step") == "subject":
+                if not 1 <= len(text) <= 300:
+                    raise WorkspaceError("Тема должна содержать от 1 до 300 символов.")
+                context.update(subject=text, category="", query="", offset=0)
+                self.recipients(actor, context)
+            elif context.get("step") == "recipient_search":
+                if not 1 <= len(text) <= 160:
+                    raise WorkspaceError("Поиск должен содержать от 1 до 160 символов.")
+                context.update(query=text, offset=0)
+                self.recipients(actor, context)
+            elif context.get("step") == "custom_organization":
+                if not 1 <= len(text) <= 300:
+                    raise WorkspaceError("Название должно содержать от 1 до 300 символов.")
+                context.update(recipientOrganization=text, step="custom_address")
                 self.state.put(key, context)
+                self.say(actor, "Введите адрес получателя.")
+            elif context.get("step") == "custom_address":
+                if not EMAIL.fullmatch(text):
+                    raise WorkspaceError("Укажите полный email-адрес. Например: name@example.org.")
+                context["recipientAddress"] = text
+                context["route"] = "exat" if text.lower().endswith("@exat.uz") else "webmail"
+                self.reviewers(actor, context)
             else:
                 self.say(actor, "Откройте /history или начните письмо командой /new.")
         except (WorkspaceError, ValueError, KeyError, IndexError) as error:
