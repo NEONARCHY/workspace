@@ -241,8 +241,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("approve", telegram("910002"), 403)
         await action("approve", telegram("910001"))
         await action("approve", telegram("910002"))
-        assert letter["status"] == "approved" and int(letter["displayNumber"].split("/")[0]) > 420
-        await action("queue_delivery", telegram("910002"))
+        assert letter["status"] == "queued" and int(letter["displayNumber"].split("/")[0]) > 420
         job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         assert job["letterId"] == letter["id"] and job["kind"] == "prepare"
         assert (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"] is None
@@ -265,7 +264,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         letter = await call("GET", path, author)
-        assert letter["status"] == "awaiting_final_send"
+        assert letter["status"] == "referent_review_pending"
         packet = await call("GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910002"))
         assert len(packet["files"]) == 2
         response = await client.get(base + f"/packets/outgoing/{letter['id']}/zip", headers=author)
@@ -280,7 +279,85 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             headers=telegram("910002"),
         )
         assert hashlib.sha256(response.content).hexdigest() == hashlib.sha256(signed).hexdigest()
-        await action("release_delivery", telegram("910002"))
+        # An administrator can replace the approved document without another review.
+        number = letter["displayNumber"]
+        approvals = [event for event in letter["events"] if event["eventType"] == "letter.approve"]
+        for extension, replacement in (("pdf", b"%PDF-1.4 corrected"), ("docx", b"PK corrected")):
+            await action("replace_document", author, 403)
+            await action("replace_document", telegram("910001"), 403)
+            await action("replace_document", telegram("910004"))
+            replacement_job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+            assert replacement_job["kind"] == "replace"
+            await call(
+                "POST",
+                f"/agent/jobs/{replacement_job['id']}/result",
+                expected=204,
+                json={
+                    "agentId": "referent-test",
+                    "leaseToken": replacement_job["leaseToken"],
+                    "outcome": "revision_needed",
+                    "detail": "Prepared window closed",
+                },
+            )
+            letter = await call("GET", path, admin)
+            assert letter["status"] == "operator_revision" and letter["canReplaceDocument"]
+            assert not letter["canEdit"] and "prepare_replacement" not in letter["availableActions"]
+            await action("prepare_replacement", admin, 409)
+            sender_view = await call("GET", path, author)
+            assert not sender_view["canReplaceDocument"] and not sender_view["canEdit"]
+            upload = "/agent" + path + f"/attachment?fileName=corrected.{extension}&role=primary"
+            await call("PUT", upload, telegram("910003"), expected=404, content=replacement)
+            await call(
+                "PUT",
+                upload + "&expectedRevision=1",
+                telegram("910004"),
+                expected=409,
+                content=replacement,
+            )
+            uploaded = await call(
+                "PUT",
+                upload + f"&expectedRevision={letter['revision']}",
+                telegram("910004"),
+                content=replacement,
+            )
+            letter = await call("GET", path, admin)
+            assert "prepare_replacement" in letter["availableActions"]
+            assert [
+                item["id"] for item in letter["attachments"] if item["documentRole"] == "primary"
+            ] == [uploaded["id"]]
+            await action("prepare_replacement", author, 403)
+            await action("prepare_replacement", admin)
+            job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+            assert job["kind"] == "reprepare"
+            assert job["outgoingNumber"] == letter["outgoingNumber"]
+            assert job["yearSuffix"] == letter["yearSuffix"]
+            assert [item["id"] for item in job["files"] if item["role"] == "primary"] == [
+                uploaded["id"]
+            ]
+            lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+            signed = b"%PDF-1.4 replacement " + extension.encode()
+            await call(
+                "PUT",
+                f"/agent/files/outgoing/{letter['id']}",
+                content=signed,
+                params={**lease, "jobId": job["id"], "name": f"signed/{job['id']}.pdf"},
+            )
+            await call(
+                "POST",
+                f"/agent/jobs/{job['id']}/result",
+                expected=204,
+                json={**lease, "outcome": "prepared", "autoSend": True},
+            )
+            letter = await call("GET", path, admin)
+            assert letter["status"] == "referent_review_pending"
+            assert letter["displayNumber"] == number
+            assert [
+                event for event in letter["events"] if event["eventType"] == "letter.approve"
+            ] == approvals
+            tg_view = await call("GET", "/agent" + path, telegram("910004"))
+            assert tg_view["revision"] == letter["revision"]
+            assert "send" in tg_view["availableActions"]
+            pdf = {"sha256": hashlib.sha256(signed).hexdigest()}
         await action("send", author, 403)
         await action("send", telegram("910004"))
         send_job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
@@ -505,7 +582,6 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         await action("approve", auth("baxtiyor"), 409)  # Archive not reconciled yet.
         await call("POST", "/agent/ready?agentId=referent-test", expected=204)
         await action("approve", auth("baxtiyor"))
-        await action("queue_delivery", auth("baxtiyor"))
         await call("POST", "/agent/jobs/claim?agentId=wrong-robot", expected=409)
         job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
@@ -541,7 +617,6 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         await action("approve", auth("aziza"))
         again = await action("approve", auth("baxtiyor"))
         assert again["displayNumber"] == current["displayNumber"]
-        await action("queue_delivery", auth("baxtiyor"))
         job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
         params = {**lease, "jobId": job["id"], "name": f"signed/{job['id']}.pdf"}
@@ -568,7 +643,6 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
             expected=204,
             json={**lease, "outcome": "prepared"},
         )
-        await action("release_delivery", auth("baxtiyor"))
         await action("send")
         job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
         lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}

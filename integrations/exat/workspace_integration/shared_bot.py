@@ -15,19 +15,24 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
 from .state import State, single_instance
+from .wizard import LetterWizard
 from .worker import DeliveryWorker
 
 ACTIONS = {
     "s": ("submit", "На согласование"),
     "a": ("approve", "Согласовать"),
-    "r": ("return_for_revision", "Вернуть с комментарием"),
-    "c": ("cancel", "Отменить письмо"),
+    "r": ("return_for_revision", "Дать комментарий"),
+    "c": ("cancel", "Отклонить отправку"),
     "p": ("queue_delivery", "Подготовить PDF"),
     "t": ("retry_delivery", "Повторить подготовку"),
     "l": ("release_delivery", "Разрешить отправку"),
-    "d": ("send", "Отправить референтом"),
+    "d": ("send", "Отправить"),
     "y": ("confirm_sent", "Подтвердить: доставлено"),
     "n": ("confirm_not_sent", "Подтвердить: не доставлено"),
+    "m": ("remind", "Напомнить согласующему"),
+    "w": ("replace_document", "Заменить письмо"),
+    "j": ("mark_sent", "Отправлено вручную"),
+    "k": ("prepare_replacement", "Применить замену без согласования"),
 }
 STATUSES = {
     "draft": "Черновик",
@@ -43,6 +48,7 @@ STATUSES = {
     "failed": "Ошибка подготовки",
     "cancelled": "Отменено",
     "signed": "Подписано · без отправки",
+    "operator_revision": "Администратор заменяет файл",
 }
 CATEGORIES = {
     "": "Все",
@@ -53,14 +59,29 @@ CATEGORIES = {
     "other": "Другие",
 }
 MENU = {
-    "отправить письмо": "new", "xat yuborish": "new", "новое письмо": "new",
-    "только подпись": "sign", "подписать без отправки": "sign",
-    "история": "history", "tarix": "history", "архив": "archive", "arxiv": "archive",
-    "отмена": "cancel", "bekor qilish": "cancel",
-    "поиск": "legacy", "qidirish": "legacy", "открыть очередь": "legacy",
-    "navbatni ochish": "legacy", "ошибки": "legacy", "xatolar": "legacy",
-    "входящие на проверку": "legacy", "tekshiruvdagi kiruvchi": "legacy",
-    "сменить язык": "legacy", "tilni almashtirish": "legacy",
+    "отправить письмо": "new",
+    "xat yuborish": "new",
+    "новое письмо": "new",
+    "только подпись": "sign",
+    "подписать без отправки": "sign",
+    "история": "history",
+    "tarix": "history",
+    "архив": "archive",
+    "arxiv": "archive",
+    "отмена": "cancel",
+    "bekor qilish": "cancel",
+    "главное меню": "start",
+    "согласование": "pending",
+    "поиск": "history",
+    "qidirish": "history",
+    "открыть очередь": "pending",
+    "navbatni ochish": "pending",
+    "ошибки": "pending",
+    "xatolar": "pending",
+    "входящие на проверку": "legacy",
+    "tekshiruvdagi kiruvchi": "legacy",
+    "сменить язык": "legacy",
+    "tilni almashtirish": "legacy",
 }
 EMAIL = re.compile(
     r"[A-Za-z0-9_][A-Za-z0-9._%+\-]*@[A-Za-z0-9][A-Za-z0-9.\-]*\.[A-Za-z]{2,}"
@@ -86,6 +107,7 @@ def button(text: str, data: str) -> dict[str, str]:
 class SharedBot:
     def __init__(self, telegram: Any, api: WorkspaceClient, state: State):
         self.telegram, self.api, self.state = telegram, api, state
+        self.wizard = LetterWizard(self)
 
     def request(
         self, actor: str, path: str, payload: dict[str, Any] | None = None, method: str = "GET"
@@ -95,11 +117,15 @@ class SharedBot:
         )
 
     def say(self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None) -> None:
-        menu = {"keyboard": [
-            [{"text": "📤 Новое письмо"}, {"text": "✍️ Только подпись"}],
-            [{"text": "📚 История"}, {"text": "🗂 Архив"}],
-            [{"text": "Отмена"}],
-        ], "resize_keyboard": True, "is_persistent": True}
+        menu = {
+            "keyboard": [
+                [{"text": "📤 Новое письмо"}, {"text": "✍️ Только подпись"}],
+                [{"text": "📚 История"}, {"text": "🗂 Архив"}],
+                [{"text": "📬 Согласование"}, {"text": "Главное меню"}],
+            ],
+            "resize_keyboard": True,
+            "is_persistent": True,
+        }
         result = self.telegram.send_message(
             actor, text, reply_markup={"inline_keyboard": rows} if rows else menu
         )
@@ -115,8 +141,11 @@ class SharedBot:
             if action in letter["availableActions"]
         ]
         rows.append([button("Пакет документов", f"f:o:{compact}:0")])
+        if letter.get("canReplaceDocument"):
+            rows.append([button("Загрузить новый DOCX или PDF", f"e:{compact}")])
         if letter["canEdit"]:
-            rows.append([button("Заменить основной DOCX", f"e:{compact}")])
+            rows.append([button("Продолжить письмо", f"w:resume:{compact}")])
+            rows.append([button("Исправить письмо", f"w:edit:{compact}")])
             if letter.get("workflowKind") != "sign_only":
                 rows.append([button("Добавить вложение", f"x:{compact}")])
         latest = next(
@@ -132,12 +161,71 @@ class SharedBot:
         self.say(
             actor,
             f"{number} · {STATUSES[letter['status']]}\n"
-            f"{letter['subject']}\n{destination}"
+            f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
+            f"{destination}"
             f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
             + (f"\nКомментарий: {latest}" if latest else "")
+            + (f"\nСлужебная заметка: {letter['note']}" if letter.get("note") else "")
             + (f"\n{letter['deliveryError']}" if letter.get("deliveryError") else ""),
             rows,
         )
+
+    def history(self, actor: str, kind: str, page: int) -> None:
+        page = max(0, page)
+        result = self.request(
+            actor,
+            f"/letters?offset={page * 10}&limit=10"
+            + ("&activeOnly=true" if kind == "pending" else ""),
+        )
+        rows = [
+            [
+                button(
+                    (letter.get("displayNumber") or STATUSES[letter["status"]])
+                    + " · "
+                    + (letter["subject"] or letter["recipientOrganization"] or "Новое письмо")[:45],
+                    "o:" + UUID(letter["id"]).hex,
+                )
+            ]
+            for letter in result["letters"]
+        ]
+        navigation = []
+        if page:
+            navigation.append(button("← Назад", f"list:{kind}:{page - 1}"))
+        if len(result["letters"]) == 10:
+            navigation.append(button("Далее →", f"list:{kind}:{page + 1}"))
+        if navigation:
+            rows.append(navigation)
+        self.say(
+            actor,
+            f"{'Согласование и черновики' if kind == 'pending' else 'История'} · "
+            f"страница {page + 1}" + ("\nПисем пока нет." if not result["letters"] else ""),
+            rows,
+        )
+
+    @staticmethod
+    def current_documents(
+        letter: dict[str, Any], files: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """History stays in the packet; decisions receive only the current document version."""
+        roles = {item["id"]: item.get("documentRole") for item in letter.get("attachments", [])}
+        final = letter["status"] == "referent_review_pending"
+        selected = [
+            entry
+            for entry in files
+            if entry["source"] == "attachment"
+            and roles.get(entry["id"]) in ({"additional"} if final else {"primary", "additional"})
+        ]
+        if final:
+            signed = [
+                entry
+                for entry in files
+                if entry["source"] == "packet"
+                and entry["name"].startswith("signed/")
+                and entry["name"].lower().endswith(".pdf")
+            ]
+            if signed:
+                selected.insert(0, max(signed, key=lambda entry: entry["createdAt"]))
+        return selected
 
     def notifications(self) -> None:
         for item in self.api.request("/ai-referent/agent/notifications/claim", method="POST").get(
@@ -157,6 +245,50 @@ class SharedBot:
                     f"/ai-referent/agent/letters/{item['letterId']}",
                     telegram_id=item["telegramId"],
                 )
+                action_receipt = f"notice-actions:{item['id']}"
+                if not self.state.get(action_receipt):
+                    if letter["status"] in {
+                        "pending_review",
+                        "needs_revision",
+                        "referent_review_pending",
+                    }:
+                        packet = self.request(
+                            item["telegramId"], f"/packets/outgoing/{item['letterId']}"
+                        )
+                        candidates = self.current_documents(letter, packet["files"])
+                        for entry in candidates:
+                            file_receipt = f"notice-file:{item['id']}:{entry['id']}"
+                            if self.state.get(file_receipt):
+                                continue
+                            if int(entry.get("byteSize", 0)) > 20 * 1024 * 1024:
+                                continue
+                            content = self.api.transfer(
+                                f"/ai-referent/agent/packets/outgoing/{item['letterId']}/files/"
+                                f"{entry['id']}?source={entry['source']}",
+                                telegram_id=item["telegramId"],
+                            )
+                            if len(content) > 20 * 1024 * 1024:
+                                continue
+                            with tempfile.TemporaryDirectory(prefix="referent-review-") as folder:
+                                name = Path(entry["name"]).name
+                                if entry["source"] == "packet":
+                                    title = (
+                                        letter.get("displayNumber") or letter["subject"] or "letter"
+                                    )
+                                    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", title)[:100]
+                                    name += ".pdf"
+                                path = Path(folder) / name
+                                path.write_bytes(content)
+                                response = self.telegram.send_document(
+                                    item["telegramId"], path, caption="Документ письма"
+                                )
+                                if response.get("ok") is False:
+                                    raise WorkspaceError(
+                                        "Telegram не подтвердил доставку документа."
+                                    )
+                            self.state.put(file_receipt, True)
+                    self.show(item["telegramId"], item["letterId"])
+                    self.state.put(action_receipt, True)
                 if letter.get("workflowKind") == "sign_only" and letter["status"] == "signed":
                     packet = self.api.request(
                         f"/ai-referent/agent/packets/outgoing/{item['letterId']}",
@@ -282,8 +414,22 @@ class SharedBot:
             if callback:
                 self.telegram.answer_callback_query(callback["id"])
                 data = str(callback.get("data") or "").split(":")
+                if self.wizard.callback(actor, str(callback.get("data") or ""), operation):
+                    return
                 if data[0] == "o":
+                    self.state.remove("wizard:" + actor)
                     self.show(actor, data[1])
+                elif data[0] == "list":
+                    self.history(actor, data[1], int(data[2]))
+                elif data[0] in {"c", "p", "h", "m", "u", "b", "r", "z", "q"} and self.state.get(
+                    "wizard:" + actor
+                ):
+                    active = self.state.get("wizard:" + actor)
+                    self.wizard.resume(actor, active["letterId"])
+                    self.say(
+                        actor,
+                        "Меню обновлено. Продолжите письмо кнопками под последним сообщением.",
+                    )
                 elif data[0] == "c" and context.get("step") == "recipient":
                     category = "" if data[1] == "all" else data[1]
                     if category not in CATEGORIES:
@@ -345,6 +491,7 @@ class SharedBot:
                         "Заявка создана. Пришлите DOCX: каждая страница — отдельное письмо.",
                     )
                 elif data[0] == "a":
+                    self.state.remove("wizard:" + actor)
                     action = ACTIONS[data[1]][0]
                     payload = {
                         "action": action,
@@ -361,16 +508,22 @@ class SharedBot:
                             "Напишите комментарий или основание проверки (не менее 3 символов). "
                             "/cancel — отменить ввод.",
                         )
-                    elif action in {"send", "cancel"}:
+                    elif action in {"send", "cancel", "mark_sent", "replace_document"}:
                         self.say(
                             actor,
-                            "Подтвердите действие: " + ACTIONS[data[1]][1],
+                            "Подтвердите действие: "
+                            + ACTIONS[data[1]][1]
+                            + (
+                                ". Вы заменяете файл как администратор, без нового согласования."
+                                if action == "replace_document"
+                                else ""
+                            ),
                             [[button("Подтвердить", f"v:{data[1]}:{data[2]}:{data[3]}")]],
                         )
                     else:
                         self.request(actor, f"/letters/{UUID(data[2])}/actions", payload, "POST")
                         self.show(actor, data[2])
-                elif data[0] == "v" and data[1] in {"d", "c"}:
+                elif data[0] == "v" and data[1] in {"d", "c", "j", "w"}:
                     self.request(
                         actor,
                         f"/letters/{UUID(data[2])}/actions",
@@ -383,8 +536,11 @@ class SharedBot:
                     )
                     self.show(actor, data[2])
                 elif data[0] in {"e", "x"}:
+                    self.state.remove("wizard:" + actor)
                     letter = self.request(actor, f"/letters/{UUID(data[1])}")
-                    if not letter["canEdit"]:
+                    if not letter["canEdit"] and not (
+                        letter.get("canReplaceDocument") and data[0] == "e"
+                    ):
                         raise WorkspaceError("На текущем этапе файлы менять нельзя.")
                     self.state.put(
                         key,
@@ -392,9 +548,18 @@ class SharedBot:
                             "step": "upload",
                             "letterId": letter["id"],
                             "role": "primary" if data[0] == "e" else "additional",
+                            "revision": letter["revision"],
+                            "operator": bool(letter.get("canReplaceDocument")),
                         },
                     )
-                    self.say(actor, "Отправьте документ. Основной файл должен быть DOCX.")
+                    self.say(
+                        actor,
+                        "Отправьте DOCX или готовый подписанный PDF. "
+                        "DOCX получит прежний номер и подпись; PDF используется как есть. "
+                        "Повторного согласования не будет. Проверьте номер и подпись."
+                        if letter.get("canReplaceDocument")
+                        else "Отправьте основной DOCX.",
+                    )
                 elif data[0] == "f":
                     kind = {"o": "outgoing", "i": "incoming", "a": "archive", "j": "journal"}[
                         data[1]
@@ -479,7 +644,10 @@ class SharedBot:
                 return
             if menu:
                 text = "/" + menu
+            if self.wizard.message(actor, message, text, operation):
+                return
             if text in {"/start", "/help"}:
+                self.state.remove(key)
                 self.say(
                     actor,
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
@@ -494,6 +662,8 @@ class SharedBot:
             if text == "/cancel":
                 self.state.remove(key)
                 self.say(actor, "Ввод отменён. Сохранённые письма не удалены.")
+            elif text.startswith("/pending"):
+                self.history(actor, "pending", 0)
             elif text.startswith("/history") or text.startswith("/archive"):
                 archive = text.startswith("/archive")
                 parts = text.split()
@@ -558,7 +728,8 @@ class SharedBot:
                         "Через Telegram доступны документы до 20 МБ; "
                         "больший файл загрузите в Workspace."
                     )
-                if context["role"] == "primary" and Path(name).suffix.lower() != ".docx":
+                extensions = {".docx", ".pdf"} if context.get("operator") else {".docx"}
+                if context["role"] == "primary" and Path(name).suffix.lower() not in extensions:
                     raise WorkspaceError(
                         "Основной документ должен быть DOCX для подготовки подписи."
                     )
@@ -568,7 +739,17 @@ class SharedBot:
                     self.telegram.download_file(metadata["result"]["file_path"], path)
                     if path.stat().st_size > 20 * 1024 * 1024:
                         raise WorkspaceError("Файл превышает лимит Telegram.")
-                    query = urlencode({"fileName": name, "role": context["role"]})
+                    query = urlencode(
+                        {
+                            "fileName": name,
+                            "role": context["role"],
+                            **(
+                                {"expectedRevision": context["revision"]}
+                                if "revision" in context
+                                else {}
+                            ),
+                        }
+                    )
                     self.api.transfer(
                         f"/ai-referent/agent/letters/{context['letterId']}/attachment?{query}",
                         path.read_bytes(),
@@ -615,6 +796,13 @@ class SharedBot:
                 )
 
 
+def safe_error_text(error: Exception) -> str:
+    """Log diagnostic text without token-bearing URLs or credential-like strings."""
+    text = re.sub(r"https?://\S+", "[URL]", str(error))
+    text = re.sub(r"[A-Za-z0-9_\-]{32,}", "[redacted]", text)
+    return text[:1500]
+
+
 def run_shared(
     bot: Any, *, max_updates: int | None = None, stop_after_idle_seconds: int | None = None
 ) -> Any:
@@ -633,7 +821,6 @@ def _run_shared(
     state = State(connection_path().parent / "shared-state.sqlite")
     controller = SharedBot(bot.client, client, state)
     worker = DeliveryWorker(bot.service, client, state)
-    worker.bootstrap()  # Fail closed; do not fall back to independent legacy mutations.
     try:
         bot.client.set_my_commands(
             [
@@ -641,6 +828,7 @@ def _run_shared(
                 {"command": "new", "description": "Новое исходящее письмо"},
                 {"command": "sign", "description": "Подписать DOCX без отправки"},
                 {"command": "history", "description": "История писем"},
+                {"command": "pending", "description": "Согласование и черновики"},
                 {"command": "archive", "description": "Архив документов"},
                 {"command": "cancel", "description": "Отмена текущего действия"},
             ]
@@ -650,13 +838,35 @@ def _run_shared(
     done = threading.Event()
 
     def execute() -> None:
-        last_sync = time.monotonic()
+        ready = False
+        attempts = 0
+        next_sync = 0.0
         while not done.is_set():
+            if not ready:
+                if time.monotonic() < next_sync:
+                    done.wait(1)
+                    continue
+                attempts += 1
+                next_sync = time.monotonic() + 60
+                try:
+                    worker.bootstrap()
+                except Exception as error:
+                    bot._status_log(
+                        "workspace_bootstrap_failed",
+                        error=type(error).__name__,
+                        detail=safe_error_text(error),
+                        attempts=attempts,
+                    )
+                    continue
+                ready = True
+                next_sync = time.monotonic() + 60
+                bot._status_log("workspace_bootstrap_completed", attempts=attempts)
             try:
                 worker.tick()
-                if time.monotonic() - last_sync > 60:
+                if time.monotonic() >= next_sync:
+                    # Advance before the attempt: a failed archive must not retry every tick.
+                    next_sync = time.monotonic() + 60
                     worker.sync.run()
-                    last_sync = time.monotonic()
             except Exception as error:
                 bot._status_log("workspace_worker_error", error=type(error).__name__)
             done.wait(5)
@@ -669,6 +879,9 @@ def _run_shared(
         while max_updates is None or seen < max_updates:
             try:
                 controller.notifications()
+            except Exception as error:
+                bot._status_log("workspace_notifications_failed", error=type(error).__name__)
+            try:
                 response = bot.client.get_updates(offset=state.get("telegram-offset"))
                 for update in response.get("result", []):
                     controller.handle(update)

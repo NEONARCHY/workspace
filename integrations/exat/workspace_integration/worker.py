@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -12,6 +13,7 @@ from uuid import UUID
 
 from .authority import executing_server_job
 from .client import WorkspaceClient, WorkspaceError
+from .delivery import close_prepared, guarded_send, prepare_compose, prepared_open
 from .state import State
 from .sync import ArchiveSync
 
@@ -21,6 +23,7 @@ class DeliveryWorker:
         self.service, self.client, self.state = service, client, state
         self.sync = ArchiveSync(service, client, state)
         self.root = Path(service.archive_root) / "workspace"
+        self.prepared_handles: dict[int, int | None] = {}
 
     def bootstrap(self) -> None:
         self.sync.assert_no_legacy_pending()
@@ -99,12 +102,14 @@ class DeliveryWorker:
         thread.start()
         authority = executing_server_job.set(True)
         try:
-            if job["kind"] == "prepare":
+            if job["kind"] in {"prepare", "reprepare"}:
                 result = self.prepare(job)
             elif job["kind"] == "sign_only":
                 result = self.sign_only(job)
             elif job["kind"] == "send":
                 result = self.send(job, lost)
+            elif job["kind"] in {"cancel", "replace", "record_sent"}:
+                result = self.finish_local(job)
             else:
                 raise WorkspaceError("Неизвестный вид задания. Исполнение остановлено.")
         except Exception as error:
@@ -112,7 +117,7 @@ class DeliveryWorker:
             # not a swallowed exception or automatic retry of a possibly delivered letter.
             result = self.receipt(
                 job,
-                "unknown" if job["kind"] == "send" else "failed",
+                "unknown" if job["kind"] in {"send", "record_sent"} else "failed",
                 (
                     str(error)[:1500]
                     if isinstance(error, WorkspaceError)
@@ -152,7 +157,8 @@ class DeliveryWorker:
         folder = self.root / str(UUID(job["letterId"])) / str(UUID(job["id"]))
         files = job["files"]
         primary = next((item for item in reversed(files) if item["role"] == "primary"), None)
-        if primary is None or Path(primary["name"]).suffix.lower() != ".docx":
+        accepted = {".docx", ".pdf"} if job["kind"] == "reprepare" else {".docx"}
+        if primary is None or Path(primary["name"]).suffix.lower() not in accepted:
             raise WorkspaceError("Для подготовки подписанного PDF требуется основной DOCX.")
         draft = self.download(job, primary, folder)
         extra = [
@@ -213,9 +219,20 @@ class DeliveryWorker:
         else:
             local_id = self.service.database.insert_outgoing_letter(values)
         self.state.put("letter:" + job["letterId"], local_id)
-        result = self.service.handle_review(
-            OutgoingReviewDecision(local_id, "approve"), defer_send=True
-        )
+        if draft.suffix.lower() == ".pdf":
+            if not draft.read_bytes().startswith(b"%PDF-"):
+                raise WorkspaceError("Замена не является PDF. Отправка остановлена.")
+            self.service.database.update_outgoing_letter(
+                local_id,
+                signed_file_path=str(draft),
+                status="approved",
+                review_status="approved",
+            )
+            result = self.service.database.get_outgoing_letter(local_id)
+        else:
+            result = self.service.handle_review(
+                OutgoingReviewDecision(local_id, "approve"), defer_send=True
+            )
         signed = Path(result["signed_file_path"])
         self.sync.upload(
             "outgoing",
@@ -225,9 +242,18 @@ class DeliveryWorker:
             jobId=job["id"],
             leaseToken=job["leaseToken"],
         )
-        return self.receipt(
-            job, "prepared", "Подписанный PDF подготовлен. Внешняя отправка не выполнялась."
+        self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
+        receipt = self.receipt(
+            job,
+            "prepared",
+            "Подписанный PDF и окно отправки подготовлены. Отправка не выполнялась.",
         )
+        receipt["autoSend"] = job["kind"] == "prepare" and bool(
+            (self.service.outgoing_settings.get("exat_send", {}) or {}).get(
+                "allow_real_send", False
+            )
+        )
+        return receipt
 
     def sign_only(self, job: dict[str, Any]) -> dict[str, Any]:
         from .sign_only import sign_document_pages
@@ -290,7 +316,8 @@ class DeliveryWorker:
             },
             method="POST",
         )
-        self.service.retry_outgoing_send(local_id)
+        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
+            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         current = self.service.database.get_outgoing_letter(local_id)
         if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
             if lost.is_set():
@@ -303,10 +330,67 @@ class DeliveryWorker:
                 },
                 method="POST",
             )
-            self.service.confirm_manual_send(local_id)
+
+            def fence() -> None:
+                if (
+                    lost.is_set()
+                    or hashlib.sha256(signed.read_bytes()).hexdigest()
+                    != job["signedFile"]["sha256"]
+                ):
+                    raise WorkspaceError("Связь или подписанный файл изменились перед отправкой.")
+                self.client.request(
+                    f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
+                    {"agentId": self.client.agent_id, "leaseToken": job["leaseToken"]},
+                    method="POST",
+                )
+
+            with guarded_send(self.service, row, self.prepared_handles.get(local_id), fence):
+                self.service.confirm_manual_send(local_id)
         current = self.service.database.get_outgoing_letter(local_id)
         if current["status"] not in {"exat_sent", "webmail_sent"}:
             raise WorkspaceError("Exat не подтвердил отправку. Проверьте открытое окно и журнал.")
         return self.receipt(
             job, "sent", f"Подтверждено Exat: {current['status']}, запись {local_id}"
+        )
+
+    def finish_local(self, job: dict[str, Any]) -> dict[str, Any]:
+        local_id = self.state.get("letter:" + job["letterId"])
+        row = self.service.database.get_outgoing_letter(local_id) if local_id is not None else None
+        if job["kind"] == "record_sent":
+            if row is None:
+                raise WorkspaceError("Локальный журнал письма отсутствует. Нужна ручная сверка.")
+            if row["status"] not in {"exat_sent", "webmail_sent"}:
+                # Explicit human attestation; do not click Send or reuse the number.
+                self.service.database.update_outgoing_letter(
+                    local_id,
+                    status="webmail_sent" if row["destination_route"] == "webmail" else "exat_sent",
+                    review_status="approved",
+                    sent_at=datetime.now(UTC).isoformat(),
+                )
+                self.service.database.write_outgoing_event(
+                    local_id,
+                    "workspace_manual_sent",
+                    "Workspace operator confirmed manual delivery.",
+                )
+                self.service._clear_manual_send_hold(local_id)
+                self.service._rewrite_journal()
+            return self.receipt(
+                job, "sent", "Ручная отправка подтверждена референтом; робот не нажимал Отправить."
+            )
+        if row is not None:
+            if row["status"] in {"exat_sent", "webmail_sent"}:
+                raise WorkspaceError(
+                    "Локальный журнал уже содержит отправку. Отмена заблокирована."
+                )
+            close_prepared(self.service, row, self.prepared_handles.get(local_id))
+            self.service.database.update_outgoing_letter(
+                local_id,
+                status="cancelled" if job["kind"] == "cancel" else "operator_revision",
+                review_status="cancelled" if job["kind"] == "cancel" else "operator_revision",
+            )
+            self.service._rewrite_journal()
+        return self.receipt(
+            job,
+            "cancelled" if job["kind"] == "cancel" else "revision_needed",
+            "Подготовленное окно закрыто. Запись исключена из очереди отправки.",
         )

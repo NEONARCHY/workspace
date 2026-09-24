@@ -23,6 +23,7 @@ AIReferentStatus = Literal[
     "referent_review_pending",
     "delivery_unknown",
     "signed",
+    "operator_revision",
 ]
 AIReferentWorkflowKind = Literal["delivery", "sign_only"]
 AIReferentSource = Literal["workspace", "telegram", "import"]
@@ -37,28 +38,24 @@ AIReferentAction = Literal[
     "send",
     "confirm_sent",
     "confirm_not_sent",
+    "remind",
+    "replace_document",
+    "mark_sent",
+    "prepare_replacement",
 ]
 
 
 class AIReferentLetterFields(ApiModel):
     workflow_kind: AIReferentWorkflowKind = "delivery"
-    subject: str = Field(min_length=1, max_length=300)
-    recipient_organization: str = Field(min_length=1, max_length=300)
+    subject: str = Field(default="", max_length=300)
+    recipient_organization: str = Field(default="", max_length=300)
     recipient_address: str = Field(default="", max_length=500)
     route: AIReferentRoute
     note: str = Field(default="", max_length=5000)
     reviewer_user_id: UUID | None = None
     final_reviewer_user_id: UUID | None = None
 
-    @field_validator("subject", "recipient_organization")
-    @classmethod
-    def required_text_must_not_be_blank(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("Поле не должно быть пустым")
-        return stripped
-
-    @field_validator("recipient_address", "note")
+    @field_validator("subject", "recipient_organization", "recipient_address", "note")
     @classmethod
     def optional_text_is_trimmed(cls, value: str) -> str:
         return value.strip()
@@ -115,6 +112,7 @@ class AIReferentLetterResponse(ApiModel):
     reviewer_name: str | None = None
     final_reviewer_user_id: str | None = None
     final_reviewer_name: str | None = None
+    initial_reviewer_user_id: str | None = None
     delivery_error: str = ""
     revision: int
     sent_at: datetime | None = None
@@ -124,6 +122,7 @@ class AIReferentLetterResponse(ApiModel):
     events: list[AIReferentEventResponse] = Field(default_factory=list)
     available_actions: list[AIReferentAction] = Field(default_factory=list)
     can_edit: bool = False
+    can_replace_document: bool = False
 
 
 class AIReferentRegistryResponse(ApiModel):

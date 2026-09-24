@@ -17,6 +17,13 @@ from zoneinfo import ZoneInfo
 from .client import WorkspaceClient, WorkspaceError
 from .state import State
 
+MAX_ARCHIVE_FILE_BYTES = 200 * 1024 * 1024
+ROBOT_METADATA_FILES = frozenset({"metadata.json", "hashes.json", "ai_result.json"})
+
+
+def is_document_file(path: Path) -> bool:
+    return path.name.lower() not in ROBOT_METADATA_FILES
+
 
 def timestamp(value: Any) -> str | None:
     if not value:
@@ -71,9 +78,9 @@ class ArchiveSync:
     def upload(self, kind: str, owner: str, path: Path, name: str, **extra: str) -> None:
         if not path.is_file():
             raise WorkspaceError("Файл пакета отсутствует на ПК референта; восстановите архив.")
-        if path.stat().st_size > 50 * 1024 * 1024:
+        if path.stat().st_size > MAX_ARCHIVE_FILE_BYTES:
             raise WorkspaceError(
-                "Файл пакета превышает 50 МБ. Нужна отдельная загрузка большого файла."
+                "Файл пакета превышает 200 МБ. Нужна отдельная загрузка большого файла."
             )
         before = path.stat()
         content = path.read_bytes()
@@ -113,7 +120,7 @@ class ArchiveSync:
                 "Каталог письма отсутствует. Архив не удаляется при синхронизации."
             )
         for path in sorted(resolved.rglob("*")):
-            if not path.is_file():
+            if not path.is_file() or not is_document_file(path):
                 continue
             if not path.resolve().is_relative_to(resolved):
                 raise WorkspaceError("Ссылка внутри архива выходит за каталог письма.")

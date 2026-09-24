@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, cast, func, insert, or_, select, update
@@ -95,13 +95,16 @@ def _available_actions(
     may_approve: bool,
     attachment_count: int,
     may_operate: bool = False,
+    replacement_file_ready: bool = False,
 ) -> tuple[list[AIReferentAction], bool]:
     status = row["status"]
     privileged = _is_privileged(current_user)
     is_creator = row["created_by_user_id"] == current_user.id
     is_reviewer = row["reviewer_user_id"] == current_user.id
-    can_edit = status in _EDITABLE_STATUSES and (is_creator or privileged)
+    can_edit = status in _EDITABLE_STATUSES and (is_creator or privileged or may_operate)
     actions: list[AIReferentAction] = []
+    if status == "pending_review" and is_creator:
+        actions.append("remind")
     if row["workflow_kind"] == "sign_only":
         if can_edit and row["reviewer_user_id"] is not None and attachment_count > 0:
             actions.append("submit")
@@ -114,7 +117,13 @@ def _available_actions(
         ):
             actions.append("cancel")
         return actions, can_edit
-    if can_edit and row["reviewer_user_id"] is not None and attachment_count > 0:
+    if (
+        can_edit
+        and row["reviewer_user_id"] is not None
+        and attachment_count > 0
+        and row["recipient_organization"]
+        and row["recipient_address"]
+    ):
         actions.append("submit")
     if status == "pending_review" and may_approve and (is_reviewer or privileged):
         actions.extend(("approve", "return_for_revision"))
@@ -125,11 +134,13 @@ def _available_actions(
     if status == "awaiting_final_send" and may_approve and (is_reviewer or privileged):
         actions.extend(("release_delivery", "return_for_revision"))
     if status == "referent_review_pending" and may_operate:
-        actions.extend(("send", "return_for_revision"))
+        actions.extend(("send", "return_for_revision", "replace_document", "mark_sent"))
+    if status == "operator_revision" and may_operate and replacement_file_ready:
+        actions.append("prepare_replacement")
     if status == "delivery_unknown" and may_operate:
         actions.extend(("confirm_sent", "confirm_not_sent"))
     if status not in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"} and (
-        is_creator or privileged
+        (is_creator and status != "operator_revision") or privileged or may_operate
     ):
         actions.append("cancel")
     return actions, can_edit
@@ -172,6 +183,27 @@ async def _validate_reviewer(connection: AsyncConnection, reviewer_id: UUID | No
     if not permissions["ai_referent"]["approve"]:
         raise AIReferentServiceError(422, "Согласующему запрещён доступ к модулю AI Referent.")
     return str(key) if key else None
+
+
+def _normalize_review_route(
+    payload: CreateAIReferentLetterRequest | UpdateAIReferentLetterRequest,
+    reviewer_key: str | None,
+    final_key: str | None,
+) -> tuple[str | None, str | None]:
+    """The API stores execution order: preliminary first, Bobur last."""
+    if payload.final_reviewer_user_id is None:
+        return reviewer_key, None
+    if payload.final_reviewer_user_id == payload.reviewer_user_id:
+        raise AIReferentServiceError(422, "Выберите разных согласующих.")
+    if reviewer_key == "bobur":
+        payload.reviewer_user_id, payload.final_reviewer_user_id = (
+            payload.final_reviewer_user_id,
+            payload.reviewer_user_id,
+        )
+        return final_key, reviewer_key
+    if final_key != "bobur":
+        raise AIReferentServiceError(422, "Два этапа доступны только с финальным решением Бобура.")
+    return reviewer_key, final_key
 
 
 async def _letter_row(
@@ -267,6 +299,34 @@ async def _letter_attachments(
     return [_attachment(row) for row in rows]
 
 
+async def _replacement_ready(connection: AsyncConnection, row: RowMapping) -> bool:
+    if row["status"] != "operator_revision":
+        return False
+    started = await connection.scalar(
+        select(func.max(ai_referent_events.c.created_at)).where(
+            ai_referent_events.c.letter_id == row["id"],
+            ai_referent_events.c.event_type == "letter.replace_document",
+        )
+    )
+    if started is None:
+        return False
+    return bool(
+        await connection.scalar(
+            select(attachments.c.id)
+            .where(
+                attachments.c.owner_type == "ai_referent_letter",
+                attachments.c.owner_id == row["id"],
+                attachments.c.document_role == "primary",
+                attachments.c.created_at > started,
+                or_(
+                    attachments.c.file_name.ilike("%.docx"), attachments.c.file_name.ilike("%.pdf")
+                ),
+            )
+            .limit(1)
+        )
+    )
+
+
 async def _response(
     connection: AsyncConnection,
     row: RowMapping,
@@ -276,6 +336,7 @@ async def _response(
 ) -> AIReferentLetterResponse:
     letter_attachments = await _letter_attachments(connection, row["id"])
     permissions = await module_permissions_for_user(connection, current_user)
+    replacement_ready = await _replacement_ready(connection, row)
     if may_approve is None:
         may_approve = permissions.get("ai_referent", {}).get("approve", False)
     actions, can_edit = _available_actions(
@@ -287,6 +348,7 @@ async def _response(
             for item in letter_attachments
         ),
         may_operate=permissions.get("ai_referent", {}).get("admin", False),
+        replacement_file_ready=replacement_ready,
     )
     if not permissions.get("ai_referent", {}).get("edit", False):
         can_edit = False
@@ -312,6 +374,9 @@ async def _response(
         if row.get("final_reviewer_user_id")
         else None,
         final_reviewer_name=row.get("final_reviewer_name"),
+        initial_reviewer_user_id=(
+            str(row["initial_reviewer_user_id"]) if row.get("initial_reviewer_user_id") else None
+        ),
         delivery_error=row.get("delivery_error") or "",
         revision=row["revision"],
         sent_at=row["sent_at"],
@@ -321,6 +386,10 @@ async def _response(
         events=await _letter_events(connection, row["id"]),
         available_actions=actions,
         can_edit=can_edit,
+        can_replace_document=(
+            row["status"] == "operator_revision"
+            and permissions.get("ai_referent", {}).get("admin", False)
+        ),
     )
 
 
@@ -362,12 +431,15 @@ async def create_letter(
     reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     final_key = await _validate_reviewer(connection, payload.final_reviewer_user_id)
     if payload.workflow_kind == "sign_only":
-        if payload.reviewer_user_id is None or payload.final_reviewer_user_id is not None:
+        if payload.final_reviewer_user_id is not None:
             raise AIReferentServiceError(422, "Выберите одного согласующего для подписи.")
         if payload.route != "exat":
             raise AIReferentServiceError(
                 422, "Подписание без отправки не использует канал доставки."
             )
+    operation_payload = payload
+    payload = payload.model_copy()
+    reviewer_key, final_key = _normalize_review_route(payload, reviewer_key, final_key)
     now = datetime.now(UTC)
     letter_id = uuid4()
     await connection.execute(
@@ -411,7 +483,7 @@ async def create_letter(
         from_status=None,
         to_status="draft",
     )
-    await remember_operation(connection, current_user, payload, "create", letter_id)
+    await remember_operation(connection, current_user, operation_payload, "create", letter_id)
     return await _response(connection, await _letter_row(connection, letter_id), current_user)
 
 
@@ -422,6 +494,7 @@ async def load_letters(
     query: str = "",
     status: str | None = None,
     workflow_kind: str | None = None,
+    active_only: bool = False,
     offset: int = 0,
     limit: int = 50,
 ) -> AIReferentRegistryResponse:
@@ -455,6 +528,8 @@ async def load_letters(
         )
     if status:
         statement = statement.where(ai_referent_letters.c.status == status)
+    if active_only:
+        statement = statement.where(ai_referent_letters.c.status.not_in(_FINAL_STATUSES))
     if workflow_kind:
         statement = statement.where(ai_referent_letters.c.workflow_kind == workflow_kind)
     cleaned = query.strip()
@@ -558,15 +633,16 @@ async def update_letter(
     if row["status"] not in _EDITABLE_STATUSES:
         raise AIReferentServiceError(409, "На текущем этапе письмо нельзя редактировать.")
     if row["created_by_user_id"] != current_user.id and not _is_privileged(current_user):
-        raise AIReferentServiceError(403, "Редактировать письмо может его автор.")
+        await ensure_module_action(connection, current_user, "ai_referent", "admin")
     reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     final_key = await _validate_reviewer(connection, payload.final_reviewer_user_id)
     if row["workflow_kind"] == "sign_only" and (
-        payload.reviewer_user_id is None
-        or payload.final_reviewer_user_id is not None
-        or payload.route != "exat"
+        payload.final_reviewer_user_id is not None or payload.route != "exat"
     ):
         raise AIReferentServiceError(422, "Для подписи выберите одного согласующего.")
+    operation_payload = payload
+    payload = payload.model_copy()
+    reviewer_key, final_key = _normalize_review_route(payload, reviewer_key, final_key)
     await connection.execute(
         update(ai_referent_letters)
         .where(ai_referent_letters.c.id == letter_id)
@@ -599,7 +675,7 @@ async def update_letter(
         from_status=row["status"],
         to_status=row["status"],
     )
-    await remember_operation(connection, current_user, payload, scope, letter_id)
+    await remember_operation(connection, current_user, operation_payload, scope, letter_id)
     return await _response(connection, await _letter_row(connection, letter_id), current_user)
 
 
@@ -655,7 +731,20 @@ async def act_on_letter(
     values: dict[str, object] = {}
     command_kind: str | None = None
 
-    if row["workflow_kind"] == "sign_only":
+    if action == "remind":
+        await ensure_module_action(connection, current_user, "ai_referent", "edit")
+        if current_status != "pending_review" or not is_creator:
+            raise AIReferentServiceError(403, "Напомнить о согласовании может автор письма.")
+        last_reminder = await connection.scalar(
+            select(func.max(ai_referent_events.c.created_at)).where(
+                ai_referent_events.c.letter_id == letter_id,
+                ai_referent_events.c.event_type == "letter.remind",
+            )
+        )
+        if last_reminder and datetime.now(UTC) - last_reminder < timedelta(minutes=5):
+            raise AIReferentServiceError(429, "Повторное напоминание доступно через 5 минут.")
+        next_status = current_status
+    elif row["workflow_kind"] == "sign_only":
         if action == "submit":
             await ensure_module_action(connection, current_user, "ai_referent", "edit")
             if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
@@ -712,7 +801,11 @@ async def act_on_letter(
     elif action == "submit":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
         if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
-            raise AIReferentServiceError(403, "Отправить письмо может его автор.")
+            if current_status not in _EDITABLE_STATUSES:
+                raise AIReferentServiceError(409, "Письмо не готово к повторному согласованию.")
+            await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        if not row["recipient_organization"] or not row["recipient_address"]:
+            raise AIReferentServiceError(422, "Выберите организацию и адрес получателя.")
         if row["reviewer_user_id"] is None:
             raise AIReferentServiceError(422, "Сначала выберите согласующего.")
         values["reviewer_key"] = await _validate_reviewer(connection, row["reviewer_user_id"])
@@ -729,13 +822,22 @@ async def act_on_letter(
         if not file_count:
             raise AIReferentServiceError(422, "Перед согласованием приложите основной файл письма.")
         next_status = "pending_review"
-    elif action in {"send", "confirm_sent", "confirm_not_sent"} or (
-        action == "return_for_revision" and current_status == "referent_review_pending"
-    ):
+    elif action == "prepare_replacement":
+        await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        if current_status != "operator_revision" or not await _replacement_ready(connection, row):
+            raise AIReferentServiceError(409, "Сначала загрузите новый DOCX или готовый PDF.")
+        next_status, command_kind = "queued", "reprepare"
+    elif action in {
+        "send",
+        "confirm_sent",
+        "confirm_not_sent",
+        "mark_sent",
+        "replace_document",
+    } or (action == "return_for_revision" and current_status == "referent_review_pending"):
         await ensure_module_action(connection, current_user, "ai_referent", "admin")
         expected = (
             "referent_review_pending"
-            if action in {"send", "return_for_revision"}
+            if action in {"send", "return_for_revision", "mark_sent", "replace_document"}
             else "delivery_unknown"
         )
         if current_status != expected:
@@ -750,9 +852,15 @@ async def act_on_letter(
             "confirm_sent": "sent",
             "confirm_not_sent": "referent_review_pending",
             "return_for_revision": "needs_revision",
+            "mark_sent": "queued",
+            "replace_document": "queued",
         }[action]
         if action == "send":
             command_kind = "send"
+        elif action == "mark_sent":
+            command_kind = "record_sent"
+        elif action == "replace_document":
+            command_kind = "replace"
         if action == "confirm_sent":
             values["sent_at"] = datetime.now(UTC)
         values["delivery_error"] = ""
@@ -793,7 +901,8 @@ async def act_on_letter(
                         )
                     number, year_suffix = await _reserve_number(connection)
                     values.update(outgoing_number=number, year_suffix=year_suffix)
-                next_status = "approved"
+                next_status = "queued"
+                command_kind = "prepare"
         elif action == "return_for_revision":
             if current_status not in {"pending_review", "awaiting_final_send", "failed"}:
                 raise AIReferentServiceError(409, "Письмо не ожидает согласования.")
@@ -812,11 +921,13 @@ async def act_on_letter(
             command_kind = "prepare"
     elif action == "cancel":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
-        if current_status in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"} or not (
-            is_creator or privileged
-        ):
+        if current_status in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"}:
             raise AIReferentServiceError(403, "Отменить письмо может его автор.")
+        if current_status == "operator_revision" or not (is_creator or privileged):
+            await ensure_module_action(connection, current_user, "ai_referent", "admin")
         next_status = "cancelled"
+        if row["outgoing_number"] is not None:
+            next_status, command_kind = "queued", "cancel"
     else:
         raise AIReferentServiceError(422, "Неизвестное действие.")
 
@@ -883,6 +994,10 @@ async def act_on_letter(
         "cancel": "Письмо отменено",
         "confirm_sent": "Доставка письма подтверждена",
         "confirm_not_sent": "Отсутствие доставки подтверждено",
+        "remind": "Напоминание: письмо ожидает вашего решения",
+        "replace_document": "Администратор заменяет документ без повторного согласования",
+        "mark_sent": "Референт подтвердил ручную отправку",
+        "prepare_replacement": "Администратор подтвердил новую версию письма",
     }
     if row["workflow_kind"] == "sign_only":
         titles.update({

@@ -742,6 +742,7 @@ export interface WorkspaceAttachment {
 
 export type AIReferentRoute = "exat" | "webmail";
 export type AIReferentStatus =
+  | "operator_revision"
   | "awaiting_final_send"
   | "referent_review_pending"
   | "delivery_unknown"
@@ -758,6 +759,10 @@ export type AIReferentStatus =
 export type AIReferentWorkflowKind = "delivery" | "sign_only";
 export type AIReferentSource = "workspace" | "telegram" | "import";
 export type AIReferentAction =
+  | "remind"
+  | "replace_document"
+  | "mark_sent"
+  | "prepare_replacement"
   | "release_delivery"
   | "send"
   | "confirm_sent"
@@ -781,6 +786,8 @@ export interface AIReferentEvent {
 }
 
 export interface AIReferentLetter {
+  readonly canReplaceDocument?: boolean;
+  readonly initialReviewerUserId?: string | null;
   readonly finalReviewerUserId?: string | null;
   readonly finalReviewerName?: string | null;
   readonly deliveryError?: string;

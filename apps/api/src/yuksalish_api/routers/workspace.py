@@ -1262,6 +1262,7 @@ async def put_attachment(
         Literal["opus"] | None,
         Query(alias="mediaCodec"),
     ] = None,
+    expected_revision: Annotated[int | None, Query(alias="expectedRevision", ge=1)] = None,
 ) -> AttachmentResponse:
     attachment_module = {
         "message": "messenger",
@@ -1273,13 +1274,7 @@ async def put_attachment(
     await ensure_module_action(connection, current_user, attachment_module, "edit")
     safe_name = _safe_file_name(file_name)
     sign_only = False
-    if owner_type == "ai_referent_letter":
-        workflow_kind = await connection.scalar(
-            select(ai_referent_letters.c.workflow_kind).where(ai_referent_letters.c.id == owner_id)
-        )
-        sign_only = workflow_kind == "sign_only"
-        if sign_only and (document_role != "primary" or not safe_name.lower().endswith(".docx")):
-            raise HTTPException(422, "Для подписи загрузите только основной DOCX.")
+    operator_replacement = False
     try:
         await validate_attachment_owner(
             connection,
@@ -1290,6 +1285,37 @@ async def put_attachment(
         )
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+
+    if owner_type == "ai_referent_letter":
+        # Read the stage only after the ownership check locks the letter row.
+        letter = (
+            (
+                await connection.execute(
+                    select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == owner_id,
+                    )
+                )
+            )
+            .mappings()
+            .one()
+        )
+        operator_replacement = letter["status"] == "operator_revision"
+        if operator_replacement and (
+            document_role != "primary" or not safe_name.lower().endswith((".docx", ".pdf"))
+        ):
+            raise HTTPException(422, "Для замены нужен основной DOCX или готовый PDF.")
+        sign_only = letter["workflow_kind"] == "sign_only"
+        if sign_only and (document_role != "primary" or not safe_name.lower().endswith(".docx")):
+            raise HTTPException(422, "Для подписи загрузите только основной DOCX.")
+
+    if owner_type == "ai_referent_letter" and expected_revision is not None:
+        revision = await connection.scalar(
+            select(ai_referent_letters.c.revision).where(
+                ai_referent_letters.c.id == owner_id,
+            )
+        )
+        if revision != expected_revision:
+            raise HTTPException(409, "Письмо изменилось. Обновите карточку перед загрузкой файла.")
 
     settings = request.app.state.settings
     is_audio_hint = False
@@ -1343,6 +1369,12 @@ async def put_attachment(
             )
     if not content:
         raise HTTPException(status_code=422, detail="Attachment must not be empty")
+    if (
+        operator_replacement
+        and safe_name.lower().endswith(".pdf")
+        and not content.startswith(b"%PDF-")
+    ):
+        raise HTTPException(422, "Файл не является PDF.")
     if sign_only:
         try:
             with ZipFile(BytesIO(content)) as package:
