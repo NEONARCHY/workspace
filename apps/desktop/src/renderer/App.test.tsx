@@ -1892,7 +1892,23 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
-    const preparationAction = await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 });
+    const preparationAction = await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 })
+      .catch((error: unknown) => {
+        const detail = document.querySelector(".project-detail");
+        const hiddenParent = detail?.closest('[aria-hidden="true"]');
+        const dialogs = Array.from(document.querySelectorAll('[role="dialog"]')).map((dialog) => ({
+          className: dialog.className,
+          hiddenParent: dialog.closest('[aria-hidden="true"]')?.className ?? null,
+          label: dialog.getAttribute("aria-labelledby"),
+        }));
+        throw new Error(JSON.stringify({
+          detailOpen: detail?.closest(".projects-view")?.classList.contains("detail-open") ?? false,
+          hiddenParent: hiddenParent?.className ?? null,
+          hiddenParentTag: hiddenParent?.tagName ?? null,
+          formOpen: document.querySelector(".record-composer") !== null,
+          dialogs,
+        }), { cause: error });
+      });
     fireEvent.click(preparationAction);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/projects/project-created/stage"),
