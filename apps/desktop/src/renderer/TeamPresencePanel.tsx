@@ -34,7 +34,7 @@ function clockLabel(value: string): string {
 export function TeamPresencePanel({ token }: { readonly token: string }) {
   const [data, setData] = useState<WorkdayTeam>();
   const [error, setError] = useState("");
-  const [onlyWorking, setOnlyWorking] = useState(false);
+  const [onlyWorking, setOnlyWorking] = useState(true);
   const [editing, setEditing] = useState<WorkdayTeamMember>();
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
@@ -106,8 +106,8 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>
     </header>
     <div className="team-presence-toolbar">
-      <button type="button" aria-pressed={!onlyWorking} className={!onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(false)}>Вся команда</button>
       <button type="button" aria-pressed={onlyWorking} className={onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(true)}>Сейчас работают</button>
+      <button type="button" aria-pressed={!onlyWorking} className={!onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(false)}>Вся команда</button>
       <small>Данные на {data ? clockLabel(data.asOf) : "—"}</small>
       <Button appearance="subtle" size="small" icon={<ArrowSync20Regular />} aria-label="Обновить отметки" onClick={() => {
         void loadTeamWorkday(token).then((result) => {
