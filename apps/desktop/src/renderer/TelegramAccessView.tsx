@@ -7,11 +7,7 @@ import type {
   TelegramBotKey,
 } from "@yuksalish/contracts";
 
-import {
-  createTelegramVerificationCode,
-  loadTelegramAccess,
-  saveTelegramAccess,
-} from "./workspace-api";
+import { loadTelegramAccess, saveTelegramAccess } from "./workspace-api";
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Не удалось выполнить действие. Попробуйте ещё раз.";
@@ -30,8 +26,6 @@ function PersonAccessRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [code, setCode] = useState("");
-  const [expiresAt, setExpiresAt] = useState("");
   const dirty = telegramId !== (person.telegramId ?? "") ||
     selected.length !== person.botKeys.length ||
     selected.some((key) => !person.botKeys.includes(key));
@@ -57,7 +51,6 @@ function PersonAccessRow({
     setBusy(true);
     setError("");
     setNotice("");
-    setCode("");
     try {
       const saved = await saveTelegramAccess(token, person.userId, {
         telegramId: id || null,
@@ -65,26 +58,9 @@ function PersonAccessRow({
         expectedRevision: person.revision,
       });
       onSaved(saved);
-      setNotice(saved.verified
-        ? "Доступ сохранён. Изменения действуют сейчас."
-        : saved.telegramId
-          ? "Настройки сохранены. Новый ID нужно подтвердить кодом в Telegram."
-          : "Telegram ID и доступы удалены.");
-    } catch (caught) {
-      setError(errorText(caught));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const issueCode = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await createTelegramVerificationCode(token, person.userId);
-      setCode(result.code);
-      setExpiresAt(result.expiresAt);
-      setNotice("Передайте код только этому сотруднику. Он должен отправить боту AI Referent команду /link КОД.");
+      setNotice(saved.telegramId
+        ? "Сохранено. Доступ к подключённым ботам действует сразу."
+        : "Telegram ID и доступы удалены.");
     } catch (caught) {
       setError(errorText(caught));
     } finally {
@@ -120,9 +96,7 @@ function PersonAccessRow({
           className={`telegram-access-status ${person.verified ? "is-verified" : ""}`}
           id={`telegram-status-${person.userId}`}
         >
-          {person.verified
-            ? person.verificationSource === "legacy_admin" ? "Ранее назначен" : "ID подтверждён"
-            : person.telegramId ? "Ожидает подтверждения" : "ID не указан"}
+          {person.verified ? "ID действует" : person.telegramId ? "Сохраните ID повторно" : "ID не указан"}
         </span>
       </div>
       <fieldset className="telegram-access-bots" disabled={busy}>
@@ -146,17 +120,8 @@ function PersonAccessRow({
         <div className="telegram-access-messages" aria-live="polite">
           {error ? <span className="telegram-access-error" role="alert">{error}</span> : null}
           {!error && notice ? <span>{notice}</span> : null}
-          {code ? <div className="telegram-access-code">
-            <span>Код до {new Date(expiresAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
-            <code>{code}</code>
-          </div> : null}
         </div>
         <div className="telegram-access-actions">
-          {!person.verified && person.telegramId && !dirty ? (
-            <button type="button" className="telegram-access-secondary" onClick={() => void issueCode()} disabled={busy}>
-              Получить код
-            </button>
-          ) : null}
           <button type="button" className="telegram-access-primary" onClick={() => void save()} disabled={!dirty || busy}>
             {busy ? "Подождите…" : "Сохранить"}
           </button>
@@ -197,7 +162,7 @@ export function TelegramAccessView({ token }: { readonly token: string }) {
     `${person.fullName} ${person.username} ${person.jobTitle ?? ""}`
       .toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"))), [registry, query]);
   const verified = registry?.people.filter((person) => person.verified).length ?? 0;
-  const pending = registry?.people.filter((person) => person.telegramId && !person.verified).length ?? 0;
+  const referentAccess = registry?.people.filter((person) => person.verified && person.botKeys.includes("ai_referent")).length ?? 0;
   return <section className="telegram-access-view" aria-labelledby="telegram-access-title">
     <div className="telegram-access-header">
       <div>
@@ -211,12 +176,12 @@ export function TelegramAccessView({ token }: { readonly token: string }) {
     </div>
     {registry ? <div className="telegram-access-overview" aria-label="Состояние привязок">
       <span><strong>{registry.people.length}</strong> действующих сотрудников</span>
-      <span><strong>{verified}</strong> с подтверждённым ID</span>
-      <span><strong>{pending}</strong> ожидают подтверждения</span>
+      <span><strong>{verified}</strong> с действующим ID</span>
+      <span><strong>{referentAccess}</strong> с доступом к AI Referent</span>
     </div> : null}
     <div className="telegram-access-guide">
       <span className="telegram-access-guide-icon" aria-hidden="true">↗</span>
-      <p>Отметьте нужных ботов и сохраните строку. Новый ID начнёт действовать после команды <code>/link КОД</code> от самого сотрудника. Пока подключён только AI Referent; право согласовывать письма настраивается отдельно.</p>
+      <p>Укажите Telegram ID, отметьте нужных ботов и сохраните строку — дополнительный код не нужен. Сейчас проверку доступа поддерживает AI Referent; право согласовывать письма настраивается отдельно. Для получения сообщений сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
     </div>
     <label className="telegram-access-search">
       <span>Найти сотрудника</span>
