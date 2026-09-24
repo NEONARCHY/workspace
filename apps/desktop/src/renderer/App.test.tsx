@@ -1892,8 +1892,13 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
-    const preparationAction = await screen.findByRole("button", { name: "Подготовка" }, { timeout: 5_000 });
-    fireEvent.click(preparationAction);
+    const closeDetail = screen.queryByRole("button", { name: "Закрыть карточку проекта" });
+    if (closeDetail) fireEvent.click(closeDetail);
+    const card = await screen.findByRole("button", { name: "Перенести: Тестовый проект BP-7" });
+    const targetColumn = document.querySelector<HTMLElement>('.project-board [data-spatial-lane="preparation"]');
+    expect(targetColumn).not.toBeNull();
+    installSpatialGeometry();
+    await dropSpatialCard(card.closest("article")!, targetColumn!);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/projects/project-created/stage"),
       expect.objectContaining({ method: "PATCH" }),

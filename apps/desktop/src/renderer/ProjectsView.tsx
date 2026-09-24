@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -164,9 +164,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const [filter, setFilter] = useState<"active" | "all" | "completed">("active");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const openSavedProjectTimer = useRef(0);
   const formRef = useRef<HTMLFormElement>(null);
-  useEffect(() => () => window.clearTimeout(openSavedProjectTimer.current), []);
   const closeForm = () => {
     if (savingRef.current) return;
     if (formMode === "edit") setDetailOpen(true);
@@ -232,9 +230,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       if (saved !== undefined) {
         updateSelectedId(saved.id);
         setFormMode(null);
-        // Let the form's save click finish before Fluent handles outside-click dismissal.
-        window.clearTimeout(openSavedProjectTimer.current);
-        openSavedProjectTimer.current = window.setTimeout(() => setDetailOpen(true), 0);
+        queueMicrotask(() => setDetailOpen(true));
       }
       else setFormError("Не удалось сохранить проект. Проверьте подключение и повторите попытку.");
     } catch { setFormError("Не удалось сохранить проект. Введённые данные сохранены в форме."); }
@@ -347,14 +343,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       </>}
 
       {selected !== undefined ? (
-        <Dialog open={detailOpen} onOpenChange={(event, data) => {
-          if (!data.open) {
-            if (import.meta.env.MODE === "test") {
-              console.info("project-detail-close", data.type, event.type, (event.target as HTMLElement | null)?.className);
-            }
-            closeDetail();
-          }
-        }}>
+        <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) closeDetail(); }}>
         <DialogSurface className="project-dialog context-record-dialog" aria-labelledby="project-detail-title">
           <div className="context-record-workspace">
           <article className="bp7-detail project-detail">
