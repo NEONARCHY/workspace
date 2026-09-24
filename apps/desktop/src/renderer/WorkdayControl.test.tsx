@@ -85,9 +85,11 @@ describe("workday presence", () => {
     vi.mocked(loadTeamWorkday).mockResolvedValue(team);
     show(<TeamPresencePanel token="test-token" />);
     await screen.findByText("Дилшод Рахимов");
-    expect(screen.getByText("На больничном")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сейчас работают" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Малика Нурова")).not.toBeInTheDocument();
     expect(screen.getByText("из 2 работают")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Сейчас работают" }));
-    await waitFor(() => expect(screen.queryByText("Малика Нурова")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Вся команда" }));
+    await waitFor(() => expect(screen.getByText("Малика Нурова")).toBeInTheDocument());
+    expect(screen.getByText("На больничном")).toBeInTheDocument();
   });
 });
