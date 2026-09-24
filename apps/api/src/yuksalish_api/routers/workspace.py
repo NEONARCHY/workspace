@@ -8,6 +8,7 @@ from pathlib import PurePosixPath
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
+from zipfile import BadZipFile, ZipFile
 
 from fastapi import (
     APIRouter,
@@ -96,7 +97,7 @@ from yuksalish_api.repository import (
     update_trip_request,
     validate_attachment_owner,
 )
-from yuksalish_api.tables import users
+from yuksalish_api.tables import ai_referent_letters, users
 from yuksalish_api.web_security import is_allowed_web_origin
 from yuksalish_api.workspace_schemas import (
     AbsenceActionRequest,
@@ -1271,6 +1272,14 @@ async def put_attachment(
     }[owner_type]
     await ensure_module_action(connection, current_user, attachment_module, "edit")
     safe_name = _safe_file_name(file_name)
+    sign_only = False
+    if owner_type == "ai_referent_letter":
+        workflow_kind = await connection.scalar(
+            select(ai_referent_letters.c.workflow_kind).where(ai_referent_letters.c.id == owner_id)
+        )
+        sign_only = workflow_kind == "sign_only"
+        if sign_only and (document_role != "primary" or not safe_name.lower().endswith(".docx")):
+            raise HTTPException(422, "Для подписи загрузите только основной DOCX.")
     try:
         await validate_attachment_owner(
             connection,
@@ -1334,6 +1343,28 @@ async def put_attachment(
             )
     if not content:
         raise HTTPException(status_code=422, detail="Attachment must not be empty")
+    if sign_only:
+        try:
+            with ZipFile(BytesIO(content)) as package:
+                names = {name.lower() for name in package.namelist()}
+                if sum(item.file_size for item in package.infolist()) > 100 * 1024 * 1024:
+                    raise HTTPException(422, "DOCX слишком большой после распаковки.")
+                external_relationships = any(
+                    item.filename.lower().endswith(".rels")
+                    and (
+                        b'targetmode="external"' in package.read(item).lower()
+                        or b"targetmode='external'" in package.read(item).lower()
+                    )
+                    for item in package.infolist()
+                )
+                if (
+                    "word/document.xml" not in names
+                    or any("vbaproject" in name for name in names)
+                    or external_relationships
+                ):
+                    raise HTTPException(422, "DOCX повреждён или содержит недопустимые элементы.")
+        except BadZipFile as error:
+            raise HTTPException(422, "Файл не является DOCX.") from error
 
     content_type = request.headers.get("content-type", "application/octet-stream")[:160]
     if media_kind == "voice":

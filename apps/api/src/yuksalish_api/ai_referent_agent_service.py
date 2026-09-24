@@ -237,6 +237,7 @@ async def complete_job(
     agent_id: str,
     outcome: str,
     detail: str,
+    signed_pages: int | None = None,
 ) -> None:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     job = (
@@ -250,7 +251,9 @@ async def complete_job(
     )
     if job is None or job["lease_token"] != lease or job["claimed_by"] != agent_id:
         raise HTTPException(409, "Устаревшее подтверждение задания.")
-    result = {"outcome": outcome, "detail": detail}
+    result: dict[str, object] = {"outcome": outcome, "detail": detail}
+    if signed_pages is not None:
+        result["signedPages"] = signed_pages
     if job["status"] == "completed" and job["result"] == result:
         return
     if job["status"] != "claimed" or job["lease_until"] < datetime.now(UTC):
@@ -258,21 +261,43 @@ async def complete_job(
     row = await _letter_row(connection, job["letter_id"], lock=True)
     if row["status"] != "sending":
         raise HTTPException(409, "Состояние письма уже изменилось.")
+    if row["workflow_kind"] == "sign_only" and job["kind"] != "sign_only":
+        raise HTTPException(409, "Для подписи без отправки назначено неверное задание.")
+    if row["workflow_kind"] == "sign_only" and outcome == "sent":
+        raise HTTPException(422, "Внешняя отправка в режиме подписи запрещена.")
     if outcome == "prepared":
-        if job["kind"] != "prepare":
+        if job["kind"] not in {"prepare", "sign_only"}:
             raise HTTPException(422, "Неверный результат отправки.")
-        signed = await connection.scalar(
-            select(ai_referent_files.c.id).where(
-                ai_referent_files.c.owner_id == row["id"],
-                ai_referent_files.c.kind == "outgoing",
-                ai_referent_files.c.relative_path == f"signed/{job_id}.pdf",
+        if job["kind"] == "sign_only":
+            if signed_pages is None or not 1 <= signed_pages <= 100:
+                raise HTTPException(422, "Укажите число подписанных страниц.")
+            produced = (
+                await connection.execute(
+                    select(ai_referent_files.c.relative_path).where(
+                        ai_referent_files.c.owner_id == row["id"],
+                        ai_referent_files.c.kind == "outgoing",
+                        ai_referent_files.c.relative_path.like(f"signed/{job_id}/%"),
+                    )
+                )
+            ).scalars().all()
+            expected = {f"signed/{job_id}/{page:03d}.pdf" for page in range(1, signed_pages + 1)}
+            if set(produced) != expected:
+                raise HTTPException(422, "Нужен отдельный подписанный PDF для каждой страницы.")
+            status = "signed"
+        else:
+            signed = await connection.scalar(
+                select(ai_referent_files.c.id).where(
+                    ai_referent_files.c.owner_id == row["id"],
+                    ai_referent_files.c.kind == "outgoing",
+                    ai_referent_files.c.relative_path == f"signed/{job_id}.pdf",
+                )
             )
-        )
-        if not signed:
-            raise HTTPException(422, "Сначала загрузите подписанный PDF этого задания.")
-        status = (
-            "awaiting_final_send" if row["reviewer_key"] == "bobur" else "referent_review_pending"
-        )
+            if not signed:
+                raise HTTPException(422, "Сначала загрузите подписанный PDF этого задания.")
+            status = (
+                "awaiting_final_send"
+                if row["reviewer_key"] == "bobur" else "referent_review_pending"
+            )
     elif outcome == "sent":
         if job["kind"] != "send" or len(detail.strip()) < 3:
             raise HTTPException(422, "Требуется подтверждение фактической отправки.")
@@ -318,6 +343,7 @@ async def complete_job(
         {
             "awaiting_final_send": "Подписанный PDF ожидает финального решения",
             "referent_review_pending": "Письмо готово: требуется отправка референтом",
+            "signed": "Письма подписаны и доступны отдельными PDF — без отправки адресатам",
             "sent": "Письмо отправлено",
             "failed": "Ошибка подготовки письма",
             "delivery_unknown": "Результат отправки требует проверки",

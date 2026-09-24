@@ -38,7 +38,7 @@ from .tables import (
 from .workspace_schemas import AttachmentResponse
 
 _EDITABLE_STATUSES = frozenset({"draft", "needs_revision"})
-_FINAL_STATUSES = frozenset({"sent", "cancelled"})
+_FINAL_STATUSES = frozenset({"sent", "signed", "cancelled"})
 _PRIVILEGED_ROLES = frozenset({"admin", "superadmin"})
 
 
@@ -102,6 +102,18 @@ def _available_actions(
     is_reviewer = row["reviewer_user_id"] == current_user.id
     can_edit = status in _EDITABLE_STATUSES and (is_creator or privileged)
     actions: list[AIReferentAction] = []
+    if row["workflow_kind"] == "sign_only":
+        if can_edit and row["reviewer_user_id"] is not None and attachment_count > 0:
+            actions.append("submit")
+        if status == "pending_review" and may_approve and is_reviewer:
+            actions.extend(("approve", "return_for_revision"))
+        if status == "failed" and may_approve and is_reviewer:
+            actions.extend(("retry_delivery", "return_for_revision"))
+        if status not in _FINAL_STATUSES | {"queued", "sending"} and (
+            is_creator or privileged
+        ):
+            actions.append("cancel")
+        return actions, can_edit
     if can_edit and row["reviewer_user_id"] is not None and attachment_count > 0:
         actions.append("submit")
     if status == "pending_review" and may_approve and (is_reviewer or privileged):
@@ -290,6 +302,7 @@ async def _response(
         route=row["route"],
         note=row["note"] or "",
         status=row["status"],
+        workflow_kind=row["workflow_kind"],
         source=row["source"],
         created_by_user_id=str(row["created_by_user_id"]),
         created_by_name=row["creator_name"],
@@ -348,6 +361,13 @@ async def create_letter(
         return await load_letter(connection, current_user, replay)
     reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     final_key = await _validate_reviewer(connection, payload.final_reviewer_user_id)
+    if payload.workflow_kind == "sign_only":
+        if payload.reviewer_user_id is None or payload.final_reviewer_user_id is not None:
+            raise AIReferentServiceError(422, "Выберите одного согласующего для подписи.")
+        if payload.route != "exat":
+            raise AIReferentServiceError(
+                422, "Подписание без отправки не использует канал доставки."
+            )
     now = datetime.now(UTC)
     letter_id = uuid4()
     await connection.execute(
@@ -356,11 +376,17 @@ async def create_letter(
             outgoing_number=None,
             year_suffix=None,
             subject=payload.subject,
-            recipient_organization=payload.recipient_organization,
-            recipient_address=payload.recipient_address,
+            recipient_organization=(
+                "Подписание без отправки" if payload.workflow_kind == "sign_only"
+                else payload.recipient_organization
+            ),
+            recipient_address=(
+                "" if payload.workflow_kind == "sign_only" else payload.recipient_address
+            ),
             route=payload.route,
             note=payload.note,
             status="draft",
+            workflow_kind=payload.workflow_kind,
             source="workspace",
             created_by_user_id=current_user.id,
             reviewer_user_id=payload.reviewer_user_id,
@@ -395,6 +421,7 @@ async def load_letters(
     *,
     query: str = "",
     status: str | None = None,
+    workflow_kind: str | None = None,
     offset: int = 0,
     limit: int = 50,
 ) -> AIReferentRegistryResponse:
@@ -428,6 +455,8 @@ async def load_letters(
         )
     if status:
         statement = statement.where(ai_referent_letters.c.status == status)
+    if workflow_kind:
+        statement = statement.where(ai_referent_letters.c.workflow_kind == workflow_kind)
     cleaned = query.strip()
     if cleaned:
         pattern = f"%{cleaned}%"
@@ -492,6 +521,7 @@ async def load_letters(
             for key in ("approved", "queued", "sending", "referent_review_pending")
         ),
         sent_count=counts.get("sent", 0),
+        signed_count=counts.get("signed", 0),
     )
 
 
@@ -523,19 +553,32 @@ async def update_letter(
     row = await _letter_row(connection, letter_id, lock=True)
     if row["revision"] != payload.expected_revision:
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
+    if payload.workflow_kind != row["workflow_kind"]:
+        raise AIReferentServiceError(422, "Вид заявки нельзя изменить после создания.")
     if row["status"] not in _EDITABLE_STATUSES:
         raise AIReferentServiceError(409, "На текущем этапе письмо нельзя редактировать.")
     if row["created_by_user_id"] != current_user.id and not _is_privileged(current_user):
         raise AIReferentServiceError(403, "Редактировать письмо может его автор.")
     reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     final_key = await _validate_reviewer(connection, payload.final_reviewer_user_id)
+    if row["workflow_kind"] == "sign_only" and (
+        payload.reviewer_user_id is None
+        or payload.final_reviewer_user_id is not None
+        or payload.route != "exat"
+    ):
+        raise AIReferentServiceError(422, "Для подписи выберите одного согласующего.")
     await connection.execute(
         update(ai_referent_letters)
         .where(ai_referent_letters.c.id == letter_id)
         .values(
             subject=payload.subject,
-            recipient_organization=payload.recipient_organization,
-            recipient_address=payload.recipient_address,
+            recipient_organization=(
+                "Подписание без отправки" if row["workflow_kind"] == "sign_only"
+                else payload.recipient_organization
+            ),
+            recipient_address=(
+                "" if row["workflow_kind"] == "sign_only" else payload.recipient_address
+            ),
             route=payload.route,
             note=payload.note,
             reviewer_user_id=payload.reviewer_user_id,
@@ -612,7 +655,61 @@ async def act_on_letter(
     values: dict[str, object] = {}
     command_kind: str | None = None
 
-    if action == "submit":
+    if row["workflow_kind"] == "sign_only":
+        if action == "submit":
+            await ensure_module_action(connection, current_user, "ai_referent", "edit")
+            if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
+                raise AIReferentServiceError(403, "Отправить на подпись может автор.")
+            if row["reviewer_user_id"] is None:
+                raise AIReferentServiceError(422, "Выберите согласующего.")
+            values["reviewer_key"] = await _validate_reviewer(
+                connection, row["reviewer_user_id"]
+            )
+            primary_count = await connection.scalar(
+                select(func.count()).select_from(attachments).where(
+                    attachments.c.owner_type == "ai_referent_letter",
+                    attachments.c.owner_id == letter_id,
+                    attachments.c.document_role == "primary",
+                    attachments.c.file_name.ilike("%.docx"),
+                )
+            )
+            if not primary_count:
+                raise AIReferentServiceError(422, "Нужен основной DOCX для подписи.")
+            next_status = "pending_review"
+        elif action == "approve":
+            await ensure_module_action(connection, current_user, "ai_referent", "approve")
+            if current_status != "pending_review" or not is_reviewer:
+                raise AIReferentServiceError(403, "Подписать может только выбранный согласующий.")
+            await _validate_reviewer(connection, current_user.id)
+            if not await connection.scalar(
+                select(ai_referent_configuration.c.execution_agent_id)
+            ):
+                raise AIReferentServiceError(409, "Робот референта ещё не подключён.")
+            next_status = "queued"
+            command_kind = "sign_only"
+        elif action == "return_for_revision":
+            await ensure_module_action(connection, current_user, "ai_referent", "approve")
+            if current_status not in {"pending_review", "failed"} or not is_reviewer:
+                raise AIReferentServiceError(403, "Вернуть может выбранный согласующий.")
+            if len(payload.comment) < 3:
+                raise AIReferentServiceError(422, "Укажите причину возврата.")
+            next_status = "needs_revision"
+        elif action == "retry_delivery":
+            await ensure_module_action(connection, current_user, "ai_referent", "approve")
+            if current_status != "failed" or not is_reviewer:
+                raise AIReferentServiceError(403, "Повторить подпись может согласующий.")
+            next_status = "queued"
+            command_kind = "sign_only"
+        elif action == "cancel":
+            await ensure_module_action(connection, current_user, "ai_referent", "edit")
+            if current_status in _FINAL_STATUSES | {"queued", "sending"} or not (
+                is_creator or privileged
+            ):
+                raise AIReferentServiceError(403, "Заявку нельзя отменить на этом этапе.")
+            next_status = "cancelled"
+        else:
+            raise AIReferentServiceError(422, "Этот маршрут только для подписи, без отправки.")
+    elif action == "submit":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
         if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
             raise AIReferentServiceError(403, "Отправить письмо может его автор.")
@@ -787,5 +884,12 @@ async def act_on_letter(
         "confirm_sent": "Доставка письма подтверждена",
         "confirm_not_sent": "Отсутствие доставки подтверждено",
     }
+    if row["workflow_kind"] == "sign_only":
+        titles.update({
+            "submit": "Документ поступил на подпись",
+            "approve": "Подпись одобрена — робот готовит отдельные PDF",
+            "retry_delivery": "Робот повторно готовит подписанные PDF",
+            "cancel": "Заявка на подпись отменена",
+        })
     await notify_letter(connection, updated, titles[action], payload.comment)
     return await _response(connection, updated, current_user)

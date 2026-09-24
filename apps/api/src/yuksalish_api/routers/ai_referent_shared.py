@@ -113,6 +113,7 @@ class AgentLease(ApiModel):
 class AgentResult(AgentLease):
     outcome: Literal["prepared", "sent", "failed", "unknown"]
     detail: str = Field(default="", max_length=2000)
+    signed_pages: int | None = Field(default=None, ge=1, le=100)
 
 
 class NotificationAck(ApiModel):
@@ -400,11 +401,18 @@ async def upload_packet_file(
         if job_id is None or lease_token is None:
             raise HTTPException(403, "Требуется действующее задание.")
         await heartbeat_job(connection, job_id, lease_token, agent_id)
-        job_owner = await connection.scalar(
-            select(commands.c.letter_id).where(commands.c.id == job_id)
+        job = (
+            (await connection.execute(select(commands).where(commands.c.id == job_id)))
+            .mappings().one_or_none()
         )
+        job_owner = job["letter_id"] if job else None
         if job_owner != owner_id:
             raise HTTPException(403, "Файл не относится к заданию.")
+        if job is not None and job["kind"] == "sign_only":
+            prefix = f"signed/{job_id}/"
+            suffix = name[len(prefix):] if name.startswith(prefix) else ""
+            if not (len(suffix) == 7 and suffix[:3].isdigit() and suffix[3:] == ".pdf"):
+                raise HTTPException(422, "В этом режиме принимаются только отдельные PDF-страницы.")
     elif kind == "journal":
         if owner_id != uuid5(NAMESPACE_URL, f"ai-journal:{agent_id}"):
             raise HTTPException(403, "Неверный владелец журнала.")
@@ -474,7 +482,8 @@ async def job_result(
     job_id: UUID, payload: AgentResult, request: Request, connection: Connection
 ) -> Response:
     await complete_job(
-        connection, job_id, payload.lease_token, payload.agent_id, payload.outcome, payload.detail
+        connection, job_id, payload.lease_token, payload.agent_id, payload.outcome,
+        payload.detail, payload.signed_pages,
     )
     await request.app.state.event_bus.publish(
         {"type": "ai_referent.updated", "entityId": str(job_id)}

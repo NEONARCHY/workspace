@@ -36,6 +36,7 @@ from yuksalish_api.ai_referent_schemas import (
     AIReferentLetterResponse,
     AIReferentRegistryResponse,
     AIReferentStatus,
+    AIReferentWorkflowKind,
     CreateAIReferentLetterRequest,
     UpdateAIReferentLetterRequest,
 )
@@ -265,11 +266,13 @@ async def get_letters(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
     query: Annotated[str, Query(max_length=200)] = "",
     status: AIReferentStatus | None = None,
+    workflow_kind: AIReferentWorkflowKind | None = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> AIReferentRegistryResponse:
     return await load_letters(
-        connection, current_user, query=query, status=status, offset=offset, limit=limit
+        connection, current_user, query=query, status=status,
+        workflow_kind=workflow_kind, offset=offset, limit=limit
     )
 
 

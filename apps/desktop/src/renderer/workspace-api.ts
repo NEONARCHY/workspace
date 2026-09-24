@@ -158,12 +158,13 @@ export function issueEmployeeReward(
 
 export function loadAIReferentRegistry(
   token: string,
-  filters: { readonly query?: string; readonly status?: string; readonly offset?: number } = {},
+  filters: { readonly query?: string; readonly status?: string; readonly offset?: number; readonly workflowKind?: "delivery" | "sign_only" } = {},
 ): Promise<AIReferentRegistry> {
   const query = new URLSearchParams();
   if (filters.query?.trim()) query.set("query", filters.query.trim());
   if (filters.status) query.set("status", filters.status);
   if (filters.offset) query.set("offset", String(filters.offset));
+  if (filters.workflowKind) query.set("workflow_kind", filters.workflowKind);
   const suffix = query.size > 0 ? `?${query.toString()}` : "";
   return apiRequest<AIReferentRegistry>(`/ai-referent/letters${suffix}`, {}, token);
 }
