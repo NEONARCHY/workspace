@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +42,7 @@ describe("workday presence", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => cleanup());
 
-  it("starts and finishes only on explicit button clicks", async () => {
+  it("requires confirmation before finishing and keeps work active after cancellation", async () => {
     vi.mocked(loadMyWorkday).mockResolvedValue(initial);
     vi.mocked(startMyWorkday).mockResolvedValue(working);
     vi.mocked(finishMyWorkday).mockResolvedValue({
@@ -54,8 +54,28 @@ describe("workday presence", () => {
     await screen.findByRole("button", { name: "Завершить работу" });
     expect(startMyWorkday).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole("button", { name: "Завершить работу" }));
+    let dialog = await screen.findByRole("dialog", { name: "Завершить рабочий день?" });
+    expect(finishMyWorkday).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(finishMyWorkday).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Завершить работу" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Завершить работу" }));
+    dialog = await screen.findByRole("dialog", { name: "Завершить рабочий день?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Да, завершить" }));
     await screen.findByRole("button", { name: "Начать снова" });
     expect(finishMyWorkday).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps confirmation open when finishing fails so the employee can retry", async () => {
+    vi.mocked(loadMyWorkday).mockResolvedValue(working);
+    vi.mocked(finishMyWorkday).mockRejectedValue(new Error("Сервис временно недоступен"));
+    show(<WorkdayControl token="test-token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Завершить работу" }));
+    const dialog = await screen.findByRole("dialog", { name: "Завершить рабочий день?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Да, завершить" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Сервис временно недоступен");
+    expect(within(dialog).getByRole("button", { name: "Да, завершить" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Завершить работу" })).toBeEnabled();
   });
 
   it("does not offer a start button during approved absence", async () => {

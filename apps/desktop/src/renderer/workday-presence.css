@@ -2,6 +2,7 @@
 .workday-control .fui-Button { white-space: nowrap; border-radius: 12px; font-size: 13px; }
 .workday-control-away { display: inline-flex; align-items: center; gap: 6px; color: var(--ws-muted); font-size: 12px; }
 .workday-control-error { border: 0; background: transparent; color: #a03d50; font: inherit; font-size: 12px; cursor: pointer; }
+.workday-confirm-error { margin: 12px 0 0; color: #a03d50; font-size: 13px; }
 
 .team-presence-panel { min-width: 0; padding: 22px 24px 12px; border: 1px solid var(--ws-line); border-radius: 24px; background: var(--ws-surface); box-shadow: var(--ws-shadow-card); }
 .team-presence-heading { display: flex; justify-content: space-between; align-items: center; gap: 24px; }

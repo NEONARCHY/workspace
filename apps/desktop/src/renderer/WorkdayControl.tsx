@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 
 import type { WorkdayMe } from "@yuksalish/contracts";
-import { Button } from "@fluentui/react-components";
+import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle } from "@fluentui/react-components";
 import { Clock20Regular, Play20Regular, Stop20Regular } from "@fluentui/react-icons";
 
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { finishMyWorkday, loadMyWorkday, startMyWorkday } from "./workspace-api";
 
 function timeLabel(value: string): string {
@@ -14,6 +15,7 @@ export function WorkdayControl({ token }: { readonly token: string }) {
   const [data, setData] = useState<WorkdayMe>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -23,7 +25,10 @@ export function WorkdayControl({ token }: { readonly token: string }) {
         if (!result.schedule?.startsAt || !result.schedule?.endsAt) {
           throw new Error("Сервер вернул неполный рабочий статус");
         }
-        if (active) { setData(result); setError(""); }
+        if (active) {
+          setData(result); setError("");
+          if (result.status !== "working") setConfirmFinishOpen(false);
+        }
       }).catch((failure: unknown) => {
         if (active) setError(failure instanceof Error ? failure.message : "Не удалось получить рабочий статус");
       });
@@ -38,18 +43,20 @@ export function WorkdayControl({ token }: { readonly token: string }) {
     };
   }, [token]);
 
-  const act = async () => {
-    if (busy || !data || data.status === "approved_absence") return;
+  const act = async (action: "start" | "finish") => {
+    if (busy || !data || data.status === "approved_absence"
+      || (action === "finish") !== (data.status === "working")) return;
     setBusy(true);
     setError("");
     try {
-      const result = data.status === "working"
+      const result = action === "finish"
         ? await finishMyWorkday(token)
         : await startMyWorkday(token);
       if (!result.schedule?.startsAt || !result.schedule?.endsAt) {
         throw new Error("Сервер вернул неполный рабочий статус");
       }
       setData(result);
+      if (action === "finish") setConfirmFinishOpen(false);
       window.dispatchEvent(new Event("yuksalish:workday-changed"));
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Не удалось изменить рабочий статус");
@@ -71,9 +78,12 @@ export function WorkdayControl({ token }: { readonly token: string }) {
       icon={isWorking ? <Stop20Regular /> : <Play20Regular />}
       disabled={busy || !data}
       title={`${label} · ${schedule}${data?.session?.closeSource === "automatic" ? " · предыдущий день закрыт автоматически" : ""}`}
-      onClick={() => void act()}
+      onClick={() => {
+        if (isWorking) { setError(""); setConfirmFinishOpen(true); }
+        else void act("start");
+      }}
     >{busy ? "Сохраняем…" : data ? label : "Рабочий день"}</Button>}
-    {error ? <button className="workday-control-error" type="button" role="alert" title={error} onClick={() => {
+    {error && !confirmFinishOpen ? <button className="workday-control-error" type="button" role="alert" title={error} onClick={() => {
       void loadMyWorkday(token).then((result) => {
         if (!result.schedule?.startsAt || !result.schedule?.endsAt) {
           throw new Error("Сервер вернул неполный рабочий статус");
@@ -81,5 +91,24 @@ export function WorkdayControl({ token }: { readonly token: string }) {
         setData(result); setError("");
       }).catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "Повторите позже"));
     }}>Ошибка · повторить</button> : null}
+    <Dialog open={confirmFinishOpen} onOpenChange={(_event, next) => {
+      if (!next.open && !busy) setConfirmFinishOpen(false);
+    }}>
+      <DialogSurface aria-describedby="workday-finish-confirmation-message">
+        <DialogBody>
+          <DialogTitle>Завершить рабочий день?</DialogTitle>
+          <DialogContent id="workday-finish-confirmation-message">
+            Текущая отметка работы будет закрыта. Если продолжите работу, сможете начать снова.
+            {error ? <p className="workday-confirm-error" role="alert">{error}</p> : null}
+          </DialogContent>
+          <DialogActions>
+            <Button disabled={busy} onClick={() => setConfirmFinishOpen(false)}>Отмена</Button>
+            <Button appearance="primary" disabled={busy || data?.status !== "working"} onClick={() => void act("finish")}>
+              {busy ? "Завершаем…" : "Да, завершить"}
+            </Button>
+          </DialogActions>
+        </DialogBody>
+      </DialogSurface>
+    </Dialog>
   </div>;
 }
