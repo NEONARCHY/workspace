@@ -103,6 +103,8 @@ import { HrView } from "./HrView";
 import { AIReferentView } from "./AIReferentView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
+import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
@@ -388,6 +390,7 @@ export function App() {
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
   const [webUpdateAvailable, setWebUpdateAvailable] = useState(false);
+  const [profileUserId, setProfileUserId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
@@ -1638,9 +1641,42 @@ export function App() {
   const activeSectionDenied = activeSection !== "notifications" && modulePermissions[activeSection]?.view === false;
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
   const displayedSection = activeSectionDenied && fallbackSection !== "settings" ? fallbackSection : activeSection;
+  const renderEmbeddedChat = (
+    chatId: string,
+    contextLabel: "задачи" | "проекта" | "поездки",
+  ) => <EmbeddedConversation
+    chatId={chatId}
+    contextLabel={contextLabel}
+    token={session.accessToken}
+    chats={workspace.chats}
+    personalPreferences={workspace.personalPreferences}
+    messages={workspace.messages}
+    tasks={workspace.tasks}
+    attachments={workspace.attachments}
+    people={workspace.people}
+    onSendMessage={handleSendMessage}
+    onSendVoiceMessage={handleSendVoiceMessage}
+    onReactMessage={handleMessageReaction}
+    onPinMessage={handleMessagePin}
+    currentUserId={workspace.currentUser.id}
+    currentUserRole={workspace.currentUser.role}
+    chatActions={chatActions}
+    onEditMessage={async (message, body, mentionUserIds) => {
+      await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds));
+    }}
+    onDeleteMessage={async (message) => {
+      await messengerMutation((token) => deleteWorkspaceMessage(token, message));
+    }}
+    onCreateTaskFromMessage={handleCreateTaskFromMessage}
+    onDownloadAttachment={handleDownloadAttachment}
+    onLoadAttachment={handleLoadAttachment}
+    onMarkRead={handleMarkChatRead}
+    onOpenPersonProfile={setProfileUserId}
+  />;
 
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
+      <EmployeeProfileProvider onOpenProfile={setProfileUserId}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
@@ -1696,7 +1732,7 @@ export function App() {
               );
             }} />}
           <div className="rail-bottom">
-            <button className="rail-profile" type="button" onClick={() => setAccountOpen(true)}>
+            <button className="rail-profile" type="button" aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
               <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
               <span>{workspace.currentUser.name}</span>
             </button>
@@ -1713,7 +1749,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -1798,6 +1834,7 @@ export function App() {
                   setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
                   setActiveSection(section);
                 }}
+                onOpenPersonProfile={setProfileUserId}
                 focusChatId={focusTarget?.section === "messenger" ? focusTarget.entityId : undefined}
               />
             ) : null}
@@ -1828,29 +1865,9 @@ export function App() {
                 onSetDependency={handleSetTaskDependency}
                 onRemoveDependency={handleRemoveTaskDependency}
                 onSetCycle={handleSetTaskCycle}
-                renderTaskChat={(task) => task.chatId ? <EmbeddedConversation
-                  chatId={task.chatId}
-                  token={session.accessToken}
-                  chats={workspace.chats}
-                  personalPreferences={workspace.personalPreferences}
-                  messages={workspace.messages}
-                  tasks={workspace.tasks}
-                  attachments={workspace.attachments}
-                  people={workspace.people}
-                  onSendMessage={handleSendMessage}
-                  onSendVoiceMessage={handleSendVoiceMessage}
-                  onReactMessage={handleMessageReaction}
-                  onPinMessage={handleMessagePin}
-                  currentUserId={workspace.currentUser.id}
-                  currentUserRole={workspace.currentUser.role}
-                  chatActions={chatActions}
-                  onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
-                  onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
-                  onCreateTaskFromMessage={handleCreateTaskFromMessage}
-                  onDownloadAttachment={handleDownloadAttachment}
-                  onLoadAttachment={handleLoadAttachment}
-                  onMarkRead={handleMarkChatRead}
-                /> : <div className="embedded-chat-unavailable">Для этой задачи чат недоступен.</div>}
+                renderTaskChat={(task) => task.chatId
+                  ? renderEmbeddedChat(task.chatId, "задачи")
+                  : <div className="embedded-chat-unavailable">Для этой задачи чат недоступен.</div>}
                 onReturnForRevision={handleReturnTaskForRevision}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
@@ -1942,6 +1959,9 @@ export function App() {
                 onUpdate={handleUpdateProject}
                 onMove={handleMoveProject}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
+                renderProjectChat={(project) => project.chatId
+                  ? renderEmbeddedChat(project.chatId, "проекта")
+                  : <div className="embedded-chat-unavailable">Для этого проекта чат недоступен.</div>}
                 focusProjectId={focusTarget?.section === "projects" ? focusTarget.entityId : undefined}
               />
             ) : null}
@@ -1960,6 +1980,9 @@ export function App() {
                 onUpdate={handleUpdateTrip}
                 onAction={handleTripAction}
                 onOpenChat={(chatId) => void handleOpenContextChat(chatId)}
+                renderTripChat={(request) => request.chatId
+                  ? renderEmbeddedChat(request.chatId, "поездки")
+                  : <div className="embedded-chat-unavailable">Для этой поездки чат недоступен.</div>}
                 focusRequestId={focusTarget?.section === "trip_approvals" ? focusTarget.entityId : undefined}
               />
             ) : null}
@@ -2057,7 +2080,14 @@ export function App() {
         />
         </RecoveryBoundary>
       ) : null}
+      <EmployeeProfileDialog
+        token={session.accessToken}
+        userId={profileUserId}
+        open={profileUserId !== undefined}
+        onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
+      />
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
+      </EmployeeProfileProvider>
     </FluentProvider>
   );
 }

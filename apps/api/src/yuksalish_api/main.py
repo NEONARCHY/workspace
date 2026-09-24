@@ -30,6 +30,7 @@ from .routers import (
     messenger,
     modules,
     personal,
+    recognition,
     updates,
     workday,
     workspace,
@@ -152,6 +153,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(ai_referent.router, prefix=runtime_settings.api_prefix)
     application.include_router(ai_referent_shared.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
+    application.include_router(recognition.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     application.include_router(zoom.router, prefix=runtime_settings.api_prefix)
     return application

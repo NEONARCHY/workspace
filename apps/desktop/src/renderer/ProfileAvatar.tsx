@@ -8,7 +8,7 @@ const avatarUrls = new Map<string, string>();
 export function ProfileAvatar({ person, token, size }: {
   readonly person: WorkspacePerson;
   readonly token: string;
-  readonly size: 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128;
+  readonly size: 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128;
 }) {
   if (!person.avatarVersion) return <Avatar name={person.name} size={size} color="colorful" />;
   const cacheKey = `${person.id}:${person.avatarVersion}`;
@@ -18,7 +18,7 @@ export function ProfileAvatar({ person, token, size }: {
 function LoadedProfileAvatar({ person, token, size, cacheKey }: {
   readonly person: WorkspacePerson;
   readonly token: string;
-  readonly size: 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128;
+  readonly size: 16 | 20 | 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128;
   readonly cacheKey: string;
 }) {
   const [url, setUrl] = useState(() => avatarUrls.get(cacheKey));

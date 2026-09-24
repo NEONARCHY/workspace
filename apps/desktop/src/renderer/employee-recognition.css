@@ -1,0 +1,166 @@
+.employee-profile-link { min-width: 0; }
+.employee-profile-link.is-interactive { cursor: pointer; border-radius: 10px; outline: none; transition: color 150ms var(--ws-ease), background-color 150ms var(--ws-ease), box-shadow 150ms var(--ws-ease); }
+.employee-profile-link.is-interactive:hover { color: var(--ws-link); background: rgb(0 145 168 / 7%); }
+.employee-profile-link.is-interactive:focus-visible { box-shadow: 0 0 0 2px var(--ws-turquoise), 0 0 0 4px rgb(0 145 168 / 13%); }
+.employee-profile-link.is-interactive .fui-Avatar { transition: transform 150ms var(--ws-ease), box-shadow 150ms var(--ws-ease); }
+.employee-profile-link.is-interactive:hover .fui-Avatar,
+.employee-profile-link.is-interactive:focus-visible .fui-Avatar { box-shadow: 0 5px 14px rgb(41 58 85 / 16%); transform: translateY(-1px); }
+
+.fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: min(1220px, calc(100vw - 48px)); max-width: none; height: min(860px, calc(100vh - 40px)); max-height: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 72%); border-radius: 26px; background: linear-gradient(145deg, rgb(251 254 254 / 99%), rgb(234 245 248 / 99%)); box-shadow: 0 30px 80px rgb(27 46 66 / 28%); }
+.employee-profile-dialog .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.employee-profile-dialog .fui-DialogTitle { padding: 2px 6px 10px; color: var(--ws-navy); font-size: 18px; font-weight: 600; }
+.employee-profile-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; padding: 0 6px 10px; scroll-padding-top: 222px; scrollbar-width: thin; }
+.employee-profile-loading { display: grid; min-height: 420px; place-items: center; }
+.employee-profile-error { padding: 14px 16px; border: 1px solid #e9b9bf; border-radius: 14px; color: #8a2430; background: #fff2f3; }
+.employee-profile-shell { display: grid; gap: 18px; }
+.employee-profile-sticky { position: sticky; z-index: 8; top: 0; display: grid; gap: 8px; padding-bottom: 10px; background: linear-gradient(180deg, rgb(246 252 252 / 99%) 0%, rgb(240 249 250 / 97%) 82%, rgb(240 249 250 / 0%) 100%); }
+.employee-profile-hero { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 16px; min-height: 116px; padding: 14px 20px; overflow: hidden; border: 1px solid rgb(0 145 168 / 12%); border-radius: 20px; background: radial-gradient(circle at 84% 10%, rgb(122 226 224 / 34%), transparent 38%), linear-gradient(135deg, #f8ffff, #e5f3f5 62%, #e8eef9); box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%), 0 10px 26px rgb(41 58 85 / 8%); }
+.employee-profile-hero::after { position: absolute; inset: auto -50px -90px auto; width: 260px; height: 180px; border-radius: 50%; background: conic-gradient(from 110deg, rgb(0 145 168 / 14%), rgb(126 110 255 / 12%), rgb(255 177 92 / 12%), rgb(0 145 168 / 14%)); filter: blur(18px); content: ""; }
+.employee-profile-hero > * { position: relative; z-index: 1; }
+.employee-profile-hero .fui-Avatar { border: 4px solid rgb(255 255 255 / 76%); box-shadow: 0 10px 24px rgb(41 58 85 / 16%); }
+.employee-profile-hero span { color: var(--ws-link); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.employee-profile-hero h2 { margin: 3px 0 2px; color: var(--ws-navy); font-size: 24px; line-height: 1.08; }
+.employee-profile-hero p, .employee-profile-hero small { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.employee-profile-hero-stat { display: grid; min-width: 102px; padding: 10px 13px; border: 1px solid rgb(255 255 255 / 76%); border-radius: 16px; background: rgb(255 255 255 / 62%); box-shadow: inset 0 1px 0 #fff, 0 8px 20px rgb(41 58 85 / 8%); text-align: center; }
+.employee-profile-hero-stat strong { color: var(--ws-navy); font-size: 22px; font-variant-numeric: tabular-nums; }
+.employee-profile-hero-stat span { font-size: 10px; }
+.employee-profile-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: rgb(236 245 246 / 94%); backdrop-filter: blur(14px); }
+.employee-profile-tabs button { min-height: 34px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
+.employee-profile-tabs button:hover { color: var(--ws-navy); }
+.employee-profile-tabs button.is-active { color: var(--ws-navy); background: rgb(255 255 255 / 92%); box-shadow: 0 6px 18px rgb(41 58 85 / 10%), inset 0 0 0 1px rgb(255 255 255 / 88%); }
+.employee-profile-tabs button:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 1px; }
+.employee-profile-overview, .employee-achievements-section, .employee-rewards-section { scroll-margin-top: 222px; }
+.employee-profile-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.employee-profile-overview > article { display: grid; min-height: 88px; align-content: start; gap: 5px; padding: 14px 16px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 16px; background: rgb(255 255 255 / 72%); box-shadow: inset 0 1px 0 #fff; }
+.employee-profile-overview > article span, .employee-profile-overview > article small { color: var(--ws-muted); font-size: 12px; }
+.employee-profile-overview > article strong { color: var(--ws-navy); font-size: 15px; line-height: 1.25; }
+.employee-profile-highlight { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 88px; padding: 14px 18px; border: 1px solid rgb(0 145 168 / 13%); border-radius: 18px; background: linear-gradient(115deg, rgb(228 247 246 / 88%), rgb(237 239 252 / 88%)); }
+.employee-profile-highlight h3, .employee-achievements-section h3, .employee-rewards-section h3 { margin: 0 0 4px; color: var(--ws-navy); }
+.employee-profile-highlight p, .employee-achievements-section header p, .employee-rewards-section header p { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.employee-profile-emblem-row { display: flex; align-items: center; gap: 8px; }
+.employee-profile-emblem-row > span:not(.recognition-emblem) { max-width: 290px; color: var(--ws-muted); font-size: 12px; }
+.employee-achievements-section, .employee-rewards-section { display: grid; gap: 12px; }
+.employee-achievements-section > header, .employee-rewards-section > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 2px 0; }
+.employee-achievements-section h4 { margin: 8px 2px -4px; color: var(--ws-navy); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: .7; }
+.achievement-card.is-unlocked { opacity: 1; }
+.recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }
+.recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: #fff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
+.recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: var(--recognition-active, 0); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
+.recognition-card-glare { position: absolute; z-index: 3; inset: 0; pointer-events: none; background: radial-gradient(circle 320px at var(--recognition-light-x, 50%) var(--recognition-light-y, 50%), rgb(255 255 255 / 88%) 0%, rgb(255 255 255 / 20%) 40%, transparent 80%); mix-blend-mode: overlay; opacity: var(--recognition-active, 0); }
+.recognition-card-content { position: relative; z-index: 4; display: grid; min-height: inherit; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; padding: 18px; transform: translateZ(30px); }
+.recognition-card-details { min-width: 0; }
+.recognition-holographic-card:hover .recognition-card-surface, .recognition-holographic-card:focus-within .recognition-card-surface { border-color: color-mix(in srgb, var(--tier-accent), white 70%); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 4%), 0 25px 40px -10px rgb(30 41 59 / 12%), 0 0 30px var(--recognition-glow); }
+.recognition-rarity-bronze {
+  --tier-accent: #9a6f4b; --recognition-holo-a: rgb(215 175 130 / 35%); --recognition-holo-b: rgb(255 235 200 / 65%); --recognition-holo-c: rgb(180 130 90 / 44%); --recognition-glow: rgb(163 122 84 / 18%);
+  --recognition-card-foil: linear-gradient(115deg, transparent 15%, rgb(215 175 130 / 30%) 30%, rgb(255 235 200 / 60%) 45%, rgb(180 130 90 / 40%) 60%, transparent 80%);
+  --recognition-icon-foil: linear-gradient(130deg, transparent 12%, rgb(222 179 131 / 50%) 40%, rgb(255 243 220 / 90%) 54%, transparent 82%);
+}
+.recognition-rarity-silver {
+  --tier-accent: #5f7185; --recognition-holo-a: rgb(180 210 230 / 38%); --recognition-holo-b: rgb(255 255 255 / 84%); --recognition-holo-c: rgb(140 170 200 / 44%); --recognition-glow: rgb(100 116 139 / 18%);
+  --recognition-card-foil: linear-gradient(108deg, transparent 14%, rgb(180 210 230 / 35%) 31%, rgb(255 255 255 / 82%) 46%, rgb(140 170 200 / 40%) 61%, transparent 82%);
+  --recognition-icon-foil: linear-gradient(145deg, transparent 8%, rgb(171 199 219 / 44%) 35%, rgb(255 255 255 / 96%) 52%, rgb(151 176 204 / 52%) 70%, transparent 90%);
+}
+.recognition-rarity-gold {
+  --tier-accent: #b76705; --recognition-holo-a: rgb(240 195 90 / 40%); --recognition-holo-b: rgb(255 250 210 / 84%); --recognition-holo-c: rgb(220 160 50 / 45%); --recognition-glow: rgb(217 119 6 / 22%);
+  --recognition-card-foil: linear-gradient(120deg, transparent 12%, rgb(240 195 90 / 34%) 29%, rgb(255 250 210 / 82%) 45%, rgb(250 204 21 / 42%) 57%, rgb(220 160 50 / 34%) 68%, transparent 88%);
+  --recognition-icon-foil: conic-gradient(from 200deg, transparent, rgb(255 224 130 / 74%), rgb(255 255 235 / 94%), rgb(222 159 54 / 52%), transparent);
+}
+.recognition-rarity-platinum {
+  --tier-accent: #287f86; --recognition-holo-a: rgb(196 239 241 / 45%); --recognition-holo-b: rgb(255 255 255 / 84%); --recognition-holo-c: rgb(166 193 230 / 44%); --recognition-glow: rgb(76 172 178 / 22%);
+  --recognition-card-foil: linear-gradient(125deg, transparent 8%, rgb(177 230 229 / 42%) 24%, rgb(255 255 255 / 86%) 43%, rgb(181 203 235 / 46%) 61%, rgb(201 245 239 / 34%) 74%, transparent 92%);
+  --recognition-icon-foil: radial-gradient(circle at 36% 34%, rgb(255 255 255 / 96%), rgb(177 230 229 / 58%) 28%, rgb(170 191 225 / 44%) 54%, transparent 76%);
+}
+.recognition-rarity-sapphire {
+  --tier-accent: #3169c6; --recognition-holo-a: rgb(117 202 255 / 42%); --recognition-holo-b: rgb(215 240 255 / 78%); --recognition-holo-c: rgb(74 103 224 / 46%); --recognition-glow: rgb(65 119 234 / 25%);
+  --recognition-card-foil: linear-gradient(102deg, transparent 10%, rgb(89 190 255 / 42%) 26%, rgb(225 247 255 / 82%) 43%, rgb(78 111 230 / 48%) 59%, rgb(106 211 255 / 36%) 72%, transparent 90%);
+  --recognition-icon-foil: conic-gradient(from 145deg, rgb(79 117 226 / 28%), rgb(135 224 255 / 78%), rgb(242 253 255 / 94%), rgb(72 103 210 / 48%), rgb(79 117 226 / 28%));
+}
+.recognition-rarity-amethyst {
+  --tier-accent: #8050b9; --recognition-holo-a: rgb(229 157 255 / 44%); --recognition-holo-b: rgb(246 220 255 / 76%); --recognition-holo-c: rgb(137 90 222 / 46%); --recognition-glow: rgb(146 94 226 / 26%);
+  --recognition-card-foil: linear-gradient(132deg, transparent 9%, rgb(238 174 255 / 42%) 25%, rgb(255 232 255 / 80%) 41%, rgb(151 95 231 / 48%) 58%, rgb(231 161 255 / 35%) 72%, transparent 92%);
+  --recognition-icon-foil: radial-gradient(circle at 65% 32%, rgb(255 243 255 / 94%), rgb(226 157 255 / 72%) 27%, rgb(132 82 211 / 48%) 58%, transparent 79%);
+}
+.recognition-rarity-prism {
+  --tier-accent: #087fa0; --recognition-holo-a: rgb(255 180 220 / 46%); --recognition-holo-b: rgb(130 230 255 / 64%); --recognition-holo-c: rgb(200 180 255 / 46%); --recognition-glow: rgb(14 165 233 / 25%);
+  --recognition-card-foil: linear-gradient(115deg, transparent 10%, rgb(255 180 220 / 40%) 25%, rgb(130 230 255 / 60%) 40%, rgb(255 240 150 / 50%) 55%, rgb(200 180 255 / 40%) 70%, transparent 90%);
+  --recognition-icon-foil: conic-gradient(from 230deg, rgb(255 167 214 / 58%), rgb(107 225 255 / 78%), rgb(255 242 155 / 72%), rgb(196 167 255 / 64%), rgb(255 167 214 / 58%));
+}
+.recognition-rarity-cosmic {
+  --tier-accent: #6350bb; --recognition-holo-a: rgb(255 112 232 / 48%); --recognition-holo-b: rgb(80 211 255 / 66%); --recognition-holo-c: rgb(255 223 105 / 50%); --recognition-glow: rgb(118 94 255 / 32%);
+  --recognition-card-foil: conic-gradient(from 210deg at 50% 50%, transparent, rgb(255 112 232 / 44%), rgb(80 211 255 / 62%), rgb(255 223 105 / 48%), rgb(122 92 255 / 54%), transparent);
+  --recognition-icon-foil: radial-gradient(circle at 38% 30%, rgb(255 255 255 / 96%), rgb(90 220 255 / 76%) 20%, rgb(255 107 230 / 64%) 43%, rgb(112 80 229 / 54%) 66%, transparent 84%);
+}
+.achievement-card h3, .employee-reward-card h3 { margin: 2px 0 4px; color: var(--ws-navy); font-size: 14px; }
+.achievement-card p, .employee-reward-card p { margin: 0 0 8px; color: var(--ws-muted); font-size: 12px; line-height: 1.35; }
+.achievement-card small, .employee-reward-card small { color: var(--tier-accent); font-size: 11px; font-weight: 600; }
+.achievement-tier { color: var(--tier-accent); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.achievement-progress { height: 4px; margin: 6px 0 0; overflow: hidden; border-radius: 999px; background: rgb(41 58 85 / 9%); }
+.achievement-progress i { display: block; height: 100%; border-radius: inherit; background: var(--tier-accent); }
+.recognition-emblem { --emblem-base: #80d8d5; --tier-accent: #087f91; position: relative; display: grid; width: 72px; height: 72px; flex: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 94%); border-radius: 50%; background: linear-gradient(135deg, #edf3f6 0%, #fff 100%); box-shadow: inset 0 2px 5px rgb(0 0 0 / 8%), inset 0 -1px 2px #fff, 0 4px 12px rgb(0 0 0 / 4%); place-items: center; transform: translateZ(10px); }
+.recognition-emblem::before { position: absolute; z-index: 1; inset: -40%; border-radius: 50%; background: var(--recognition-icon-foil, linear-gradient(125deg, transparent 18%, var(--recognition-holo-a, rgb(255 205 112 / 35%)) 36%, rgb(255 255 255 / 86%) 49%, var(--recognition-holo-b, rgb(111 229 255 / 50%)) 61%, var(--recognition-holo-c, rgb(195 146 255 / 40%)) 74%, transparent 88%)); content: ""; mix-blend-mode: color-dodge; opacity: var(--recognition-active, 0); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
+.recognition-emblem::after { position: absolute; z-index: 3; inset: 0; border-radius: 50%; background: radial-gradient(circle 48px at var(--recognition-light-x, 50%) var(--recognition-light-y, 50%), rgb(255 255 255 / 90%), transparent 68%); content: ""; mix-blend-mode: screen; opacity: calc(var(--recognition-active, 0) * .75); pointer-events: none; }
+.recognition-emblem > span { position: relative; z-index: 2; display: grid; width: 42px; height: 42px; place-items: center; color: var(--tier-accent); filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--tier-accent), transparent 65%)); transform: translate3d(var(--recognition-icon-x, 0px), var(--recognition-icon-y, 0px), 22px); }
+.recognition-emblem > span svg { width: 25px; height: 25px; }
+.recognition-emblem.recognition-bronze { --emblem-base: #d99b6c; --tier-accent: #9a6f4b; }
+.recognition-emblem.recognition-silver { --emblem-base: #b8cbd5; --tier-accent: #5f7185; }
+.recognition-emblem.recognition-gold { --emblem-base: #f1c768; --tier-accent: #b76705; }
+.recognition-emblem.recognition-platinum { --emblem-base: #a9e0df; --tier-accent: #287f86; }
+.recognition-emblem.recognition-sapphire { --emblem-base: #6ea9f5; --tier-accent: #3169c6; }
+.recognition-emblem.recognition-amethyst { --emblem-base: #b58af2; --tier-accent: #8050b9; }
+.recognition-emblem.recognition-prism { --emblem-base: #69d5c9; --tier-accent: #087fa0; }
+.recognition-emblem.recognition-cosmic { --emblem-base: #7868e8; --tier-accent: #6350bb; }
+.recognition-emblem.is-locked { filter: saturate(.18) opacity(.68); }
+.recognition-emblem.is-compact { width: 54px; height: 54px; }
+.recognition-emblem.is-compact > span { width: 29px; height: 29px; }
+.recognition-emblem.is-compact > span svg { width: 18px; height: 18px; }
+.employee-reward-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.employee-reward-card { min-height: 112px; border: 0; border-radius: 20px; background: transparent; }
+.reward-composer { display: grid; gap: 12px; padding: 16px; border: 1px solid rgb(0 145 168 / 14%); border-radius: 20px; background: rgb(255 255 255 / 72%); }
+.reward-icon-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.reward-icon-picker button { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px; padding: 7px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 14px; color: var(--ws-text); background: rgb(247 251 252 / 90%); text-align: left; cursor: pointer; }
+.reward-icon-picker button.is-active { border-color: rgb(0 145 168 / 42%); background: #e8f7f7; box-shadow: 0 0 0 2px rgb(0 145 168 / 8%); }
+.reward-icon-picker button strong, .reward-icon-picker button small { display: block; }
+.reward-icon-picker button strong { color: var(--ws-navy); font-size: 12px; }
+.reward-icon-picker button small { margin-top: 2px; color: var(--ws-muted); font-size: 10px; line-height: 1.2; }
+.reward-composer input, .reward-composer textarea { box-sizing: border-box; width: 100%; min-height: 38px; padding: 9px 11px; border: 1px solid var(--ws-line); border-radius: 10px; color: var(--ws-text); background: #fff; font: inherit; }
+.reward-composer textarea { min-height: 76px; }
+.reward-composer input:focus, .reward-composer textarea:focus { border-color: var(--ws-turquoise); outline: 2px solid rgb(0 145 168 / 12%); }
+.reward-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.recognition-empty { grid-column: 1 / -1; margin: 0; padding: 28px; border: 1px dashed rgb(41 58 85 / 15%); border-radius: 16px; color: var(--ws-muted); background: rgb(255 255 255 / 42%); text-align: center; }
+.recognition-guide-dialog { width: min(650px, calc(100vw - 32px)); max-width: none; border-radius: 24px; }
+.recognition-guide-copy { color: var(--ws-text); line-height: 1.55; }
+.recognition-guide-copy h3 { margin: 18px 0 4px; color: var(--ws-navy); }
+.recognition-guide-copy p { margin: 0; }
+.recognition-guide-copy ul { margin: 7px 0 0; padding-left: 22px; }
+
+@media (max-width: 760px) {
+  .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: calc(100vw - 16px); height: calc(100vh - 16px); border-radius: 20px; }
+  .employee-profile-dialog .fui-DialogContent { scroll-padding-top: 248px; }
+  .employee-profile-sticky { padding-bottom: 8px; }
+  .employee-profile-hero { grid-template-columns: auto minmax(0, 1fr); padding: 13px; }
+  .employee-profile-hero-stat { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: center; gap: 7px; }
+  .employee-profile-hero h2 { font-size: 20px; }
+  .employee-profile-overview, .achievement-grid, .employee-reward-list { grid-template-columns: 1fr; }
+  .employee-profile-overview, .employee-achievements-section, .employee-rewards-section { scroll-margin-top: 248px; }
+  .reward-icon-picker { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .achievement-grid, .employee-reward-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recognition-emblem, .recognition-holographic-card, .recognition-card-surface, .employee-profile-tabs button, .employee-profile-link.is-interactive, .employee-profile-link.is-interactive .fui-Avatar { transition: none; }
+  .recognition-emblem, .recognition-holographic-card, .recognition-card-content, .recognition-emblem > span { transform: none !important; }
+  .recognition-card-foil, .recognition-card-glare, .recognition-emblem::before, .recognition-emblem::after { display: none; }
+  .employee-profile-link.is-interactive .fui-Avatar { transform: none !important; }
+}
+
+@media (forced-colors: active) {
+  .employee-profile-link.is-interactive:focus-visible { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
+  .recognition-card-surface, .recognition-emblem, .employee-profile-hero, .employee-profile-dialog { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .recognition-card-foil, .recognition-card-glare, .recognition-emblem::before, .recognition-emblem::after { display: none; }
+  .recognition-emblem > span { color: CanvasText; background: Canvas; }
+}

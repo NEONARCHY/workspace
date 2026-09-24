@@ -245,6 +245,79 @@ export interface WorkspacePerson {
   readonly avatarVersion?: string | null;
 }
 
+export type RecognitionTier =
+  | "bronze"
+  | "silver"
+  | "gold"
+  | "platinum"
+  | "sapphire"
+  | "amethyst"
+  | "prism"
+  | "cosmic";
+export type RecognitionCategory =
+  | "tasks"
+  | "projects"
+  | "trips"
+  | "meetings"
+  | "correspondence"
+  | "feed"
+  | "payment_creation"
+  | "payment_completion"
+  | "efficiency"
+  | "tenure"
+  | "communication"
+  | "support";
+
+export interface EmployeeAchievement {
+  readonly code: string;
+  readonly title: string;
+  readonly description: string;
+  readonly category: RecognitionCategory;
+  readonly tier: RecognitionTier;
+  readonly iconKey: string;
+  readonly progress: number;
+  readonly target: number;
+  readonly unlocked: boolean;
+  readonly earnedAt?: string | null;
+}
+
+export interface EmployeeReward {
+  readonly id: string;
+  readonly iconKey: string;
+  readonly title: string;
+  readonly description: string;
+  readonly recipientUserId: string;
+  readonly issuerUserId: string;
+  readonly issuerName: string;
+  readonly createdAt: string;
+}
+
+export interface EmployeeRecognitionProfile {
+  readonly person: WorkspacePerson;
+  readonly departmentName?: string | null;
+  readonly employmentDate?: string | null;
+  readonly serviceYears?: number | null;
+  readonly serviceMonths?: number | null;
+  readonly serviceDays?: number | null;
+  readonly activeTaskCount?: number | null;
+  readonly activeTaskCountVisible: boolean;
+  readonly achievements: readonly EmployeeAchievement[];
+  readonly rewards: readonly EmployeeReward[];
+  readonly canIssueReward: boolean;
+  readonly canManageSettings: boolean;
+}
+
+export interface RecognitionSettings {
+  readonly activeTaskCountVisible: boolean;
+  readonly updatedAt?: string | null;
+}
+
+export interface EmployeeRewardInput {
+  readonly iconKey: string;
+  readonly title: string;
+  readonly description: string;
+}
+
 export interface WorkflowPosition {
   readonly id: string;
   readonly name: string;
@@ -332,6 +405,7 @@ export interface MessageReaction {
   readonly emoji: MessageReactionEmoji;
   readonly count: number;
   readonly reactedByCurrentUser: boolean;
+  readonly reactorUserIds?: readonly string[];
 }
 
 export interface FeedComment {

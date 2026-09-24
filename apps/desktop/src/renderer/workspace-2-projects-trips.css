@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  padding: var(--ws-view-edge) var(--ws-view-edge) 0;
   overflow: hidden;
 }
 
@@ -47,12 +48,21 @@
 }
 
 /* Shared process cockpit: payments, projects and trips use one predictable hierarchy. */
-.workflow-process-view { --workflow-hero-accent: #65c8c5; --workflow-hero-glow: rgb(101 200 197 / 17%); }
+.workflow-process-view {
+  --workflow-hero-accent: #65c8c5;
+  --workflow-hero-glow: rgb(101 200 197 / 17%);
+  --ws2-process-section-gap: 10px;
+}
 .projects-view.workflow-process-view { --workflow-hero-accent: #68b8a5; --workflow-hero-glow: rgb(104 184 165 / 18%); }
 .trips-view.workflow-process-view { --workflow-hero-accent: #79aee0; --workflow-hero-glow: rgb(121 174 224 / 17%); }
 .workflow-process-view .workflow-hero-header {
   position: relative;
   isolation: isolate;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  height: auto;
   min-height: 116px;
   padding: 20px 24px 19px 28px;
   overflow: hidden;
@@ -71,12 +81,13 @@
 .workflow-process-view .workflow-hero-header .toolbar-actions > .fui-Button { min-height: 38px; padding-inline: 16px; border-radius: 13px; box-shadow: 0 9px 20px -14px rgb(41 58 85 / 65%); }
 
 .ws2-process-overview {
-  display: grid;
-  grid-template-columns: minmax(250px, .9fr) minmax(0, 1.55fr);
+  display: flex;
+  align-items: stretch;
   flex: none;
   min-width: 0;
-  min-height: 106px;
-  margin: 9px 4px 10px;
+  min-height: 0;
+  margin: var(--ws2-process-section-gap) 4px 0;
+  padding: 10px 14px;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 88%);
   border-radius: 21px;
@@ -89,48 +100,42 @@
 }
 
 .ws2-process-focus {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  display: inline-grid;
   align-content: center;
-  gap: 2px 15px;
-  min-width: 0;
-  padding: 17px 24px;
+  gap: 4px;
+  min-width: 170px;
+  padding: 6px 16px;
   border: 0;
-  border-radius: 23px;
+  border-radius: 14px;
   color: var(--ws-text);
-  background: transparent;
+  background: rgb(255 255 255 / 48%);
   text-align: left;
   cursor: pointer;
 }
 
 .ws2-process-focus { transition: background-color 160ms var(--ws-ease-out, ease), transform 160ms var(--ws-ease-out, ease); }
-.ws2-process-focus:hover { background: rgb(255 255 255 / 35%); transform: translateX(2px); }
+.ws2-process-focus:hover { background: #d8efeb; }
+.trips-view .ws2-process-focus:hover { background: #dfebf4; }
+.ws2-process-focus:active { transform: translateY(1px); }
 .ws2-process-focus:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -4px; }
-.ws2-process-focus > span { grid-column: 1 / -1; color: #477377; font-size: 11px; font-weight: 650; }
+.ws2-process-focus > span { color: #5b7180; font-size: 11px; line-height: 1.2; }
 .ws2-process-focus > strong {
-  grid-row: 2;
-  color: #214e60;
-  font-size: clamp(40px, 4vw, 54px);
+  color: #19334f;
+  font-size: 25px;
   font-weight: 600;
-  letter-spacing: -.06em;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.ws2-process-focus > small { align-self: end; padding-bottom: 5px; color: #356673; font-size: 11px; font-weight: 600; }
-.ws2-process-focus > small span { margin-left: 3px; font-size: 15px; }
 
 .ws2-process-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
+  display: flex;
+  align-items: stretch;
   min-width: 0;
-  padding: 13px 18px 13px 6px;
+  white-space: nowrap;
 }
-.ws2-process-metrics > div { display: grid; align-content: center; gap: 5px; min-width: 0; min-height: 62px; padding: 7px 20px; border-left: 1px solid rgb(65 96 107 / 12%); }
-.ws2-process-metrics > div::after { width: 28px; height: 3px; margin-top: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ws2-process-accent) 72%, white); content: ""; }
-.ws2-process-metrics strong { color: var(--ws-text); font-size: 28px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
-.ws2-process-metrics span { color: #526d7b; font-size: 11px; font-weight: 550; line-height: 1.3; }
+.ws2-process-metrics > div { display: inline-grid; align-content: center; gap: 4px; min-width: 112px; padding: 6px 16px; border-left: 1px solid #dce8e6; }
+.ws2-process-metrics strong { color: #19334f; font-size: 25px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.ws2-process-metrics span { color: #5b7180; font-size: 11px; line-height: 1.2; }
 .ws2-process-metrics .attention strong { color: #a34a50; }
 
 .ws2-process-toolbar {
@@ -138,8 +143,8 @@
   align-items: center;
   gap: 10px;
   flex: none;
-  min-height: 54px;
-  padding: 5px 4px 10px;
+  min-height: 0;
+  padding: var(--ws2-process-section-gap) 4px;
   border: 0;
   background: transparent;
 }
@@ -175,12 +180,74 @@
 .ws2-segmented button > span { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 7px; color: #54717c; background: #dce8e7; font-size: 10px; font-variant-numeric: tabular-nums; }
 .ws2-segmented button.active > span { color: #236d78; background: #e1f1ee; }
 
+.process-record-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 4px 16px;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(91 121 128 / 28%) transparent;
+}
+.process-record-row {
+  display: grid;
+  grid-template-columns: minmax(250px, 1.6fr) minmax(130px, .7fr) minmax(185px, .9fr) minmax(140px, .7fr) minmax(205px, 1fr) 24px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-width: 1000px;
+  min-height: 76px;
+  margin-bottom: 7px;
+  padding: 11px 16px;
+  border: 1px solid rgb(255 255 255 / 90%);
+  border-radius: 17px;
+  color: var(--ws-text);
+  background: rgb(251 253 252 / 92%);
+  box-shadow: 0 8px 22px -21px rgb(31 62 72 / 42%);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 170ms var(--ws-ease), box-shadow 190ms var(--ws-ease), transform 180ms var(--ws-ease);
+}
+.process-record-row:hover,
+.process-record-row:focus-visible {
+  outline: 0;
+  border-color: rgb(105 168 169 / 48%);
+  box-shadow: 0 13px 28px -21px rgb(31 62 72 / 46%);
+  transform: translateY(-1px);
+}
+.process-record-row > span { min-width: 0; }
+.process-record-primary,
+.process-record-fact,
+.process-record-person > span { display: grid; gap: 3px; }
+.process-record-primary small { color: #39727d; font-size: 10px; font-weight: 650; letter-spacing: .035em; }
+.process-record-primary strong { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.process-record-primary em { overflow: hidden; color: #6b7f88; font-size: 11px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.process-record-status { display: inline-flex; width: fit-content; align-items: center; gap: 7px; padding: 6px 9px; border-radius: 9px; color: #4b6571; background: #edf2f1; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.process-record-status > i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--record-status-color, #789099); box-shadow: 0 0 0 3px color-mix(in srgb, var(--record-status-color, #789099) 12%, transparent); }
+.process-record-status.status-action { color: #246570; background: #e3f3f1; --record-status-color: #3a9ca0; }
+.process-record-status.status-revision { color: #5e4f91; background: #eeeafa; --record-status-color: #7563b8; }
+.process-record-status.status-overdue,
+.process-record-status.status-danger { color: #93404a; background: #fbeaec; --record-status-color: #c75b62; }
+.process-record-status.status-success { color: #316d4b; background: #e8f4ec; --record-status-color: #4f9c6d; }
+.process-record-person { display: flex; align-items: center; gap: 9px; }
+.process-record-person small,
+.process-record-fact small { color: #758790; font-size: 10px; }
+.process-record-person strong,
+.process-record-fact strong { overflow: hidden; color: #3d5765; font-size: 11px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.process-record-money strong { color: #21485d; font-size: 12px; font-variant-numeric: tabular-nums; }
+.process-record-arrow { color: #52808b; font-size: 18px; text-align: right; transition: transform 170ms var(--ws-ease); }
+.process-record-row:hover .process-record-arrow { transform: translateX(3px); }
+.process-record-empty { display: grid; place-items: center; gap: 5px; min-height: 150px; padding: 28px; border: 1px dashed rgb(92 124 132 / 18%); border-radius: 19px; color: #71858e; text-align: center; }
+.process-record-empty > svg { color: #6c9aa2; }
+.process-record-empty strong { color: #405c69; font-size: 14px; }
+.process-record-empty span { font-size: 11px; }
+
 .projects-view .project-board,
 .trips-view .trip-kanban {
   flex: 1 1 auto;
-  min-height: min(520px, 58vh);
+  min-height: 0;
   gap: 12px;
-  padding: 2px 4px 16px;
+  padding: 0 4px 16px;
   scrollbar-gutter: stable;
 }
 .projects-view .project-board { grid-template-columns: repeat(5, minmax(250px, 275px)); height: auto; min-width: 0; padding-right: 4px; }
@@ -188,42 +255,109 @@
 
 .projects-view .project-column,
 .trips-view .trip-column {
+  --process-lane-scrollbar: rgb(91 121 128 / 34%);
   min-width: 0;
-  border: 1px solid rgb(255 255 255 / 65%);
-  border-radius: 20px;
-  background: #e5ecec;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid rgb(78 109 118 / 10%);
+  border-radius: 22px;
+  background: #edf2f1;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 82%), 0 10px 24px -26px rgb(20 43 67 / 34%);
 }
-.projects-view .project-column { background: color-mix(in srgb, var(--context-accent, #86bcb5) 6%, #e5ecec); }
-.trips-view .trip-column { background: color-mix(in srgb, var(--approval-stage-color) 5%, #e5ecec); }
+.projects-view .project-column { background: color-mix(in srgb, var(--project-stage-color, #86bcb5) 7%, #edf2f1); }
+.trips-view .trip-column { background: color-mix(in srgb, var(--approval-stage-color) 7%, #edf2f1); }
 .projects-view .project-column > header,
-.trips-view .trip-column > header { min-height: 62px; padding: 15px 14px 10px; border: 0; }
+.trips-view .trip-column > header { min-height: 57px; padding: 14px 14px 6px; border: 0; }
+.projects-view .project-column > header {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: initial;
+  gap: 9px;
+}
+.projects-view .project-column > header::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--project-stage-color, #86bcb5) 70%, #708991);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--project-stage-color, #86bcb5) 13%, transparent);
+  content: "";
+}
 .projects-view .project-column > header strong,
 .trips-view .trip-column > header strong { color: var(--ws-text); font-size: 13px; font-weight: 650; line-height: 1.28; }
 .projects-view .project-column > header .fui-Badge,
-.trips-view .approval-column-count { min-width: 22px; min-height: 22px; border: 0; color: #456270; background: rgb(255 255 255 / 78%); font-size: 11px; }
+.trips-view .approval-column-count { min-width: 22px; min-height: 22px; border: 0; color: #456270; background: rgb(255 255 255 / 72%); box-shadow: inset 0 0 0 1px rgb(78 109 118 / 6%); font-size: 11px; }
+.projects-view .project-column-total,
+.trips-view .approval-column-total {
+  display: grid;
+  flex: none;
+  gap: 2px;
+  min-height: 48px;
+  margin: 0;
+  padding: 0 15px 11px 31px;
+  border: 0;
+  border-bottom: 1px solid rgb(72 102 111 / 9%);
+  background: transparent;
+}
+.projects-view .project-column-total > span,
+.trips-view .approval-column-total > span { color: #617782; font-size: 10px; }
+.projects-view .project-column-total > strong,
+.trips-view .approval-column-total > strong { color: #2d4757; font-size: 15px; line-height: 1.15; }
 .projects-view .project-stack,
 .trips-view .approval-column-stack {
   gap: 10px;
-  padding: 10px;
+  padding: 10px 10px 14px;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: auto;
   scrollbar-width: thin;
+  scrollbar-color: var(--process-lane-scrollbar) transparent;
 }
-.trips-view .approval-column-total { min-height: 46px; padding: 0 15px 10px; border-color: rgb(72 102 111 / 10%); }
-.trips-view .approval-column-total > span { color: #465e69; font-size: 10px; }
-.trips-view .approval-column-total > strong { color: #2d4757; font-size: 17px; }
-.trips-view .approval-column-empty { color: #455d69; }
+.projects-view .project-stack::-webkit-scrollbar,
+.trips-view .approval-column-stack::-webkit-scrollbar { width: 5px; }
+.projects-view .project-stack::-webkit-scrollbar-track,
+.trips-view .approval-column-stack::-webkit-scrollbar-track { background: transparent; }
+.projects-view .project-stack::-webkit-scrollbar-thumb,
+.trips-view .approval-column-stack::-webkit-scrollbar-thumb { border-radius: 999px; background: var(--process-lane-scrollbar); }
+.projects-view .empty-column,
+.trips-view .approval-column-empty {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 3px;
+  padding: 12px;
+  border: 0;
+  border-radius: 13px;
+  color: #71858e;
+  background: rgb(255 255 255 / 24%);
+  font-size: 11px;
+}
 
 .projects-view .project-card,
 .trips-view .trip-board-card {
-  border: 1px solid rgb(255 255 255 / 92%);
-  border-radius: 17px;
-  background: #fff;
-  box-shadow: 0 6px 18px -14px rgb(31 62 72 / 30%);
-  transition: border-color 160ms ease, transform 160ms ease, opacity 160ms ease;
+  border: 1px solid rgb(255 255 255 / 96%);
+  border-radius: 18px;
+  background: #fcfdfd;
+  box-shadow: 0 9px 24px -17px rgb(31 62 72 / 36%), 0 1px 2px rgb(31 62 72 / 4%);
+  transition: border-color 170ms var(--ws-ease), box-shadow 190ms var(--ws-ease), transform 180ms var(--ws-ease), opacity 160ms var(--ws-ease);
 }
 .projects-view .project-card:hover,
-.trips-view .trip-board-card:hover { border-color: #a8cfce; box-shadow: var(--ws-shadow-card); }
+.trips-view .trip-board-card:hover,
+.projects-view .project-card:focus-within,
+.trips-view .trip-board-card:focus-within {
+  border-color: rgb(121 174 175 / 54%);
+  box-shadow: 0 15px 30px -19px rgb(31 62 72 / 42%), 0 2px 5px rgb(31 62 72 / 6%);
+  transform: translateY(-2px);
+}
+.projects-view .project-card.spatial-drag-preview,
+.projects-view .project-card.spatial-drag-preview:hover,
+.trips-view .trip-board-card.spatial-drag-preview,
+.trips-view .trip-board-card.spatial-drag-preview:hover {
+  transform: translate3d(var(--spatial-drift-x, 0), var(--spatial-shift, 0), 0)
+    rotate(var(--spatial-tilt, 0deg))
+    scale(var(--spatial-stretch-x, 1), var(--spatial-stretch-y, 1));
+}
 .projects-view .project-card.selected { border-color: #53a5a5; box-shadow: 0 0 0 2px rgb(0 145 168 / 12%); }
 .projects-view .project-card { position: relative; }
 .app-provider .projects-view .project-card > .context-chat-button {
@@ -352,15 +486,72 @@
 .trip-dialog:not(.record-composer-dialog) .trip-purpose { padding: 18px; border: 0; border-radius: 17px; background: linear-gradient(110deg, #e5f1ef, #eef1f8); }
 .trip-dialog:not(.record-composer-dialog) .trip-purpose p { color: var(--ws-text); font-size: 16px; line-height: 1.45; }
 
+.fui-DialogSurface.project-dialog.context-record-dialog,
+.fui-DialogSurface.trip-dialog.context-record-dialog {
+  width: min(1480px, calc(100vw - 32px));
+  max-width: none;
+  height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 92%);
+  border-radius: 25px;
+  background: color-mix(in srgb, var(--ws-surface, #fff) 94%, #eaf4f3);
+  box-shadow: 0 24px 70px -27px rgb(29 48 62 / 42%);
+}
+.context-record-workspace {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.05fr) minmax(420px, .95fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.context-record-workspace > :is(.project-detail, .trip-detail) {
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  padding: 0 28px 34px;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  background: transparent;
+  scrollbar-color: #9bb5bb #edf3f2;
+  scrollbar-width: thin;
+}
+.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar { width: 9px; }
+.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar-track { background: #edf3f2; }
+.context-record-workspace > :is(.project-detail, .trip-detail)::-webkit-scrollbar-thumb { border: 2px solid #edf3f2; border-radius: 999px; background: #9bb5bb; }
+.project-dialog.context-record-dialog .project-detail > header,
+.trip-dialog.context-record-dialog .trip-detail > header {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  min-height: 105px;
+  margin: 0 -28px 14px;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid #e1e9e7;
+  background: rgb(250 252 251 / 96%);
+  box-shadow: 0 10px 26px rgb(32 54 72 / 5%);
+  backdrop-filter: blur(8px);
+}
+.project-dialog.context-record-dialog .project-detail > header h2,
+.trip-dialog.context-record-dialog .trip-detail > header h2 { margin-top: 4px; font-size: 27px; font-weight: 600; }
+.project-detail-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 5px; }
+.project-detail-header-actions > .fui-Button:last-child,
+.trip-dialog.context-record-dialog .trip-detail > header > .fui-Button { width: 36px; min-width: 36px; height: 36px; border-radius: 12px; background: #eaf1ef; }
+.context-record-workspace > .embedded-chat { display: block; min-width: 0; min-height: 0; padding: 0; border-left: 1px solid rgb(41 58 85 / 10%); background: #f7fbfa; }
+.context-record-workspace .embedded-conversation { height: calc(100dvh - 32px); border-radius: 0; }
+.context-record-workspace .embedded-conversation .conversation-header { min-height: 76px; padding-inline: 18px; }
+.context-record-workspace .embedded-conversation .message-scroll { padding-inline: 16px; }
+
 @keyframes ws2-process-dialog-in {
   from { opacity: .82; transform: translate(-50%, calc(-50% + 14px)); }
   to { opacity: 1; transform: translate(-50%, -50%); }
 }
 
 @container workspace (max-width: 900px) {
-  .ws2-process-overview { grid-template-columns: minmax(0, .85fr) minmax(0, 1.2fr); }
-  .ws2-process-focus { padding-inline: 17px; }
-  .ws2-process-metrics { padding-inline: 0 10px; }
+  .ws2-process-overview { overflow-x: auto; scrollbar-width: thin; }
+  .ws2-process-focus { padding-inline: 12px; }
   .ws2-process-metrics > div { padding-inline: 12px; }
   .ws2-process-toolbar { flex-wrap: wrap; }
   .project-toolbar > .fui-Input,
@@ -369,13 +560,15 @@
 }
 
 @container workspace (max-width: 610px) {
-  .ws2-process-overview { grid-template-columns: minmax(0, 1fr); }
-  .ws2-process-focus { grid-template-columns: auto 1fr; padding: 14px 18px 8px; }
-  .ws2-process-focus > strong { font-size: 39px; }
-  .ws2-process-metrics { padding: 0 10px 10px; }
-  .ws2-process-metrics > div { min-height: 46px; padding: 4px 10px; }
-  .ws2-process-metrics strong { font-size: 20px; }
-  .ws2-process-metrics span { font-size: 10px; }
+  .workflow-process-view .workflow-hero-header {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    min-height: 0;
+  }
+  .workflow-process-view .workflow-hero-header > .fui-Button,
+  .workflow-process-view .workflow-hero-header > .toolbar-actions { justify-self: start; }
+  .ws2-process-focus { min-width: 150px; }
+  .ws2-process-metrics > div { min-width: 105px; padding-inline: 10px; }
   .ws2-segmented { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
   .ws2-segmented button { flex: none; }
   .projects-view .spatial-inspector {
@@ -389,10 +582,15 @@
 }
 
 @media (max-height: 700px) {
-  .projects-view,
-  .trips-view { overflow-y: auto; }
   .projects-view .project-board,
-  .trips-view .trip-kanban { flex: 0 0 390px; min-height: 390px; }
+  .trips-view .trip-kanban { min-height: 0; }
+}
+
+@media (max-width: 900px) {
+  .context-record-workspace { grid-template-columns: 1fr; overflow-y: auto; }
+  .context-record-workspace > :is(.project-detail, .trip-detail) { overflow: visible; }
+  .context-record-workspace > .embedded-chat { min-height: 620px; border-top: 1px solid rgb(41 58 85 / 10%); border-left: 0; }
+  .context-record-workspace .embedded-conversation { height: 620px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

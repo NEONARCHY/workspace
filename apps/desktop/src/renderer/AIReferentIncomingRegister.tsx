@@ -4,13 +4,12 @@ import type {
   AIReferentIncomingLetter,
   AIReferentIncomingRegistry,
 } from "@yuksalish/contracts";
-import { Button, Input, Spinner } from "@fluentui/react-components";
+import { Button, Spinner } from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
   ArrowDownload20Regular,
   Attach20Regular,
   MailInbox20Regular,
-  Search20Regular,
   Warning20Regular,
 } from "@fluentui/react-icons";
 
@@ -19,6 +18,7 @@ import {
   loadAIReferentIncomingRegistry,
 } from "./workspace-api";
 import { AIReferentFiles } from "./AIReferentFiles";
+import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
@@ -127,47 +127,48 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
       </section>
 
       <div className="ai-referent-toolbar ai-incoming-toolbar">
-        <Input
-          contentBefore={<Search20Regular />}
-          aria-label="Поиск входящих писем"
+        <AIReferentGooeySearch
+          ariaLabel="Поиск входящих писем"
           placeholder="Номер, организация, тема или ответственный"
           value={query}
-          onChange={(_event, data) => { setPage(0); setQuery(data.value); }}
+          onValueChange={(value) => { setPage(0); setQuery(value); }}
         />
-        <div className="ai-referent-filters" role="group" aria-label="Фильтр входящих писем">
-          {([
-            ["all", "Все"],
-            ["registered", "Зарегистрированные"],
-            ["attention", "Требуют внимания"],
-            ["attachments", "С вложениями"],
-          ] as const).map(([key, label]) => (
-            <button
-              type="button"
-              key={key}
-              className={filter === key ? "active" : ""}
-              aria-pressed={filter === key}
-              onClick={() => selectFilter(key)}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="ai-referent-toolbar-actions">
+          <div className="ai-referent-filters" role="group" aria-label="Фильтр входящих писем">
+            {([
+              ["all", "Все"],
+              ["registered", "Зарегистрированные"],
+              ["attention", "Требуют внимания"],
+              ["attachments", "С вложениями"],
+            ] as const).map(([key, label]) => (
+              <button
+                type="button"
+                key={key}
+                className={filter === key ? "active" : ""}
+                aria-pressed={filter === key}
+                onClick={() => selectFilter(key)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            appearance="secondary"
+            icon={<ArrowDownload20Regular />}
+            disabled={!registry?.journal.available || downloading}
+            onClick={() => void downloadJournal()}
+          >
+            {downloading ? "Скачиваем…" : "Excel-журнал"}
+          </Button>
+          <Button
+            appearance="subtle"
+            icon={<ArrowClockwise20Regular />}
+            disabled={loading}
+            onClick={() => void refresh(query)}
+          >
+            Обновить
+          </Button>
         </div>
-        <Button
-          appearance="secondary"
-          icon={<ArrowDownload20Regular />}
-          disabled={!registry?.journal.available || downloading}
-          onClick={() => void downloadJournal()}
-        >
-          {downloading ? "Скачиваем…" : "Excel-журнал"}
-        </Button>
-        <Button
-          appearance="subtle"
-          icon={<ArrowClockwise20Regular />}
-          disabled={loading}
-          onClick={() => void refresh(query)}
-        >
-          Обновить
-        </Button>
       </div>
 
       <div className="ai-incoming-sync-line" aria-live="polite">

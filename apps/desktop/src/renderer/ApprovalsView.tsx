@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
+import { nextAvailableStageColor, workflowStageColor } from "./workflow-stage-colors";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 import type {
   ApprovalNodeData,
@@ -38,6 +41,7 @@ import {
   Money24Regular,
   Open16Regular,
   Save24Regular,
+  Search20Regular,
 } from "@fluentui/react-icons";
 import {
   addEdge,
@@ -243,7 +247,10 @@ function WorkflowObjectNode({ data, selected }: NodeProps<ApprovalNode>) {
   const statusText = typeof data.statusText === "string" ? data.statusText : data.detail;
   const assignee = typeof data.assignee === "string" ? data.assignee : "";
   return (
-    <div className={`workflow-object-node state-${journeyState}${selected ? " is-selected" : ""}`}>
+    <div
+      className={`workflow-object-node state-${journeyState}${selected ? " is-selected" : ""}`}
+      style={{ "--workflow-node-color": workflowStageColor(data.stageColor, workflowStageColor(data.displayStageColor, "#84bdb8")) } as CSSProperties}
+    >
       <Handle type="target" position={Position.Left} />
       <div className="workflow-object-heading">
         <i aria-hidden="true" />
@@ -351,19 +358,43 @@ function requestPayload(
 
 function workflowNodeConfig(data: ApprovalNodeData): Readonly<Record<string, unknown>> {
   return Object.fromEntries(
-    Object.entries(data).filter(([key]) => !["label", "kind", "detail"].includes(key)),
+    Object.entries(data).filter(
+      ([key, value]) => !["label", "kind", "detail", "displayStageColor"].includes(key) && value !== undefined,
+    ),
   );
 }
 
 function flowNodes(workflow?: WorkflowDefinition): ApprovalNode[] {
   if (workflow === undefined || !Array.isArray(workflow.nodes)) {
-    return initialNodes.map((node) => ({ ...node, type: "approvalObject" }));
+    return initialNodes.map((node) => ({
+      ...node,
+      type: "approvalObject",
+      data: {
+        ...node.data,
+        displayStageColor: approvalStagePalette({
+          key: node.id,
+          kind: node.data.kind,
+          label: node.data.label,
+        }).background,
+      },
+    }));
   }
   return workflow.nodes.map((node) => ({
     id: node.id,
     type: "approvalObject",
     position: { x: node.positionX, y: node.positionY },
-    data: { ...node.config, label: node.label, kind: node.kind, detail: node.detail },
+    data: {
+      ...node.config,
+      displayStageColor: approvalStagePalette({
+        key: node.id,
+        kind: node.kind,
+        label: node.label,
+        color: typeof node.config.stageColor === "string" ? node.config.stageColor : undefined,
+      }).background,
+      label: node.label,
+      kind: node.kind,
+      detail: node.detail,
+    },
     className: `workflow-node node-${node.kind}`,
   }));
 }
@@ -436,6 +467,7 @@ interface ApprovalBoardColumn {
   readonly key: string;
   readonly label: string;
   readonly kind: string;
+  readonly color?: string;
 }
 
 interface ApprovalAdvancePlan {
@@ -483,7 +515,14 @@ function approvalBoardColumns(
     visited.add(nodeKey);
     const node = nodeById.get(nodeKey);
     if (node !== undefined && !["condition", "parallel"].includes(node.kind)) {
-      ordered.push({ key: node.id, label: node.label, kind: node.kind });
+      ordered.push({
+        key: node.id,
+        label: node.label,
+        kind: node.kind,
+        color: "config" in node && typeof node.config?.stageColor === "string"
+          ? node.config.stageColor
+          : undefined,
+      });
     }
     for (const edge of outgoing.get(nodeKey) ?? []) visit(edge.target);
   };
@@ -897,6 +936,7 @@ export function ApprovalsView({
   useModalFocus(createPanelRef, creatingRequest, closeCreate);
   useModalFocus(detailPanelRef, requests.some((request) => request.id === selectedRequestId), closeDetail);
   const [boardFilter, setBoardFilter] = useState<ApprovalBoardFilter>("all");
+  const [presentation, setPresentation] = useState<"kanban" | "list">("kanban");
   const [requestQuery, setRequestQuery] = useState("");
   const [movingRequestId, setMovingRequestId] = useState("");
   const [editingRequestId, setEditingRequestId] = useState("");
@@ -923,6 +963,14 @@ export function ApprovalsView({
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId),
     [nodes, selectedNodeId],
+  );
+  const usedStageColors = nodes.flatMap((node) =>
+    typeof node.data.stageColor === "string" ? [node.data.stageColor] : [],
+  );
+  const colorsUsedByOtherStages = nodes.flatMap((node) =>
+    node.id !== selectedNodeId && typeof node.data.stageColor === "string"
+      ? [node.data.stageColor]
+      : [],
   );
   const selectedNodeReminderHours = useMemo(() => {
     const value = selectedNode?.data.reminderHoursBefore;
@@ -990,6 +1038,10 @@ export function ApprovalsView({
     () => new Map(people.map((person) => [person.id, person])),
     [people],
   );
+  const personLink = (id: string | undefined, children: ReactNode, className?: string) => {
+    const person = id ? peopleById.get(id) : undefined;
+    return <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"} className={className}>{children}</EmployeeProfileLink>;
+  };
 
   const captureWorkflowSnapshot = useCallback(() => {
     const current = editorStateRef.current;
@@ -1138,6 +1190,7 @@ export function ApprovalsView({
       label: kindLabels[kind],
       kind,
       detail: "Настройте правило",
+      stageColor: nextAvailableStageColor(usedStageColors),
     };
     setNodes((current) => [
       ...current,
@@ -1492,14 +1545,14 @@ export function ApprovalsView({
               <span className="approval-metric"><strong>{boardSummary.revision}</strong><span>На доработке</span></span>
               <span className="approval-metric approval-metric-overdue"><strong>{boardSummary.overdue}</strong><span>Просрочено</span></span>
             </div>
-            <Input
-              className="approval-search"
-              aria-label="Поиск заявок"
-              placeholder="Номер, название или проект"
-              value={requestQuery}
-              onChange={(_event, data) => setRequestQuery(data.value)}
-            />
-            <div className="approval-board-filters" aria-label="Фильтр заявок">
+          </div>
+          <div className="approval-view-toolbar ws2-process-toolbar">
+            <div className="ws2-segmented" role="group" aria-label="Вид заявок">
+              <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
+              <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
+            </div>
+            <Input contentBefore={<Search20Regular />} className="approval-search" aria-label="Поиск заявок" placeholder="Номер, название или проект" value={requestQuery} onChange={(_event, data) => setRequestQuery(data.value)} />
+            <div className="ws2-segmented" role="group" aria-label="Фильтр заявок">
               {([
                 ["all", "Все", filterCounts.all],
                 ["actionable", "Нужно моё решение", filterCounts.actionable],
@@ -1514,7 +1567,7 @@ export function ApprovalsView({
                   aria-pressed={boardFilter === filter}
                   onClick={() => setBoardFilter(filter)}
                 >
-                  <span>{label}</span><span className="approval-filter-count" aria-hidden="true">{count}</span>
+                  {label}<span className="approval-filter-count" aria-hidden="true">{count}</span>
                 </button>
               ))}
             </div>
@@ -1529,7 +1582,7 @@ export function ApprovalsView({
             <div className="request-create-policy">Ваша должность не может создавать заявки на оплату</div>
           ) : null}
 
-          <SpatialBoard interactionMode="payment" canDrop={(id, target) => {
+          {presentation === "kanban" ? <SpatialBoard interactionMode="payment" canDrop={(id, target) => {
             const request = requests.find((item) => item.id === id);
             if (!request || target === requestBoardColumn(request, boardColumns)) return false;
             const plan = approvalAdvancePlan(request, workflow, currentUserId);
@@ -1602,10 +1655,10 @@ export function ApprovalsView({
                               ) : null}
                             </span>
                             <span className="approval-card-peopleline">
-                              <span className="approval-card-owner">
+                              {personLink(request.responsibleUserId, <>
                                 <Avatar size={24} name={responsibleName} color="colorful" />
                                 <span>{responsibleName}</span>
-                              </span>
+                              </>, "approval-card-owner")}
                               {request.details.deadline && cardStatus.tone !== "overdue" ? (
                                 <span
                                   className={`approval-card-deadline deadline-${deadline.tone}`}
@@ -1676,7 +1729,24 @@ export function ApprovalsView({
               </div>
             ) : null}
           </div>
-          </SpatialBoard>
+          </SpatialBoard> : (
+            <div className="process-record-list approval-record-list" aria-label="Список заявок">
+              {filteredRequests.map((request) => {
+                const column = boardColumns.find((candidate) => candidate.key === requestBoardColumn(request, boardColumns));
+                const cardStatus = approvalCardStatusPresentation(request, currentUserId);
+                const responsibleName = peopleById.get(request.responsibleUserId)?.name || "Ответственный не указан";
+                return <button type="button" className="process-record-row" key={request.id} onClick={() => openDetail(request.id)}>
+                  <span className="process-record-primary"><small>#{request.number}</small><strong>{request.title}</strong><em>{request.details.projectName || "Без проекта"}</em></span>
+                  <span className={`process-record-status status-${cardStatus.tone}`}><i />{cardStatus.label}</span>
+                  {personLink(request.responsibleUserId, <><Avatar size={28} name={responsibleName} color="colorful" /><span><small>Ответственный</small><strong>{responsibleName}</strong></span></>, "process-record-person")}
+                  <span className="process-record-fact"><small>Этап</small><strong>{column?.label || "Маршрут не назначен"}</strong></span>
+                  <span className="process-record-fact process-record-money"><small>Сумма</small><strong>{formatMoney(request.amount, request.currency)}</strong></span>
+                  <span className="process-record-arrow" aria-hidden="true">→</span>
+                </button>;
+              })}
+              {!filteredRequests.length ? <div className="process-record-empty"><Money24Regular /><strong>{requests.length ? "Заявки не найдены" : "Заявок пока нет"}</strong><span>{requests.length ? "Измените поиск или фильтр." : "Создайте первую заявку — она появится здесь и на доске."}</span></div> : null}
+            </div>
+          )}
 
           {creatingRequest ? (
             <div
@@ -1692,7 +1762,7 @@ export function ApprovalsView({
                   aside={<>
                     <RecordSummary title="Сводка заявки"><div className="record-summary-title">{requestTitle.trim() || "Новая заявка"}</div>
                       <strong className="record-summary-amount">{requestAmount.trim() && Number.isFinite(Number(requestAmount.replace(/\s/g, ""))) && Number(requestAmount.replace(/\s/g, "")) > 0 ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(requestAmount.replace(/\s/g, "")))} UZS` : "Укажите сумму"}</strong>
-                      <dl className="record-summary-facts"><div><dt>Проект</dt><dd>{requestDetails.projectName || "Не указан"}</dd></div><div><dt>Ответственный</dt><dd>{people.find((person) => person.id === requestDetails.responsibleUserId)?.name || "Не указан"}</dd></div><div><dt>Документы</dt><dd>{requestFiles.length + requestAdditionalFiles.length}</dd></div><div><dt>Приоритет</dt><dd>{requestDetails.requestPriority === "urgent" ? "Срочная" : "Обычная"}</dd></div></dl>
+                      <dl className="record-summary-facts"><div><dt>Проект</dt><dd>{requestDetails.projectName || "Не указан"}</dd></div><div><dt>Ответственный</dt><dd>{personLink(requestDetails.responsibleUserId, people.find((person) => person.id === requestDetails.responsibleUserId)?.name || "Не указан")}</dd></div><div><dt>Документы</dt><dd>{requestFiles.length + requestAdditionalFiles.length}</dd></div><div><dt>Приоритет</dt><dd>{requestDetails.requestPriority === "urgent" ? "Срочная" : "Обычная"}</dd></div></dl>
                     </RecordSummary>
                     <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
                   </>}>
@@ -1829,7 +1899,7 @@ export function ApprovalsView({
                     </div>
                     <dl className="approval-key-facts detail-overview">
                       <div><dt>Текущий этап</dt><dd>{selectedRequest.stageLabel}</dd></div>
-                      <div><dt>Ответственный</dt><dd>{peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник"}</dd></div>
+                      <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник")}</dd></div>
                       <div><dt>Срок</dt><dd>{selectedDeadline?.label ?? "Без срока"}</dd></div>
                     </dl>
                     {selectedRequest.status === "needs_revision" && latestReturnComment(selectedRequest) ? (
@@ -1870,8 +1940,8 @@ export function ApprovalsView({
                     <section className="approval-fact-section detail-overview approval-people-summary">
                       <h3>Ответственные</h3>
                       <dl>
-                        <div><dt>Инициатор</dt><dd>{peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник"}</dd></div>
-                        <div><dt>Ответственный</dt><dd>{peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник"}</dd></div>
+                        <div><dt>Инициатор</dt><dd>{personLink(selectedRequest.requesterId, peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник")}</dd></div>
+                        <div><dt>Ответственный</dt><dd>{personLink(selectedRequest.responsibleUserId, peopleById.get(selectedRequest.responsibleUserId)?.name ?? "Сотрудник")}</dd></div>
                         <div><dt>Текущий этап</dt><dd>{selectedRequest.stageLabel}</dd></div>
                         <div><dt>Создана</dt><dd>{formatDateTime(selectedRequest.createdAt)}</dd></div>
                       </dl>
@@ -1964,7 +2034,7 @@ export function ApprovalsView({
                         {selectedRequest.deadlineControl.events.slice().reverse().map((event) => (
                           <div key={event.id}>
                             <span>{deadlineEventLabels[event.eventType]}</span>
-                            <strong>{peopleById.get(event.recipientUserId)?.name ?? "Сотрудник"}</strong>
+                            {personLink(event.recipientUserId, <strong>{peopleById.get(event.recipientUserId)?.name ?? "Сотрудник"}</strong>)}
                             <time>{formatDateTime(event.createdAt)}</time>
                           </div>
                         ))}
@@ -1974,14 +2044,14 @@ export function ApprovalsView({
                       <header><span>Ход согласования</span><strong>{selectedRequest.actions.length + 1} событий</strong></header>
                       <div className="approval-timeline-event">
                         <i />
-                        <div><strong>Заявка создана</strong><span>{peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник"}</span><time>{formatDateTime(selectedRequest.createdAt)}</time></div>
+                        <div><strong>Заявка создана</strong>{personLink(selectedRequest.requesterId, <span>{peopleById.get(selectedRequest.requesterId)?.name ?? "Сотрудник"}</span>)}<time>{formatDateTime(selectedRequest.createdAt)}</time></div>
                       </div>
                       {selectedRequest.actions.map((action, index) => (
                         <div key={`${action.createdAt}-${action.nodeKey}-${index}`} className="approval-timeline-event">
                           <i />
                           <div>
                             <strong>{approvalActionLabels[action.action] ?? action.action}</strong>
-                            <span>{peopleById.get(action.actorUserId)?.name ?? "Сотрудник"} · {boardColumns.find((column) => column.key === action.nodeKey)?.label ?? action.nodeKey}</span>
+                            <span>{personLink(action.actorUserId, peopleById.get(action.actorUserId)?.name ?? "Сотрудник")} · {boardColumns.find((column) => column.key === action.nodeKey)?.label ?? action.nodeKey}</span>
                             {action.comment ? <p>{action.comment}</p> : null}
                             <time>{formatDateTime(action.createdAt)}</time>
                           </div>
@@ -2130,6 +2200,11 @@ export function ApprovalsView({
                     ))}
                   </WorkspaceSelect>
                 </label>
+                <WorkflowStageColorPicker
+                  value={typeof selectedNode.data.stageColor === "string" ? selectedNode.data.stageColor : undefined}
+                  usedByOtherStages={colorsUsedByOtherStages}
+                  onChange={(stageColor) => updateSelected({ stageColor })}
+                />
                 {selectedNode.data.kind === "approval" ? (
                   <>
                     <label>

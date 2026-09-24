@@ -3,6 +3,7 @@ import { Avatar, Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-
 import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
 export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
@@ -55,7 +56,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
           }}
         >
           <td className="record-selection-cell"><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
-          <td><span className="record-person employee-person"><Avatar name={employee.name} size={36} color="colorful" aria-hidden="true" /><span><button {...restoreFocusTarget} type="button" className="record-open" aria-haspopup="dialog" aria-label={`Открыть сотрудника: ${employee.name}`} onClick={() => onOpen(employee)}><strong>{employee.name}</strong></button><small>@{employee.username}</small></span></span></td>
+          <td><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><Avatar name={employee.name} size={36} color="colorful" aria-hidden="true" /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
           <td className="employee-position">
             {employee.jobTitle ? employee.jobTitle : (
               <span className="employee-position-missing" title="Должность не назначена">

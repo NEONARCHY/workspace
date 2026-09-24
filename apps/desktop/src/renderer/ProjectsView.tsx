@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -6,7 +6,9 @@ import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
-import { Avatar } from "@fluentui/react-components";
+import { workflowStageColor } from "./workflow-stage-colors";
+import { Avatar, DialogSurface } from "@fluentui/react-components";
+import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 
 import type {
   ProjectInput,
@@ -18,6 +20,7 @@ import type {
 } from "@yuksalish/contracts";
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -35,6 +38,13 @@ const nextStages: Readonly<Record<ProjectStage, readonly ProjectStage[]>> = {
   failure: ["approval"],
 };
 const stagePosition = new Map(stages.map((stage, index) => [stage, index]));
+const defaultStageColors: Readonly<Record<ProjectStage, string>> = {
+  start: "#72b9dc",
+  preparation: "#d8b86c",
+  approval: "#849fd0",
+  success: "#62bd72",
+  failure: "#d97878",
+};
 
 function isBackwardStage(current: ProjectStage, target: ProjectStage): boolean {
   return (stagePosition.get(target) ?? 0) < (stagePosition.get(current) ?? 0);
@@ -55,6 +65,7 @@ interface ProjectsViewProps {
     comment?: string,
   ) => Promise<WorkspaceProject | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
+  readonly renderProjectChat?: (project: WorkspaceProject) => ReactNode;
   readonly focusProjectId?: string;
   readonly workflow?: WorkflowDefinition;
   readonly positions?: readonly WorkflowPosition[];
@@ -138,9 +149,10 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, focusProjectId, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, renderProjectChat, focusProjectId, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const [view, setView] = useState<"board" | "designer">("board");
+  const [presentation, setPresentation] = useState<"kanban" | "list">("kanban");
   const [selectedId, updateSelectedId] = useState(focusProjectId ?? projects[0]?.id ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusProjectId));
   const [failureId, setFailureId] = useState<string>();
@@ -153,11 +165,13 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const detailRef = useRef<HTMLElement>(null);
-  const closeForm = () => { if (!savingRef.current) setFormMode(null); };
+  const closeForm = () => {
+    if (savingRef.current) return;
+    if (formMode === "edit") setDetailOpen(true);
+    setFormMode(null);
+  };
   const closeDetail = () => { setDetailOpen(false); setFailureId(undefined); };
   useModalFocus(formRef, formMode !== null, closeForm);
-  useModalFocus(detailRef, detailOpen && formMode === null, closeDetail);
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const workflowStages = workflow?.nodes
     .filter((node): node is typeof node & { id: ProjectStage } => stages.includes(node.id as ProjectStage))
@@ -169,12 +183,20 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
     ...stageLabels,
     ...Object.fromEntries(workflowStages?.map((node) => [node.id, node.label]) ?? []),
   };
+  const projectStageColors: Readonly<Record<ProjectStage, string>> = {
+    ...defaultStageColors,
+    ...Object.fromEntries(workflowStages?.map((node) => [
+      node.id,
+      workflowStageColor(node.config.stageColor, defaultStageColors[node.id]),
+    ]) ?? []),
+  };
   const canCreate = ["manager", "admin", "superadmin"].includes(currentUser.role);
   const isAdministrator = ["admin", "superadmin"].includes(currentUser.role);
   const availableStages = (project: WorkspaceProject) => isAdministrator
     ? stages.filter((stage) => stage !== project.stage)
     : nextStages[project.stage];
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
   const activeCount = projects.filter((project) => project.status !== "completed").length;
   const completedCount = projects.length - activeCount;
   const actionableCount = projects.filter((project) => project.canMove).length;
@@ -205,7 +227,11 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
     savingRef.current = true; setSaving(true); setFormError("");
     try {
       const saved = formMode === "edit" && selected !== undefined ? await onUpdate(selected, payload) : await onCreate(payload);
-      if (saved !== undefined) { setSelectedId(saved.id); setFormMode(null); }
+      if (saved !== undefined) {
+        updateSelectedId(saved.id);
+        setFormMode(null);
+        queueMicrotask(() => setDetailOpen(true));
+      }
       else setFormError("Не удалось сохранить проект. Проверьте подключение и повторите попытку.");
     } catch { setFormError("Не удалось сохранить проект. Введённые данные сохранены в форме."); }
     finally { savingRef.current = false; setSaving(false); }
@@ -237,9 +263,8 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
-          <span>Сейчас в работе</span>
           <strong>{activeCount}</strong>
-          <small>Открыть активные проекты <span aria-hidden="true">→</span></small>
+          <span>Сейчас в работе</span>
         </button>
         <div className="ws2-process-metrics">
           <div><strong>{actionableCount}</strong><span>можно переместить</span></div>
@@ -249,6 +274,10 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       </section>
 
       <div className="ws2-process-toolbar project-toolbar">
+        <div className="ws2-segmented" role="group" aria-label="Вид проектов">
+          <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
+          <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
+        </div>
         <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         <div className="ws2-segmented" role="group" aria-label="Фильтр проектов">
           {([["active", "В работе"], ["all", "Все"], ["completed", "Завершённые"]] as const).map(([key, label]) => (
@@ -259,7 +288,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         </div>
       </div>
 
-      <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
+      {presentation === "kanban" ? <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>
       <div className="project-board middle-pan-surface" aria-label="Стадии проектов" {...boardPan}>
         {displayStages.map((stage) => {
           const items = visibleProjects.filter((project) => project.stage === stage);
@@ -267,8 +296,13 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
             <SpatialLane id={stage}
               className={`project-column project-stage-${stage}`}
               key={stage}
+              style={{ "--project-stage-color": projectStageColors[stage] } as CSSProperties}
             >
               <header><strong>{projectStageLabels[stage]}</strong><Badge appearance="tint">{items.length}</Badge></header>
+              <div className="project-column-total" aria-label={`${items.length} проектов на этапе «${projectStageLabels[stage]}»`}>
+                <span>Проектов на этапе</span>
+                <strong>{items.length}</strong>
+              </div>
               <div className="project-stack" tabIndex={0} aria-label={`Проекты на стадии «${projectStageLabels[stage]}»`}>
                 {items.map((project) => (
                   <SpatialCard id={project.id} lane={stage} label={project.title} disabled={!project.canMove}
@@ -278,7 +312,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
                     <button className="spatial-card-open" type="button" onClick={() => setSelectedId(project.id)}>
                     <span className="project-card-topline"><span className="project-code">{project.code}</span><span data-tone={deadlineTone(project)}>{shortDate(project.endDate)}</span></span>
                     <strong>{project.title}</strong>
-                    <small className="spatial-person"><Avatar size={24} name={personName(project.managerUserId)} color="colorful" />{personName(project.managerUserId)}</small>
+                    {personLink(project.managerUserId, <><Avatar size={24} name={personName(project.managerUserId)} color="colorful" />{personName(project.managerUserId)}</>, "spatial-person")}
                     <div className="budget-progress" role="progressbar" aria-label={`Использовано бюджета проекта ${project.title}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={project.budget ? Math.round(Math.min(100, project.spentBudget / project.budget * 100)) : 0}><i style={{ width: `${project.budget ? Math.min(100, project.spentBudget / project.budget * 100) : 0}%` }} /></div>
                     <small>{money(project.spentBudget, project.currency)} из {money(project.budget, project.currency)}</small>
                     </button>
@@ -291,28 +325,47 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           );
         })}
       </div>
-      </SpatialBoard>
+      </SpatialBoard> : (
+        <div className="process-record-list project-record-list" aria-label="Проекты в виде списка">
+          {visibleProjects.map((project) => (
+            <button type="button" className="process-record-row" key={project.id} onClick={() => setSelectedId(project.id)}>
+              <span className="process-record-primary"><small>{project.code}</small><strong>{project.title}</strong><em>{project.description || "Описание не добавлено"}</em></span>
+              <span className="process-record-status" style={{ "--record-status-color": projectStageColors[project.stage] } as CSSProperties}><i />{projectStageLabels[project.stage]}</span>
+              {personLink(project.managerUserId, <><Avatar size={28} name={personName(project.managerUserId)} color="colorful" /><span><small>Руководитель</small><strong>{personName(project.managerUserId)}</strong></span></>, "process-record-person")}
+              <span className="process-record-fact"><small>Срок</small><strong>{shortDate(project.endDate)}</strong></span>
+              <span className="process-record-fact process-record-money"><small>Бюджет</small><strong>{money(project.spentBudget, project.currency)} из {money(project.budget, project.currency)}</strong></span>
+              <span className="process-record-arrow" aria-hidden="true">→</span>
+            </button>
+          ))}
+          {!visibleProjects.length ? <div className="process-record-empty"><strong>{projects.length ? "Проекты не найдены" : "Проектов пока нет"}</strong><span>{projects.length ? "Измените поиск или фильтр." : "Создайте первый проект — он появится здесь и на доске."}</span></div> : null}
+        </div>
+      )}
       </>}
 
-      {selected !== undefined && detailOpen ? (
-        <aside ref={detailRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="project-detail-title" className="bp7-detail spatial-inspector">
-          <Button className="project-inspector-close" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть карточку проекта" onClick={closeDetail} />
+      {selected !== undefined ? (
+        <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) closeDetail(); }}>
+        <DialogSurface className="project-dialog context-record-dialog" aria-labelledby="project-detail-title">
+          <div className="context-record-workspace">
+          <article className="bp7-detail project-detail">
           <header>
             <div><span>{selected.code}</span><h2 id="project-detail-title">{selected.title}</h2></div>
+            <div className="project-detail-header-actions">
             {selected.canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={() => {
               setForm(projectForm(selected));
               setFormError("");
+              setDetailOpen(false);
               setFormMode("edit");
             }}>Изменить</Button> : null}
+            <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть карточку проекта" onClick={closeDetail} />
+            </div>
           </header>
           <div className="project-detail-stage" aria-label={`Текущая стадия: ${projectStageLabels[selected.stage]}`}>
             {displayStages.map((stage) => <span key={stage} aria-current={stage === selected.stage ? "step" : undefined}>{projectStageLabels[stage]}</span>)}
           </div>
           <p>{selected.description || "Описание пока не добавлено."}</p>
-          {selected.chatId && onOpenChat ? <Button className="inspector-chat-button" appearance="secondary" icon={<Chat24Regular />} onClick={() => onOpenChat(selected.chatId!)}>Открыть чат проекта</Button> : null}
           {failureId === selected.id ? <DecisionReason title="Причина провала проекта" onCancel={() => setFailureId(undefined)} onConfirm={async (reason) => Boolean(await onMove(selected, "failure", reason))} /> : null}
           <dl className="bp7-facts">
-            <div><dt>Руководитель</dt><dd>{personName(selected.managerUserId)}</dd></div>
+            <div><dt>Руководитель</dt><dd>{personLink(selected.managerUserId, personName(selected.managerUserId))}</dd></div>
             <div><dt>Период</dt><dd>{selected.startDate || "—"} — {selected.endDate || "—"}</dd></div>
             <div><dt>Бюджет</dt><dd>{money(selected.budget, selected.currency)}</dd></div>
             <div><dt>Остаток</dt><dd>{money(selected.remainingBudget, selected.currency)}</dd></div>
@@ -334,10 +387,14 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
           <div className="bp7-history">
             <h3>История проекта</h3>
             {[...selected.history].reverse().map((entry) => (
-              <div key={entry.id}><i /><p><strong>{projectStageLabels[entry.toStage]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
+              <div key={entry.id}><i /><p><strong>{projectStageLabels[entry.toStage]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>
             ))}
           </div>
-        </aside>
+          </article>
+          {renderProjectChat ? renderProjectChat(selected) : <div className="embedded-chat-unavailable">Чат проекта недоступен.</div>}
+          </div>
+        </DialogSurface>
+        </Dialog>
       ) : null}
 
       {formMode !== null ? (
@@ -348,7 +405,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии проекта">{displayStages.map((stage) => <span key={stage} aria-current={stage === formStage ? "step" : undefined}>{projectStageLabels[stage]}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка проекта"><div className="record-summary-title">{form.title.trim() || "Новый проект"}</div><p>{form.code.trim() || "Код ещё не указан"}</p><strong className="record-summary-amount">{remaining}</strong><p>Оставшийся бюджет</p>
-                  <dl className="record-summary-facts"><div><dt>Руководитель</dt><dd>{personName(form.managerUserId)}</dd></div><div><dt>Период</dt><dd>{form.startDate || "Не указан"} — {form.endDate || "Не указан"}</dd></div><div><dt>Стадия</dt><dd>{projectStageLabels[formStage]}</dd></div></dl>
+                  <dl className="record-summary-facts"><div><dt>Руководитель</dt><dd>{personLink(form.managerUserId, personName(form.managerUserId))}</dd></div><div><dt>Период</dt><dd>{form.startDate || "Не указан"} — {form.endDate || "Не указан"}</dd></div><div><dt>Стадия</dt><dd>{projectStageLabels[formStage]}</dd></div></dl>
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>{formMode === "create" ? "Карточка ещё не сохранена" : "Редактирование карточки"}</h3><p>{formMode === "create" ? "После сохранения появится история проекта. Стадиями можно управлять на доске и в карточке проекта." : "История проекта и текущая стадия сохранятся. Бюджет и ответственного можно уточнить здесь."}</p></section>
               </>}>

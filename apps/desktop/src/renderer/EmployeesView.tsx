@@ -12,8 +12,9 @@ import type {
   WorkspaceDepartment,
   WorkspacePosition,
   WorkspaceRole,
+  RecognitionSettings,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Spinner, Switch, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, Chat24Regular, Delete24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";
@@ -22,11 +23,14 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 import {
   createPosition,
   deletePosition,
   loadDirectory,
+  loadRecognitionSettings,
+  updateRecognitionSettings,
   updateEmployeeAccess,
   updateEmployeeStatus,
   updatePosition,
@@ -113,11 +117,22 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [chatTitle, setChatTitle] = useState("");
   const positionFocusTarget = useRestoreFocusTarget();
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [recognitionSettings, setRecognitionSettings] = useState<RecognitionSettings>();
+  const [recognitionSettingsBusy, setRecognitionSettingsBusy] = useState(false);
   const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
   const canManageDepartments = canManage
     || currentUser.role === "manager"
     || (currentUser.jobTitle ?? "").toLocaleLowerCase("uz").includes("kadr")
     || (currentUser.jobTitle ?? "").includes("Yuksalish");
+
+  useEffect(() => {
+    if (!canManage) return;
+    let active = true;
+    void loadRecognitionSettings(token)
+      .then((loaded) => { if (active) setRecognitionSettings(loaded); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [canManage, token]);
 
   useEffect(() => {
     let active = true;
@@ -403,6 +418,20 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
         </div>
         <div className="toolbar-actions">
+          {canManage && recognitionSettings ? <Switch
+            checked={recognitionSettings.activeTaskCountVisible}
+            disabled={recognitionSettingsBusy}
+            label="Активные задачи в профилях"
+            title="Управляет видимостью количества активных задач для всех сотрудников"
+            onChange={(_, data) => {
+              setRecognitionSettingsBusy(true);
+              setFeedback("");
+              void updateRecognitionSettings(token, data.checked)
+                .then(setRecognitionSettings)
+                .catch((cause: unknown) => setFeedback(cause instanceof Error ? cause.message : "Не удалось изменить видимость"))
+                .finally(() => setRecognitionSettingsBusy(false));
+            }}
+          /> : null}
           {canManageDepartments ? <Button onClick={() => setDepartmentsOpen(true)}>Отделы и подразделения</Button> : null}
           {canManage ? <Button onClick={() => setAccessOpen(true)}>Права модулей</Button> : null}
           {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
@@ -503,12 +532,14 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           {selectedEmployee ? (
             <>
               <div className="directory-heading">
-                <Avatar name={selectedEmployee.name} size={56} color="colorful" />
+                <EmployeeProfileLink userId={selectedEmployee.id} personName={selectedEmployee.name}><Avatar name={selectedEmployee.name} size={56} color="colorful" /></EmployeeProfileLink>
+                <EmployeeProfileLink userId={selectedEmployee.id} personName={selectedEmployee.name}>
                 <div>
                   <span>Карточка сотрудника</span>
                   <h2>{selectedEmployee.name}</h2>
                   <p>@{selectedEmployee.username} · {employeeStatusLabel(selectedEmployee.status)}</p>
                 </div>
+                </EmployeeProfileLink>
               </div>
               <div className="directory-form-grid">
                 <Field label="Роль доступа" hint="Влияет на разрешённые действия в системе.">

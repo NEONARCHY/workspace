@@ -83,6 +83,18 @@ describe("Personal organization", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
     expect(within(screen.getByRole("list")).getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", first.id);
   });
+  it("keeps pinned order and raises the chat with the newest message above other chats", () => {
+    const [first, second] = initialChats;
+    const third = { ...first!, id: "third", title: "Самый новый", canDelete: false };
+    const datedMessages = [
+      { ...initialMessages[0]!, chatId: first!.id, createdAt: "2026-09-24T08:00:00Z" },
+      { ...initialMessages[1]!, chatId: second!.id, createdAt: "2026-09-24T10:00:00Z" },
+      { ...initialMessages[2]!, chatId: third.id, createdAt: "2026-09-24T12:00:00Z" },
+    ];
+    render(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={[first!, second!, third]} messages={datedMessages} onSelect={vi.fn()}
+      preferences={{ ...defaultPersonalPreferences, pinnedChatIds: [first!.id] }} /></FluentProvider>);
+    expect(screen.getAllByRole("listitem").map((item) => item.getAttribute("data-chat-id"))).toEqual([first!.id, third.id, second!.id]);
+  });
   it("opens project and trip conversations as regular lists from the More menu", () => {
     const select = vi.fn();
     const contextChats = [
@@ -93,6 +105,9 @@ describe("Personal organization", () => {
       preferences={defaultPersonalPreferences} /></FluentProvider>);
     expect(screen.queryByText("Проект · Офис")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Ещё/ }));
+    expect(screen.queryByRole("menuitem", { name: /Чаты проектов/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Папки чатов" })).toHaveClass("is-more");
+    fireEvent.transitionEnd(document.querySelector(".chat-bucket-slider")!, { propertyName: "transform" });
     fireEvent.click(screen.getByRole("menuitem", { name: /Чаты проектов/ }));
     const projectList = screen.getByRole("list", { name: "Чаты проектов" });
     fireEvent.click(projectList.querySelector("button.chat-row")!);

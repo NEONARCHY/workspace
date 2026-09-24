@@ -15,6 +15,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 interface FeedViewProps {
   readonly posts: readonly FeedPost[];
@@ -138,9 +139,9 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
             return (
               <article className={`feed-card ${post.isPinned ? "pinned" : ""}`} key={post.id}>
                 <header>
-                  {author ? <ProfileAvatar person={author} token={token} size={40} /> : null}
+                  {author ? <EmployeeProfileLink userId={author.id} personName={author.name}><ProfileAvatar person={author} token={token} size={40} /></EmployeeProfileLink> : null}
                   <span>
-                    <strong>{author?.name ?? "Сотрудник"}</strong>
+                    {author ? <EmployeeProfileLink userId={author.id} personName={author.name}><strong>{author.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
                     <small>{dateLabel(post.createdAt)}</small>
                   </span>
                   {post.isPinned ? <span className="feed-pin">Закреплено</span> : null}
@@ -182,9 +183,9 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                       const isLastReply = Boolean(depth) && nextThreadRootId !== threadRootId;
                       return (
                         <div className={`feed-comment ${depth ? "is-reply" : ""} ${hasReplies ? "has-replies" : ""} ${isLastReply ? "is-last-reply" : ""}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
-                          {commentAuthor ? <ProfileAvatar person={commentAuthor} token={token} size={28} /> : null}
+                          {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><ProfileAvatar person={commentAuthor} token={token} size={28} /></EmployeeProfileLink> : null}
                           <span>
-                            <strong>{commentAuthor?.name ?? "Сотрудник"}</strong>
+                            {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><strong>{commentAuthor.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
                             <p>{item.body}</p>
                             <span className="feed-comment-meta">
                               <small>{dateLabel(item.createdAt)}</small>
@@ -199,7 +200,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   </div>
                 ) : null}
                 <div className="feed-comment-composer">
-                  {replying[post.id] ? <div className="feed-reply-context"><span>Ответ для {person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}</span><Button size="small" appearance="subtle" aria-label="Отменить ответ" onClick={() => setReplying((current) => ({ ...current, [post.id]: undefined }))}>×</Button></div> : null}
+                  {replying[post.id] ? <div className="feed-reply-context"><span>Ответ для <EmployeeProfileLink userId={replying[post.id]!.authorUserId} personName={person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}>{person(replying[post.id]!.authorUserId)?.name ?? "сотрудника"}</EmployeeProfileLink></span><Button size="small" appearance="subtle" aria-label="Отменить ответ" onClick={() => setReplying((current) => ({ ...current, [post.id]: undefined }))}>×</Button></div> : null}
                   <Input
                     input={{ ref: (node) => { commentInputs.current[post.id] = node; } }}
                     aria-label={`Комментарий к публикации ${post.title}`}

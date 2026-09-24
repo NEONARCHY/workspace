@@ -41,7 +41,7 @@
 .app-provider .fui-Dropdown:focus-visible { outline: 0; }
 
 .app-provider :is(
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
   textarea:not(.fui-Textarea__textarea),
   select:not(.fui-Select__select)
 ) {
@@ -56,12 +56,12 @@
 }
 
 .app-provider :is(
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
   textarea:not(.fui-Textarea__textarea),
   select:not(.fui-Select__select)
 ):focus,
 .app-provider :is(
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
   textarea:not(.fui-Textarea__textarea),
   select:not(.fui-Select__select)
 ):focus-visible {
@@ -199,13 +199,12 @@
    empty header band above the month grid. */
 .calendar-view:not(.task-calendar-embedded) .calendar-main {
   gap: 10px;
-  padding-top: 12px;
+  padding: 12px var(--ws-view-edge) 22px;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-toolbar {
   min-height: 54px;
   margin-bottom: 8px;
-  padding-top: 4px;
-  padding-bottom: 8px;
+  padding: 4px var(--ws-view-panel-title-inline) 8px;
 }
 
 .app-content > .workspace-view {

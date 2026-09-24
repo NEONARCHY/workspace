@@ -109,6 +109,10 @@ async def exercise_permissions(url: str) -> None:
                 project_chat = await service.chat_summary(connection, admin, project_chat_id)
                 assert project_chat.context_type == "project"
                 assert project_chat.context_id is not None
+                assert project_chat.can_delete is False
+                with pytest.raises(WorkspaceRepositoryError) as protected_chat:
+                    await service.delete_chat(connection, admin, project_chat_id)
+                assert protected_chat.value.status_code == 409
                 admin_workspace = await load_workspace(connection, admin)
                 assert project_chat.id in {chat.id for chat in admin_workspace.chats}
                 assert str(group_id) not in {chat.id for chat in admin_workspace.chats}
@@ -368,6 +372,7 @@ async def exercise_messages(url: str) -> None:
                 )
                 assert reacted.reactions[0].count == 1
                 assert reacted.reactions[0].reacted_by_current_user
+                assert reacted.reactions[0].reactor_user_ids == [str(owner.id)]
                 reacted_by_peer = await service.toggle_message_reaction(
                     connection,
                     peer,
@@ -375,6 +380,10 @@ async def exercise_messages(url: str) -> None:
                     MessageReactionRequest(emoji="👍"),
                 )
                 assert reacted_by_peer.reactions[0].count == 2
+                assert reacted_by_peer.reactions[0].reactor_user_ids == [
+                    str(owner.id),
+                    str(peer.id),
+                ]
                 with pytest.raises(WorkspaceRepositoryError):
                     await service.set_message_pin(
                         connection,
@@ -614,7 +623,12 @@ async def exercise_http(url: str) -> None:
         reaction = await client.post(path + "/reactions", headers=headers, json={"emoji": "🎉"})
         assert reaction.status_code == 200
         assert reaction.json()["reactions"] == [
-            {"emoji": "🎉", "count": 1, "reactedByCurrentUser": True}
+            {
+                "emoji": "🎉",
+                "count": 1,
+                "reactedByCurrentUser": True,
+                "reactorUserIds": [owner["user"]["id"]],
+            }
         ]
         rocket = await client.post(path + "/reactions", headers=headers, json={"emoji": "🚀"})
         assert rocket.status_code == 200

@@ -1627,7 +1627,14 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.queryByLabelText("Живой маршрут заявки")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
 
-    const card = openCard.closest("article");
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    expect(screen.getByLabelText("Список заявок")).toHaveTextContent("Заявка для доски");
+    fireEvent.click(screen.getByRole("button", { name: "Канбан" }));
+    expect(screen.getByLabelText("Доска заявок по стадиям")).toBeInTheDocument();
+
+    const card = screen.getByRole("button", {
+      name: "Открыть заявку №502: Заявка для доски",
+    }).closest("article");
     expect(card).not.toBeNull();
     installSpatialGeometry();
     const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
@@ -1885,7 +1892,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("heading", { name: "Тестовый проект BP-7" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Подготовка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Подготовка" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/projects/project-created/stage"),
       expect.objectContaining({ method: "PATCH" }),

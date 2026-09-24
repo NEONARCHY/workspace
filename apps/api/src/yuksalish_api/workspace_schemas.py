@@ -138,6 +138,7 @@ class MessageReactionResponse(ApiModel):
     emoji: str = Field(min_length=1, max_length=16)
     count: int = Field(ge=1)
     reacted_by_current_user: bool = False
+    reactor_user_ids: list[str] = Field(default_factory=list)
 
 
 class ChatMessageResponse(ApiModel):

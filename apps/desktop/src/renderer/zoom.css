@@ -1,14 +1,14 @@
 /* Zoom conferences: one shared host, so the screen reads as a single calendar
    with a working detail panel next to it. Tokens come from design-system.css. */
 .zoom-view { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); min-height: 0; }
-.zoom-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px 24px 18px; }
+.zoom-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 24px var(--ws-view-title-inline) 18px; }
 .zoom-header h1 { margin: 0; }
 .zoom-header p { max-width: 62ch; margin: 6px 0 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
 .zoom-header-actions { display: flex; flex: none; gap: 10px; }
-.zoom-error { margin: 0 24px 12px; }
-.zoom-notice { margin: 0 24px 12px; padding: 10px 12px; border-left: 3px solid var(--ws-turquoise); border-radius: 0 10px 10px 0; color: var(--ws-text); background: var(--ws-selected); font-size: 13px; }
+.zoom-error { margin: 0 var(--ws-view-edge) 12px; }
+.zoom-notice { margin: 0 var(--ws-view-edge) 12px; padding: 10px 12px; border-left: 3px solid var(--ws-turquoise); border-radius: 0 10px 10px 0; color: var(--ws-text); background: var(--ws-selected); font-size: 13px; }
 
-.zoom-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); min-height: 0; border-top: 1px solid var(--ws-line); }
+.zoom-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); min-height: 0; margin-inline: var(--ws-view-edge); overflow: hidden; border: 1px solid var(--ws-line); border-radius: var(--ws-radius); }
 .zoom-list { display: grid; align-content: start; gap: 14px; min-height: 0; padding: 20px 20px 24px; overflow-y: auto; }
 .zoom-buckets { justify-self: start; display: inline-flex; gap: 4px; }
 .zoom-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }

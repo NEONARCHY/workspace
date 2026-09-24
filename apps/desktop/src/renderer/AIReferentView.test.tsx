@@ -114,6 +114,7 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentRecipientPicker
       token="token" organization="" address="" onSelect={onSelect} onManualChange={vi.fn()}
     /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть: поиск адресата" }));
     const search = screen.getByRole("textbox", { name: "Поиск адресата" });
     fireEvent.change(search, { target: { value: "финанс" } });
     await waitFor(() => expect(loadAIReferentRecipients).toHaveBeenCalledWith("token", expect.objectContaining({ query: "финанс" })));
@@ -180,11 +181,16 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(screen.getByText("Входящее письмо")).toBeInTheDocument());
     expect(screen.getByText("Организация-отправитель")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Excel-журнал/ })).toBeEnabled();
+    const incomingRefresh = screen.getByRole("button", { name: "Обновить" });
+    expect(incomingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
     await waitFor(() => expect(screen.getByText("Ответ партнёру")).toBeInTheDocument());
     expect(screen.getByText("Организация-получатель")).toBeInTheDocument();
     expect(screen.getAllByText("На согласовании")).not.toHaveLength(0);
     expect(screen.getByRole("button", { name: /Новое письмо/ })).toBeEnabled();
+    const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
+    expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
+    expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
   });
 });

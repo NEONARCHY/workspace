@@ -2,11 +2,11 @@ import type { TripAction, TripRequest, TripStage } from "@yuksalish/contracts";
 
 // Read-only Bitrix metadata: entity 1038, category 17, verified 2026-09-04.
 export const tripColumns: readonly { key: TripStage; label: string; color: string }[] = [
-  { key: "launch", label: "Запуск", color: "#22b9ff" },
-  { key: "manager_approval", label: "Утверждение руководителем", color: "#88b9ff" },
-  { key: "hr", label: "Кадровая служба", color: "#10e5fc" },
-  { key: "approved", label: "Утверждено", color: "#00ff00" },
-  { key: "rejected", label: "Отклонено", color: "#ff0000" },
+  { key: "launch", label: "Запуск", color: "#72b9dc" },
+  { key: "manager_approval", label: "Утверждение руководителем", color: "#849fd0" },
+  { key: "hr", label: "Кадровая служба", color: "#50bec8" },
+  { key: "approved", label: "Утверждено", color: "#62bd72" },
+  { key: "rejected", label: "Отклонено", color: "#d97878" },
 ];
 
 // UI only proposes an existing action. The server remains the authority on permissions.

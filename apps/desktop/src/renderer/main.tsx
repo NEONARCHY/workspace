@@ -13,6 +13,7 @@ import "./record-composer.css";
 import "./motion.css";
 import "./record-lists.css";
 import "./members.css";
+import "./employee-recognition.css";
 import "./hr.css";
 import "./ai-referent.css";
 import "./zoom.css";
