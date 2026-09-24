@@ -51,16 +51,13 @@ body { background: var(--ws-canvas); }
 .section-jump-trigger kbd { margin-left: auto; border: 0; color: #405b6b; background: #edf2f3; padding: 2px 6px; border-radius: 5px; font: inherit; font-size: 10px; }
 .workspace-top-context, .workspace-identity, .workspace-identity-profile { display: flex; align-items: center; gap: 12px; }
 .workspace-identity { gap: 0; padding: 3px 4px 3px 3px; border-radius: 30px; background: transparent; }
-.workspace-identity:hover { background: #fff; }
 .workspace-identity-profile, .workspace-identity-menu { border: 0; color: inherit; background: transparent; cursor: pointer; }
 .workspace-identity-profile { min-width: 0; padding: 2px 7px 2px 2px; border-radius: 24px 8px 8px 24px; }
-.workspace-identity-profile:hover { color: var(--ws-link); }
 .workspace-identity-profile:focus-visible, .workspace-identity-menu:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 1px; }
 .workspace-identity-menu { display: grid; width: 28px; height: 28px; padding: 0; border-radius: 50%; place-items: center; }
 .workspace-identity-menu:hover { background: rgb(0 145 168 / 8%); }
 .workspace-identity-profile > span:not(.fui-Avatar) { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .identity-popover-profile { width: 100%; padding: 8px; border: 0; border-radius: 14px; color: inherit; background: transparent; text-align: left; cursor: pointer; }
-.identity-popover-profile:hover { background: rgb(0 145 168 / 7%); }
 .connection-indicator { display: flex; align-items: center; gap: 8px; padding: 10px; border: 0; background: transparent; cursor: pointer; border-radius: 50%; }
 .connection-indicator > span { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
 .connection-indicator i { width: 8px; height: 8px; border-radius: 50%; background: #448876; box-shadow: 0 0 0 4px #e3efea; }

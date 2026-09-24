@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,5 +32,17 @@ describe("EmployeeProfileLink", () => {
     render(<EmployeeProfileLink personName="Неизвестный сотрудник">Неизвестный сотрудник</EmployeeProfileLink>);
 
     expect(screen.getByText("Неизвестный сотрудник")).not.toHaveAttribute("role", "button");
+  });
+
+  it("does not highlight profile-opening names or avatars on hover", () => {
+    const styles = ["employee-recognition.css", "spatial-workspace.css", "message-layout.css"]
+      .map((file) => readFileSync(resolve(process.cwd(), "src/renderer", file), "utf8"))
+      .join("\n");
+
+    expect(styles).not.toMatch(/\.employee-profile-link\.is-interactive:hover/);
+    expect(styles).not.toMatch(/\.workspace-identity(?:-profile)?:hover/);
+    expect(styles).not.toMatch(/\.identity-popover-profile:hover/);
+    expect(styles).not.toMatch(/\.message-reaction-tooltip-people\s*>\s*button:hover/);
+    expect(styles).toMatch(/\.employee-profile-link\.is-interactive:focus-visible/);
   });
 });

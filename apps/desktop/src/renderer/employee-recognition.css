@@ -1,10 +1,6 @@
 .employee-profile-link { min-width: 0; }
-.employee-profile-link.is-interactive { cursor: pointer; border-radius: 10px; outline: none; transition: color 150ms var(--ws-ease), background-color 150ms var(--ws-ease), box-shadow 150ms var(--ws-ease); }
-.employee-profile-link.is-interactive:hover { color: var(--ws-link); background: rgb(0 145 168 / 7%); }
+.employee-profile-link.is-interactive { cursor: pointer; border-radius: 10px; outline: none; }
 .employee-profile-link.is-interactive:focus-visible { box-shadow: 0 0 0 2px var(--ws-turquoise), 0 0 0 4px rgb(0 145 168 / 13%); }
-.employee-profile-link.is-interactive .fui-Avatar { transition: transform 150ms var(--ws-ease), box-shadow 150ms var(--ws-ease); }
-.employee-profile-link.is-interactive:hover .fui-Avatar,
-.employee-profile-link.is-interactive:focus-visible .fui-Avatar { box-shadow: 0 5px 14px rgb(41 58 85 / 16%); transform: translateY(-1px); }
 
 .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: min(1220px, calc(100vw - 48px)); max-width: none; height: min(860px, calc(100vh - 40px)); max-height: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 72%); border-radius: 26px; background: linear-gradient(145deg, rgb(251 254 254 / 99%), rgb(234 245 248 / 99%)); box-shadow: 0 30px 80px rgb(27 46 66 / 28%); }
 .employee-profile-dialog .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
@@ -152,10 +148,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .recognition-emblem, .recognition-holographic-card, .recognition-card-surface, .employee-profile-tabs button, .employee-profile-link.is-interactive, .employee-profile-link.is-interactive .fui-Avatar { transition: none; }
+  .recognition-emblem, .recognition-holographic-card, .recognition-card-surface, .employee-profile-tabs button { transition: none; }
   .recognition-emblem, .recognition-holographic-card, .recognition-card-content, .recognition-emblem > span { transform: none !important; }
   .recognition-card-foil, .recognition-card-glare, .recognition-emblem::before, .recognition-emblem::after { display: none; }
-  .employee-profile-link.is-interactive .fui-Avatar { transform: none !important; }
 }
 
 @media (forced-colors: active) {

@@ -41,7 +41,6 @@
 .message-reaction-tooltip-people { display: grid; gap: 5px; max-height: 144px; overflow-y: auto; scrollbar-width: thin; }
 .message-reaction-tooltip-people > span, .message-reaction-tooltip-people > button { display: flex; min-height: 28px; align-items: center; gap: 7px; padding: 3px 5px; border: 0; border-radius: 8px; color: rgb(255 255 255 / 84%); background: transparent; font: inherit; font-size: 11px; text-align: left; white-space: nowrap; }
 .message-reaction-tooltip-people > button { width: 100%; cursor: pointer; }
-.message-reaction-tooltip-people > button:hover { color: #fff; background: rgb(255 255 255 / 10%); }
 .message-reaction-tooltip-people > button:focus-visible { outline: 2px solid #71d7df; outline-offset: -1px; }
 
 .voice-message { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 7px; width: min(390px, 68vw); min-width: min(280px, 66vw); padding: 1px 0; }
