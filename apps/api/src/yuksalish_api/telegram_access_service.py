@@ -153,10 +153,11 @@ async def save_telegram_access(
     active_id = identity["telegram_id"] if identity else None
     unchanged_id = bool(identity and identity["verified_at"] and active_id == target_id)
     now = datetime.now(UTC)
+    verified_at = identity["verified_at"] if identity and unchanged_id else now
     values = {
         "telegram_id": target_id,
         "pending_telegram_id": None,
-        "verified_at": identity["verified_at"] if identity and unchanged_id else now if target_id else None,
+        "verified_at": verified_at if target_id else None,
         "verification_source": "admin" if target_id else None,
         "code_hash": None,
         "code_expires_at": None,
