@@ -12,10 +12,8 @@ from ..telegram_access_schemas import (
     TelegramAccessPerson,
     TelegramAccessRegistry,
     TelegramAccessUpdate,
-    TelegramVerificationCode,
 )
 from ..telegram_access_service import (
-    issue_admin_code,
     list_telegram_access,
     require_telegram_admin,
     save_telegram_access,
@@ -41,12 +39,3 @@ async def put_access(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> TelegramAccessPerson:
     return await save_telegram_access(connection, user, user_id, payload)
-
-
-@router.post("/{user_id}/verification-code", response_model=TelegramVerificationCode)
-async def post_verification_code(
-    user_id: UUID,
-    user: Annotated[AuthenticatedUser, Depends(require_user)],
-    connection: Annotated[AsyncConnection, Depends(get_connection)],
-) -> TelegramVerificationCode:
-    return await issue_admin_code(connection, user, user_id)

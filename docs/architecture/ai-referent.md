@@ -82,8 +82,9 @@ cancel запрещён в queued/sending/delivery_unknown и завершённ
   `agent_id + external_id`;
 - `ai_referent_agents` — heartbeat агента и метаданные последнего Excel-журнала;
 - объект `ai-referent/journals/<agent>/...xlsx` в MinIO — скачиваемый снимок журнала.
-- `core_telegram_identities` — общий подтверждённый или ожидающий подтверждения
-  Telegram ID сотрудника и хеш одноразового кода;
+- `core_telegram_identities` — общий Telegram ID сотрудника, назначенный
+  администратором и действующий сразу; поля прежней кодовой привязки сохранены
+  для совместимости со старыми клиентами;
 - `core_telegram_bot_grants` — отдельные разрешения по ботам; AI Referent проверяет
   свой grant перед любым действием через Telegram;
 - `ai_referent_operations` — принятые операции с их автором и отпечатком данных;
