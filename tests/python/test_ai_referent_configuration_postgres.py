@@ -192,7 +192,7 @@ async def test_shared_reviewer_configuration_access_conflicts_reassignment_and_a
                 .one()
             )
             assert approved_row["reviewer_user_id"] is None
-            assert approved_row["status"] == "approved"
+            assert approved_row["status"] == "queued"
         audit = (await client.get(base + f"/letters/{letter_id}", headers=admin)).json()
         assert any(event["eventType"] == "letter.approve" for event in audit["events"])
         initial["expectedRevision"] = disabled.json()["revision"]

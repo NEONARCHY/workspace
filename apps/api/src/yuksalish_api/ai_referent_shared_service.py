@@ -284,18 +284,21 @@ async def notify_letter(
     connection: AsyncConnection, row: RowMapping, title: str, comment: str = ""
 ) -> None:
     now = datetime.now(UTC)
-    recipients = {
-        row["created_by_user_id"],
-        row["reviewer_user_id"],
-        row.get("final_reviewer_user_id"),
-        row.get("initial_reviewer_user_id"),
-    }
+    # Do not ask a future reviewer to decide before their stage has begun.
+    recipients = {row["created_by_user_id"]}
+    if row["status"] != "needs_revision":
+        recipients.add(row["reviewer_user_id"])
     action_recipients = set()
     if row["status"] == "needs_revision":
         action_recipients.add(row["created_by_user_id"])
     elif row["status"] in {"pending_review", "approved", "awaiting_final_send", "failed"}:
         action_recipients.add(row["reviewer_user_id"])
-    if row["status"] in {"referent_review_pending", "delivery_unknown", "failed"}:
+    if row["status"] in {
+        "referent_review_pending",
+        "delivery_unknown",
+        "failed",
+        "operator_revision",
+    }:
         candidates = (
             (await connection.execute(select(users).where(users.c.status == "active")))
             .mappings()
@@ -314,7 +317,11 @@ async def notify_letter(
             rights = await module_permissions_for_user(connection, actor)
             if rights.get("ai_referent", {}).get("admin"):
                 recipients.add(actor.id)
-                if row["status"] in {"referent_review_pending", "delivery_unknown"}:
+                if row["status"] in {
+                    "referent_review_pending",
+                    "delivery_unknown",
+                    "operator_revision",
+                }:
                     action_recipients.add(actor.id)
     # Resolve old action indicators; audit and read state remain intact.
     await connection.execute(
@@ -328,7 +335,14 @@ async def notify_letter(
     )
     for user_id in recipients - {None}:
         event_key = f"ai-letter:{row['id']}:{row['revision']}"
-        body = row["subject"] + (f"\n{comment}" if comment else "")
+        subject = row["subject"] or (
+            f"{int(row['outgoing_number']):04d}/{row['year_suffix']}-AI"
+            if row["outgoing_number"] is not None
+            else "Тема — будущий исходящий номер"
+        )
+        body = subject + (f"\n{comment}" if comment else "")
+        if row.get("note"):
+            body += f"\nСлужебная заметка: {row['note']}"  # noqa: RUF001
         text = f"{title}\n{body}"
         await connection.execute(
             pg_insert(workspace_notifications)

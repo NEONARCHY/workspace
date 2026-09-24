@@ -6,7 +6,8 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients } from "./workspace-api";
+import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, uploadWorkspaceAttachment } from "./workspace-api";
+import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -154,6 +155,29 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ id: "letter-1", revision: 2 }), "return_for_revision", "Уточните адрес", expect.any(String)));
     expect(await screen.findAllByText("Письмо уже изменилось")).not.toHaveLength(0);
     expect(comment).toHaveValue("Уточните адрес");
+  });
+
+  it("lets an administrator replace the document without asking a reviewer again", async () => {
+    const letter: AIReferentLetter = { ...registry.letters[0]!, status: "operator_revision",
+      revision: 12, canReplaceDocument: true, canEdit: false, availableActions: [],
+      displayNumber: "0441/26-AI" };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    const input = await screen.findByLabelText("Новый документ администратора");
+    input.focus();
+    const pdf = new File(["%PDF-1.4 replacement"], "corrected.pdf", { type: "application/pdf" });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    vi.mocked(loadAIReferentLetter).mockResolvedValue({ ...letter, revision: 13, availableActions: ["prepare_replacement"] });
+    vi.mocked(uploadWorkspaceAttachment).mockResolvedValue({ id: "replacement", ownerType: "ai_referent_letter", ownerId: letter.id, fileName: pdf.name, contentType: pdf.type, byteSize: pdf.size, sha256: "a".repeat(64), documentRole: "primary", uploadedByUserId: "admin", createdAt: "2026-09-24T12:00:00Z" });
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить замену" }));
+    await waitFor(() => expect(uploadWorkspaceAttachment).toHaveBeenCalledWith("token", "ai_referent_letter", letter.id, pdf, "primary", undefined, 12));
+    const apply = await screen.findByRole("button", { name: "Применить замену без согласования" });
+    fireEvent.click(apply);
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    vi.mocked(actOnAIReferentLetter).mockResolvedValue({ ...letter, revision: 14, status: "queued", availableActions: [], canReplaceDocument: false });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ revision: 13 }), "prepare_replacement", "", expect.any(String)));
+    expect(screen.queryByRole("button", { name: "Отправить на согласование" })).not.toBeInTheDocument();
   });
 
   it("opens the incoming packet and offers retry without pretending files exist", async () => {

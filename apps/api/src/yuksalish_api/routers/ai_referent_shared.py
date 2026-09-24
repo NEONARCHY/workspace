@@ -111,9 +111,10 @@ class AgentLease(ApiModel):
 
 
 class AgentResult(AgentLease):
-    outcome: Literal["prepared", "sent", "failed", "unknown"]
+    outcome: Literal["prepared", "sent", "failed", "unknown", "cancelled", "revision_needed"]
     detail: str = Field(default="", max_length=2000)
     signed_pages: int | None = Field(default=None, ge=1, le=100)
+    auto_send: bool = False
 
 
 class NotificationAck(ApiModel):
@@ -245,8 +246,11 @@ async def get_agent_letters(
     actor: Actor,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    active_only: Annotated[bool, Query(alias="activeOnly")] = False,
 ) -> AIReferentRegistryResponse:
-    return await load_letters(connection, actor, offset=offset, limit=limit)
+    return await load_letters(
+        connection, actor, offset=offset, limit=limit, active_only=active_only
+    )
 
 
 @router.get("/agent/letters/{letter_id}", response_model=AIReferentLetterResponse)
@@ -312,6 +316,7 @@ async def agent_attachment(
     actor: Actor,
     file_name: Annotated[str, Query(alias="fileName", min_length=1, max_length=500)],
     role: Literal["primary", "additional"] = "primary",
+    expected_revision: Annotated[int | None, Query(alias="expectedRevision", ge=1)] = None,
 ) -> AttachmentResponse:
     # Exact-content retry does not create a second attachment. Stream bounds and
     # owner/permission checks are shared with the regular upload endpoint.
@@ -326,6 +331,7 @@ async def agent_attachment(
         "file",
         None,
         None,
+        expected_revision,
     )
 
 
@@ -497,8 +503,14 @@ async def job_result(
     job_id: UUID, payload: AgentResult, request: Request, connection: Connection
 ) -> Response:
     await complete_job(
-        connection, job_id, payload.lease_token, payload.agent_id, payload.outcome,
-        payload.detail, payload.signed_pages,
+        connection,
+        job_id,
+        payload.lease_token,
+        payload.agent_id,
+        payload.outcome,
+        payload.detail,
+        payload.signed_pages,
+        payload.auto_send,
     )
     await request.app.state.event_bus.publish(
         {"type": "ai_referent.updated", "entityId": str(job_id)}

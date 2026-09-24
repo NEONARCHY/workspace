@@ -79,140 +79,7 @@ def test_receipts_survive_restart_and_instance_lock_releases(modules, tmp_path):
         pass
 
 
-def test_telegram_sign_command_creates_one_reviewer_without_delivery(modules, tmp_path):
-    telegram = Mock()
-    telegram.send_message.return_value = {"ok": True}
-    api = Mock()
-    letter_id = str(uuid4())
-
-    def request(path, payload=None, **_kwargs):
-        if path.endswith("/reviewers"):
-            return {"reviewers": [
-                {"key": "bobur", "userId": str(uuid4()), "fullName": "Reviewer",
-                 "canApprove": True},
-            ]}
-        if path.endswith("/letters"):
-            assert payload["workflowKind"] == "sign_only"
-            assert payload["finalReviewerUserId"] is None
-            assert payload["recipientOrganization"] == "Подписание без отправки"
-            return {"id": letter_id}
-        raise AssertionError(path)
-
-    api.request.side_effect = request
-    state = modules.state.State(tmp_path / "state.sqlite")
-    bot = modules.shared_bot.SharedBot(telegram, api, state)
-    actor = {"id": 123}
-    chat = {"id": 123, "type": "private"}
-    bot.handle({"update_id": 1, "message": {"from": actor, "chat": chat, "text": "/sign"}})
-    bot.handle({"update_id": 2, "message": {"from": actor, "chat": chat, "text": "Пакет"}})
-    bot.handle({"update_id": 3, "callback_query": {
-        "id": "callback", "from": actor, "message": {"chat": chat}, "data": "q:bobur",
-    }})
-    assert state.get("conversation:123") == {
-        "step": "upload", "role": "primary", "letterId": letter_id,
-    }
-    assert any(call.args[0] == "/ai-referent/agent/letters" for call in api.request.call_args_list)
-
-
-def test_bot_menu_catalog_address_and_reviewer_buttons(modules, tmp_path):
-    telegram = Mock()
-    telegram.send_message.return_value = {"ok": True}
-    api = Mock()
-    letter_id = str(uuid4())
-    reviewer_id = str(uuid4())
-
-    def request(path, payload=None, **_kwargs):
-        if path.endswith("/reviewers"):
-            return {"reviewers": [
-                {"key": "askar", "userId": reviewer_id, "fullName": "Askar",
-                 "canApprove": True},
-            ]}
-        if "/recipients?" in path:
-            return {"entries": [{
-                "id": "org-1", "name": "Example Ministry", "categoryKey": "ministries",
-                "addresses": ["EX-01"], "route": "exat",
-            }], "totalCount": 1, "updatedAt": "2026-09-24T00:00:00Z"}
-        if path.endswith("/letters"):
-            assert payload["recipientOrganization"] == "Example Ministry"
-            assert payload["recipientAddress"] == "EX-01"
-            assert payload["route"] == "exat"
-            assert payload["reviewerUserId"] == reviewer_id
-            return {"id": letter_id}
-        raise AssertionError(path)
-
-    api.request.side_effect = request
-    state = modules.state.State(tmp_path / "state.sqlite")
-    bot = modules.shared_bot.SharedBot(telegram, api, state)
-    actor = {"id": 123}
-    chat = {"id": 123, "type": "private"}
-
-    def message(number, text):
-        bot.handle({"update_id": number, "message": {
-            "from": actor, "chat": chat, "text": text,
-        }})
-
-    def callback(number, data):
-        bot.handle({"update_id": number, "callback_query": {
-            "id": str(number), "from": actor, "message": {"chat": chat}, "data": data,
-        }})
-
-    message(1, "/start")
-    menu = telegram.send_message.call_args.kwargs["reply_markup"]["keyboard"]
-    assert any("Только подпись" in item["text"] for row in menu for item in row)
-    message(2, "📤 Отправить письмо")
-    assert state.get("conversation:123")["step"] == "subject"
-    message(3, "Тема письма")
-    assert state.get("conversation:123")["step"] == "recipient"
-    assert "X-AI-Referent-Telegram-Id" not in str(api.request.call_args_list)
-    callback(4, "u:0")
-    callback(5, "b:0")
-    assert state.get("conversation:123")["step"] == "reviewer"
-    callback(6, "r:askar")
-    callback(7, "z:none")
-    assert state.get("conversation:123")["step"] == "upload"
-    assert api.request.call_args_list[-1].kwargs["telegram_id"] == "123"
-
-
-def test_bot_custom_address_search_and_stale_menu_not_used_as_recipient(modules, tmp_path):
-    telegram = Mock()
-    telegram.send_message.return_value = {"ok": True}
-    api = Mock()
-    api.request.side_effect = lambda path, *_args, **_kwargs: (
-        {"reviewers": []} if path.endswith("/reviewers")
-        else {"entries": [], "totalCount": 0, "updatedAt": None}
-    )
-    state = modules.state.State(tmp_path / "state.sqlite")
-    bot = modules.shared_bot.SharedBot(telegram, api, state)
-    actor = {"id": 123}
-    chat = {"id": 123, "type": "private"}
-
-    def message(number, text):
-        bot.handle({"update_id": number, "message": {
-            "from": actor, "chat": chat, "text": text,
-        }})
-
-    def callback(number, data):
-        bot.handle({"update_id": number, "callback_query": {
-            "id": str(number), "from": actor, "message": {"chat": chat}, "data": data,
-        }})
-
-    message(1, "Новое письмо")
-    message(2, "Тема")
-    message(3, "📩 Открыть очередь")
-    assert state.get("conversation:123")["step"] == "recipient"
-    callback(4, "h:search")
-    message(5, "Министерство")
-    assert "query=%D0%9C" in api.request.call_args.args[0]
-    callback(6, "m:organization")
-    message(7, "Новая организация")
-    message(8, "не адрес")
-    assert state.get("conversation:123")["step"] == "custom_address"
-    message(9, "custom@example.org")
-    context = state.get("conversation:123")
-    assert context["route"] == "webmail"
-    assert context["recipientAddress"] == "custom@example.org"
-    message(10, "✍️ Только подпись")
-    assert state.get("conversation:123")["step"] == "sign_subject"
+# Guided delivery/signature coverage lives in test_ai_referent_wizard.py.
 
 
 def test_legacy_mutations_are_blocked_only_in_connected_mode(modules, monkeypatch):
@@ -251,11 +118,12 @@ def test_worker_does_not_repeat_started_job_and_retains_rejected_ack(modules, tm
     assert state.get("result:" + job["id"]) is None
 
 
-def test_worker_verifies_pdf_and_lease_before_external_send(modules, tmp_path):
+def test_worker_verifies_pdf_and_lease_before_external_send(modules, tmp_path, monkeypatch):
     state = modules.state.State(tmp_path / "state.sqlite")
     pdf = tmp_path / "signed.pdf"
     pdf.write_bytes(b"%PDF signed")
-    row = {"status": "signed", "signed_file_path": str(pdf)}
+    row = {"id": 42, "destination_route": "webmail", "status": "signed",
+           "signed_file_path": str(pdf)}
     service = Mock(archive_root=str(tmp_path))
     service.database.get_outgoing_letter.return_value = row
     api = Mock(agent_id="test")
@@ -276,6 +144,12 @@ def test_worker_verifies_pdf_and_lease_before_external_send(modules, tmp_path):
         worker.send(job, threading.Event())
     service.retry_outgoing_send.assert_not_called()
     api.request.side_effect = None
+    monkeypatch.setattr(modules.worker, "prepared_open", lambda *_: False)
+
+    def prepare(service, local_id):
+        service.retry_outgoing_send(local_id)
+
+    monkeypatch.setattr(modules.worker, "prepare_compose", prepare)
     service.database.get_outgoing_letter.side_effect = [
         row,
         {"status": "webmail_dry_run_prepared"},

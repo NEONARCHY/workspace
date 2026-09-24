@@ -166,7 +166,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         )
         assert approved.status_code == 200, approved.text
         letter = approved.json()
-        assert letter["status"] == "approved"
+        assert letter["status"] == "queued"
         assert letter["displayNumber"].endswith("-AI")
 
         queued = await client.post(
@@ -178,8 +178,8 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
                 "expectedRevision": letter["revision"],
             },
         )
-        assert queued.status_code == 200, queued.text
-        assert queued.json()["status"] == "queued"
+        # Final approval already enqueued preparation; an old button cannot enqueue it twice.
+        assert queued.status_code == 409, queued.text
 
         registry = await client.get("/api/v1/ai-referent/letters", headers=author)
         assert registry.status_code == 200
@@ -398,8 +398,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
                 "expectedRevision": editable_letter["revision"],
             },
         )
-        assert second_queued.status_code == 200, second_queued.text
-        editable_letter = second_queued.json()
+        assert second_queued.status_code == 409, second_queued.text
 
         queue_again = await client.post(
             f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",

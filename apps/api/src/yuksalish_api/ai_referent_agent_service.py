@@ -4,10 +4,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import insert, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .ai_referent_service import _event, _letter_row
+from .ai_referent_service import _display_number, _event, _letter_row
 from .ai_referent_shared_service import notify_letter, telegram_id_for
 from .tables import (
     ai_referent_configuration,
@@ -42,7 +42,15 @@ async def expire_jobs(connection: AsyncConnection) -> int:
         .all()
     )
     for job in rows:
-        status = "delivery_unknown" if job["kind"] == "send" else "failed"
+        status = (
+            "delivery_unknown"
+            if job["kind"] in {"send", "record_sent"}
+            else "referent_review_pending"
+            if job["kind"] in {"cancel", "replace"}
+            else "operator_revision"
+            if job["kind"] == "reprepare"
+            else "failed"
+        )
         await connection.execute(
             update(commands)
             .where(commands.c.id == job["id"])
@@ -93,11 +101,22 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
     )
     if active:
         return None
+    waiting_for_operator = await connection.scalar(
+        select(letters.c.id)
+        .where(letters.c.status.in_(["referent_review_pending", "awaiting_final_send"]))
+        .limit(1)
+    )
     job = (
         (
             await connection.execute(
                 select(commands)
                 .where(commands.c.status == "pending")
+                .where(
+                    or_(
+                        commands.c.kind.not_in(["prepare", "reprepare"]),
+                        literal(waiting_for_operator is None),
+                    )
+                )
                 .order_by(commands.c.created_at)
                 .limit(1)
                 .with_for_update(skip_locked=True)
@@ -156,7 +175,7 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         .where(
             ai_referent_events.c.letter_id == row["id"],
             ai_referent_events.c.event_type == "letter.approve",
-            ai_referent_events.c.to_status == "approved",
+            ai_referent_events.c.to_status.in_(["approved", "queued"]),
         )
         .order_by(ai_referent_events.c.created_at.desc())
         .limit(1)
@@ -190,7 +209,7 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         "revision": row["revision"] + 1,
         "outgoingNumber": row["outgoing_number"],
         "yearSuffix": row["year_suffix"],
-        "subject": row["subject"],
+        "subject": row["subject"] or _display_number(row) or "",
         "recipientOrganization": row["recipient_organization"],
         "recipientAddress": row["recipient_address"],
         "route": row["route"],
@@ -238,6 +257,7 @@ async def complete_job(
     outcome: str,
     detail: str,
     signed_pages: int | None = None,
+    auto_send: bool = False,
 ) -> None:
     await connection.execute(select(ai_referent_configuration).with_for_update())
     job = (
@@ -254,6 +274,8 @@ async def complete_job(
     result: dict[str, object] = {"outcome": outcome, "detail": detail}
     if signed_pages is not None:
         result["signedPages"] = signed_pages
+    if auto_send:
+        result["autoSend"] = True
     if job["status"] == "completed" and job["result"] == result:
         return
     if job["status"] != "claimed" or job["lease_until"] < datetime.now(UTC):
@@ -266,7 +288,7 @@ async def complete_job(
     if row["workflow_kind"] == "sign_only" and outcome == "sent":
         raise HTTPException(422, "Внешняя отправка в режиме подписи запрещена.")
     if outcome == "prepared":
-        if job["kind"] not in {"prepare", "sign_only"}:
+        if job["kind"] not in {"prepare", "reprepare", "sign_only"}:
             raise HTTPException(422, "Неверный результат отправки.")
         if job["kind"] == "sign_only":
             if signed_pages is None or not 1 <= signed_pages <= 100:
@@ -295,16 +317,28 @@ async def complete_job(
             if not signed:
                 raise HTTPException(422, "Сначала загрузите подписанный PDF этого задания.")
             status = (
-                "awaiting_final_send"
-                if row["reviewer_key"] == "bobur" else "referent_review_pending"
+                "queued" if auto_send and job["kind"] == "prepare" else "referent_review_pending"
             )
     elif outcome == "sent":
-        if job["kind"] != "send" or len(detail.strip()) < 3:
+        if job["kind"] not in {"send", "record_sent"} or len(detail.strip()) < 3:
             raise HTTPException(422, "Требуется подтверждение фактической отправки.")
         status = "sent"
+    elif outcome in {"cancelled", "revision_needed"}:
+        expected_kind = "cancel" if outcome == "cancelled" else "replace"
+        if job["kind"] != expected_kind:
+            raise HTTPException(422, "Результат не соответствует заданию.")
+        status = "cancelled" if outcome == "cancelled" else "operator_revision"
     else:
         # Even a reported send failure may have happened after the external click.
-        status = "delivery_unknown" if job["kind"] == "send" else "failed"
+        status = (
+            "delivery_unknown"
+            if job["kind"] in {"send", "record_sent"}
+            else "referent_review_pending"
+            if job["kind"] in {"cancel", "replace"}
+            else "operator_revision"
+            if job["kind"] == "reprepare"
+            else "failed"
+        )
     now = datetime.now(UTC)
     await connection.execute(
         update(commands)
@@ -314,7 +348,7 @@ async def complete_job(
             result=result,
             completed_at=now,
             updated_at=now,
-            last_error=detail if status in {"failed", "delivery_unknown"} else "",
+            last_error=detail if outcome in {"failed", "unknown"} else "",
         )
     )
     await connection.execute(
@@ -325,9 +359,24 @@ async def complete_job(
             revision=row["revision"] + 1,
             updated_at=now,
             sent_at=now if status == "sent" else row["sent_at"],
-            delivery_error=detail if status in {"failed", "delivery_unknown"} else "",
+            delivery_error=detail if outcome in {"failed", "unknown"} else "",
         )
     )
+    if status == "queued":
+        await connection.execute(
+            insert(commands).values(
+                id=uuid4(),
+                letter_id=row["id"],
+                route=row["route"],
+                status="pending",
+                idempotency_key=f"letter:{row['id']}:revision:{row['revision'] + 1}",
+                kind="send",
+                attempt_count=0,
+                last_error="",
+                created_at=now,
+                updated_at=now,
+            )
+        )
     await _event(
         connection,
         row["id"],
@@ -347,5 +396,8 @@ async def complete_job(
             "sent": "Письмо отправлено",
             "failed": "Ошибка подготовки письма",
             "delivery_unknown": "Результат отправки требует проверки",
+            "queued": "Подписанное письмо поставлено в очередь отправки",
+            "cancelled": "Письмо отменено, подготовленное окно закрыто",
+            "operator_revision": "Администратор: загрузите замену без повторного согласования",
         }[status],
     )

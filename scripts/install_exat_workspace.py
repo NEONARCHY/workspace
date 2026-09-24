@@ -218,6 +218,30 @@ def patch_source(relative: str, source: str) -> str:
     return source
 
 
+def patch_number_backing(source: str) -> str:
+    """Widen only the white mask, keeping the number/date text anchor unchanged."""
+    marker = "# workspace-number-backing-v1"
+    if marker in source:
+        return source
+    source = replace_once(
+        source,
+        "        shape = document.Shapes.AddTextbox(1, 82, 126, 245, 27)",
+        f"        {marker}\n"
+        "        # Extend the mask 38pt left; retain the text at x=82pt.\n"
+        "        shape = document.Shapes.AddTextbox(1, 44, 126, 283, 27)",
+    )
+    source = replace_once(source, "            shape.TextFrame.MarginLeft = 0",
+                          "            shape.TextFrame.MarginLeft = 38")
+    source = replace_once(
+        source,
+        "            page.draw_rect(rect, color=None, fill=(1, 1, 1), overlay=True)",
+        "            backing = fitz.Rect(min(rect.x0, 44), rect.y0, rect.x1, rect.y1)\n"
+        "            page.draw_rect(backing, color=None, fill=(1, 1, 1), overlay=True)",
+    )
+    compile(source, "src/outgoing/facsimile.py", "exec")
+    return source
+
+
 def install(root: Path, *, apply: bool = False) -> dict[str, object]:
     root = root.resolve(strict=True)
     if not root.is_dir() or root == Path(root.anchor):
@@ -234,6 +258,17 @@ def install(root: Path, *, apply: bool = False) -> dict[str, object]:
             planned[path] = patched.replace("\n", "\r\n" if b"\r\n" in original else "\n").encode(
                 "utf-8"
             )
+    facsimile = root / "src/outgoing/facsimile.py"
+    if facsimile.exists():
+        if not facsimile.resolve().is_relative_to(root):
+            raise ValueError("Путь исходников выходит за пределы Exat.")
+        original = facsimile.read_bytes()
+        source = original.decode("utf-8-sig").replace("\r\n", "\n")
+        patched = patch_number_backing(source)
+        if patched != source:
+            planned[facsimile] = patched.replace(
+                "\n", "\r\n" if b"\r\n" in original else "\n"
+            ).encode("utf-8")
     destination = root / "src/workspace_integration"
     if not destination.resolve().is_relative_to(root):
         raise ValueError("Каталог адаптера выходит за пределы Exat.")

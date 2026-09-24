@@ -1495,6 +1495,7 @@ export async function uploadWorkspaceAttachment(
     readonly mediaDurationMs: number;
     readonly mediaCodec: "opus";
   },
+  expectedRevision?: number,
 ): Promise<WorkspaceAttachment> {
   const isAudioFile = file.type.toLowerCase().startsWith("audio/")
     || /\.(?:mp3|m4a|aac|wav|flac|ogg|oga|opus|webm)$/i.test(file.name);
@@ -1503,6 +1504,7 @@ export async function uploadWorkspaceAttachment(
     throw new Error(isAudioFile ? "Аудиофайл должен быть не больше 100 МБ" : "Файл должен быть не больше 25 МБ");
   }
   const query = new URLSearchParams({ fileName: file.name, documentRole });
+  if (expectedRevision !== undefined) query.set("expectedRevision", String(expectedRevision));
   if (media) {
     query.set("mediaKind", media.mediaKind);
     query.set("mediaDurationMs", String(media.mediaDurationMs));

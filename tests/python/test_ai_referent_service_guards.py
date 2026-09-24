@@ -273,7 +273,7 @@ async def test_reviewer_validation_uses_account_and_module_permission(monkeypatc
     "action,status,target",
     [
         ("submit", "draft", "pending_review"),
-        ("approve", "pending_review", "approved"),
+        ("approve", "pending_review", "queued"),
         ("return_for_revision", "pending_review", "needs_revision"),
         ("queue_delivery", "approved", "queued"),
         ("retry_delivery", "failed", "queued"),
@@ -293,6 +293,9 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
         "created_by_user_id": user.id,
         "reviewer_user_id": user.id,
         "route": "exat",
+        "recipient_organization": "Test organization",
+        "recipient_address": "org@exat.uz",
+        "outgoing_number": None,
     }
     connection = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=1))
     monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
@@ -367,7 +370,12 @@ async def test_letter_action_rejection_never_mutates_data(
         "reviewer_user_id": assigned,
     }
     monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
-    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+
+    async def authorize(_connection, _user, _module, permission):
+        if permission == "admin":
+            raise letters.AIReferentServiceError(403, "Operator permission required")
+
+    monkeypatch.setattr(letters, "ensure_module_action", authorize)
     monkeypatch.setattr(letters, "_validate_reviewer", AsyncMock(return_value="askar"))
     connection = SimpleNamespace(execute=AsyncMock())
     with pytest.raises(letters.AIReferentServiceError) as error:

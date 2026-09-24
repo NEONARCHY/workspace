@@ -5611,8 +5611,11 @@ async def validate_attachment_owner(
             and (
                 letter["created_by_user_id"] == current_user.id
                 or current_user.role in {"admin", "superadmin"}
+                or module_access.get("ai_referent", {}).get("admin", False)
             )
         )
+        if letter["status"] == "operator_revision":
+            writable = bool(module_access.get("ai_referent", {}).get("admin", False))
         if not accessible or (write and not writable):
             raise WorkspaceRepositoryError(404, "Исходящее письмо не найдено")
         return
@@ -5679,6 +5682,17 @@ async def create_attachment(
         ))).mappings().first()
         if existing is not None:
             return _attachment(existing)
+        if document_role == "primary":
+            # Keep earlier versions downloadable, but never sign a superseded document.
+            await connection.execute(
+                update(attachments)
+                .where(
+                    attachments.c.owner_type == owner_type,
+                    attachments.c.owner_id == owner_id,
+                    attachments.c.document_role == "primary",
+                )
+                .values(document_role="general")
+            )
     now = datetime.now(UTC)
     values = {
         "id": uuid4(),
