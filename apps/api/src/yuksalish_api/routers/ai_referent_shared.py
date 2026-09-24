@@ -170,6 +170,21 @@ async def get_recipients(
     return await load_recipients(connection, query, category, offset, limit)
 
 
+@router.get("/agent/recipients", response_model=RecipientRegistry)
+async def get_agent_recipients(
+    connection: Connection,
+    actor: Actor,
+    query: Annotated[str, Query(max_length=160)] = "",
+    category: Annotated[
+        str, Query(pattern=r"^(|ministries|agencies|committees|other|international)$")
+    ] = "",
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=30)] = 8,
+) -> RecipientRegistry:
+    await ensure_module_action(connection, actor, "ai_referent", "view")
+    return await load_recipients(connection, query, category, offset, limit)
+
+
 @router.get("/agent/reviewers", response_model=ReviewerConfigurationResponse)
 async def agent_reviewers(connection: Connection, actor: Actor) -> ReviewerConfigurationResponse:
     result = await read_configuration(connection)
