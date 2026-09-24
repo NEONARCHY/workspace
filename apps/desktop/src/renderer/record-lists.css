@@ -3,14 +3,14 @@
 .tasks-view.bp5-tasks .tasks-main { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
 .employees-view { display: flex; flex-direction: column; min-height: 0; }
 .tasks-view .section-toolbar, .employees-view .section-toolbar { flex: none; min-height: 94px; }
-.tasks-view .task-filters { flex: none; align-items: center; padding: 12px 24px 16px; }
+.tasks-view .task-filters { flex: none; align-items: center; padding: 12px var(--ws-view-edge) 16px; }
 .tasks-view .task-search { flex: 1 1 260px; min-width: 160px; max-width: none; margin-left: auto; }
 .task-role-filter { min-height: 36px; padding: 7px 10px; color: var(--ws-text); border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; font-size: 13px; }
-.record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px 24px 18px; }
+.record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px var(--ws-view-edge) 18px; }
 .record-list-controls .employee-search { flex: 1 1 280px; width: auto; margin: 0; }
 .record-list-controls > label { display: flex; flex-direction: column; gap: 5px; color: var(--ws-muted); font-size: 12px; }
 .record-list-controls select { min-height: 36px; min-width: 165px; max-width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; color: var(--ws-text); font-size: 13px; }
-.record-table-frame { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; margin: 0 24px 24px; overflow: hidden; border: 1px solid var(--ws-line); border-radius: 14px; background: white; }
+.record-table-frame { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; margin: 0 var(--ws-view-edge) 24px; overflow: hidden; border: 1px solid var(--ws-line); border-radius: 14px; background: white; }
 .record-table-scroll { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
 .record-table-scroll:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -3px; }
 .record-table { width: 100%; min-width: 980px; border-spacing: 0; border-collapse: separate; table-layout: fixed; text-align: left; font-size: 13px; color: var(--ws-text); }
@@ -60,7 +60,7 @@
 .employee-record-table .employee-row:hover td:nth-child(2), .employee-record-table .employee-row:focus-within td:nth-child(2) { background: #e5f3f6; }
 .employee-record-table .employee-row.selected td { background: #f2f9de; }
 .employee-record-table .employee-row.selected:hover td, .employee-record-table .employee-row.selected:focus-within td { background: #ebf6cd; }
-.employee-selection-bar { display: flex; flex: none; align-items: center; gap: 18px; min-height: 72px; margin: -10px 24px 20px; padding: 11px 14px; border: 1px solid #b9d9df; border-radius: 14px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 30px rgb(21 62 82 / 15%); animation: employee-bar-in var(--ws-motion-medium) var(--ws-ease) both; }
+.employee-selection-bar { display: flex; flex: none; align-items: center; gap: 18px; min-height: 72px; margin: -10px var(--ws-view-edge) 20px; padding: 11px 14px; border: 1px solid #b9d9df; border-radius: 14px; background: rgb(255 255 255 / 96%); box-shadow: 0 12px 30px rgb(21 62 82 / 15%); animation: employee-bar-in var(--ws-motion-medium) var(--ws-ease) both; }
 .employee-selection-summary { display: flex; align-items: center; gap: 10px; min-width: 210px; }
 .employee-selection-summary > span { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 12px; color: white; background: var(--ws-turquoise); font-size: 16px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; box-shadow: 0 5px 14px rgb(0 145 168 / 22%); }
 .employee-selection-summary div { display: grid; gap: 2px; }
@@ -109,7 +109,7 @@
 .directory-record-dialog .directory-form-grid { grid-template-columns: minmax(0, 1fr); }
 .directory-record-dialog .directory-heading { align-items: center; }
 .directory-record-dialog .directory-heading h2 { font-size: 24px; }
-.employees-view > .directory-feedback { flex: none; margin: 0 24px 16px; }
+.employees-view > .directory-feedback { flex: none; margin: 0 var(--ws-view-edge) 16px; }
 .directory-loading { gap: 16px; }
 .account-section { scroll-margin-top: 104px; }
 .tasks-view.bp5-tasks .task-kanban { flex: 1; min-height: 0; grid-template-columns: repeat(5, minmax(220px, 1fr)); align-items: stretch; overflow-x: auto; overflow-y: hidden; overscroll-behavior: contain; }

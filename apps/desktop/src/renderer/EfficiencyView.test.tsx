@@ -70,7 +70,7 @@ describe("EfficiencyView", () => {
 
   it("opens a colleague aggregate without exposing task details", () => {
     renderView();
-    fireEvent.click(screen.getByRole("button", { name: "Открыть сводку: Бахтиёр Самугов" }));
+    fireEvent.click(screen.getByRole("row", { name: "Открыть сводку: Бахтиёр Самугов" }));
 
     expect(screen.getByRole("article", { name: "Сводка сотрудника: Бахтиёр Самугов" })).toBeInTheDocument();
     expect(screen.queryByText(/task-/i)).not.toBeInTheDocument();

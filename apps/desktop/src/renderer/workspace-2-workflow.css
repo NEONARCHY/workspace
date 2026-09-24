@@ -171,9 +171,9 @@
   gap: 5px;
   min-height: 92px;
   padding: 12px 14px;
-  border: 1px solid #c6dbd8;
+  border: 1px solid color-mix(in srgb, var(--workflow-node-color, #84bdb8) 38%, #dce6e4);
   border-radius: 17px;
-  background: #fbfdfc;
+  background: color-mix(in srgb, var(--workflow-node-color, #84bdb8) 13%, #fbfdfc);
   box-shadow: 0 8px 18px -16px rgb(34 63 76 / 35%);
   transition: transform 160ms var(--ws-ease-standard), border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -181,16 +181,43 @@
 .react-flow__node:hover .workflow-object-node { transform: translateY(-1px); border-color: #95c5c1; }
 .workflow-object-node.is-selected { border-color: #3d9ba3; box-shadow: 0 0 0 3px rgb(0 145 168 / 13%), 0 14px 24px -20px rgb(32 64 75 / 42%); }
 .workflow-object-heading { display: flex; align-items: center; gap: 6px; color: #58727d; font-size: 10px; font-weight: 650; }
-.workflow-object-heading i { width: 7px; height: 7px; border-radius: 3px; background: #84bdb8; }
+.workflow-object-heading i { width: 7px; height: 7px; border-radius: 3px; background: var(--workflow-node-color, #84bdb8); }
 .workflow-object-node > strong { color: #263f52; font-size: 13px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
 .workflow-object-node > small { color: #607681; font-size: 10px; font-weight: 500; line-height: 1.35; }
 .workflow-object-node > em { width: fit-content; margin-top: 2px; padding: 3px 6px; border-radius: 7px; color: #476873; background: #e9f2f0; font-size: 9px; font-style: normal; font-weight: 600; }
-.node-condition .workflow-object-heading i { background: #d4ae56; }
-.node-parallel .workflow-object-heading i { background: #8d91c7; }
-.node-correction .workflow-object-heading i { background: #cf7f74; }
-.node-end .workflow-object-heading i { background: #6bae78; }
-.node-start .workflow-object-heading i { background: #6c8795; }
 .workflow-object-node .react-flow__handle { width: 10px; height: 10px; border: 2px solid #f9fcfb; background: #438e99; }
+
+.workflow-color-picker {
+  display: grid;
+  gap: 8px;
+  margin: 15px 0 0;
+  padding: 0;
+  border: 0;
+}
+.workflow-color-picker legend { padding: 0; color: #47616f; font-size: 12px; font-weight: 600; }
+.workflow-color-picker > p { margin: 0; color: #70838c; font-size: 10px; line-height: 1.4; }
+.workflow-color-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.workflow-color-options button {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  place-items: center;
+  gap: 3px;
+  padding: 5px 3px;
+  border: 1px solid #d8e4e2;
+  border-radius: 10px;
+  color: #506875;
+  background: #f5f9f8;
+  font: inherit;
+  cursor: pointer;
+}
+.workflow-color-options button:is(:hover, :focus-visible) { border-color: #8ebfc0; transform: translateY(-1px); }
+.workflow-color-options button[aria-pressed="true"] { border-color: var(--workflow-color-accent, #4a9da2); background: var(--workflow-color-surface, #e7f2f1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--workflow-color-accent, #4a9da2) 18%, transparent); }
+.workflow-color-option > span { width: 19px; height: 19px; border: 3px solid rgb(255 255 255 / 88%); border-radius: 7px; background: var(--workflow-color-accent); box-shadow: 0 0 0 1px rgb(45 73 84 / 12%); }
+.workflow-color-option > small { min-width: 0; max-width: 100%; overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-color-option > b { position: absolute; top: 3px; right: 4px; display: grid; min-width: 15px; height: 15px; place-items: center; border-radius: 6px; color: #fff; background: #506b78; font-size: 8px; }
+.workflow-color-auto { grid-column: 1 / -1; min-height: 30px !important; }
 
 .approvals-view .react-flow__edge-path { stroke: #82a1a8; stroke-width: 1.7; }
 .approvals-view .react-flow__edge-text { fill: #3e5d68; font-family: var(--ws-font); font-size: 11px; font-weight: 600; }
@@ -241,7 +268,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .approvals-view .node-library button,
-  .workflow-object-node { transition-duration: 0ms; }
+  .workflow-object-node,
+  .workflow-color-options button { transition-duration: 0ms; transform: none; }
 }
 
 @media (forced-colors: active) {

@@ -26,6 +26,7 @@ describe("Payment board colours and totals", () => {
     expect(approvalStagePalette({ key: "custom", label: "Доработать", kind: "correction" }).background).toBe("#6b52cc");
     expect(approvalStagePalette({ key: "custom", label: "Отклонено", kind: "end" }).background).toBe("#ff0000");
     expect(approvalStagePalette({ key: "custom", label: "Проверка", kind: "approval" }).background).toBe("#dbe8f5");
+    expect(approvalStagePalette({ key: "chair", label: "Председатель", kind: "approval", color: "#72b9dc" }).background).toBe("#72b9dc");
   });
   it("keeps small header text readable on each exact stage colour", () => {
     const luminance = (hex: string) => {

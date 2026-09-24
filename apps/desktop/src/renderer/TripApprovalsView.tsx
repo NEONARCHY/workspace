@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -8,7 +8,9 @@ import { tripColumns, tripDropAction } from "./trip-board";
 import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { workflowStageColor } from "./workflow-stage-colors";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -30,6 +32,7 @@ interface TripApprovalsViewProps {
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onAction: (request: TripRequest, action: TripAction, comment?: string, targetStage?: TripStage) => Promise<TripRequest | undefined>;
   readonly onOpenChat?: (chatId: string) => void;
+  readonly renderTripChat?: (request: TripRequest) => ReactNode;
   readonly workflow?: WorkflowDefinition;
   readonly positions?: readonly WorkflowPosition[];
   readonly canManageWorkflow?: boolean;
@@ -44,7 +47,7 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
@@ -71,9 +74,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
     ? workflowTripNodes.map((node) => ({
         ...tripColumns.find((column) => column.key === node.id)!,
         label: node.label,
+        color: workflowStageColor(
+          node.config.stageColor,
+          tripColumns.find((column) => column.key === node.id)!.color,
+        ),
       }))
     : tripColumns;
   const personName = (id: string) => people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const personLink = (id: string, children: ReactNode, className?: string) => <EmployeeProfileLink userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)} className={className}>{children}</EmployeeProfileLink>;
   const runningCount = requests.filter((request) => !isFinished(request)).length;
   const finishedCount = requests.length - runningCount;
   const actionableCount = requests.filter((request) => request.allowedActions.length > 0).length;
@@ -138,9 +146,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
       {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
-          <span>Ожидают действий</span>
           <strong>{actionableCount}</strong>
-          <small>Показать поездки в работе <span aria-hidden="true">→</span></small>
+          <span>Ожидают действий</span>
         </button>
         <div className="ws2-process-metrics">
           <div><strong>{runningCount}</strong><span>в работе</span></div>
@@ -181,7 +188,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                       <strong>{request.purpose}</strong>
                       <span className="trip-card-destination">{request.destination}</span>
                       <span className="approval-card-project">{dateLabel(request.startDate)} — {dateLabel(request.endDate)}</span>
-                      <span className="approval-card-owner"><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></span>
+                      {personLink(request.requesterUserId, <><Avatar size={24} name={personName(request.requesterUserId)} color="colorful" /><span>{personName(request.requesterUserId)}</span></>, "approval-card-owner")}
                       <span className="approval-card-meta"><span>{request.stageLabel}</span><span>{request.employeeIds.length} участн.</span></span>
                     </button>
                     <footer><span>{movable ? "Можно перенести" : request.statusLabel}</span>{request.chatId && onOpenChat ? <Button size="small" className="context-chat-button" appearance="subtle" icon={<Chat24Regular />} aria-label={`Открыть чат поездки ${request.number}`} onClick={() => onOpenChat(request.chatId!)} /> : null}{forward ? <Button size="small" appearance="subtle" disabled={busy} aria-label={`${actionLabels[forward]}: ${request.number}`} onClick={() => void act(request, forward)}>{moveLabels[forward]}</Button> : null}</footer>
@@ -205,32 +212,31 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
           else closeDetail();
         }
       }}>
-        <DialogSurface className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : ""}`} aria-labelledby={formMode !== null ? "trip-composer-title" : undefined}>
-          {formMode === null && selected ? <article className="trip-detail">
+        <DialogSurface className={`trip-dialog ${formMode !== null ? "record-composer-dialog" : "context-record-dialog"}`} aria-labelledby={formMode !== null ? "trip-composer-title" : undefined}>
+          {formMode === null && selected ? <div className="context-record-workspace"><article className="trip-detail">
             <header><div><span>{selected.number}</span><DialogTitle>{selected.destination}</DialogTitle><p>{selected.startDate} — {selected.endDate}</p></div><Button autoFocus appearance="subtle" icon={<Dismiss20Regular />} disabled={busy} onClick={closeDetail} aria-label="Закрыть карточку поездки" /></header>
             <Badge className="trip-detail-status" appearance="tint" color={selected.status === "rejected" ? "danger" : selected.status === "approved" ? "success" : "informative"}>{selected.statusLabel}</Badge>
             <div className="trip-detail-stages" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== (selected.stage === "rejected" ? "approved" : "rejected")).map((column) => <span key={column.key} aria-current={selected.stage === column.key ? "step" : undefined} style={{ "--approval-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>
             {feedback}
             {pendingDecision?.id === selected.id ? <DecisionReason key={`${selected.id}:${pendingDecision.action}`} title={pendingDecision.action === "return" ? "Что нужно исправить?" : "Причина отклонения"} onCancel={() => setPendingDecision(undefined)} onConfirm={(reason) => commitAction(selected, pendingDecision.action, reason)} /> : null}
             <div className="trip-purpose"><span>Цель поездки</span><p>{selected.purpose}</p></div>
-            <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personName(selected.requesterUserId)}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
-            <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personName(id)}</span>)}</div>
-            {selected.chatId && onOpenChat ? <Button appearance="secondary" icon={<Chat24Regular />} onClick={() => onOpenChat(selected.chatId!)}>Открыть чат поездки</Button> : null}
+            <dl className="bp7-facts"><div><dt>Инициатор</dt><dd>{personLink(selected.requesterUserId, personName(selected.requesterUserId))}</dd></div><div><dt>Период</dt><dd>{selected.startDate} — {selected.endDate}</dd></div></dl>
+            <div className="trip-employees"><h3>Сотрудники</h3>{selected.employeeIds.map((id) => <span key={id}>{personLink(id, personName(id), "trip-employee-link")}</span>)}</div>
             <div className="bp7-actions">
               {selected.canEdit ? <Button disabled={busy || Boolean(pendingDecision)} icon={<Edit24Regular />} onClick={() => { setForm({ purpose: selected.purpose, destination: selected.destination, startDate: selected.startDate, endDate: selected.endDate, employeeIds: selected.employeeIds }); setEmployeeQuery(""); setError(""); setFormMode("edit"); }}>Изменить</Button> : null}
               {selected.allowedActions.map((action) => <Button className={`trip-decision-action action-${action}`} disabled={busy || Boolean(pendingDecision)} appearance={action === "approve" || action === "submit" || action === "resubmit" ? "primary" : "secondary"} key={action} onClick={() => void act(selected, action)}>{actionLabels[action]}</Button>)}
               {isAdministrator ? displayTripColumns.filter((column) => column.key !== selected.stage).map((column) => <Button data-stage={column.key} disabled={busy || Boolean(pendingDecision)} key={`move:${column.key}`} onClick={() => void commitAction(selected, "move", `Перенос на этап «${column.label}»`, column.key)}>{column.label}</Button>) : null}
             </div>
-            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personName(entry.actorUserId)} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
-          </article> : formMode !== null ? (
+            <div className="bp7-history"><h3>История решений</h3>{[...selected.actions].reverse().map((entry) => <div key={entry.id}><i /><p><strong>{entry.action === "created" ? "Заявка создана" : actionLabels[entry.action]}</strong><span>{personLink(entry.actorUserId, personName(entry.actorUserId))} · {new Date(entry.createdAt).toLocaleString("ru-RU")}</span>{entry.comment ? <small>{entry.comment}</small> : null}</p></div>)}</div>
+          </article>{renderTripChat ? renderTripChat(selected) : <div className="embedded-chat-unavailable">Чат поездки недоступен.</div>}</div> : formMode !== null ? (
           <form className="bp7-modal trip-form record-composer" noValidate aria-busy={busy} onSubmit={(event) => { event.preventDefault(); void save(); }}>
             <RecordComposer title={formMode === "create" ? "Создать заявку на поездку" : "Изменить заявку на поездку"} titleId="trip-composer-title" eyebrow="Согласование поездок" busy={busy} error={error} submitLabel="Сохранить" onClose={closeForm}
               hint="Сохранение не отправляет поездку на согласование. Отправить её можно из карточки."
               stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Маршрут согласования">{displayTripColumns.filter((column) => column.key !== "rejected").map((column) => <span key={column.key} aria-current={column.key === (formMode === "edit" ? selected?.stage : "launch") ? "step" : undefined} style={{ "--record-stage-color": column.color } as CSSProperties}>{column.label}</span>)}</div>}
               aside={<>
                 <RecordSummary title="Сводка поездки"><div className="record-summary-title">{form.destination.trim() || "Место поездки не указано"}</div><p>{form.purpose.trim() || "Добавьте цель поездки"}</p>
-                  <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personName(selected.requesterUserId) : currentUser.name}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
-                  <ul className="record-summary-people">{form.employeeIds.map((id) => <li key={id}>{personName(id)}</li>)}</ul>
+                  <dl className="record-summary-facts"><div><dt>Даты</dt><dd>{form.startDate || "Не указано"} — {form.endDate || "Не указано"}</dd></div><div><dt>Инициатор</dt><dd>{formMode === "edit" && selected ? personLink(selected.requesterUserId, personName(selected.requesterUserId)) : personLink(currentUser.id, currentUser.name)}</dd></div><div><dt>Участников</dt><dd>{form.employeeIds.length}</dd></div></dl>
+                  <ul className="record-summary-people">{form.employeeIds.map((id) => <EmployeeProfileLink as="li" key={id} userId={people.some((person) => person.id === id) ? id : undefined} personName={personName(id)}>{personName(id)}</EmployeeProfileLink>)}</ul>
                 </RecordSummary>
                 <section className="record-summary-card record-summary-note"><h3>Что произойдёт дальше</h3><p>Сначала сохраните карточку, затем отправьте её руководителю. После его согласования заявка поступит в кадровую службу.</p><p>История решений будет доступна в карточке поездки.</p></section>
               </>}>

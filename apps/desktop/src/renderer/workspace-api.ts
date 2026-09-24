@@ -38,6 +38,9 @@ import type {
   DirectoryBootstrap,
   DirectoryEmployee,
   EfficiencyOverview,
+  EmployeeRecognitionProfile,
+  EmployeeReward,
+  EmployeeRewardInput,
   FeedPost,
   DevelopmentSession,
   InvitationResult,
@@ -70,6 +73,7 @@ import type {
   WorkdaySchedule,
   WorkdayTeam,
   ManagedEmployeeStatus,
+  RecognitionSettings,
   MembersRegistry,
   HrOverview,
   HrProfile,
@@ -106,6 +110,47 @@ export function loadLinkPreview(token: string, url: string): Promise<LinkPreview
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
+}
+
+export function loadEmployeeRecognitionProfile(
+  token: string,
+  userId: string,
+): Promise<EmployeeRecognitionProfile> {
+  return apiRequest<EmployeeRecognitionProfile>(
+    `/recognition/profiles/${encodeURIComponent(userId)}`,
+    {},
+    token,
+  );
+}
+
+export function loadRecognitionSettings(token: string): Promise<RecognitionSettings> {
+  return apiRequest<RecognitionSettings>("/recognition/settings", {}, token);
+}
+
+export function updateRecognitionSettings(
+  token: string,
+  activeTaskCountVisible: boolean,
+): Promise<RecognitionSettings> {
+  return apiRequest<RecognitionSettings>(
+    "/recognition/settings",
+    {
+      method: "PATCH",
+      body: JSON.stringify({ activeTaskCountVisible }),
+    },
+    token,
+  );
+}
+
+export function issueEmployeeReward(
+  token: string,
+  userId: string,
+  payload: EmployeeRewardInput,
+): Promise<EmployeeReward> {
+  return apiRequest<EmployeeReward>(
+    `/recognition/profiles/${encodeURIComponent(userId)}/rewards`,
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
 }
 
 export function loadAIReferentRegistry(

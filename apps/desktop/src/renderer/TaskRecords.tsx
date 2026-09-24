@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Avatar, Badge, useRestoreFocusTarget } from "@fluentui/react-components";
 import type { TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 
@@ -32,7 +33,8 @@ export function TaskRecords({ tasks, people, selectedId, filterKey, onSelect }: 
   const onSort = (key: string) => setSort({ key, descending: sort.key === key && !sort.descending });
   const person = (id: string) => {
     const value = peopleById.get(id);
-    return <span className={`record-person${value?.status && value.status !== "active" ? " workspace-person-inactive" : ""}`}><Avatar name={value?.name ?? "Сотрудник"} size={28} color="colorful" aria-hidden="true" /><span>{value?.name ?? "Сотрудник"}</span></span>;
+    const name = value?.name ?? "Сотрудник";
+    return <EmployeeProfileLink userId={value?.id} personName={name} className={`record-person${value?.status && value.status !== "active" ? " workspace-person-inactive" : ""}`}><Avatar name={name} size={28} color="colorful" aria-hidden="true" /><span>{name}</span></EmployeeProfileLink>;
   };
   return <div className="record-table-frame task-records">
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>

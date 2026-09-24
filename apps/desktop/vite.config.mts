@@ -3,6 +3,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+import { compareReleaseVersions } from "./src/renderer/release-versions.mts";
+
 const tabsterEsmPath = fileURLToPath(
   new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
 );
@@ -27,7 +29,9 @@ function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
 
 const releasedRoot = new URL("./release-notes/released/", import.meta.url);
 const releaseHistory: ReleaseHistoryEntry[] = existsSync(releasedRoot)
-  ? readdirSync(releasedRoot).filter((name) => statSync(new URL(name, releasedRoot)).isDirectory()).sort().reverse()
+  ? readdirSync(releasedRoot)
+    .filter((name) => statSync(new URL(name, releasedRoot)).isDirectory())
+    .sort((left, right) => compareReleaseVersions(right, left))
     .map((version) => ({
       version,
       title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,

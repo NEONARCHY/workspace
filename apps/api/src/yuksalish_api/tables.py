@@ -779,6 +779,25 @@ hr_service_history = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
+recognition_settings = sa.Table(
+    "employee_recognition_settings", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("active_task_count_visible", sa.Boolean()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+employee_rewards = sa.Table(
+    "employee_rewards", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("recipient_user_id", uuid_type),
+    sa.Column("issuer_user_id", uuid_type),
+    sa.Column("icon_key", sa.String(32)),
+    sa.Column("title", sa.String(100)),
+    sa.Column("description", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 hr_monthly_registers = sa.Table(
     "hr_monthly_registers", metadata,
     sa.Column("id", uuid_type, primary_key=True),

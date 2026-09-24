@@ -7,7 +7,6 @@ import type {
   WorkspacePerson,
 } from "@yuksalish/contracts";
 import {
-  Avatar,
   Button,
   Checkbox,
   DialogBody,
@@ -18,8 +17,11 @@ import {
   Input,
   Textarea,
 } from "@fluentui/react-components";
+import { PeopleTeam24Regular, Sparkle24Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 export interface ChatActions {
   readonly create: (input: CreateChatInput) => Promise<ChatSummary>;
@@ -64,12 +66,14 @@ const roleLabels = {
 };
 
 function PeoplePicker({
+  token,
   people,
   selected,
   onChange,
   single = false,
   disabled = false,
 }: {
+  readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly selected: readonly string[];
   readonly onChange: (ids: readonly string[]) => void;
@@ -94,9 +98,19 @@ function PeoplePicker({
         {found.map((person) => (
           <Checkbox
             key={person.id}
+            className="chat-person-option"
+            aria-label={person.name}
             disabled={disabled}
             checked={selected.includes(person.id)}
-            label={person.name}
+            label={
+              <span className="chat-person-identity">
+                <ProfileAvatar person={person} token={token} size={36} />
+                <span>
+                  <strong>{person.name}</strong>
+                  <small>{person.jobTitle || "Сотрудник"}</small>
+                </span>
+              </span>
+            }
             onChange={(_, data) =>
               onChange(
                 data.checked
@@ -199,6 +213,7 @@ function MemberEditor({
 }
 
 export function ChatManagement({
+  token,
   chat,
   currentUserId,
   people,
@@ -208,6 +223,7 @@ export function ChatManagement({
   onRequestDelete,
   allowDelete = false,
 }: {
+  readonly token: string;
   readonly chat?: ChatSummary;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
@@ -217,7 +233,6 @@ export function ChatManagement({
   readonly onRequestDelete?: (chat: ChatSummary) => void;
   readonly allowDelete?: boolean;
 }) {
-  const [kind, setKind] = useState<"direct" | "group">("group");
   const [title, setTitle] = useState(chat?.title ?? "");
   const [description, setDescription] = useState(chat?.description ?? "");
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -231,8 +246,10 @@ export function ChatManagement({
   const isOwner = chat?.ownerId === currentUserId;
   const isCreator = chat?.members.some((member) => member.userId === currentUserId && member.role === "owner");
   const isGroup = chat?.kind === "group";
+  const isUserManagedChat = Boolean(chat && !chat.contextType && (chat.kind === "direct" || chat.kind === "group"));
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const personFor = (id: string) => people.find((person) => person.id === id);
   const run = async (
     operation: () => Promise<unknown>,
     complete?: () => void,
@@ -271,7 +288,7 @@ export function ChatManagement({
               ? isGroup
                 ? "Управление группой"
                 : "Участники чата"
-              : "Новый разговор"}
+              : "Новая группа"}
           </DialogTitle>
           <DialogContent className="chat-settings-content">
             {error && (
@@ -280,28 +297,16 @@ export function ChatManagement({
               </p>
             )}
             {!chat && (
-              <>
-                <Field label="Тип разговора">
-                  <Select
-                    value={kind}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setKind(event.target.value as typeof kind);
-                      setSelected([]);
-                    }}
-                  >
-                    <option value="group">Личная группа</option>
-                    <option value="direct">Личный диалог</option>
-                  </Select>
-                </Field>
-                <p className="muted">
-                  {kind === "group"
-                    ? "Вы станете владельцем. Группу и переписку видят только добавленные сотрудники."
-                    : "Переписка только между вами и выбранным сотрудником. Существующий диалог откроется повторно."}
-                </p>
-              </>
+              <div className="chat-create-intro">
+                <span className="chat-create-icon" aria-hidden="true"><PeopleTeam24Regular /></span>
+                <div>
+                  <span className="chat-create-kicker"><Sparkle24Regular /> Новая команда</span>
+                  <strong>Соберите рабочую группу</strong>
+                  <p>Вы станете владельцем, а переписку увидят только выбранные сотрудники.</p>
+                </div>
+              </div>
             )}
-            {(isGroup || (!chat && kind === "group")) && (
+            {(isGroup || !chat) && (
               <>
                 <Field label="Название группы" required>
                   <Input
@@ -343,7 +348,14 @@ export function ChatManagement({
                 {chat.members.map((member) => (
                   <div className="chat-member" key={member.userId}>
                     <div className="chat-member-heading">
-                      <Avatar name={personName(member.userId)} size={32} />
+                      <EmployeeProfileLink userId={member.userId} personName={personName(member.userId)}>
+                        {personFor(member.userId) ? (
+                          <ProfileAvatar person={personFor(member.userId)!} token={token} size={32} />
+                        ) : (
+                          <span className="chat-member-avatar-fallback" aria-hidden="true" />
+                        )}
+                      </EmployeeProfileLink>
+                      <EmployeeProfileLink userId={member.userId} personName={personName(member.userId)}>
                       <div>
                         <strong>{personName(member.userId)}</strong>
                         <small>
@@ -353,6 +365,7 @@ export function ChatManagement({
                             : " · Только чтение"}
                         </small>
                       </div>
+                      </EmployeeProfileLink>
                       <div className="chat-member-actions">
                         {isGroup &&
                           isOwner &&
@@ -431,10 +444,10 @@ export function ChatManagement({
               <section>
                 <h3>{chat ? "Добавить сотрудников" : "Сотрудники"}</h3>
                 <PeoplePicker
+                  token={token}
                   people={eligible}
                   selected={selected}
                   onChange={setSelected}
-                  single={!chat && kind === "direct"}
                   disabled={busy}
                 />
                 <p className="muted">
@@ -494,7 +507,7 @@ export function ChatManagement({
               </div>
             )}
             <div className="chat-dialog-actions">
-              {chat && onRequestDelete && (allowDelete || isOwner || isCreator) ? (
+              {chat && isUserManagedChat && onRequestDelete && (allowDelete || isOwner || isCreator) ? (
                 <Button appearance="primary" disabled={busy} onClick={() => onRequestDelete(chat)}>
                   Удалить чат
                 </Button>
@@ -505,25 +518,21 @@ export function ChatManagement({
                   disabled={
                     busy ||
                     !selected.length ||
-                    (kind === "group" && !title.trim())
+                    !title.trim()
                   }
                   onClick={() =>
                     void run(async () => {
                       const created = await actions.create({
-                        kind,
-                        title: kind === "group" ? title.trim() : "",
-                        description: kind === "group" ? description : "",
+                        kind: "group",
+                        title: title.trim(),
+                        description,
                         memberIds: selected,
                       });
                       onCreated(created);
                     })
                   }
                 >
-                  {busy
-                    ? "Создаём…"
-                    : kind === "group"
-                      ? "Создать группу"
-                      : "Открыть диалог"}
+                  {busy ? "Создаём…" : "Создать группу"}
                 </Button>
               )}
               <Button disabled={busy} onClick={onClose}>

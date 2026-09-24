@@ -764,6 +764,7 @@ def _reaction_summaries(
             emoji=cast(Any, emoji),
             count=len(user_ids),
             reacted_by_current_user=current_user.id in user_ids,
+            reactor_user_ids=[str(user_id) for user_id in sorted(user_ids, key=str)],
         )
         for emoji in messenger_service.REACTION_EMOJIS
         if (user_ids := grouped.get(emoji))

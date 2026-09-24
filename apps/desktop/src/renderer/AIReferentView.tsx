@@ -28,8 +28,11 @@ import {
   Dismiss20Regular,
   Document20Regular,
   Mail24Regular,
+  Mail32Regular,
+  MailArrowForward20Regular,
+  MailInbox48Regular,
+  MailMultiple32Regular,
   Open20Regular,
-  Search20Regular,
 } from "@fluentui/react-icons";
 
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -39,6 +42,8 @@ import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
+import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import {
   actOnAIReferentLetter,
   createAIReferentLetter,
@@ -344,16 +349,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           <h1>AI Referent</h1>
           <p>Письма, согласования и архив — в одном рабочем пространстве.</p>
         </div>
-        <div className="ai-referent-header-art" aria-hidden="true"><Mail24Regular /><span /><Mail24Regular /></div>
+        <div className="ai-referent-header-art" aria-hidden="true">
+          <MailInbox48Regular className="ai-referent-header-mail mail-inbox" />
+          <Mail32Regular className="ai-referent-header-mail mail-main" />
+          <MailMultiple32Regular className="ai-referent-header-mail mail-stack" />
+          <MailArrowForward20Regular className="ai-referent-header-mail mail-forward" />
+          <Mail24Regular className="ai-referent-header-mail mail-edge" />
+        </div>
         <div className="ai-referent-header-actions">
-          {registerKind === "outgoing" ? <Button
-              appearance="subtle"
-              icon={<ArrowClockwise20Regular />}
-              disabled={loading || busy}
-              onClick={() => void refresh()}
-            >
-              Обновить
-            </Button> : null}
           {registerKind === "outgoing" && canCreate ? (
             <Button appearance="primary" icon={<Add24Regular />} onClick={openCreate}>
               Новое письмо
@@ -411,31 +414,40 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       </section>
 
       <div className="ai-referent-toolbar">
-        <Input
-          contentBefore={<Search20Regular />}
-          aria-label="Поиск исходящих писем"
+        <AIReferentGooeySearch
+          ariaLabel="Поиск исходящих писем"
           placeholder="Номер, тема, организация или сотрудник"
           value={query}
-          onChange={(_event, data) => { setQuery(data.value); setPage(0); }}
+          onValueChange={(value) => { setQuery(value); setPage(0); }}
         />
-        <div className="ai-referent-filters" role="group" aria-label="Фильтр писем">
-          {([
-            ["all", "Все"],
-            ["draft", "Черновики"],
-            ["pending_review", "На согласовании"],
-            ["needs_revision", "Доработка"],
-            ["sent", "Отправленные"],
-          ] as const).map(([key, label]) => (
-            <button
-              type="button"
-              key={key}
-              className={filter === key ? "active" : ""}
-              aria-pressed={filter === key}
-              onClick={() => { setFilter(key); setPage(0); }}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="ai-referent-toolbar-actions">
+          <div className="ai-referent-filters" role="group" aria-label="Фильтр писем">
+            {([
+              ["all", "Все"],
+              ["draft", "Черновики"],
+              ["pending_review", "На согласовании"],
+              ["needs_revision", "Доработка"],
+              ["sent", "Отправленные"],
+            ] as const).map(([key, label]) => (
+              <button
+                type="button"
+                key={key}
+                className={filter === key ? "active" : ""}
+                aria-pressed={filter === key}
+                onClick={() => { setFilter(key); setPage(0); }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <Button
+            appearance="subtle"
+            icon={<ArrowClockwise20Regular />}
+            disabled={loading || busy}
+            onClick={() => void refresh()}
+          >
+            Обновить
+          </Button>
         </div>
       </div>
 
@@ -466,10 +478,16 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 <small>{letter.recipientOrganization}</small>
               </span>
               <span className="ai-referent-row-person">
-                <small>Автор</small>{letter.createdByName}
+                <small>Автор</small><EmployeeProfileLink
+                  userId={letter.createdByUserId}
+                  personName={letter.createdByName}
+                >{letter.createdByName}</EmployeeProfileLink>
               </span>
               <span className="ai-referent-row-person">
-                <small>Согласующий</small>{letter.reviewerName ?? "Не назначен"}
+                <small>Согласующий</small><EmployeeProfileLink
+                  userId={letter.reviewerUserId ?? undefined}
+                  personName={letter.reviewerName ?? "Не назначен"}
+                >{letter.reviewerName ?? "Не назначен"}</EmployeeProfileLink>
               </span>
               <span className="ai-referent-row-number">
                 <strong>{letter.displayNumber ?? "Без номера"}</strong>
@@ -573,8 +591,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <p>{selected.recipientAddress || "Адрес будет уточнён перед отправкой"}</p>
                 </section>
                 <section className="ai-referent-detail-people">
-                  <div><small>Автор</small><strong>{selected.createdByName}</strong></div>
-                  <div><small>Согласующий</small><strong>{selected.reviewerName ?? "Не назначен"}</strong></div>
+                  <div><small>Автор</small><EmployeeProfileLink
+                    userId={selected.createdByUserId}
+                    personName={selected.createdByName}
+                  ><strong>{selected.createdByName}</strong></EmployeeProfileLink></div>
+                  <div><small>Согласующий</small><EmployeeProfileLink
+                    userId={selected.reviewerUserId ?? undefined}
+                    personName={selected.reviewerName ?? "Не назначен"}
+                  ><strong>{selected.reviewerName ?? "Не назначен"}</strong></EmployeeProfileLink></div>
                 </section>
                 {selected.note ? <section className="ai-referent-detail-card"><h3>Заметка</h3><p>{selected.note}</p></section> : null}
                 </> : null}
@@ -593,7 +617,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <h3>Активность</h3>
                   <div className="ai-referent-timeline">
                     {selected.events.map((event) => (
-                      <div key={event.id}><i aria-hidden="true" /><span><strong>{event.actorName}</strong><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p></span></div>
+                      <div key={event.id}><i aria-hidden="true" /><span><EmployeeProfileLink
+                        userId={event.actorUserId ?? undefined}
+                        personName={event.actorName}
+                      ><strong>{event.actorName}</strong></EmployeeProfileLink><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p></span></div>
                     ))}
                   </div>
                 </section> : null}

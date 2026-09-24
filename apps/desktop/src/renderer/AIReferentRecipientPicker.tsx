@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 
 import type { AIReferentRecipient, AIReferentRecipientRegistry } from "@yuksalish/contracts";
 import { Input, Spinner } from "@fluentui/react-components";
-import { Search20Regular } from "@fluentui/react-icons";
 
+import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { loadAIReferentRecipients } from "./workspace-api";
 
 const categories = [
@@ -87,13 +87,14 @@ export function AIReferentRecipientPicker({
       ) : null}
       {mode === "search" ? (
         <div className="ai-referent-picker-search">
-          <Input
+          <AIReferentGooeySearch
             value={query}
-            onChange={(_event, data) => changeQuery(data.value)}
-            contentBefore={<Search20Regular aria-hidden="true" />}
+            onValueChange={changeQuery}
             placeholder="Название организации или адрес"
-            aria-label="Поиск адресата"
+            ariaLabel="Поиск адресата"
             autoComplete="off"
+            collapsedWidth={290}
+            expandedWidth={420}
           />
           <div className="ai-referent-picker-categories" aria-label="Категории организаций">
             {categories.map(([key, label]) => (

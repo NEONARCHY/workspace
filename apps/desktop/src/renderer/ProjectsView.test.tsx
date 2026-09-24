@@ -9,10 +9,10 @@ import { people } from "./test-fixtures/demo-data";
 const project: WorkspaceProject = { id: "qa-project", code: "YUK-26", title: "Региональная программа", description: "Описание",
   managerUserId: people[0]!.id, budget: 100000, spentBudget: 20000, remainingBudget: 80000, currency: "UZS",
   status: "in_progress", stage: "approval", chatId: "project-chat", createdByUserId: people[0]!.id, createdAt: "2026-09-04", updatedAt: "2026-09-04", canEdit: true, canMove: true, history: [] };
-function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = [], currentUser = people[0]!, onOpenChat = vi.fn()) {
+function setup(onCreate = vi.fn(async () => undefined as WorkspaceProject | undefined), projects: WorkspaceProject[] = [], currentUser = people[0]!, onOpenChat = vi.fn(), renderProjectChat?: (item: WorkspaceProject) => React.ReactNode) {
   const onUpdate = vi.fn(async () => project);
   const onMove = vi.fn(async () => undefined as WorkspaceProject | undefined);
-  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={onUpdate} onMove={onMove} onOpenChat={onOpenChat} /></FluentProvider>);
+  render(<FluentProvider theme={workspaceTheme}><ProjectsView projects={projects} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={onUpdate} onMove={onMove} onOpenChat={onOpenChat} renderProjectChat={renderProjectChat} /></FluentProvider>);
   return { onCreate, onUpdate, onMove, onOpenChat };
 }
 const change = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name, { exact: true }), { target: { value } });
@@ -24,11 +24,25 @@ describe("Project composer", () => {
     setup(undefined, [project, completed]);
     expect(screen.getByLabelText("Сводка по проектам")).toHaveTextContent("1завершено");
     expect(document.querySelectorAll(".project-card")).toHaveLength(1);
+    expect(screen.getByLabelText("1 проектов на этапе «Согласование»")).toHaveTextContent("1");
     fireEvent.click(screen.getByRole("button", { name: /Все.*2/ }));
     expect(document.querySelectorAll(".project-card")).toHaveLength(2);
     fireEvent.change(screen.getByLabelText("Поиск проектов"), { target: { value: "DONE" } });
     expect(document.querySelectorAll(".project-card")).toHaveLength(1);
     expect(screen.getByText("Завершённый проект")).toBeInTheDocument();
+  });
+  it("switches between kanban and list without losing search or filters", () => {
+    const completed = { ...project, id: "done-project", code: "DONE", title: "Завершённый проект", status: "completed" as const, stage: "success" as const, canMove: false };
+    setup(undefined, [project, completed]);
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    expect(screen.getByRole("group", { name: "Вид проектов" })).toHaveTextContent("КанбанСписок");
+    expect(screen.getByLabelText("Проекты в виде списка").querySelectorAll(".process-record-row")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /Все.*2/ }));
+    fireEvent.change(screen.getByLabelText("Поиск проектов"), { target: { value: "DONE" } });
+    expect(screen.getByLabelText("Проекты в виде списка").querySelectorAll(".process-record-row")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Канбан" }));
+    expect(screen.getByLabelText("Стадии проектов")).toBeInTheDocument();
+    expect(document.querySelectorAll(".project-card")).toHaveLength(1);
   });
   it("groups fields and recalculates the remainder in the selected currency", () => {
     setup(); open(); change("Название проекта", "Региональные инициативы"); change("Бюджет проекта", "14500"); change("Потрачено", "2500"); change("Валюта проекта", "USD");
@@ -82,5 +96,13 @@ describe("Project composer", () => {
     setup(undefined, [project], people[0]!, onOpenChat);
     fireEvent.click(screen.getByRole("button", { name: `Открыть чат проекта ${project.title}` }));
     expect(onOpenChat).toHaveBeenCalledWith("project-chat");
+  });
+  it("opens a modal project workspace with the synchronized embedded chat", () => {
+    setup(undefined, [project], people[0]!, undefined, (item) => <aside aria-label={`Чат проекта ${item.title}`} />);
+    fireEvent.click(screen.getByText(project.title));
+    const dialog = screen.getByRole("dialog", { name: project.title });
+    expect(dialog).toHaveClass("project-dialog", "context-record-dialog");
+    expect(within(dialog).getByLabelText(`Чат проекта ${project.title}`)).toBeInTheDocument();
+    expect(dialog.querySelector(".project-detail > header")).not.toBeNull();
   });
 });

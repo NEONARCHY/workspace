@@ -4,6 +4,7 @@ import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contract
 import { Avatar, Button, Input } from "@fluentui/react-components";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 interface EfficiencyViewProps {
   readonly overview?: EfficiencyOverview;
@@ -116,7 +117,7 @@ function EmployeeSummary({ employee, title }: { readonly employee: EmployeeEffic
     <div className="eff-summary-lead">
       <ScoreGauge employee={employee} />
       <div className="eff-summary-copy">
-        <div className="eff-person"><Avatar name={employee.name} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></div>
+        <EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-person"><Avatar name={employee.name} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></EmployeeProfileLink>
         <h3>{employee.percentage == null ? "Пока нет задач, по которым можно рассчитать процент" : "Доля задач, переданных или выполненных в установленный срок"}</h3>
         <p>{employee.eligibleCount ? `В расчёт вошло: ${countLabel(employee.eligibleCount, ["задача", "задачи", "задач"])}. Вовремя выполнено: ${countLabel(employee.onTimeCount, ["задача", "задачи", "задач"])}.` : "Будущие задачи и задачи без срока не ухудшают результат. Показатель появится, когда наступит срок хотя бы одной учитываемой задачи."}</p>
         {employee.smallSample ? <div className="eff-sample-note">Выборка пока небольшая — интерпретируйте процент осторожно.</div> : null}
@@ -196,7 +197,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
     <section className="eff-people" aria-label="Эффективность сотрудников">
       <div className="eff-people-heading"><div><h2>Сотрудники</h2><p>Нейтральная сортировка по имени. Это не рейтинг.</p></div><Input aria-label="Поиск сотрудников в эффективности" contentBefore={<Search20Regular />} placeholder="Имя или должность" value={query} onChange={(_, data) => setQuery(data.value)} /></div>
       <div className="eff-table-scroll" tabIndex={0} aria-label="Таблица прокручивается горизонтально">
-        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} onClick={() => setSelectedUserId(employee.userId)}><td><button type="button" aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)}><Avatar name={employee.name} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></button></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
+        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} tabIndex={0} aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedUserId(employee.userId); } }}><td><EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-table-person"><Avatar name={employee.name} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></EmployeeProfileLink></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
       </div>
       {!visibleEmployees.length ? <div className="eff-table-empty">По вашему запросу сотрудники не найдены.</div> : null}
     </section>

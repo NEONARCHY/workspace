@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { scrollToLatest } from "./message-scroll";
 import type {
   ChatMessage,
   ChatSummary,
+  MessageReaction,
   MessageReactionEmoji,
   PersonalPreferences,
   PersonalChatAction,
@@ -42,6 +43,21 @@ import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import {
+  MessageRevealOverlay,
+  MessageVanishOverlay,
+  type MessageRevealRequest,
+  type MessageVanishRequest,
+} from "./MessageVanishOverlay";
+
+interface OutgoingMessageReveal {
+  readonly messageId?: string;
+  readonly request: MessageRevealRequest;
+  readonly composerFinished: boolean;
+  readonly phase: "waiting" | "revealing";
+}
 
 export interface MessengerViewProps {
   readonly token: string;
@@ -85,6 +101,7 @@ export interface MessengerViewProps {
   readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
   readonly onOpenContext?: (contextType: "task" | "project" | "trip", contextId: string) => void;
+  readonly onOpenPersonProfile?: (userId: string) => void;
 }
 
 function MessageContextMenu({
@@ -126,6 +143,106 @@ function MessageContextMenu({
   );
 }
 
+function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenPersonProfile }: {
+  readonly reaction: MessageReaction;
+  readonly people: readonly WorkspacePerson[];
+  readonly token: string;
+  readonly disabled: boolean;
+  readonly onToggle: () => void;
+  readonly onOpenPersonProfile?: (userId: string) => void;
+}) {
+  const tooltipId = useId();
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState({ left: 8, top: 8, below: false });
+  const reactors = (reaction.reactorUserIds ?? [])
+    .map((userId) => people.find((person) => person.id === userId))
+    .filter((person): person is WorkspacePerson => person !== undefined);
+  const additionalReactors = reactors.length > 1 ? reactors.slice(1, 4) : [];
+  const names = reactors.length
+    ? reactors.map((person) => person.name)
+    : [`${reaction.count} ${reaction.count === 1 ? "реакция" : "реакции"}`];
+
+  const cancelClose = () => {
+    if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
+    closeTimer.current = undefined;
+  };
+  const show = () => {
+    cancelClose();
+    setOpen(true);
+  };
+  const hideSoon = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 180);
+  };
+  useEffect(() => () => cancelClose(), []);
+  useLayoutEffect(() => {
+    if (!open || !anchorRef.current || !tooltipRef.current) return;
+    const anchor = anchorRef.current.getBoundingClientRect();
+    const tooltip = tooltipRef.current.getBoundingClientRect();
+    const margin = 10;
+    const gap = 8;
+    const below = anchor.top < tooltip.height + gap + margin;
+    const desiredLeft = anchor.left + anchor.width / 2 - tooltip.width / 2;
+    setPosition({
+      left: Math.max(margin, Math.min(desiredLeft, window.innerWidth - tooltip.width - margin)),
+      top: below ? anchor.bottom + gap : anchor.top - tooltip.height - gap,
+      below,
+    });
+  }, [open, reactors.length]);
+
+  return <span
+    className="message-reaction-chip"
+    onPointerEnter={show}
+    onPointerLeave={hideSoon}
+    onFocus={show}
+    onBlur={hideSoon}
+  >
+    <Button
+      ref={anchorRef}
+      size="small"
+      appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"}
+      disabled={disabled}
+      aria-label={`${reaction.emoji}: ${names.join(", ")}`}
+      aria-controls={tooltipId}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <span className="message-reaction-emoji" aria-hidden="true">{reaction.emoji}</span>
+      {additionalReactors.length ? <span className="message-reaction-avatars" aria-hidden="true">
+        {additionalReactors.map((person) => <ProfileAvatar key={person.id} person={person} token={token} size={20} />)}
+      </span> : null}
+    </Button>
+    {open ? createPortal(<div
+      ref={tooltipRef}
+      className={`message-reaction-tooltip is-open${position.below ? " is-below" : ""}`}
+      id={tooltipId}
+      role="dialog"
+      aria-label={`Кто поставил реакцию ${reaction.emoji}`}
+      style={{ left: position.left, top: position.top }}
+      onPointerEnter={show}
+      onPointerLeave={hideSoon}
+    >
+      <strong><span aria-hidden="true">{reaction.emoji}</span> Поставили реакцию</strong>
+      <div className="message-reaction-tooltip-people">
+        {reactors.length ? reactors.map((person) => <button
+          type="button"
+          key={person.id}
+          onClick={() => {
+            setOpen(false);
+            onOpenPersonProfile?.(person.id);
+          }}
+        >
+          <ProfileAvatar person={person} token={token} size={20} />
+          <span>{person.name}</span>
+        </button>) : <span>{names[0]}</span>}
+      </div>
+    </div>, document.body) : null}
+  </span>;
+}
+
 function Conversation({
   token,
   chat,
@@ -152,6 +269,7 @@ function Conversation({
   personalPreferences,
   onPersonalChat,
   onOpenContext,
+  onOpenPersonProfile,
   embedded = false,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
@@ -181,6 +299,9 @@ function Conversation({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [vanishRequest, setVanishRequest] = useState<MessageVanishRequest>();
+  const [outgoingReveal, setOutgoingReveal] = useState<OutgoingMessageReveal>();
+  const vanishSequence = useRef(0);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -221,6 +342,7 @@ function Conversation({
   const canSend = chat.permissions.sendMessages;
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
+  const personById = (id: string) => people.find((person) => person.id === id);
   const activeMessages = messages.filter(
     (message) => message.chatId === chat.id,
   );
@@ -300,6 +422,8 @@ function Conversation({
   }, [contextMenu]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
+    vanishSequence.current += 1;
+    setVanishRequest({ id: vanishSequence.current, text: message.body, direction: "restore" });
     setEditing(message);
     setEditBody(message.body);
     setEditMentions(message.mentionUserIds ?? []);
@@ -323,16 +447,47 @@ function Conversation({
   };
   const send = () => {
     if (!canSend || busy || (!draft.trim() && pendingFiles.length === 0)) return;
+    const sentText = draft.trim();
+    const sentFiles = pendingFiles;
+    const sentReplyId = reply?.id;
+    const sentMentions = mentions.filter((id) => activeMemberIds.has(id));
+    let transitionId: number | undefined;
+    if (sentText) {
+      vanishSequence.current += 1;
+      transitionId = vanishSequence.current;
+      const request = { id: transitionId, text: sentText };
+      setOutgoingReveal({ request, composerFinished: false, phase: "waiting" });
+      setVanishRequest({ ...request, direction: "vanish" });
+      setDraft("");
+    }
     focusAfterSend.current = true;
     void run(async () => {
-      const message = await onSendMessage(chat.id, draft.trim() || "Файл", pendingFiles, {
-        replyToMessageId: reply?.id,
-        mentionUserIds: mentions.filter((id) => activeMemberIds.has(id)),
-      });
-      if (!message)
-        throw new Error(
-          "Сообщение не отправлено. Текст сохранён — попробуйте снова.",
-        );
+      try {
+        const message = await onSendMessage(chat.id, sentText || "Файл", sentFiles, {
+          replyToMessageId: sentReplyId,
+          mentionUserIds: sentMentions,
+        });
+        if (!message)
+          throw new Error(
+            "Сообщение не отправлено. Текст сохранён — попробуйте снова.",
+          );
+        if (transitionId !== undefined) {
+          setOutgoingReveal((current) => current?.request.id === transitionId
+            ? {
+                ...current,
+                messageId: message.id,
+                phase: current.composerFinished ? "revealing" : "waiting",
+              }
+            : current);
+        }
+      } catch (cause) {
+        if (transitionId !== undefined) {
+          setOutgoingReveal(undefined);
+          setDraft(sentText);
+          setVanishRequest({ id: transitionId, text: sentText, direction: "restore" });
+        }
+        throw cause;
+      }
       setDraft("");
       draftEdited.current = true;
       void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
@@ -424,7 +579,7 @@ function Conversation({
           <div>
             {pinnedMessages.map((message) => (
               <button key={message.id} type="button" onClick={() => revealMessage(message.id)}>
-                <span>{personName(message.authorId)}</span>
+                <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>{personName(message.authorId)}</EmployeeProfileLink>
                 <strong>{message.body.slice(0, 140)}</strong>
                 <time>{message.time}</time>
               </button>
@@ -457,6 +612,14 @@ function Conversation({
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
           );
           const voiceAttachments = messageAttachments.filter((attachment) => attachment.mediaKind === "voice");
+          const revealPhase = outgoingReveal?.messageId === message.id
+            ? outgoingReveal.phase
+            : undefined;
+          const revealClass = revealPhase === "waiting"
+            ? " message-awaiting-reveal"
+            : revealPhase === "revealing"
+              ? " message-particle-revealing"
+              : "";
           return (
             <div key={message.id}>
               {(index === 0 || date !== previousDate) && (
@@ -464,7 +627,8 @@ function Conversation({
               )}
               <div
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""} ${pendingDeletion?.message.id === message.id ? "is-pending-delete" : ""}`}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""} ${pendingDeletion?.message.id === message.id ? "is-pending-delete" : ""}${revealClass}`}
+                aria-hidden={revealPhase ? true : undefined}
                 onContextMenu={(event) => {
                   event.preventDefault();
                   setContextMenu({ message, x: event.clientX, y: event.clientY });
@@ -476,7 +640,7 @@ function Conversation({
                     setContextMenu({ message, x: rect.left + 28, y: rect.top + 28 });
                   }
                 }}
-                tabIndex={0}
+                tabIndex={revealPhase ? -1 : 0}
                 onPointerEnter={() => setReactionTargetId(message.id)}
                 onPointerLeave={() => {
                   setReactionTargetId((current) => current === message.id ? undefined : current);
@@ -487,22 +651,16 @@ function Conversation({
                 }}
               >
                 {!own && (
-                  <Avatar
-                    name={personName(message.authorId)}
-                    size={32}
-                    color="colorful"
-                  />
+                  <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>
+                    {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
+                  </EmployeeProfileLink>
                 )}
                 <div className="message-content">
                   <div className="message-body">
-                    {!own && <strong>{personName(message.authorId)}</strong>}
+                    {!own && <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>}
                     {message.replyToMessageId && (
                       <blockquote className="message-quote">
-                        <strong>
-                          {parent
-                            ? personName(parent.authorId)
-                            : "Ответ на сообщение"}
-                        </strong>
+                        {parent ? <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink> : <strong>Ответ на сообщение</strong>}
                         <span>
                           {parent?.deletedAt
                             ? "Сообщение удалено"
@@ -513,18 +671,26 @@ function Conversation({
                     {message.deletedAt || voiceAttachments.length === 0 ? (
                       <p
                         className={
-                          message.deletedAt ? "message-deleted" : undefined
+                          message.deletedAt ? "message-deleted" : "message-text"
                         }
                       >
                         {message.deletedAt ? "Сообщение удалено" : message.body}
                       </p>
+                    ) : null}
+                    {revealPhase === "revealing" ? (
+                      <MessageRevealOverlay
+                        request={outgoingReveal?.request}
+                        onComplete={(id) => {
+                          setOutgoingReveal((current) => current?.request.id === id ? undefined : current);
+                        }}
+                      />
                     ) : null}
                     {!message.deletedAt && (
                       <>
                         {!!message.mentionUserIds?.length && (
                           <div className="message-mentions">
                             {message.mentionUserIds.map((id) => (
-                              <span key={id}>@{personName(id)}</span>
+                              <EmployeeProfileLink key={id} userId={id} personName={personName(id)}>@{personName(id)}</EmployeeProfileLink>
                             ))}
                           </div>
                         )}
@@ -549,16 +715,15 @@ function Conversation({
                   {!!message.reactions?.length && (
                     <div className="message-reactions" aria-label="Реакции на сообщение">
                       {message.reactions.map((reaction) => (
-                        <Button
+                        <MessageReactionChip
                           key={reaction.emoji}
-                          size="small"
-                          appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"}
+                          reaction={reaction}
+                          people={people}
+                          token={token}
                           disabled={!canSend || busy}
-                          aria-label={`${reaction.emoji}: ${reaction.count}`}
-                          onClick={() => void run(() => onReactMessage(message, reaction.emoji))}
-                        >
-                          {reaction.emoji} {reaction.count}
-                        </Button>
+                          onOpenPersonProfile={onOpenPersonProfile}
+                          onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
+                        />
                       ))}
                     </div>
                   )}
@@ -660,7 +825,7 @@ function Conversation({
           {reply && (
             <div className="composer-context">
               <div>
-                <small>Ответ · {personName(reply.authorId)}</small>
+                <small>Ответ · <EmployeeProfileLink userId={reply.authorId} personName={personName(reply.authorId)}>{personName(reply.authorId)}</EmployeeProfileLink></small>
                 <p>
                   {activeMessages.find((item) => item.id === reply.id)
                     ?.deletedAt
@@ -726,8 +891,10 @@ function Conversation({
                     }
                   }}
                 >
-                  <ProfileAvatar person={person} token={token} size={28} />
-                  <span><strong>{person.name}</strong><small>@{person.username || person.name.replace(/\s+/gu, "_")}</small></span>
+                  <EmployeeProfileLink userId={person.id} personName={person.name}>
+                    <ProfileAvatar person={person} token={token} size={28} />
+                    <span><strong>{person.name}</strong><small>@{person.username || person.name.replace(/\s+/gu, "_")}</small></span>
+                  </EmployeeProfileLink>
                   {selected ? <b aria-hidden="true">✓</b> : null}
                 </button>;
               })}
@@ -788,13 +955,15 @@ function Conversation({
               />
             </Tooltip>
             <Button
+              className="composer-mention-button"
               appearance="subtle"
               aria-label="Упомянуть участника"
               aria-expanded={mentionPicker}
               disabled={busy}
               onClick={() => setMentionPicker(!mentionPicker)}
             >
-              @{activeMentions.length || ""}
+              <span className="composer-mention-glyph" aria-hidden="true">@</span>
+              {activeMentions.length ? <span className="composer-mention-count">{activeMentions.length}</span> : null}
             </Button>
             <Tooltip content="Записать голосовое сообщение" relationship="label">
               <Button
@@ -828,25 +997,26 @@ function Conversation({
                   ))}
                 </div>
               )}
-              <Input
-                input={{ ref: composerInputRef }}
-                aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}
-                aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
-                placeholder={editing ? "Измените сообщение" : "Напишите сообщение · @ упомянуть"}
-                maxLength={20000}
-                value={editing ? editBody : draft}
-                disabled={busy}
-                onChange={(_, data) => {
-                  if (editing) {
-                    setEditBody(data.value);
+              <div className={`composer-field-shell${vanishRequest ? " is-message-animating" : ""}${vanishRequest?.direction === "restore" ? " is-restoring-message" : ""}`}>
+                <Input
+                  input={{ ref: composerInputRef }}
+                  aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}
+                  aria-description="Стрелка вверх в пустом поле — изменить последнее своё сообщение"
+                  placeholder={editing ? "Измените сообщение" : "Напишите сообщение · @ упомянуть"}
+                  maxLength={20000}
+                  value={editing ? editBody : draft}
+                  disabled={busy}
+                  onChange={(_, data) => {
+                    if (editing) {
+                      setEditBody(data.value);
+                      setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
+                      return;
+                    }
+                    draftEdited.current = true;
+                    setDraft(data.value);
                     setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
-                    return;
-                  }
-                  draftEdited.current = true;
-                  setDraft(data.value);
-                  setMentionPicker(/(?:^|\s)@[^\s@]*$/u.test(data.value));
-                }}
-                onKeyDown={(event) => {
+                  }}
+                  onKeyDown={(event) => {
                   if (
                     event.key === "ArrowUp" &&
                     !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey &&
@@ -883,8 +1053,23 @@ function Conversation({
                     setEditMentions([]);
                     setMentionPicker(false);
                   }
-                }}
-              />
+                  }}
+                />
+                <MessageVanishOverlay
+                  inputRef={composerInputRef}
+                  request={vanishRequest}
+                  onComplete={(id) => {
+                    setVanishRequest((current) => current?.id === id ? undefined : current);
+                    setOutgoingReveal((current) => current?.request.id === id
+                      ? {
+                          ...current,
+                          composerFinished: true,
+                          phase: current.messageId ? "revealing" : "waiting",
+                        }
+                      : current);
+                  }}
+                />
+              </div>
             </div>
             <Button
               appearance="primary"
@@ -900,14 +1085,17 @@ function Conversation({
   );
 }
 
-export function EmbeddedConversation(props: MessengerViewProps & { readonly chatId: string }) {
-  const { onMarkRead } = props;
+export function EmbeddedConversation(props: MessengerViewProps & {
+  readonly chatId: string;
+  readonly contextLabel?: "задачи" | "проекта" | "поездки";
+}) {
+  const { onMarkRead, contextLabel = "задачи" } = props;
   const chat = props.chats.find((item) => item.id === props.chatId);
   useEffect(() => {
     if (chat?.unread) void onMarkRead(chat.id);
   }, [chat?.id, chat?.unread, onMarkRead]);
-  if (!chat) return <div className="embedded-chat-unavailable">Чат задачи недоступен для вашей роли.</div>;
-  return <section className="messenger-view embedded-chat" aria-label={`Чат задачи: ${chat.title}`}>
+  if (!chat) return <div className="embedded-chat-unavailable">Чат {contextLabel} недоступен для вашей роли.</div>;
+  return <section className="messenger-view embedded-chat" aria-label={`Чат ${contextLabel}: ${chat.title}`}>
     <Conversation
       key={`${props.currentUserId}:${chat.id}`}
       {...props}
@@ -926,6 +1114,8 @@ export function MessengerView(props: MessengerViewProps) {
   const [pendingChatDeletion, setPendingChatDeletion] = useState<{ chat: ChatSummary; deadline: number }>();
   const [chatDeleteSeconds, setChatDeleteSeconds] = useState(6);
   const [chatDeletionError, setChatDeletionError] = useState("");
+  const [pendingLeave, setPendingLeave] = useState<ChatSummary>();
+  const [leaveBusy, setLeaveBusy] = useState(false);
   const visibleChats = chats.filter((chat) => chat.id !== pendingChatDeletion?.chat.id);
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
   const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
@@ -937,11 +1127,38 @@ export function MessengerView(props: MessengerViewProps) {
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
   const activeChat = visibleChats.find((chat) => chat.id === activeChatId) ?? firstActive;
   const requestChatDeletion = (chat: ChatSummary) => {
+    if (chat.contextType || (chat.kind !== "direct" && chat.kind !== "group")) return;
     setChatDeletionError("");
     setPendingChatDeletion({ chat, deadline: Date.now() + 6_000 });
     setChatDeleteSeconds(6);
     setPanel(undefined);
     setConversationOpen(false);
+  };
+  const openDirectChat = async (person: WorkspacePerson) => {
+    const chat = await props.chatActions.create({
+      kind: "direct",
+      title: "",
+      description: "",
+      memberIds: [person.id],
+    });
+    setActiveChatId(chat.id);
+    setConversationOpen(true);
+    setPanel(undefined);
+    setListRevision((revision) => revision + 1);
+  };
+  const leaveGroup = async () => {
+    if (!pendingLeave || leaveBusy) return;
+    setLeaveBusy(true);
+    setChatDeletionError("");
+    try {
+      await props.chatActions.remove(pendingLeave.id, props.currentUserId);
+      if (activeChatId === pendingLeave.id) setConversationOpen(false);
+      setPendingLeave(undefined);
+    } catch (cause) {
+      setChatDeletionError(cause instanceof Error ? cause.message : "Не удалось выйти из группы");
+    } finally {
+      setLeaveBusy(false);
+    }
   };
   useEffect(() => {
     if (!pendingChatDeletion) return;
@@ -974,19 +1191,19 @@ export function MessengerView(props: MessengerViewProps) {
             <h1>Сообщения</h1>
             <p>Диалоги, группы и обсуждения задач</p>
           </div>
-          <Tooltip content="Создать чат" relationship="label">
+          <Tooltip content="Создать группу" relationship="label">
             <Button
               appearance="subtle"
               icon={<Add24Regular />}
-              aria-label="Создать чат"
+              aria-label="Создать группу"
               {...restoreFocusTarget}
               onClick={() => setPanel("create")}
             />
           </Tooltip>
         </div>
-          <OrganizedChatList key={listRevision} chats={visibleChats} messages={messages} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
-          onDelete={requestChatDeletion}
+          onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
           onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
       </aside>
       {activeChat ? (
@@ -1006,6 +1223,7 @@ export function MessengerView(props: MessengerViewProps) {
       {(panel === "create" || (panel === "manage" && activeChat)) && (
         <ChatManagement
           key={panel === "create" ? "new" : activeChat?.id}
+          token={props.token}
           chat={panel === "manage" ? activeChat : undefined}
           currentUserId={props.currentUserId}
           people={props.people}
@@ -1021,6 +1239,16 @@ export function MessengerView(props: MessengerViewProps) {
           allowDelete={Boolean(activeChat?.canDelete)}
         />
       )}
+      <ConfirmActionDialog
+        open={Boolean(pendingLeave)}
+        title="Выйти из группы?"
+        message={pendingLeave ? `Группа «${pendingLeave.title}» исчезнет из вашего списка. История останется у других участников.` : ""}
+        confirmLabel="Выйти"
+        busyLabel="Выходим…"
+        busy={leaveBusy}
+        onCancel={() => { if (!leaveBusy) setPendingLeave(undefined); }}
+        onConfirm={() => void leaveGroup()}
+      />
       {pendingChatDeletion ? <div className="messenger-undo" role="status">
         <span>Чат будет удалён через {chatDeleteSeconds} сек.</span>
         <Button size="small" appearance="primary" onClick={() => setPendingChatDeletion(undefined)}>Вернуть</Button>

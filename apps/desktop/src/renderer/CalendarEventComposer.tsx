@@ -8,6 +8,7 @@ import type {
 import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add20Regular } from "@fluentui/react-icons";
 
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { PersonPicker } from "./PersonPicker";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -180,7 +181,10 @@ export function CalendarEventComposer({
                 {visiblePeople.map((person) => (
                   <Checkbox
                     key={person.id}
-                    label={`${person.name}${person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}`}
+                    label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                      {person.name}
+                      {person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}
+                    </EmployeeProfileLink>}
                     checked={draft.attendeeIds.includes(person.id)}
                     disabled={person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
                     onChange={(_event, data) => onDraftChange({

@@ -28,6 +28,7 @@ import {
 } from "./CalendarEventComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import type { PaymentRequestInput } from "./workspace-api";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 interface CalendarViewProps {
   readonly focusEventId?: string;
@@ -698,7 +699,9 @@ export function CalendarView({
               {people.map((person) => (
                 <Checkbox
                   key={person.id}
-                  label={`${person.name}${busyAttendeeIds.has(person.id) ? " · занят" : ""}`}
+                  label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                    {person.name}{busyAttendeeIds.has(person.id) ? " · занят" : ""}
+                  </EmployeeProfileLink>}
                   checked={draft.attendeeIds.includes(person.id)}
                   disabled={
                     person.id !== currentUserId
@@ -739,10 +742,10 @@ export function CalendarView({
                   {selected.attendeeIds.map((id) => {
                     const status = attendanceStatus(selected, id);
                     return (
-                      <span key={id} className={`calendar-attendee-status ${status ?? "pending"}`}>
+                      <EmployeeProfileLink key={id} userId={id} personName={people.find((person) => person.id === id)?.name ?? "Сотрудник"} className={`calendar-attendee-status ${status ?? "pending"}`}>
                         {people.find((person) => person.id === id)?.name ?? "Сотрудник"}
                         {status ? ` · ${attendanceLabels[status]}` : ""}
-                      </span>
+                      </EmployeeProfileLink>
                     );
                   })}
                   {selected.attendeeIds.length === 0 ? "Не указаны" : null}
@@ -817,7 +820,10 @@ export function CalendarView({
                     {new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                   </span>
                   <strong>{meeting.topic}</strong>
-                  <small>Zoom-конференция · {meeting.organizerName}</small>
+                  <small>Zoom-конференция · <EmployeeProfileLink
+                    userId={meeting.organizerUserId ?? undefined}
+                    personName={meeting.organizerName}
+                  >{meeting.organizerName}</EmployeeProfileLink></small>
                 </button>
               ))}
               {selectedDayEvents.length > 0 ? selectedDayEvents.map((event) => (

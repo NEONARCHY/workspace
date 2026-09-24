@@ -8,6 +8,7 @@ import { ArrowSync20Regular, Clock20Regular, PeopleTeam24Regular } from "@fluent
 
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 const absenceLabels: Record<string, string> = {
   vacation: "В отпуске",
@@ -118,8 +119,8 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
     {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
     <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
-        <Avatar name={person.name} size={36} color="colorful" />
-        <span className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></span>
+        <EmployeeProfileLink userId={person.userId} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /></EmployeeProfileLink>
+        <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
         <span className={`team-presence-status is-${person.status}`}>{statusLabel(person)}</span>
         <span className="team-presence-times">{person.session
           ? `${clockLabel(person.session.startedAt)}${person.session.endedAt ? `–${clockLabel(person.session.endedAt)}` : " · в работе"}`
@@ -134,7 +135,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
     <Dialog open={Boolean(editing)} onOpenChange={(_event, next) => { if (!next.open && !saving) setEditing(undefined); }}>
       <DialogSurface className="workday-schedule-dialog" aria-label="График сотрудника">
         <DialogBody>
-          <DialogTitle>График · {editing?.name}</DialogTitle>
+          <DialogTitle>График · {editing ? <EmployeeProfileLink userId={editing.userId} personName={editing.name}>{editing.name}</EmployeeProfileLink> : null}</DialogTitle>
           <DialogContent>
             <p>Новый график применяется к будущим отметкам. Уже начатый рабочий день сохранит прежнее время.</p>
             <div className="workday-schedule-fields">

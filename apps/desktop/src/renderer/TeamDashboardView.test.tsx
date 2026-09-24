@@ -132,4 +132,27 @@ describe("TeamDashboardView", () => {
     expect(within(attention).getByText("Подготовить договор")).toBeInTheDocument();
     expect(within(attention).getByText("Проверить бюджет")).toBeInTheDocument();
   });
+
+  it("opens flow groups in one drawer and resets task detail when another group is selected", () => {
+    renderDashboard();
+
+    fireEvent.click(screen.getByRole("button", { name: /Просрочены.*1/i }));
+    let drawer = screen.getByRole("dialog", { name: "Просрочены" });
+    expect(within(drawer).getByText("Подготовить договор")).toBeInTheDocument();
+    expect(within(drawer).queryByText("Проверить бюджет")).not.toBeInTheDocument();
+
+    fireEvent.click(within(drawer).getByRole("button", { name: /Подготовить договор/i }));
+    drawer = screen.getByRole("dialog", { name: "Подготовить договор" });
+    expect(within(drawer).getByRole("button", { name: "Вернуться к списку задач" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Задачи со сроком четверг, 10 сентября: 1/i }));
+    drawer = screen.getByRole("dialog", { name: "четверг, 10 сентября" });
+    expect(within(drawer).getByText("Проверить бюджет")).toBeInTheDocument();
+    expect(within(drawer).queryByRole("button", { name: "Вернуться к списку задач" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Задачи со сроком пятница, 11 сентября: 0/i }));
+    drawer = screen.getByRole("dialog", { name: "пятница, 11 сентября" });
+    expect(within(drawer).getByText("В этот день задач нет")).toBeInTheDocument();
+    expect(drawer).not.toHaveTextContent(/drawer/i);
+  });
 });

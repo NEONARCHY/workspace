@@ -14,10 +14,10 @@ const request: TripRequest = {
   chatId: "trip-chat",
   actions: [], createdAt: "2026-09-04T09:00:00Z", updatedAt: "2026-09-04T09:00:00Z",
 };
-function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined), currentUser = people[0]!, onOpenChat = vi.fn()) {
+function setup(item = request, onAction = vi.fn(async () => undefined as TripRequest | undefined), currentUser = people[0]!, onOpenChat = vi.fn(), renderTripChat?: (trip: TripRequest) => React.ReactNode) {
   installSpatialGeometry();
   const onCreate = vi.fn(async () => undefined);
-  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} onOpenChat={onOpenChat} /></FluentProvider>);
+  render(<FluentProvider theme={webLightTheme}><TripApprovalsView requests={[item]} people={people} currentUser={currentUser} onCreate={onCreate} onUpdate={vi.fn()} onAction={onAction} onOpenChat={onOpenChat} renderTripChat={renderTripChat} /></FluentProvider>);
   return { onAction, onCreate, onOpenChat };
 }
 const column = (key: string) => document.querySelector(`.trip-column[data-stage-key="${key}"]`)!;
@@ -46,7 +46,7 @@ describe("Trip approvals interaction", async () => {
   it("starts on the coloured board and filters the same cards in list view", async () => {
     setup();
     expect(screen.getByLabelText("Стадии поездок")).toBeInTheDocument();
-    expect(column("manager_approval")).toHaveStyle({ "--approval-stage-color": "#88b9ff" });
+    expect(column("manager_approval")).toHaveStyle({ "--approval-stage-color": "#849fd0" });
     expect(within(column("manager_approval") as HTMLElement).getByLabelText("1 поездок на этапе «Утверждение руководителем»")).toHaveTextContent("1");
     fireEvent.change(screen.getByLabelText("Поиск поездок"), { target: { value: "нет совпадений" } });
     expect(document.querySelectorAll(".trip-board-card")).toHaveLength(0);
@@ -130,5 +130,13 @@ describe("Trip approvals interaction", async () => {
     setup(request, undefined, people[0]!, onOpenChat);
     fireEvent.click(screen.getByRole("button", { name: `Открыть чат поездки ${request.number}` }));
     expect(onOpenChat).toHaveBeenCalledWith("trip-chat");
+  });
+  it("keeps the trip detail and synchronized chat in one modal workspace", () => {
+    setup(request, undefined, people[0]!, undefined, (trip) => <aside aria-label={`Чат поездки ${trip.number}`} />);
+    fireEvent.click(card().querySelector(".approval-card-open")!);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("trip-dialog", "context-record-dialog");
+    expect(within(dialog).getByLabelText(`Чат поездки ${request.number}`)).toBeInTheDocument();
+    expect(dialog.querySelector(".trip-detail > header")).not.toBeNull();
   });
 });

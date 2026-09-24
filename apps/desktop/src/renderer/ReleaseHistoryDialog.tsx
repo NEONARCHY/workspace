@@ -11,6 +11,7 @@ import { useMemo, useState } from "react";
 
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { compareReleaseVersions } from "./release-versions.mts";
 
 export function ReleaseHistoryDialog({ open, onOpenChange }: {
   open: boolean;
@@ -20,7 +21,8 @@ export function ReleaseHistoryDialog({ open, onOpenChange }: {
     version: __YUKSALISH_APP_VERSION__,
     title: __YUKSALISH_RELEASE_NOTES__.title,
     items: __YUKSALISH_RELEASE_NOTES__.items,
-  }, ...__YUKSALISH_RELEASE_HISTORY__.filter((release) => release.version !== __YUKSALISH_APP_VERSION__)], []);
+  }, ...__YUKSALISH_RELEASE_HISTORY__.filter((release) => release.version !== __YUKSALISH_APP_VERSION__)]
+    .sort((left, right) => compareReleaseVersions(right.version, left.version)), []);
   const [selectedVersion, setSelectedVersion] = useState(releases[0]?.version ?? "");
   const selectedRelease = releases.find((release) => release.version === selectedVersion) ?? releases[0];
 

@@ -45,4 +45,25 @@ describe("ProcessWorkflowDesigner", () => {
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ id: "trip-draft", formSchema: { process: "trip" } }));
   });
+
+  it("saves a pastel stage colour and marks colours used by another stage", () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const coloredWorkflow: WorkflowDefinition = {
+      ...workflow,
+      nodes: workflow.nodes.map((node) => node.id === "success"
+        ? { ...node, config: { stageColor: "#73bf9b" } }
+        : node),
+    };
+    render(<ProcessWorkflowDesigner workflow={coloredWorkflow} processName="Маршрут проектов" accent="project" onSave={onSave} onPublish={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "Мятный, уже используется: 1" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Небесный, свободен" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      nodes: expect.arrayContaining([
+        expect.objectContaining({ id: "start", config: expect.objectContaining({ stageColor: "#72b9dc" }) }),
+      ]),
+    }));
+  });
 });

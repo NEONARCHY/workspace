@@ -1627,7 +1627,14 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.queryByLabelText("Живой маршрут заявки")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
 
-    const card = openCard.closest("article");
+    fireEvent.click(screen.getByRole("button", { name: "Список" }));
+    expect(screen.getByLabelText("Список заявок")).toHaveTextContent("Заявка для доски");
+    fireEvent.click(screen.getByRole("button", { name: "Канбан" }));
+    expect(screen.getByLabelText("Доска заявок по стадиям")).toBeInTheDocument();
+
+    const card = screen.getByRole("button", {
+      name: "Открыть заявку №502: Заявка для доски",
+    }).closest("article");
     expect(card).not.toBeNull();
     installSpatialGeometry();
     const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);

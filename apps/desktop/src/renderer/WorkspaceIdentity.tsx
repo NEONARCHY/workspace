@@ -1,5 +1,5 @@
 import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
-import { ChevronDown16Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
+import { ChevronDown16Regular, Person20Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
 import { useRef, useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -11,7 +11,7 @@ export interface ProfilePanelAnchor {
   readonly top: number;
 }
 
-export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { person: WorkspacePerson; token: string; onSettings: (anchor: ProfilePanelAnchor) => void; onLogout: () => void }) {
+export function WorkspaceIdentity({ person, token, onProfile, onSettings, onLogout }: { person: WorkspacePerson; token: string; onProfile?: () => void; onSettings: (anchor: ProfilePanelAnchor) => void; onLogout: () => void }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const close = (afterClose?: () => void) => {
@@ -31,20 +31,26 @@ export function WorkspaceIdentity({ person, token, onSettings, onLogout }: { per
     }
     setOpen(false);
   };
-  return <Popover open={open} onOpenChange={(_event, data) => {
-    setOpen(data.open);
-  }} positioning="below-end" withArrow>
-    <PopoverTrigger disableButtonEnhancement><button ref={triggerRef} className={`workspace-identity${open ? " is-open" : ""}`} type="button" aria-label={`Профиль: ${person.name}`}><ProfileAvatar person={person} token={token} size={32} /><span>{person.name}</span><ChevronDown16Regular /></button></PopoverTrigger>
-    <PopoverSurface className={`identity-popover${open ? "" : " is-closed"}`}>
-      {open ? <>
-      <div className="identity-popover-profile"><span className="identity-popover-avatar"><ProfileAvatar person={person} token={token} size={48} /></span><span><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p></span></div>
-      <div className="identity-popover-actions">
-        <Button appearance="subtle" icon={<Settings20Regular />} onClick={openSettings}>Настройки профиля</Button>
-        <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={() => close(onLogout)}>Выйти</Button>
-      </div>
-      </> : null}
-    </PopoverSurface>
-  </Popover>;
+  return <div className={`workspace-identity${open ? " is-open" : ""}`}>
+    <button className="workspace-identity-profile" type="button" aria-label={`Открыть профиль: ${person.name}`} onClick={onProfile}>
+      <ProfileAvatar person={person} token={token} size={32} /><span>{person.name}</span>
+    </button>
+    <Popover open={open} onOpenChange={(_event, data) => {
+      setOpen(data.open);
+    }} positioning="below-end" withArrow>
+      <PopoverTrigger disableButtonEnhancement><button ref={triggerRef} className="workspace-identity-menu" type="button" aria-label="Меню профиля"><ChevronDown16Regular /></button></PopoverTrigger>
+      <PopoverSurface className={`identity-popover${open ? "" : " is-closed"}`}>
+        {open ? <>
+        <button className="identity-popover-profile" type="button" onClick={() => close(onProfile)}><span className="identity-popover-avatar"><ProfileAvatar person={person} token={token} size={48} /></span><span><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p></span></button>
+        <div className="identity-popover-actions">
+          {onProfile ? <Button appearance="subtle" icon={<Person20Regular />} onClick={() => close(onProfile)}>Открыть рабочий профиль</Button> : null}
+          <Button appearance="subtle" icon={<Settings20Regular />} onClick={openSettings}>Настройки профиля</Button>
+          <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={() => close(onLogout)}>Выйти</Button>
+        </div>
+        </> : null}
+      </PopoverSurface>
+    </Popover>
+  </div>;
 }
 
 export function ConnectionIndicator({ detail, error, updateAvailable = false }: { detail: string; error: boolean; updateAvailable?: boolean }) {

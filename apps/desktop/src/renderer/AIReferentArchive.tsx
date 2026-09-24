@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AIReferentArchiveLetter, AIReferentJournalFile } from "@yuksalish/contracts";
-import { Button, Input, Spinner } from "@fluentui/react-components";
-import { ArrowClockwise20Regular, Chat20Regular, Search20Regular } from "@fluentui/react-icons";
+import { Button, Spinner } from "@fluentui/react-components";
+import { ArrowClockwise20Regular, Chat20Regular } from "@fluentui/react-icons";
 import { AIReferentFiles } from "./AIReferentFiles";
+import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { loadAIReferentArchive, loadAIReferentJournals, loadAIReferentTelegramLink, createAIReferentTelegramLink } from "./workspace-api";
 
 export function AIReferentArchive({ token }: { readonly token: string }) {
@@ -38,7 +39,14 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
         : <span className="ai-referent-muted">Пока нет загруженных журналов</span>}
     </div>
     <div className="ai-referent-toolbar">
-      <Input contentBefore={<Search20Regular />} aria-label="Поиск в архиве Exat" placeholder="Номер, тема или организация" value={query} onChange={(_event, data) => { setQuery(data.value); setPage(0); }} />
+      <AIReferentGooeySearch
+        ariaLabel="Поиск в архиве Exat"
+        collapsedWidth={270}
+        expandedWidth={390}
+        placeholder="Номер, тема или организация"
+        value={query}
+        onValueChange={(value) => { setQuery(value); setPage(0); }}
+      />
       <Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
     </div>
     {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}

@@ -1,10 +1,10 @@
 .members-view { display: flex; flex-direction: column; min-height: 0; }
 .members-toolbar { flex: none; }
-.members-summary { display: flex; gap: 12px; padding: 0 24px 16px; }
+.members-summary { display: flex; gap: 12px; padding: 0 var(--ws-view-edge) 16px; }
 .members-summary > div { display: grid; min-width: 150px; gap: 3px; padding: 13px 15px; border: 1px solid #c7dfe4; border-radius: 14px; background: #f8fcfc; }
 .members-summary strong { color: var(--ws-navy); font-size: 22px; font-variant-numeric: tabular-nums; }
 .members-summary span { color: var(--ws-muted); font-size: 12px; }
-.members-regional-ranking { margin: 0 24px 16px; padding: 18px 20px; border: 1px solid #c7dfe4; border-radius: 16px; background: linear-gradient(135deg, #f8fcfc, #eef8f8); }
+.members-regional-ranking { margin: 0 var(--ws-view-edge) 16px; padding: 18px 20px; border: 1px solid #c7dfe4; border-radius: 16px; background: linear-gradient(135deg, #f8fcfc, #eef8f8); }
 .members-ranking-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .members-ranking-heading h2 { margin: 0; color: var(--ws-navy); font-size: 18px; }
 .members-ranking-heading p, .members-ranking-empty { margin: 5px 0 0; color: var(--ws-muted); font-size: 13px; }
@@ -25,7 +25,7 @@
 .members-record-table th:first-child { width: 26%; }
 .member-row td:first-child { background: #f5fafb; }
 .member-row:hover td:first-child, .member-row:focus-within td:first-child { background: #e5f3f6; }
-.member-inspector { display: grid; align-content: start; gap: 18px; width: min(300px, 30vw); margin: 0 24px 12px 0; padding: 20px; border: 1px solid #c7dfe4; border-radius: 16px; background: white; box-shadow: 0 12px 30px rgb(21 62 82 / 12%); overflow: auto; }
+.member-inspector { display: grid; align-content: start; gap: 18px; width: min(300px, 30vw); margin: 0 var(--ws-view-edge) 12px 0; padding: 20px; border: 1px solid #c7dfe4; border-radius: 16px; background: white; box-shadow: 0 12px 30px rgb(21 62 82 / 12%); overflow: auto; }
 .member-inspector > div { display: flex; align-items: center; gap: 12px; }
 .member-inspector h2 { margin: 0; color: var(--ws-navy); font-size: 18px; }
 .member-inspector p { margin: 4px 0 0; color: var(--ws-muted); font-size: 12px; }

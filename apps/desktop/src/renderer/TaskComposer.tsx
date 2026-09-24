@@ -29,6 +29,7 @@ import { PersonPicker } from "./PersonPicker";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { workspacePlatform } from "./platform-adapter";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -354,7 +355,7 @@ export function TaskComposer({
                     <strong>{title.trim() || "Название новой задачи"}</strong>
                     <p>{description.trim() || "Добавьте ожидаемый результат и важные детали."}</p>
                     <dl className="record-summary-facts">
-                      <div><dt>Ответственный</dt><dd>{assignee?.name ?? "Не выбран"}</dd></div>
+                      <div><dt>Ответственный</dt><dd>{assignee ? <EmployeeProfileLink userId={assignee.id} personName={assignee.name}>{assignee.name}</EmployeeProfileLink> : "Не выбран"}</dd></div>
                       <div><dt>Проект</dt><dd>{project.trim() || "Без проекта"}</dd></div>
                       <div><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
                     </dl>
@@ -454,8 +455,7 @@ export function TaskComposer({
                 {participants.map((participant) => {
                   const person = peopleById.get(participant.userId);
                   return <div className="task-composer-person-chip" key={participant.userId}>
-                    <Avatar name={person?.name ?? "Сотрудник"} size={28} />
-                    <span><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span>
+                    <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><Avatar name={person?.name ?? "Сотрудник"} size={28} /><span><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span></EmployeeProfileLink>
                     <button type="button" aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={() => setParticipants((current) => current.filter((item) => item.userId !== participant.userId))}><Delete20Regular /></button>
                   </div>;
                 })}

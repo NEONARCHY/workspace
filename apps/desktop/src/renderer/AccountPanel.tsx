@@ -17,6 +17,7 @@ import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 import {
   changeOwnPassword,
@@ -242,12 +243,16 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         </nav>}
 
         {initialSection !== "invite" && <><section className="account-profile">
-          <ProfileAvatar person={user} token={token} size={48} />
-          <div>
-            <strong>{user.name}</strong>
-            <span>{user.jobTitle ?? user.role}</span>
-            <small>@{user.username}</small>
-          </div>
+          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+            <ProfileAvatar person={user} token={token} size={48} />
+          </EmployeeProfileLink>
+          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+            <div>
+              <strong>{user.name}</strong>
+              <span>{user.jobTitle ?? user.role}</span>
+              <small>@{user.username}</small>
+            </div>
+          </EmployeeProfileLink>
           <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
             <Camera24Regular />
             <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>

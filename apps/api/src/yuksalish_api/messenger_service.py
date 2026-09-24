@@ -234,9 +234,13 @@ async def chat_summary(
         context_id=str(chat["context_id"]) if chat["context_id"] else None,
         owner_id=next((str(m["user_id"]) for m in members if m["member_role"] == "owner"), None),
         can_delete=(
-            membership["member_role"] == "owner"
-            or chat["created_by_user_id"] == user.id
-            or user.role in {"admin", "superadmin"}
+            chat["context_type"] is None
+            and chat["kind"] in {"direct", "group"}
+            and (
+                membership["member_role"] == "owner"
+                or chat["created_by_user_id"] == user.id
+                or user.role in {"admin", "superadmin"}
+            )
         ),
         members=[
             ChatMemberResponse(
@@ -378,6 +382,8 @@ async def delete_chat(
     chat_id: UUID,
 ) -> None:
     chat, member = await chat_access(connection, user, chat_id, lock=True)
+    if chat["context_type"] is not None or chat["kind"] not in {"direct", "group"}:
+        raise WorkspaceRepositoryError(409, "Служебный чат нельзя удалить")
     is_owner = member["member_role"] == "owner"
     is_creator = chat["created_by_user_id"] == user.id
     is_workspace_admin = user.role in {"admin", "superadmin"}
@@ -581,23 +587,30 @@ async def message_detail_maps(
     reaction_rows = (
         (
             await connection.execute(
-                select(message_reactions).where(message_reactions.c.message_id.in_(message_ids))
+                select(message_reactions)
+                .where(message_reactions.c.message_id.in_(message_ids))
+                .order_by(
+                    message_reactions.c.message_id,
+                    message_reactions.c.created_at,
+                    message_reactions.c.user_id,
+                )
             )
         )
         .mappings()
         .all()
     )
-    grouped: dict[UUID, dict[str, set[UUID]]] = {}
+    grouped: dict[UUID, dict[str, list[UUID]]] = {}
     for reaction in reaction_rows:
         grouped.setdefault(reaction["message_id"], {}).setdefault(
-            reaction["emoji"], set()
-        ).add(reaction["user_id"])
+            reaction["emoji"], []
+        ).append(reaction["user_id"])
     reactions = {
         message_id: [
             MessageReactionResponse(
                 emoji=emoji,
                 count=len(users_for_emoji),
                 reacted_by_current_user=user.id in users_for_emoji,
+                reactor_user_ids=[str(user_id) for user_id in users_for_emoji],
             )
             for emoji in REACTION_EMOJIS
             if (users_for_emoji := values.get(emoji))

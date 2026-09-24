@@ -18,6 +18,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import {
   cancelZoomMeeting,
   createZoomMeeting,
@@ -444,7 +445,10 @@ export function ZoomView({
                     </span>
                     <span className="zoom-row-body">
                       <strong>{meeting.topic}</strong>
-                      <small>{meeting.organizerName} · {meeting.durationMinutes} мин</small>
+                      <small><EmployeeProfileLink
+                        userId={meeting.organizerUserId ?? undefined}
+                        personName={meeting.organizerName}
+                      >{meeting.organizerName}</EmployeeProfileLink> · {meeting.durationMinutes} мин</small>
                     </span>
                     <span className={`zoom-status ${meeting.status}`}>{statusLabels[meeting.status]}</span>
                   </button>
@@ -537,7 +541,9 @@ export function ZoomView({
                     .map((person) => (
                       <Checkbox
                         key={person.id}
-                        label={person.name}
+                        label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                          {person.name}
+                        </EmployeeProfileLink>}
                         checked={draft.participantIds.includes(person.id)}
                         onChange={(_event, data) => setDraft({
                           ...draft,
@@ -575,17 +581,17 @@ export function ZoomView({
                 {dayText(selected.startsAt, timeZone)}, {timeText(selected.startsAt, timeZone)}–
                 {timeText(selected.endsAt, timeZone)}
               </p>
-              <div className="zoom-organizer">
+              <EmployeeProfileLink userId={selected.organizerUserId ?? undefined} personName={selected.organizerName} className="zoom-organizer">
                 <Avatar name={selected.organizerName} size={32} color="colorful" aria-hidden="true" />
                 <span>
                   <strong>{selected.organizerName}</strong>
                   <small>Организатор</small>
                 </span>
-              </div>
+              </EmployeeProfileLink>
               {selected.description ? <p className="zoom-detail-text">{selected.description}</p> : null}
               {selected.participantIds.length ? (
                 <p className="zoom-detail-text">
-                  Приглашены: {selected.participantIds.map(personName).join(", ")}
+                  Приглашены: {selected.participantIds.map((id, index) => <span key={id}>{index ? ", " : ""}<EmployeeProfileLink userId={id} personName={personName(id)}>{personName(id)}</EmployeeProfileLink></span>)}
                 </p>
               ) : null}
               {selected.joinUrl ? (

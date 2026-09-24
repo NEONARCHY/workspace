@@ -5,11 +5,11 @@ import { tripColumns, tripColumnTotal, tripDropAction } from "./trip-board";
 describe("Trip board", () => {
   it("uses the five exact Bitrix stages and colours in order", () => {
     expect(tripColumns).toEqual([
-      { key: "launch", label: "Запуск", color: "#22b9ff" },
-      { key: "manager_approval", label: "Утверждение руководителем", color: "#88b9ff" },
-      { key: "hr", label: "Кадровая служба", color: "#10e5fc" },
-      { key: "approved", label: "Утверждено", color: "#00ff00" },
-      { key: "rejected", label: "Отклонено", color: "#ff0000" },
+      { key: "launch", label: "Запуск", color: "#72b9dc" },
+      { key: "manager_approval", label: "Утверждение руководителем", color: "#849fd0" },
+      { key: "hr", label: "Кадровая служба", color: "#50bec8" },
+      { key: "approved", label: "Утверждено", color: "#62bd72" },
+      { key: "rejected", label: "Отклонено", color: "#d97878" },
     ]);
   });
   it("proposes only adjacent forward actions, return and rejection; never revives a final stage", () => {

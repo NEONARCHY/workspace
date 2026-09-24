@@ -4,6 +4,7 @@ import type { AdministrativeChat, AdministrativeChatInspection } from "@yuksalis
 import { Button, Field, Input, Spinner, Textarea } from "@fluentui/react-components";
 import { Dismiss20Regular, LockClosed20Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 import {
   createAdministrativeChatInspection,
@@ -175,7 +176,7 @@ export function AdministrativeChatInspectionView({ token, onClose }: {
           <p className="admin-inspection-reason"><strong>Основание:</strong> {inspection.reason}</p>
           <div className="admin-inspection-messages" role="log" aria-label={`Сообщения: ${inspection.chat.title}`}>
             {inspection.messages.map((message) => <article key={message.id} className={message.deletedAt ? "deleted" : ""}>
-              <header><strong>{message.authorName}</strong><time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time></header>
+              <header><EmployeeProfileLink userId={message.authorUserId} personName={message.authorName}><strong>{message.authorName}</strong></EmployeeProfileLink><time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time></header>
               <p>{message.body}</p>
               {message.editedAt && !message.deletedAt ? <small>изменено</small> : null}
             </article>)}
@@ -186,7 +187,7 @@ export function AdministrativeChatInspectionView({ token, onClose }: {
           <div className="admin-chat-summary">
             <span>{kindLabels[selectedChat.kind] ?? selectedChat.kind}</span>
             <h3>{selectedChat.title}</h3>
-            <p>{selectedChat.members.map((member) => member.name).join(", ")}</p>
+            <p>{selectedChat.members.map((member, index) => <span key={member.userId}>{index ? ", " : ""}<EmployeeProfileLink userId={member.userId} personName={member.name}>{member.name}</EmployeeProfileLink></span>)}</p>
             <small>{selectedChat.messageCount} сообщений · обновлён {formatDateTime(selectedChat.updatedAt)}</small>
           </div>
           <Field label="Основание просмотра" required hint="Минимум 12 символов. Основание сохранится в журнале аудита.">

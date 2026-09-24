@@ -3,8 +3,9 @@ import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalish/contracts";
 import { EmployeesView } from "./EmployeesView";
+import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { workspaceTheme } from "./workspace-theme";
-import { loadDirectory, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition } from "./workspace-api";
+import { loadDirectory, loadRecognitionSettings, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadDirectory: vi.fn(),
@@ -16,6 +17,8 @@ vi.mock("./workspace-api", () => ({
   updateDepartment: vi.fn(),
   setModuleAccessRule: vi.fn(),
   deleteModuleAccessRule: vi.fn(),
+  loadRecognitionSettings: vi.fn().mockResolvedValue({ activeTaskCountVisible: true }),
+  updateRecognitionSettings: vi.fn(),
 }));
 const user: WorkspacePerson = { id: "me", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "brand" };
 const data: DirectoryBootstrap = {
@@ -33,8 +36,12 @@ const data: DirectoryBootstrap = {
   accessRules: [],
 };
 const createdChat: ChatSummary = { id: "chat-one", title: "Азиза Каримова", kind: "direct", preview: "", time: "", unread: 0, description: "", members: [], permissions: { sendMessages: true, uploadFiles: true, inviteMembers: false, manageMembers: false, editInfo: false } };
-const mount = (currentUser = user, props: Partial<React.ComponentProps<typeof EmployeesView>> = {}) => render(<FluentProvider theme={workspaceTheme}><EmployeesView token="test-token" currentUser={currentUser} onInvite={vi.fn()} {...props} /></FluentProvider>);
-beforeEach(() => { vi.resetAllMocks(); vi.mocked(loadDirectory).mockResolvedValue(data); });
+const mount = (currentUser = user, props: Partial<React.ComponentProps<typeof EmployeesView>> = {}) => render(<FluentProvider theme={workspaceTheme}><EmployeeProfileProvider onOpenProfile={vi.fn()}><EmployeesView token="test-token" currentUser={currentUser} onInvite={vi.fn()} {...props} /></EmployeeProfileProvider></FluentProvider>);
+beforeEach(() => {
+  vi.resetAllMocks();
+  vi.mocked(loadDirectory).mockResolvedValue(data);
+  vi.mocked(loadRecognitionSettings).mockResolvedValue({ activeTaskCountVisible: true });
+});
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
@@ -44,23 +51,23 @@ describe("Employee list and retained access controls", () => {
       target: { value: "manager" },
     });
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
     });
     fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), {
       target: { value: "invited" },
     });
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
     });
     expect(screen.getByText("Бахтиёр Самугов")).toBeInTheDocument();
     expect(updateEmployeeAccess).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сбросить фильтры" }));
-    expect(screen.getAllByRole("button", { name: /^Открыть сотрудника:/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(2);
   });
   it("does not expose invitations or editable permissions to a regular employee", async () => {
     mount({ ...user, role: "employee" }); await screen.findByRole("table");
     expect(screen.queryByRole("button", { name: "Пригласить сотрудника" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Азиза Каримова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
     expect(screen.getByLabelText("Должность")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Сохранить сотрудника" })).not.toBeInTheDocument();
@@ -71,7 +78,7 @@ describe("Employee list and retained access controls", () => {
   it("keeps the selected access draft visible after a server error", async () => {
     vi.mocked(updateEmployeeAccess).mockRejectedValueOnce(new Error("Нет связи"));
     mount(); await screen.findByRole("table");
-    const opener = screen.getByRole("button", { name: "Открыть сотрудника: Азиза Каримова" });
+    const opener = screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" });
     opener.focus(); fireEvent.click(opener);
     fireEvent.change(screen.getByLabelText("Роль доступа"), { target: { value: "manager" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить сотрудника" }));
@@ -83,7 +90,7 @@ describe("Employee list and retained access controls", () => {
   it("requires an audited reason before blocking an employee", async () => {
     vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "blocked" });
     mount(); await screen.findByRole("table");
-    fireEvent.click(screen.getByRole("button", { name: "Открыть сотрудника: Азиза Каримова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     fireEvent.click(screen.getByRole("button", { name: "Заблокировать" }));
     const confirm = screen.getByRole("button", { name: "Подтвердить" });
     expect(confirm).toBeDisabled();

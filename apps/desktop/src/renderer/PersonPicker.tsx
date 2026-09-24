@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Avatar, Input, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { Checkmark20Regular, ChevronDown16Regular, Person20Regular, Search20Regular } from "@fluentui/react-icons";
 import type { WorkspacePerson } from "@yuksalish/contracts";
+import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 /** Contextual owner selection; the supplied directory is the permission boundary. */
 export function PersonPicker({ people, value, onChange, label, disabled = false }: {
@@ -15,15 +16,18 @@ export function PersonPicker({ people, value, onChange, label, disabled = false 
   return <Popover open={open} onOpenChange={(_, data) => { setOpen(data.open); if (data.open) setQuery(""); }} positioning="below-start" trapFocus>
     <PopoverTrigger disableButtonEnhancement>
       <button type="button" className="person-picker-trigger" aria-label={label} disabled={disabled}>
-        {selected ? <Avatar name={selected.name} size={28} color="colorful" /> : <Person20Regular />}
-        <span>{selected?.name ?? "Выберите сотрудника"}</span><ChevronDown16Regular />
+        {selected ? <EmployeeProfileLink userId={selected.id} personName={selected.name}>
+          <Avatar name={selected.name} size={28} color="colorful" />
+          <span>{selected.name}</span>
+        </EmployeeProfileLink> : <><Person20Regular /><span>Выберите сотрудника</span></>}
+        <ChevronDown16Regular />
       </button>
     </PopoverTrigger>
     <PopoverSurface className="person-picker-surface" aria-label={label}>
       <Input aria-label={`Поиск: ${label}`} placeholder="Имя или должность" contentBefore={<Search20Regular />} value={query} onChange={(_, data) => setQuery(data.value)} />
       <div className="person-picker-list" aria-label="Доступные сотрудники">
         {visible.map(person => <button type="button" key={person.id} aria-pressed={person.id === value} onClick={() => { onChange(person.id); setOpen(false); }}>
-          <Avatar name={person.name} size={36} color="colorful" /><span><strong>{person.name}</strong><small>{person.jobTitle ?? "Сотрудник"}</small></span>{person.id === value ? <Checkmark20Regular /> : null}
+          <EmployeeProfileLink userId={person.id} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /><span><strong>{person.name}</strong><small>{person.jobTitle ?? "Сотрудник"}</small></span></EmployeeProfileLink>{person.id === value ? <Checkmark20Regular /> : null}
         </button>)}
         {!visible.length && <p role="status">Сотрудники не найдены</p>}
       </div>
