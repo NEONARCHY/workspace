@@ -23,6 +23,7 @@ from yuksalish_api.tables import (
     ai_referent_letters,
     ai_referent_telegram_links,
     ai_referent_telegram_outbox,
+    telegram_bot_grants,
     workspace_notifications,
 )
 
@@ -44,6 +45,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
     engine = create_async_engine(url)
     async with engine.begin() as connection:
         await connection.execute(delete(ai_referent_delivery_commands))
+        await connection.execute(delete(telegram_bot_grants))
         await connection.execute(delete(ai_referent_telegram_links))
         await connection.execute(delete(ai_referent_telegram_outbox))
         await connection.execute(update(ai_referent_configuration).values(execution_agent_id=None))
@@ -75,6 +77,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             return response.json() if response.content and expected != 204 else None
 
         admin, author = auth("malika"), auth("dilshod")
+        forbidden_registry = await client.get("/api/v1/telegram-access", headers=author)
+        assert forbidden_registry.status_code == 403
         await call("GET", "/recipients", agent, expected=401)
         await call("PUT", "/agent/recipients", author, expected=401, json={
             "agentId": "referent-test", "entries": [],
@@ -104,8 +108,34 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             admin,
             json={"expectedRevision": config["revision"], "reviewers": bindings},
         )
+        await call("POST", "/telegram-link", author, expected=409)
+        async def grant(name, identity):
+            registry = (await client.get("/api/v1/telegram-access", headers=admin)).json()
+            person = next(
+                item for item in registry["people"] if item["userId"] == str(users[name]["id"])
+            )
+            response = await client.put(
+                f"/api/v1/telegram-access/{person['userId']}", headers=admin,
+                json={"telegramId": identity, "botKeys": ["ai_referent"],
+                      "expectedRevision": person["revision"]},
+            )
+            assert response.status_code == 200, response.text
+
+        for name, identity in (("dilshod", "910003"), ("malika", "910004"),
+                               ("aziza", "910001"), ("baxtiyor", "910002")):
+            await grant(name, identity)
+        stale = await client.put(
+            f"/api/v1/telegram-access/{users['dilshod']['id']}", headers=admin,
+            json={"telegramId": "910003", "botKeys": ["ai_referent"],
+                  "expectedRevision": 0},
+        )
+        assert stale.status_code == 409
+        await call("GET", "/agent/letters", telegram("910003"), expected=403)
         for headers, identity in [(author, "910003"), (admin, "910004")]:
             code = await call("POST", "/telegram-link", headers)
+            if headers == author:
+                await call("POST", "/agent/telegram-link", expected=409,
+                           json={"telegramId": "910099", "code": code["code"]})
             await call(
                 "POST",
                 "/agent/telegram-link",
@@ -119,6 +149,18 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
                 json={"telegramId": identity, "code": code["code"]},
             )
             assert (await call("GET", "/telegram-link", headers))["telegramId"] == identity
+        for name, identity in (("aziza", "910001"), ("baxtiyor", "910002")):
+            if name == "aziza":
+                issued = await client.post(
+                    f"/api/v1/telegram-access/{users[name]['id']}/verification-code",
+                    headers=admin,
+                )
+                assert issued.status_code == 200, issued.text
+                code = issued.json()
+            else:
+                code = await call("POST", "/telegram-link", auth(name))
+            await call("POST", "/agent/telegram-link", expected=204,
+                       json={"telegramId": identity, "code": code["code"]})
         await call("GET", "/agent/letters", telegram("910099"), expected=403)
         await call("GET", "/agent/letters", {"X-AI-Referent-Telegram-Id": "910003"}, expected=401)
         visible_config = await call("GET", "/agent/reviewers", telegram("910003"))
@@ -312,9 +354,22 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         archived = await call("GET", "/archive?query=Archived", author)
         assert any(item["id"] == archive_id for item in archived["letters"])
         assert (await call("GET", f"/packets/archive/{archive_id}", author))["files"]
+        registry = (await client.get("/api/v1/telegram-access", headers=admin)).json()
+        author_access = next(
+            item for item in registry["people"] if item["userId"] == str(users["dilshod"]["id"])
+        )
+        revoked = await client.put(
+            f"/api/v1/telegram-access/{author_access['userId']}", headers=admin,
+            json={"telegramId": "910003", "botKeys": [],
+                  "expectedRevision": author_access["revision"]},
+        )
+        assert revoked.status_code == 200, revoked.text
+        assert (await call("GET", "/telegram-link", author))["telegramId"] == "910003"
+        await call("GET", "/agent/letters", telegram("910003"), 403)
         await call("DELETE", "/telegram-link", author, 204)
         await call("GET", "/agent/letters", telegram("910003"), 403)
     async with engine.begin() as connection:
+        await connection.execute(delete(telegram_bot_grants))
         await connection.execute(delete(ai_referent_telegram_links))
         await connection.execute(
             delete(ai_referent_letters).where(ai_referent_letters.c.id == UUID(letter["id"]))
@@ -334,6 +389,7 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
     engine = create_async_engine(url)
     async with engine.begin() as connection:
         await connection.execute(delete(ai_referent_delivery_commands))
+        await connection.execute(delete(telegram_bot_grants))
         await connection.execute(delete(ai_referent_telegram_links))
         await connection.execute(delete(ai_referent_telegram_outbox))
         await connection.execute(update(ai_referent_configuration).values(execution_agent_id=None))
@@ -388,6 +444,20 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
             )
 
         await configure()
+        async def grant(name, identity):
+            registry = (await client.get("/api/v1/telegram-access", headers=admin)).json()
+            person = next(
+                item for item in registry["people"] if item["userId"] == str(accounts[name]["id"])
+            )
+            response = await client.put(
+                f"/api/v1/telegram-access/{person['userId']}", headers=admin,
+                json={"telegramId": identity, "botKeys": ["ai_referent"],
+                      "expectedRevision": person["revision"]},
+            )
+            assert response.status_code == 200, response.text
+
+        await grant("dilshod", "920003")
+        await grant("aziza", "920001")
         code = await call("POST", "/telegram-link", author)
         await call(
             "POST",
@@ -475,6 +545,10 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         bindings[0] = {**bindings[0], "telegramId": "920011"}
         await configure()
         await call("GET", "/agent/letters", tg("920001"), 403)
+        await grant("aziza", "920011")
+        code = await call("POST", "/telegram-link", auth("aziza"))
+        await call("POST", "/agent/telegram-link", expected=204,
+                   json={"telegramId": "920011", "code": code["code"]})
         await call("GET", "/agent/letters", tg("920011"))
         await action("approve", auth("aziza"))
         await action("approve", auth("baxtiyor"), 409)  # Archive not reconciled yet.

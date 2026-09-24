@@ -1,7 +1,7 @@
 """A versioned configuration shared by Workspace, robot GUI and running bot."""
 
 from datetime import UTC, datetime
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import HTTPException
 from sqlalchemy import insert, or_, select, update
@@ -26,6 +26,7 @@ from .tables import (
     ai_referent_reviewers,
     ai_referent_telegram_links,
     audit_events,
+    telegram_identities,
     users,
 )
 
@@ -41,6 +42,38 @@ _REASSIGNABLE_STATUSES = (
     "referent_review_pending",
 )
 _CONFIGURATION_AUDIT_ID = uuid5(NAMESPACE_URL, "urn:workspace:ai-referent:configuration:1")
+
+
+async def _stage_reviewer_telegram_id(
+    connection: AsyncConnection, user_id: UUID, telegram_id: str, now: datetime
+) -> None:
+    """Keep legacy reviewer settings and the central identity registry in sync."""
+    identity = (
+        (await connection.execute(select(telegram_identities).where(
+            telegram_identities.c.user_id == user_id
+        ).with_for_update())).mappings().one_or_none()
+    )
+    if identity and (
+        (identity["telegram_id"] == telegram_id and identity["verified_at"])
+        or identity["pending_telegram_id"] == telegram_id
+    ):
+        return
+    values = {
+        "telegram_id": None,
+        "pending_telegram_id": telegram_id,
+        "verified_at": None,
+        "verification_source": None,
+        "code_hash": None,
+        "code_expires_at": None,
+        "updated_at": now,
+        "revision": (identity["revision"] + 1) if identity else 1,
+    }
+    if identity:
+        await connection.execute(update(telegram_identities).where(
+            telegram_identities.c.user_id == user_id
+        ).values(**values))
+    else:
+        await connection.execute(insert(telegram_identities).values(user_id=user_id, **values))
 
 
 def require_configuration_admin(user: AuthenticatedUser) -> None:
@@ -178,7 +211,10 @@ async def save_configuration(
         if item.telegram_id:
             linked = await connection.scalar(
                 select(ai_referent_telegram_links.c.user_id).where(
-                    ai_referent_telegram_links.c.telegram_id == item.telegram_id,
+                    or_(
+                        ai_referent_telegram_links.c.telegram_id == item.telegram_id,
+                        ai_referent_telegram_links.c.pending_telegram_id == item.telegram_id,
+                    ),
                     ai_referent_telegram_links.c.user_id != account["id"],
                 )
             )
@@ -193,6 +229,8 @@ async def save_configuration(
     for item in payload.reviewers:
         account = accounts.get(item.key)
         new_user_id = account["id"] if account else None
+        if new_user_id is not None and item.telegram_id:
+            await _stage_reviewer_telegram_id(connection, new_user_id, item.telegram_id, now)
         await connection.execute(
             update(ai_referent_reviewers)
             .where(ai_referent_reviewers.c.key == item.key)

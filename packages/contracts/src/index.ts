@@ -4,6 +4,7 @@ export const moduleKeys = [
   "team_overview",
   "payment_requests",
   "ai_referent",
+  "telegram_access",
   "feed",
   "projects",
   "trip_approvals",
@@ -948,6 +949,37 @@ export interface AIReferentConfigurationUpdate {
     readonly telegramId: string | null;
     readonly enabled: boolean;
   }[];
+}
+
+export type TelegramBotKey = "ai_referent" | "hisobot" | "takliflar" | "hudud_rating" | "ai_news_reader";
+
+export interface TelegramBotDescriptor {
+  readonly key: TelegramBotKey;
+  readonly label: string;
+  readonly connected: boolean;
+}
+
+export interface TelegramAccessPerson {
+  readonly userId: string;
+  readonly username: string;
+  readonly fullName: string;
+  readonly jobTitle: string | null;
+  readonly telegramId: string | null;
+  readonly verified: boolean;
+  readonly verificationSource: string | null;
+  readonly botKeys: readonly TelegramBotKey[];
+  readonly revision: number;
+}
+
+export interface TelegramAccessRegistry {
+  readonly bots: readonly TelegramBotDescriptor[];
+  readonly people: readonly TelegramAccessPerson[];
+}
+
+export interface TelegramAccessUpdate {
+  readonly telegramId: string | null;
+  readonly botKeys: readonly TelegramBotKey[];
+  readonly expectedRevision: number;
 }
 
 export interface AIReferentIncomingRegistry {

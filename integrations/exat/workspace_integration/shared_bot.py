@@ -276,7 +276,8 @@ class SharedBot:
                 )
                 self.say(
                     actor,
-                    "Telegram привязан к вашему аккаунту Workspace. "
+                    "Telegram ID подтверждён. Доступ к письмам включается "
+                    "администратором отдельно. Если доступ уже выдан: "
                     "/new — письмо, /history — общая очередь.",
                 )
                 return
@@ -286,7 +287,8 @@ class SharedBot:
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
                     "/history — письма и согласования\n/archive — архив Exat\n"
                     "/cancel — отменить ввод\nДля привязки получите код в "
-                    "Workspace → AI Referent → Мой Telegram и отправьте /link КОД.",
+                    "Workspace → AI Referent → Мой Telegram или получите код "
+                    "от администратора и отправьте /link КОД.",
                 )
                 return
             # Any further data request is authenticated and authorized by the server.

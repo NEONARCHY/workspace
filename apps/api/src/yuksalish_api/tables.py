@@ -1007,12 +1007,27 @@ ai_referent_reviewers = sa.Table(
     sa.Column("enabled", sa.Boolean()),
 )
 
-ai_referent_telegram_links = sa.Table(
-    "ai_referent_telegram_links", metadata,
+telegram_identities = sa.Table(
+    "core_telegram_identities", metadata,
     sa.Column("user_id", uuid_type, primary_key=True),
     sa.Column("telegram_id", sa.String(20)),
+    sa.Column("pending_telegram_id", sa.String(20)),
+    sa.Column("verified_at", sa.DateTime(timezone=True)),
+    sa.Column("verification_source", sa.String(24)),
+    sa.Column("revision", sa.Integer()),
     sa.Column("code_hash", sa.String(64)),
     sa.Column("code_expires_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+# Older AI Referent code uses this symbol; the physical table is now shared.
+ai_referent_telegram_links = telegram_identities
+
+telegram_bot_grants = sa.Table(
+    "core_telegram_bot_grants", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("bot_key", sa.String(40), primary_key=True),
+    sa.Column("updated_by_user_id", uuid_type),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 

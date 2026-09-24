@@ -101,6 +101,7 @@ import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { MembersView } from "./MembersView";
 import { HrView } from "./HrView";
 import { AIReferentView } from "./AIReferentView";
+import { TelegramAccessView } from "./TelegramAccessView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
@@ -299,6 +300,7 @@ const navItems: readonly NavItem[] = [
     icon: <DocumentBulletList24Regular />,
   },
   { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
+  { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
   {
@@ -1628,7 +1630,9 @@ export function App() {
   }
 
   const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));
-  const canView = (key: NavigationKey) => key === "notifications" || key === "settings" || modulePermissions[key]?.view !== false;
+  const isAdmin = session.user.role === "admin" || session.user.role === "superadmin";
+  const canView = (key: NavigationKey) => key === "notifications" || key === "settings"
+    || (key !== "telegram_access" || isAdmin) && modulePermissions[key]?.view !== false;
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
@@ -1638,7 +1642,8 @@ export function App() {
   const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
     .filter(canView)
     .map((key) => navItems.find((item) => item.key === key)!);
-  const activeSectionDenied = activeSection !== "notifications" && modulePermissions[activeSection]?.view === false;
+  const activeSectionDenied = activeSection !== "notifications" &&
+    (modulePermissions[activeSection]?.view === false || (activeSection === "telegram_access" && !isAdmin));
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
   const displayedSection = activeSectionDenied && fallbackSection !== "settings" ? fallbackSection : activeSection;
   const renderEmbeddedChat = (
@@ -1929,6 +1934,9 @@ export function App() {
                 focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
               />
+            ) : null}
+            {displayedSection === "telegram_access" && isAdmin ? (
+              <TelegramAccessView token={session.accessToken} />
             ) : null}
             {displayedSection === "feed" ? (
               <FeedView

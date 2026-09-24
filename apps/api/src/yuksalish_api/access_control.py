@@ -131,6 +131,8 @@ async def module_permissions_for_user(
             rule = by_subject.get((subject_type, subject_key, module_key))
             if isinstance(rule, Mapping):
                 result[module_key] = normalize_permissions(rule)
+    if user.role not in {"admin", "superadmin"}:
+        result["telegram_access"] = {action: False for action in MODULE_ACTIONS}
     return result
 
 
@@ -149,6 +151,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/administration/chat-inspections"
     ):
         return "messenger", "admin"
+    if normalized.startswith("/telegram-access"):
+        return "telegram_access", "admin"
     prefixes = (
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),

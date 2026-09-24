@@ -70,7 +70,7 @@ export function AIReferentSettings({ token, people }: Props) {
     setError("");
     try {
       accept(await saveAIReferentConfiguration(token, draft), true);
-      setNotice("Сохранено. Робот применит настройки при следующем подключении.");
+      setNotice("Сохранено. Робот применит настройки при следующем подключении. Новый Telegram ID нужно подтвердить через «Доступ к Telegram-ботам».");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось сохранить настройки.");
     } finally { busyRef.current = false; setSaving(false); }
@@ -108,7 +108,7 @@ export function AIReferentSettings({ token, people }: Props) {
             <label>Telegram ID<Input aria-label={`Telegram ID ${saved?.label}`} inputMode="numeric"
               value={item.telegramId ?? ""} onChange={(_event, data) => change(index, { telegramId: data.value.trim() || null })} />
             </label>
-            <small>Числовой ID личного аккаунта. Без ID согласование доступно только в Workspace.</small>
+            <small>Новый ID подтверждается в «Доступе к Telegram-ботам». Там же выдаётся отдельный доступ к боту; право согласования остаётся здесь.</small>
             <Checkbox checked={item.enabled} label="Разрешить согласование"
               onChange={(_event, data) => change(index, { enabled: data.checked === true })} />
             {saved?.enabled && !saved.canApprove ? <small>

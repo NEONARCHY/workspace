@@ -82,13 +82,16 @@ cancel запрещён в queued/sending/delivery_unknown и завершённ
   `agent_id + external_id`;
 - `ai_referent_agents` — heartbeat агента и метаданные последнего Excel-журнала;
 - объект `ai-referent/journals/<agent>/...xlsx` в MinIO — скачиваемый снимок журнала.
-- `ai_referent_telegram_links` — личная привязка и хеш одноразового кода;
+- `core_telegram_identities` — общий подтверждённый или ожидающий подтверждения
+  Telegram ID сотрудника и хеш одноразового кода;
+- `core_telegram_bot_grants` — отдельные разрешения по ботам; AI Referent проверяет
+  свой grant перед любым действием через Telegram;
 - `ai_referent_operations` — принятые операции с их автором и отпечатком данных;
 - `ai_referent_telegram_outbox` — уведомления с арендой и подтверждением доставки;
 - `ai_referent_archive`, `ai_referent_files` — старый реестр и неизменяемые версии файлов.
 
 Миграции: `0044_ai_referent`, `0045_ai_referent_incoming`, `0046_ai_referent_reviewers`,
-`0048_ai_referent_shared` (после календарной 47).
+`0048_ai_referent_shared` (после календарной 47), `0052_telegram_bot_access`.
 После развёртывания API
 необходимо выполнить обычный
 `alembic upgrade head` до запуска новой версии desktop.
@@ -102,6 +105,11 @@ cancel запрещён в queued/sending/delivery_unknown и завершённ
 
 Четыре стабильные роли `askar`, `bobur`, `umid`, `davronbek` связываются с UUID
 аккаунта Workspace и числовым Telegram ID. Должность не используется для назначения.
+ID и право работать с ботом управляются отдельно от права согласовывать письма:
+администратор выдаёт доступ в разделе «Доступ к Telegram-ботам», а новый ID
+подтверждается одноразовой командой `/link` в боте. Изменение ID в настройках
+согласующих или GUI Exat ставит его на подтверждение и сразу отключает старый ID.
+Ранее действовавшие привязки миграция сохраняет, не прерывая рабочий бот.
 `ai_referent_configuration` хранит revision, `ai_referent_reviewers` — привязки;
 `ai_referent_letters.reviewer_key` удерживает роль при замене человека. Открытые
 письма переназначаются в той же транзакции; история завершённых решений не меняется.
