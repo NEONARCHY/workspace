@@ -77,6 +77,7 @@ const statusLabels: Readonly<Record<AIReferentLetter["status"], string>> = {
   awaiting_final_send: "Подписанный PDF · финальное решение",
   referent_review_pending: "Ожидает отправки референтом",
   delivery_unknown: "Нужно проверить доставку",
+  signed: "Подписано · без отправки",
 };
 
 const actionLabels: Readonly<Record<AIReferentAction, string>> = {
@@ -93,6 +94,7 @@ const actionLabels: Readonly<Record<AIReferentAction, string>> = {
 };
 
 interface LetterForm {
+  workflowKind: "delivery" | "sign_only";
   subject: string;
   recipientOrganization: string;
   recipientAddress: string;
@@ -104,7 +106,8 @@ interface LetterForm {
   additionalFiles?: readonly File[];
 }
 
-const emptyForm = (): LetterForm => ({
+const emptyForm = (workflowKind: LetterForm["workflowKind"] = "delivery"): LetterForm => ({
+  workflowKind,
   subject: "",
   recipientOrganization: "",
   recipientAddress: "",
@@ -116,6 +119,7 @@ const emptyForm = (): LetterForm => ({
 
 function letterForm(letter: AIReferentLetter): LetterForm {
   return {
+    workflowKind: letter.workflowKind,
     subject: letter.subject,
     recipientOrganization: letter.recipientOrganization,
     recipientAddress: letter.recipientAddress,
@@ -128,13 +132,14 @@ function letterForm(letter: AIReferentLetter): LetterForm {
 
 function formPayload(form: LetterForm): AIReferentLetterInput {
   return {
+    workflowKind: form.workflowKind,
     subject: form.subject.trim(),
-    recipientOrganization: form.recipientOrganization.trim(),
-    recipientAddress: form.recipientAddress.trim(),
-    route: form.route,
+    recipientOrganization: form.workflowKind === "sign_only" ? "Подписание без отправки" : form.recipientOrganization.trim(),
+    recipientAddress: form.workflowKind === "sign_only" ? "" : form.recipientAddress.trim(),
+    route: form.workflowKind === "sign_only" ? "exat" : form.route,
     note: form.note.trim(),
     reviewerUserId: form.reviewerUserId || null,
-    finalReviewerUserId: form.finalReviewerUserId || null,
+    finalReviewerUserId: form.workflowKind === "sign_only" ? null : form.finalReviewerUserId || null,
   };
 }
 
@@ -149,7 +154,7 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusRevision }: AIReferentViewProps) {
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "settings" | "archive" | "telegram">("incoming");
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "archive" | "telegram">("incoming");
   const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
@@ -184,7 +189,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     if (!quiet) { setLoading(true); setRegistryError(""); }
     try {
       const [next, nextReviewers] = await Promise.all([
-        loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50 }), loadAIReferentReviewers(token),
+        loadAIReferentRegistry(token, { query, status: filter === "all" ? undefined : filter, offset: page * 50, workflowKind: registerKind === "sign_only" ? "sign_only" : "delivery" }), loadAIReferentReviewers(token),
       ]);
       if (sequence === requestSequence.current) { setReviewerConfig(nextReviewers); setRegistry(next); setRegistryError(""); }
     } catch (reason) {
@@ -192,10 +197,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [token, query, filter, page]);
+  }, [token, query, filter, page, registerKind]);
 
   useEffect(() => {
-    if (registerKind !== "outgoing") return;
+    if (registerKind !== "outgoing" && registerKind !== "sign_only") return;
     const debounce = setTimeout(() => { void refresh(); }, 250);
     const timer = setInterval(() => { if (!busyRef.current) void refresh(true); }, 15000);
     return () => { clearTimeout(debounce); clearInterval(timer); requestSequence.current += 1; };
@@ -211,7 +216,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     let alive = true;
     const reload = () => {
       if (busyRef.current) return;
-      void loadAIReferentLetter(token, selectedId).then((letter) => { if (alive) setDetail(letter); })
+      void loadAIReferentLetter(token, selectedId).then((letter) => {
+        if (alive) {
+          setDetail(letter);
+          if (letter.workflowKind === "sign_only") setRegisterKind("sign_only");
+        }
+      })
         .catch((reason: unknown) => { if (alive) setError(reason instanceof Error ? reason.message : "Письмо недоступно."); });
     };
     reload();
@@ -227,11 +237,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     } : current);
   };
 
-  const openCreate = () => {
+  const openCreate = (workflowKind: LetterForm["workflowKind"] = "delivery") => {
     savedMetadata.current = undefined;
     saveOperation.current = crypto.randomUUID();
     setEditingId("");
-    setForm(emptyForm());
+    setForm(emptyForm(workflowKind));
     setError("");
     setFormOpen(true);
   };
@@ -249,8 +259,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
 
   const save = async () => {
     if (busyRef.current) return;
-    if (!form.subject.trim() || !form.recipientOrganization.trim()) {
-      setError("Укажите тему и организацию-получателя.");
+    if (!form.subject.trim() || (form.workflowKind === "delivery" && !form.recipientOrganization.trim())) {
+      setError(form.workflowKind === "sign_only" ? "Укажите тему пакета." : "Укажите тему и организацию-получателя.");
+      return;
+    }
+    if (form.workflowKind === "sign_only" && !form.reviewerUserId) {
+      setError("Выберите согласующего для подписи.");
       return;
     }
     busyRef.current = true;
@@ -273,7 +287,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           ...current,
           totalCount: current.totalCount + 1,
           letters: [saved, ...current.letters],
-        } : { letters: [saved], totalCount: 1, pendingReviewCount: 0, readyCount: 0, sentCount: 0 });
+        } : { letters: [saved], totalCount: 1, pendingReviewCount: 0, readyCount: 0, sentCount: 0, signedCount: 0 });
       }
       if (form.file) {
         await uploadWorkspaceAttachment(
@@ -283,7 +297,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           form.file,
           "primary",
         );
-        const latest = await loadAIReferentRegistry(token);
+        const latest = await loadAIReferentRegistry(token, { workflowKind: form.workflowKind });
         setRegistry(latest);
         saved = latest.letters.find((letter) => letter.id === saved.id) ?? saved;
       } else if (existing) {
@@ -295,6 +309,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       saved = await loadAIReferentLetter(token, saved.id);
       replaceLetter(saved);
       editRevision.current = saved.revision;
+      setRegisterKind(form.workflowKind === "sign_only" ? "sign_only" : "outgoing");
+      setFilter("all");
+      setPage(0);
       setSelectedId(saved.id);
       setFormOpen(false);
       savedMetadata.current = undefined;
@@ -357,11 +374,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           <Mail24Regular className="ai-referent-header-mail mail-edge" />
         </div>
         <div className="ai-referent-header-actions">
-          {registerKind === "outgoing" && canCreate ? (
-            <Button appearance="primary" icon={<Add24Regular />} onClick={openCreate}>
+          {canCreate ? (<>
+            <Button appearance="primary" icon={<Add24Regular />} onClick={() => openCreate("delivery")}>
               Новое письмо
             </Button>
-          ) : null}
+            <Button appearance="secondary" icon={<Document20Regular />} onClick={() => openCreate("sign_only")}>
+              На подпись
+            </Button>
+          </>) : null}
         </div>
       </header>
 
@@ -380,9 +400,14 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           role="tab"
           aria-selected={registerKind === "outgoing"}
           className={registerKind === "outgoing" ? "active" : ""}
-          onClick={() => setRegisterKind("outgoing")}
+          onClick={() => { setRegisterKind("outgoing"); setFilter("all"); setPage(0); }}
         >
           Исходящие
+        </button>
+        <button type="button" role="tab" aria-selected={registerKind === "sign_only"}
+          className={registerKind === "sign_only" ? "active" : ""}
+          onClick={() => { setRegisterKind("sign_only"); setFilter("all"); setPage(0); }}>
+          На подпись
         </button>
         {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
           className={registerKind === "settings" ? "active" : ""}
@@ -397,25 +422,25 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
         <div className="ai-referent-page ai-referent-outgoing-page">
 
-      <section className="ai-referent-summary" aria-label="Сводка исходящих писем">
+      <section className="ai-referent-summary" aria-label={registerKind === "sign_only" ? "Сводка заявок на подпись" : "Сводка исходящих писем"}>
         <button type="button" className="primary" aria-pressed={filter === "pending_review"} onClick={() => { setFilter("pending_review"); setPage(0); }}>
           <span>Ожидают решения</span><strong>{registry?.pendingReviewCount ?? 0}</strong>
           <small>Открыть очередь согласования</small>
         </button>
         <button type="button" aria-pressed={filter === "all"} onClick={() => { setFilter("all"); setPage(0); }}>
-          <strong>{registry?.totalCount ?? 0}</strong><span>всего писем</span>
+          <strong>{registry?.totalCount ?? 0}</strong><span>{registerKind === "sign_only" ? "пакетов на подпись" : "всего писем"}</span>
         </button>
-        <button type="button" aria-pressed={filter === "approved"} onClick={() => { setFilter("approved"); setPage(0); }}>
-          <strong>{registry?.readyCount ?? 0}</strong><span>готовы к отправке</span>
+        <button type="button" aria-pressed={filter === (registerKind === "sign_only" ? "queued" : "approved")} onClick={() => { setFilter(registerKind === "sign_only" ? "queued" : "approved"); setPage(0); }}>
+          <strong>{registry?.readyCount ?? 0}</strong><span>{registerKind === "sign_only" ? "готовятся роботом" : "готовы к отправке"}</span>
         </button>
-        <button type="button" aria-pressed={filter === "sent"} onClick={() => { setFilter("sent"); setPage(0); }}>
-          <strong>{registry?.sentCount ?? 0}</strong><span>отправлено</span>
+        <button type="button" aria-pressed={filter === (registerKind === "sign_only" ? "signed" : "sent")} onClick={() => { setFilter(registerKind === "sign_only" ? "signed" : "sent"); setPage(0); }}>
+          <strong>{registerKind === "sign_only" ? registry?.signedCount ?? 0 : registry?.sentCount ?? 0}</strong><span>{registerKind === "sign_only" ? "подписано" : "отправлено"}</span>
         </button>
       </section>
 
       <div className="ai-referent-toolbar">
         <AIReferentGooeySearch
-          ariaLabel="Поиск исходящих писем"
+          ariaLabel={registerKind === "sign_only" ? "Поиск пакетов на подпись" : "Поиск исходящих писем"}
           placeholder="Номер, тема, организация или сотрудник"
           value={query}
           onValueChange={(value) => { setQuery(value); setPage(0); }}
@@ -427,7 +452,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
               ["draft", "Черновики"],
               ["pending_review", "На согласовании"],
               ["needs_revision", "Доработка"],
-              ["sent", "Отправленные"],
+              [registerKind === "sign_only" ? "signed" : "sent", registerKind === "sign_only" ? "Подписанные" : "Отправленные"],
             ] as const).map(([key, label]) => (
               <button
                 type="button"
@@ -475,7 +500,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
               </span>
               <span className="ai-referent-row-main">
                 <strong>{letter.subject}</strong>
-                <small>{letter.recipientOrganization}</small>
+                <small>{letter.workflowKind === "sign_only" ? "Без отправки адресату · каждая страница — отдельный PDF" : letter.recipientOrganization}</small>
               </span>
               <span className="ai-referent-row-person">
                 <small>Автор</small><EmployeeProfileLink
@@ -490,7 +515,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 >{letter.reviewerName ?? "Не назначен"}</EmployeeProfileLink>
               </span>
               <span className="ai-referent-row-number">
-                <strong>{letter.displayNumber ?? "Без номера"}</strong>
+                <strong>{letter.displayNumber ?? (letter.workflowKind === "sign_only" ? "На подпись" : "Без номера")}</strong>
                 <small>{dateTime(letter.updatedAt)}</small>
               </span>
               <Open20Regular aria-hidden="true" />
@@ -512,12 +537,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 </DialogTrigger>
               )}
             >
-              {editingId ? "Редактировать письмо" : "Новое исходящее письмо"}
+              {form.workflowKind === "sign_only" ? (editingId ? "Редактировать заявку на подпись" : "Подписать без отправки") : (editingId ? "Редактировать письмо" : "Новое исходящее письмо")}
             </DialogTitle>
             <DialogContent>
               <div className="ai-referent-form">
                 <label>Тема письма<Input value={form.subject} onChange={(_e, d) => setForm((current) => ({ ...current, subject: d.value }))} /></label>
-                {formOpen ? <AIReferentRecipientPicker
+                {form.workflowKind === "sign_only" ? <p className="ai-referent-sign-hint">Загрузите DOCX, выберите одного согласующего. После его решения робот вернёт каждый лист отдельным подписанным PDF. Адресатам письма не отправляются.</p> : null}
+                {formOpen && form.workflowKind === "delivery" ? <AIReferentRecipientPicker
                   token={token}
                   organization={form.recipientOrganization}
                   address={form.recipientAddress}
@@ -532,10 +558,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   }))}
                 /> : null}
                 <div className="ai-referent-form-grid">
-                  <label>Канал отправки<Select value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></label>
+                  {form.workflowKind === "delivery" ? <label>Канал отправки<Select value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></label> : null}
                   <label>Согласующий<Select value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value }))}><option value="">Не назначен</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
                 </div>
-                <label>Второй согласующий (необязательно)<Select value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="">Без второго согласующего</option>{reviewers.filter((person) => person.id !== form.reviewerUserId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
+                {form.workflowKind === "delivery" ? <label>Второй согласующий (необязательно)<Select value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="">Без второго согласующего</option>{reviewers.filter((person) => person.id !== form.reviewerUserId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label> : null}
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
                 <label className="ai-referent-upload-zone ai-referent-upload-primary">
                   <input className="ai-referent-upload-input" type="file" accept=".docx" aria-label="Выбрать основной документ DOCX" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
@@ -543,12 +569,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <span className="ai-referent-upload-copy"><strong>Основной документ</strong><small>{editingId ? "Новая версия письма в формате DOCX" : "Письмо в формате DOCX"}</small>{form.file ? <span className="ai-referent-upload-selected"><em title={form.file.name}>{form.file.name}</em></span> : null}</span>
                   <span className="ai-referent-upload-action">{form.file ? "Заменить" : "Выбрать DOCX"}</span>
                 </label>
-                <label className="ai-referent-upload-zone">
+                {form.workflowKind === "delivery" ? <label className="ai-referent-upload-zone">
                   <input className="ai-referent-upload-input" type="file" multiple aria-label="Выбрать дополнительные вложения" onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} />
                   <span className="ai-referent-upload-icon"><Attach20Regular aria-hidden="true" /></span>
                   <span className="ai-referent-upload-copy"><strong>Дополнительные вложения</strong><small>Приложения, таблицы и сопроводительные файлы</small>{selectedAdditionalFiles.length ? <span className="ai-referent-upload-selected">{selectedAdditionalFiles.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{selectedAdditionalFiles.length > 2 ? <em>+{selectedAdditionalFiles.length - 2}</em> : null}</span> : null}</span>
                   <span className="ai-referent-upload-action">{selectedAdditionalFiles.length ? "Изменить" : "Добавить файлы"}</span>
-                </label>
+                </label> : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
                 <div className="ai-referent-form-actions">
                   <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
@@ -571,13 +597,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   </DialogTrigger>
                 )}
               >
-                <span className="ai-referent-detail-number">{selected.displayNumber ?? "Черновик без номера"}</span>
+                <span className="ai-referent-detail-number">{selected.displayNumber ?? (selected.workflowKind === "sign_only" ? "Подпись без отправки" : "Черновик без номера")}</span>
                 {selected.subject}
               </DialogTitle>
               <DialogContent className="ai-referent-detail-content">
                 <div className="ai-referent-detail-status">
                   <span className={`ai-referent-status status-${selected.status}`}>{statusLabels[selected.status]}</span>
-                  <span>{selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
+                  <span>{selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
                 <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
@@ -585,11 +611,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
                 </div>
                 {detailTab === "overview" ? <>
-                <section className="ai-referent-detail-card ai-referent-recipient">
+                {selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>
                   <p>{selected.recipientAddress || "Адрес будет уточнён перед отправкой"}</p>
-                </section>
+                </section> : null}
                 <section className="ai-referent-detail-people">
                   <div><small>Автор</small><EmployeeProfileLink
                     userId={selected.createdByUserId}
@@ -605,7 +631,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 {detailTab === "files" ?
                 <section className="ai-referent-detail-section">
                   <h3>Файлы <span>{selected.attachments.length}</span></h3>
-                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} letterLabel={`${selected.displayNumber ?? "Черновик"} — ${selected.subject}`} />
+                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} letterLabel={`${selected.displayNumber ?? (selected.workflowKind === "sign_only" ? "Подпись" : "Черновик")} — ${selected.subject}`} />
                   {selected.attachments.length ? selected.attachments.map((attachment) => (
                     <button type="button" key={attachment.id} className="ai-referent-file" aria-label={`Скачать ${attachment.fileName}`} onClick={() => void download(attachment.id, attachment.fileName)}>
                       <Document20Regular /><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small></span><ArrowDownload20Regular />
@@ -639,7 +665,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                       disabled={busy || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3)}
                       onClick={() => ["send", "cancel", "confirm_sent", "confirm_not_sent"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
                     >
-                      {actionLabels[action]}
+                      {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : actionLabels[action]}
                     </Button>
                   ))}
                 </div>

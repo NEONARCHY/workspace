@@ -22,7 +22,9 @@ AIReferentStatus = Literal[
     "awaiting_final_send",
     "referent_review_pending",
     "delivery_unknown",
+    "signed",
 ]
+AIReferentWorkflowKind = Literal["delivery", "sign_only"]
 AIReferentSource = Literal["workspace", "telegram", "import"]
 AIReferentAction = Literal[
     "submit",
@@ -39,6 +41,7 @@ AIReferentAction = Literal[
 
 
 class AIReferentLetterFields(ApiModel):
+    workflow_kind: AIReferentWorkflowKind = "delivery"
     subject: str = Field(min_length=1, max_length=300)
     recipient_organization: str = Field(min_length=1, max_length=300)
     recipient_address: str = Field(default="", max_length=500)
@@ -104,6 +107,7 @@ class AIReferentLetterResponse(ApiModel):
     route: AIReferentRoute
     note: str
     status: AIReferentStatus
+    workflow_kind: AIReferentWorkflowKind = "delivery"
     source: AIReferentSource
     created_by_user_id: str
     created_by_name: str
@@ -128,6 +132,7 @@ class AIReferentRegistryResponse(ApiModel):
     pending_review_count: int = 0
     ready_count: int = 0
     sent_count: int = 0
+    signed_count: int = 0
 
 
 AIReferentIncomingSource = Literal["exat", "webmail", "import"]

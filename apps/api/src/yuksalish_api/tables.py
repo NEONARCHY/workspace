@@ -868,6 +868,7 @@ ai_referent_letters = sa.Table(
     sa.Column("route", sa.String(16)),
     sa.Column("note", sa.Text()),
     sa.Column("status", sa.String(32)),
+    sa.Column("workflow_kind", sa.String(16)),
     sa.Column("source", sa.String(24)),
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("reviewer_user_id", uuid_type),
