@@ -347,7 +347,14 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
       </>}
 
       {selected !== undefined ? (
-        <Dialog open={detailOpen} onOpenChange={(_, data) => { if (!data.open) closeDetail(); }}>
+        <Dialog open={detailOpen} onOpenChange={(event, data) => {
+          if (!data.open) {
+            if (import.meta.env.MODE === "test") {
+              console.info("project-detail-close", data.type, event.type, (event.target as HTMLElement | null)?.className);
+            }
+            closeDetail();
+          }
+        }}>
         <DialogSurface className="project-dialog context-record-dialog" aria-labelledby="project-detail-title">
           <div className="context-record-workspace">
           <article className="bp7-detail project-detail">
