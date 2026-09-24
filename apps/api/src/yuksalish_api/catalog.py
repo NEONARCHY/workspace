@@ -47,6 +47,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="telegram_access",
+        label=LocalizedLabel(
+            ru="Доступ к Telegram-ботам",
+            uz_cyrl="Telegram ботларига рухсат",
+            uz_latn="Telegram botlariga ruxsat",
+        ),
+        route="/telegram-access",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="feed",
         label=LocalizedLabel(ru="Лента", uz_cyrl="Лента", uz_latn="Lenta"),
         route="/feed",

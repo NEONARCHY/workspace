@@ -23,6 +23,7 @@ from .tables import (
     ai_referent_reviewers,
     ai_referent_telegram_links,
     ai_referent_telegram_outbox,
+    telegram_bot_grants,
     users,
     workspace_notifications,
 )
@@ -79,37 +80,59 @@ async def remember_operation(
 
 
 async def telegram_id_for(connection: AsyncConnection, user_id: UUID) -> str | None:
-    configured = await connection.scalar(
+    linked = await connection.scalar(
+        select(ai_referent_telegram_links.c.telegram_id)
+        .join(telegram_bot_grants,
+              telegram_bot_grants.c.user_id == ai_referent_telegram_links.c.user_id)
+        .where(
+            ai_referent_telegram_links.c.user_id == user_id,
+            ai_referent_telegram_links.c.verified_at.is_not(None),
+            telegram_bot_grants.c.bot_key == "ai_referent",
+        )
+    )
+    if not linked:
+        return None
+    active = await connection.scalar(
+        select(users.c.id).where(users.c.id == user_id, users.c.status == "active")
+    )
+    if active is None:
+        return None
+    assigned = await connection.scalar(
         select(ai_referent_reviewers.c.telegram_id).where(
             ai_referent_reviewers.c.user_id == user_id,
             ai_referent_reviewers.c.enabled.is_(True),
         )
     )
+    return str(linked) if assigned is None or str(assigned) == linked else None
+
+
+async def verified_telegram_id_for(connection: AsyncConnection, user_id: UUID) -> str | None:
     linked = await connection.scalar(
         select(ai_referent_telegram_links.c.telegram_id).where(
             ai_referent_telegram_links.c.user_id == user_id,
+            ai_referent_telegram_links.c.verified_at.is_not(None),
         )
     )
-    return str(configured or linked) if configured or linked else None
+    return str(linked) if linked else None
 
 
 async def telegram_actor(connection: AsyncConnection, telegram_id: str) -> AuthenticatedUser:
-    # A configured reviewer identity wins. A stale personal link must not impersonate
-    # a reassigned reviewer (or make the prior Telegram ID authoritative).
-    assigned = await connection.scalar(
-        select(ai_referent_reviewers.c.user_id).where(
-            ai_referent_reviewers.c.telegram_id == telegram_id,
-            ai_referent_reviewers.c.enabled.is_(True),
-        )
-    )
     linked = await connection.scalar(
-        select(ai_referent_telegram_links.c.user_id).where(
+        select(ai_referent_telegram_links.c.user_id)
+        .join(telegram_bot_grants,
+              telegram_bot_grants.c.user_id == ai_referent_telegram_links.c.user_id)
+        .where(
             ai_referent_telegram_links.c.telegram_id == telegram_id,
+            ai_referent_telegram_links.c.verified_at.is_not(None),
+            telegram_bot_grants.c.bot_key == "ai_referent",
         )
     )
-    user_id = assigned or linked
+    user_id = linked
     if user_id is None:
-        raise HTTPException(403, "Сначала привяжите Telegram в AI Referent → Мой Telegram.")
+        raise HTTPException(
+            403, "Нет подтверждённого Telegram ID или доступа к AI Referent. "
+            "Обратитесь к администратору."
+        )
     current_assignment = await connection.scalar(
         select(ai_referent_reviewers.c.telegram_id).where(
             ai_referent_reviewers.c.user_id == user_id,
@@ -149,24 +172,20 @@ async def issue_link_code(
     connection: AsyncConnection, user: AuthenticatedUser
 ) -> dict[str, object]:
     await ensure_module_action(connection, user, "ai_referent", "view")
+    identity = (
+        (await connection.execute(select(ai_referent_telegram_links).where(
+            ai_referent_telegram_links.c.user_id == user.id
+        ).with_for_update())).mappings().one_or_none()
+    )
+    if identity is None or not (identity["pending_telegram_id"] or identity["telegram_id"]):
+        raise HTTPException(409, "Сначала попросите администратора указать ваш Telegram ID.")
     code = secrets.token_urlsafe(24)
     expires = datetime.now(UTC) + timedelta(minutes=10)
-    statement = pg_insert(ai_referent_telegram_links).values(
-        user_id=user.id,
-        telegram_id=None,
-        code_hash=hashlib.sha256(code.encode()).hexdigest(),
-        code_expires_at=expires,
-        updated_at=datetime.now(UTC),
-    )
     await connection.execute(
-        statement.on_conflict_do_update(
-            index_elements=[ai_referent_telegram_links.c.user_id],
-            set_={
-                "code_hash": statement.excluded.code_hash,
-                "code_expires_at": expires,
-                "updated_at": datetime.now(UTC),
-            },
-        )
+        update(ai_referent_telegram_links)
+        .where(ai_referent_telegram_links.c.user_id == user.id)
+        .values(code_hash=hashlib.sha256(code.encode()).hexdigest(),
+                code_expires_at=expires, updated_at=datetime.now(UTC))
     )
     return {"code": code, "expiresAt": expires.isoformat()}
 
@@ -207,7 +226,10 @@ async def consume_link_code(
     )
     conflict = await connection.scalar(
         select(ai_referent_telegram_links.c.user_id).where(
-            ai_referent_telegram_links.c.telegram_id == telegram_id,
+            or_(
+                ai_referent_telegram_links.c.telegram_id == telegram_id,
+                ai_referent_telegram_links.c.pending_telegram_id == telegram_id,
+            ),
             ai_referent_telegram_links.c.user_id != row["user_id"],
         )
     )
@@ -220,7 +242,11 @@ async def consume_link_code(
         not active
         or conflict
         or (assigned and assigned != active)
-        or (expected and str(expected) != telegram_id)
+        or not (
+            row["pending_telegram_id"] == telegram_id
+            or (row["verified_at"] and row["telegram_id"] == telegram_id)
+        )
+        or (expected and str(expected) != telegram_id and not row["pending_telegram_id"])
     ):
         raise HTTPException(409, "Привязка нарушает назначения. Обратитесь к администратору.")
     await connection.execute(
@@ -230,11 +256,28 @@ async def consume_link_code(
         )
         .values(
             telegram_id=telegram_id,
+            pending_telegram_id=None,
+            verified_at=datetime.now(UTC),
+            verification_source="bot",
+            revision=ai_referent_telegram_links.c.revision + 1,
             code_hash=None,
             code_expires_at=None,
             updated_at=datetime.now(UTC),
         )
     )
+    changed = await connection.execute(
+        update(ai_referent_reviewers)
+        .where(ai_referent_reviewers.c.user_id == active,
+               ai_referent_reviewers.c.telegram_id.is_distinct_from(telegram_id))
+        .values(telegram_id=telegram_id)
+    )
+    if changed.rowcount:
+        await connection.execute(
+            update(ai_referent_configuration)
+            .where(ai_referent_configuration.c.id == 1)
+            .values(revision=ai_referent_configuration.c.revision + 1,
+                    updated_at=datetime.now(UTC))
+        )
 
 
 async def notify_letter(

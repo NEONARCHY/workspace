@@ -42,7 +42,6 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
       <AIReferentGooeySearch
         ariaLabel="Поиск в архиве Exat"
         collapsedWidth={270}
-        expandedWidth={390}
         placeholder="Номер, тема или организация"
         value={query}
         onValueChange={(value) => { setQuery(value); setPage(0); }}
@@ -87,12 +86,12 @@ export function AIReferentTelegram({ token }: { readonly token: string }) {
       <div className="ai-referent-telegram-copy">
         <span className="ai-referent-eyebrow">{telegramId ? "Подключено" : "Один раз для связи"}</span>
         <h3>{telegramId ? "Бот связан с вашим аккаунтом" : "Подключите личный Telegram"}</h3>
-        <p>{telegramId ? `Telegram ID: ${telegramId}` : "Получите одноразовый код и отправьте его корпоративному боту в личном чате. Он действует 10 минут."}</p>
+        <p>{telegramId ? `Telegram ID: ${telegramId}. Доступ к боту выдаёт администратор отдельно.` : "Сначала попросите администратора указать ваш Telegram ID и выдать доступ к AI Referent. Затем получите одноразовый код и отправьте его боту в личном чате в течение 10 минут."}</p>
         <Button appearance="primary" disabled={busy} onClick={() => void create()}>{busy ? "Создаём код…" : telegramId ? "Получить новый код" : "Получить код привязки"}</Button>
         {link ? <div className="ai-referent-telegram-code" role="status"><span>Команда для бота</span><code>/link {link.code}</code><small>Действует до {new Date(link.expiresAt).toLocaleTimeString("ru-RU")}. Не передавайте код другим.</small></div> : null}
         {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       </div>
     </section>
-    <p className="ai-referent-telegram-note">Назначения согласующих настраивает администратор во вкладке «Согласующие».</p>
+    <p className="ai-referent-telegram-note">Доступ к боту и право согласовывать письма — разные настройки. Администратор управляет ими отдельно.</p>
   </div>;
 }

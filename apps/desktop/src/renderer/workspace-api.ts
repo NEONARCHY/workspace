@@ -10,6 +10,9 @@ import type {
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
+  TelegramAccessPerson,
+  TelegramAccessRegistry,
+  TelegramAccessUpdate,
   AIReferentRecipientRegistry,
   NavigationKey,
   AdministrativeChat,
@@ -287,6 +290,28 @@ export function loadAIReferentTelegramLink(token: string) {
 
 export function createAIReferentTelegramLink(token: string) {
   return apiRequest<{ readonly code: string; readonly expiresAt: string }>("/ai-referent/telegram-link", { method: "POST" }, token);
+}
+
+export function loadTelegramAccess(token: string): Promise<TelegramAccessRegistry> {
+  return apiRequest<TelegramAccessRegistry>("/telegram-access", {}, token);
+}
+
+export function saveTelegramAccess(
+  token: string, userId: string, payload: TelegramAccessUpdate,
+): Promise<TelegramAccessPerson> {
+  return apiRequest<TelegramAccessPerson>(
+    `/telegram-access/${encodeURIComponent(userId)}`,
+    { method: "PUT", body: JSON.stringify(payload) }, token,
+  );
+}
+
+export function createTelegramVerificationCode(
+  token: string, userId: string,
+): Promise<{ readonly code: string; readonly expiresAt: string }> {
+  return apiRequest<{ readonly code: string; readonly expiresAt: string }>(
+    `/telegram-access/${encodeURIComponent(userId)}/verification-code`,
+    { method: "POST" }, token,
+  );
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {

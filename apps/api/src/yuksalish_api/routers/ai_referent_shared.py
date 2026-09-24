@@ -54,7 +54,7 @@ from ..ai_referent_shared_service import (
     consume_link_code,
     issue_link_code,
     telegram_actor,
-    telegram_id_for,
+    verified_telegram_id_for,
 )
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
@@ -66,6 +66,7 @@ from ..tables import (
     ai_referent_incoming_letters,
     ai_referent_letters,
     ai_referent_number_counters,
+    ai_referent_reviewers,
     ai_referent_telegram_links,
     ai_referent_telegram_outbox,
     attachments,
@@ -177,7 +178,7 @@ async def agent_reviewers(connection: Connection, actor: Actor) -> ReviewerConfi
 
 @router.get("/telegram-link")
 async def get_link(connection: Connection, user: User) -> dict[str, object]:
-    return {"telegramId": await telegram_id_for(connection, user.id)}
+    return {"telegramId": await verified_telegram_id_for(connection, user.id)}
 
 
 @router.post("/telegram-link")
@@ -188,12 +189,31 @@ async def post_link(connection: Connection, user: User) -> dict[str, object]:
 @router.delete("/telegram-link", status_code=204)
 async def delete_link(connection: Connection, user: User) -> Response:
     await connection.execute(
+        select(ai_referent_configuration.c.id)
+        .where(ai_referent_configuration.c.id == 1).with_for_update()
+    )
+    now = datetime.now(UTC)
+    await connection.execute(
         update(ai_referent_telegram_links)
         .where(
             ai_referent_telegram_links.c.user_id == user.id,
         )
-        .values(telegram_id=None, code_hash=None, code_expires_at=None)
+        .values(telegram_id=None, pending_telegram_id=None, verified_at=None,
+                 verification_source=None, code_hash=None, code_expires_at=None,
+                 revision=ai_referent_telegram_links.c.revision + 1, updated_at=now)
     )
+    changed = await connection.execute(
+        update(ai_referent_reviewers)
+        .where(ai_referent_reviewers.c.user_id == user.id,
+               ai_referent_reviewers.c.telegram_id.is_not(None))
+        .values(telegram_id=None)
+    )
+    if changed.rowcount:
+        await connection.execute(
+            update(ai_referent_configuration)
+            .where(ai_referent_configuration.c.id == 1)
+            .values(revision=ai_referent_configuration.c.revision + 1, updated_at=now)
+        )
     return Response(status_code=204)
 
 

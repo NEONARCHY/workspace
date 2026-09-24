@@ -1,0 +1,83 @@
+.telegram-access-view {
+  --telegram-ink: var(--ws-text, #293a55);
+  --telegram-muted: var(--ws-text-muted, #52677d);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+  height: 100%;
+  padding: 28px clamp(16px, 2.8vw, 40px) 24px;
+  color: var(--telegram-ink);
+}
+.telegram-access-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.telegram-access-eyebrow { margin: 0 0 5px; color: var(--ws-link, #006779); font-size: 12px; font-weight: 700; letter-spacing: .025em; }
+.telegram-access-header h1 { margin: 0 0 5px; font-size: clamp(24px, 2vw, 30px); letter-spacing: -.025em; }
+.telegram-access-header p:not(.telegram-access-eyebrow) { margin: 0; color: var(--telegram-muted); }
+.telegram-access-overview { display: flex; gap: 0; width: fit-content; max-width: 100%; padding: 11px 4px; border: 1px solid var(--ws-border, #dce8eb); border-radius: 18px; background: rgb(255 255 255 / 82%); box-shadow: 0 10px 30px -25px rgb(41 58 85 / 30%); }
+.telegram-access-overview span { padding: 2px 18px; color: var(--telegram-muted); white-space: nowrap; }
+.telegram-access-overview span + span { border-left: 1px solid var(--ws-border, #dce8eb); }
+.telegram-access-overview strong { margin-right: 5px; color: var(--ws-link, #006779); font-size: 20px; font-variant-numeric: tabular-nums; }
+.telegram-access-guide { display: flex; align-items: center; gap: 12px; max-width: 1080px; padding: 12px 15px; border: 1px solid #cce8e5; border-radius: 16px; background: #f0faf8; }
+.telegram-access-guide p { margin: 0; color: var(--telegram-muted); line-height: 1.45; }
+.telegram-access-guide code { color: var(--ws-link, #006779); font-weight: 700; }
+.telegram-access-guide-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 10px; background: #d8f0ed; color: var(--ws-link, #006779); font-size: 20px; }
+.telegram-access-search, .telegram-access-id-field { display: grid; gap: 6px; color: var(--telegram-muted); font-size: 12px; font-weight: 600; }
+.telegram-access-search { max-width: 430px; }
+.telegram-access-search input, .telegram-access-id-field input { box-sizing: border-box; width: 100%; min-height: 40px; padding: 9px 12px; border: 1px solid #c8d9df; border-radius: 11px; outline: none; background: #fff; color: var(--telegram-ink); font: inherit; font-size: 14px; font-weight: 500; }
+.telegram-access-search input:focus-visible, .telegram-access-id-field input:focus-visible { border-color: #00869c; box-shadow: 0 0 0 3px rgb(0 145 168 / 14%); }
+.telegram-access-list { display: grid; flex: 1 1 auto; align-content: start; gap: 12px; min-height: 0; overflow-y: auto; padding: 2px 7px 18px 2px; scrollbar-width: thin; scrollbar-color: #a8c2ca transparent; }
+.telegram-access-row { display: grid; grid-template-columns: minmax(185px, .8fr) minmax(200px, .65fr) minmax(350px, 1.55fr); gap: 16px 22px; padding: 18px 20px 14px; border: 1px solid #dbe7ea; border-radius: 20px; background: rgb(255 255 255 / 90%); box-shadow: 0 10px 28px -25px rgb(41 58 85 / 40%); transition: border-color 160ms ease, transform 160ms ease; }
+.telegram-access-row:hover { border-color: #b4d9d8; transform: translateY(-1px); }
+.telegram-access-person { display: flex; align-items: flex-start; gap: 11px; min-width: 0; padding-top: 18px; }
+.telegram-access-avatar { display: grid; flex: none; place-items: center; width: 38px; height: 38px; border-radius: 14px; background: #d9efed; color: var(--ws-link, #006779); font-size: 13px; font-weight: 700; }
+.telegram-access-person-copy { display: grid; gap: 4px; min-width: 0; }
+.telegram-access-person-copy strong { overflow-wrap: anywhere; font-size: 14px; }
+.telegram-access-person-copy span { color: var(--telegram-muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
+.telegram-access-editor { min-width: 0; }
+.telegram-access-id-field input { font-variant-numeric: tabular-nums; }
+.telegram-access-status { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; color: #7e6255; font-size: 12px; }
+.telegram-access-status::before { width: 6px; height: 6px; border-radius: 50%; background: #c49e74; content: ""; }
+.telegram-access-status.is-verified { color: #006779; }
+.telegram-access-status.is-verified::before { background: #0091a8; }
+.telegram-access-bots { min-width: 0; margin: 0; padding: 0; border: 0; }
+.telegram-access-bots legend { margin: 0 0 6px; padding: 0; color: var(--telegram-muted); font-size: 12px; font-weight: 600; }
+.telegram-access-bot-grid { display: flex; flex-wrap: wrap; gap: 7px; }
+.telegram-access-bot { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 39px; padding: 5px 11px 5px 8px; border: 1px solid #d7e2e6; border-radius: 11px; background: #f8fbfb; cursor: pointer; user-select: none; }
+.telegram-access-bot:has(input:checked) { border-color: #86c9c8; background: #eaf7f5; }
+.telegram-access-bot:has(input:focus-visible) { outline: 3px solid rgb(0 145 168 / 35%); outline-offset: 2px; }
+.telegram-access-bot input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.telegram-access-bot-mark { display: grid; flex: none; place-items: center; width: 20px; height: 20px; border: 1px solid #a9bec7; border-radius: 6px; background: white; color: transparent; font-size: 13px; font-weight: 700; }
+.telegram-access-bot input:checked + .telegram-access-bot-mark { border-color: #007c91; background: #007c91; color: white; }
+.telegram-access-bot > span:last-child { display: grid; gap: 1px; color: var(--telegram-ink); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.telegram-access-bot small { color: var(--telegram-muted); font-size: 11px; font-weight: 500; }
+.telegram-access-row-footer { display: flex; grid-column: 1 / -1; align-items: flex-end; justify-content: space-between; gap: 14px; min-height: 32px; padding-top: 10px; border-top: 1px solid #edf2f3; }
+.telegram-access-messages { display: grid; gap: 6px; min-width: 0; color: var(--telegram-muted); font-size: 12px; }
+.telegram-access-error { color: #a3444b; }
+.telegram-access-code { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.telegram-access-code code { padding: 5px 8px; border-radius: 7px; background: #eaf7f5; color: #005c6b; font-size: 12px; overflow-wrap: anywhere; user-select: all; }
+.telegram-access-actions { display: flex; flex: none; flex-wrap: wrap; gap: 8px; }
+.telegram-access-primary, .telegram-access-secondary { min-height: 34px; padding: 6px 13px; border: 1px solid #c5d6dc; border-radius: 10px; background: white; color: var(--telegram-ink); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.telegram-access-primary { border-color: #293a55; background: #293a55; color: white; }
+.telegram-access-primary:hover:not(:disabled) { background: #364e70; }
+.telegram-access-secondary:hover:not(:disabled) { border-color: #77b4bd; background: #eff9f8; }
+.telegram-access-primary:disabled, .telegram-access-secondary:disabled { opacity: .48; cursor: not-allowed; }
+.telegram-access-primary:focus-visible, .telegram-access-secondary:focus-visible, .telegram-access-page-error button:focus-visible { outline: 3px solid rgb(0 145 168 / 38%); outline-offset: 2px; }
+.telegram-access-page-error { display: flex; align-items: center; gap: 12px; padding: 15px; border: 1px solid #e9c9c9; border-radius: 14px; background: #fff8f8; color: #a3444b; }
+.telegram-access-page-error button { border: 0; background: none; color: #006779; font: inherit; font-weight: 700; cursor: pointer; }
+.telegram-access-loading, .telegram-access-empty { margin: 0; padding: 30px; border: 1px dashed #bfd6dc; border-radius: 18px; color: var(--telegram-muted); text-align: center; }
+@container workspace (max-width: 1100px) {
+  .telegram-access-row { grid-template-columns: minmax(185px, .8fr) minmax(200px, 1fr); }
+  .telegram-access-bots { grid-column: 1 / -1; }
+}
+@container workspace (max-width: 640px) {
+  .telegram-access-view { padding: 16px 12px; }
+  .telegram-access-header, .telegram-access-row-footer { align-items: stretch; flex-direction: column; }
+  .telegram-access-overview { width: 100%; flex-wrap: wrap; }
+  .telegram-access-overview span { padding: 5px 10px; }
+  .telegram-access-row { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .telegram-access-person { padding-top: 0; }
+  .telegram-access-bots { grid-column: auto; }
+  .telegram-access-actions { justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: reduce) { .telegram-access-row { transition: none; } .telegram-access-row:hover { transform: none; } }
+@media (forced-colors: active) { .telegram-access-bot:has(input:checked), .telegram-access-status.is-verified { outline: 1px solid Highlight; } }
