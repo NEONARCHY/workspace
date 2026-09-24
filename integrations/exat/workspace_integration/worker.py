@@ -99,7 +99,14 @@ class DeliveryWorker:
         thread.start()
         authority = executing_server_job.set(True)
         try:
-            result = self.prepare(job) if job["kind"] == "prepare" else self.send(job, lost)
+            if job["kind"] == "prepare":
+                result = self.prepare(job)
+            elif job["kind"] == "sign_only":
+                result = self.sign_only(job)
+            elif job["kind"] == "send":
+                result = self.send(job, lost)
+            else:
+                raise WorkspaceError("Неизвестный вид задания. Исполнение остановлено.")
         except Exception as error:
             # Boundary around existing GUI/Office libraries: persist an explicit failure,
             # not a swallowed exception or automatic retry of a possibly delivered letter.
@@ -221,6 +228,33 @@ class DeliveryWorker:
         return self.receipt(
             job, "prepared", "Подписанный PDF подготовлен. Внешняя отправка не выполнялась."
         )
+
+    def sign_only(self, job: dict[str, Any]) -> dict[str, Any]:
+        from .sign_only import sign_document_pages
+
+        folder = self.root / "sign-only" / str(UUID(job["letterId"])) / str(UUID(job["id"]))
+        primary = next(
+            (item for item in reversed(job["files"]) if item["role"] == "primary"), None
+        )
+        if primary is None or Path(primary["name"]).suffix.lower() != ".docx":
+            raise WorkspaceError("Для подписи нужен основной DOCX.")
+        draft = self.download(job, primary, folder)
+        pages = sign_document_pages(
+            self.service.facsimile, draft, folder / "signed", str(job["reviewerName"])
+        )
+        for page in pages:
+            self.sync.upload(
+                "outgoing", job["letterId"], page,
+                f"signed/{job['id']}/{page.name}",
+                jobId=job["id"], leaseToken=job["leaseToken"],
+            )
+        return {
+            **self.receipt(
+                job, "prepared",
+                f"Подписано {len(pages)} отдельных PDF; отправка не выполнялась.",
+            ),
+            "signedPages": len(pages),
+        }
 
     def send(self, job: dict[str, Any], lost: threading.Event) -> dict[str, Any]:
         local_id = self.state.get("letter:" + job["letterId"])

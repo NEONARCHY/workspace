@@ -753,7 +753,9 @@ export type AIReferentStatus =
   | "sending"
   | "sent"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "signed";
+export type AIReferentWorkflowKind = "delivery" | "sign_only";
 export type AIReferentSource = "workspace" | "telegram" | "import";
 export type AIReferentAction =
   | "release_delivery"
@@ -792,6 +794,7 @@ export interface AIReferentLetter {
   readonly route: AIReferentRoute;
   readonly note: string;
   readonly status: AIReferentStatus;
+  readonly workflowKind: AIReferentWorkflowKind;
   readonly source: AIReferentSource;
   readonly createdByUserId: string;
   readonly createdByName: string;
@@ -813,6 +816,7 @@ export interface AIReferentRegistry {
   readonly pendingReviewCount: number;
   readonly readyCount: number;
   readonly sentCount: number;
+  readonly signedCount: number;
 }
 
 export interface AIReferentRecipient {
@@ -831,6 +835,7 @@ export interface AIReferentRecipientRegistry {
 }
 
 export interface AIReferentLetterInput {
+  readonly workflowKind?: AIReferentWorkflowKind;
   readonly finalReviewerUserId?: string | null;
   readonly operationId?: string;
   readonly subject: string;

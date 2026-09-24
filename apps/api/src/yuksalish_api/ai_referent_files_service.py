@@ -21,6 +21,7 @@ from .auth import AuthenticatedUser
 from .object_storage import ObjectStorage
 from .tables import (
     ai_referent_archive,
+    ai_referent_delivery_commands,
     ai_referent_files,
     ai_referent_incoming_letters,
     ai_referent_letters,
@@ -124,6 +125,7 @@ async def packet_entries(
         .mappings()
         .all()
     )
+    visible_prefix = await _published_sign_only_prefix(connection, kind, owner_id)
     result.extend(
         {
             "id": str(row["id"]),
@@ -134,8 +136,34 @@ async def packet_entries(
             "createdAt": row["created_at"].isoformat(),
         }
         for row in files
+        if visible_prefix is None or str(row["relative_path"]).startswith(visible_prefix)
     )
     return result
+
+
+async def _published_sign_only_prefix(
+    connection: AsyncConnection, kind: str, owner_id: UUID
+) -> str | None:
+    if kind != "outgoing":
+        return None
+    row = (
+        (await connection.execute(
+            select(ai_referent_letters.c.workflow_kind, ai_referent_letters.c.status)
+            .where(ai_referent_letters.c.id == owner_id)
+        )).mappings().one_or_none()
+    )
+    if row is None or row["workflow_kind"] != "sign_only":
+        return None
+    if row["status"] != "signed":
+        return "signed/hidden/"
+    job_id = await connection.scalar(
+        select(ai_referent_delivery_commands.c.id).where(
+            ai_referent_delivery_commands.c.letter_id == owner_id,
+            ai_referent_delivery_commands.c.kind == "sign_only",
+            ai_referent_delivery_commands.c.status == "completed",
+        ).order_by(ai_referent_delivery_commands.c.completed_at.desc()).limit(1)
+    )
+    return f"signed/{job_id}/" if job_id else "signed/hidden/"
 
 
 def packet_archive_filename(number: str, subject: str) -> str:
@@ -248,6 +276,12 @@ async def file_metadata(
     row = (await connection.execute(query)).mappings().one_or_none()
     if row is None:
         raise HTTPException(404, "Файл не найден.")
+    if source != "attachment":
+        visible_prefix = await _published_sign_only_prefix(connection, kind, owner_id)
+        if visible_prefix is not None and not str(row["relative_path"]).startswith(
+            visible_prefix
+        ):
+            raise HTTPException(404, "Файл ещё не опубликован.")
     return row
 
 
