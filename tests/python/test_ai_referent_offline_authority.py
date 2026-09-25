@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -83,13 +84,14 @@ def test_client_uses_agent_token_routes_for_lease(monkeypatch):
     epoch = str(uuid4())
     assert client.start_offline_authority() == {"ok": True}
     assert client.heartbeat_offline_authority(epoch) == {"ok": True}
-    assert client.offline_rights(epoch) == {"ok": True}
+    snapshot_id = str(uuid4())
+    assert client.offline_rights(epoch, snapshot_id) == {"ok": True}
     assert calls == [
         ("/ai-referent/agent/offline/authority:start?agentId=referent-pc", {}, "POST"),
         ("/ai-referent/agent/offline/authority:heartbeat",
          {"agentId": "referent-pc", "epoch": epoch}, "POST"),
         (f"/ai-referent/agent/offline/rights?agentId=referent-pc&epoch={epoch}",
-         None, "GET"),
+         {"snapshotId": snapshot_id}, "POST"),
     ]
 
 
@@ -98,25 +100,53 @@ def test_last_verified_rights_replace_revoked_ids_atomically(tmp_path):
     epoch = str(uuid4())
     journal.set_authority_phase("referent-pc", epoch, "online")
 
-    def response(actor_ids, stamp):
+    def response(actor_ids, stamp, snapshot_id):
         actors = [{"telegramId": value, "userId": str(uuid4()),
                    "fullName": "Сотрудник", "role": "employee", "reviewerKeys": []}
                   for value in actor_ids]
         canonical = json.dumps(actors, ensure_ascii=False, sort_keys=True,
                                separators=(",", ":"))
-        return {"epoch": epoch, "actors": actors, "verifiedAt": stamp,
+        return {"snapshotId": snapshot_id, "epoch": epoch,
+                "actors": actors, "verifiedAt": stamp,
                 "contentSha256": hashlib.sha256(canonical.encode()).hexdigest()}
 
-    first = response(["123"], "2026-09-25T12:00:00Z")
+    first_id = journal.prepare_offline_rights(epoch)
+    assert OfflineJournal(tmp_path).prepare_offline_rights(epoch) == first_id
+    first = response(["123"], "2026-09-25T12:00:00Z", first_id)
+    journal.save_offline_rights(first)
     journal.save_offline_rights(first)
     assert journal.offline_actor("123")["telegramId"] == "123"
-    later = response(["456"], "2026-09-25T12:00:01Z")
+    later_id = journal.prepare_offline_rights(epoch)
+    assert later_id != first_id
+    later = response(["456"], "2026-09-25T12:00:01Z", later_id)
     journal.save_offline_rights(later)
     assert journal.offline_actor("123") is None
     assert journal.offline_actor("456")["telegramId"] == "456"
+    unrequested = response(["789"], "2026-09-25T12:00:02Z", str(uuid4()))
+    with pytest.raises(ValueError, match="сохранённому запросу"):
+        journal.save_offline_rights(unrequested)
     with pytest.raises(ValueError, match="старой"):
         journal.save_offline_rights(first)
     damaged = dict(later, contentSha256="0" * 64)
     with pytest.raises(ValueError, match="сумма"):
         journal.save_offline_rights(damaged)
     assert journal.offline_actor("456") is not None
+    with journal.connect() as connection:
+        connection.execute(
+            "UPDATE rights_snapshot SET epoch = ? WHERE id = 1", (str(uuid4()),)
+        )
+    assert journal.offline_actor("456") is None
+
+
+def test_older_local_rights_table_is_upgraded_without_claiming_replay_evidence(tmp_path):
+    with sqlite3.connect(tmp_path / "offline-journal.sqlite") as connection:
+        connection.execute(
+            "CREATE TABLE rights_snapshot (id INTEGER PRIMARY KEY, epoch TEXT NOT NULL, "
+            "payload TEXT NOT NULL, verified_at TEXT NOT NULL, content_sha256 TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO rights_snapshot VALUES (1, ?, '[]', ?, ?)",
+            (str(uuid4()), "2026-09-25T12:00:00+00:00", hashlib.sha256(b"[]").hexdigest()),
+        )
+    journal = OfflineJournal(tmp_path)
+    assert journal.offline_rights_evidence() is None

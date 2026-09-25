@@ -1057,6 +1057,18 @@ ai_referent_authority = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+ai_referent_offline_rights_snapshots = sa.Table(
+    "ai_referent_offline_rights_snapshots",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("reviewer_revision", sa.Integer(), nullable=False),
+    sa.Column("actors", postgresql.JSONB(), nullable=False),
+    sa.Column("content_sha256", sa.String(64), nullable=False),
+    sa.Column("verified_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,

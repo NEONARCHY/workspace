@@ -7,6 +7,8 @@ from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .ai_referent_configuration_service import read_configuration
@@ -15,13 +17,32 @@ from .ai_referent_shared_service import telegram_actor
 from .tables import (
     ai_referent_authority,
     ai_referent_configuration,
+    ai_referent_offline_rights_snapshots,
     telegram_bot_grants,
     telegram_identities,
 )
 
 
+def _stored_snapshot(
+    row: RowMapping, *, agent_id: str, epoch: UUID
+) -> OfflineRightsSnapshot:
+    if row["agent_id"] != agent_id or row["epoch"] != epoch:
+        raise HTTPException(409, "Копия прав относится к другому роботу или эпохе.")
+    canonical = json.dumps(
+        row["actors"], ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if hashlib.sha256(canonical).hexdigest() != row["content_sha256"]:
+        raise HTTPException(500, "Контрольная сумма сохранённых прав не совпала.")
+    return OfflineRightsSnapshot(
+        snapshot_id=row["id"], epoch=epoch, verified_at=row["verified_at"],
+        reviewer_revision=row["reviewer_revision"], actors=row["actors"],
+        content_sha256=row["content_sha256"],
+    )
+
+
 async def export_offline_rights(
-    connection: AsyncConnection, *, agent_id: str, epoch: UUID, enabled: bool
+    connection: AsyncConnection, *, agent_id: str, epoch: UUID,
+    snapshot_id: UUID, enabled: bool
 ) -> OfflineRightsSnapshot:
     if not enabled:
         raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
@@ -30,6 +51,15 @@ async def export_offline_rights(
     )
     if assigned != agent_id:
         raise HTTPException(403, "Этот компьютер не назначен агентом отправки.")
+    existing = (
+        await connection.execute(
+            select(ai_referent_offline_rights_snapshots)
+            .where(ai_referent_offline_rights_snapshots.c.id == snapshot_id)
+            .with_for_update()
+        )
+    ).mappings().first()
+    if existing is not None:
+        return _stored_snapshot(existing, agent_id=agent_id, epoch=epoch)
     authority = (
         await connection.execute(select(ai_referent_authority).with_for_update(read=True))
     ).mappings().first()
@@ -81,10 +111,21 @@ async def export_offline_rights(
         [actor.model_dump(mode="json", by_alias=True) for actor in actors],
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8")
-    return OfflineRightsSnapshot(
-        epoch=epoch,
-        verified_at=now,
-        reviewer_revision=configuration.revision,
-        actors=actors,
-        content_sha256=hashlib.sha256(canonical).hexdigest(),
+    await connection.execute(
+        pg_insert(ai_referent_offline_rights_snapshots)
+        .values(
+            id=snapshot_id, agent_id=agent_id, epoch=epoch,
+            reviewer_revision=configuration.revision,
+            actors=[actor.model_dump(mode="json", by_alias=True) for actor in actors],
+            content_sha256=hashlib.sha256(canonical).hexdigest(), verified_at=now,
+        )
+        .on_conflict_do_nothing(index_elements=[ai_referent_offline_rights_snapshots.c.id])
     )
+    saved = (
+        await connection.execute(
+            select(ai_referent_offline_rights_snapshots)
+            .where(ai_referent_offline_rights_snapshots.c.id == snapshot_id)
+            .with_for_update()
+        )
+    ).mappings().one()
+    return _stored_snapshot(saved, agent_id=agent_id, epoch=epoch)

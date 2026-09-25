@@ -68,6 +68,7 @@ from ..ai_referent_schemas import (
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
     OfflineRightsSnapshot,
+    OfflineRightsSnapshotRequest,
     UpdateAIReferentLetterRequest,
 )
 from ..ai_referent_service import (
@@ -853,12 +854,13 @@ async def heartbeat_agent_authority(
     )
 
 
-@router.get(
+@router.post(
     "/agent/offline/rights",
     response_model=OfflineRightsSnapshot,
     dependencies=[Depends(require_agent_token)],
 )
 async def get_agent_offline_rights(
+    payload: OfflineRightsSnapshotRequest,
     request: Request,
     connection: Connection,
     agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
@@ -866,6 +868,7 @@ async def get_agent_offline_rights(
 ) -> OfflineRightsSnapshot:
     return await export_offline_rights(
         connection, agent_id=agent_id, epoch=epoch,
+        snapshot_id=payload.snapshot_id,
         enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
 

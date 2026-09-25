@@ -108,10 +108,17 @@ class OfflineJournal:
                 );
                 CREATE TABLE IF NOT EXISTS rights_snapshot (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
+                    snapshot_id TEXT,
                     epoch TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     verified_at TEXT NOT NULL,
                     content_sha256 TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS rights_requests (
+                    snapshot_id TEXT PRIMARY KEY,
+                    epoch TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT
                 );
                 CREATE TABLE IF NOT EXISTS telegram_cursor (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -125,6 +132,11 @@ class OfflineJournal:
                 );
                 """
             )
+            columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(rights_snapshot)")
+            }
+            if "snapshot_id" not in columns:
+                connection.execute("ALTER TABLE rights_snapshot ADD COLUMN snapshot_id TEXT")
 
     def initialize_telegram_offset(self, previous_offset: int | None) -> int:
         """Import the old post-handle cursor only once before using this inbox."""
@@ -256,8 +268,33 @@ class OfflineJournal:
                 (phase, _now()),
             )
 
+    def prepare_offline_rights(self, epoch: str) -> str:
+        """Persist the request ID before a network call; reuse it after a crash."""
+        epoch = str(UUID(epoch))
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            state = connection.execute(
+                "SELECT epoch, phase FROM authority_state WHERE id = 1"
+            ).fetchone()
+            if state is None or state["epoch"] != epoch or state["phase"] != "online":
+                raise ValueError("Нет действующей аренды для запроса прав.")
+            pending = connection.execute(
+                "SELECT snapshot_id FROM rights_requests "
+                "WHERE epoch = ? AND completed_at IS NULL ORDER BY created_at LIMIT 1",
+                (epoch,),
+            ).fetchone()
+            if pending is not None:
+                return str(pending["snapshot_id"])
+            snapshot_id = str(uuid4())
+            connection.execute(
+                "INSERT INTO rights_requests (snapshot_id, epoch, created_at) VALUES (?, ?, ?)",
+                (snapshot_id, epoch, _now()),
+            )
+            return snapshot_id
+
     def save_offline_rights(self, response: dict[str, Any]) -> None:
         """Atomically replace the last server-verified actor set, including revocations."""
+        snapshot_id = str(UUID(str(response["snapshotId"])))
         epoch = str(UUID(str(response["epoch"])))
         actors = response["actors"]
         if not isinstance(actors, list):
@@ -285,36 +322,83 @@ class OfflineJournal:
             ).fetchone()
             if state is None or state["epoch"] != epoch or state["phase"] != "online":
                 raise ValueError("Нет действующей аренды для сохранения прав.")
+            request = connection.execute(
+                "SELECT epoch, completed_at FROM rights_requests WHERE snapshot_id = ?",
+                (snapshot_id,),
+            ).fetchone()
+            if request is None or request["epoch"] != epoch:
+                raise ValueError("Копия прав не соответствует сохранённому запросу.")
             previous = connection.execute(
-                "SELECT verified_at, content_sha256 FROM rights_snapshot WHERE id = 1"
+                "SELECT snapshot_id, verified_at, content_sha256 "
+                "FROM rights_snapshot WHERE id = 1"
             ).fetchone()
             if previous is not None:
                 prior_time = datetime.fromisoformat(previous["verified_at"])
                 if verified_at < prior_time or (
-                    verified_at == prior_time and digest != previous["content_sha256"]
+                    verified_at == prior_time and (
+                        digest != previous["content_sha256"]
+                        or snapshot_id != previous["snapshot_id"]
+                    )
                 ):
                     raise ValueError("Нельзя заменить права более старой или иной копией.")
+            if request["completed_at"] is not None:
+                if (
+                    previous is None or previous["snapshot_id"] != snapshot_id
+                    or previous["content_sha256"] != digest
+                    or prior_time != verified_at
+                ):
+                    raise ValueError("Нельзя повторно применить старую копию прав.")
+                return
             connection.execute(
-                "INSERT INTO rights_snapshot VALUES (1, ?, ?, ?, ?) "
-                "ON CONFLICT(id) DO UPDATE SET epoch = excluded.epoch, "
+                "INSERT INTO rights_snapshot "
+                "(id, snapshot_id, epoch, payload, verified_at, content_sha256) "
+                "VALUES (1, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET snapshot_id = excluded.snapshot_id, "
+                "epoch = excluded.epoch, "
                 "payload = excluded.payload, verified_at = excluded.verified_at, "
                 "content_sha256 = excluded.content_sha256",
-                (epoch, canonical, verified_at.isoformat(), digest),
+                (snapshot_id, epoch, canonical, verified_at.isoformat(), digest),
             )
+            connection.execute(
+                "UPDATE rights_requests SET completed_at = ? WHERE snapshot_id = ?",
+                (_now(), snapshot_id),
+            )
+
+    def offline_rights_evidence(self) -> dict[str, str] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT snapshot_id, epoch, verified_at, content_sha256 "
+                "FROM rights_snapshot WHERE id = 1"
+            ).fetchone()
+        if row is None or row["snapshot_id"] is None:
+            return None  # Older unregistered copies cannot authorize replay.
+        return dict(row)
 
     def offline_actor(self, telegram_id: str) -> dict[str, Any] | None:
         """Missing or revoked IDs have no access; old cache cannot grant it."""
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT payload, content_sha256 FROM rights_snapshot WHERE id = 1"
+                "SELECT snapshot_id, epoch, payload, content_sha256 "
+                "FROM rights_snapshot WHERE id = 1"
             ).fetchone()
-        if row is None:
+            state = connection.execute(
+                "SELECT epoch FROM authority_state WHERE id = 1"
+            ).fetchone()
+        if (
+            row is None or row["snapshot_id"] is None or state is None
+            or row["epoch"] != state["epoch"]
+        ):
             return None
         if hashlib.sha256(row["payload"].encode("utf-8")).hexdigest() != row["content_sha256"]:
             raise ValueError("Локальная копия Telegram-доступов повреждена.")
-        for actor in json.loads(row["payload"]):
-            if actor["telegramId"] == telegram_id:
-                return actor
+        actors = json.loads(row["payload"])
+        if not isinstance(actors, list):
+            raise ValueError("Локальная копия Telegram-доступов повреждена.")
+        for actor in actors:
+            if not isinstance(actor, dict) or any(not isinstance(key, str) for key in actor):
+                raise ValueError("Локальная копия Telegram-доступов повреждена.")
+            if actor.get("telegramId") == telegram_id:
+                return {key: value for key, value in actor.items()}
         return None
 
     def prepare_number_reservation(self, agent_id: str, count: int) -> str:

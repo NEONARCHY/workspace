@@ -125,7 +125,12 @@ class OfflineTelegramActor(ApiModel):
     reviewer_keys: list[str]
 
 
+class OfflineRightsSnapshotRequest(ApiModel):
+    snapshot_id: UUID
+
+
 class OfflineRightsSnapshot(ApiModel):
+    snapshot_id: UUID
     epoch: UUID
     verified_at: datetime
     reviewer_revision: int
