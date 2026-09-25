@@ -530,9 +530,11 @@ async def get_agent_letters(
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     active_only: Annotated[bool, Query(alias="activeOnly")] = False,
+    sent_only: Annotated[bool, Query(alias="sentOnly")] = False,
 ) -> AIReferentRegistryResponse:
     return await load_letters(
-        connection, actor, offset=offset, limit=limit, active_only=active_only
+        connection, actor, offset=offset, limit=limit,
+        active_only=active_only, history_only=sent_only,
     )
 
 
@@ -630,6 +632,8 @@ async def get_packet(
 async def agent_packet(
     kind: Kind, owner_id: UUID, connection: Connection, actor: Actor
 ) -> dict[str, object]:
+    if kind == "archive":
+        raise HTTPException(403, "Архив доступен только в Workspace.")
     return await get_packet(kind, owner_id, connection, actor)
 
 
@@ -687,6 +691,8 @@ async def agent_download_file(
     actor: Actor,
     source: Literal["packet", "attachment"] = "packet",
 ) -> Response:
+    if kind == "archive":
+        raise HTTPException(403, "Архив доступен только в Workspace.")
     return await download_packet_file(kind, owner_id, file_id, request, connection, actor, source)
 
 
@@ -895,7 +901,7 @@ async def agent_archive(
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> dict[str, object]:
-    return await get_archive(connection, actor, offset, limit)
+    raise HTTPException(403, "Архив доступен только в Workspace.")
 
 
 @router.put("/agent/archive", dependencies=[Depends(require_agent_token)])
