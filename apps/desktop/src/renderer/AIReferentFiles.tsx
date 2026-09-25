@@ -20,9 +20,10 @@ export function saveReferentBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AIReferentFiles({ token, kind, ownerId, letterLabel }: {
+export function AIReferentFiles({ token, kind, ownerId, letterLabel, details }: {
   readonly token: string; readonly kind: AIReferentPacketKind; readonly ownerId: string;
   readonly letterLabel?: string;
+  readonly details?: readonly { readonly label: string; readonly value: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<readonly AIReferentPacketFile[]>([]);
@@ -59,7 +60,8 @@ export function AIReferentFiles({ token, kind, ownerId, letterLabel }: {
           <DialogTitle action={<Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть пакет" onClick={() => setOpen(false)} />}>Пакет документов</DialogTitle>
           <DialogContent className="ai-referent-detail-content ai-referent-packet-content">
             <p className="ai-referent-packet-context">{letterLabel || (kind === "journal" ? "Excel-журналы" : "Письмо и вложения")}</p>
-            <p className="ai-referent-packet-help">Доступные документы и сохранённые версии. Оригиналы остаются на ПК референта.</p>
+            {details?.length ? <dl className="ai-referent-packet-details">{details.map(({ label, value }) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : null}
+            <p className="ai-referent-packet-help">Актуальное письмо и приложения. Исходные рабочие файлы остаются в защищённом хранилище.</p>
             {loading ? <Spinner label="Загружаем файлы" /> : null}
             {error ? <p role="alert">{error}</p> : null}
             {!loading && !error && files.length === 0 ? <p>Робот ещё не передал файлы этого письма.</p> : null}

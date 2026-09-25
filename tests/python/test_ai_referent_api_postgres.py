@@ -620,11 +620,23 @@ async def test_ai_referent_agent_syncs_incoming_registry_and_excel_journal() -> 
         assert registry.status_code == 200, registry.text
         payload = registry.json()
         assert payload["totalCount"] == 1
+        assert payload["filteredCount"] == 1
         assert payload["attentionCount"] == 1
         assert payload["withAttachmentsCount"] == 1
         assert payload["letters"][0]["responsibleDisplayName"] == "Бобур"
         assert payload["letters"][0]["responsibleUserId"] is None
         assert payload["journal"]["fileName"] == "register.xlsx"
+
+        registered = await client.get(
+            "/api/v1/ai-referent/incoming",
+            params={"category": "registered"},
+            headers=admin_headers,
+        )
+        assert registered.status_code == 200, registered.text
+        assert registered.json()["letters"] == []
+        assert registered.json()["filteredCount"] == 0
+        assert registered.json()["totalCount"] == payload["totalCount"]
+        assert registered.json()["attentionCount"] == payload["attentionCount"]
 
         downloaded = await client.get("/api/v1/ai-referent/journal/latest", headers=admin_headers)
         assert downloaded.status_code == 200
