@@ -30,7 +30,7 @@ for (const entry of entries) {
   }
 }
 const itemCount = entries.reduce((total, entry) => total + entry.items.length, 0);
-if (itemCount > 100) fail("a pending release may contain at most 100 changes");
+if (itemCount > 150) fail("a pending release may contain at most 150 changes");
 
 const [base, head = "HEAD"] = process.argv.slice(2);
 if (base && !/^0+$/.test(base)) {
