@@ -16,6 +16,7 @@ from yuksalish_api.project_hub_schemas import (
     ProjectHubOverview,
     ProjectHubResponse,
     ProjectHubWrite,
+    ProjectWorkCommentWrite,
     ProjectWorkItemResponse,
     ProjectWorkItemWrite,
     ProjectWorkStatusWrite,
@@ -23,10 +24,12 @@ from yuksalish_api.project_hub_schemas import (
     ProjectWorkstreamWrite,
 )
 from yuksalish_api.project_hub_service import (
+    add_item_comment,
     create_funding_request,
     decide_funding_request,
     load_funding_requests,
     load_hub,
+    load_request_targets,
     publish_event,
     save_item,
     save_project,
@@ -54,6 +57,12 @@ async def get_hub(user: User, connection: Connection) -> ProjectHubOverview:
 async def get_requests(user: User, connection: Connection) -> list[ProjectFundingResponse]:
     await ensure_module_action(connection, user, "project_funding", "view")
     return await load_funding_requests(connection, user)
+
+
+@router.get("/request-targets", response_model=ProjectHubOverview)
+async def get_request_targets(user: User, connection: Connection) -> ProjectHubOverview:
+    await ensure_module_action(connection, user, "project_funding", "create")
+    return await load_request_targets(connection, user)
 
 
 @router.post("/projects", response_model=ProjectHubResponse, status_code=201)
@@ -158,6 +167,24 @@ async def patch_item_status(
     await ensure_module_action(connection, user, "project_hub", "edit")
     try:
         return await set_item_status(connection, user, project_id, item_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.post(
+    "/projects/{project_id}/items/{item_id}/comments",
+    response_model=ProjectWorkItemResponse,
+)
+async def post_item_comment(
+    project_id: UUID,
+    item_id: UUID,
+    payload: ProjectWorkCommentWrite,
+    user: User,
+    connection: Connection,
+) -> ProjectWorkItemResponse:
+    await ensure_module_action(connection, user, "project_hub", "view")
+    try:
+        return await add_item_comment(connection, user, project_id, item_id, payload)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
 

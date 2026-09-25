@@ -1,5 +1,5 @@
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -11,15 +11,18 @@ from yuksalish_api.project_hub_schemas import (
     ProjectFundingAction,
     ProjectFundingWrite,
     ProjectHubWrite,
+    ProjectWorkCommentWrite,
     ProjectWorkItemWrite,
     ProjectWorkStatusWrite,
     ProjectWorkstreamWrite,
 )
 from yuksalish_api.project_hub_service import (
+    add_item_comment,
     create_funding_request,
     decide_funding_request,
     load_funding_requests,
     load_hub,
+    load_request_targets,
     materialize_project_reminders,
     publish_event,
     save_item,
@@ -92,9 +95,22 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                 )
                 project = await save_project(connection, manager, details)
                 workstream = await save_workstream(
-                    connection, manager, UUID(project.id),
-                    ProjectWorkstreamWrite(title="Проведение форума"),
+                    connection,
+                    manager,
+                    UUID(project.id),
+                    ProjectWorkstreamWrite(
+                        title="Проведение форума",
+                        start_date=date(2030, 9, 1),
+                        end_date=date(2030, 10, 1),
+                    ),
                 )
+                assert workstream.end_date == date(2030, 10, 1)
+                old_client_edit = await save_workstream(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkstreamWrite(title="Проведение форума", description="Уточнено"),
+                    UUID(workstream.id),
+                )
+                assert old_client_edit.end_date == date(2030, 10, 1)
                 assert project.approver_user_ids == [str(first_id), str(second_id)]
                 assert any(
                     candidate.id == workstream.id
@@ -135,6 +151,85 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                         assignee_user_ids=[str(first_id)],
                     ),
                 )
+                targets = await load_request_targets(connection, first)
+                assert [candidate.id for candidate in targets.items] == [item.id]
+                assert targets.items[0].actions == []
+                assert not (await load_request_targets(connection, outsider)).items
+                started = await set_item_status(
+                    connection,
+                    manager,
+                    UUID(project.id),
+                    UUID(item.id),
+                    ProjectWorkStatusWrite(status="active", expected_status="planned"),
+                )
+                assert started.status == "active" and started.actions[-1].to_status == "active"
+                with pytest.raises(WorkspaceRepositoryError) as stale_status:
+                    await set_item_status(
+                        connection,
+                        manager,
+                        UUID(project.id),
+                        UUID(item.id),
+                        ProjectWorkStatusWrite(status="completed", expected_status="planned"),
+                    )
+                assert stale_status.value.status_code == 409
+                commented = await add_item_comment(
+                    connection,
+                    first,
+                    UUID(project.id),
+                    UUID(item.id),
+                    ProjectWorkCommentWrite(comment="Площадка согласована"),
+                )
+                assert commented.actions[-1].comment == "Площадка согласована"
+                with pytest.raises(WorkspaceRepositoryError) as outsider_comment:
+                    await add_item_comment(
+                        connection,
+                        outsider,
+                        UUID(project.id),
+                        UUID(item.id),
+                        ProjectWorkCommentWrite(comment="outsider"),
+                    )
+                assert outsider_comment.value.status_code == 404
+                with pytest.raises(WorkspaceRepositoryError) as no_reason:
+                    await set_item_status(
+                        connection,
+                        manager,
+                        UUID(project.id),
+                        UUID(item.id),
+                        ProjectWorkStatusWrite(status="cancelled", expected_status="active"),
+                    )
+                assert no_reason.value.status_code == 422
+                cancelled_task = await save_item(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkItemWrite(
+                        workstream_id=workstream.id, kind="task", title="Отменить"
+                    ),
+                )
+                cancelled_with_reason = await set_item_status(
+                    connection, manager, UUID(project.id), UUID(cancelled_task.id),
+                    ProjectWorkStatusWrite(
+                        status="cancelled", expected_status="planned", comment="План изменён"
+                    ),
+                )
+                assert cancelled_with_reason.actions[-1].comment == "План изменён"
+                rejected_task = await save_item(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkItemWrite(
+                        workstream_id=workstream.id, kind="task", title="Проверить"
+                    ),
+                )
+                rejected_with_reason = await set_item_status(
+                    connection, manager, UUID(project.id), UUID(rejected_task.id),
+                    ProjectWorkStatusWrite(
+                        status="rejected", expected_status="planned", comment="Нужна доработка"
+                    ),
+                )
+                assert rejected_with_reason.status == "rejected"
+                assert rejected_with_reason.actions[-1].comment == "Нужна доработка"
+                reopened = await set_item_status(
+                    connection, manager, UUID(project.id), UUID(rejected_task.id),
+                    ProjectWorkStatusWrite(status="active", expected_status="rejected"),
+                )
+                assert reopened.status == "active"
                 request = await create_funding_request(
                     connection,
                     manager,
@@ -277,6 +372,12 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                         due_at=due + timedelta(hours=1),
                     ),
                 )
+                with pytest.raises(WorkspaceRepositoryError) as rejected_event:
+                    await set_item_status(
+                        connection, manager, UUID(project.id), UUID(event.id),
+                        ProjectWorkStatusWrite(status="rejected", comment="Нет"),
+                    )
+                assert rejected_event.value.status_code == 422
                 published = await publish_event(
                     connection,
                     manager,

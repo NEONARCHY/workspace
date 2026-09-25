@@ -4,18 +4,21 @@ import { FluentProvider } from "@fluentui/react-components";
 import type { ProjectHubOverview, ProjectHubRequest } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { ProjectHubView } from "./ProjectHubView";
+import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
 import { people } from "./test-fixtures/demo-data";
 import {
   createProjectHubRequest, decideProjectHubRequest, loadProjectHub,
+  loadProjectHubRequestTargets,
   loadProjectHubRequests, saveProjectHubProject,
-  saveProjectHubWorkstream, uploadWorkspaceAttachment,
+  saveProjectHubWorkstream, uploadWorkspaceAttachment, commentProjectHubItem,
+  setProjectHubItemStatus,
 } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
-  loadProjectHub: vi.fn(), loadProjectHubRequests: vi.fn(), saveProjectHubProject: vi.fn(),
+  loadProjectHub: vi.fn(), loadProjectHubRequestTargets: vi.fn(), loadProjectHubRequests: vi.fn(), saveProjectHubProject: vi.fn(),
   saveProjectHubItem: vi.fn(), setProjectHubItemStatus: vi.fn(), publishProjectHubEvent: vi.fn(),
   saveProjectHubWorkstream: vi.fn(), uploadWorkspaceAttachment: vi.fn(), downloadWorkspaceAttachment: vi.fn(),
-  createProjectHubRequest: vi.fn(), decideProjectHubRequest: vi.fn(),
+  createProjectHubRequest: vi.fn(), decideProjectHubRequest: vi.fn(), commentProjectHubItem: vi.fn(),
 }));
 
 const project: ProjectHubOverview["projects"][number] = {
@@ -31,7 +34,7 @@ const item: ProjectHubOverview["items"][number] = {
   startsAt: "2030-10-01T10:00:00Z", dueAt: "2030-10-01T11:00:00Z", budget: 500,
   status: "planned", assigneeUserIds: [people[1]!.id], calendarEventId: null,
   createdByUserId: people[0]!.id, createdAt: "2026-09-25T00:00:00Z",
-  updatedAt: "2026-09-25T00:00:00Z", requestCount: 2, approvedRequestCount: 1,
+  updatedAt: "2026-09-25T00:00:00Z", requestCount: 2, approvedRequestCount: 1, actions: [],
 };
 const approved: ProjectHubRequest = {
   id: "request-1", projectId: project.id, projectTitle: project.title,
@@ -50,21 +53,28 @@ function setup(mode: "projects" | "funding" = "projects") {
 }
 
 beforeEach(() => {
+  installSpatialGeometry();
   vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project], workstreams: [{ id: "stream-1", projectId: project.id, title: "Проведение форума", description: "", sortOrder: 0, createdAt: project.createdAt, updatedAt: project.updatedAt }], items: [item], requests: [] });
+  vi.mocked(loadProjectHubRequestTargets).mockResolvedValue({ projects: [project], workstreams: [{ id: "stream-1", projectId: project.id, title: "Проведение форума", description: "", sortOrder: 0, createdAt: project.createdAt, updatedAt: project.updatedAt }], items: [item], requests: [] });
   vi.mocked(loadProjectHubRequests).mockResolvedValue([approved, pending]);
   vi.mocked(saveProjectHubProject).mockResolvedValue(project);
   vi.mocked(createProjectHubRequest).mockResolvedValue(pending);
   vi.mocked(decideProjectHubRequest).mockResolvedValue({ ...pending, status: "approved" });
+  vi.mocked(commentProjectHubItem).mockResolvedValue(item);
+  vi.mocked(setProjectHubItemStatus).mockResolvedValue({ ...item, status: "cancelled" });
 });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
   it("shows the own project work and multiple requests without global task/payment data", async () => {
     setup();
     expect(await screen.findByRole("heading", { name: project.title })).toBeInTheDocument();
     const work = screen.getByRole("region", { name: "Направления и работы проекта" });
-    expect(within(work).getByRole("heading", { name: "Проведение форума" })).toBeInTheDocument();
+    expect(within(work).getByText("Проведение форума")).toBeInTheDocument();
+    expect(within(work).queryByText("Форум")).not.toBeInTheDocument();
+    fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
     expect(within(work).getByText("Форум")).toBeInTheDocument();
+    fireEvent.click(within(work).getByRole("button", { name: /Мероприятие.*Форум/ }));
     expect(within(work).getByText(/Аренда зала · Согласовано/)).toBeInTheDocument();
     expect(within(work).getByText(/Печать баннеров · На согласовании/)).toBeInTheDocument();
     expect(screen.getByLabelText("Обзор проекта")).toHaveTextContent("300");
@@ -103,7 +113,7 @@ describe("standalone project hub", () => {
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Название направления" }), { target: { value: "Открытие центра" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Сохранить направление" }));
     await waitFor(() => expect(saveProjectHubWorkstream).toHaveBeenCalledWith(
-      "test-token", project.id, { title: "Открытие центра", description: "" }, undefined,
+      "test-token", project.id, { title: "Открытие центра", description: "", startDate: null, endDate: null }, undefined,
     ));
   });
 
@@ -140,13 +150,79 @@ describe("standalone project hub", () => {
   it("requires a final approval date when creating a project request", async () => {
     setup();
     const work = await screen.findByRole("region", { name: "Направления и работы проекта" });
-    fireEvent.click(within(work).getByRole("button", { name: "Новая заявка" }));
+    fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
+    fireEvent.click(within(work).getByRole("button", { name: /Мероприятие.*Форум/ }));
+    fireEvent.click(within(work).getByRole("button", { name: "Новая проектная заявка" }));
     const dialog = screen.getByRole("dialog");
     fireEvent.change(within(dialog).getByRole("spinbutton", { name: /Сумма/ }), { target: { value: "100" } });
     fireEvent.change(within(dialog).getByLabelText("Крайний срок согласования"), { target: { value: "2030-09-30T17:00" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
     await waitFor(() => expect(createProjectHubRequest).toHaveBeenCalledWith(
       "test-token", project.id, expect.objectContaining({ approvalDueAt: expect.any(String) }),
+    ));
+  });
+
+  it("creates a request from the funding section with project and direction selected", async () => {
+    setup("funding");
+    fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Направление"), { target: { value: "stream-1" } });
+    fireEvent.change(within(dialog).getByLabelText("Задача или мероприятие"), { target: { value: item.id } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Название" }), { target: { value: "Печать программы" } });
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: /Сумма/ }), { target: { value: "100" } });
+    fireEvent.change(within(dialog).getByLabelText("Крайний срок согласования"), { target: { value: "2030-09-30T17:00" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
+    await waitFor(() => expect(createProjectHubRequest).toHaveBeenCalledWith(
+      "test-token", project.id, expect.objectContaining({ itemId: item.id, title: "Печать программы" }),
+    ));
+  });
+
+  it("keeps comments and cancellation reasons in the project work card", async () => {
+    setup();
+    const work = await screen.findByRole("region", { name: "Направления и работы проекта" });
+    fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
+    fireEvent.click(within(work).getByRole("button", { name: /Мероприятие.*Форум/ }));
+    const card = within(work).getByRole("complementary", { name: "Карточка проектной работы" });
+    fireEvent.change(within(card).getByRole("textbox", { name: "Новый комментарий" }), { target: { value: "Согласовать площадку" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Отправить" }));
+    await waitFor(() => expect(commentProjectHubItem).toHaveBeenCalledWith("test-token", project.id, item.id, "Согласовать площадку"));
+    fireEvent.click(within(card).getByRole("button", { name: "Отменить с причиной" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Подтвердить отмену" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Причина отмены" }), { target: { value: "Форум перенесён" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить отмену" }));
+    await waitFor(() => expect(setProjectHubItemStatus).toHaveBeenCalledWith(
+      "test-token", project.id, item.id, "cancelled", "planned", "Форум перенесён",
+    ));
+  });
+
+  it("moves a project task through the protected status action on drop", async () => {
+    const task = { ...item, kind: "task" as const, title: "Подготовить форум" };
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project], workstreams: [{ id: "stream-1", projectId: project.id, title: "Проведение форума", description: "", sortOrder: 0, createdAt: project.createdAt, updatedAt: project.updatedAt }], items: [task], requests: [] });
+    vi.mocked(setProjectHubItemStatus).mockResolvedValue({ ...task, status: "active" });
+    setup();
+    const work = await screen.findByRole("region", { name: "Направления и работы проекта" });
+    fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
+    await dropSpatialCard(document.querySelector('[data-spatial-card="item-1"]')!, document.querySelector('[data-spatial-lane="active"]')!);
+    await waitFor(() => expect(setProjectHubItemStatus).toHaveBeenCalledWith(
+      "test-token", project.id, item.id, "active", "planned",
+    ));
+  });
+
+  it("requires a reason before rejecting a project task", async () => {
+    const task = { ...item, kind: "task" as const, title: "Подготовить форум" };
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project], workstreams: [{ id: "stream-1", projectId: project.id, title: "Проведение форума", description: "", sortOrder: 0, createdAt: project.createdAt, updatedAt: project.updatedAt }], items: [task], requests: [] });
+    setup();
+    const work = await screen.findByRole("region", { name: "Направления и работы проекта" });
+    fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
+    fireEvent.click(within(work).getByRole("button", { name: /Задача.*Подготовить форум/ }));
+    fireEvent.click(within(work).getByRole("button", { name: "Отклонить с причиной" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Подтвердить отклонение" })).toBeDisabled();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Причина отклонения" }), { target: { value: "Нужно уточнить смету" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить отклонение" }));
+    await waitFor(() => expect(setProjectHubItemStatus).toHaveBeenCalledWith(
+      "test-token", project.id, item.id, "rejected", "planned", "Нужно уточнить смету",
     ));
   });
 });
