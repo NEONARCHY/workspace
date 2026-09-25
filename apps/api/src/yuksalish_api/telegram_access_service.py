@@ -13,6 +13,7 @@ from .tables import (
     ai_referent_configuration,
     ai_referent_reviewers,
     audit_events,
+    hisobot_live_reports,
     telegram_bot_grants,
     telegram_identities,
     users,
@@ -26,7 +27,7 @@ from .telegram_access_schemas import (
 
 BOT_CATALOG = [
     BotDescriptor(key="ai_referent", label="AI Referent", connected=True),
-    BotDescriptor(key="hisobot", label="AI Hisobot", connected=False),
+    BotDescriptor(key="hisobot", label="AI Hisobot", connected=True),
     BotDescriptor(key="takliflar", label="Takliflar va Murojatlar", connected=False),
     BotDescriptor(key="hudud_rating", label="Hudud AI Reyting", connected=False),
     BotDescriptor(key="ai_news_reader", label="AI News Reader", connected=False),
@@ -57,7 +58,7 @@ async def _active_user(connection: AsyncConnection, user_id: UUID) -> RowMapping
 def _person(
     account: RowMapping,
     identity: RowMapping | None,
-    grants: set[str],
+    grants: dict[str, RowMapping],
 ) -> TelegramAccessPerson:
     verified = bool(identity and identity["telegram_id"] and identity["verified_at"])
     return TelegramAccessPerson(
@@ -72,6 +73,12 @@ def _person(
             identity["verification_source"] if identity is not None and verified else None
         ),
         bot_keys=[bot.key for bot in BOT_CATALOG if bot.key in grants],
+        hisobot_scope=grants["hisobot"]["report_scope"] if "hisobot" in grants else None,
+        hisobot_region=grants["hisobot"]["region_name"] if "hisobot" in grants else None,
+        hisobot_report_required=bool(grants["hisobot"]["report_required"])
+        if "hisobot" in grants else True,
+        hisobot_manager=bool(grants["hisobot"]["hisobot_manager"])
+        if "hisobot" in grants else False,
         revision=identity["revision"] if identity else 0,
     )
 
@@ -92,14 +99,12 @@ async def list_telegram_access(connection: AsyncConnection) -> TelegramAccessReg
         row["user_id"]: row
         for row in (await connection.execute(select(telegram_identities))).mappings().all()
     }
-    grants: dict[UUID, set[str]] = {}
-    for user_id, bot_key in (await connection.execute(
-        select(telegram_bot_grants.c.user_id, telegram_bot_grants.c.bot_key)
-    )).all():
-        grants.setdefault(user_id, set()).add(bot_key)
+    grants: dict[UUID, dict[str, RowMapping]] = {}
+    for grant in (await connection.execute(select(telegram_bot_grants))).mappings().all():
+        grants.setdefault(grant["user_id"], {})[grant["bot_key"]] = grant
     return TelegramAccessRegistry(
         bots=BOT_CATALOG,
-        people=[_person(account, identities.get(account["id"]), grants.get(account["id"], set()))
+        people=[_person(account, identities.get(account["id"]), grants.get(account["id"], {}))
                 for account in accounts],
     )
 
@@ -151,6 +156,13 @@ async def save_telegram_access(
         if conflict or reviewer_conflict:
             raise HTTPException(409, "Telegram ID уже относится к другому сотруднику.")
     active_id = identity["telegram_id"] if identity else None
+    if active_id and active_id != target_id:
+        # Keep imported historical reports attached to the same Workspace person
+        # when the administrator replaces their Telegram account.
+        await connection.execute(update(hisobot_live_reports).where(
+            hisobot_live_reports.c.telegram_id == active_id,
+            hisobot_live_reports.c.user_id.is_(None),
+        ).values(user_id=user_id))
     unchanged_id = bool(identity and identity["verified_at"] and active_id == target_id)
     now = datetime.now(UTC)
     verified_at = identity["verified_at"] if identity and unchanged_id else now
@@ -181,6 +193,10 @@ async def save_telegram_access(
         await connection.execute(
             insert(telegram_bot_grants).values(
                 user_id=user_id, bot_key=bot_key,
+                report_scope=payload.hisobot_scope if bot_key == "hisobot" else None,
+                region_name=payload.hisobot_region if bot_key == "hisobot" else None,
+                report_required=payload.hisobot_report_required if bot_key == "hisobot" else None,
+                hisobot_manager=payload.hisobot_manager if bot_key == "hisobot" else None,
                 updated_by_user_id=actor.id, updated_at=now,
             )
         )
@@ -209,4 +225,10 @@ async def save_telegram_access(
             telegram_identities.c.user_id == user_id
         ))).mappings().one()
     )
-    return _person(account, saved_identity, set(payload.bot_keys))
+    saved_grants = {
+        row["bot_key"]: row
+        for row in (await connection.execute(
+            select(telegram_bot_grants).where(telegram_bot_grants.c.user_id == user_id)
+        )).mappings().all()
+    }
+    return _person(account, saved_identity, saved_grants)

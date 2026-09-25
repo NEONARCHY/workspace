@@ -47,6 +47,12 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="ai_hisobot",
+        label=LocalizedLabel(ru="AI Hisobot", uz_cyrl="AI Ҳисобот", uz_latn="AI Hisobot"),
+        route="/ai-hisobot",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="telegram_access",
         label=LocalizedLabel(
             ru="Доступ к Telegram-ботам",

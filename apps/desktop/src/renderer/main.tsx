@@ -35,6 +35,7 @@ import "./window-titlebar.css";
 import "./web-platform.css";
 import "./workspace-2-focus.css";
 import "./ai-referent-workspace.css";
+import "./ai-hisobot.css";
 import "./telegram-access.css";
 import { workspacePlatform } from "./platform-adapter";
 

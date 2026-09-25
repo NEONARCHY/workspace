@@ -43,8 +43,21 @@ def test_bot_grant_requires_numeric_telegram_id() -> None:
         )
 
 
-def test_future_bot_catalog_is_explicitly_not_connected() -> None:
-    assert [bot.key for bot in BOT_CATALOG if bot.connected] == ["ai_referent"]
+def test_connected_bot_catalog() -> None:
+    assert [bot.key for bot in BOT_CATALOG if bot.connected] == ["ai_referent", "hisobot"]
     assert {bot.key for bot in BOT_CATALOG} == {
         "ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader"
     }
+
+
+def test_hisobot_hudud_grant_accepts_only_known_regions() -> None:
+    valid = TelegramAccessUpdate(
+        telegramId="123456", botKeys=["hisobot"], hisobotScope="hudud",
+        hisobotRegion="Самарқанд вилояти", expectedRevision=0,
+    )
+    assert valid.hisobot_region == "Самарқанд вилояти"
+    with pytest.raises(ValidationError, match="14 территориальных"):
+        TelegramAccessUpdate(
+            telegramId="123456", botKeys=["hisobot"], hisobotScope="hudud",
+            hisobotRegion="Несуществующий регион", expectedRevision=0,
+        )

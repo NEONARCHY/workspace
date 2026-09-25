@@ -17,12 +17,14 @@ const employee: TelegramAccessPerson = {
   userId: "person-1", username: "employee", fullName: "Пример Сотрудник",
   jobTitle: "Специалист", telegramId: null, verified: false,
   verificationSource: null, botKeys: [], revision: 0,
+  hisobotScope: null, hisobotRegion: null,
+  hisobotReportRequired: true, hisobotManager: false,
 };
 
 const registry: TelegramAccessRegistry = {
   bots: [
     { key: "ai_referent", label: "AI Referent", connected: true },
-    { key: "hisobot", label: "AI Hisobot", connected: false },
+    { key: "hisobot", label: "AI Hisobot", connected: true },
   ],
   people: [employee],
 };
@@ -55,6 +57,8 @@ describe("Telegram bot access hub", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(saveTelegramAccess).toHaveBeenCalledWith("token", "person-1", {
       telegramId: "123456789", botKeys: ["ai_referent"], expectedRevision: 0,
+      hisobotScope: null, hisobotRegion: null,
+      hisobotReportRequired: true, hisobotManager: false,
     }));
     expect(await screen.findByText("Сохранено. Доступ к подключённым ботам действует сразу.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Получить код" })).not.toBeInTheDocument();
