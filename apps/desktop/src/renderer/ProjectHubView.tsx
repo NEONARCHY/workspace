@@ -15,7 +15,6 @@ import {
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
-import "./project-hub.css";
 
 type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
@@ -257,14 +256,14 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
     <header className="project-hub-header">
       <div><span className="view-kicker">ПРОЕКТНОЕ ПРОСТРАНСТВО</span><h1>{mode === "projects" ? "Проекты" : "Проектные заявки"}</h1>
         <p>{mode === "projects" ? "Планируйте работу, бюджет и решения в одной карточке проекта." : "Отдельный маршрут денежных решений по проектам."}</p></div>
-      <div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
-        {mode === "projects" && canCreateProject ? <Button appearance="primary" icon={<Add24Regular />} onClick={() => startProject()}>Новый проект</Button> : null}
-        {mode === "funding" && canCreateRequest ? <Button appearance="primary" icon={<Add24Regular />} onClick={() => { setFundingProjectId((id) => id || hub.projects[0]?.id || ""); setFundingWorkstreamId(""); setRequestForm({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" }); setRequestFiles([]); setRequestDraftId(""); setUploadedFileCount(0); setActionError(""); setFormMode("request"); }}>Новая проектная заявка</Button> : null}</div>
+      <div className="project-hub-header-side"><div className="project-hub-hero-summary" aria-label={mode === "projects" ? `Всего проектов: ${hub.projects.length}` : `Всего проектных заявок: ${requests.length}`}><strong>{mode === "projects" ? hub.projects.length : requests.length}</strong><span>{mode === "projects" ? "проектов в пространстве" : "заявок в пространстве"}</span></div><div className="project-hub-header-actions"><Button icon={<ArrowClockwise24Regular />} onClick={() => void reload()} disabled={loading}>Обновить</Button>
+        {mode === "projects" && canCreateProject ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => startProject()}>Новый проект</Button> : null}
+        {mode === "funding" && canCreateRequest ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => { setFundingProjectId((id) => id || hub.projects[0]?.id || ""); setFundingWorkstreamId(""); setRequestForm({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" }); setRequestFiles([]); setRequestDraftId(""); setUploadedFileCount(0); setActionError(""); setFormMode("request"); }}>Новая проектная заявка</Button> : null}</div></div>
     </header>
     {loadError ? <p className="project-hub-error" role="alert">{loadError}</p> : null}
     {mode === "projects" ? <div className="project-hub-layout">
       <aside className="project-hub-index" aria-label="Список новых проектов">
-        <div className="project-hub-index-top"><strong>{hub.projects.length} проектов</strong><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
+        <div className="project-hub-index-top"><div><span className="view-kicker">ПОРТФЕЛЬ</span><strong>Ваши проекты</strong><small>{visibleProjects.length} в выбранном срезе</small></div><WorkspaceSelect aria-label="Фильтр проектов" value={filter} onChange={(event) => setFilter(event.target.value)}><option value="active">Активные</option><option value="completed">Завершённые</option><option value="all">Все</option></WorkspaceSelect></div>
         {visibleProjects.map((project) => <button type="button" key={project.id} className={`project-hub-project ${project.id === selectedProjectId ? "selected" : ""}`} aria-current={project.id === selectedProjectId ? "true" : undefined} onClick={() => { setSelectedProjectId(project.id); setSelectedWorkstreamId(""); setSelectedItemId(""); }}>
           <span>{project.code} · {project.accessStatus === "closed" ? "Закрытый" : "Открытый"}</span><strong>{project.title}</strong><small>{personName(project.managerUserId)}</small>
           <span className="project-hub-mini-budget">{formatMoney(project.approvedAmount, project.currency)} согласовано из {formatMoney(project.budget, project.currency)}</span>
@@ -311,10 +310,11 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
         </> : <div className="project-hub-empty">Выберите проект или создайте новый.</div>}
       </main>
     </div> : <div className="project-hub-funding-layout">
+      <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
       <div className="project-hub-funding-board" role="region" aria-label="Канбан проектных заявок">
         {(["draft", "pending", "approved", "rejected"] as const).map((status) => <section className={`project-hub-funding-lane ${status}`} key={status} aria-label={requestStatus[status]}>
           <div className="project-hub-lane-head"><h3>{requestStatus[status]}</h3><span>{requests.filter((request) => request.status === status).length}</span></div>
-          {requests.filter((request) => request.status === status).map((request) => <button type="button" key={request.id} className={`project-hub-funding-card ${selectedRequestId === request.id ? "selected" : ""}`} onClick={() => { setSelectedRequestId(request.id); setDecisionComment(""); }}><span>{request.projectTitle} · {request.itemTitle}</span><strong>{request.title}</strong><b>{formatMoney(request.amount, request.currency)}</b><small>{status === "pending" && request.approverUserIds[request.currentStep] ? `Сейчас: ${personName(request.approverUserIds[request.currentStep]!)}` : requestStatus[status]}</small>{request.approvalDueAt ? <small className={status === "pending" && new Date(request.approvalDueAt).getTime() < asOf ? "overdue" : ""}>Срок: {formatDate(request.approvalDueAt)}</small> : null}</button>)}
+          {requests.filter((request) => request.status === status).map((request) => <button type="button" key={request.id} aria-current={selectedRequestId === request.id ? "true" : undefined} className={`project-hub-funding-card ${selectedRequestId === request.id ? "selected" : ""}`} onClick={() => { setSelectedRequestId(request.id); setDecisionComment(""); }}><span>{request.projectTitle} · {request.itemTitle}</span><strong>{request.title}</strong><b>{formatMoney(request.amount, request.currency)}</b><small>{status === "pending" && request.approverUserIds[request.currentStep] ? `Сейчас: ${personName(request.approverUserIds[request.currentStep]!)}` : requestStatus[status]}</small>{request.approvalDueAt ? <small className={status === "pending" && new Date(request.approvalDueAt).getTime() < asOf ? "overdue" : ""}>Срок: {formatDate(request.approvalDueAt)}</small> : null}</button>)}
           {!requests.some((request) => request.status === status) ? <p className="project-hub-lane-empty">Пока пусто</p> : null}
         </section>)}
         {!requests.length ? <p className="project-hub-empty">Доступных проектных заявок пока нет.</p> : null}
