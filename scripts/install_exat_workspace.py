@@ -242,6 +242,34 @@ def patch_number_backing(source: str) -> str:
     return source
 
 
+def patch_signature_identity(source: str) -> str:
+    """Resolve full Workspace names before Exat's existing image and row lookup."""
+    marker = "# workspace-signature-identity-v1"
+    if source.count(marker) == 2:
+        return source
+    if marker in source:
+        raise ValueError("Частично обновлён механизм распознавания подписанта Exat.")
+    for header, indent in (
+        (
+            "    def _resolve_signature_image(self, reviewer_name: str) -> Path | None:\n",
+            "        ",
+        ),
+        ("def _signature_name_variants(reviewer_name: str) -> tuple[str, ...]:\n", "    "),
+    ):
+        anchor = header + f"{indent}normalized = normalize_search_text(reviewer_name)\n"
+        replacement = (
+            header
+            + f"{indent}{marker}\n"
+            + f"{indent}from src.workspace_integration.signature_identity "
+            "import canonical_reviewer_name\n"
+            + f"{indent}normalized = normalize_search_text("
+            "canonical_reviewer_name(reviewer_name))\n"
+        )
+        source = replace_once(source, anchor, replacement)
+    compile(source, "src/outgoing/facsimile.py", "exec")
+    return source
+
+
 def install(root: Path, *, apply: bool = False) -> dict[str, object]:
     root = root.resolve(strict=True)
     if not root.is_dir() or root == Path(root.anchor):
@@ -264,7 +292,7 @@ def install(root: Path, *, apply: bool = False) -> dict[str, object]:
             raise ValueError("Путь исходников выходит за пределы Exat.")
         original = facsimile.read_bytes()
         source = original.decode("utf-8-sig").replace("\r\n", "\n")
-        patched = patch_number_backing(source)
+        patched = patch_signature_identity(patch_number_backing(source))
         if patched != source:
             planned[facsimile] = patched.replace(
                 "\n", "\r\n" if b"\r\n" in original else "\n"

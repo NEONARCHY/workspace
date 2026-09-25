@@ -143,7 +143,6 @@ class LetterWizard:
                 else "Подождите: робот проверяет форматирование письма и место для подписи. "
                 "Можно оставить этот чат — проверка продолжится."
             )
-            rows.append([opt("Проверить состояние", "go", "checking")])
             back = "document"
         elif step == "document":
             text = (
@@ -276,7 +275,8 @@ class LetterWizard:
         rows.append([opt("Назад", "go", back)])
         self.save(actor, context)
         self.bot.system(
-            actor, "wizard", text, rows, letter_id=letter["id"], revision=letter["revision"]
+            actor, "wizard", text, rows, letter_id=letter["id"], revision=letter["revision"],
+            edit_existing=step == "checking",
         )
 
     def poll_checks(self) -> None:
@@ -466,15 +466,15 @@ class LetterWizard:
             role = "primary" if step == "document" else "additional"
             if role == "primary" and not name.lower().endswith(".docx"):
                 raise WorkspaceError("Основной файл должен быть DOCX.")
+            if int(document.get("file_size") or 0) > 20 * 1024 * 1024:
+                raise WorkspaceError(
+                    "Файл больше 20 МБ — загрузите его в это же письмо через Workspace."
+                )
             if role == "primary":
                 self.bot.system(
                     actor,
                     "wizard",
                     "Подождите: робот проверяет форматирование письма и место для подписи.",
-                )
-            if int(document.get("file_size") or 0) > 20 * 1024 * 1024:
-                raise WorkspaceError(
-                    "Файл больше 20 МБ — загрузите его в это же письмо через Workspace."
                 )
             metadata = self.bot.telegram.get_file(document["file_id"])
             with tempfile.TemporaryDirectory(prefix="referent-upload-") as directory:
