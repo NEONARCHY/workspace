@@ -286,13 +286,14 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         letter = await call("GET", path, author)
         assert letter["status"] == "referent_review_pending"
         packet = await call("GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910002"))
-        assert len(packet["files"]) == 2
+        assert len(packet["files"]) == 1
+        assert packet["files"][0]["id"] == letter["finalPdfFileId"]
         response = await client.get(base + f"/packets/outgoing/{letter['id']}/zip", headers=author)
         assert response.status_code == 200, response.text
         assert "Shared%20letter.zip" in response.headers["content-disposition"]
         assert letter["id"] not in response.headers["content-disposition"]
         with ZipFile(BytesIO(response.content)) as bundle:
-            assert len(bundle.namelist()) == 2
+            assert len(bundle.namelist()) == 1
         pdf = next(item for item in packet["files"] if item["source"] == "packet")
         response = await client.get(
             base + f"/agent/packets/outgoing/{letter['id']}/files/{pdf['id']}",
