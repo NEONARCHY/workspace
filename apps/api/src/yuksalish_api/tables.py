@@ -554,6 +554,83 @@ workspace_projects = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+project_hub_projects = sa.Table(
+    "project_hub_projects", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("code", sa.String(48)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("manager_user_id", uuid_type),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
+    sa.Column("budget", sa.BigInteger()),
+    sa.Column("currency", sa.String(3)),
+    sa.Column("access_status", sa.String(16)),
+    sa.Column("lifecycle_status", sa.String(16)),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+project_hub_people = sa.Table(
+    "project_hub_people", metadata,
+    sa.Column("project_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("kind", sa.String(16), primary_key=True),
+    sa.Column("sort_order", sa.Integer()),
+)
+
+project_hub_items = sa.Table(
+    "project_hub_items", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("project_id", uuid_type),
+    sa.Column("kind", sa.String(16)),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("starts_at", sa.DateTime(timezone=True)),
+    sa.Column("due_at", sa.DateTime(timezone=True)),
+    sa.Column("budget", sa.BigInteger()),
+    sa.Column("status", sa.String(16)),
+    sa.Column("calendar_event_id", uuid_type),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+project_hub_item_assignees = sa.Table(
+    "project_hub_item_assignees", metadata,
+    sa.Column("item_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+)
+
+project_hub_requests = sa.Table(
+    "project_hub_requests", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("project_id", uuid_type),
+    sa.Column("item_id", uuid_type),
+    sa.Column("title", sa.String(240)),
+    sa.Column("purpose", sa.Text()),
+    sa.Column("amount", sa.BigInteger()),
+    sa.Column("currency", sa.String(3)),
+    sa.Column("status", sa.String(16)),
+    sa.Column("approver_ids", postgresql.JSONB()),
+    sa.Column("current_step", sa.Integer()),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+project_hub_request_actions = sa.Table(
+    "project_hub_request_actions", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(16)),
+    sa.Column("step", sa.Integer()),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 project_stage_actions = sa.Table(
     "project_stage_actions",
     metadata,

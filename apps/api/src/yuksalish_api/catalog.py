@@ -73,6 +73,22 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="project_hub",
+        label=LocalizedLabel(ru="Проекты", uz_cyrl="Лойиҳалар", uz_latn="Loyihalar"),
+        route="/project-hub",
+        status="available",
+    ),
+    ModuleDescriptor(
+        key="project_funding",
+        label=LocalizedLabel(
+            ru="Проектные заявки",
+            uz_cyrl="Лойиҳа аризалари",
+            uz_latn="Loyiha arizalari",
+        ),
+        route="/project-funding",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="trip_approvals",
         label=LocalizedLabel(
             ru="Согласование поездок",

@@ -42,6 +42,7 @@ from .tables import (
     message_receipts,
     messages,
     positions,
+    project_hub_items,
     project_stage_actions,
     task_checklist_items,
     task_comment_reactions,
@@ -1839,6 +1840,8 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "calendar",
                         workspace_notifications.c.section == "absences",
                         workspace_notifications.c.section == "hr",
+                        workspace_notifications.c.section == "project_hub",
+                        workspace_notifications.c.section == "project_funding",
                         and_(workspace_notifications.c.section == "ai_referent",
                              workspace_notifications.c.entity_id.in_(referent_letters)),
                     ),
@@ -3298,6 +3301,18 @@ async def update_calendar_event(
             updated_at=datetime.now(UTC),
         )
     )
+    # Published project events remain one planning object when edited in the calendar.
+    await connection.execute(
+        update(project_hub_items)
+        .where(project_hub_items.c.calendar_event_id == event_id)
+        .values(
+            title=payload.title,
+            description=payload.description,
+            starts_at=payload.starts_at,
+            due_at=payload.ends_at,
+            updated_at=datetime.now(UTC),
+        )
+    )
     await _replace_calendar_attendees(
         connection,
         event_id,
@@ -3330,6 +3345,11 @@ async def cancel_calendar_event(
     await connection.execute(
         update(calendar_events)
         .where(calendar_events.c.id == event_id)
+        .values(status="cancelled", updated_at=datetime.now(UTC))
+    )
+    await connection.execute(
+        update(project_hub_items)
+        .where(project_hub_items.c.calendar_event_id == event_id)
         .values(status="cancelled", updated_at=datetime.now(UTC))
     )
     await connection.execute(

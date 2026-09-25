@@ -3,16 +3,17 @@ import { useState, type ReactNode } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
 import { moveBefore, normalizeNavigation } from "./personal-organization";
 
-export function NavigationEditor({ order, revision, labels, icons, badges, onSave, onClose }: {
+export function NavigationEditor({ order, revision, labels, hiddenKeys = [], icons, badges, onSave, onClose }: {
   readonly order: readonly NavigationKey[];
   readonly revision: number;
   readonly labels: Readonly<Record<NavigationKey, string>>;
+  readonly hiddenKeys?: readonly NavigationKey[];
   readonly icons?: Readonly<Partial<Record<NavigationKey, ReactNode>>>;
   readonly badges?: Readonly<Partial<Record<NavigationKey, number>>>;
   readonly onSave: (order: readonly NavigationKey[], revision: number) => Promise<void>;
   readonly onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(() => normalizeNavigation(order));
+  const [draft, setDraft] = useState(() => normalizeNavigation(order).filter((key) => !hiddenKeys.includes(key)));
   const [baseRevision] = useState(revision);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -25,7 +26,9 @@ export function NavigationEditor({ order, revision, labels, icons, badges, onSav
   const save = () => {
     if (busy) return;
     setBusy(true); setError("");
-    void onSave(draft, baseRevision).then(onClose).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось сохранить меню")).finally(() => setBusy(false));
+    const positions = [...draft];
+    const fullOrder = normalizeNavigation(order).map((key) => hiddenKeys.includes(key) ? key : positions.shift()!);
+    void onSave(fullOrder, baseRevision).then(onClose).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось сохранить меню")).finally(() => setBusy(false));
   };
   return <form id="navigation-editor-form" className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}
     onSubmit={(event) => { event.preventDefault(); save(); }}>
@@ -42,7 +45,7 @@ export function NavigationEditor({ order, revision, labels, icons, badges, onSav
     <span className="organization-live" role="status">{announcement}</span>
     {error && <div className="organization-error" role="alert">{error}</div>}
     <div className="navigation-edit-actions">
-      <button type="button" className="navigation-reset" disabled={busy} onClick={() => { setDraft([...navigationKeys]); setAnnouncement("Восстановлен стандартный порядок. Нажмите «Сохранить»."); }}>По умолчанию</button>
+      <button type="button" className="navigation-reset" disabled={busy} onClick={() => { setDraft(navigationKeys.filter((key) => !hiddenKeys.includes(key))); setAnnouncement("Восстановлен стандартный порядок. Нажмите «Сохранить»."); }}>По умолчанию</button>
       <button type="button" className="navigation-cancel" disabled={busy} onClick={onClose}>Отмена</button>
       <button type="submit" className="navigation-save" disabled={busy}>{busy ? "Сохраняем…" : "Сохранить"}</button>
     </div>
