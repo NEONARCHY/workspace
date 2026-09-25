@@ -1635,8 +1635,7 @@ export function App() {
   const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));
   const isAdmin = session.user.role === "admin" || session.user.role === "superadmin";
   const canView = (key: NavigationKey) => key === "notifications" || key === "settings"
-    || (key !== "projects" && key !== "payment_requests")
-      && (key !== "telegram_access" || isAdmin) && modulePermissions[key]?.view !== false;
+    || (key !== "telegram_access" || isAdmin) && modulePermissions[key]?.view !== false;
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
@@ -1644,7 +1643,7 @@ export function App() {
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
-    .filter(canView)
+    .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
     .map((key) => navItems.find((item) => item.key === key)!);
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
