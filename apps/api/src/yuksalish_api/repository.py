@@ -43,6 +43,8 @@ from .tables import (
     messages,
     positions,
     project_hub_items,
+    project_hub_projects,
+    project_hub_requests,
     project_stage_actions,
     task_checklist_items,
     task_comment_reactions,
@@ -5572,6 +5574,33 @@ async def validate_attachment_owner(
 
     if owner_type == "task":
         await _task_access_row(connection, current_user, owner_id, edit=write)
+        return
+
+    if owner_type == "project_funding_request":
+        row = (
+            (
+                await connection.execute(
+                    select(project_hub_requests, project_hub_projects.c.manager_user_id)
+                    .join(
+                        project_hub_projects,
+                        project_hub_projects.c.id == project_hub_requests.c.project_id,
+                    )
+                    .where(project_hub_requests.c.id == owner_id)
+                )
+            ).mappings().first()
+        )
+        visible = row is not None and (
+            current_user.role in {"admin", "superadmin"}
+            or current_user.id in {row["manager_user_id"], row["requester_user_id"]}
+            or str(current_user.id) in row["approver_ids"]
+        )
+        writable = (
+            row is not None
+            and row["status"] == "pending"
+            and row["requester_user_id"] == current_user.id
+        )
+        if not visible or (write and not writable):
+            raise WorkspaceRepositoryError(404, "Project request was not found")
         return
 
     if owner_type == "absence":

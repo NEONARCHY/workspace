@@ -580,10 +580,23 @@ project_hub_people = sa.Table(
     sa.Column("sort_order", sa.Integer()),
 )
 
+project_hub_workstreams = sa.Table(
+    "project_hub_workstreams", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("project_id", uuid_type),
+    sa.Column("title", sa.String(240)),
+    sa.Column("description", sa.Text()),
+    sa.Column("sort_order", sa.Integer()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 project_hub_items = sa.Table(
     "project_hub_items", metadata,
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("project_id", uuid_type),
+    sa.Column("workstream_id", uuid_type),
     sa.Column("kind", sa.String(16)),
     sa.Column("title", sa.String(240)),
     sa.Column("description", sa.Text()),
@@ -615,6 +628,7 @@ project_hub_requests = sa.Table(
     sa.Column("status", sa.String(16)),
     sa.Column("approver_ids", postgresql.JSONB()),
     sa.Column("current_step", sa.Integer()),
+    sa.Column("approval_due_at", sa.DateTime(timezone=True)),
     sa.Column("requester_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),

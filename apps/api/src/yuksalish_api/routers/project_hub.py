@@ -19,6 +19,8 @@ from yuksalish_api.project_hub_schemas import (
     ProjectWorkItemResponse,
     ProjectWorkItemWrite,
     ProjectWorkStatusWrite,
+    ProjectWorkstreamResponse,
+    ProjectWorkstreamWrite,
 )
 from yuksalish_api.project_hub_service import (
     create_funding_request,
@@ -28,6 +30,7 @@ from yuksalish_api.project_hub_service import (
     publish_event,
     save_item,
     save_project,
+    save_workstream,
     set_item_status,
 )
 from yuksalish_api.repository import WorkspaceRepositoryError
@@ -90,6 +93,39 @@ async def post_item(
     await ensure_module_action(connection, user, "project_hub", "create")
     try:
         return await save_item(connection, user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.post(
+    "/projects/{project_id}/workstreams",
+    response_model=ProjectWorkstreamResponse,
+    status_code=201,
+)
+async def post_workstream(
+    project_id: UUID, payload: ProjectWorkstreamWrite, user: User, connection: Connection
+) -> ProjectWorkstreamResponse:
+    await ensure_module_action(connection, user, "project_hub", "create")
+    try:
+        return await save_workstream(connection, user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.put(
+    "/projects/{project_id}/workstreams/{workstream_id}",
+    response_model=ProjectWorkstreamResponse,
+)
+async def put_workstream(
+    project_id: UUID,
+    workstream_id: UUID,
+    payload: ProjectWorkstreamWrite,
+    user: User,
+    connection: Connection,
+) -> ProjectWorkstreamResponse:
+    await ensure_module_action(connection, user, "project_hub", "edit")
+    try:
+        return await save_workstream(connection, user, project_id, payload, workstream_id)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
 

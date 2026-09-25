@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .workspace_schemas import AttachmentResponse
+
 
 class HubModel(BaseModel):
     model_config = ConfigDict(
@@ -54,7 +56,28 @@ class ProjectHubResponse(ProjectHubWrite):
     can_edit: bool
 
 
+class ProjectWorkstreamWrite(HubModel):
+    title: str = Field(min_length=1, max_length=240)
+    description: str = Field(default="", max_length=20_000)
+
+    @model_validator(mode="after")
+    def validate_workstream(self) -> "ProjectWorkstreamWrite":
+        self.title = self.title.strip()
+        if not self.title:
+            raise ValueError("Workstream title is required")
+        return self
+
+
+class ProjectWorkstreamResponse(ProjectWorkstreamWrite):
+    id: str
+    project_id: str
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+
 class ProjectWorkItemWrite(HubModel):
+    workstream_id: str | None = None
     kind: Literal["task", "event"]
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
@@ -80,6 +103,7 @@ class ProjectWorkItemWrite(HubModel):
 
 
 class ProjectWorkItemResponse(ProjectWorkItemWrite):
+    workstream_id: str
     id: str
     project_id: str
     status: Literal["planned", "active", "completed", "cancelled"]
@@ -100,12 +124,15 @@ class ProjectFundingWrite(HubModel):
     title: str = Field(min_length=1, max_length=240)
     purpose: str = Field(default="", max_length=20_000)
     amount: int = Field(gt=0, le=9_007_199_254_740_991)
+    approval_due_at: datetime | None = None
 
     @model_validator(mode="after")
     def validate_request(self) -> "ProjectFundingWrite":
         self.title = self.title.strip()
         if not self.title:
             raise ValueError("Request title is required")
+        if self.approval_due_at is not None and self.approval_due_at.tzinfo is None:
+            raise ValueError("Approval deadline must include a timezone")
         return self
 
 
@@ -135,14 +162,17 @@ class ProjectFundingResponse(HubModel):
     status: Literal["pending", "approved", "rejected"]
     approver_user_ids: list[str]
     current_step: int
+    approval_due_at: datetime | None
     requester_user_id: str
     created_at: datetime
     updated_at: datetime
     can_decide: bool
     actions: list[ProjectFundingActionResponse] = Field(default_factory=list)
+    attachments: list[AttachmentResponse] = Field(default_factory=list)
 
 
 class ProjectHubOverview(HubModel):
     projects: list[ProjectHubResponse]
+    workstreams: list[ProjectWorkstreamResponse]
     items: list[ProjectWorkItemResponse]
     requests: list[ProjectFundingResponse]
