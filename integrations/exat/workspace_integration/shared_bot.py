@@ -802,7 +802,7 @@ class SharedBot:
                     actor,
                     "Telegram ID подтверждён. Доступ к письмам включается "
                     "администратором отдельно. Если доступ уже выдан: "
-                    "/new — письмо, /history — общая очередь.",
+                    "/new — письмо, /history — доступные отправленные письма.",
                 )
                 return
             menu = menu_action(text)
@@ -822,7 +822,7 @@ class SharedBot:
                 self.say(
                     actor,
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
-                    "/history — отправленные вами письма\n"
+                    "/history — доступные отправленные письма\n"
                     "/pending — согласования и черновики\n"
                     "/sign — подписать без отправки\n"
                     "/cancel — отменить ввод\nДоступ выдаёт администратор Workspace: "
