@@ -13,6 +13,7 @@ from yuksalish_api.project_hub_schemas import (
     ProjectHubWrite,
     ProjectWorkItemWrite,
     ProjectWorkStatusWrite,
+    ProjectWorkstreamWrite,
 )
 from yuksalish_api.project_hub_service import (
     create_funding_request,
@@ -23,14 +24,16 @@ from yuksalish_api.project_hub_service import (
     publish_event,
     save_item,
     save_project,
+    save_workstream,
     set_item_status,
 )
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     cancel_calendar_event,
     update_calendar_event,
+    validate_attachment_owner,
 )
-from yuksalish_api.tables import users, workspace_notifications
+from yuksalish_api.tables import attachments, users, workspace_notifications
 from yuksalish_api.workspace_schemas import UpdateCalendarEventRequest
 
 
@@ -88,14 +91,43 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     access_status="closed",
                 )
                 project = await save_project(connection, manager, details)
+                workstream = await save_workstream(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkstreamWrite(title="Проведение форума"),
+                )
                 assert project.approver_user_ids == [str(first_id), str(second_id)]
+                assert any(
+                    candidate.id == workstream.id
+                    for candidate in (await load_hub(connection, manager)).workstreams
+                )
+                with pytest.raises(WorkspaceRepositoryError) as duplicate_workstream:
+                    await save_workstream(
+                        connection, manager, UUID(project.id),
+                        ProjectWorkstreamWrite(title="Проведение форума"),
+                    )
+                assert duplicate_workstream.value.status_code == 409
+                with pytest.raises(WorkspaceRepositoryError) as forbidden_workstream:
+                    await save_workstream(
+                        connection, outsider, UUID(project.id),
+                        ProjectWorkstreamWrite(title="Чужое направление"),
+                    )
+                assert forbidden_workstream.value.status_code == 404
                 assert len((await load_hub(connection, outsider)).projects) == 0
                 due = datetime.now(UTC) + timedelta(days=10)
+                with pytest.raises(WorkspaceRepositoryError) as missing_workstream:
+                    await save_item(
+                        connection, manager, UUID(project.id),
+                        ProjectWorkItemWrite(
+                            workstream_id=str(uuid4()), kind="task", title="Без направления"
+                        ),
+                    )
+                assert missing_workstream.value.status_code == 404
                 item = await save_item(
                     connection,
                     manager,
                     UUID(project.id),
                     ProjectWorkItemWrite(
+                        workstream_id=workstream.id,
                         kind="task",
                         title="Подготовить форум",
                         due_at=due,
@@ -107,8 +139,43 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     connection,
                     manager,
                     UUID(project.id),
-                    ProjectFundingWrite(item_id=item.id, title="Аренда", amount=400),
+                    ProjectFundingWrite(
+                        item_id=item.id, title="Аренда", amount=400,
+                        approval_due_at=due,
+                    ),
                 )
+                assert request.approval_due_at == due
+                with pytest.raises(WorkspaceRepositoryError) as past_deadline:
+                    await create_funding_request(
+                        connection, manager, UUID(project.id),
+                        ProjectFundingWrite(
+                            item_id=item.id, title="Просроченная", amount=1,
+                            approval_due_at=datetime.now(UTC) - timedelta(days=1),
+                        ),
+                    )
+                assert past_deadline.value.status_code == 422
+                await validate_attachment_owner(
+                    connection, manager, "project_funding_request", UUID(request.id), write=True
+                )
+                await validate_attachment_owner(
+                    connection, first, "project_funding_request", UUID(request.id), write=False
+                )
+                with pytest.raises(WorkspaceRepositoryError) as forbidden_file:
+                    await validate_attachment_owner(
+                        connection, first, "project_funding_request", UUID(request.id), write=True
+                    )
+                assert forbidden_file.value.status_code == 404
+                await connection.execute(
+                    insert(attachments).values(
+                        id=uuid4(), owner_type="project_funding_request",
+                        owner_id=UUID(request.id), file_name="smeta.pdf",
+                        content_type="application/pdf", byte_size=100, sha256="0" * 64,
+                        storage_key=f"tests/{request.id}/smeta.pdf", uploaded_by_user_id=manager_id,
+                        document_role="general", media_kind="file", created_at=datetime.now(UTC),
+                    )
+                )
+                funding = await load_funding_requests(connection, manager)
+                assert funding[0].attachments[0].file_name == "smeta.pdf"
                 assert request.current_step == 0
                 with pytest.raises(WorkspaceRepositoryError) as denied:
                     await decide_funding_request(
@@ -146,6 +213,12 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     str(first_id),
                     str(second_id),
                 ]
+                with pytest.raises(WorkspaceRepositoryError) as closed_file:
+                    await validate_attachment_owner(
+                        connection, manager, "project_funding_request", UUID(request.id),
+                        write=True,
+                    )
+                assert closed_file.value.status_code == 404
                 assert (await load_hub(connection, manager)).projects[0].approved_amount == 400
                 with pytest.raises(WorkspaceRepositoryError) as reduced_budget:
                     await save_project(
@@ -165,7 +238,8 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     manager,
                     UUID(project.id),
                     ProjectFundingWrite(
-                        item_id=item.id, title="Дополнительные расходы", amount=700
+                        item_id=item.id, title="Дополнительные расходы", amount=700,
+                        approval_due_at=due,
                     ),
                 )
                 with pytest.raises(WorkspaceRepositoryError) as over_budget:
@@ -196,6 +270,7 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     manager,
                     UUID(project.id),
                     ProjectWorkItemWrite(
+                        workstream_id=workstream.id,
                         kind="event",
                         title="Встреча команды",
                         starts_at=due,
@@ -246,6 +321,21 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                         connection, manager, UUID(project.id), UUID(event.id),
                         ProjectWorkStatusWrite(status="active"),
                     )
+                legacy_item = await save_item(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkItemWrite(kind="task", title="Работа старого клиента"),
+                )
+                legacy_stream = next(
+                    candidate for candidate in (await load_hub(connection, manager)).workstreams
+                    if candidate.id == legacy_item.workstream_id
+                )
+                assert legacy_stream.title == "Ранее добавленные работы"
+                edited_legacy = await save_item(
+                    connection, manager, UUID(project.id),
+                    ProjectWorkItemWrite(kind="task", title="Изменённая работа"),
+                    UUID(legacy_item.id),
+                )
+                assert edited_legacy.workstream_id == legacy_item.workstream_id
             finally:
                 await transaction.rollback()
     finally:

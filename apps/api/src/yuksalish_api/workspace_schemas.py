@@ -175,7 +175,8 @@ class LinkPreviewResponse(ApiModel):
 
 
 AttachmentOwnerType = Literal[
-    "message", "task", "approval_request", "absence", "ai_referent_letter"
+    "message", "task", "approval_request", "absence", "ai_referent_letter",
+    "project_funding_request",
 ]
 
 

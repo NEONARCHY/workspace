@@ -725,6 +725,7 @@ export type AttachmentOwnerType =
   | "message"
   | "task"
   | "approval_request"
+  | "project_funding_request"
   | "absence"
   | "ai_referent_letter";
 
@@ -1278,9 +1279,22 @@ export type ProjectHubProjectInput = Pick<ProjectHubProject,
   "approverUserIds" | "startDate" | "endDate" | "budget" | "currency" |
   "accessStatus" | "lifecycleStatus">;
 
+export interface ProjectHubWorkstream {
+  readonly id: string;
+  readonly projectId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly sortOrder: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export type ProjectHubWorkstreamInput = Pick<ProjectHubWorkstream, "title" | "description">;
+
 export interface ProjectHubItem {
   readonly id: string;
   readonly projectId: string;
+  readonly workstreamId: string;
   readonly kind: "task" | "event";
   readonly title: string;
   readonly description: string;
@@ -1298,7 +1312,7 @@ export interface ProjectHubItem {
 }
 
 export type ProjectHubItemInput = Pick<ProjectHubItem,
-  "kind" | "title" | "description" | "startsAt" | "dueAt" | "budget" | "assigneeUserIds">;
+  "workstreamId" | "kind" | "title" | "description" | "startsAt" | "dueAt" | "budget" | "assigneeUserIds">;
 
 export interface ProjectHubRequestAction {
   readonly actorUserId: string;
@@ -1321,15 +1335,18 @@ export interface ProjectHubRequest {
   readonly status: "pending" | "approved" | "rejected";
   readonly approverUserIds: readonly string[];
   readonly currentStep: number;
+  readonly approvalDueAt?: string | null;
   readonly requesterUserId: string;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly canDecide: boolean;
   readonly actions: readonly ProjectHubRequestAction[];
+  readonly attachments: readonly WorkspaceAttachment[];
 }
 
 export interface ProjectHubOverview {
   readonly projects: readonly ProjectHubProject[];
+  readonly workstreams: readonly ProjectHubWorkstream[];
   readonly items: readonly ProjectHubItem[];
   readonly requests: readonly ProjectHubRequest[];
 }

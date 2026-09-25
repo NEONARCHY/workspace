@@ -1268,6 +1268,7 @@ async def put_attachment(
         "message": "messenger",
         "task": "tasks",
         "approval_request": "payment_requests",
+        "project_funding_request": "project_funding",
         "absence": "absences",
         "ai_referent_letter": "ai_referent",
     }[owner_type]
@@ -1460,6 +1461,7 @@ async def download_attachment(
             "message": "messenger",
             "task": "tasks",
             "approval_request": "payment_requests",
+            "project_funding_request": "project_funding",
             "absence": "absences",
         }[metadata.owner_type]
         await ensure_module_action(connection, current_user, attachment_module, "view")

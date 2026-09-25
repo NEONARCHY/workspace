@@ -56,6 +56,8 @@ import type {
   ProjectHubOverview,
   ProjectHubProject,
   ProjectHubProjectInput,
+  ProjectHubWorkstream,
+  ProjectHubWorkstreamInput,
   ProjectHubItem,
   ProjectHubItemInput,
   ProjectHubRequest,
@@ -1487,6 +1489,15 @@ export function saveProjectHubProject(
   );
 }
 
+export function saveProjectHubWorkstream(
+  token: string, projectId: string, payload: ProjectHubWorkstreamInput, workstreamId?: string,
+): Promise<ProjectHubWorkstream> {
+  return apiRequest<ProjectHubWorkstream>(
+    workstreamId ? `/project-hub/projects/${projectId}/workstreams/${workstreamId}` : `/project-hub/projects/${projectId}/workstreams`,
+    { method: workstreamId ? "PUT" : "POST", body: JSON.stringify(payload) }, token,
+  );
+}
+
 export function saveProjectHubItem(
   token: string, projectId: string, payload: ProjectHubItemInput, itemId?: string,
 ): Promise<ProjectHubItem> {
@@ -1515,7 +1526,7 @@ export function publishProjectHubEvent(
 
 export function createProjectHubRequest(
   token: string, projectId: string,
-  payload: { readonly itemId: string; readonly title: string; readonly purpose: string; readonly amount: number },
+  payload: { readonly itemId: string; readonly title: string; readonly purpose: string; readonly amount: number; readonly approvalDueAt: string },
 ): Promise<ProjectHubRequest> {
   return apiRequest<ProjectHubRequest>(
     `/project-hub/projects/${projectId}/requests`,

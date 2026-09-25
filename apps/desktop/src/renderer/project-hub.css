@@ -50,13 +50,28 @@
 .project-hub-route b { display: inline-grid; place-items: center; width: 23px; height: 23px; border-radius: 50%; background: #293a55; color: white; }
 .project-hub-empty { padding: 28px; color: #62728a; text-align: center; border: 1px dashed #cddde5; border-radius: 14px; }
 .project-hub-error { color: #a33f39; background: #fff0ef; border-radius: 10px; padding: 12px; margin-top: 12px; }
-.project-hub-funding-layout { display: grid; grid-template-columns: minmax(280px, 1.15fr) minmax(300px, .85fr); gap: 16px; }
+.project-hub-funding-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 360px); gap: 16px; align-items: start; }
+.project-hub-funding-board { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; min-width: 0; overflow-x: auto; padding-bottom: 8px; }
+.project-hub-funding-lane { min-width: 220px; min-height: 310px; padding: 12px; border: 1px solid #dce7ec; border-radius: 18px; background: #f5fafb; }
+.project-hub-funding-lane.approved { background: #f2faf5; }
+.project-hub-funding-lane.rejected { background: #fff8f7; }
+.project-hub-lane-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 4px 12px; }
+.project-hub-lane-head h3 { font-size: 15px; }
+.project-hub-lane-head span { display: grid; place-items: center; min-width: 26px; height: 26px; border-radius: 50%; background: #fff; font-variant-numeric: tabular-nums; }
+.project-hub-lane-empty { padding: 20px 8px; text-align: center; color: #62728a; }
+.project-hub-funding-board > .project-hub-empty { grid-column: 1 / -1; }
 .project-hub-funding-list, .project-hub-funding-detail { padding: 20px; align-self: start; }
 .project-hub-funding-summary { display: flex; gap: 12px; margin-bottom: 16px; }
 .project-hub-funding-summary > div { flex: 1; display: flex; flex-direction: column; background: #f3f9fa; border-radius: 12px; padding: 12px; }
 .project-hub-funding-summary strong { font-size: 20px; }
 .project-hub-funding-summary span { color: #62728a; font-size: 12px; }
 .project-hub-funding-card { border-color: #dce7ec; padding: 16px; }
+.project-hub-funding-card { background: #fff; }
+.project-hub-funding-card .overdue, .project-hub-deadline-overdue { color: #ad4734; font-weight: 700; }
+.project-hub-files { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.project-hub-files button { max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.project-hub-upload { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-weight: 600; }
+.project-hub-upload small { font-weight: 400; color: #62728a; }
 .project-hub-funding-card b, .project-hub-funding-amount { font-variant-numeric: tabular-nums; }
 .project-hub-funding-detail h2 { font-size: 24px; margin: 6px 0; }
 .project-hub-funding-detail h3 { font-size: 16px; margin-top: 24px; }
@@ -74,6 +89,12 @@
 .project-hub-decide > div { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .project-hub-action-history p { border-left: 2px solid #dce7ec; padding: 8px 12px; }
 .project-hub-action-history small { display: block; margin-top: 3px; }
+.project-hub-workstream { margin: 12px 0 18px; padding: 16px; border-radius: 18px; background: #f6fafb; border: 1px solid #dce7ec; }
+.project-hub-workstream-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+.project-hub-workstream-head h4 { margin: 0; font-size: 18px; }
+.project-hub-workstream-head p, .project-hub-workstream-head small { color: #62728a; }
+.project-hub-workstream-head > div:last-child { display: flex; gap: 6px; flex-wrap: wrap; }
+.project-hub-workstream .project-hub-work-row { background: #fff; }
 .fui-DialogSurface.project-hub-dialog { box-sizing: border-box; width: min(700px, calc(100vw - 24px)); max-width: none; height: min(800px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .project-hub-dialog-head { flex: 0 0 auto; padding: 20px 22px 12px; display: flex; justify-content: space-between; align-items: start; }
 .project-hub-dialog-head h2 { margin: 4px 0 0; font-size: 23px; }
@@ -93,6 +114,7 @@
 .project-hub-route-preview { margin-top: 18px; }
 .project-hub-view button:focus-visible, .project-hub-dialog button:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
 @media (max-width: 1100px) { .project-hub-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .project-hub-work-row { grid-template-columns: minmax(0, 1fr) minmax(150px, auto); } .project-hub-work-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; } }
-@media (max-width: 760px) { .project-hub-view { padding: 12px; } .project-hub-layout, .project-hub-funding-layout { grid-template-columns: 1fr; } .project-hub-index { max-height: 240px; overflow: auto; } .project-hub-header { flex-direction: column; } }
+@media (max-width: 1100px) { .project-hub-funding-layout { grid-template-columns: 1fr; } .project-hub-funding-board { grid-template-columns: repeat(3, minmax(240px, 1fr)); } }
+@media (max-width: 760px) { .project-hub-view { padding: 12px; } .project-hub-layout, .project-hub-funding-layout { grid-template-columns: 1fr; } .project-hub-index { max-height: 240px; overflow: auto; } .project-hub-header, .project-hub-workstream-head { flex-direction: column; } }
 @media (max-width: 520px) { .project-hub-metrics, .project-hub-fields, .project-hub-work-row { grid-template-columns: 1fr; } .project-hub-linked, .project-hub-work-actions { grid-column: 1; } .project-hub-funding-summary { flex-wrap: wrap; } }
 @media (forced-colors: active) { .project-hub-project.selected, .project-hub-funding-card.selected { outline: 2px solid Highlight; } }
