@@ -187,6 +187,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                   <td>
                     <strong>{letter.platformIncomingNumber || `№ ${letter.sequenceNumber}`}</strong>
                     <small>{dateTime(letter.receivedAt)} · {letter.source === "webmail" ? "Webmail" : "E-XAT"}</small>
+                    {letter.senderLetterNumber ? <small title={letter.senderLetterNumber}>Исх. {letter.senderLetterNumber}</small> : null}
                   </td>
                   <td className="ai-incoming-subject">
                     <strong>{letter.subject || "Без темы"}</strong>
@@ -194,6 +195,7 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                   </td>
                   <td>
                     <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount} {letter.attachmentsCount === 1 ? "файл" : "файлов"}</span>
+                    {letter.mainDocumentFilename ? <small title={letter.mainDocumentFilename}>{letter.mainDocumentFilename}</small> : null}
                     <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
                   </td>
                   <td>
