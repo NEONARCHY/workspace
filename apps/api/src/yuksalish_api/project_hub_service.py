@@ -880,6 +880,8 @@ async def create_funding_request(
     user: AuthenticatedUser,
     project_id: UUID,
     payload: ProjectFundingWrite,
+    *,
+    draft: bool = False,
 ) -> ProjectFundingResponse:
     project = await _require_project(connection, user, project_id, lock=True)
     if project["lifecycle_status"] != "active":
@@ -922,7 +924,7 @@ async def create_funding_request(
             purpose=payload.purpose,
             amount=payload.amount,
             currency=project["currency"],
-            status="pending",
+            status="draft" if draft else "pending",
             approver_ids=[str(value) for value in approvers],
             current_step=0,
             approval_due_at=payload.approval_due_at,
@@ -931,30 +933,26 @@ async def create_funding_request(
             updated_at=now,
         )
     )
-    await connection.execute(
-        insert(project_hub_request_actions).values(
-            id=uuid4(),
-            request_id=request_id,
-            actor_user_id=user.id,
-            action="submit",
-            step=0,
-            comment=None,
-            created_at=now,
+    if not draft:
+        await connection.execute(
+            insert(project_hub_request_actions).values(
+                id=uuid4(), request_id=request_id, actor_user_id=user.id,
+                action="submit", step=0, comment=None, created_at=now,
+            )
         )
-    )
-    await _upsert_notification(
-        connection,
-        user_id=approvers[0],
-        event_key=f"project-funding:{request_id}:step:0",
-        kind="approval",
-        priority="attention",
-        title="Проектная заявка ждёт решения",
-        body=f"{project['title']} · {payload.title}",
-        section="project_funding",
-        entity_id=request_id,
-        requires_action=True,
-        occurred_at=now,
-    )
+        await _upsert_notification(
+            connection,
+            user_id=approvers[0],
+            event_key=f"project-funding:{request_id}:step:0",
+            kind="approval",
+            priority="attention",
+            title="Проектная заявка ждёт решения",
+            body=f"{project['title']} · {payload.title}",
+            section="project_funding",
+            entity_id=request_id,
+            requires_action=True,
+            occurred_at=now,
+        )
     row = (
         (
             await connection.execute(
@@ -965,6 +963,67 @@ async def create_funding_request(
         .one()
     )
     return await _request_response(connection, user, row)
+
+
+async def submit_funding_request(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    request_id: UUID,
+) -> ProjectFundingResponse:
+    row = (
+        (await connection.execute(
+            select(project_hub_requests)
+            .where(project_hub_requests.c.id == request_id)
+            .with_for_update()
+        )).mappings().first()
+    )
+    if row is None or row["requester_user_id"] != user.id:
+        raise WorkspaceRepositoryError(404, "Project request was not found")
+    project = await _require_project(connection, user, row["project_id"])
+    if row["status"] == "pending":
+        return await _request_response(connection, user, row)
+    if row["status"] != "draft":
+        raise WorkspaceRepositoryError(409, "This request is already decided")
+    if project["lifecycle_status"] != "active":
+        raise WorkspaceRepositoryError(409, "Completed projects cannot accept requests")
+    item_status = await connection.scalar(
+        select(project_hub_items.c.status).where(project_hub_items.c.id == row["item_id"])
+    )
+    if item_status == "cancelled":
+        raise WorkspaceRepositoryError(409, "Cancelled work cannot receive requests")
+    now = datetime.now(UTC)
+    if row["approval_due_at"] is not None and row["approval_due_at"] <= now:
+        raise WorkspaceRepositoryError(422, "Approval deadline must be in the future")
+    approvers = list(row["approver_ids"])
+    if not approvers:
+        raise WorkspaceRepositoryError(409, "Set the project's approval route first")
+    await connection.execute(
+        update(project_hub_requests)
+        .where(project_hub_requests.c.id == request_id)
+        .values(status="pending", updated_at=now)
+    )
+    await connection.execute(
+        insert(project_hub_request_actions).values(
+            id=uuid4(), request_id=request_id, actor_user_id=user.id,
+            action="submit", step=0, comment=None, created_at=now,
+        )
+    )
+    await _upsert_notification(
+        connection,
+        user_id=UUID(approvers[0]),
+        event_key=f"project-funding:{request_id}:step:0",
+        kind="approval", priority="attention",
+        title="Проектная заявка ждёт решения",
+        body=f"{project['title']} · {row['title']}",
+        section="project_funding", entity_id=request_id,
+        requires_action=True, occurred_at=now,
+    )
+    updated = (
+        (await connection.execute(
+            select(project_hub_requests).where(project_hub_requests.c.id == request_id)
+        )).mappings().one()
+    )
+    return await _request_response(connection, user, updated)
 
 
 async def decide_funding_request(
@@ -1187,6 +1246,8 @@ async def load_funding_requests(
     )
     visible: list[ProjectFundingResponse] = []
     for row in rows:
+        if row["status"] == "draft" and row["requester_user_id"] != user.id:
+            continue
         project = await _project_row(connection, row["project_id"])
         if not await _can_view_project(connection, user, project):
             continue

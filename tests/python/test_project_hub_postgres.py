@@ -29,6 +29,7 @@ from yuksalish_api.project_hub_service import (
     save_project,
     save_workstream,
     set_item_status,
+    submit_funding_request,
 )
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
@@ -230,6 +231,40 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     ProjectWorkStatusWrite(status="active", expected_status="rejected"),
                 )
                 assert reopened.status == "active"
+                draft = await create_funding_request(
+                    connection, manager, UUID(project.id),
+                    ProjectFundingWrite(
+                        item_id=item.id, title="File draft", amount=10,
+                        approval_due_at=due,
+                    ), draft=True,
+                )
+                assert draft.status == "draft"
+                assert draft.actions == []
+                assert not await connection.scalar(
+                    select(workspace_notifications.c.id).where(
+                        workspace_notifications.c.entity_id == UUID(draft.id)
+                    )
+                )
+                assert all(
+                    row.id != draft.id for row in await load_funding_requests(connection, first)
+                )
+                await validate_attachment_owner(
+                    connection, manager, "project_funding_request", UUID(draft.id), write=True
+                )
+                with pytest.raises(WorkspaceRepositoryError):
+                    await validate_attachment_owner(
+                        connection, first, "project_funding_request", UUID(draft.id), write=False
+                    )
+                submitted = await submit_funding_request(connection, manager, UUID(draft.id))
+                assert submitted.status == "pending"
+                assert len(submitted.actions) == 1
+                repeated = await submit_funding_request(connection, manager, UUID(draft.id))
+                assert len(repeated.actions) == 1
+                assert await connection.scalar(
+                    select(workspace_notifications.c.id).where(
+                        workspace_notifications.c.entity_id == UUID(draft.id)
+                    )
+                )
                 request = await create_funding_request(
                     connection,
                     manager,

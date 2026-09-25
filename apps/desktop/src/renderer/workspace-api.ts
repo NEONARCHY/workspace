@@ -1587,6 +1587,22 @@ export function createProjectHubRequest(
   );
 }
 
+export function createProjectHubRequestDraft(
+  token: string, projectId: string,
+  payload: { readonly itemId: string; readonly title: string; readonly purpose: string; readonly amount: number; readonly approvalDueAt: string },
+): Promise<ProjectHubRequest> {
+  return apiRequest<ProjectHubRequest>(
+    `/project-hub/projects/${projectId}/requests/drafts`,
+    { method: "POST", body: JSON.stringify(payload) }, token,
+  );
+}
+
+export function submitProjectHubRequestDraft(token: string, requestId: string): Promise<ProjectHubRequest> {
+  return apiRequest<ProjectHubRequest>(
+    `/project-hub/requests/${requestId}/submit`, { method: "POST" }, token,
+  );
+}
+
 export function decideProjectHubRequest(
   token: string, requestId: string, action: "approve" | "reject", comment = "",
 ): Promise<ProjectHubRequest> {
