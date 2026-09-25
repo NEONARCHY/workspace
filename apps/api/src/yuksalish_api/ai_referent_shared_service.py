@@ -15,6 +15,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action, module_permissions_for_user
+from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser
 from .tables import (
     ai_referent_configuration,
@@ -295,12 +296,7 @@ async def notify_letter(
         action_recipients.add(row["created_by_user_id"])
     elif row["status"] in {"pending_review", "approved", "awaiting_final_send", "failed"}:
         action_recipients.add(row["reviewer_user_id"])
-    if row["status"] in {
-        "referent_review_pending",
-        "delivery_unknown",
-        "failed",
-        "operator_revision",
-    }:
+    if row["status"] in OPERATOR_VISIBLE_STATUSES:
         candidates = (
             (await connection.execute(select(users).where(users.c.status == "active")))
             .mappings()
@@ -319,12 +315,7 @@ async def notify_letter(
             rights = await module_permissions_for_user(connection, actor)
             if rights.get("ai_referent", {}).get("admin"):
                 recipients.add(actor.id)
-                if row["status"] in {
-                    "referent_review_pending",
-                    "delivery_unknown",
-                    "operator_revision",
-                }:
-                    action_recipients.add(actor.id)
+                action_recipients.add(actor.id)
     # Resolve old action indicators; audit and read state remain intact.
     await connection.execute(
         update(workspace_notifications)
@@ -449,16 +440,10 @@ async def claim_notifications(connection: AsyncConnection) -> list[dict[str, obj
             .one_or_none()
         )
         permissions = await module_permissions_for_user(connection, actor)
-        if letter is None or not (
-            permissions.get("ai_referent", {}).get("admin")
-            or actor.id
-            in {
-                letter["created_by_user_id"],
-                letter["reviewer_user_id"],
-                letter["final_reviewer_user_id"],
-                letter["initial_reviewer_user_id"],
-            }
-            or letter["status"] == "sent"
+        if letter is None or not may_view_letter(
+            letter,
+            actor,
+            may_operate=permissions.get("ai_referent", {}).get("admin", False),
         ):
             continue
         result.append(

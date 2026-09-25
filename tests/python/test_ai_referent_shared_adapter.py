@@ -9,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zipfile import ZipFile
 
 import pytest
@@ -301,6 +301,41 @@ def test_shared_bot_history_is_sent_only_and_archive_is_unavailable(modules, tmp
     assert all(row[0]["text"][0] in "📤✍📚📬🏠" for row in menu)
     assert all("Архив" not in entry["text"] for row in menu for entry in row)
     assert modules.shared_bot.button("Далее", "list:sent:1")["text"].startswith("➡️ ")
+
+
+def test_administrator_pending_menu_shows_only_other_letter_stage(modules, tmp_path):
+    api, telegram = Mock(), Mock()
+    telegram.send_message.return_value = {"ok": True}
+    letter_id = str(uuid4())
+    stage = {
+        "id": letter_id,
+        "status": "pending_review",
+        "createdByName": "Сотрудник",
+        "createdAt": "2026-09-25T09:30:00+05:00",
+        "displayNumber": None,
+        "subject": "Секретный текст письма",
+    }
+
+    def request(path, *args, **kwargs):
+        if "/letters/progress/" in path:
+            return stage
+        if "/letters/progress?" in path:
+            return {"letters": [stage]}
+        return {"letters": []}
+
+    api.request.side_effect = request
+    bot = modules.shared_bot.SharedBot(
+        telegram, api, modules.state.State(tmp_path / "progress.sqlite")
+    )
+    bot.history("123", "pending", 0)
+    markup = telegram.send_message.call_args.kwargs["reply_markup"]["inline_keyboard"]
+    assert markup[0][0]["callback_data"] == "g:" + UUID(letter_id).hex
+    assert "Секретный" not in str(telegram.send_message.call_args)
+
+    bot.show_progress("123", letter_id)
+    assert "/letters/progress/" in api.request.call_args.args[0]
+    assert modules.shared_bot.STATUSES["pending_review"] in telegram.send_message.call_args.args[1]
+    assert "Секретный" not in telegram.send_message.call_args.args[1]
 
 
 def test_sign_only_worker_uploads_one_pdf_per_page_without_send(modules, monkeypatch, tmp_path):

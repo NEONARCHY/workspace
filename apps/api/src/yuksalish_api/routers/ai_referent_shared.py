@@ -40,6 +40,7 @@ from ..ai_referent_preflight import (
     finish_check,
     reviewer_names,
 )
+from ..ai_referent_progress import list_other_letter_progress, load_letter_progress
 from ..ai_referent_recipient_service import (
     RecipientRegistry,
     RecipientSnapshot,
@@ -51,6 +52,8 @@ from ..ai_referent_schemas import (
     AIReferentCommentAudio,
     AIReferentDocumentCheck,
     AIReferentLetterResponse,
+    AIReferentProgressItem,
+    AIReferentProgressResponse,
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
     UpdateAIReferentLetterRequest,
@@ -536,6 +539,23 @@ async def get_agent_letters(
         connection, actor, offset=offset, limit=limit,
         active_only=active_only, history_only=sent_only,
     )
+
+
+@router.get("/agent/letters/progress", response_model=AIReferentProgressResponse)
+async def get_agent_letter_progress_list(
+    connection: Connection,
+    actor: Actor,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 10,
+) -> AIReferentProgressResponse:
+    return await list_other_letter_progress(connection, actor, offset=offset, limit=limit)
+
+
+@router.get("/agent/letters/progress/{letter_id}", response_model=AIReferentProgressItem)
+async def get_agent_letter_progress(
+    letter_id: UUID, connection: Connection, actor: Actor
+) -> AIReferentProgressItem:
+    return await load_letter_progress(connection, actor, letter_id)
 
 
 @router.get("/agent/letters/{letter_id}", response_model=AIReferentLetterResponse)
