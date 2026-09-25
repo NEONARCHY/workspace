@@ -5655,13 +5655,19 @@ async def validate_attachment_owner(
             ).mappings().first()
         )
         visible = row is not None and (
-            current_user.role in {"admin", "superadmin"}
-            or current_user.id in {row["manager_user_id"], row["requester_user_id"]}
-            or str(current_user.id) in row["approver_ids"]
+            (row["status"] == "draft" and row["requester_user_id"] == current_user.id)
+            or (
+                row["status"] != "draft"
+                and (
+                    current_user.role in {"admin", "superadmin"}
+                    or current_user.id in {row["manager_user_id"], row["requester_user_id"]}
+                    or str(current_user.id) in row["approver_ids"]
+                )
+            )
         )
         writable = (
             row is not None
-            and row["status"] == "pending"
+            and row["status"] in {"draft", "pending"}
             and row["requester_user_id"] == current_user.id
         )
         if not visible or (write and not writable):
