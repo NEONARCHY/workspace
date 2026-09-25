@@ -301,8 +301,11 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         letter = await call("GET", path, author)
         assert letter["status"] == "awaiting_final_send" and letter["finalPdfFileId"]
-        admin_final_view = await call("GET", "/agent" + path, telegram("910004"))
-        assert "release_delivery" not in admin_final_view["availableActions"]
+        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        admin_final_progress = await call(
+            "GET", "/agent/letters/progress/" + letter["id"], telegram("910004")
+        )
+        assert admin_final_progress["status"] == "awaiting_final_send"
         await action("release_delivery", telegram("910004"), 403)
         await action("send", admin, 409)
         await action("release_delivery", telegram("910001"), 403)
