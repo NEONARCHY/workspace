@@ -592,7 +592,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 <label>Тема письма (необязательно)<Input maxLength={300} placeholder="Если пропустить — исходящий номер" value={form.subject} onChange={(_e, d) => setForm((current) => ({ ...current, subject: d.value }))} /></label>
                 <small>Оставьте пустой — робот использует исходящий номер. Введённая тема уйдёт без добавления номера.</small>
                 {form.workflowKind === "sign_only" ? <p className="ai-referent-sign-hint">Загрузите DOCX, выберите одного согласующего. После его решения робот вернёт каждый лист отдельным подписанным PDF. Адресатам письма не отправляются.</p> : null}
-                {formOpen && form.workflowKind === "delivery" ? <AIReferentRecipientPicker
+                {form.workflowKind === "delivery" ? <AIReferentRecipientPicker
                   token={token}
                   organization={form.recipientOrganization}
                   address={form.recipientAddress}
