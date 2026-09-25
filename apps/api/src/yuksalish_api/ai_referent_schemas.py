@@ -153,6 +153,18 @@ class AIReferentRegistryResponse(ApiModel):
     signed_count: int = 0
 
 
+class AIReferentProgressItem(ApiModel):
+    id: str
+    display_number: str | None = None
+    created_by_name: str
+    status: AIReferentStatus
+    created_at: datetime
+
+
+class AIReferentProgressResponse(ApiModel):
+    letters: list[AIReferentProgressItem] = Field(default_factory=list)
+
+
 AIReferentIncomingSource = Literal["exat", "webmail", "import"]
 
 

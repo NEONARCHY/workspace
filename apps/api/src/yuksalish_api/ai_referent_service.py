@@ -25,6 +25,7 @@ from .ai_referent_schemas import (
     UpdateAIReferentLetterRequest,
 )
 from .ai_referent_shared_service import notify_letter, operation_replay, remember_operation
+from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser
 from .tables import (
     ai_referent_comment_audio,
@@ -60,16 +61,10 @@ def _may_view_all_sent(user: AuthenticatedUser) -> bool:
     return _is_privileged(user) or user.role == "manager"
 
 
-def _may_view(row: RowMapping, user: AuthenticatedUser) -> bool:
-    if row["status"] == "sent":
-        return _may_view_all_sent(user) or row["created_by_user_id"] == user.id
-    return bool(
-        _is_privileged(user)
-        or row["created_by_user_id"] == user.id
-        or row["reviewer_user_id"] == user.id
-        or row.get("final_reviewer_user_id") == user.id
-        or row.get("initial_reviewer_user_id") == user.id
-    )
+def _may_view(
+    row: RowMapping, user: AuthenticatedUser, *, may_operate: bool = False
+) -> bool:
+    return may_view_letter(row, user, may_operate=may_operate)
 
 
 def _display_number(row: RowMapping) -> str | None:
@@ -106,10 +101,9 @@ def _available_actions(
     replacement_file_ready: bool = False,
 ) -> tuple[list[AIReferentAction], bool]:
     status = row["status"]
-    privileged = _is_privileged(current_user)
     is_creator = row["created_by_user_id"] == current_user.id
     is_reviewer = row["reviewer_user_id"] == current_user.id
-    can_edit = status in _EDITABLE_STATUSES and (is_creator or privileged or may_operate)
+    can_edit = status in _EDITABLE_STATUSES and is_creator
     actions: list[AIReferentAction] = []
     if status == "pending_review" and is_creator:
         actions.append("remind")
@@ -120,9 +114,7 @@ def _available_actions(
             actions.extend(("approve", "return_for_revision"))
         if status == "failed" and may_approve and is_reviewer:
             actions.extend(("retry_delivery", "return_for_revision"))
-        if status not in _FINAL_STATUSES | {"queued", "sending"} and (
-            is_creator or privileged
-        ):
+        if status not in _FINAL_STATUSES | {"queued", "sending"} and is_creator:
             actions.append("cancel")
         return actions, can_edit
     if (
@@ -133,13 +125,13 @@ def _available_actions(
         and row["recipient_address"]
     ):
         actions.append("submit")
-    if status == "pending_review" and may_approve and (is_reviewer or privileged):
+    if status == "pending_review" and may_approve and is_reviewer:
         actions.extend(("approve", "return_for_revision"))
-    if status == "approved" and may_approve and (is_reviewer or privileged):
+    if status == "approved" and may_approve and is_reviewer:
         actions.append("queue_delivery")
-    if status == "failed" and may_approve and (is_reviewer or privileged):
+    if status == "failed" and may_approve and is_reviewer:
         actions.extend(("retry_delivery", "return_for_revision"))
-    if status == "awaiting_final_send" and may_approve and (is_reviewer or privileged):
+    if status == "awaiting_final_send" and may_approve and is_reviewer:
         actions.extend(("release_delivery", "return_for_revision"))
     if status == "referent_review_pending" and may_operate:
         actions.extend(("send", "return_for_revision", "replace_document", "mark_sent"))
@@ -148,7 +140,7 @@ def _available_actions(
     if status == "delivery_unknown" and may_operate:
         actions.extend(("confirm_sent", "confirm_not_sent"))
     if status not in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"} and (
-        (is_creator and status != "operator_revision") or privileged or may_operate
+        is_creator and status != "operator_revision"
     ):
         actions.append("cancel")
     return actions, can_edit
@@ -423,7 +415,7 @@ async def _response(
         can_edit=can_edit,
         can_delete=bool(
             permissions.get("ai_referent", {}).get("edit")
-            and (row["created_by_user_id"] == current_user.id or _is_privileged(current_user))
+            and row["created_by_user_id"] == current_user.id
         ),
         can_replace_document=(
             row["status"] == "operator_revision"
@@ -560,25 +552,32 @@ async def load_letters(
     permissions = await module_permissions_for_user(connection, current_user)
     if history_only:
         statement = statement.where(ai_referent_letters.c.status == "sent")
-        if not _may_view_all_sent(current_user):
+        if not (
+            _may_view_all_sent(current_user)
+            or permissions.get("ai_referent", {}).get("admin", False)
+        ):
             statement = statement.where(
                 ai_referent_letters.c.created_by_user_id == current_user.id
             )
-    elif not _is_privileged(current_user):
+    else:
         participants = or_(
             ai_referent_letters.c.created_by_user_id == current_user.id,
             ai_referent_letters.c.reviewer_user_id == current_user.id,
             ai_referent_letters.c.final_reviewer_user_id == current_user.id,
             ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
         )
-        non_sent = ai_referent_letters.c.status != "sent"
-        if not permissions.get("ai_referent", {}).get("admin"):
-            non_sent = and_(non_sent, participants)
+        may_operate = permissions.get("ai_referent", {}).get("admin", False)
+        non_sent = and_(ai_referent_letters.c.status != "sent", participants)
+        if may_operate:
+            non_sent = or_(
+                non_sent,
+                ai_referent_letters.c.status.in_(OPERATOR_VISIBLE_STATUSES),
+            )
         sent = ai_referent_letters.c.status == "sent"
-        if current_user.role != "manager":
+        if not _may_view_all_sent(current_user) and not may_operate:
             sent = and_(sent, ai_referent_letters.c.created_by_user_id == current_user.id)
         statement = statement.where(
-            or_(sent, ai_referent_letters.c.created_by_user_id == current_user.id, non_sent)
+            or_(sent, non_sent)
         )
     if status:
         statement = statement.where(ai_referent_letters.c.status == status)
@@ -661,10 +660,11 @@ async def load_letter(
 ) -> AIReferentLetterResponse:
     await ensure_module_action(connection, current_user, "ai_referent", "view")
     row = await _letter_row(connection, letter_id)
-    if not _may_view(row, current_user):
-        permissions = await module_permissions_for_user(connection, current_user)
-        if row["status"] == "sent" or not permissions.get("ai_referent", {}).get("admin"):
-            raise AIReferentServiceError(404, "Исходящее письмо не найдено.")
+    permissions = await module_permissions_for_user(connection, current_user)
+    if not _may_view(
+        row, current_user, may_operate=permissions.get("ai_referent", {}).get("admin", False)
+    ):
+        raise AIReferentServiceError(404, "Исходящее письмо не найдено.")
     return await _response(connection, row, current_user)
 
 
@@ -687,8 +687,8 @@ async def update_letter(
         raise AIReferentServiceError(422, "Вид заявки нельзя изменить после создания.")
     if row["status"] not in _EDITABLE_STATUSES:
         raise AIReferentServiceError(409, "На текущем этапе письмо нельзя редактировать.")
-    if row["created_by_user_id"] != current_user.id and not _is_privileged(current_user):
-        await ensure_module_action(connection, current_user, "ai_referent", "admin")
+    if row["created_by_user_id"] != current_user.id:
+        raise AIReferentServiceError(403, "Редактировать черновик может только его автор.")
     reviewer_key = await _validate_reviewer(connection, payload.reviewer_user_id)
     final_key = await _validate_reviewer(connection, payload.final_reviewer_user_id)
     if row["workflow_kind"] == "sign_only" and (
@@ -779,7 +779,6 @@ async def act_on_letter(
         raise AIReferentServiceError(409, "Письмо уже изменилось. Обновите данные.")
     action = payload.action
     current_status = row["status"]
-    privileged = _is_privileged(current_user)
     is_creator = row["created_by_user_id"] == current_user.id
     is_reviewer = row["reviewer_user_id"] == current_user.id
     next_status: str
@@ -808,7 +807,7 @@ async def act_on_letter(
     elif row["workflow_kind"] == "sign_only":
         if action == "submit":
             await ensure_module_action(connection, current_user, "ai_referent", "edit")
-            if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
+            if current_status not in _EDITABLE_STATUSES or not is_creator:
                 raise AIReferentServiceError(403, "Отправить на подпись может автор.")
             if row["reviewer_user_id"] is None:
                 raise AIReferentServiceError(422, "Выберите согласующего.")
@@ -853,19 +852,17 @@ async def act_on_letter(
             command_kind = "sign_only"
         elif action == "cancel":
             await ensure_module_action(connection, current_user, "ai_referent", "edit")
-            if current_status in _FINAL_STATUSES | {"queued", "sending"} or not (
-                is_creator or privileged
-            ):
+            if current_status in _FINAL_STATUSES | {"queued", "sending"} or not is_creator:
                 raise AIReferentServiceError(403, "Заявку нельзя отменить на этом этапе.")
             next_status = "cancelled"
         else:
             raise AIReferentServiceError(422, "Этот маршрут только для подписи, без отправки.")
     elif action == "submit":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
-        if current_status not in _EDITABLE_STATUSES or not (is_creator or privileged):
-            if current_status not in _EDITABLE_STATUSES:
-                raise AIReferentServiceError(409, "Письмо не готово к повторному согласованию.")
-            await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        if current_status not in _EDITABLE_STATUSES:
+            raise AIReferentServiceError(409, "Письмо не готово к повторному согласованию.")
+        if not is_creator:
+            raise AIReferentServiceError(403, "Отправить письмо может его автор.")
         if not row["recipient_organization"] or not row["recipient_address"]:
             raise AIReferentServiceError(422, "Выберите организацию и адрес получателя.")
         if row["reviewer_user_id"] is None:
@@ -940,10 +937,9 @@ async def act_on_letter(
         "release_delivery",
     }:
         await ensure_module_action(connection, current_user, "ai_referent", "approve")
-        if not (is_reviewer or privileged):
+        if not is_reviewer:
             raise AIReferentServiceError(403, "Действие доступно назначенному согласующему.")
-        if not privileged:
-            await _validate_reviewer(connection, current_user.id)
+        await _validate_reviewer(connection, current_user.id)
         if action == "approve":
             if current_status != "pending_review":
                 raise AIReferentServiceError(409, "Письмо не ожидает согласования.")
@@ -993,8 +989,8 @@ async def act_on_letter(
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
         if current_status in _FINAL_STATUSES | {"queued", "sending", "delivery_unknown"}:
             raise AIReferentServiceError(403, "Отменить письмо может его автор.")
-        if current_status == "operator_revision" or not (is_creator or privileged):
-            await ensure_module_action(connection, current_user, "ai_referent", "admin")
+        if current_status == "operator_revision" or not is_creator:
+            raise AIReferentServiceError(403, "Отменить письмо может его автор.")
         next_status = "cancelled"
         if row["outgoing_number"] is not None:
             next_status, command_kind = "queued", "cancel"

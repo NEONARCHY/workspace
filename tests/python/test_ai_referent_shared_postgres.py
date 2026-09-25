@@ -177,6 +177,11 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert replay["id"] == letter["id"]
         await call("POST", "/letters", author, expected=409, json={**payload, "subject": "Changed"})
         path = "/letters/" + letter["id"]
+        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        await call(
+            "DELETE", "/agent" + path + f"?expectedRevision={letter['revision']}",
+            telegram("910004"), expected=403,
+        )
 
         async def action(name, actor, expected=200, comment="", revision=None):
             nonlocal letter
@@ -212,11 +217,39 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             content=data,
         )
         assert duplicate["id"] == file["id"]
+        await call(
+            "PUT",
+            "/agent" + path + "/attachment?fileName=intrusion.docx&role=primary",
+            telegram("910004"), expected=404, content=data,
+        )
         letter = await call("GET", path, author)
         assert len(letter["attachments"]) == 1
         await action("submit", author, 409)
         await pass_preflight(client, engine, letter["id"], author, "shared-test-agent")
+        await action("submit", telegram("910004"), 403)
         await action("submit", author)
+        admin_queue = await call("GET", "/agent/letters?activeOnly=true", telegram("910004"))
+        assert not any(item["id"] == letter["id"] for item in admin_queue["letters"])
+        admin_progress = await call(
+            "GET", "/agent/letters/progress", telegram("910004")
+        )
+        stage = next(item for item in admin_progress["letters"] if item["id"] == letter["id"])
+        assert stage["status"] == "pending_review"
+        assert "subject" not in stage and "events" not in stage and "attachments" not in stage
+        await call("GET", "/agent/letters/progress/" + letter["id"], telegram("910003"),
+                   expected=404)
+        await call("GET", path, admin, expected=404)
+        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        await call(
+            "GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910004"),
+            expected=404,
+        )
+        await action("approve", telegram("910004"), 403)
+        await action(
+            "return_for_revision", telegram("910004"), 403,
+            comment="Администратор не является согласующим",
+        )
+        await action("cancel", telegram("910004"), 403)
         await action("approve", telegram("910002"), 403)
         await action("return_for_revision", telegram("910001"), comment="Please correct the draft")
         assert letter["status"] == "needs_revision"
@@ -268,6 +301,12 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         letter = await call("GET", path, author)
         assert letter["status"] == "awaiting_final_send" and letter["finalPdfFileId"]
+        await call("GET", "/agent" + path, telegram("910004"), expected=404)
+        admin_final_progress = await call(
+            "GET", "/agent/letters/progress/" + letter["id"], telegram("910004")
+        )
+        assert admin_final_progress["status"] == "awaiting_final_send"
+        await action("release_delivery", telegram("910004"), 403)
         await action("send", admin, 409)
         await action("release_delivery", telegram("910001"), 403)
         await action("release_delivery", telegram("910002"))
@@ -285,6 +324,16 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         )
         letter = await call("GET", path, author)
         assert letter["status"] == "referent_review_pending"
+        admin_operator_view = await call("GET", "/agent" + path, telegram("910004"))
+        assert {"send", "replace_document"}.issubset(
+            admin_operator_view["availableActions"]
+        )
+        admin_final_queue = await call(
+            "GET", "/agent/letters?activeOnly=true", telegram("910004")
+        )
+        assert any(item["id"] == letter["id"] for item in admin_final_queue["letters"])
+        admin_progress = await call("GET", "/agent/letters/progress", telegram("910004"))
+        assert not any(item["id"] == letter["id"] for item in admin_progress["letters"])
         packet = await call("GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910002"))
         assert len(packet["files"]) == 1
         assert packet["files"][0]["id"] == letter["finalPdfFileId"]
@@ -397,6 +446,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await action("confirm_sent", admin, 422)
         await action("confirm_sent", admin, comment="Verified in the external sent mailbox")
         assert letter["status"] == "sent" and letter["sentAt"]
+        admin_history = await call("GET", "/agent/letters?sentOnly=true", telegram("910004"))
+        assert any(item["id"] == letter["id"] for item in admin_history["letters"])
         async with engine.connect() as connection:
             alerts = (
                 (
@@ -576,7 +627,7 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         )
 
         async def action(name, headers=admin, expected=200, comment=""):
-            current = await call("GET", path, admin)
+            current = await call("GET", path, author)
             return await call(
                 "POST",
                 path + "/actions",
@@ -631,8 +682,8 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
             expected=204,
             json={**lease, "outcome": "failed", "detail": "Conversion unavailable"},
         )
-        current = await call("GET", path, admin)
-        assert current["status"] == "failed" and "retry_delivery" in current["availableActions"]
+        current = await call("GET", path, author)
+        assert current["status"] == "failed"
         await action("return_for_revision", auth("baxtiyor"), comment="Replace source document")
         # Revisions preserve the allocated number while repeating the entire route.
         await pass_preflight(client, engine, letter["id"], author, "shared-test-agent")

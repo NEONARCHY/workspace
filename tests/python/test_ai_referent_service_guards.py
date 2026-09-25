@@ -12,7 +12,10 @@ from sqlalchemy.sql import Insert, Select, Update
 
 from yuksalish_api import ai_referent_agent_service as agent
 from yuksalish_api import ai_referent_configuration_service as configuration
+from yuksalish_api import ai_referent_deletion as deletion
+from yuksalish_api import ai_referent_progress as progress
 from yuksalish_api import ai_referent_service as letters
+from yuksalish_api import repository
 from yuksalish_api.ai_referent_configuration_schemas import (
     ReviewerConfigurationResponse,
     ReviewerConfigurationUpdate,
@@ -26,6 +29,7 @@ from yuksalish_api.ai_referent_files_service import (
 )
 from yuksalish_api.ai_referent_schemas import AIReferentActionRequest
 from yuksalish_api.auth import AuthenticatedUser
+from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.routers import ai_referent_shared as shared
 
 
@@ -43,6 +47,74 @@ def actor(role="employee"):
         job_title="Director",
         role=role,
     )
+
+
+@pytest.mark.parametrize(
+    ("status", "review_actions"),
+    [
+        ("pending_review", {"approve", "return_for_revision"}),
+        ("approved", {"queue_delivery"}),
+        ("failed", {"retry_delivery", "return_for_revision"}),
+        ("awaiting_final_send", {"release_delivery", "return_for_revision"}),
+    ],
+)
+@pytest.mark.parametrize("role", ["admin", "superadmin"])
+def test_administrator_cannot_take_another_reviewers_actions(
+    role, status, review_actions
+):
+    administrator = actor(role)
+    row = {
+        "status": status,
+        "workflow_kind": "delivery",
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+        "recipient_organization": "Partner",
+        "recipient_address": "partner@exat.uz",
+    }
+    actions, _ = letters._available_actions(
+        row, administrator, may_approve=True, may_operate=True, attachment_count=1
+    )
+    assert review_actions.isdisjoint(actions)
+    row["reviewer_user_id"] = administrator.id
+    assigned_actions, _ = letters._available_actions(
+        row, administrator, may_approve=True, may_operate=True, attachment_count=1
+    )
+    assert review_actions.issubset(assigned_actions)
+
+
+@pytest.mark.parametrize("role", ["admin", "superadmin"])
+def test_administrator_keeps_referent_delivery_actions(role):
+    administrator = actor(role)
+    row = {
+        "status": "referent_review_pending",
+        "workflow_kind": "delivery",
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+        "recipient_organization": "Partner",
+        "recipient_address": "partner@exat.uz",
+    }
+    actions, _ = letters._available_actions(
+        row, administrator, may_approve=True, may_operate=True, attachment_count=1
+    )
+    assert {"send", "replace_document", "mark_sent"}.issubset(actions)
+
+
+@pytest.mark.parametrize("role", ["admin", "superadmin"])
+def test_administrator_cannot_edit_or_cancel_another_draft(role):
+    administrator = actor(role)
+    row = {
+        "status": "draft",
+        "workflow_kind": "delivery",
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+        "recipient_organization": "Partner",
+        "recipient_address": "partner@exat.uz",
+    }
+    actions, can_edit = letters._available_actions(
+        row, administrator, may_approve=True, may_operate=True, attachment_count=1
+    )
+    assert not can_edit
+    assert not {"submit", "cancel"}.intersection(actions)
 
 
 def mapped(value):
@@ -162,6 +234,38 @@ def test_sent_letter_visibility_is_owner_or_leadership(role):
     assert letters._may_view(row, user)
 
 
+@pytest.mark.parametrize("role", ["admin", "superadmin"])
+@pytest.mark.parametrize(
+    "status",
+    [
+        "draft", "needs_revision", "pending_review", "approved", "queued",
+        "sending", "awaiting_final_send", "failed", "cancelled", "signed",
+    ],
+)
+def test_administrator_cannot_view_other_letters_before_operator_stage(role, status):
+    administrator = actor(role)
+    row = {
+        "status": status,
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+    }
+    assert not letters._may_view(row, administrator, may_operate=True)
+
+
+@pytest.mark.parametrize(
+    "status", ["referent_review_pending", "operator_revision", "delivery_unknown", "sent"]
+)
+def test_operator_can_view_final_stage_and_history(status):
+    operator = actor()
+    row = {
+        "status": status,
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+    }
+    assert letters._may_view(row, operator, may_operate=True)
+    assert not letters._may_view(row, operator)
+
+
 @pytest.mark.anyio
 async def test_sent_letter_direct_open_denied_to_other_employee(monkeypatch):
     user = actor()
@@ -174,11 +278,127 @@ async def test_sent_letter_direct_open_denied_to_other_employee(monkeypatch):
     monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
     monkeypatch.setattr(
         letters, "module_permissions_for_user",
-        AsyncMock(return_value={"ai_referent": {"admin": True}}),
+        AsyncMock(return_value={"ai_referent": {"admin": False}}),
     )
     with pytest.raises(letters.AIReferentServiceError) as error:
         await letters.load_letter(Mock(), user, uuid4())
     assert error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_administrator_cannot_open_other_pending_letter(monkeypatch):
+    administrator = actor("admin")
+    row = {
+        "status": "pending_review",
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+    }
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(
+        letters,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": True}}),
+    )
+    with pytest.raises(letters.AIReferentServiceError) as error:
+        await letters.load_letter(Mock(), administrator, uuid4())
+    assert error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_administrator_letter_list_is_limited_to_operator_stage_and_history(monkeypatch):
+    administrator = actor("admin")
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[mapped([]), mapped([])]))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(
+        letters,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": True, "approve": True}}),
+    )
+    await letters.load_letters(connection, administrator)
+    where = str(
+        connection.execute.call_args_list[1].args[0].whereclause.compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "referent_review_pending" in where
+    assert "operator_revision" in where
+    assert "delivery_unknown" in where
+    assert "created_by_user_id" in where
+    assert "reviewer_user_id" in where
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("is_operator", [False, True])
+async def test_progress_list_exposes_only_status_and_identity_to_operator(
+    monkeypatch, is_operator
+):
+    user = actor("admin" if is_operator else "employee")
+    record = {
+        "id": uuid4(),
+        "status": "pending_review",
+        "created_by_name": "Sender",
+        "created_at": datetime.now(UTC),
+        "outgoing_number": None,
+        "year_suffix": None,
+        "subject": "This must not leave the progress endpoint",
+    }
+    connection = SimpleNamespace(execute=AsyncMock(return_value=mapped([record])))
+    monkeypatch.setattr(progress, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(
+        progress,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": is_operator}}),
+    )
+    result = await progress.list_other_letter_progress(connection, user)
+    if not is_operator:
+        assert result.letters == []
+        connection.execute.assert_not_awaited()
+        return
+    assert len(result.letters) == 1
+    assert result.letters[0].status == "pending_review"
+    assert "subject" not in result.letters[0].model_dump(by_alias=True)
+    where = str(
+        connection.execute.call_args.args[0].whereclause.compile(
+            compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "pending_review" in where
+    assert "draft" not in where
+    assert "IS DISTINCT FROM" in where
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status,allowed", [("pending_review", False),
+                                             ("referent_review_pending", True)])
+async def test_old_administrator_notification_does_not_expose_letter_cycle(
+    monkeypatch, status, allowed
+):
+    administrator = actor("admin")
+    letter_id = uuid4()
+    letter = {
+        "id": letter_id,
+        "status": status,
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+    }
+    connection = SimpleNamespace(execute=AsyncMock(return_value=mapped(letter)))
+    monkeypatch.setattr(
+        repository,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"view": True, "admin": True}}),
+    )
+    check = repository._ensure_ai_referent_notification_visible(
+        connection,
+        administrator,
+        {"section": "ai_referent", "entity_id": letter_id},
+    )
+    if allowed:
+        await check
+    else:
+        with pytest.raises(WorkspaceRepositoryError) as error:
+            await check
+        assert error.value.status_code == 404
 
 
 @pytest.mark.anyio
@@ -204,6 +424,18 @@ async def test_telegram_history_query_limits_employee_to_own_sent_letters(monkey
     manager_where = str(connection.execute.call_args_list[1].args[0].whereclause)
     assert "ai_referent_letters.status" in manager_where
     assert "created_by_user_id" not in manager_where
+
+    connection.execute.reset_mock(side_effect=True)
+    connection.execute.side_effect = [mapped([]), mapped([])]
+    monkeypatch.setattr(
+        letters, "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": True}}),
+    )
+    await letters.load_letters(connection, user, history_only=True)
+    operator_where = str(connection.execute.call_args_list[1].args[0].whereclause)
+    assert "ai_referent_letters.status" in operator_where
+    assert "created_by_user_id" not in operator_where
+
 
 
 @pytest.mark.anyio
@@ -437,6 +669,7 @@ async def test_reviewer_validation_uses_account_and_module_permission(monkeypatc
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("role", ["employee", "admin", "superadmin"])
 @pytest.mark.parametrize(
     "action,status,target",
     [
@@ -449,9 +682,9 @@ async def test_reviewer_validation_uses_account_and_module_permission(monkeypatc
     ],
 )
 async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
-    monkeypatch, action, status, target
+    monkeypatch, role, action, status, target
 ):
-    user = actor()
+    user = actor(role)
     letter_id = uuid4()
     row = {
         "id": letter_id,
@@ -514,6 +747,133 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
     assert len(queued) == (1 if target == "queued" else 0)
     if queued:
         assert queued[0].compile().params["idempotency_key"] == f"letter:{letter_id}:revision:4"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("role", ["admin", "superadmin"])
+@pytest.mark.parametrize(
+    ("action", "status"),
+    [
+        ("submit", "draft"),
+        ("approve", "pending_review"),
+        ("return_for_revision", "pending_review"),
+        ("queue_delivery", "approved"),
+        ("retry_delivery", "failed"),
+        ("release_delivery", "awaiting_final_send"),
+        ("return_for_revision", "awaiting_final_send"),
+        ("cancel", "pending_review"),
+    ],
+)
+async def test_administrator_cannot_change_other_letter_before_operator_stage(
+    monkeypatch, role, action, status
+):
+    administrator = actor(role)
+    row = {
+        "id": uuid4(),
+        "revision": 3,
+        "workflow_kind": "delivery",
+        "status": status,
+        "created_by_user_id": uuid4(),
+        "reviewer_user_id": uuid4(),
+    }
+    connection = SimpleNamespace(execute=AsyncMock())
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    validate = AsyncMock()
+    monkeypatch.setattr(letters, "_validate_reviewer", validate)
+    with pytest.raises(letters.AIReferentServiceError) as error:
+        await letters.act_on_letter(
+            connection,
+            administrator,
+            row["id"],
+            AIReferentActionRequest(
+                action=action, expectedRevision=3, comment="Review decision reason"
+            ),
+        )
+    assert error.value.status_code == 403
+    validate.assert_not_awaited()
+    assert all(isinstance(call.args[0], Select) for call in connection.execute.call_args_list)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("status", ["draft", "needs_revision", "operator_revision"])
+async def test_administrator_can_upload_only_at_operator_replacement_stage(
+    monkeypatch, status
+):
+    administrator = actor("admin")
+    letter_id = uuid4()
+    query_result = Mock()
+    query_result.mappings.return_value.first.return_value = {
+        "id": letter_id,
+        "status": status,
+        "created_by_user_id": uuid4(),
+    }
+    connection = SimpleNamespace(execute=AsyncMock(return_value=query_result))
+    monkeypatch.setattr(
+        repository,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"view": True, "edit": True, "admin": True}}),
+    )
+    operation = repository.validate_attachment_owner(
+        connection, administrator, "ai_referent_letter", letter_id, write=True
+    )
+    if status == "operator_revision":
+        await operation
+    else:
+        with pytest.raises(WorkspaceRepositoryError) as error:
+            await operation
+        assert error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_administrator_cannot_delete_another_letter(monkeypatch):
+    administrator = actor("admin")
+    letter_id = uuid4()
+    query_result = Mock()
+    query_result.mappings.return_value.first.return_value = {
+        "id": letter_id,
+        "revision": 3,
+        "status": "pending_review",
+        "created_by_user_id": uuid4(),
+    }
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[Mock(), query_result]))
+    monkeypatch.setattr(deletion, "ensure_module_action", AsyncMock())
+    with pytest.raises(HTTPException) as error:
+        await deletion.request_deletion(connection, administrator, letter_id, 3)
+    assert error.value.status_code == 403
+    assert all(isinstance(call.args[0], Select) for call in connection.execute.call_args_list)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("module_admin", [False, True])
+async def test_only_module_operator_can_open_another_users_sent_letter(
+    monkeypatch, module_admin
+):
+    operator = actor()
+    letter_id = uuid4()
+    row = {
+        "id": letter_id,
+        "status": "sent",
+        "created_by_user_id": uuid4(),
+    }
+    connection = SimpleNamespace()
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(
+        letters,
+        "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": module_admin}}),
+    )
+    marker = object()
+    response = AsyncMock(return_value=marker)
+    monkeypatch.setattr(letters, "_response", response)
+    if module_admin:
+        assert await letters.load_letter(connection, operator, letter_id) is marker
+    else:
+        with pytest.raises(letters.AIReferentServiceError) as error:
+            await letters.load_letter(connection, operator, letter_id)
+        assert error.value.status_code == 404
+        response.assert_not_awaited()
 
 
 @pytest.mark.anyio

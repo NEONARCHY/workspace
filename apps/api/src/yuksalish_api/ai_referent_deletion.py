@@ -81,8 +81,8 @@ async def request_deletion(
     )
     if row is None:
         return {"queued": False}
-    if row["created_by_user_id"] != user.id and user.role not in {"admin", "superadmin"}:
-        raise HTTPException(403, "Удалить письмо может автор или администратор.")
+    if row["created_by_user_id"] != user.id:
+        raise HTTPException(403, "Удалить письмо может только автор.")
     if row["revision"] != revision:
         raise HTTPException(409, "Письмо изменилось. Проверьте актуальное состояние.")
     if row["status"] in {"sent", "signed", "sending", "queued", "delivery_unknown"}:

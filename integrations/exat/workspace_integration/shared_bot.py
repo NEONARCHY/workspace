@@ -275,6 +275,11 @@ class SharedBot:
             f"/letters?offset={page * 10}&limit=10"
             + ("&activeOnly=true" if kind == "pending" else "&sentOnly=true"),
         )
+        progress = (
+            self.request(actor, f"/letters/progress?offset={page * 10}&limit=10")["letters"]
+            if kind == "pending"
+            else []
+        )
         rows = [
             [
                 button(
@@ -286,10 +291,19 @@ class SharedBot:
             ]
             for letter in result["letters"]
         ]
+        rows.extend(
+            [
+                button(
+                    f"{item['createdByName']} · {STATUSES[item['status']]}",
+                    "g:" + UUID(item["id"]).hex,
+                )
+            ]
+            for item in progress
+        )
         navigation = []
         if page:
             navigation.append(button("← Назад", f"list:{kind}:{page - 1}"))
-        if len(result["letters"]) == 10:
+        if len(result["letters"]) == 10 or len(progress) == 10:
             navigation.append(button("Далее →", f"list:{kind}:{page + 1}"))
         if navigation:
             rows.append(navigation)
@@ -297,8 +311,27 @@ class SharedBot:
             actor,
             "history",
             f"{'Согласование и черновики' if kind == 'pending' else 'История'} · "
-            f"страница {page + 1}" + ("\nПисем пока нет." if not result["letters"] else ""),
+            f"страница {page + 1}"
+            + ("\nЧужие письма: только текущий этап." if progress else "")
+            + ("\nПисем пока нет." if not result["letters"] and not progress else ""),
             rows,
+        )
+
+    def show_progress(self, actor: str, letter_id: str) -> None:
+        item = self.request(actor, f"/letters/progress/{UUID(letter_id)}")
+        date = item["createdAt"][:16].replace("T", " ")
+        number = item.get("displayNumber") or "Письмо без номера"
+        self.system(
+            actor,
+            "progress-" + item["id"],
+            f"{number} · {item['createdByName']} · {date}\n"
+            f"Этап: {STATUSES[item['status']]}\n"
+            "Для чужого письма здесь доступен только этап. Решения принимают назначенные "
+            "согласующие.",
+            [
+                [button("Обновить этап", "g:" + UUID(item["id"]).hex)],
+                [button("← Согласование", "list:pending:0")],
+            ],
         )
 
     @staticmethod
@@ -573,6 +606,8 @@ class SharedBot:
                 if data[0] == "o":
                     self.state.remove("wizard:" + actor)
                     self.show(actor, data[1])
+                elif data[0] == "g":
+                    self.show_progress(actor, data[1])
                 elif data[0] == "list":
                     self.history(actor, data[1], int(data[2]))
                 elif data[0] in {"c", "p", "h", "m", "u", "b", "r", "z", "q"} and self.state.get(

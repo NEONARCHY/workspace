@@ -4,7 +4,7 @@ from __future__ import annotations
 
 _ICONS = ("📤", "✍️", "📚", "📬", "🏠", "🔎", "📎", "📄", "📁", "🏢", "🏛️",
           "🌐", "👤", "✉️", "✅", "↩️", "⬅️", "➡️", "🗑️", "⚙️", "🔄",
-          "⏳", "🚀", "📝", "📅", "🛑", "📋", "🔹", "🗂️")
+          "⏳", "🚀", "📝", "📅", "🛑", "📋", "🔹", "🗂️", "👁️")
 
 
 def button_label(label: str, action: str = "") -> str:
@@ -46,7 +46,9 @@ def button_label(label: str, action: str = "") -> str:
         icon = "👤"
     elif action.startswith("o:"):
         icon = "✉️"
-    elif action.startswith(("f:", "g:")):
+    elif action.startswith("g:"):
+        icon = "👁️"
+    elif action.startswith("f:"):
         icon = "📁"
     elif action.startswith("c:"):
         icon = "🗂️"

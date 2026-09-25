@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
 from .access_control import ModuleAction, module_permissions_for_user
+from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
@@ -1796,15 +1797,29 @@ async def _sync_notifications_for_user(
     referent_rights = (await module_permissions_for_user(connection, current_user)).get(
         "ai_referent", {}
     )
-    referent_letters = select(ai_referent_letters.c.id)
-    if not referent_rights.get("admin"):
-        referent_letters = referent_letters.where(or_(
+    referent_participants = or_(
+        ai_referent_letters.c.created_by_user_id == current_user.id,
+        ai_referent_letters.c.reviewer_user_id == current_user.id,
+        ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+        ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
+    )
+    referent_non_sent = and_(ai_referent_letters.c.status != "sent", referent_participants)
+    if referent_rights.get("admin"):
+        referent_non_sent = or_(
+            referent_non_sent,
+            ai_referent_letters.c.status.in_(OPERATOR_VISIBLE_STATUSES),
+        )
+    referent_sent = ai_referent_letters.c.status == "sent"
+    if current_user.role not in {"manager", "admin", "superadmin"} and not referent_rights.get(
+        "admin"
+    ):
+        referent_sent = and_(
+            referent_sent,
             ai_referent_letters.c.created_by_user_id == current_user.id,
-            ai_referent_letters.c.reviewer_user_id == current_user.id,
-            ai_referent_letters.c.final_reviewer_user_id == current_user.id,
-            ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
-            ai_referent_letters.c.status == "sent",
-        ))
+        )
+    referent_letters = select(ai_referent_letters.c.id).where(
+        or_(referent_sent, referent_non_sent)
+    )
     rows = (
         (
             await connection.execute(
@@ -1865,6 +1880,7 @@ async def mark_notification_read(
     current_user: AuthenticatedUser,
     notification_id: UUID,
 ) -> NotificationResponse:
+    await _load_visible_notification_row(connection, current_user, notification_id)
     await connection.execute(
         update(workspace_notifications)
         .where(
@@ -1890,6 +1906,54 @@ async def mark_notification_read(
     return _notification(row)
 
 
+async def _load_visible_notification_row(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    notification_id: UUID,
+) -> RowMapping:
+    row = (
+        (
+            await connection.execute(
+                select(workspace_notifications).where(
+                    workspace_notifications.c.id == notification_id,
+                    workspace_notifications.c.user_id == current_user.id,
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Notification was not found")
+    await _ensure_ai_referent_notification_visible(connection, current_user, row)
+    return row
+
+
+async def _ensure_ai_referent_notification_visible(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    row: RowMapping,
+) -> None:
+    if row["section"] != "ai_referent" or row["entity_id"] is None:
+        return
+    letter = (
+        (
+            await connection.execute(
+                select(ai_referent_letters).where(ai_referent_letters.c.id == row["entity_id"])
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+    rights = (await module_permissions_for_user(connection, current_user)).get(
+        "ai_referent", {}
+    )
+    if letter is None or not rights.get("view") or not may_view_letter(
+        letter, current_user, may_operate=rights.get("admin", False)
+    ):
+        raise WorkspaceRepositoryError(404, "Notification was not found")
+
+
 async def mark_all_notifications_read(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -1909,6 +1973,7 @@ async def mark_notification_desktop_delivered(
     current_user: AuthenticatedUser,
     notification_id: UUID,
 ) -> NotificationResponse:
+    await _load_visible_notification_row(connection, current_user, notification_id)
     await connection.execute(
         update(workspace_notifications)
         .where(
@@ -5646,24 +5711,16 @@ async def validate_attachment_owner(
         module_access = await module_permissions_for_user(connection, current_user)
         accessible = (
             module_access.get("ai_referent", {}).get("view", False)
-            and (
-                current_user.role in {"admin", "superadmin"}
-                or letter["status"] == "sent"
-                or letter["created_by_user_id"] == current_user.id
-                or letter["reviewer_user_id"] == current_user.id
-                or letter.get("final_reviewer_user_id") == current_user.id
-                or letter.get("initial_reviewer_user_id") == current_user.id
-                or module_access.get("ai_referent", {}).get("admin", False)
+            and may_view_letter(
+                letter,
+                current_user,
+                may_operate=module_access.get("ai_referent", {}).get("admin", False),
             )
         )
         writable = (
             module_access.get("ai_referent", {}).get("edit", False)
             and letter["status"] in {"draft", "needs_revision"}
-            and (
-                letter["created_by_user_id"] == current_user.id
-                or current_user.role in {"admin", "superadmin"}
-                or module_access.get("ai_referent", {}).get("admin", False)
-            )
+            and letter["created_by_user_id"] == current_user.id
         )
         if letter["status"] == "operator_revision":
             writable = bool(module_access.get("ai_referent", {}).get("admin", False))
