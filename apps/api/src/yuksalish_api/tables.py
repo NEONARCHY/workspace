@@ -1034,6 +1034,18 @@ ai_referent_number_counters = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+ai_referent_offline_number_reservations = sa.Table(
+    "ai_referent_offline_number_reservations",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("year_suffix", sa.String(2), nullable=False),
+    sa.Column("first_number", sa.Integer(), nullable=False),
+    sa.Column("last_number", sa.Integer(), nullable=False),
+    sa.Column("valid_until", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,

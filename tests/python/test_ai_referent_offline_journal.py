@@ -128,3 +128,78 @@ def test_server_denial_is_not_hidden_by_cached_letter(tmp_path):
     bot = SharedBot(None, API(), State(tmp_path / "state.sqlite"), journal)
     with pytest.raises(WorkspaceError, match="Доступ отозван"):
         bot.request("123", "/letters?sentOnly=true")
+
+
+def test_reserved_numbers_survive_restart_and_are_assigned_once(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    request_id = journal.prepare_number_reservation("referent-test", 2)
+    assert journal.prepare_number_reservation("referent-test", 2) == request_id
+    from datetime import UTC, datetime
+
+    current = datetime.now(UTC)
+    response = {
+        "reservationId": request_id,
+        "agentId": "referent-test",
+        "yearSuffix": current.strftime("%y"),
+        "firstNumber": 901,
+        "lastNumber": 902,
+        "validUntil": datetime(current.year + 1, 1, 1, tzinfo=UTC).isoformat(),
+    }
+    journal.save_number_reservation(response)
+    journal.save_number_reservation(response)
+    letter_a, letter_b = str(uuid4()), str(uuid4())
+    assert journal.take_reserved_number(letter_a, "referent-test") == (901, current.strftime("%y"))
+    reopened = OfflineJournal(tmp_path)
+    assert reopened.take_reserved_number(letter_a, "referent-test") == (
+        901, current.strftime("%y")
+    )
+    assert reopened.take_reserved_number(letter_b, "referent-test") == (
+        902, current.strftime("%y")
+    )
+    with pytest.raises(ValueError, match="Нет действующего резерва"):
+        reopened.take_reserved_number(str(uuid4()), "referent-test")
+
+
+def test_number_range_rejects_wrong_agent_overlap_and_changed_replay(tmp_path):
+    from datetime import UTC, datetime
+
+    journal = OfflineJournal(tmp_path)
+    current = datetime.now(UTC)
+    expiry = datetime(current.year + 1, 1, 1, tzinfo=UTC).isoformat()
+    first = journal.prepare_number_reservation("referent-test", 2)
+    response = {
+        "reservationId": first, "agentId": "referent-test",
+        "yearSuffix": current.strftime("%y"), "firstNumber": 100,
+        "lastNumber": 101, "validUntil": expiry,
+    }
+    with pytest.raises(ValueError, match="не соответствует"):
+        journal.save_number_reservation({**response, "agentId": "other-pc"})
+    journal.save_number_reservation(response)
+    with pytest.raises(ValueError, match="изменил"):
+        journal.save_number_reservation({**response, "firstNumber": 101, "lastNumber": 102})
+    second = journal.prepare_number_reservation("referent-test", 2)
+    with pytest.raises(ValueError, match="пересекаются"):
+        journal.save_number_reservation({**response, "reservationId": second})
+
+
+def test_expired_or_wrong_year_reservation_never_becomes_spendable(tmp_path):
+    from datetime import UTC, datetime, timedelta
+
+    journal = OfflineJournal(tmp_path)
+    request_id = journal.prepare_number_reservation("referent-test", 1)
+    current = datetime.now(UTC)
+    response = {
+        "reservationId": request_id, "agentId": "referent-test",
+        "yearSuffix": current.strftime("%y"), "firstNumber": 42,
+        "lastNumber": 42,
+        "validUntil": (current - timedelta(seconds=1)).isoformat(),
+    }
+    with pytest.raises(ValueError, match="недействительный"):
+        journal.save_number_reservation(response)
+    with pytest.raises(ValueError, match="недействительный"):
+        journal.save_number_reservation({
+            **response, "yearSuffix": f"{(current.year + 1) % 100:02d}",
+            "validUntil": (current + timedelta(days=1)).isoformat(),
+        })
+    with pytest.raises(ValueError, match="Нет действующего резерва"):
+        journal.take_reserved_number(str(uuid4()), "referent-test")

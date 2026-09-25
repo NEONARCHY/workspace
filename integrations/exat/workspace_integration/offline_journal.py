@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 def _json(value: Any) -> str:
@@ -78,8 +78,125 @@ class OfflineJournal:
                         CHECK (outcome IN ('unknown', 'confirmed', 'not_sent')),
                     detail TEXT NOT NULL DEFAULT ''
                 );
+                CREATE TABLE IF NOT EXISTS number_reservations (
+                    reservation_id TEXT PRIMARY KEY,
+                    agent_id TEXT NOT NULL,
+                    requested_count INTEGER NOT NULL CHECK (requested_count BETWEEN 1 AND 20),
+                    year_suffix TEXT,
+                    first_number INTEGER,
+                    last_number INTEGER,
+                    next_number INTEGER,
+                    valid_until TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS number_assignments (
+                    letter_id TEXT PRIMARY KEY,
+                    reservation_id TEXT NOT NULL REFERENCES number_reservations(reservation_id),
+                    year_suffix TEXT NOT NULL,
+                    outgoing_number INTEGER NOT NULL,
+                    assigned_at TEXT NOT NULL,
+                    UNIQUE (year_suffix, outgoing_number)
+                );
                 """
             )
+
+    def prepare_number_reservation(self, agent_id: str, count: int) -> str:
+        """Persist the idempotency key before asking the server for a range."""
+        if not agent_id or len(agent_id) > 128 or not 1 <= count <= 20:
+            raise ValueError("Неверный агент или размер резерва.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            pending = connection.execute(
+                "SELECT reservation_id FROM number_reservations WHERE agent_id = ? "
+                "AND requested_count = ? AND first_number IS NULL "
+                "ORDER BY created_at LIMIT 1",
+                (agent_id, count),
+            ).fetchone()
+            if pending is not None:
+                return str(pending["reservation_id"])
+            reservation_id = str(uuid4())
+            connection.execute(
+                "INSERT INTO number_reservations "
+                "(reservation_id, agent_id, requested_count, created_at) VALUES (?, ?, ?, ?)",
+                (reservation_id, agent_id, count, _now()),
+            )
+            return reservation_id
+
+    def save_number_reservation(self, response: dict[str, Any]) -> None:
+        """Only a matching, unexpired server-issued range can become spendable."""
+        reservation_id = str(UUID(str(response["reservationId"])))
+        agent_id = str(response["agentId"])
+        year_suffix = str(response["yearSuffix"])
+        first_number, last_number = int(response["firstNumber"]), int(response["lastNumber"])
+        valid_until = datetime.fromisoformat(str(response["validUntil"]).replace("Z", "+00:00"))
+        now = datetime.now(UTC)
+        if (
+            len(year_suffix) != 2 or not year_suffix.isdecimal()
+            or first_number < 1 or last_number < first_number
+            or valid_until.tzinfo is None or valid_until <= now
+            or year_suffix != now.strftime("%y")
+        ):
+            raise ValueError("Сервер вернул недействительный резерв номеров.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM number_reservations WHERE reservation_id = ?", (reservation_id,)
+            ).fetchone()
+            if row is None or row["agent_id"] != agent_id or (
+                last_number - first_number + 1 != row["requested_count"]
+            ):
+                raise ValueError("Резерв не соответствует сохранённому запросу.")
+            if row["first_number"] is not None:
+                if (row["year_suffix"], row["first_number"], row["last_number"],
+                    row["valid_until"]) != (
+                    year_suffix, first_number, last_number, valid_until.isoformat()
+                ):
+                    raise ValueError("Повторный ответ изменил уже сохранённый резерв.")
+                return
+            overlap = connection.execute(
+                "SELECT 1 FROM number_reservations WHERE reservation_id != ? "
+                "AND year_suffix = ? AND first_number <= ? AND last_number >= ? LIMIT 1",
+                (reservation_id, year_suffix, last_number, first_number),
+            ).fetchone()
+            if overlap is not None:
+                raise ValueError("Диапазоны резервов пересекаются.")
+            connection.execute(
+                "UPDATE number_reservations SET year_suffix = ?, first_number = ?, "
+                "last_number = ?, next_number = ?, valid_until = ? WHERE reservation_id = ?",
+                (year_suffix, first_number, last_number, first_number,
+                 valid_until.isoformat(), reservation_id),
+            )
+
+    def take_reserved_number(self, letter_id: str, agent_id: str) -> tuple[int, str]:
+        """Assign once per letter; a crash may create a gap but never a duplicate."""
+        letter_id = str(UUID(letter_id))
+        now = datetime.now(UTC)
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            assigned = connection.execute(
+                "SELECT outgoing_number, year_suffix FROM number_assignments "
+                "WHERE letter_id = ?", (letter_id,)
+            ).fetchone()
+            if assigned is not None:
+                return int(assigned["outgoing_number"]), str(assigned["year_suffix"])
+            row = connection.execute(
+                "SELECT * FROM number_reservations WHERE agent_id = ? AND year_suffix = ? "
+                "AND valid_until > ? AND next_number <= last_number "
+                "ORDER BY first_number LIMIT 1",
+                (agent_id, now.strftime("%y"), now.isoformat()),
+            ).fetchone()
+            if row is None:
+                raise ValueError("Нет действующего резерва исходящих номеров.")
+            number = int(row["next_number"])
+            connection.execute(
+                "UPDATE number_reservations SET next_number = ? WHERE reservation_id = ?",
+                (number + 1, row["reservation_id"]),
+            )
+            connection.execute(
+                "INSERT INTO number_assignments VALUES (?, ?, ?, ?, ?)",
+                (letter_id, row["reservation_id"], row["year_suffix"], number, now.isoformat()),
+            )
+            return number, str(row["year_suffix"])
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

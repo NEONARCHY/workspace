@@ -83,6 +83,20 @@ class AIReferentActionRequest(ApiModel):
         return value.strip()
 
 
+class OfflineNumberReservationRequest(ApiModel):
+    reservation_id: UUID
+    count: int = Field(ge=1, le=20)
+
+
+class OfflineNumberReservationResponse(ApiModel):
+    reservation_id: UUID
+    agent_id: str
+    year_suffix: str
+    first_number: int
+    last_number: int
+    valid_until: datetime
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]

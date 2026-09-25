@@ -32,6 +32,7 @@ from ..ai_referent_files_service import (
     require_packet_access,
     store_packet_file,
 )
+from ..ai_referent_offline_numbers import reserve_offline_numbers
 from ..ai_referent_preflight import (
     check_response,
     checked_lease,
@@ -56,6 +57,8 @@ from ..ai_referent_schemas import (
     AIReferentProgressResponse,
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
+    OfflineNumberReservationRequest,
+    OfflineNumberReservationResponse,
     UpdateAIReferentLetterRequest,
 )
 from ..ai_referent_service import (
@@ -795,6 +798,24 @@ async def agent_ready(
         .values(execution_agent_id=agent_id)
     )
     return Response(status_code=204)
+
+
+@router.post(
+    "/agent/offline/number-reservations",
+    response_model=OfflineNumberReservationResponse,
+    dependencies=[Depends(require_agent_token)],
+)
+async def reserve_agent_offline_numbers(
+    payload: OfflineNumberReservationRequest,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+) -> OfflineNumberReservationResponse:
+    return await reserve_offline_numbers(
+        connection,
+        agent_id=agent_id,
+        reservation_id=payload.reservation_id,
+        count=payload.count,
+    )
 
 
 @router.post(
