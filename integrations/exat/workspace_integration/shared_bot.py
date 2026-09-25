@@ -15,6 +15,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from .button_labels import button_label
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
+from .offline_journal import OfflineJournal
 from .state import State, single_instance
 from .wizard import LetterWizard
 from .worker import DeliveryWorker
@@ -106,16 +107,43 @@ def button(text: str, data: str) -> dict[str, str]:
 
 
 class SharedBot:
-    def __init__(self, telegram: Any, api: WorkspaceClient, state: State):
+    def __init__(
+        self, telegram: Any, api: WorkspaceClient, state: State,
+        offline: OfflineJournal | None = None,
+    ):
         self.telegram, self.api, self.state = telegram, api, state
+        self.offline = offline
+        self.offline_read = False
         self.wizard = LetterWizard(self)
 
     def request(
         self, actor: str, path: str, payload: dict[str, Any] | None = None, method: str = "GET"
     ) -> dict[str, Any]:
-        return self.api.request(
-            "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
-        )
+        try:
+            result = self.api.request(
+                "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
+            )
+        except WorkspaceError as error:
+            if (
+                method != "GET" or self.offline is None
+                or error.status not in {0, 502, 503, 504}
+            ):
+                raise
+            cached = self.offline.snapshot(actor, path)
+            if cached is None and path.startswith("/letters/") and path.count("/") == 2:
+                letter = self.offline.cached_letter(actor, path.removeprefix("/letters/"))
+                if letter is not None:
+                    cached = {"payload": letter}
+            if cached is None:
+                raise WorkspaceError(
+                    "Workspace недоступен, а это письмо ещё не сохранено в локальной копии."
+                ) from error
+            self.offline_read = True
+            return cached["payload"]
+        self.offline_read = False
+        if method == "GET" and self.offline is not None:
+            self.offline.cache(actor, path, result)
+        return result
 
     def say(
         self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None
@@ -243,6 +271,8 @@ class SharedBot:
             rows.append([button("Исправить письмо", f"w:edit:{compact}")])
             if letter.get("workflowKind") != "sign_only":
                 rows.append([button("Добавить вложение", f"x:{compact}")])
+        if self.offline_read:
+            rows = []
         latest = next(
             (event["comment"] for event in letter.get("events", []) if event.get("comment")), ""
         )
@@ -256,7 +286,9 @@ class SharedBot:
         self.system(
             actor,
             "letter-" + letter["id"],
-            f"{number} · {STATUSES[letter['status']]}\n"
+            ("⚠️ Офлайн-копия: сведения могли измениться. Действия недоступны.\n"
+             if self.offline_read else "")
+            + f"{number} · {STATUSES[letter['status']]}\n"
             f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
             f"{destination}"
             f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
@@ -275,11 +307,13 @@ class SharedBot:
             f"/letters?offset={page * 10}&limit=10"
             + ("&activeOnly=true" if kind == "pending" else "&sentOnly=true"),
         )
+        list_offline = self.offline_read
         progress = (
             self.request(actor, f"/letters/progress?offset={page * 10}&limit=10")["letters"]
             if kind == "pending"
             else []
         )
+        offline_read = list_offline or self.offline_read
         rows = [
             [
                 button(
@@ -312,6 +346,8 @@ class SharedBot:
             "history",
             f"{'Согласование и черновики' if kind == 'pending' else 'История'} · "
             f"страница {page + 1}"
+            + ("\n⚠️ Офлайн-копия. Новые действия появятся после связи."
+               if offline_read else "")
             + ("\nЧужие письма: только текущий этап." if progress else "")
             + ("\nПисем пока нет." if not result["letters"] and not progress else ""),
             rows,
@@ -1068,7 +1104,8 @@ def _run_shared(
 
     client = WorkspaceClient()
     state = State(connection_path().parent / "shared-state.sqlite")
-    controller = SharedBot(bot.client, client, state)
+    offline = OfflineJournal(connection_path().parent / "offline")
+    controller = SharedBot(bot.client, client, state, offline)
     worker = DeliveryWorker(bot.service, client, state)
     try:
         bot.client.set_my_commands(
