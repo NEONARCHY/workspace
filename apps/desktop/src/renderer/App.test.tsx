@@ -1839,6 +1839,7 @@ describe("corporate workspace authentication alpha", () => {
       "CRM",
       "Задачи",
       "AI Referent",
+      "AI Hisobot",
       "Лента",
       "Проекты",
       "Проектные заявки",

@@ -46,6 +46,7 @@ const kindLabels: Record<NotificationKind, string> = {
   calendar: "Календарь",
   absence: "Отсутствия",
   zoom: "Zoom-конференции",
+  hisobot: "AI Hisobot",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -55,6 +56,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "trip") return <Airplane24Regular />;
   if (kind === "absence") return <PersonAvailable24Regular />;
   if (kind === "zoom") return <Video24Regular />;
+  if (kind === "hisobot") return <TaskListSquareLtr24Regular />;
   return <CalendarLtr24Regular />;
 }
 
@@ -135,8 +137,8 @@ export function NotificationCenter({
       "desktopEnabled",
       workspacePlatform.kind === "web" ? "Системные уведомления браузера" : "Уведомления Windows",
       workspacePlatform.kind === "web"
-        ? "Показывать новые события после явного разрешения браузера"
-        : "Показывать новые события поверх других окон",
+        ? "Показывать обычные события после разрешения браузера; AI Hisobot обязателен"
+        : "Показывать обычные события поверх окон; AI Hisobot остаётся обязательным",
     ],
     ["messagesEnabled", "Сообщения", "Новые сообщения в доступных чатах"],
     ["tasksEnabled", "Задачи", "Назначения, возвраты и сроки"],
@@ -145,7 +147,7 @@ export function NotificationCenter({
     ["calendarEnabled", "Календарь", "Предстоящие встречи и события"],
     ["absencesEnabled", "Отсутствия", "Заявки, решения и больничные документы"],
     ["zoomEnabled", "Zoom-конференции", "Напоминание перед началом конференции"],
-    ["remindersEnabled", "Напоминания", "Сроки в ближайшие 24 часа"],
+    ["remindersEnabled", "Напоминания", "Сроки в ближайшие 24 часа, кроме обязательных AI Hisobot"],
   ];
 
   return (

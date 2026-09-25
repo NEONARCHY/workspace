@@ -133,6 +133,8 @@ async def module_permissions_for_user(
                 result[module_key] = normalize_permissions(rule)
     if user.role not in {"admin", "superadmin"}:
         result["telegram_access"] = {action: False for action in MODULE_ACTIONS}
+        result["ai_hisobot"]["approve"] = False
+        result["ai_hisobot"]["admin"] = False
     return result
 
 
@@ -153,6 +155,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return "messenger", "admin"
     if normalized.startswith("/telegram-access"):
         return "telegram_access", "admin"
+    if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
+        return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
     prefixes = (
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),

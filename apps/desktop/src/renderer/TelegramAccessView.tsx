@@ -9,6 +9,13 @@ import type {
 
 import { loadTelegramAccess, saveTelegramAccess } from "./workspace-api";
 
+const regions = [
+  "Андижон вилояти", "Бухоро вилояти", "Фарғона вилояти", "Жиззах вилояти",
+  "Наманган вилояти", "Навоий вилояти", "Қашқадарё вилояти",
+  "Қорақалпоғистон Республикаси", "Самарқанд вилояти", "Сирдарё вилояти",
+  "Сурхондарё вилояти", "Тошкент шаҳри", "Тошкент вилояти", "Хоразм вилояти",
+] as const;
+
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : "Не удалось выполнить действие. Попробуйте ещё раз.";
 }
@@ -23,12 +30,22 @@ function PersonAccessRow({
 }) {
   const [telegramId, setTelegramId] = useState(person.telegramId ?? "");
   const [selected, setSelected] = useState<readonly TelegramBotKey[]>(person.botKeys);
+  const [hisobotScope, setHisobotScope] = useState<"central" | "hudud">(person.hisobotScope ?? "central");
+  const [hisobotRegion, setHisobotRegion] = useState(person.hisobotRegion ?? regions[0]);
+  const [reportRequired, setReportRequired] = useState(person.hisobotReportRequired);
+  const [managementAccess, setManagementAccess] = useState(person.hisobotManager);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const dirty = telegramId !== (person.telegramId ?? "") ||
     selected.length !== person.botKeys.length ||
-    selected.some((key) => !person.botKeys.includes(key));
+    selected.some((key) => !person.botKeys.includes(key)) ||
+    (selected.includes("hisobot") && (
+      hisobotScope !== (person.hisobotScope ?? "central") ||
+      (hisobotScope === "hudud" && hisobotRegion !== person.hisobotRegion) ||
+      reportRequired !== person.hisobotReportRequired ||
+      managementAccess !== person.hisobotManager
+    ));
 
   const toggle = (key: TelegramBotKey) => {
     setSelected((current) => current.includes(key)
@@ -55,6 +72,10 @@ function PersonAccessRow({
       const saved = await saveTelegramAccess(token, person.userId, {
         telegramId: id || null,
         botKeys: selected,
+        hisobotScope: selected.includes("hisobot") ? hisobotScope : null,
+        hisobotRegion: selected.includes("hisobot") && hisobotScope === "hudud" ? hisobotRegion : null,
+        hisobotReportRequired: reportRequired,
+        hisobotManager: managementAccess,
         expectedRevision: person.revision,
       });
       onSaved(saved);
@@ -116,6 +137,21 @@ function PersonAccessRow({
           ))}
         </div>
       </fieldset>
+      {selected.includes("hisobot") ? <div className="telegram-access-hisobot" aria-label="Настройки AI Hisobot">
+        <label>Контур отчётности
+          <select value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy}>
+            <option value="central">Центральный аппарат</option>
+            <option value="hudud">Территориальное подразделение</option>
+          </select>
+        </label>
+        {hisobotScope === "hudud" ? <label>Регион
+          <select value={hisobotRegion} onChange={(event) => setHisobotRegion(event.target.value)} disabled={busy}>
+            {regions.map((region) => <option key={region} value={region}>{region}</option>)}
+          </select>
+        </label> : null}
+        <label className="telegram-access-hisobot-check"><input type="checkbox" checked={reportRequired} onChange={(event) => setReportRequired(event.target.checked)} disabled={busy} /> Сдаёт ежедневный отчёт</label>
+        <label className="telegram-access-hisobot-check"><input type="checkbox" checked={managementAccess} onChange={(event) => setManagementAccess(event.target.checked)} disabled={busy} /> Видит все отчёты</label>
+      </div> : null}
       <div className="telegram-access-row-footer">
         <div className="telegram-access-messages" aria-live="polite">
           {error ? <span className="telegram-access-error" role="alert">{error}</span> : null}
@@ -181,7 +217,7 @@ export function TelegramAccessView({ token }: { readonly token: string }) {
     </div> : null}
     <div className="telegram-access-guide">
       <span className="telegram-access-guide-icon" aria-hidden="true">↗</span>
-      <p>Укажите Telegram ID, отметьте нужных ботов и сохраните строку — дополнительный код не нужен. Сейчас проверку доступа поддерживает AI Referent; право согласовывать письма настраивается отдельно. Для получения сообщений сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
+      <p>Укажите Telegram ID, отметьте нужных ботов и сохраните строку. Для AI Hisobot также выберите контур и регион, а для руководства снимите обязанность сдавать отчёт. Чтобы получать сообщения, сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
     </div>
     <label className="telegram-access-search">
       <span>Найти сотрудника</span>
