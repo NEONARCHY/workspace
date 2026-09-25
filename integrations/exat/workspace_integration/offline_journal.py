@@ -113,8 +113,111 @@ class OfflineJournal:
                     verified_at TEXT NOT NULL,
                     content_sha256 TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS telegram_cursor (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    next_offset INTEGER NOT NULL CHECK (next_offset >= 0)
+                );
+                CREATE TABLE IF NOT EXISTS telegram_updates (
+                    update_id INTEGER PRIMARY KEY CHECK (update_id >= 0),
+                    payload TEXT NOT NULL,
+                    received_at TEXT NOT NULL,
+                    handled_at TEXT
+                );
                 """
             )
+
+    def initialize_telegram_offset(self, previous_offset: int | None) -> int:
+        """Import the old post-handle cursor only once before using this inbox."""
+        if previous_offset is not None and (
+            not isinstance(previous_offset, int) or previous_offset < 0
+        ):
+            raise ValueError("Недопустимый сохранённый Telegram offset.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.execute(
+                "INSERT OR IGNORE INTO telegram_cursor VALUES (1, ?)",
+                (previous_offset if previous_offset is not None else 0,),
+            )
+            row = connection.execute(
+                "SELECT next_offset FROM telegram_cursor WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Telegram offset не сохранён.")
+            return int(row["next_offset"])
+
+    def telegram_offset(self) -> int:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT next_offset FROM telegram_cursor WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Сначала восстановите Telegram offset.")
+        return int(row["next_offset"])
+
+    def receive_telegram_updates(self, updates: list[dict[str, Any]]) -> int:
+        """Fsync every update in the same transaction that advances the cursor."""
+        encoded: list[tuple[int, str]] = []
+        for update in updates:
+            update_id = update.get("update_id")
+            if type(update_id) is not int or update_id < 0:
+                raise ValueError("Telegram прислал обновление без корректного ID.")
+            payload = _json(update)
+            if len(payload.encode("utf-8")) > 2 * 1024 * 1024:
+                raise ValueError("Telegram-обновление превышает безопасный размер.")
+            encoded.append((update_id, payload))
+        if len({update_id for update_id, _ in encoded}) != len(encoded):
+            raise ValueError("Пакет Telegram содержит повторный update_id.")
+        encoded.sort(key=lambda item: item[0])
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
+                "SELECT next_offset FROM telegram_cursor WHERE id = 1"
+            ).fetchone()
+            if cursor is None:
+                raise RuntimeError("Сначала восстановите Telegram offset.")
+            next_offset = int(cursor["next_offset"])
+            for update_id, payload in encoded:
+                existing = connection.execute(
+                    "SELECT payload FROM telegram_updates WHERE update_id = ?",
+                    (update_id,),
+                ).fetchone()
+                if existing is not None:
+                    if existing["payload"] != payload:
+                        raise ValueError("Повторный Telegram update_id содержит другие данные.")
+                    continue
+                if update_id < next_offset:
+                    raise ValueError("Получено старое Telegram-обновление вне журнала.")
+                connection.execute(
+                    "INSERT INTO telegram_updates VALUES (?, ?, ?, NULL)",
+                    (update_id, payload, _now()),
+                )
+                next_offset = max(next_offset, update_id + 1)
+            connection.execute(
+                "UPDATE telegram_cursor SET next_offset = ? WHERE id = 1",
+                (next_offset,),
+            )
+            return next_offset
+
+    def pending_telegram_updates(self, limit: int = 100) -> list[dict[str, Any]]:
+        if not 1 <= limit <= 1000:
+            raise ValueError("Недопустимый размер очереди Telegram.")
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM telegram_updates WHERE handled_at IS NULL "
+                "ORDER BY update_id LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [json.loads(row["payload"]) for row in rows]
+
+    def mark_telegram_update_handled(self, update_id: int) -> None:
+        with self.connect() as connection:
+            cursor = connection.execute(
+                "UPDATE telegram_updates SET handled_at = COALESCE(handled_at, ?) "
+                "WHERE update_id = ?",
+                (_now(), update_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Telegram-обновление не найдено в журнале.")
 
     def authority_state(self) -> dict[str, str] | None:
         with self.connect() as connection:

@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
-from integrations.exat.workspace_integration.shared_bot import SharedBot
+from integrations.exat.workspace_integration.shared_bot import SharedBot, poll_durable_updates
 from integrations.exat.workspace_integration.state import State
 
 
@@ -96,6 +96,65 @@ def test_external_send_is_never_replayed_after_crash(tmp_path):
     assert not reopened.begin_external_effect(str(uuid4()), letter_id, "webmail_send")
     with pytest.raises(ValueError, match="другому письму"):
         reopened.begin_external_effect(effect_id, str(uuid4()), "exat_send")
+
+
+def test_telegram_update_is_durable_before_offset_advances(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    assert journal.initialize_telegram_offset(15) == 15
+    updates = [{"update_id": 17, "message": {"text": "/new"}},
+               {"update_id": 16, "message": {"text": "/history"}}]
+    assert journal.receive_telegram_updates(updates) == 18
+    reopened = OfflineJournal(tmp_path)
+    assert reopened.initialize_telegram_offset(999) == 18  # Migration never rewinds.
+    assert [item["update_id"] for item in reopened.pending_telegram_updates()] == [16, 17]
+    reopened.mark_telegram_update_handled(16)
+    pending = OfflineJournal(tmp_path).pending_telegram_updates()
+    assert [item["update_id"] for item in pending] == [17]
+    assert reopened.receive_telegram_updates(updates) == 18
+    with pytest.raises(ValueError, match="другие данные"):
+        reopened.receive_telegram_updates([{"update_id": 17, "message": {"text": "changed"}}])
+    with pytest.raises(ValueError, match="вне журнала"):
+        reopened.receive_telegram_updates([{"update_id": 15}])
+    assert reopened.telegram_offset() == 18
+
+
+def test_telegram_inbox_batch_rolls_back_with_cursor(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    journal.initialize_telegram_offset(None)
+    with pytest.raises(ValueError, match="повторный update_id"):
+        journal.receive_telegram_updates([{"update_id": 1}, {"update_id": 1}])
+    assert journal.telegram_offset() == 0
+    assert journal.pending_telegram_updates() == []
+    with pytest.raises(ValueError, match="корректного ID"):
+        journal.receive_telegram_updates([{"update_id": True}])
+
+
+def test_poll_replays_saved_update_before_fetching_more(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    journal.initialize_telegram_offset(5)
+    fetched = []
+    handled = []
+
+    class Telegram:
+        def get_updates(self, *, offset):
+            fetched.append(offset)
+            return {"result": [{"update_id": 5, "message": {"text": "/new"}}]}
+
+    class Controller:
+        def handle(self, update):
+            assert OfflineJournal(tmp_path).telegram_offset() == 6
+            assert OfflineJournal(tmp_path).pending_telegram_updates() == [update]
+            handled.append(update["update_id"])
+            if len(handled) == 1:
+                raise RuntimeError("Process stopped after receiving the update")
+
+    with pytest.raises(RuntimeError, match="Process stopped"):
+        poll_durable_updates(Telegram(), Controller(), journal)
+    assert fetched == [5]
+    assert poll_durable_updates(Telegram(), Controller(), OfflineJournal(tmp_path)) == 1
+    assert fetched == [5]  # Replay came from disk, not Telegram.
+    assert handled == [5, 5]
+    assert journal.pending_telegram_updates() == []
 
 
 def test_bot_reads_only_its_own_last_verified_server_snapshot(tmp_path):

@@ -1097,6 +1097,25 @@ def run_shared(
         )
 
 
+def poll_durable_updates(
+    telegram: Any, controller: SharedBot, journal: OfflineJournal, *, limit: int | None = None
+) -> int:
+    """Never acknowledge Telegram before the update is durable and handled."""
+    pending = journal.pending_telegram_updates()
+    if not pending:
+        response = telegram.get_updates(offset=journal.telegram_offset())
+        journal.receive_telegram_updates(response.get("result", []))
+        pending = journal.pending_telegram_updates()
+    handled = 0
+    for update in pending:
+        controller.handle(update)
+        journal.mark_telegram_update_handled(int(update["update_id"]))
+        handled += 1
+        if limit is not None and handled >= limit:
+            break
+    return handled
+
+
 def _run_shared(
     bot: Any, *, max_updates: int | None = None, stop_after_idle_seconds: int | None = None
 ) -> Any:
@@ -1105,6 +1124,7 @@ def _run_shared(
     client = WorkspaceClient()
     state = State(connection_path().parent / "shared-state.sqlite")
     offline = OfflineJournal(connection_path().parent / "offline")
+    offline.initialize_telegram_offset(state.get("telegram-offset"))
     controller = SharedBot(bot.client, client, state, offline)
     worker = DeliveryWorker(bot.service, client, state)
     try:
@@ -1188,15 +1208,14 @@ def _run_shared(
             except Exception as error:
                 bot._status_log("workspace_notifications_failed", error=type(error).__name__)
             try:
-                response = bot.client.get_updates(offset=state.get("telegram-offset"))
-                for update in response.get("result", []):
-                    controller.handle(update)
-                    state.put("telegram-offset", int(update["update_id"]) + 1)
-                    seen += 1
-                    handled += 1
+                completed = poll_durable_updates(
+                    bot.client, controller, offline,
+                    limit=max_updates - seen if max_updates is not None else None,
+                )
+                if completed:
+                    seen += completed
+                    handled += completed
                     idle = time.monotonic()
-                    if max_updates is not None and seen >= max_updates:
-                        break
             except Exception as error:
                 bot._status_log("workspace_poll_error", error=type(error).__name__)
                 done.wait(5)
