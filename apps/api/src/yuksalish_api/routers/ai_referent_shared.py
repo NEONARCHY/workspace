@@ -37,6 +37,7 @@ from ..ai_referent_files_service import (
     require_packet_access,
     store_packet_file,
 )
+from ..ai_referent_offline_blobs import stage_offline_blob
 from ..ai_referent_offline_numbers import reserve_offline_numbers
 from ..ai_referent_offline_rights import export_offline_rights
 from ..ai_referent_preflight import (
@@ -65,6 +66,7 @@ from ..ai_referent_schemas import (
     CreateAIReferentLetterRequest,
     OfflineAuthorityHeartbeat,
     OfflineAuthorityLease,
+    OfflineBlobReceipt,
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
     OfflineRightsSnapshot,
@@ -869,6 +871,28 @@ async def get_agent_offline_rights(
     return await export_offline_rights(
         connection, agent_id=agent_id, epoch=epoch,
         snapshot_id=payload.snapshot_id,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.put(
+    "/agent/offline/blobs/{sha256}",
+    response_model=OfflineBlobReceipt,
+    dependencies=[Depends(require_agent_token)],
+)
+async def upload_agent_offline_blob(
+    sha256: str,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineBlobReceipt:
+    content = await read_limited_packet(
+        request.stream(), request.app.state.settings.ai_referent_packet_max_bytes
+    )
+    return await stage_offline_blob(
+        connection, _storage(request), agent_id=agent_id, epoch=epoch,
+        sha256=sha256, content=content,
         enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
 

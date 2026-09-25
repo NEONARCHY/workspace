@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import ssl
@@ -230,6 +231,25 @@ class WorkspaceClient:
             + urlencode({"agentId": self.agent_id, "epoch": epoch}),
             {"snapshotId": snapshot_id}, method="POST",
         )
+
+    def upload_offline_blob(
+        self, epoch: str, sha256: str, content: bytes
+    ) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        if hashlib.sha256(content).hexdigest() != sha256:
+            raise WorkspaceError("Контрольная сумма локального файла не совпала.")
+        response = self.transfer(
+            f"/ai-referent/agent/offline/blobs/{sha256}?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            content, method="PUT",
+        )
+        receipt = json.loads(response)
+        if not isinstance(receipt, dict) or any(
+            not isinstance(key, str) for key in receipt
+        ):
+            raise WorkspaceError("Сервер вернул неверную квитанцию автономного файла.")
+        return {key: value for key, value in receipt.items()}
 
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(

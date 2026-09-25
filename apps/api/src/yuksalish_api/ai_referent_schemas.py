@@ -138,6 +138,13 @@ class OfflineRightsSnapshot(ApiModel):
     content_sha256: str
 
 
+class OfflineBlobReceipt(ApiModel):
+    id: UUID
+    epoch: UUID
+    sha256: str
+    byte_size: int
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]

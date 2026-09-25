@@ -1069,6 +1069,20 @@ ai_referent_offline_rights_snapshots = sa.Table(
     sa.Column("verified_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+ai_referent_offline_blobs = sa.Table(
+    "ai_referent_offline_blobs",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("sha256", sa.String(64), nullable=False),
+    sa.Column("byte_size", sa.BigInteger(), nullable=False),
+    sa.Column("storage_key", sa.String(300), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint("agent_id", "epoch", "sha256", name="uq_ai_offline_blob_identity"),
+    sa.CheckConstraint("byte_size > 0", name="ck_ai_offline_blob_nonempty"),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,

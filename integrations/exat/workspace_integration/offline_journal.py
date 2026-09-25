@@ -610,6 +610,18 @@ class OfflineJournal:
             {**dict(row), "payload": json.loads(row["payload"])} for row in rows
         ]
 
+    def pending_blob_hashes(self, limit: int = 100) -> list[str]:
+        """List only files still referenced by unacknowledged operations."""
+        if not 1 <= limit <= 1000:
+            raise ValueError("Недопустимый размер пакета файлов.")
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT blob_sha256 FROM operations WHERE status = 'pending' "
+                "AND blob_sha256 IS NOT NULL GROUP BY blob_sha256 "
+                "ORDER BY MIN(sequence) LIMIT ?", (limit,)
+            ).fetchall()
+        return [str(row["blob_sha256"]) for row in rows]
+
     def finish(self, sequence: int, *, accepted: bool, result: dict[str, Any]) -> None:
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")

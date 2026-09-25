@@ -5,6 +5,7 @@ from uuid import uuid4
 import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
+from integrations.exat.workspace_integration.offline_replay import stage_pending_blobs
 from integrations.exat.workspace_integration.shared_bot import SharedBot, poll_durable_updates
 from integrations.exat.workspace_integration.state import State
 
@@ -35,6 +36,54 @@ def test_operation_and_blob_survive_reopen(tmp_path):
         payload={"fileName": "letter.docx"},
         blob_sha256=digest,
     ) == sequence
+
+
+def test_staging_only_pending_referenced_blobs_is_retry_safe(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    first = journal.put_blob(b"letter")
+    orphan = journal.put_blob(b"unreferenced")
+    second = journal.put_blob(b"voice")
+    for digest in (first, first, second):
+        journal.append(
+            operation_id=str(uuid4()), actor_id="123", kind="upload",
+            payload={}, blob_sha256=digest,
+        )
+    assert orphan not in journal.pending_blob_hashes()
+    assert journal.pending_blob_hashes() == [first, second]
+    epoch = str(uuid4())
+
+    class Client:
+        def __init__(self):
+            self.calls = []
+
+        def upload_offline_blob(self, received_epoch, digest, content):
+            self.calls.append((received_epoch, digest, content))
+            return {"id": str(uuid4()), "epoch": received_epoch,
+                    "sha256": digest, "byteSize": len(content)}
+
+    client = Client()
+    assert stage_pending_blobs(journal, client, epoch) == [first, second]
+    assert stage_pending_blobs(OfflineJournal(tmp_path), client, epoch) == [first, second]
+    assert [item[1] for item in client.calls] == [first, second, first, second]
+    assert all(item[0] == epoch for item in client.calls)
+
+
+def test_mismatched_staging_receipt_keeps_local_operation_pending(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    digest = journal.put_blob(b"letter")
+    journal.append(
+        operation_id=str(uuid4()), actor_id="123", kind="upload",
+        payload={}, blob_sha256=digest,
+    )
+
+    class Client:
+        def upload_offline_blob(self, epoch, sha256, content):
+            return {"id": str(uuid4()), "epoch": epoch,
+                    "sha256": "0" * 64, "byteSize": len(content)}
+
+    with pytest.raises(ValueError, match="другой автономный файл"):
+        stage_pending_blobs(journal, Client(), str(uuid4()))
+    assert len(journal.pending()) == 1
 
 
 def test_operation_id_cannot_be_reused_with_different_payload(tmp_path):

@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
-from integrations.exat.workspace_integration.client import WorkspaceClient
+from integrations.exat.workspace_integration.client import WorkspaceClient, WorkspaceError
 from integrations.exat.workspace_integration.offline_authority import OfflineAuthorityGate
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
 
@@ -93,6 +93,28 @@ def test_client_uses_agent_token_routes_for_lease(monkeypatch):
         (f"/ai-referent/agent/offline/rights?agentId=referent-pc&epoch={epoch}",
          {"snapshotId": snapshot_id}, "POST"),
     ]
+
+
+def test_client_uploads_only_verified_local_blob(monkeypatch):
+    client = WorkspaceClient.__new__(WorkspaceClient)
+    client.agent_id = "referent-pc"
+    calls = []
+
+    def transfer(path, body, *, method):
+        calls.append((path, body, method))
+        return b'{"id":"00000000-0000-0000-0000-000000000001"}'
+
+    monkeypatch.setattr(client, "transfer", transfer)
+    epoch = str(uuid4())
+    digest = hashlib.sha256(b"document").hexdigest()
+    assert client.upload_offline_blob(epoch, digest, b"document")["id"].endswith("1")
+    assert calls == [
+        (f"/ai-referent/agent/offline/blobs/{digest}?agentId=referent-pc&epoch={epoch}",
+         b"document", "PUT")
+    ]
+    with pytest.raises(WorkspaceError, match="Контрольная сумма"):
+        client.upload_offline_blob(epoch, digest, b"other bytes")
+    assert len(calls) == 1
 
 
 def test_last_verified_rights_replace_revoked_ids_atomically(tmp_path):
