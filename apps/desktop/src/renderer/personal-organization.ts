@@ -5,7 +5,19 @@ export const defaultPersonalPreferences: PersonalPreferences = {
 };
 
 export function normalizeNavigation(order: readonly NavigationKey[]): NavigationKey[] {
-  return [...new Set([...order.filter((key) => navigationKeys.includes(key)), ...navigationKeys])];
+  const known = [...new Set(order.filter((key) => navigationKeys.includes(key)))];
+  const missing = navigationKeys.filter((key) => !known.includes(key));
+  if (known.includes("projects")) {
+    for (const key of (["project_hub", "project_funding"] as const)) {
+      const missingIndex = missing.indexOf(key);
+      if (missingIndex >= 0) {
+        const anchor = key === "project_hub" ? "projects" : "project_hub";
+        known.splice(known.indexOf(anchor) + 1, 0, key);
+        missing.splice(missingIndex, 1);
+      }
+    }
+  }
+  return [...known, ...missing];
 }
 
 /** Move only known identities. Unknown or same-item drops are no-ops. */

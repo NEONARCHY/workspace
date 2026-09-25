@@ -53,6 +53,12 @@ import type {
   PasswordResetResult,
   PaymentRequestDetails,
   ProjectInput,
+  ProjectHubOverview,
+  ProjectHubProject,
+  ProjectHubProjectInput,
+  ProjectHubItem,
+  ProjectHubItemInput,
+  ProjectHubRequest,
   ProjectStage,
   SessionSummary,
   TaskParticipantRole,
@@ -1461,6 +1467,68 @@ export function changeWorkspaceProjectStage(
     `/projects/${projectId}/stage`,
     { method: "PATCH", body: JSON.stringify({ stage, comment }) },
     token,
+  );
+}
+
+export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadProjectHubRequests(token: string): Promise<readonly ProjectHubRequest[]> {
+  return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", {}, token);
+}
+
+export function saveProjectHubProject(
+  token: string, payload: ProjectHubProjectInput, projectId?: string,
+): Promise<ProjectHubProject> {
+  return apiRequest<ProjectHubProject>(
+    projectId ? `/project-hub/projects/${projectId}` : "/project-hub/projects",
+    { method: projectId ? "PUT" : "POST", body: JSON.stringify(payload) }, token,
+  );
+}
+
+export function saveProjectHubItem(
+  token: string, projectId: string, payload: ProjectHubItemInput, itemId?: string,
+): Promise<ProjectHubItem> {
+  return apiRequest<ProjectHubItem>(
+    itemId ? `/project-hub/projects/${projectId}/items/${itemId}` : `/project-hub/projects/${projectId}/items`,
+    { method: itemId ? "PUT" : "POST", body: JSON.stringify(payload) }, token,
+  );
+}
+
+export function setProjectHubItemStatus(
+  token: string, projectId: string, itemId: string, status: ProjectHubItem["status"],
+): Promise<ProjectHubItem> {
+  return apiRequest<ProjectHubItem>(
+    `/project-hub/projects/${projectId}/items/${itemId}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) }, token,
+  );
+}
+
+export function publishProjectHubEvent(
+  token: string, projectId: string, itemId: string,
+): Promise<ProjectHubItem> {
+  return apiRequest<ProjectHubItem>(
+    `/project-hub/projects/${projectId}/items/${itemId}/publish`, { method: "POST" }, token,
+  );
+}
+
+export function createProjectHubRequest(
+  token: string, projectId: string,
+  payload: { readonly itemId: string; readonly title: string; readonly purpose: string; readonly amount: number },
+): Promise<ProjectHubRequest> {
+  return apiRequest<ProjectHubRequest>(
+    `/project-hub/projects/${projectId}/requests`,
+    { method: "POST", body: JSON.stringify(payload) }, token,
+  );
+}
+
+export function decideProjectHubRequest(
+  token: string, requestId: string, action: "approve" | "reject", comment = "",
+): Promise<ProjectHubRequest> {
+  return apiRequest<ProjectHubRequest>(
+    `/project-hub/requests/${requestId}/decision`,
+    { method: "POST", body: JSON.stringify({ action, comment }) }, token,
   );
 }
 

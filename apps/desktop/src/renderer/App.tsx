@@ -92,6 +92,7 @@ import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { ProjectsView } from "./ProjectsView";
+import { ProjectHubView } from "./ProjectHubView";
 import { TasksView } from "./TasksView";
 import { TeamDashboardView } from "./TeamDashboardView";
 import { WorkdayControl } from "./WorkdayControl";
@@ -303,6 +304,8 @@ const navItems: readonly NavItem[] = [
   { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
+  { key: "project_hub", label: "Проекты", icon: <FolderPeople24Regular /> },
+  { key: "project_funding", label: "Проектные заявки", icon: <DocumentBulletList24Regular /> },
   {
     key: "trip_approvals",
     label: "Согласование поездок",
@@ -1640,10 +1643,10 @@ export function App() {
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
-    .filter(canView)
+    .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
     .map((key) => navItems.find((item) => item.key === key)!);
   const activeSectionDenied = activeSection !== "notifications" &&
-    (modulePermissions[activeSection]?.view === false || (activeSection === "telegram_access" && !isAdmin));
+    !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
   const displayedSection = activeSectionDenied && fallbackSection !== "settings" ? fallbackSection : activeSection;
   const renderEmbeddedChat = (
@@ -1705,6 +1708,7 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
+            hiddenKeys={["projects", "payment_requests"]}
             icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
@@ -1971,6 +1975,23 @@ export function App() {
                   ? renderEmbeddedChat(project.chatId, "проекта")
                   : <div className="embedded-chat-unavailable">Для этого проекта чат недоступен.</div>}
                 focusProjectId={focusTarget?.section === "projects" ? focusTarget.entityId : undefined}
+              />
+            ) : null}
+            {displayedSection === "project_hub" || displayedSection === "project_funding" ? (
+              <ProjectHubView
+                key={`${displayedSection}:${focusTarget?.revision ?? 0}`}
+                mode={displayedSection === "project_hub" ? "projects" : "funding"}
+                token={session.accessToken}
+                people={workspace.people}
+                currentUserId={workspace.currentUser.id}
+                canCreateProject={modulePermissions.project_hub?.create ?? false}
+                canCreateRequest={modulePermissions.project_funding?.create ?? false}
+                canViewFunding={modulePermissions.project_funding?.view ?? false}
+                focusId={focusTarget?.section === displayedSection ? focusTarget.entityId : undefined}
+                onOpenCalendar={(eventId) => {
+                  setFocusTarget((current) => ({ section: "calendar", entityId: eventId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("calendar");
+                }}
               />
             ) : null}
             {displayedSection === "trip_approvals" ? (

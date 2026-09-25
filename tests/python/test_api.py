@@ -54,6 +54,8 @@ async def test_module_catalog_has_all_locales() -> None:
         "telegram_access",
         "feed",
         "projects",
+        "project_hub",
+        "project_funding",
         "trip_approvals",
         "messenger",
         "calendar",

@@ -17,6 +17,7 @@ from .events import WorkspaceEventBus
 from .hr_service import materialize_previous_month_register
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
+from .project_hub_service import materialize_project_reminders
 from .repository import materialize_due_notifications
 from .routers import (
     administration,
@@ -30,6 +31,7 @@ from .routers import (
     messenger,
     modules,
     personal,
+    project_hub,
     recognition,
     telegram_access,
     updates,
@@ -78,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_sick_document_notifications(connection)
                         created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
+                        created += await materialize_project_reminders(connection)
                         await close_overdue_sessions(connection)
                     async with engine.begin() as connection:
                         created += await expire_jobs(connection)
@@ -148,6 +151,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
+    application.include_router(project_hub.router, prefix=runtime_settings.api_prefix)
     application.include_router(workday.router, prefix=runtime_settings.api_prefix)
     application.include_router(messenger.router, prefix=runtime_settings.api_prefix)
     application.include_router(administration.router, prefix=runtime_settings.api_prefix)

@@ -1158,6 +1158,8 @@ NotificationSection = Literal[
     "absences",
     "zoom_meetings",
     "hr",
+    "project_hub",
+    "project_funding",
 ]
 
 
@@ -1210,6 +1212,8 @@ NavigationKey = Literal[
     "telegram_access",
     "feed",
     "projects",
+    "project_hub",
+    "project_funding",
     "trip_approvals",
     "messenger",
     "calendar",
@@ -1230,6 +1234,8 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "telegram_access",
     "feed",
     "projects",
+    "project_hub",
+    "project_funding",
     "trip_approvals",
     "messenger",
     "calendar",

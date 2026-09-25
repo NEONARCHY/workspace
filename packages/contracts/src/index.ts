@@ -7,6 +7,8 @@ export const moduleKeys = [
   "telegram_access",
   "feed",
   "projects",
+  "project_hub",
+  "project_funding",
   "trip_approvals",
   "absences",
   "members",
@@ -618,6 +620,8 @@ export type NotificationSection = Extract<
   | "messenger"
   | "tasks"
   | "payment_requests"
+  | "project_hub"
+  | "project_funding"
   | "trip_approvals"
   | "calendar"
   | "absences"
@@ -1246,6 +1250,88 @@ export interface ProjectInput {
   readonly budget: number;
   readonly spentBudget: number;
   readonly currency: "UZS" | "USD" | "EUR";
+}
+
+export interface ProjectHubProject {
+  readonly id: string;
+  readonly code: string;
+  readonly title: string;
+  readonly description: string;
+  readonly managerUserId: string;
+  readonly responsibleUserIds: readonly string[];
+  readonly approverUserIds: readonly string[];
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
+  readonly budget: number;
+  readonly currency: "UZS" | "USD" | "EUR";
+  readonly accessStatus: "open" | "closed";
+  readonly lifecycleStatus: "active" | "completed";
+  readonly approvedAmount: number;
+  readonly canEdit: boolean;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export type ProjectHubProjectInput = Pick<ProjectHubProject,
+  "code" | "title" | "description" | "managerUserId" | "responsibleUserIds" |
+  "approverUserIds" | "startDate" | "endDate" | "budget" | "currency" |
+  "accessStatus" | "lifecycleStatus">;
+
+export interface ProjectHubItem {
+  readonly id: string;
+  readonly projectId: string;
+  readonly kind: "task" | "event";
+  readonly title: string;
+  readonly description: string;
+  readonly startsAt?: string | null;
+  readonly dueAt?: string | null;
+  readonly budget: number;
+  readonly status: "planned" | "active" | "completed" | "cancelled";
+  readonly assigneeUserIds: readonly string[];
+  readonly calendarEventId?: string | null;
+  readonly createdByUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly requestCount: number;
+  readonly approvedRequestCount: number;
+}
+
+export type ProjectHubItemInput = Pick<ProjectHubItem,
+  "kind" | "title" | "description" | "startsAt" | "dueAt" | "budget" | "assigneeUserIds">;
+
+export interface ProjectHubRequestAction {
+  readonly actorUserId: string;
+  readonly action: "submit" | "approve" | "reject";
+  readonly step: number;
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
+
+export interface ProjectHubRequest {
+  readonly id: string;
+  readonly projectId: string;
+  readonly projectTitle: string;
+  readonly itemId: string;
+  readonly itemTitle: string;
+  readonly title: string;
+  readonly purpose: string;
+  readonly amount: number;
+  readonly currency: string;
+  readonly status: "pending" | "approved" | "rejected";
+  readonly approverUserIds: readonly string[];
+  readonly currentStep: number;
+  readonly requesterUserId: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly canDecide: boolean;
+  readonly actions: readonly ProjectHubRequestAction[];
+}
+
+export interface ProjectHubOverview {
+  readonly projects: readonly ProjectHubProject[];
+  readonly items: readonly ProjectHubItem[];
+  readonly requests: readonly ProjectHubRequest[];
 }
 
 export type TripStage = "launch" | "manager_approval" | "hr" | "approved" | "rejected";

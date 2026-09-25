@@ -18,6 +18,10 @@ describe("Personal organization", () => {
     expect(moveBefore(["a", "b"], "foreign", "a")).toEqual(["a", "b"]);
     expect(moveBefore(["a", "b"], "a", "a")).toEqual(["a", "b"]);
     expect(normalizeNavigation(["calendar", "calendar"])).toEqual(["calendar", ...navigationKeys.filter((key) => key !== "calendar")]);
+    expect(normalizeNavigation(["tasks", "projects", "settings"])).toEqual([
+      "tasks", "projects", "project_hub", "project_funding", "settings",
+      ...navigationKeys.filter((key) => !["tasks", "projects", "project_hub", "project_funding", "settings"].includes(key)),
+    ]);
   });
   it("does not let an older bootstrap overwrite a just-saved preference response", () => {
     const current = { ...defaultPersonalPreferences, revision: 3, pinnedChatIds: ["a"] };
@@ -46,6 +50,15 @@ describe("Personal organization", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Конфликт версий");
     expect(close).not.toHaveBeenCalled();
     expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
+  });
+  it("hides legacy project and payment entries without deleting their saved positions", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<NavigationEditor order={navigationKeys} revision={1} labels={labels}
+      hiddenKeys={["projects", "payment_requests"]} onSave={save} onClose={vi.fn()} />);
+    expect(screen.queryByRole("listitem", { name: /payment_requests/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listitem", { name: /projects/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 1));
   });
   it("sorts pinned chats, separates the archive, finds messages and restores without repinning", async () => {
     const first = initialChats[0]!, second = initialChats[1]!;
