@@ -274,6 +274,7 @@ class AIReferentJournalResponse(ApiModel):
 class AIReferentIncomingRegistryResponse(ApiModel):
     letters: list[AIReferentIncomingLetterResponse] = Field(default_factory=list)
     total_count: int = 0
+    filtered_count: int = 0
     registered_count: int = 0
     attention_count: int = 0
     with_attachments_count: int = 0

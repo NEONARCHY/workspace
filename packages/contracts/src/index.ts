@@ -1063,6 +1063,7 @@ export interface HisobotProfile {
 export interface AIReferentIncomingRegistry {
   readonly letters: readonly AIReferentIncomingLetter[];
   readonly totalCount: number;
+  readonly filteredCount: number;
   readonly registeredCount: number;
   readonly attentionCount: number;
   readonly withAttachmentsCount: number;

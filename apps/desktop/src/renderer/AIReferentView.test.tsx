@@ -62,6 +62,7 @@ const registry = {
 
 const incomingRegistry = {
   totalCount: 1,
+  filteredCount: 1,
   registeredCount: 1,
   attentionCount: 0,
   withAttachmentsCount: 1,
@@ -255,7 +256,7 @@ describe("AIReferentView", () => {
 
     expect(screen.getByRole("heading", { name: "AI Referent" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("Входящее письмо")).toBeInTheDocument());
-    expect(screen.getByText("Организация-отправитель")).toBeInTheDocument();
+    expect(screen.getByText(/Организация-отправитель · Ответственный:/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Excel-журнал/ })).toBeEnabled();
     const incomingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(incomingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
@@ -268,6 +269,46 @@ describe("AIReferentView", () => {
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
+  });
+
+  it("uses the summary cards as the only incoming filters and keeps their totals stable", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockImplementation(async (_token, options) => ({
+      ...incomingRegistry,
+      letters: options?.category === "attention" ? [] : incomingRegistry.letters,
+      filteredCount: options?.category === "attention" ? 0 : 1,
+    }));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    const totalCard = await screen.findByRole("button", { name: /всего входящих/ });
+    await waitFor(() => expect(totalCard).toHaveTextContent("1"));
+    expect(screen.queryByRole("button", { name: "Все" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /требуют внимания/ }));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenCalledWith(
+      "token", expect.objectContaining({ category: "attention" }),
+    ));
+    expect(totalCard).toHaveTextContent("1");
+    expect(screen.getByText("Страница 1 · Найдено 0")).toBeInTheDocument();
+  });
+
+  it("prioritizes the signed letter and keeps attachments inside the packet", async () => {
+    vi.mocked(loadAIReferentPacket).mockResolvedValue({ files: [] });
+    const attachment = {
+      id: "original-1", ownerType: "ai_referent_letter" as const,
+      ownerId: "letter-1", fileName: "unsigned.docx", contentType: "application/docx",
+      byteSize: 1024, sha256: "a".repeat(64), documentRole: "primary" as const,
+      uploadedByUserId: "user-1", createdAt: "2026-09-22T08:00:00Z",
+    };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue({
+      ...registry.letters[0]!, finalPdfFileId: "signed-1", attachments: [attachment],
+    });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    const detail = await screen.findByRole("dialog", { name: /Ответ партнёру/ });
+    expect(within(detail).getByRole("button", { name: "Скачать подписанное письмо" })).toBeInTheDocument();
+    expect(within(detail).queryByText("unsigned.docx")).not.toBeInTheDocument();
+    fireEvent.click(within(detail).getByRole("tab", { name: /Документы/ }));
+    fireEvent.click(within(detail).getByRole("button", { name: "Пакет документов" }));
+    const packet = await screen.findByRole("dialog", { name: "Пакет документов" });
+    expect(within(packet).getByText("Организация-получатель")).toBeInTheDocument();
+    expect(within(packet).queryByText("unsigned.docx")).not.toBeInTheDocument();
   });
 
   it("creates a sign-only request without delivery controls", async () => {
