@@ -1,4 +1,6 @@
 import type {
+  AIReferentCommentAudio,
+  AIReferentDocumentCheck,
   AIReferentArchiveLetter,
   AIReferentJournalFile,
   AIReferentPacketFile,
@@ -256,12 +258,13 @@ export function actOnAIReferentLetter(
   action: AIReferentAction,
   comment = "",
   operationId?: string,
+  commentAudioId?: string,
 ): Promise<AIReferentLetter> {
   return apiRequest<AIReferentLetter>(
     `/ai-referent/letters/${letter.id}/actions`,
     {
       method: "POST",
-      body: JSON.stringify({ action, comment, expectedRevision: letter.revision, operationId }),
+      body: JSON.stringify({ action, comment, expectedRevision: letter.revision, operationId, commentAudioId }),
     },
     token,
   );
@@ -269,6 +272,32 @@ export function actOnAIReferentLetter(
 
 export function loadAIReferentLetter(token: string, id: string) {
   return apiRequest<AIReferentLetter>(`/ai-referent/letters/${id}`, {}, token);
+}
+
+export function deleteAIReferentLetter(token: string, letter: Pick<AIReferentLetter, "id" | "revision">) {
+  return apiRequest<{ readonly queued: boolean }>(`/ai-referent/letters/${letter.id}?expectedRevision=${letter.revision}`, { method: "DELETE" }, token);
+}
+
+export function checkAIReferentDocument(token: string, file: File, workflowKind: string) {
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/document-checks?${new URLSearchParams({ fileName: file.name, workflowKind })}`, {
+    method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream" }, body: file,
+  }, (response) => response.json() as Promise<AIReferentDocumentCheck>, 120_000);
+}
+
+export function loadAIReferentDocumentCheck(token: string, id: string) {
+  return apiRequest<AIReferentDocumentCheck>(`/ai-referent/document-checks/${id}`, {}, token);
+}
+
+export function uploadAIReferentCommentAudio(token: string, letter: Pick<AIReferentLetter, "id" | "revision">, file: File, durationMs: number) {
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/letters/${letter.id}/comment-audio?${new URLSearchParams({ expectedRevision: String(letter.revision), durationMs: String(Math.round(durationMs)) })}`, {
+    method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type }, body: file,
+  }, (response) => response.json() as Promise<AIReferentCommentAudio>, 120_000);
+}
+
+export function downloadAIReferentCommentAudio(token: string, id: string) {
+  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/comment-audio/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (response) => response.blob(), 120_000);
 }
 
 export function loadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string) {

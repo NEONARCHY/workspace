@@ -481,8 +481,17 @@
 .ai-referent-detail-content .ai-referent-recipient strong { display: block; font-size: 16px; }
 .ai-referent-detail-content .ai-referent-detail-actions { z-index: 2; }
 
-.ai-referent-form-dialog { width: min(740px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); border-radius: 23px; }
-.ai-referent-form-dialog .fui-DialogBody { min-height: 0; }
+.fui-DialogSurface.ai-referent-form-dialog { width: min(1000px, calc(100vw - 40px)); max-width: calc(100vw - 40px); height: min(86dvh, 820px); max-height: min(86dvh, 820px); overflow: hidden; border-radius: 23px; }
+.ai-referent-form-dialog .ai-referent-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ai-referent-select-field { display: grid; min-width: 0; gap: 6px; }
+.ai-referent-select-field > span { font-size: 12px; color: var(--ws-muted); }
+.ai-referent-preflight { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: var(--ws-surface); border: 1px solid var(--ws-line); }
+.ai-referent-preflight small { display: block; margin-top: 4px; }
+.ai-referent-audio-comment { display: grid; justify-items: start; gap: 8px; min-width: 0; }
+.ai-referent-audio-comment audio { max-width: 100%; }
+.ai-referent-form-dialog .ai-referent-picker-result strong,
+.ai-referent-form-dialog .ai-referent-picker-selected strong { white-space: normal; overflow-wrap: anywhere; }
+.ai-referent-form-dialog .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto; }
 .ai-referent-form-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .ai-referent-form-dialog .ai-referent-form { gap: 15px; padding: 6px 2px 2px; }
 .ai-referent-form-dialog .ai-referent-form > label:not(.ai-referent-upload-zone) { gap: 6px; }
@@ -608,6 +617,7 @@
   .ai-referent-view .ai-incoming-table td { padding-inline: 8px; }
 }
 @media (max-width: 580px) {
+  .ai-referent-form-dialog .ai-referent-form-grid { grid-template-columns: minmax(0, 1fr); }
   .ai-referent-form-dialog .ai-referent-upload-zone { grid-template-columns: 38px minmax(0, 1fr); gap: 9px; }
   .ai-referent-upload-action { grid-column: 2; justify-self: start; }
 }

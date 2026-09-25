@@ -778,6 +778,20 @@ export type AIReferentAction =
   | "queue_delivery"
   | "retry_delivery";
 
+export interface AIReferentDocumentCheck {
+  readonly id: string;
+  readonly status: "pending" | "checking" | "passed" | "failed";
+  readonly reviewerKeys: readonly string[];
+  readonly detail: string;
+}
+
+export interface AIReferentCommentAudio {
+  readonly id: string;
+  readonly contentType: string;
+  readonly durationMs: number;
+  readonly byteSize: number;
+}
+
 export interface AIReferentEvent {
   readonly id: string;
   readonly eventType: string;
@@ -786,10 +800,14 @@ export interface AIReferentEvent {
   readonly fromStatus?: AIReferentStatus | null;
   readonly toStatus?: AIReferentStatus | null;
   readonly comment: string;
+  readonly audio?: AIReferentCommentAudio | null;
   readonly createdAt: string;
 }
 
 export interface AIReferentLetter {
+  readonly documentCheck?: AIReferentDocumentCheck | null;
+  readonly finalPdfFileId?: string | null;
+  readonly canDelete?: boolean;
   readonly canReplaceDocument?: boolean;
   readonly initialReviewerUserId?: string | null;
   readonly finalReviewerUserId?: string | null;

@@ -39,9 +39,10 @@ async function main() {
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
+  await page.route("**/version.json", route => route.fulfill({ json: { version: "1.0.18", commit: "visual-only" } }));
   page.on("pageerror", error => errors.push(error.message));
   page.on("console", message => {
-    if (message.type() === "error" && !message.text().includes("WebSocket connection to")) errors.push(message.text());
+    if (message.type() === "error" && !message.text().includes("WebSocket connection to")) errors.push(message.text() + " " + message.location().url);
   });
   await page.route("**/api/v1/**", route => {
     const url = route.request().url();
@@ -49,6 +50,8 @@ async function main() {
     if (url.endsWith("/workspace/bootstrap")) return route.fulfill({ json: { currentUser: person, canCreatePaymentRequests: true, people: [person], positions: [], chats: [], messages: [], tasks: [], requests: [], projects: [], tripRequests: [], feedPosts: [], calendarEvents: [], notifications: [], attachments: [], workflow: null, requestWorkflows: [], notificationPreferences: { desktopEnabled: false } } });
     if (url.endsWith("/directory")) return route.fulfill({ json: { people: [person], departments: [], positions: [] } });
     if (url.includes("/ai-referent/incoming")) return route.fulfill({ json: { letters: incoming, totalCount: incoming.length, registeredCount: 50, attentionCount: 6, withAttachmentsCount: 56, lastSyncAt: "2026-09-23T09:15:00Z", journal: { available: true, fileName: "register.xlsx", updatedAt: "2026-09-23T09:15:00Z" } } });
+    if (/\/ai-referent\/letters\/outgoing-\d+$/.test(url)) return route.fulfill({ json: outgoing[0] });
+    if (url.includes("/ai-referent/document-checks")) return route.fulfill({ json: { id: "check-visual", status: "passed", reviewerKeys: ["askar", "bobur"], detail: "" } });
     if (url.includes("/ai-referent/letters")) return route.fulfill({ json: { letters: outgoing, totalCount: outgoing.length, pendingReviewCount: 8, readyCount: 0, sentCount: 32 } });
     if (url.includes("/ai-referent/reviewers") || url.includes("/ai-referent/configuration")) return route.fulfill({ json: { revision: 1, updatedAt: "2026-09-23T09:15:00Z", reviewers, runtimes: [] } });
     if (url.includes("/ai-referent/archive")) return route.fulfill({ json: { letters: archive } });
@@ -105,9 +108,15 @@ async function main() {
     await page.getByRole("button", { name: "Новое письмо" }).click();
     const compose = page.getByRole("dialog", { name: "Новое исходящее письмо" });
     await compose.waitFor();
+    const bounds = await compose.boundingBox();
+    assert.ok(bounds.width >= 970 && bounds.height < 800, JSON.stringify(bounds));
+    const channel = compose.getByRole("combobox", { name: "Канал отправки" });
+    await compose.getByText("Канал отправки", { exact: true }).click();
+    assert.equal(await channel.getAttribute("aria-expanded"), "false", "label must not open dropdown");
     await compose.getByRole("button", { name: /Министерство развития/ }).waitFor();
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(output, "compose.png") });
+    await compose.getByRole("button", { name: "Открыть: поиск адресата" }).click();
     await compose.getByRole("textbox", { name: "Поиск адресата" }).fill("развития");
     await compose.getByRole("button", { name: /Министерство развития/ }).click();
     await compose.getByText("ORG-001").waitFor();
@@ -138,7 +147,7 @@ async function main() {
     await page.getByText("Архивное письмо о программе сотрудничества").first().waitFor();
     await page.screenshot({ path: path.join(output, "archive.png") });
     await page.getByRole("tab", { name: "Мой Telegram" }).click();
-    await page.getByText("Подключите личный Telegram").waitFor();
+    await page.getByText("Попросите администратора подключить Telegram").waitFor();
     await page.screenshot({ path: path.join(output, "telegram.png") });
     assert.deepEqual(errors, []);
     console.log(`PASS: AI Referent visual smoke: ${output}`);

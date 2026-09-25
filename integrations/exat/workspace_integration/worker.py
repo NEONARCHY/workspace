@@ -60,6 +60,10 @@ class DeliveryWorker:
         configuration = self.client.configuration()
         self.client.acknowledge(configuration["revision"])
         self.flush_results()
+        from .preflight import run_preflight
+
+        if run_preflight(self.service, self.client, self.state):
+            return
         job = self.client.request(
             "/ai-referent/agent/jobs/claim?" + urlencode({"agentId": self.client.agent_id}),
             method="POST",
@@ -108,7 +112,9 @@ class DeliveryWorker:
                 result = self.sign_only(job)
             elif job["kind"] == "send":
                 result = self.send(job, lost)
-            elif job["kind"] in {"cancel", "replace", "record_sent"}:
+            elif job["kind"] == "dispatch":
+                result = self.dispatch(job)
+            elif job["kind"] in {"cancel", "replace", "record_sent", "delete"}:
                 result = self.finish_local(job)
             else:
                 raise WorkspaceError("Неизвестный вид задания. Исполнение остановлено.")
@@ -242,11 +248,12 @@ class DeliveryWorker:
             jobId=job["id"],
             leaseToken=job["leaseToken"],
         )
-        self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
+        if not job.get("requiresFinalCheck"):
+            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         receipt = self.receipt(
             job,
             "prepared",
-            "Подписанный PDF и окно отправки подготовлены. Отправка не выполнялась.",
+            "Подписанный PDF подготовлен. Отправка не выполнялась.",
         )
         receipt["autoSend"] = job["kind"] == "prepare" and bool(
             (self.service.outgoing_settings.get("exat_send", {}) or {}).get(
@@ -254,6 +261,27 @@ class DeliveryWorker:
             )
         )
         return receipt
+
+    def dispatch(self, job: dict[str, Any]) -> dict[str, Any]:
+        local_id = self.state.get("letter:" + job["letterId"])
+        row = self.service.database.get_outgoing_letter(local_id) if local_id is not None else None
+        if row is None or not job.get("signedFile"):
+            raise WorkspaceError("Нет локального пакета подтверждённого письма.")
+        signed = Path(str(row["signed_file_path"] or ""))
+        if (
+            not signed.is_file()
+            or hashlib.sha256(signed.read_bytes()).hexdigest() != job["signedFile"]["sha256"]
+        ):
+            raise WorkspaceError("Итоговый PDF изменился. Отправка заблокирована.")
+        self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
+        return {
+            **self.receipt(job, "ready", "Подтверждённый PDF передан в окно отправки."),
+            "autoSend": bool(
+                (self.service.outgoing_settings.get("exat_send", {}) or {}).get(
+                    "allow_real_send", False
+                )
+            ),
+        }
 
     def sign_only(self, job: dict[str, Any]) -> dict[str, Any]:
         from .sign_only import sign_document_pages
@@ -356,6 +384,24 @@ class DeliveryWorker:
     def finish_local(self, job: dict[str, Any]) -> dict[str, Any]:
         local_id = self.state.get("letter:" + job["letterId"])
         row = self.service.database.get_outgoing_letter(local_id) if local_id is not None else None
+        if job["kind"] == "delete" and row is None:
+            # Reconcile the durable local registry after a state-file restore. Never
+            # report deletion merely because an in-memory/state mapping is missing.
+            matches = [
+                item
+                for item in self.service.database.list_outgoing_letters()
+                if json.loads(item.get("dry_run_json") or "{}").get("workspace_letter_id")
+                == job["letterId"]
+            ]
+            if len(matches) > 1:
+                raise WorkspaceError("Найдены дубли локального письма. Нужна сверка референта.")
+            if matches:
+                row = matches[0]
+                local_id = row["id"]
+            elif not self.state.get("deleted-local:" + job["letterId"]):
+                raise WorkspaceError(
+                    "Локальная запись не найдена. Удаление требует сверки референта."
+                )
         if job["kind"] == "record_sent":
             if row is None:
                 raise WorkspaceError("Локальный журнал письма отсутствует. Нужна ручная сверка.")
@@ -383,6 +429,15 @@ class DeliveryWorker:
                     "Локальный журнал уже содержит отправку. Отмена заблокирована."
                 )
             close_prepared(self.service, row, self.prepared_handles.get(local_id))
+            if job["kind"] == "delete":
+                self.service.database.delete_outgoing_letter(local_id)
+                self.state.put("deleted-local:" + job["letterId"], {"localId": local_id})
+                self.service._clear_manual_send_hold(local_id)
+                self.service._rewrite_journal()
+                self.state.remove("letter:" + job["letterId"])
+                return self.receipt(
+                    job, "deleted", "Локальная запись удалена. Номер повторно не используется."
+                )
             self.service.database.update_outgoing_letter(
                 local_id,
                 status="cancelled" if job["kind"] == "cancel" else "operator_revision",
@@ -391,6 +446,10 @@ class DeliveryWorker:
             self.service._rewrite_journal()
         return self.receipt(
             job,
-            "cancelled" if job["kind"] == "cancel" else "revision_needed",
+            "deleted"
+            if job["kind"] == "delete"
+            else "cancelled"
+            if job["kind"] == "cancel"
+            else "revision_needed",
             "Подготовленное окно закрыто. Запись исключена из очереди отправки.",
         )

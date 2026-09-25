@@ -295,12 +295,15 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
         "route": "exat",
         "recipient_organization": "Test organization",
         "recipient_address": "org@exat.uz",
+        "reviewer_key": "askar",
         "outgoing_number": None,
     }
     connection = SimpleNamespace(execute=AsyncMock(), scalar=AsyncMock(return_value=1))
     monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
     monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
     validate = AsyncMock(return_value="askar")
+    preflight = AsyncMock()
+    monkeypatch.setattr(letters, "require_passed", preflight)
     monkeypatch.setattr(letters, "_validate_reviewer", validate)
     monkeypatch.setattr(letters, "_reserve_number", AsyncMock(return_value=(42, "26")))
     event = AsyncMock()
@@ -320,6 +323,8 @@ async def test_letter_actions_keep_revision_audit_and_delivery_idempotency(
         ),
     )
     assert result is marker
+    if action == "submit":
+        preflight.assert_awaited_once_with(connection, row)
     notification.assert_awaited_once()
     mutations = [
         call.args[0]
@@ -460,7 +465,7 @@ async def test_sign_only_result_requires_complete_page_set_and_finishes_signed(m
     }
     row = {
         "id": letter_id, "status": "sending", "workflow_kind": "sign_only",
-        "revision": 3, "sent_at": None,
+        "revision": 3, "sent_at": None, "final_pdf_file_id": None,
     }
     command_rows = SimpleNamespace(mappings=lambda: SimpleNamespace(one_or_none=lambda: job))
     filenames = [f"signed/{job_id}/{page:03d}.pdf" for page in (1, 2)]

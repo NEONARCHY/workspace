@@ -12,6 +12,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from ai_referent_test_support import pass_preflight
 from test_zoom_postgres import zoom_settings
 from yuksalish_api.auth import issue_access_token
 from yuksalish_api.main import create_app
@@ -136,6 +137,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             content=b"PK outgoing letter test fixture",
         )
         assert uploaded.status_code == 201, uploaded.text
+        await pass_preflight(client, engine, letter["id"], author, "test-referent-agent-token")
 
         current = await client.get(f"/api/v1/ai-referent/letters/{letter['id']}", headers=author)
         letter = current.json()
@@ -295,6 +297,9 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             content=b"%PDF-1.4 revised outgoing letter",
         )
         assert second_upload.status_code == 201, second_upload.text
+        await pass_preflight(
+            client, engine, editable_letter["id"], author, "test-referent-agent-token"
+        )
         editable_letter = (
             await client.get(
                 f"/api/v1/ai-referent/letters/{editable_letter['id']}",

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AIReferentConfiguration,
+  AIReferentDocumentCheck,
+  AIReferentCommentAudio,
   AIReferentAction,
   AIReferentLetter,
   AIReferentLetterInput,
@@ -10,6 +12,7 @@ import type {
 } from "@yuksalish/contracts";
 import {
   Button,
+  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
@@ -39,13 +42,19 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
-import { AIReferentFiles } from "./AIReferentFiles";
+import { AIReferentFiles, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
+import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import {
   actOnAIReferentLetter,
+  deleteAIReferentLetter,
+  checkAIReferentDocument,
+  loadAIReferentDocumentCheck,
+  loadAIReferentPacket,
+  downloadAIReferentPacket,
   createAIReferentLetter,
   downloadWorkspaceAttachment,
   loadAIReferentRegistry,
@@ -88,7 +97,7 @@ const actionLabels: Readonly<Record<AIReferentAction, string>> = {
   cancel: "Отменить письмо",
   queue_delivery: "Подготовить подписанный PDF",
   retry_delivery: "Повторить подготовку PDF",
-  release_delivery: "Разрешить отправку",
+  release_delivery: "Отправить",
   send: "Отправить письмо референтом",
   confirm_sent: "Подтвердить доставку",
   confirm_not_sent: "Подтвердить: не доставлено",
@@ -178,19 +187,53 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const requestSequence = useRef(0);
   const savedMetadata = useRef<{ readonly id: string; readonly fingerprint: string } | undefined>(undefined);
   const [confirmAction, setConfirmAction] = useState<AIReferentAction>();
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState<LetterForm>(emptyForm);
   const [decisionComment, setDecisionComment] = useState("");
+  const [decisionAudio, setDecisionAudio] = useState<{ letterId: string; revision: number; audio: AIReferentCommentAudio }>();
+  const [documentCheck, setDocumentCheck] = useState<{ file: File; result?: AIReferentDocumentCheck; error?: string }>();
+  const [checkAttempt, setCheckAttempt] = useState(0);
   const [replacement, setReplacement] = useState<{ letterId: string; file: File }>();
   const replacementFile = replacement?.letterId === selectedId ? replacement.file : undefined;
 
   const selected = detail?.id === selectedId ? detail : registry?.letters.find((letter) => letter.id === selectedId);
+  const selectedAudio = decisionAudio?.letterId === selected?.id && decisionAudio?.revision === selected?.revision ? decisionAudio?.audio : undefined;
+  const activeCheck = documentCheck?.file === form.file ? documentCheck : undefined;
+  const checkingFile = Boolean(form.file && (!activeCheck?.result || ["pending", "checking"].includes(activeCheck.result.status)));
   const reviewers = reviewerConfig?.reviewers.flatMap((item) =>
     item.canApprove && item.userId ? [{ id: item.userId, name: item.fullName }] : []) ?? [];
   const boburId = reviewerConfig?.reviewers.find((item) => item.key === "bobur" && item.canApprove)?.userId;
   // Search and counts use the same server-side selection across all pages.
   const visibleLetters = registry?.letters ?? [];
+
+  useEffect(() => {
+    const file = form.file;
+    if (!formOpen || !file) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const fail = (reason: unknown) => { if (alive) setDocumentCheck({ file, error: reason instanceof Error ? reason.message : "Проверка недоступна. Повторите попытку." }); };
+    const accept = (result: AIReferentDocumentCheck) => {
+      if (!alive) return;
+      setDocumentCheck({ file, result });
+      if (result.status === "pending" || result.status === "checking") {
+        timer = setTimeout(() => { void loadAIReferentDocumentCheck(token, result.id).then(accept).catch(fail); }, 2500);
+      }
+    };
+    void checkAIReferentDocument(token, file, form.workflowKind).then(accept).catch(fail);
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [token, form.file, form.workflowKind, formOpen, checkAttempt]);
+
+  const selectDocument = (file?: File) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith(".docx") || file.size > 20 * 1024 * 1024) {
+      setError("Основной документ должен быть DOCX размером до 20 МБ."); return;
+    }
+    setError(""); setDocumentCheck(undefined);
+    setForm((current) => ({ ...current, file }));
+    setCheckAttempt((attempt) => attempt + 1);
+  };
 
   const refresh = useCallback(async (quiet = false) => {
     const sequence = ++requestSequence.current;
@@ -267,6 +310,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
 
   const save = async () => {
     if (busyRef.current) return;
+    if (form.file && activeCheck?.result?.status !== "passed") { setError("Дождитесь успешной проверки DOCX роботом."); return; }
+    if (form.workflowKind === "delivery" && form.reviewerUserId === boburId && !form.finalReviewerUserId) { setError("Выберите предварительного согласующего перед Бобуром."); return; }
     busyRef.current = true;
     setBusy(true);
     setError("");
@@ -331,9 +376,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     setBusy(true);
     setError("");
     try {
-      const updated = await actOnAIReferentLetter(token, letter, action, decisionComment, crypto.randomUUID());
+      const updated = await actOnAIReferentLetter(token, letter, action, decisionComment, crypto.randomUUID(), action === "return_for_revision" ? selectedAudio?.id : undefined);
       replaceLetter(updated);
       setDecisionComment("");
+      setDecisionAudio(undefined);
       setConfirmAction(undefined);
       void refresh();
     } catch (reason) {
@@ -562,30 +608,33 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   }))}
                 /> : null}
                 <div className="ai-referent-form-grid">
-                  {form.workflowKind === "delivery" ? <label>Канал отправки<Select value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></label> : null}
-                  <label>Согласующий<Select value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value, finalReviewerUserId: "" }))}><option value="">Не назначен</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label>
+                  {form.workflowKind === "delivery" ? <div className="ai-referent-select-field"><span id="referent-route-label">Канал отправки</span><Select aria-labelledby="referent-route-label" value={form.route} onChange={(event) => setForm((current) => ({ ...current, route: event.target.value as LetterForm["route"] }))}><option value="exat">E-XAT</option><option value="webmail">Webmail</option></Select></div> : null}
+                  <div className="ai-referent-select-field"><span id="referent-reviewer-label">Согласующий</span><Select aria-labelledby="referent-reviewer-label" value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value, finalReviewerUserId: "" }))}><option value="">Не назначен</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div>
                 </div>
-                {form.workflowKind === "delivery" && boburId && form.reviewerUserId === boburId ? <label>Предварительный согласующий — до Бобура<Select value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="">Только Бобур</option>{reviewers.filter((person) => person.id !== boburId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></label> : null}
+                {form.workflowKind === "delivery" && boburId && form.reviewerUserId === boburId ? <div className="ai-referent-select-field"><span id="referent-preliminary-label">Предварительный согласующий — до Бобура · обязательно</span><Select aria-labelledby="referent-preliminary-label" required value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="" disabled>Выберите предварительного согласующего</option>{reviewers.filter((person) => person.id !== boburId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div> : null}
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
-                <label className="ai-referent-upload-zone ai-referent-upload-primary">
-                  <input className="ai-referent-upload-input" type="file" accept=".docx" aria-label="Выбрать основной документ DOCX" onChange={(event) => setForm((current) => ({ ...current, file: event.target.files?.[0] }))} />
+                <label className="ai-referent-upload-zone ai-referent-upload-primary" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); if (!busy) selectDocument(event.dataTransfer.files[0]); }}>
+                  <input className="ai-referent-upload-input" disabled={busy} type="file" accept=".docx" aria-label="Выбрать основной документ DOCX" onChange={(event) => selectDocument(event.target.files?.[0])} />
                   <span className="ai-referent-upload-icon"><Document20Regular aria-hidden="true" /></span>
                   <span className="ai-referent-upload-copy"><strong>Основной документ</strong><small>{editingId ? "Новая версия письма в формате DOCX" : "Письмо в формате DOCX"}</small>{form.file ? <span className="ai-referent-upload-selected"><em title={form.file.name}>{form.file.name}</em></span> : null}</span>
                   <span className="ai-referent-upload-action">{form.file ? "Заменить" : "Выбрать DOCX"}</span>
                 </label>
-                {form.workflowKind === "delivery" ? <label className="ai-referent-upload-zone">
+                {form.file && (checkingFile || activeCheck?.error || activeCheck?.result?.status === "failed") ? <div className="ai-referent-preflight" role="status" aria-live="polite">
+                  {activeCheck?.error || activeCheck?.result?.status === "failed" ? <><p>{activeCheck.error || activeCheck.result?.detail}</p><Button onClick={() => { setDocumentCheck(undefined); setCheckAttempt((attempt) => attempt + 1); }}>Повторить проверку</Button></> : <><Spinner size="tiny" /><span>Подождите: робот проверяет форматирование и место для подписи.<small>Проверка выполняется на ПК референта. Если он выключен, письмо останется в ожидании.</small></span></>}
+                </div> : null}
+                {form.workflowKind === "delivery" ? <label className="ai-referent-upload-zone" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); const files = Array.from(event.dataTransfer.files); if (!busy) setForm((current) => ({ ...current, additionalFiles: [...(current.additionalFiles ?? []), ...files] })); }}>
                   <input className="ai-referent-upload-input" type="file" multiple aria-label="Выбрать дополнительные вложения" onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} />
                   <span className="ai-referent-upload-icon"><Attach20Regular aria-hidden="true" /></span>
                   <span className="ai-referent-upload-copy"><strong>Дополнительные вложения</strong><small>Приложения, таблицы и сопроводительные файлы</small>{selectedAdditionalFiles.length ? <span className="ai-referent-upload-selected">{selectedAdditionalFiles.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{selectedAdditionalFiles.length > 2 ? <em>+{selectedAdditionalFiles.length - 2}</em> : null}</span> : null}</span>
                   <span className="ai-referent-upload-action">{selectedAdditionalFiles.length ? "Изменить" : "Добавить файлы"}</span>
                 </label> : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
-                <div className="ai-referent-form-actions">
-                  <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
-                  <Button appearance="primary" disabled={busy} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
-                </div>
               </div>
             </DialogContent>
+            <DialogActions className="ai-referent-form-actions">
+              <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
+              <Button appearance="primary" disabled={busy || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
+            </DialogActions>
           </DialogBody>
         </DialogSurface>
       </Dialog>
@@ -610,6 +659,15 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <span>{selected.workflowKind === "sign_only" ? "Только подпись · без доставки" : selected.route === "exat" ? "E-XAT" : "Webmail"}</span>
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
+                {selected.documentCheck && selected.canEdit && selected.documentCheck.status !== "passed" ? <p className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</p> : null}
+                {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Итоговый подписанный PDF</h3><p>Проверьте именно этот документ перед отправкой. Приложения в предварительный просмотр не включены.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => {
+                  setError("");
+                  void loadAIReferentPacket(token, "outgoing", selected.id).then(async (packet) => {
+                    const pdf = packet.files.find((entry) => entry.id === selected.finalPdfFileId);
+                    if (!pdf) throw new Error("Итоговый PDF ещё недоступен. Обновите письмо.");
+                    saveReferentBlob(await downloadAIReferentPacket(token, "outgoing", selected.id, pdf), referentDownloadName(selected.displayNumber || selected.subject || "Подписанное письмо", "pdf"));
+                  }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось загрузить PDF."));
+                }}>Открыть подписанный PDF</Button></section> : null}
                 <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
                   {([ ["overview", "Обзор"], ["files", `Документы · ${selected.attachments.length}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
                     <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
@@ -650,7 +708,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                       <div key={event.id}><i aria-hidden="true" /><span><EmployeeProfileLink
                         userId={event.actorUserId ?? undefined}
                         personName={event.actorName}
-                      ><strong>{event.actorName}</strong></EmployeeProfileLink><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p></span></div>
+                      ><strong>{event.actorName}</strong></EmployeeProfileLink><small>{dateTime(event.createdAt)}</small><p>{event.comment || statusLabels[event.toStatus ?? selected.status]}</p>{event.audio ? <AIReferentAudioPlayer key={event.audio.id} token={token} audio={event.audio} /> : null}</span></div>
                     ))}
                   </div>
                 </section> : null}
@@ -675,21 +733,30 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 {selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
                 ) : null}
+                {selected.availableActions.includes("return_for_revision") ? <AIReferentAudioComposer key={`${selected.id}:${selected.revision}`} token={token} letter={selected} disabled={busy} value={selectedAudio} onChange={(audio) => setDecisionAudio(audio ? { letterId: selected.id, revision: selected.revision, audio } : undefined)} /> : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
                 <div className="ai-referent-detail-actions">
                   {selected.canEdit ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
+                  {selected.canDelete ? <Button disabled={busy} onClick={() => setDeleteConfirmation(selected.id)}>Удалить письмо из базы</Button> : null}
                   {selected.availableActions.map((action) => (
                     <Button
                       key={action}
                       appearance={action === "approve" || action === "queue_delivery" || action === "submit" ? "primary" : "secondary"}
                       icon={action === "approve" ? <Checkmark20Regular /> : undefined}
-                      disabled={busy || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3)}
+                      disabled={busy || (["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action) && decisionComment.trim().length < 3 && !(action === "return_for_revision" && selectedAudio))}
                       onClick={() => ["send", "cancel", "confirm_sent", "confirm_not_sent", "mark_sent", "replace_document", "prepare_replacement"].includes(action) ? setConfirmAction(action) : void act(selected, action)}
                     >
                       {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : actionLabels[action]}
                     </Button>
                   ))}
                 </div>
+                {deleteConfirmation === selected.id ? <section className="ai-referent-detail-card" aria-label="Подтверждение удаления"><p>Удалить письмо из общей базы Workspace и Telegram? Отправленные письма и выполняемую отправку удалить нельзя. Журнал удаления и резервные файлы сохранятся.</p><Button disabled={busy} onClick={() => {
+                  if (busyRef.current) return;
+                  busyRef.current = true; setBusy(true); setError("");
+                  void deleteAIReferentLetter(token, selected).then(() => { setSelectedId(""); setDeleteConfirmation(""); void refresh(); })
+                    .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось удалить письмо."))
+                    .finally(() => { busyRef.current = false; setBusy(false); });
+                }}>Подтвердить удаление</Button><Button disabled={busy} onClick={() => setDeleteConfirmation("")}>Не удалять</Button></section> : null}
                 {confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
               </DialogContent>
             </DialogBody>

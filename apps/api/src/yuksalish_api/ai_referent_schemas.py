@@ -75,11 +75,26 @@ class AIReferentActionRequest(ApiModel):
     comment: str = Field(default="", max_length=2000)
     expected_revision: int = Field(ge=1)
     operation_id: UUID | None = None
+    comment_audio_id: UUID | None = None
 
     @field_validator("comment")
     @classmethod
     def comment_is_trimmed(cls, value: str) -> str:
         return value.strip()
+
+
+class AIReferentDocumentCheck(ApiModel):
+    id: str
+    status: Literal["pending", "checking", "passed", "failed"]
+    reviewer_keys: list[str] = Field(default_factory=list)
+    detail: str = ""
+
+
+class AIReferentCommentAudio(ApiModel):
+    id: str
+    content_type: str
+    duration_ms: int
+    byte_size: int
 
 
 class AIReferentEventResponse(ApiModel):
@@ -90,6 +105,7 @@ class AIReferentEventResponse(ApiModel):
     from_status: AIReferentStatus | None = None
     to_status: AIReferentStatus | None = None
     comment: str = ""
+    audio: AIReferentCommentAudio | None = None
     created_at: datetime
 
 
@@ -123,6 +139,9 @@ class AIReferentLetterResponse(ApiModel):
     available_actions: list[AIReferentAction] = Field(default_factory=list)
     can_edit: bool = False
     can_replace_document: bool = False
+    document_check: AIReferentDocumentCheck | None = None
+    final_pdf_file_id: str | None = None
+    can_delete: bool = False
 
 
 class AIReferentRegistryResponse(ApiModel):
