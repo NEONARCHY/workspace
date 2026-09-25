@@ -10,6 +10,11 @@ from zipfile import BadZipFile, ZipFile
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from yuksalish_api.access_control import ensure_module_action
+from yuksalish_api.ai_referent_authority import (
+    read_authority_status,
+    require_workspace_write,
+)
 from yuksalish_api.ai_referent_configuration_schemas import (
     ReviewerConfigurationResponse,
     ReviewerConfigurationUpdate,
@@ -38,6 +43,7 @@ from yuksalish_api.ai_referent_schemas import (
     AIReferentStatus,
     AIReferentWorkflowKind,
     CreateAIReferentLetterRequest,
+    OfflineAuthorityStatus,
     UpdateAIReferentLetterRequest,
 )
 from yuksalish_api.ai_referent_service import (
@@ -53,6 +59,15 @@ from yuksalish_api.database import get_connection
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 
 router = APIRouter(prefix="/ai-referent", tags=["ai-referent"])
+
+
+@router.get("/authority", response_model=OfflineAuthorityStatus)
+async def get_authority_status(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> OfflineAuthorityStatus:
+    await ensure_module_action(connection, current_user, "ai_referent", "view")
+    return await read_authority_status(connection)
 
 
 def _translate(error: AIReferentServiceError) -> HTTPException:
@@ -83,7 +98,10 @@ async def get_configuration(
     return await read_configuration(connection)
 
 
-@router.put("/configuration", response_model=ReviewerConfigurationResponse)
+@router.put(
+    "/configuration", response_model=ReviewerConfigurationResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def put_configuration(
     payload: ReviewerConfigurationUpdate,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
@@ -288,7 +306,10 @@ async def get_letter(
         raise _translate(error) from error
 
 
-@router.post("/letters", response_model=AIReferentLetterResponse, status_code=201)
+@router.post(
+    "/letters", response_model=AIReferentLetterResponse, status_code=201,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def post_letter(
     request: Request,
     payload: CreateAIReferentLetterRequest,
@@ -305,7 +326,10 @@ async def post_letter(
     return result
 
 
-@router.patch("/letters/{letter_id}", response_model=AIReferentLetterResponse)
+@router.patch(
+    "/letters/{letter_id}", response_model=AIReferentLetterResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def patch_letter(
     request: Request,
     letter_id: UUID,
@@ -323,7 +347,10 @@ async def patch_letter(
     return result
 
 
-@router.post("/letters/{letter_id}/actions", response_model=AIReferentLetterResponse)
+@router.post(
+    "/letters/{letter_id}/actions", response_model=AIReferentLetterResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def post_letter_action(
     request: Request,
     letter_id: UUID,

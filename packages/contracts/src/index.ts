@@ -979,6 +979,13 @@ export interface AIReferentConfiguration {
   }[];
 }
 
+export interface AIReferentAuthorityStatus {
+  readonly writable: boolean;
+  readonly mode: "legacy" | "online" | "replay_required";
+  readonly leaseUntil: string | null;
+  readonly detail: string;
+}
+
 export interface AIReferentConfigurationUpdate {
   readonly expectedRevision: number;
   readonly reviewers: readonly {

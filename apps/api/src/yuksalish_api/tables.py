@@ -1046,6 +1046,17 @@ ai_referent_offline_number_reservations = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+ai_referent_authority = sa.Table(
+    "ai_referent_authority",
+    metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("mode", sa.String(24), nullable=False),
+    sa.Column("lease_until", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,

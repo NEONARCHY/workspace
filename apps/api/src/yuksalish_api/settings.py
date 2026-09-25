@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     members_integration_key: SecretStr = SecretStr("")
     members_cache_seconds: int = 300
     ai_referent_agent_token: SecretStr = SecretStr("")
+    ai_referent_offline_authority_enabled: bool = False
     hisobot_bridge_token: SecretStr = SecretStr("")
     ai_referent_journal_max_bytes: int = 25 * 1024 * 1024
     ai_referent_packet_max_bytes: int = 200 * 1024 * 1024

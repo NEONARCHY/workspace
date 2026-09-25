@@ -7,6 +7,7 @@ import type {
   AIReferentPacketKind,
   AIReferentAction,
   AIReferentConfiguration,
+  AIReferentAuthorityStatus,
   AIReferentConfigurationUpdate,
   AIReferentIncomingRegistry,
   AIReferentLetter,
@@ -197,6 +198,10 @@ export function loadAIReferentConfiguration(token: string) {
   return apiRequest<AIReferentConfiguration>(
     "/ai-referent/configuration", {}, token,
   );
+}
+
+export function loadAIReferentAuthority(token: string): Promise<AIReferentAuthorityStatus> {
+  return apiRequest<AIReferentAuthorityStatus>("/ai-referent/authority", {}, token);
 }
 
 export function loadAIReferentReviewers(token: string) {

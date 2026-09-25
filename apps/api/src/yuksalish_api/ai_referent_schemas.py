@@ -97,6 +97,26 @@ class OfflineNumberReservationResponse(ApiModel):
     valid_until: datetime
 
 
+class OfflineAuthorityLease(ApiModel):
+    epoch: UUID
+    mode: Literal["online", "replay_required"]
+    lease_until: datetime
+    server_time: datetime
+    lease_seconds: int
+
+
+class OfflineAuthorityHeartbeat(ApiModel):
+    agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$")
+    epoch: UUID
+
+
+class OfflineAuthorityStatus(ApiModel):
+    writable: bool
+    mode: Literal["legacy", "online", "replay_required"]
+    lease_until: datetime | None = None
+    detail: str = ""
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]
