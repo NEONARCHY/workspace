@@ -3,6 +3,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const focusCompose = process.env.AI_REFERENT_VISUAL_FOCUS_COMPOSE === "1";
 
 const person = { id: "reviewer-1", username: "reviewer", name: "Руководитель отдела", initials: "РО", role: "admin", status: "active", color: "#0091a8" };
 const incoming = Array.from({ length: 56 }, (_, index) => ({
@@ -80,7 +81,7 @@ async function main() {
       throw error;
     }
     await page.evaluate(() => document.fonts.ready);
-    for (const [width, height, suffix] of [[1440, 900, "1440"], [1024, 768, "1024"], [800, 640, "800"]]) {
+    for (const [width, height, suffix] of (focusCompose ? [] : [[1440, 900, "1440"], [1024, 768, "1024"], [800, 640, "800"]])) {
       await page.setViewportSize({ width, height });
       const box = await page.locator(".ai-incoming-table-wrap").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));
       await page.screenshot({ path: path.join(output, `incoming-${suffix}.png`) });
@@ -100,10 +101,12 @@ async function main() {
     const list = await page.locator(".ai-referent-list").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));
     assert.ok(list.scroll > list.client, "outgoing list must scroll");
     await page.screenshot({ path: path.join(output, "outgoing.png") });
-    await page.setViewportSize({ width: 800, height: 640 });
-    const compactList = await page.locator(".ai-referent-list").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));
-    assert.ok(compactList.client > 80, `outgoing list should remain visible at 800: ${JSON.stringify(compactList)}`);
-    await page.screenshot({ path: path.join(output, "outgoing-800.png") });
+    if (!focusCompose) {
+      await page.setViewportSize({ width: 800, height: 640 });
+      const compactList = await page.locator(".ai-referent-list").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));
+      assert.ok(compactList.client > 80, `outgoing list should remain visible at 800: ${JSON.stringify(compactList)}`);
+      await page.screenshot({ path: path.join(output, "outgoing-800.png") });
+    }
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.getByRole("button", { name: "Новое письмо" }).click();
     const compose = page.getByRole("dialog", { name: "Новое исходящее письмо" });
@@ -130,7 +133,23 @@ async function main() {
     await compose.locator(".fui-DialogContent").evaluate(node => { node.scrollTop = node.scrollHeight; });
     await page.screenshot({ path: path.join(output, "compose-800-selected.png") });
     await page.setViewportSize({ width: 1440, height: 900 });
+    await page.evaluate(() => {
+      window.__referentExitGaps = [];
+      window.__referentExitObserver = new MutationObserver(() => {
+        const surface = document.querySelector(".ai-referent-form-dialog");
+        if (surface && !surface.querySelector(".ai-referent-recipient-picker")) {
+          window.__referentExitGaps.push(performance.now());
+        }
+      });
+      window.__referentExitObserver.observe(document.body, { childList: true, subtree: true });
+    });
     await compose.getByRole("button", { name: "Отмена" }).click();
+    await page.locator(".ai-referent-form-dialog").waitFor({ state: "detached" });
+    const exitGaps = await page.evaluate(() => {
+      window.__referentExitObserver.disconnect();
+      return window.__referentExitGaps.length;
+    });
+    assert.equal(exitGaps, 0, "recipient section must remain until the dialog exits");
     await page.locator(".ai-referent-row").first().click();
     const detail = page.getByRole("dialog");
     await detail.getByRole("tab", { name: "Документы · 0" }).click();

@@ -1042,6 +1042,23 @@ def _run_shared(
         bot._status_log("workspace_commands_failed", error=type(error).__name__)
     done = threading.Event()
 
+    def check_documents() -> None:
+        last_error: tuple[str, str] | None = None
+        next_log = 0.0
+        while not done.is_set():
+            try:
+                worker.check_documents()
+                last_error = None
+            except Exception as error:
+                reason = (type(error).__name__, safe_error_text(error))
+                if reason != last_error or time.monotonic() >= next_log:
+                    bot._status_log(
+                        "workspace_preflight_failed", error=reason[0], detail=reason[1]
+                    )
+                    next_log = time.monotonic() + 60
+                last_error = reason
+            done.wait(5)
+
     def execute() -> None:
         ready = False
         attempts = 0
@@ -1076,7 +1093,11 @@ def _run_shared(
                 bot._status_log("workspace_worker_error", error=type(error).__name__)
             done.wait(5)
 
+    check_thread = threading.Thread(
+        target=check_documents, name="workspace-document-checks", daemon=True
+    )
     thread = threading.Thread(target=execute, name="workspace-executor", daemon=True)
+    check_thread.start()
     thread.start()
     seen, handled = 0, 0
     idle = time.monotonic()
@@ -1107,4 +1128,5 @@ def _run_shared(
     finally:
         done.set()
         thread.join(timeout=45)
+        check_thread.join(timeout=5)
     return PollingResult("stopped", seen, handled, [])

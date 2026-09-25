@@ -54,16 +54,19 @@ class DeliveryWorker:
                 self.state.put("unconfirmed:" + key, record)
             self.state.remove(key)
 
+    def check_documents(self) -> bool:
+        # A read-only DOCX check must not wait for the potentially long archive
+        # reconciliation that gates numbering and real delivery jobs.
+        from .preflight import run_preflight
+
+        return run_preflight(self.service, self.client, self.state)
+
     def tick(self) -> None:
         # Shared mode reads assignments from the API on every action; acknowledge liveness
         # without rewriting the legacy SQLite reviewer history.
         configuration = self.client.configuration()
         self.client.acknowledge(configuration["revision"])
         self.flush_results()
-        from .preflight import run_preflight
-
-        if run_preflight(self.service, self.client, self.state):
-            return
         job = self.client.request(
             "/ai-referent/agent/jobs/claim?" + urlencode({"agentId": self.client.agent_id}),
             method="POST",
