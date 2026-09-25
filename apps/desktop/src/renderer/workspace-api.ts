@@ -1502,6 +1502,10 @@ export function loadProjectHubRequests(token: string): Promise<readonly ProjectH
   return apiRequest<readonly ProjectHubRequest[]>("/project-hub/requests", {}, token);
 }
 
+export function loadProjectHubRequestTargets(token: string): Promise<ProjectHubOverview> {
+  return apiRequest<ProjectHubOverview>("/project-hub/request-targets", {}, token);
+}
+
 export function saveProjectHubProject(
   token: string, payload: ProjectHubProjectInput, projectId?: string,
 ): Promise<ProjectHubProject> {
@@ -1531,10 +1535,20 @@ export function saveProjectHubItem(
 
 export function setProjectHubItemStatus(
   token: string, projectId: string, itemId: string, status: ProjectHubItem["status"],
+  expectedStatus?: ProjectHubItem["status"], comment = "",
 ): Promise<ProjectHubItem> {
   return apiRequest<ProjectHubItem>(
     `/project-hub/projects/${projectId}/items/${itemId}/status`,
-    { method: "PATCH", body: JSON.stringify({ status }) }, token,
+    { method: "PATCH", body: JSON.stringify({ status, expectedStatus, comment }) }, token,
+  );
+}
+
+export function commentProjectHubItem(
+  token: string, projectId: string, itemId: string, comment: string,
+): Promise<ProjectHubItem> {
+  return apiRequest<ProjectHubItem>(
+    `/project-hub/projects/${projectId}/items/${itemId}/comments`,
+    { method: "POST", body: JSON.stringify({ comment }) }, token,
   );
 }
 

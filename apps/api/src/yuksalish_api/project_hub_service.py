@@ -18,6 +18,8 @@ from .project_hub_schemas import (
     ProjectHubOverview,
     ProjectHubResponse,
     ProjectHubWrite,
+    ProjectWorkActionResponse,
+    ProjectWorkCommentWrite,
     ProjectWorkItemResponse,
     ProjectWorkItemWrite,
     ProjectWorkStatusWrite,
@@ -33,6 +35,7 @@ from .repository import (
 from .tables import (
     attachments,
     calendar_events,
+    project_hub_item_actions,
     project_hub_item_assignees,
     project_hub_items,
     project_hub_people,
@@ -289,6 +292,8 @@ def _workstream_response(row: RowMapping) -> ProjectWorkstreamResponse:
         project_id=str(row["project_id"]),
         title=row["title"],
         description=row["description"],
+        start_date=row["start_date"],
+        end_date=row["end_date"],
         sort_order=row["sort_order"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -332,26 +337,49 @@ async def save_workstream(
         )
         await connection.execute(
             insert(project_hub_workstreams).values(
-                id=workstream_id, project_id=project_id, title=payload.title,
-                description=payload.description, sort_order=order,
-                created_by_user_id=user.id, created_at=now, updated_at=now,
+                id=workstream_id,
+                project_id=project_id,
+                title=payload.title,
+                description=payload.description,
+                start_date=payload.start_date,
+                end_date=payload.end_date,
+                sort_order=order,
+                created_by_user_id=user.id,
+                created_at=now,
+                updated_at=now,
             )
         )
     else:
+        changes: dict[str, object] = {
+            "title": payload.title,
+            "description": payload.description,
+            "updated_at": now,
+        }
+        # Older desktop builds do not send dates; editing a title must not erase them.
+        if "start_date" in payload.model_fields_set:
+            changes["start_date"] = payload.start_date
+        if "end_date" in payload.model_fields_set:
+            changes["end_date"] = payload.end_date
         await connection.execute(
             update(project_hub_workstreams)
             .where(project_hub_workstreams.c.id == workstream_id)
-            .values(title=payload.title, description=payload.description, updated_at=now)
+            .values(**changes)
         )
     row = (
-        await connection.execute(
-            select(project_hub_workstreams).where(project_hub_workstreams.c.id == workstream_id)
+        (
+            await connection.execute(
+                select(project_hub_workstreams).where(project_hub_workstreams.c.id == workstream_id)
+            )
         )
-    ).mappings().one()
+        .mappings()
+        .one()
+    )
     return _workstream_response(row)
 
 
-async def _item_response(connection: AsyncConnection, row: RowMapping) -> ProjectWorkItemResponse:
+async def _item_response(
+    connection: AsyncConnection, row: RowMapping, *, include_actions: bool = True
+) -> ProjectWorkItemResponse:
     assignees = list(
         (
             await connection.execute(
@@ -371,6 +399,17 @@ async def _item_response(connection: AsyncConnection, row: RowMapping) -> Projec
             ).where(project_hub_requests.c.item_id == row["id"])
         )
     ).one()
+    action_rows: list[RowMapping] = []
+    if include_actions:
+        action_rows = list(
+            (
+                await connection.execute(
+                    select(project_hub_item_actions)
+                    .where(project_hub_item_actions.c.item_id == row["id"])
+                    .order_by(project_hub_item_actions.c.created_at, project_hub_item_actions.c.id)
+                )
+            ).mappings().all()
+        )
     return ProjectWorkItemResponse(
         id=str(row["id"]),
         project_id=str(row["project_id"]),
@@ -389,6 +428,17 @@ async def _item_response(connection: AsyncConnection, row: RowMapping) -> Projec
         updated_at=row["updated_at"],
         request_count=int(counts[0]),
         approved_request_count=int(counts[1]),
+        actions=[
+            ProjectWorkActionResponse(
+                actor_user_id=str(action["actor_user_id"]),
+                action=action["action"],
+                from_status=action["from_status"],
+                to_status=action["to_status"],
+                comment=action["comment"],
+                created_at=action["created_at"],
+            )
+            for action in action_rows
+        ],
     )
 
 
@@ -425,27 +475,36 @@ async def save_item(
             workstream_id = UUID(payload.workstream_id)
         except ValueError as error:
             raise WorkspaceRepositoryError(422, "Invalid workstream") from error
-        if await connection.scalar(
-            select(project_hub_workstreams.c.id).where(
-                project_hub_workstreams.c.id == workstream_id,
-                project_hub_workstreams.c.project_id == project_id,
+        if (
+            await connection.scalar(
+                select(project_hub_workstreams.c.id).where(
+                    project_hub_workstreams.c.id == workstream_id,
+                    project_hub_workstreams.c.project_id == project_id,
+                )
             )
-        ) is None:
+            is None
+        ):
             raise WorkspaceRepositoryError(404, "Project workstream was not found")
     elif row is not None:
         workstream_id = row["workstream_id"]
     else:
         legacy = (
-            await connection.execute(
-                select(project_hub_workstreams).where(
-                    project_hub_workstreams.c.project_id == project_id,
-                    project_hub_workstreams.c.title == "Ранее добавленные работы",
+            (
+                await connection.execute(
+                    select(project_hub_workstreams).where(
+                        project_hub_workstreams.c.project_id == project_id,
+                        project_hub_workstreams.c.title == "Ранее добавленные работы",
+                    )
                 )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if legacy is None:
             created_legacy = await save_workstream(
-                connection, user, project_id,
+                connection,
+                user,
+                project_id,
                 ProjectWorkstreamWrite(title="Ранее добавленные работы"),
             )
             workstream_id = UUID(created_legacy.id)
@@ -507,14 +566,18 @@ async def set_item_status(
     item_id: UUID,
     payload: ProjectWorkStatusWrite,
 ) -> ProjectWorkItemResponse:
-    await _require_project(connection, user, project_id, edit=True)
+    project = await _require_project(connection, user, project_id, edit=True, lock=True)
+    if project["lifecycle_status"] != "active":
+        raise WorkspaceRepositoryError(409, "Completed projects cannot change work status")
     row = (
         (
             await connection.execute(
-                select(project_hub_items).where(
+                select(project_hub_items)
+                .where(
                     project_hub_items.c.id == item_id,
                     project_hub_items.c.project_id == project_id,
                 )
+                .with_for_update()
             )
         )
         .mappings()
@@ -522,6 +585,15 @@ async def set_item_status(
     )
     if row is None:
         raise WorkspaceRepositoryError(404, "Work item was not found")
+    if payload.expected_status is not None and row["status"] != payload.expected_status:
+        raise WorkspaceRepositoryError(409, "Work status changed. Refresh before trying again")
+    if row["status"] == payload.status:
+        return await _item_response(connection, row)
+    comment = payload.comment.strip()
+    if payload.status in {"cancelled", "rejected"} and not comment:
+        raise WorkspaceRepositoryError(422, "Cancellation or rejection requires a reason")
+    if payload.status == "rejected" and row["kind"] != "task":
+        raise WorkspaceRepositoryError(422, "Only project tasks may be rejected")
     if payload.status == "cancelled" and row["calendar_event_id"]:
         await connection.execute(
             update(calendar_events)
@@ -539,10 +611,23 @@ async def set_item_status(
         )
     if row["status"] == "cancelled" and row["calendar_event_id"] and payload.status != "cancelled":
         raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot be reopened")
+    now = datetime.now(UTC)
     await connection.execute(
         update(project_hub_items)
         .where(project_hub_items.c.id == item_id)
-        .values(status=payload.status, updated_at=datetime.now(UTC))
+        .values(status=payload.status, updated_at=now)
+    )
+    await connection.execute(
+        insert(project_hub_item_actions).values(
+            id=uuid4(),
+            item_id=item_id,
+            actor_user_id=user.id,
+            action="status",
+            from_status=row["status"],
+            to_status=payload.status,
+            comment=comment or None,
+            created_at=now,
+        )
     )
     new_row = (
         (
@@ -554,6 +639,61 @@ async def set_item_status(
         .one()
     )
     return await _item_response(connection, new_row)
+
+
+async def add_item_comment(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    project_id: UUID,
+    item_id: UUID,
+    payload: ProjectWorkCommentWrite,
+) -> ProjectWorkItemResponse:
+    project = await _require_project(connection, user, project_id)
+    row = (
+        (
+            await connection.execute(
+                select(project_hub_items).where(
+                    project_hub_items.c.id == item_id,
+                    project_hub_items.c.project_id == project_id,
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Work item was not found")
+    responsible = await connection.scalar(
+        select(project_hub_people.c.user_id).where(
+            project_hub_people.c.project_id == project_id,
+            project_hub_people.c.user_id == user.id,
+            project_hub_people.c.kind == "responsible",
+        )
+    )
+    assignee = await connection.scalar(
+        select(project_hub_item_assignees.c.user_id).where(
+            project_hub_item_assignees.c.item_id == item_id,
+            project_hub_item_assignees.c.user_id == user.id,
+        )
+    )
+    if not (_admin(user) or user.id == project["manager_user_id"] or responsible or assignee):
+        raise WorkspaceRepositoryError(403, "Only work participants may comment")
+    comment = payload.comment.strip()
+    if not comment:
+        raise WorkspaceRepositoryError(422, "Comment cannot be empty")
+    await connection.execute(
+        insert(project_hub_item_actions).values(
+            id=uuid4(),
+            item_id=item_id,
+            actor_user_id=user.id,
+            action="comment",
+            from_status=None,
+            to_status=None,
+            comment=comment,
+            created_at=datetime.now(UTC),
+        )
+    )
+    return await _item_response(connection, row)
 
 
 async def publish_event(
@@ -665,7 +805,9 @@ async def _request_response(
                 )
                 .order_by(attachments.c.created_at)
             )
-        ).mappings().all()
+        )
+        .mappings()
+        .all()
     )
     return ProjectFundingResponse(
         id=str(row["id"]),
@@ -943,7 +1085,9 @@ async def load_hub(
                     project_hub_workstreams.c.created_at,
                 )
             )
-        ).mappings().all()
+        )
+        .mappings()
+        .all()
     )
     item_rows = (
         (
@@ -960,6 +1104,70 @@ async def load_hub(
         projects=[await _project_response(connection, user, row) for row in visible],
         workstreams=[_workstream_response(row) for row in workstream_rows],
         items=[await _item_response(connection, row) for row in item_rows],
+        requests=[],
+    )
+
+
+async def load_request_targets(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+) -> ProjectHubOverview:
+    """Return only project work where this user may create a funding request."""
+    projects = (
+        (
+            await connection.execute(
+                select(project_hub_projects)
+                .where(project_hub_projects.c.lifecycle_status == "active")
+                .order_by(project_hub_projects.c.title)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    visible_projects: list[RowMapping] = []
+    visible_items: list[RowMapping] = []
+    for project in projects:
+        if not await _can_view_project(connection, user, project):
+            continue
+        rows = (
+            (
+                await connection.execute(
+                    select(project_hub_items)
+                    .where(
+                        project_hub_items.c.project_id == project["id"],
+                        project_hub_items.c.status != "cancelled",
+                    )
+                    .order_by(project_hub_items.c.title)
+                )
+            )
+            .mappings()
+            .all()
+        )
+        allowed = [
+            row for row in rows if await _may_create_request(connection, user, project, row["id"])
+        ]
+        if allowed:
+            visible_projects.append(project)
+            visible_items.extend(allowed)
+    if not visible_items:
+        return ProjectHubOverview(projects=[], workstreams=[], items=[], requests=[])
+    workstream_ids = {row["workstream_id"] for row in visible_items}
+    workstreams = (
+        (
+            await connection.execute(
+                select(project_hub_workstreams)
+                .where(project_hub_workstreams.c.id.in_(workstream_ids))
+                .order_by(project_hub_workstreams.c.sort_order)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    return ProjectHubOverview(
+        projects=[await _project_response(connection, user, row) for row in visible_projects],
+        workstreams=[_workstream_response(row) for row in workstreams],
+        items=[await _item_response(connection, row, include_actions=False)
+               for row in visible_items],
         requests=[],
     )
 
@@ -1022,9 +1230,7 @@ async def materialize_project_reminders(connection: AsyncConnection) -> int:
     for row in rows:
         remaining = row["due_at"] - now
         threshold = (
-            1 if remaining <= timedelta(days=1)
-            else 7 if remaining <= timedelta(days=7)
-            else 20
+            1 if remaining <= timedelta(days=1) else 7 if remaining <= timedelta(days=7) else 20
         )
         assignees = list(
             (

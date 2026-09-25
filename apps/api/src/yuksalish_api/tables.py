@@ -586,6 +586,8 @@ project_hub_workstreams = sa.Table(
     sa.Column("project_id", uuid_type),
     sa.Column("title", sa.String(240)),
     sa.Column("description", sa.Text()),
+    sa.Column("start_date", sa.Date()),
+    sa.Column("end_date", sa.Date()),
     sa.Column("sort_order", sa.Integer()),
     sa.Column("created_by_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
@@ -614,6 +616,18 @@ project_hub_item_assignees = sa.Table(
     "project_hub_item_assignees", metadata,
     sa.Column("item_id", uuid_type, primary_key=True),
     sa.Column("user_id", uuid_type, primary_key=True),
+)
+
+project_hub_item_actions = sa.Table(
+    "project_hub_item_actions", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("item_id", uuid_type),
+    sa.Column("actor_user_id", uuid_type),
+    sa.Column("action", sa.String(16)),
+    sa.Column("from_status", sa.String(16)),
+    sa.Column("to_status", sa.String(16)),
+    sa.Column("comment", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 project_hub_requests = sa.Table(

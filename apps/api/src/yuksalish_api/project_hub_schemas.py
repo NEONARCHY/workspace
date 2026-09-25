@@ -59,12 +59,16 @@ class ProjectHubResponse(ProjectHubWrite):
 class ProjectWorkstreamWrite(HubModel):
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
+    start_date: date | None = None
+    end_date: date | None = None
 
     @model_validator(mode="after")
     def validate_workstream(self) -> "ProjectWorkstreamWrite":
         self.title = self.title.strip()
         if not self.title:
             raise ValueError("Workstream title is required")
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("Workstream end date must not precede start date")
         return self
 
 
@@ -106,17 +110,35 @@ class ProjectWorkItemResponse(ProjectWorkItemWrite):
     workstream_id: str
     id: str
     project_id: str
-    status: Literal["planned", "active", "completed", "cancelled"]
+    status: Literal["planned", "active", "completed", "rejected", "cancelled"]
     calendar_event_id: str | None
     created_by_user_id: str
     created_at: datetime
     updated_at: datetime
     request_count: int
     approved_request_count: int
+    actions: list["ProjectWorkActionResponse"] = Field(default_factory=list)
+
+
+class ProjectWorkActionResponse(HubModel):
+    actor_user_id: str
+    action: Literal["status", "comment"]
+    from_status: str | None
+    to_status: str | None
+    comment: str | None
+    created_at: datetime
 
 
 class ProjectWorkStatusWrite(HubModel):
-    status: Literal["planned", "active", "completed", "cancelled"]
+    status: Literal["planned", "active", "completed", "rejected", "cancelled"]
+    expected_status: Literal[
+        "planned", "active", "completed", "rejected", "cancelled"
+    ] | None = None
+    comment: str = Field(default="", max_length=4000)
+
+
+class ProjectWorkCommentWrite(HubModel):
+    comment: str = Field(min_length=1, max_length=4000)
 
 
 class ProjectFundingWrite(HubModel):

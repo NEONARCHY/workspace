@@ -1328,12 +1328,23 @@ export interface ProjectHubWorkstream {
   readonly projectId: string;
   readonly title: string;
   readonly description: string;
+  readonly startDate?: string | null;
+  readonly endDate?: string | null;
   readonly sortOrder: number;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
-export type ProjectHubWorkstreamInput = Pick<ProjectHubWorkstream, "title" | "description">;
+export type ProjectHubWorkstreamInput = Pick<ProjectHubWorkstream, "title" | "description" | "startDate" | "endDate">;
+
+export interface ProjectHubItemAction {
+  readonly actorUserId: string;
+  readonly action: "status" | "comment";
+  readonly fromStatus?: ProjectHubItem["status"] | null;
+  readonly toStatus?: ProjectHubItem["status"] | null;
+  readonly comment?: string | null;
+  readonly createdAt: string;
+}
 
 export interface ProjectHubItem {
   readonly id: string;
@@ -1345,7 +1356,7 @@ export interface ProjectHubItem {
   readonly startsAt?: string | null;
   readonly dueAt?: string | null;
   readonly budget: number;
-  readonly status: "planned" | "active" | "completed" | "cancelled";
+  readonly status: "planned" | "active" | "completed" | "rejected" | "cancelled";
   readonly assigneeUserIds: readonly string[];
   readonly calendarEventId?: string | null;
   readonly createdByUserId: string;
@@ -1353,6 +1364,7 @@ export interface ProjectHubItem {
   readonly updatedAt: string;
   readonly requestCount: number;
   readonly approvedRequestCount: number;
+  readonly actions: readonly ProjectHubItemAction[];
 }
 
 export type ProjectHubItemInput = Pick<ProjectHubItem,
