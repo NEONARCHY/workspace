@@ -18,7 +18,12 @@ from yuksalish_api.ai_referent_configuration_schemas import (
     ReviewerConfigurationUpdate,
     ReviewerRuntimeAcknowledgement,
 )
-from yuksalish_api.ai_referent_files_service import packet_archive_filename
+from yuksalish_api.ai_referent_files_service import (
+    file_metadata,
+    is_internal_packet_file,
+    packet_archive_filename,
+    packet_entries,
+)
 from yuksalish_api.ai_referent_schemas import AIReferentActionRequest
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.routers import ai_referent_shared as shared
@@ -53,6 +58,92 @@ def test_packet_archive_filename_is_readable_and_windows_safe():
         "0439-26-AI — Материалы проект Навои.zip"
     )
     assert packet_archive_filename("", "") == "Пакет документов.zip"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["000364 - metadata.json", "000364 - hashes.json", "000364 - ai_result.json"],
+)
+def test_incoming_packet_hides_machine_sidecars(name):
+    assert is_internal_packet_file("incoming", name)
+    assert is_internal_packet_file("archive", f"folder/{name}")
+    assert not is_internal_packet_file("outgoing", name)
+    assert not is_internal_packet_file("incoming", "analysis.json")
+
+
+@pytest.mark.anyio
+async def test_signed_outgoing_packet_contains_final_pdf_and_attachments_only():
+    owner_id, primary_id, additional_id, final_id, old_pdf_id = (uuid4() for _ in range(5))
+    created_at = datetime.now(UTC)
+    connection = Mock()
+    connection.scalar = AsyncMock(return_value=final_id)
+    connection.execute = AsyncMock(side_effect=[
+        mapped([
+            {"id": primary_id, "file_name": "unsigned.docx", "document_role": "primary",
+             "byte_size": 1, "sha256": "a", "created_at": created_at},
+            {"id": additional_id, "file_name": "appendix.pdf", "document_role": "additional",
+             "byte_size": 1, "sha256": "b", "created_at": created_at},
+        ]),
+        mapped([
+            {"id": final_id, "relative_path": "signed/final.pdf", "byte_size": 1,
+             "sha256": "c", "created_at": created_at},
+            {"id": old_pdf_id, "relative_path": "signed/old.pdf", "byte_size": 1,
+             "sha256": "d", "created_at": created_at},
+        ]),
+        mapped({"workflow_kind": "delivery", "status": "signed"}),
+    ])
+    entries = await packet_entries(connection, "outgoing", owner_id)
+    assert {entry["id"] for entry in entries} == {str(additional_id), str(final_id)}
+    delivery_lookup = connection.scalar.await_args.args[0]
+    assert "workflow_kind" in str(delivery_lookup)
+
+
+@pytest.mark.anyio
+async def test_sign_only_packet_keeps_all_published_signed_pages():
+    owner_id, job_id, first_id, second_id = (uuid4() for _ in range(4))
+    created_at = datetime.now(UTC)
+    connection = Mock()
+    connection.scalar = AsyncMock(side_effect=[None, job_id])
+    connection.execute = AsyncMock(side_effect=[
+        mapped([]),
+        mapped([
+            {"id": first_id, "relative_path": f"signed/{job_id}/001.pdf",
+             "byte_size": 1, "sha256": "a", "created_at": created_at},
+            {"id": second_id, "relative_path": f"signed/{job_id}/002.pdf",
+             "byte_size": 1, "sha256": "b", "created_at": created_at},
+        ]),
+        mapped({"workflow_kind": "sign_only", "status": "signed"}),
+    ])
+    entries = await packet_entries(connection, "outgoing", owner_id)
+    assert {entry["id"] for entry in entries} == {str(first_id), str(second_id)}
+
+
+@pytest.mark.anyio
+async def test_incoming_sidecar_cannot_be_downloaded_directly():
+    connection = Mock()
+    connection.execute = AsyncMock(return_value=mapped({"relative_path": "000364 - metadata.json"}))
+    with pytest.raises(HTTPException) as error:
+        await file_metadata(connection, "incoming", uuid4(), uuid4(), "packet")
+    assert error.value.status_code == 404
+    with pytest.raises(HTTPException) as alternate_source_error:
+        await file_metadata(connection, "incoming", uuid4(), uuid4(), "attachment")
+    assert alternate_source_error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_incoming_packet_excludes_sidecars_but_keeps_letter():
+    owner_id = uuid4()
+    created_at = datetime.now(UTC)
+    sidecar_id, letter_id = uuid4(), uuid4()
+    connection = Mock()
+    connection.execute = AsyncMock(return_value=mapped([
+        {"id": sidecar_id, "relative_path": "000364 - hashes.json", "byte_size": 1,
+         "sha256": "a", "created_at": created_at},
+        {"id": letter_id, "relative_path": "000364 - letter.pdf", "byte_size": 2,
+         "sha256": "b", "created_at": created_at},
+    ]))
+    entries = await packet_entries(connection, "incoming", owner_id)
+    assert [entry["id"] for entry in entries] == [str(letter_id)]
 
 
 @pytest.mark.parametrize("role", ["employee", "manager", "admin", "superadmin"])

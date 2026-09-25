@@ -85,7 +85,14 @@ async def packet_entries(
     connection: AsyncConnection, kind: str, owner_id: UUID
 ) -> list[dict[str, object]]:
     result: list[dict[str, object]] = []
+    final_pdf_id = None
     if kind == "outgoing":
+        final_pdf_id = await connection.scalar(
+            select(ai_referent_letters.c.final_pdf_file_id).where(
+                ai_referent_letters.c.id == owner_id,
+                ai_referent_letters.c.workflow_kind == "delivery",
+            )
+        )
         rows = (
             (
                 await connection.execute(
@@ -110,6 +117,7 @@ async def packet_entries(
                 "createdAt": row["created_at"].isoformat(),
             }
             for row in rows
+            if not (final_pdf_id and row["document_role"] == "primary")
         )
     files = (
         (
@@ -136,9 +144,19 @@ async def packet_entries(
             "createdAt": row["created_at"].isoformat(),
         }
         for row in files
-        if visible_prefix is None or str(row["relative_path"]).startswith(visible_prefix)
+        if (visible_prefix is None or str(row["relative_path"]).startswith(visible_prefix))
+        and not is_internal_packet_file(kind, str(row["relative_path"]))
+        and not (kind == "outgoing" and final_pdf_id and row["id"] != final_pdf_id)
     )
     return result
+
+
+def is_internal_packet_file(kind: str, path: str) -> bool:
+    """Keep machine-generated E-XAT sidecars out of user-visible incoming packages."""
+    if kind not in {"incoming", "archive"}:
+        return False
+    name = PurePosixPath(path).name.lower()
+    return bool(re.search(r"(?:^|[-_\s])(?:metadata|hashes|ai[_-]?results?)\.json$", name))
 
 
 async def _published_sign_only_prefix(
@@ -261,6 +279,8 @@ async def store_packet_file(
 async def file_metadata(
     connection: AsyncConnection, kind: str, owner_id: UUID, file_id: UUID, source: str
 ) -> RowMapping:
+    if source == "attachment" and kind != "outgoing":
+        raise HTTPException(404, "Файл не найден.")
     if source == "attachment" and kind == "outgoing":
         query = select(attachments).where(
             attachments.c.id == file_id,
@@ -276,6 +296,20 @@ async def file_metadata(
     row = (await connection.execute(query)).mappings().one_or_none()
     if row is None:
         raise HTTPException(404, "Файл не найден.")
+    if source != "attachment" and is_internal_packet_file(kind, str(row["relative_path"])):
+        raise HTTPException(404, "Файл не опубликован.")
+    if kind == "outgoing":
+        final_pdf_id = await connection.scalar(
+            select(ai_referent_letters.c.final_pdf_file_id).where(
+                ai_referent_letters.c.id == owner_id,
+                ai_referent_letters.c.workflow_kind == "delivery",
+            )
+        )
+        if final_pdf_id and (
+            (source == "attachment" and row["document_role"] == "primary")
+            or (source != "attachment" and row["id"] != final_pdf_id)
+        ):
+            raise HTTPException(404, "Файл не опубликован.")
     if source != "attachment":
         visible_prefix = await _published_sign_only_prefix(connection, kind, owner_id)
         if visible_prefix is not None and not str(row["relative_path"]).startswith(

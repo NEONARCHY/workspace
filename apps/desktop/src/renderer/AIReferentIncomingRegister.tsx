@@ -134,24 +134,6 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
           onValueChange={(value) => { setPage(0); setQuery(value); }}
         />
         <div className="ai-referent-toolbar-actions">
-          <div className="ai-referent-filters" role="group" aria-label="Фильтр входящих писем">
-            {([
-              ["all", "Все"],
-              ["registered", "Зарегистрированные"],
-              ["attention", "Требуют внимания"],
-              ["attachments", "С вложениями"],
-            ] as const).map(([key, label]) => (
-              <button
-                type="button"
-                key={key}
-                className={filter === key ? "active" : ""}
-                aria-pressed={filter === key}
-                onClick={() => selectFilter(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
           <Button
             appearance="secondary"
             icon={<ArrowDownload20Regular />}
@@ -194,10 +176,8 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
             <thead>
               <tr>
                 <th scope="col">Входящий №</th>
-                <th scope="col">Получено</th>
                 <th scope="col">Отправитель и тема</th>
-                <th scope="col">Ответственный</th>
-                <th scope="col">Вложения</th>
+                <th scope="col">Документы</th>
                 <th scope="col">Статус</th>
               </tr>
             </thead>
@@ -206,20 +186,14 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                 <tr key={letter.id} className={isAttention(letter) ? "needs-attention" : ""}>
                   <td>
                     <strong>{letter.platformIncomingNumber || `№ ${letter.sequenceNumber}`}</strong>
-                    <small>{letter.senderLetterNumber ? `Исх. ${letter.senderLetterNumber}` : "Без номера отправителя"}</small>
+                    <small>{dateTime(letter.receivedAt)} · {letter.source === "webmail" ? "Webmail" : "E-XAT"}</small>
                   </td>
-                  <td><span>{dateTime(letter.receivedAt)}</span><small>{letter.source === "webmail" ? "Webmail" : "E-XAT"}</small></td>
                   <td className="ai-incoming-subject">
                     <strong>{letter.subject || "Без темы"}</strong>
-                    <small>{letter.senderOrganization || letter.senderPerson || "Отправитель не определён"}</small>
+                    <small>{letter.senderOrganization || letter.senderPerson || "Отправитель не определён"} · Ответственный: {letter.responsibleUserName ?? (letter.responsibleDisplayName || "не назначен")}</small>
                   </td>
                   <td>
-                    <span>{letter.responsibleUserName ?? (letter.responsibleDisplayName || "Не назначен")}</span>
-                    {!letter.responsibleUserId && letter.responsibleDisplayName ? <small>Ожидает сопоставления</small> : null}
-                  </td>
-                  <td>
-                    <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount}</span>
-                    <small>{letter.mainDocumentFilename || "Нет файла"}</small>
+                    <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount} {letter.attachmentsCount === 1 ? "файл" : "файлов"}</span>
                     <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
                   </td>
                   <td>
@@ -236,8 +210,8 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
       ) : null}
       <div className="ai-referent-pagination" role="group" aria-label="Страницы входящих писем">
         <Button disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Назад</Button>
-        <span>Страница {page + 1} · Найдено {registry?.totalCount ?? 0}</span>
-        <Button disabled={loading || (page + 1) * 100 >= (registry?.totalCount ?? 0)} onClick={() => setPage(page + 1)}>Далее</Button>
+        <span>Страница {page + 1} · Найдено {registry?.filteredCount ?? 0}</span>
+        <Button disabled={loading || (page + 1) * 100 >= (registry?.filteredCount ?? 0)} onClick={() => setPage(page + 1)}>Далее</Button>
       </div>
     </div>
   );

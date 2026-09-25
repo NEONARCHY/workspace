@@ -406,6 +406,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   };
 
   const selectedAdditionalFiles = form.additionalFiles ?? [];
+  const primaryDocument = selected?.attachments.find((attachment) => attachment.documentRole === "primary");
+  const visibleDocumentCount = selected?.workflowKind === "delivery" && selected.finalPdfFileId
+    ? 1 + (selected.attachments.filter((attachment) => attachment.documentRole !== "primary").length)
+    : selected?.attachments.length ?? 0;
   return (
     <section className="workspace-view ai-referent-view" aria-label="AI Referent">
       <header className="ai-referent-header">
@@ -660,19 +664,19 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   <span>Источник: {selected.source === "telegram" ? "Telegram" : selected.source === "import" ? "Архив" : "Workspace"}</span>
                 </div>
                 {selected.documentCheck && selected.canEdit && selected.documentCheck.status !== "passed" ? <p className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</p> : null}
-                {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Итоговый подписанный PDF</h3><p>Проверьте именно этот документ перед отправкой. Приложения в предварительный просмотр не включены.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => {
+                <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
+                  {([ ["overview", "Обзор"], ["files", `Документы · ${visibleDocumentCount}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
+                    <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
+                </div>
+                {detailTab === "overview" ? <>
+                {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Письмо · подписанный PDF</h3><p>Это актуальная версия письма. Вложения доступны в пакете документов.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => {
                   setError("");
                   void loadAIReferentPacket(token, "outgoing", selected.id).then(async (packet) => {
                     const pdf = packet.files.find((entry) => entry.id === selected.finalPdfFileId);
                     if (!pdf) throw new Error("Итоговый PDF ещё недоступен. Обновите письмо.");
                     saveReferentBlob(await downloadAIReferentPacket(token, "outgoing", selected.id, pdf), referentDownloadName(selected.displayNumber || selected.subject || "Подписанное письмо", "pdf"));
                   }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось загрузить PDF."));
-                }}>Открыть подписанный PDF</Button></section> : null}
-                <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
-                  {([ ["overview", "Обзор"], ["files", `Документы · ${selected.attachments.length}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
-                    <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
-                </div>
-                {detailTab === "overview" ? <>
+                }}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
                 {selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>
@@ -692,13 +696,15 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 </> : null}
                 {detailTab === "files" ?
                 <section className="ai-referent-detail-section">
-                  <h3>Файлы <span>{selected.attachments.length}</span></h3>
-                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} letterLabel={`${selected.displayNumber ?? (selected.workflowKind === "sign_only" ? "Подпись" : "Черновик")} — ${selected.subject}`} />
-                  {selected.attachments.length ? selected.attachments.map((attachment) => (
-                    <button type="button" key={attachment.id} className="ai-referent-file" aria-label={`Скачать ${attachment.fileName}`} onClick={() => void download(attachment.id, attachment.fileName)}>
-                      <Document20Regular /><span><strong>{attachment.fileName}</strong><small>{Math.max(1, Math.round(attachment.byteSize / 1024))} КБ</small></span><ArrowDownload20Regular />
-                    </button>
-                  )) : <p className="ai-referent-muted">Файл письма ещё не приложен.</p>}
+                  <h3>Пакет письма <span>{visibleDocumentCount}</span></h3>
+                  <p className="ai-referent-muted">Письмо и приложения в одном месте. После подписи исходный DOCX заменяется итоговым PDF.</p>
+                  <AIReferentFiles token={token} kind="outgoing" ownerId={selected.id} letterLabel={`${selected.displayNumber ?? (selected.workflowKind === "sign_only" ? "Подпись" : "Черновик")} — ${selected.subject}`} details={[
+                    { label: "Получатель", value: selected.recipientOrganization || "Не указан" },
+                    { label: "Автор", value: selected.createdByName },
+                    { label: "Согласующий", value: selected.reviewerName || "Не назначен" },
+                    { label: "Канал", value: selected.workflowKind === "sign_only" ? "Только подпись" : selected.route === "exat" ? "E-XAT" : "Webmail" },
+                    { label: "Статус", value: statusLabels[selected.status] },
+                  ]} />
                 </section> : null}
                 {detailTab === "history" ?
                 <section className="ai-referent-detail-section">

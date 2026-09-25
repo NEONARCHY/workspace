@@ -228,8 +228,10 @@ async def load_incoming_letters(
         )
     )
     conditions = []
+    summary_conditions = []
     if status:
         conditions.append(ai_referent_incoming_letters.c.status == status)
+        summary_conditions.append(ai_referent_incoming_letters.c.status == status)
     if category == "registered":
         conditions.append(ai_referent_incoming_letters.c.status.in_(_REGISTERED_STATUSES))
     elif category == "attention":
@@ -244,17 +246,17 @@ async def load_incoming_letters(
     cleaned = query.strip()
     if cleaned:
         pattern = f"%{cleaned}%"
-        conditions.append(
-            or_(
-                ai_referent_incoming_letters.c.sequence_number.ilike(pattern),
-                ai_referent_incoming_letters.c.platform_incoming_number.ilike(pattern),
-                ai_referent_incoming_letters.c.sender_letter_number.ilike(pattern),
-                ai_referent_incoming_letters.c.sender_organization.ilike(pattern),
-                ai_referent_incoming_letters.c.sender_person.ilike(pattern),
-                ai_referent_incoming_letters.c.subject.ilike(pattern),
-                ai_referent_incoming_letters.c.responsible_display_name.ilike(pattern),
-            )
+        search_condition = or_(
+            ai_referent_incoming_letters.c.sequence_number.ilike(pattern),
+            ai_referent_incoming_letters.c.platform_incoming_number.ilike(pattern),
+            ai_referent_incoming_letters.c.sender_letter_number.ilike(pattern),
+            ai_referent_incoming_letters.c.sender_organization.ilike(pattern),
+            ai_referent_incoming_letters.c.sender_person.ilike(pattern),
+            ai_referent_incoming_letters.c.subject.ilike(pattern),
+            ai_referent_incoming_letters.c.responsible_display_name.ilike(pattern),
         )
+        conditions.append(search_condition)
+        summary_conditions.append(search_condition)
     if conditions:
         statement = statement.where(*conditions)
     rows = (
@@ -306,12 +308,17 @@ async def load_incoming_letters(
         .filter(ai_referent_incoming_letters.c.has_attachments.is_(True))
         .label("with_attachments_count"),
     )
-    if conditions:
-        counts_statement = counts_statement.where(*conditions)
+    if summary_conditions:
+        counts_statement = counts_statement.where(*summary_conditions)
     counts = (await connection.execute(counts_statement)).mappings().one()
+    filtered_count_statement = select(func.count()).select_from(ai_referent_incoming_letters)
+    if conditions:
+        filtered_count_statement = filtered_count_statement.where(*conditions)
+    filtered_count = await connection.scalar(filtered_count_statement)
     return AIReferentIncomingRegistryResponse(
         letters=[_response(row) for row in rows],
         total_count=counts["total_count"],
+        filtered_count=filtered_count or 0,
         registered_count=counts["registered_count"],
         attention_count=counts["attention_count"],
         with_attachments_count=counts["with_attachments_count"],
