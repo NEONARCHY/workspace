@@ -1782,6 +1782,7 @@ async def _sync_notifications_for_user(
         if item["event_key"] not in active_attention_keys
         and not item["event_key"].startswith("hr:")
         and not item["event_key"].startswith("ai-letter:")
+        and not item["event_key"].startswith("hisobot:")
     ]
     if stale_ids:
         await connection.execute(
@@ -1842,6 +1843,7 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "hr",
                         workspace_notifications.c.section == "project_hub",
                         workspace_notifications.c.section == "project_funding",
+                        workspace_notifications.c.section == "ai_hisobot",
                         and_(workspace_notifications.c.section == "ai_referent",
                              workspace_notifications.c.entity_id.in_(referent_letters)),
                     ),

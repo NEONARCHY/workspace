@@ -15,6 +15,8 @@ import type {
   TelegramAccessPerson,
   TelegramAccessRegistry,
   TelegramAccessUpdate,
+  HisobotProfile,
+  HisobotReport,
   AIReferentRecipientRegistry,
   NavigationKey,
   AdministrativeChat,
@@ -335,6 +337,26 @@ export function saveTelegramAccess(
     `/telegram-access/${encodeURIComponent(userId)}`,
     { method: "PUT", body: JSON.stringify(payload) }, token,
   );
+}
+
+export function loadHisobotProfile(token: string): Promise<HisobotProfile> {
+  return apiRequest<HisobotProfile>("/hisobot/me", {}, token);
+}
+
+export function saveHisobotReport(token: string, content: string): Promise<HisobotReport> {
+  return apiRequest<HisobotReport>(
+    "/hisobot/me/report", { method: "PUT", body: JSON.stringify({ content }) }, token,
+  );
+}
+
+export function loadHisobotHistory(token: string, beforeDate?: string): Promise<readonly HisobotReport[]> {
+  const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, {}, token);
+}
+
+export function loadHisobotReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotReport[]> {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, {}, token);
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {

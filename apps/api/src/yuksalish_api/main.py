@@ -14,6 +14,7 @@ from .ai_referent_agent_service import expire_jobs
 from .database import create_database_engine
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
+from .hisobot_service import materialize_hisobot_reminders
 from .hr_service import materialize_previous_month_register
 from .logging import configure_logging
 from .object_storage import InMemoryObjectStorage, MinioObjectStorage
@@ -26,6 +27,7 @@ from .routers import (
     authentication,
     directory,
     health,
+    hisobot,
     hr,
     members,
     messenger,
@@ -81,6 +83,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_previous_month_register(connection)
                         created += await materialize_zoom_reminders(connection, runtime_settings)
                         created += await materialize_project_reminders(connection)
+                        created += await materialize_hisobot_reminders(connection)
                         await close_overdue_sessions(connection)
                     async with engine.begin() as connection:
                         created += await expire_jobs(connection)
@@ -93,7 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         )
                 except Exception:
                     logger.exception("notification_scheduler_failed")
-                await asyncio.sleep(60)
+                await asyncio.sleep(20)
 
         scheduler_task = asyncio.create_task(
             notification_scheduler(), name="workspace-notification-scheduler"
@@ -158,6 +161,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(ai_referent.router, prefix=runtime_settings.api_prefix)
     application.include_router(ai_referent_shared.router, prefix=runtime_settings.api_prefix)
     application.include_router(telegram_access.router, prefix=runtime_settings.api_prefix)
+    application.include_router(hisobot.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(recognition.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
