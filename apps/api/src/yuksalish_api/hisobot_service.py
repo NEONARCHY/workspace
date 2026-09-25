@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -16,15 +16,21 @@ from .hisobot_schemas import (
     BridgeReport,
     BridgeReportExemption,
     BridgeRosterMember,
+    BridgeUnitReport,
     BridgeVacationSnapshot,
     HisobotProfile,
     HisobotReport,
     HisobotReportInput,
+    HisobotUnit,
+    HisobotUnitReport,
+    ReportScope,
 )
 from .tables import (
     absence_requests,
+    departments,
     hisobot_live_reports,
     hisobot_live_vacations,
+    hisobot_unit_reports,
     telegram_bot_grants,
     telegram_identities,
     users,
@@ -43,6 +49,26 @@ def local_now(now: datetime | None = None) -> datetime:
 
 def _report(row: object) -> HisobotReport:
     return HisobotReport.model_validate(row)
+
+
+def _unit_report(row: object) -> HisobotUnitReport:
+    return HisobotUnitReport.model_validate(row)
+
+
+async def _department_members(
+    connection: AsyncConnection, department_id: UUID,
+    scope: str, region_name: str | None,
+) -> list[str]:
+    query = (select(telegram_identities.c.telegram_id)
+             .join(users, users.c.id == telegram_identities.c.user_id)
+             .join(telegram_bot_grants, telegram_bot_grants.c.user_id == users.c.id)
+             .where(users.c.department_id == department_id, users.c.status == "active",
+                    telegram_bot_grants.c.bot_key == "hisobot",
+                    telegram_bot_grants.c.report_scope == scope,
+                    telegram_identities.c.telegram_id.is_not(None)))
+    if scope == "hudud":
+        query = query.where(telegram_bot_grants.c.region_name == region_name)
+    return list((await connection.execute(query)).scalars().all())
 
 
 async def _grant(connection: AsyncConnection, user: AuthenticatedUser) -> RowMapping:
@@ -67,23 +93,71 @@ async def _today_report(connection: AsyncConnection, telegram_id: str,
 
 
 async def profile(connection: AsyncConnection, user: AuthenticatedUser,
-                  now: datetime | None = None) -> HisobotProfile:
+                   now: datetime | None = None) -> HisobotProfile:
     grant = await _grant(connection, user)
     current = local_now(now)
     today_report = await _today_report(connection, grant["telegram_id"], current.date())
+    department = (await connection.execute(
+        select(departments.c.id, departments.c.name, departments.c.lead_user_id)
+        .join(users, users.c.department_id == departments.c.id)
+        .where(users.c.id == user.id)
+    )).mappings().one_or_none()
+    today_unit_report = None
+    unit = None
+    if department:
+        today_unit_report = (await connection.execute(select(hisobot_unit_reports).where(
+            hisobot_unit_reports.c.department_id == department["id"],
+            hisobot_unit_reports.c.report_date == current.date(),
+        ))).mappings().one_or_none()
+        member_count = int(await connection.scalar(select(func.count(users.c.id)).where(
+            users.c.department_id == department["id"], users.c.status == "active"
+        )) or 0)
+        unit = HisobotUnit(
+            id=department["id"], name=department["name"],
+            is_lead=department["lead_user_id"] == user.id,
+            member_count=member_count,
+        )
+    scope = cast(ReportScope, grant["report_scope"] or "central")
+    covered = today_report is not None
+    if scope == "central" and today_unit_report:
+        covered = covered or grant["telegram_id"] in today_unit_report["covered_telegram_ids"]
+    if scope == "hudud" and grant["region_name"]:
+        covered = covered or bool(await connection.scalar(select(hisobot_live_reports.c.id).where(
+            hisobot_live_reports.c.report_date == current.date(),
+            hisobot_live_reports.c.report_scope == "hudud",
+            hisobot_live_reports.c.region_name == grant["region_name"],
+        ).limit(1)))
+        covered = covered or bool(await connection.scalar(select(hisobot_unit_reports.c.id).where(
+            hisobot_unit_reports.c.report_date == current.date(),
+            hisobot_unit_reports.c.report_scope == "hudud",
+            hisobot_unit_reports.c.region_name == grant["region_name"],
+        ).limit(1)))
     clock = current.time().replace(tzinfo=None)
     absence_kind = next((item.kind for item in await report_exemptions(
         connection, current.date(), current.date()
     ) if item.telegram_id == grant["telegram_id"]), None)
     return HisobotProfile(
         telegram_id=grant["telegram_id"], full_name=user.full_name,
-        position=user.job_title or "", report_scope=grant["report_scope"] or "central",
+        position=user.job_title or "", report_scope=scope,
         region_name=grant["region_name"], report_required=bool(grant["report_required"]),
         management_access=bool(grant["hisobot_manager"]), today=current.date(),
         absence_kind=absence_kind,
         can_submit=bool(grant["report_required"] and current.weekday() < 5
-                        and time(12) <= clock < time(18, 30)),
+                        and time(12) <= clock < time(18, 30)
+                        and not (
+                            today_unit_report and
+                            today_unit_report["reporter_telegram_id"] == grant["telegram_id"]
+                        )),
+        can_submit_unit=bool(unit and unit.is_lead and current.weekday() < 5
+                             and time(12) <= clock < time(18, 30) and today_report is None
+                             and (
+                                 today_unit_report is None or
+                                 today_unit_report["reporter_telegram_id"] == grant["telegram_id"]
+                             )),
         today_report=_report(today_report) if today_report else None,
+        unit=unit,
+        today_unit_report=_unit_report(today_unit_report) if today_unit_report else None,
+        covered_by_report=covered,
     )
 
 
@@ -92,6 +166,17 @@ async def _store_report(connection: AsyncConnection, *, telegram_id: str,
                         report_scope: str, region_name: str | None, report_date: date,
                         content: str, submitted_at: datetime, is_late: bool,
                         source: str) -> HisobotReport:
+    await connection.execute(select(func.pg_advisory_xact_lock(
+        func.hashtext(telegram_id), func.hashtext(report_date.isoformat())
+    )))
+    unit_exists = await connection.scalar(select(hisobot_unit_reports.c.id).where(
+        hisobot_unit_reports.c.reporter_telegram_id == telegram_id,
+        hisobot_unit_reports.c.report_date == report_date,
+    ).limit(1))
+    if unit_exists:
+        raise HTTPException(
+            409, "За этот день уже отправлен отчёт от лица отдела или подразделения."  # noqa: RUF001
+        )
     user_id = await connection.scalar(select(telegram_identities.c.user_id).where(
         telegram_identities.c.telegram_id == telegram_id
     ))
@@ -142,6 +227,148 @@ async def submit_report(connection: AsyncConnection, user: AuthenticatedUser,
     )
 
 
+async def _store_unit_report(
+    connection: AsyncConnection, *, department_id: UUID, department_name: str,
+    reporter_telegram_id: str, reporter_employee_key: str, reporter_name: str,
+    reporter_position: str, report_scope: str, region_name: str | None,
+    covered_telegram_ids: list[str], report_date: date, content: str,
+    submitted_at: datetime, is_late: bool, source: str,
+) -> HisobotUnitReport:
+    await connection.execute(select(func.pg_advisory_xact_lock(
+        func.hashtext(reporter_telegram_id), func.hashtext(report_date.isoformat())
+    )))
+    personal_exists = await _today_report(connection, reporter_telegram_id, report_date)
+    if personal_exists:
+        raise HTTPException(409, "За этот день уже отправлен личный отчёт.")  # noqa: RUF001
+    prior_unit = (await connection.execute(select(hisobot_unit_reports).where(
+        hisobot_unit_reports.c.department_id == department_id,
+        hisobot_unit_reports.c.report_date == report_date,
+    ))).mappings().one_or_none()
+    if prior_unit and prior_unit["reporter_telegram_id"] != reporter_telegram_id:
+        raise HTTPException(409, "Отчёт команды за этот день уже отправлен другим сотрудником.")
+    reporter_user_id = await connection.scalar(select(telegram_identities.c.user_id).where(
+        telegram_identities.c.telegram_id == reporter_telegram_id
+    ))
+    now = datetime.now(UTC)
+    statement = pg_insert(hisobot_unit_reports).values(
+        id=uuid4(), department_id=department_id, department_name=department_name,
+        reporter_user_id=reporter_user_id, reporter_telegram_id=reporter_telegram_id,
+        reporter_employee_key=reporter_employee_key, reporter_name=reporter_name,
+        reporter_position=reporter_position, report_scope=report_scope,
+        region_name=region_name, covered_telegram_ids=sorted(set(covered_telegram_ids)),
+        report_date=report_date, content=content.strip(), submitted_at=submitted_at,
+        is_late=is_late, source=source, created_at=now, updated_at=now,
+    )
+    await connection.execute(statement.on_conflict_do_update(
+        index_elements=[hisobot_unit_reports.c.department_id, hisobot_unit_reports.c.report_date],
+        set_={
+            "department_name": statement.excluded.department_name,
+            "reporter_user_id": statement.excluded.reporter_user_id,
+            "reporter_telegram_id": statement.excluded.reporter_telegram_id,
+            "reporter_employee_key": statement.excluded.reporter_employee_key,
+            "reporter_name": statement.excluded.reporter_name,
+            "reporter_position": statement.excluded.reporter_position,
+            "report_scope": statement.excluded.report_scope,
+            "region_name": statement.excluded.region_name,
+            "covered_telegram_ids": statement.excluded.covered_telegram_ids,
+            "content": statement.excluded.content,
+            "submitted_at": statement.excluded.submitted_at,
+            "is_late": statement.excluded.is_late,
+            "source": statement.excluded.source,
+            "updated_at": now,
+        },
+        where=hisobot_unit_reports.c.submitted_at < statement.excluded.submitted_at,
+    ))
+    row = (await connection.execute(select(hisobot_unit_reports).where(
+        hisobot_unit_reports.c.department_id == department_id,
+        hisobot_unit_reports.c.report_date == report_date,
+    ))).mappings().one()
+    await resolve_reminders(
+        connection, report_date, reporter_telegram_id, report_scope, region_name,
+        covered_telegram_ids=row["covered_telegram_ids"],
+    )
+    return _unit_report(row)
+
+
+async def submit_unit_report(
+    connection: AsyncConnection, user: AuthenticatedUser, payload: HisobotReportInput,
+) -> HisobotUnitReport:
+    current = local_now()
+    clock = current.time().replace(tzinfo=None)
+    if current.weekday() >= 5 or not time(12) <= clock < time(18, 30):
+        raise HTTPException(409, "Приём отчётов по будням: 12:00-18:30.")
+    grant = await _grant(connection, user)
+    department = (await connection.execute(
+        select(departments.c.id, departments.c.name)
+        .join(users, users.c.department_id == departments.c.id)
+        .where(users.c.id == user.id, users.c.status == "active",
+               departments.c.lead_user_id == user.id)
+    )).mappings().one_or_none()
+    if department is None:
+        raise HTTPException(403, "Отчёт отдела может отправить только назначенное главное лицо.")
+    scope = grant["report_scope"] or "central"
+    covered_ids = await _department_members(
+        connection, department["id"], scope, grant["region_name"]
+    )
+    if grant["telegram_id"] not in covered_ids:
+        raise HTTPException(409, "Допуск главного лица не совпадает с подразделением.")  # noqa: RUF001
+    return await _store_unit_report(
+        connection, department_id=department["id"], department_name=department["name"],
+        reporter_telegram_id=grant["telegram_id"], reporter_employee_key=str(user.id),
+        reporter_name=user.full_name, reporter_position=user.job_title or "",
+        report_scope=scope, region_name=grant["region_name"],
+        covered_telegram_ids=covered_ids, report_date=current.date(),
+        content=payload.content, submitted_at=current, is_late=clock > time(18),
+        source="workspace",
+    )
+
+
+async def import_unit_reports(
+    connection: AsyncConnection, reports: list[BridgeUnitReport]
+) -> list[HisobotUnitReport]:
+    saved: list[HisobotUnitReport] = []
+    for report in reports:
+        if report.report_scope == "hudud" and report.region_name not in HISOBOT_REGIONS:
+            raise HTTPException(422, "Неизвестный регион в отчёте подразделения.")
+        await connection.execute(select(func.pg_advisory_xact_lock(
+            func.hashtext(report.reporter_telegram_id),
+            func.hashtext(report.report_date.isoformat()),
+        )))
+        personal = await _today_report(
+            connection, report.reporter_telegram_id, report.report_date
+        )
+        if personal:
+            if personal["submitted_at"] >= report.submitted_at:
+                continue
+            await connection.execute(delete(hisobot_live_reports).where(
+                hisobot_live_reports.c.id == personal["id"]
+            ))
+        prior_unit = (await connection.execute(select(hisobot_unit_reports).where(
+            hisobot_unit_reports.c.department_id == report.department_id,
+            hisobot_unit_reports.c.report_date == report.report_date,
+        ))).mappings().one_or_none()
+        if prior_unit and prior_unit["reporter_telegram_id"] != report.reporter_telegram_id:
+            if prior_unit["submitted_at"] >= report.submitted_at:
+                continue
+            await connection.execute(delete(hisobot_unit_reports).where(
+                hisobot_unit_reports.c.id == prior_unit["id"]
+            ))
+        saved.append(await _store_unit_report(
+            connection, department_id=report.department_id,
+            department_name=report.department_name,
+            reporter_telegram_id=report.reporter_telegram_id,
+            reporter_employee_key=report.reporter_employee_key,
+            reporter_name=report.reporter_name,
+            reporter_position=report.reporter_position,
+            report_scope=report.report_scope, region_name=report.region_name,
+            covered_telegram_ids=report.covered_telegram_ids,
+            report_date=report.report_date, content=report.content,
+            submitted_at=report.submitted_at, is_late=report.is_late,
+            source="telegram",
+        ))
+    return saved
+
+
 async def import_reports(
     connection: AsyncConnection, reports: list[BridgeReport]
 ) -> list[HisobotReport]:
@@ -149,6 +376,19 @@ async def import_reports(
     for report in reports:
         if report.report_scope == "hudud" and report.region_name not in HISOBOT_REGIONS:
             raise HTTPException(422, "Неизвестный регион в отчёте.")
+        await connection.execute(select(func.pg_advisory_xact_lock(
+            func.hashtext(report.telegram_id), func.hashtext(report.report_date.isoformat()),
+        )))
+        unit = (await connection.execute(select(hisobot_unit_reports).where(
+            hisobot_unit_reports.c.reporter_telegram_id == report.telegram_id,
+            hisobot_unit_reports.c.report_date == report.report_date,
+        ))).mappings().one_or_none()
+        if unit:
+            if unit["submitted_at"] >= report.submitted_at:
+                continue
+            await connection.execute(delete(hisobot_unit_reports).where(
+                hisobot_unit_reports.c.id == unit["id"]
+            ))
         saved.append(await _store_report(
             connection, telegram_id=report.telegram_id, employee_key=report.employee_key,
             full_name=report.full_name, position=report.position,
@@ -174,6 +414,22 @@ async def history(connection: AsyncConnection, user: AuthenticatedUser, *,
     return [_report(row) for row in rows]
 
 
+async def unit_history(
+    connection: AsyncConnection, user: AuthenticatedUser, *,
+    before_date: date | None = None, limit: int = 100,
+) -> list[HisobotUnitReport]:
+    grant = await _grant(connection, user)
+    query = select(hisobot_unit_reports).where(
+        hisobot_unit_reports.c.reporter_telegram_id == grant["telegram_id"]
+    )
+    if before_date is not None:
+        query = query.where(hisobot_unit_reports.c.report_date < before_date)
+    rows = (await connection.execute(query.order_by(
+        hisobot_unit_reports.c.report_date.desc()
+    ).limit(limit))).mappings().all()
+    return [_unit_report(row) for row in rows]
+
+
 async def management_history(connection: AsyncConnection, user: AuthenticatedUser,
                              start_date: date, end_date: date) -> list[HisobotReport]:
     grant = await _grant(connection, user)
@@ -190,6 +446,22 @@ async def management_history(connection: AsyncConnection, user: AuthenticatedUse
     return [_report(row) for row in rows]
 
 
+async def management_unit_history(
+    connection: AsyncConnection, user: AuthenticatedUser,
+    start_date: date, end_date: date,
+) -> list[HisobotUnitReport]:
+    grant = await _grant(connection, user)
+    if not grant["hisobot_manager"] and user.role not in {"admin", "superadmin"}:
+        raise HTTPException(403, "Просмотр отчётов сотрудников доступен только руководству.")
+    if end_date < start_date or (end_date - start_date).days > 366:
+        raise HTTPException(422, "Период не может превышать один год.")
+    rows = (await connection.execute(select(hisobot_unit_reports).where(
+        hisobot_unit_reports.c.report_date.between(start_date, end_date)
+    ).order_by(hisobot_unit_reports.c.report_date.desc(),
+               hisobot_unit_reports.c.department_name))).mappings().all()
+    return [_unit_report(row) for row in rows]
+
+
 async def bridge_reports(connection: AsyncConnection, start_date: date,
                          end_date: date) -> list[HisobotReport]:
     if end_date < start_date or (end_date - start_date).days > 31:
@@ -201,11 +473,27 @@ async def bridge_reports(connection: AsyncConnection, start_date: date,
     return [_report(row) for row in rows]
 
 
+async def bridge_unit_reports(
+    connection: AsyncConnection, start_date: date, end_date: date,
+) -> list[HisobotUnitReport]:
+    if end_date < start_date or (end_date - start_date).days > 31:
+        raise HTTPException(422, "Период синхронизации не может превышать 31 день.")
+    rows = (await connection.execute(select(hisobot_unit_reports).where(
+        hisobot_unit_reports.c.report_date.between(start_date, end_date)
+    ).order_by(hisobot_unit_reports.c.report_date,
+               hisobot_unit_reports.c.department_id))).mappings().all()
+    return [_unit_report(row) for row in rows]
+
+
 async def bridge_roster(connection: AsyncConnection) -> list[BridgeRosterMember]:
     rows = (await connection.execute(
-        select(users, telegram_bot_grants, telegram_identities.c.telegram_id)
+        select(users, telegram_bot_grants, telegram_identities.c.telegram_id,
+               departments.c.id.label("hisobot_department_id"),
+               departments.c.name.label("hisobot_department_name"),
+               departments.c.lead_user_id.label("hisobot_lead_user_id"))
         .join(telegram_bot_grants, users.c.id == telegram_bot_grants.c.user_id)
         .join(telegram_identities, users.c.id == telegram_identities.c.user_id)
+        .outerjoin(departments, departments.c.id == users.c.department_id)
         .where(users.c.status == "active", telegram_bot_grants.c.bot_key == "hisobot",
                telegram_identities.c.telegram_id.is_not(None))
     )).mappings().all()
@@ -215,6 +503,9 @@ async def bridge_roster(connection: AsyncConnection) -> list[BridgeRosterMember]
         report_scope=row["report_scope"] or "central", region_name=row["region_name"],
         report_required=bool(row["report_required"]),
         management_access=bool(row["hisobot_manager"]),
+        department_id=row["hisobot_department_id"] if row["hisobot_lead_user_id"] else None,
+        department_name=row["hisobot_department_name"] if row["hisobot_lead_user_id"] else None,
+        department_lead=row["hisobot_lead_user_id"] == row["id"],
     ) for row in rows]
 
 
@@ -292,9 +583,10 @@ async def report_exemptions(connection: AsyncConnection, start: date,
 
 
 async def resolve_reminders(connection: AsyncConnection, day: date, telegram_id: str,
-                            scope: str, region_name: str | None) -> None:
+                            scope: str, region_name: str | None,
+                            *, covered_telegram_ids: list[str] | None = None) -> None:
     query = select(telegram_identities.c.user_id).where(
-        telegram_identities.c.telegram_id == telegram_id
+        telegram_identities.c.telegram_id.in_(covered_telegram_ids or [telegram_id])
     )
     if scope == "hudud" and region_name:
         query = select(telegram_bot_grants.c.user_id).where(
@@ -341,7 +633,19 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
     ).where(hisobot_live_reports.c.report_date == current.date()))).all()
     submitted_ids = {row.telegram_id for row in today_rows}
     submitted_regions = {row.region_name for row in today_rows
-                         if row.report_scope == "hudud" and row.region_name}
+                          if row.report_scope == "hudud" and row.region_name}
+    unit_rows = (await connection.execute(select(
+        hisobot_unit_reports.c.report_scope, hisobot_unit_reports.c.region_name,
+        hisobot_unit_reports.c.covered_telegram_ids,
+    ).where(hisobot_unit_reports.c.report_date == current.date()))).all()
+    covered_central_ids = {
+        telegram_id for row in unit_rows if row.report_scope == "central"
+        for telegram_id in row.covered_telegram_ids
+    }
+    submitted_regions.update(
+        row.region_name for row in unit_rows
+        if row.report_scope == "hudud" and row.region_name
+    )
     exemptions = {item.telegram_id for item in await report_exemptions(
         connection, current.date(), current.date()
     ) if item.starts_date <= current.date() <= item.through_date}
@@ -359,6 +663,7 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
     created = 0
     for member in roster:
         if (not member.report_required or member.telegram_id in submitted_ids
+                or member.telegram_id in covered_central_ids
                 or member.telegram_id in exemptions
                 or (member.report_scope == "hudud" and member.region_name in submitted_regions)):
             continue

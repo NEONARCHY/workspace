@@ -17,6 +17,7 @@ import type {
   TelegramAccessUpdate,
   HisobotProfile,
   HisobotReport,
+  HisobotUnitReport,
   AIReferentRecipientRegistry,
   NavigationKey,
   AdministrativeChat,
@@ -351,14 +352,30 @@ export function saveHisobotReport(token: string, content: string): Promise<Hisob
   );
 }
 
+export function saveHisobotUnitReport(token: string, content: string): Promise<HisobotUnitReport> {
+  return apiRequest<HisobotUnitReport>(
+    "/hisobot/me/unit-report", { method: "PUT", body: JSON.stringify({ content }) }, token,
+  );
+}
+
 export function loadHisobotHistory(token: string, beforeDate?: string): Promise<readonly HisobotReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
   return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, {}, token);
 }
 
+export function loadHisobotUnitHistory(token: string, beforeDate?: string): Promise<readonly HisobotUnitReport[]> {
+  const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, {}, token);
+}
+
 export function loadHisobotReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
   return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, {}, token);
+}
+
+export function loadHisobotUnitReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotUnitReport[]> {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, {}, token);
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {
@@ -724,7 +741,7 @@ export function createDepartment(
 export function updateDepartment(
   token: string,
   departmentId: string,
-  payload: { readonly code?: string; readonly name?: string; readonly parentId?: string | null },
+  payload: { readonly code?: string; readonly name?: string; readonly parentId?: string | null; readonly leadUserId?: string | null },
 ): Promise<WorkspaceDepartment> {
   return apiRequest<WorkspaceDepartment>(
     `/directory/departments/${departmentId}`,

@@ -21,6 +21,7 @@ departments = sa.Table(
     sa.Column("code", sa.String(64)),
     sa.Column("name", sa.String(200)),
     sa.Column("parent_id", uuid_type),
+    sa.Column("lead_user_id", uuid_type),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
@@ -1187,6 +1188,28 @@ hisobot_live_reports = sa.Table(
     sa.Column("position", sa.String(500)),
     sa.Column("report_scope", sa.String(16)),
     sa.Column("region_name", sa.String(100)),
+    sa.Column("report_date", sa.Date()),
+    sa.Column("content", sa.Text()),
+    sa.Column("submitted_at", sa.DateTime(timezone=True)),
+    sa.Column("is_late", sa.Boolean()),
+    sa.Column("source", sa.String(12)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hisobot_unit_reports = sa.Table(
+    "hisobot_unit_reports", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("department_id", uuid_type),
+    sa.Column("department_name", sa.String(200)),
+    sa.Column("reporter_user_id", uuid_type),
+    sa.Column("reporter_telegram_id", sa.String(20)),
+    sa.Column("reporter_employee_key", sa.String(100)),
+    sa.Column("reporter_name", sa.String(200)),
+    sa.Column("reporter_position", sa.String(500)),
+    sa.Column("report_scope", sa.String(16)),
+    sa.Column("region_name", sa.String(100)),
+    sa.Column("covered_telegram_ids", postgresql.JSONB()),
     sa.Column("report_date", sa.Date()),
     sa.Column("content", sa.Text()),
     sa.Column("submitted_at", sa.DateTime(timezone=True)),

@@ -167,6 +167,7 @@ async def _department_response(
         code=row["code"],
         name=row["name"],
         parent_id=str(row["parent_id"]) if row["parent_id"] else None,
+        lead_user_id=str(row["lead_user_id"]) if row["lead_user_id"] else None,
         assigned_users_count=row["assigned_users_count"],
         member_ids=[str(value) for value in member_ids],
         chat_id=str(chat_id) if chat_id else None,
@@ -402,6 +403,18 @@ async def update_department(
                     raise DirectoryServiceError(422, "Parent department does not exist")
             current = parent
         values["parent_id"] = parent_id
+    if "lead_user_id" in payload.model_fields_set:
+        if payload.lead_user_id is not None:
+            valid_lead = await connection.scalar(select(users.c.id).where(
+                users.c.id == payload.lead_user_id,
+                users.c.department_id == department_id,
+                users.c.status == "active",
+            ))
+            if valid_lead is None:
+                raise DirectoryServiceError(
+                    422, "Главное лицо должно быть активным сотрудником этого отдела"
+                )
+        values["lead_user_id"] = payload.lead_user_id
     if values:
         await connection.execute(
             update(departments).where(departments.c.id == department_id).values(**values)
@@ -422,6 +435,7 @@ async def update_department(
                 "code": existing["code"],
                 "name": existing["name"],
                 "parentId": (str(existing["parent_id"]) if existing["parent_id"] else None),
+                "leadUserId": (str(existing["lead_user_id"]) if existing["lead_user_id"] else None),
             },
             "after": {
                 "code": values.get("code", existing["code"]),
@@ -430,6 +444,10 @@ async def update_department(
                     str(values.get("parent_id", existing["parent_id"]))
                     if values.get("parent_id", existing["parent_id"])
                     else None
+                ),
+                "leadUserId": (
+                    str(values.get("lead_user_id", existing["lead_user_id"]))
+                    if values.get("lead_user_id", existing["lead_user_id"]) else None
                 ),
             },
         },
@@ -460,11 +478,19 @@ async def update_department_members(
         select(users.c.id).where(users.c.department_id == department_id)
     )).scalars().all())
     removed = previous - requested
+    if department["lead_user_id"] in removed:
+        await connection.execute(update(departments).where(
+            departments.c.id == department_id
+        ).values(lead_user_id=None))
     if removed:
         await connection.execute(update(users).where(users.c.id.in_(removed)).values(
             department_id=None, updated_at=datetime.now(UTC)
         ))
     if requested:
+        await connection.execute(update(departments).where(
+            departments.c.id != department_id,
+            departments.c.lead_user_id.in_(requested),
+        ).values(lead_user_id=None))
         await connection.execute(update(users).where(users.c.id.in_(requested)).values(
             department_id=department_id, updated_at=datetime.now(UTC)
         ))
@@ -827,6 +853,10 @@ async def update_employee_access(
         if department_exists is None:
             raise DirectoryServiceError(422, "Department does not exist")
     now = datetime.now(UTC)
+    if employee["department_id"] != payload.department_id:
+        await connection.execute(update(departments).where(
+            departments.c.lead_user_id == employee_id
+        ).values(lead_user_id=None))
     await connection.execute(
         update(users)
         .where(users.c.id == employee_id)
@@ -930,6 +960,9 @@ async def update_employee_status(
         )
     )
     if payload.status != "active":
+        await connection.execute(update(departments).where(
+            departments.c.lead_user_id == employee_id
+        ).values(lead_user_id=None))
         await connection.execute(
             update(auth_sessions)
             .where(
