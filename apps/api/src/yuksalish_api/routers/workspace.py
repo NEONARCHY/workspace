@@ -1272,7 +1272,10 @@ async def put_attachment(
         "absence": "absences",
         "ai_referent_letter": "ai_referent",
     }[owner_type]
-    await ensure_module_action(connection, current_user, attachment_module, "edit")
+    await ensure_module_action(
+        connection, current_user, attachment_module,
+        "create" if owner_type == "project_funding_request" else "edit",
+    )
     safe_name = _safe_file_name(file_name)
     sign_only = False
     operator_replacement = False

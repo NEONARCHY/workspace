@@ -1388,7 +1388,7 @@ export interface ProjectHubRequest {
   readonly purpose: string;
   readonly amount: number;
   readonly currency: string;
-  readonly status: "pending" | "approved" | "rejected";
+  readonly status: "draft" | "pending" | "approved" | "rejected";
   readonly approverUserIds: readonly string[];
   readonly currentStep: number;
   readonly approvalDueAt?: string | null;
