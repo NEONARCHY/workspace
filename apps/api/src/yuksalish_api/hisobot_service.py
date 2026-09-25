@@ -1,12 +1,14 @@
 """Shared Hisobot state. PostgreSQL is authoritative for submissions from either client."""
 
 from datetime import UTC, date, datetime, time, timedelta
-from uuid import uuid4
+from typing import cast
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
@@ -43,7 +45,7 @@ def _report(row: object) -> HisobotReport:
     return HisobotReport.model_validate(row)
 
 
-async def _grant(connection: AsyncConnection, user: AuthenticatedUser):
+async def _grant(connection: AsyncConnection, user: AuthenticatedUser) -> RowMapping:
     row = (await connection.execute(
         select(telegram_bot_grants, telegram_identities.c.telegram_id)
         .join(telegram_identities, telegram_identities.c.user_id == telegram_bot_grants.c.user_id)
@@ -56,7 +58,8 @@ async def _grant(connection: AsyncConnection, user: AuthenticatedUser):
     return row
 
 
-async def _today_report(connection: AsyncConnection, telegram_id: str, day: date):
+async def _today_report(connection: AsyncConnection, telegram_id: str,
+                        day: date) -> RowMapping | None:
     return (await connection.execute(select(hisobot_live_reports).where(
         hisobot_live_reports.c.telegram_id == telegram_id,
         hisobot_live_reports.c.report_date == day,
@@ -359,9 +362,12 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
                 or member.telegram_id in exemptions
                 or (member.report_scope == "hudud" and member.region_name in submitted_regions)):
             continue
-        user_id = await connection.scalar(select(telegram_identities.c.user_id).where(
+        user_query = select(telegram_identities.c.user_id).where(
             telegram_identities.c.telegram_id == member.telegram_id
-        ))
+        )
+        user_id = cast(UUID | None, await connection.scalar(user_query))
+        if user_id is None:
+            continue
         event_key = f"hisobot:{current.date().isoformat()}:{slot:%H%M}"
         exists = await connection.scalar(select(workspace_notifications.c.id).where(
             workspace_notifications.c.user_id == user_id,

@@ -22,7 +22,9 @@ def upgrade() -> None:
         "ck_workspace_notifications_kind", "workspace_notifications",
         "kind IN ('message','task','approval','trip','calendar','absence','zoom','hisobot')",
     )
-    op.drop_constraint("ck_workspace_notifications_section", "workspace_notifications", type_="check")
+    op.drop_constraint(
+        "ck_workspace_notifications_section", "workspace_notifications", type_="check"
+    )
     op.create_check_constraint(
         "ck_workspace_notifications_section", "workspace_notifications",
         "section IN ('messenger','tasks','payment_requests','trip_approvals',"
@@ -57,7 +59,10 @@ def upgrade() -> None:
     op.create_table(
         "hisobot_live_reports",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("core_users.id"), nullable=True),
+        sa.Column(
+            "user_id", postgresql.UUID(as_uuid=True),
+            sa.ForeignKey("core_users.id"), nullable=True,
+        ),
         sa.Column("telegram_id", sa.String(20), nullable=False),
         sa.Column("employee_key", sa.String(100), nullable=False),
         sa.Column("full_name", sa.String(200), nullable=False),
@@ -96,7 +101,9 @@ def downgrade() -> None:
     op.drop_column("core_telegram_bot_grants", "report_required")
     op.drop_column("core_telegram_bot_grants", "region_name")
     op.drop_column("core_telegram_bot_grants", "report_scope")
-    op.drop_constraint("ck_workspace_notifications_section", "workspace_notifications", type_="check")
+    op.drop_constraint(
+        "ck_workspace_notifications_section", "workspace_notifications", type_="check"
+    )
     op.create_check_constraint(
         "ck_workspace_notifications_section", "workspace_notifications",
         "section IN ('messenger','tasks','payment_requests','trip_approvals',"
