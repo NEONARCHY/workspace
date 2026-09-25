@@ -21,6 +21,7 @@ from yuksalish_api.ai_referent_configuration_schemas import (
 from yuksalish_api.ai_referent_files_service import packet_archive_filename
 from yuksalish_api.ai_referent_schemas import AIReferentActionRequest
 from yuksalish_api.auth import AuthenticatedUser
+from yuksalish_api.routers import ai_referent_shared as shared
 
 
 @pytest.fixture
@@ -52,6 +53,82 @@ def test_packet_archive_filename_is_readable_and_windows_safe():
         "0439-26-AI — Материалы проект Навои.zip"
     )
     assert packet_archive_filename("", "") == "Пакет документов.zip"
+
+
+@pytest.mark.parametrize("role", ["employee", "manager", "admin", "superadmin"])
+def test_sent_letter_visibility_is_owner_or_leadership(role):
+    user = actor(role)
+    other = uuid4()
+    row = {
+        "status": "sent", "created_by_user_id": other,
+        "reviewer_user_id": user.id, "initial_reviewer_user_id": user.id,
+        "final_reviewer_user_id": user.id,
+    }
+    assert letters._may_view(row, user) is (role != "employee")
+    row["created_by_user_id"] = user.id
+    assert letters._may_view(row, user)
+    row["status"] = "pending_review"
+    assert letters._may_view(row, user)
+
+
+@pytest.mark.anyio
+async def test_sent_letter_direct_open_denied_to_other_employee(monkeypatch):
+    user = actor()
+    row = {
+        "status": "sent", "created_by_user_id": uuid4(),
+        "reviewer_user_id": user.id, "initial_reviewer_user_id": user.id,
+        "final_reviewer_user_id": user.id,
+    }
+    monkeypatch.setattr(letters, "_letter_row", AsyncMock(return_value=row))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(
+        letters, "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": True}}),
+    )
+    with pytest.raises(letters.AIReferentServiceError) as error:
+        await letters.load_letter(Mock(), user, uuid4())
+    assert error.value.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_telegram_history_query_limits_employee_to_own_sent_letters(monkeypatch):
+    user = actor()
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[mapped([]), mapped([])]))
+    monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
+    monkeypatch.setattr(
+        letters, "module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"admin": False}}),
+    )
+    result = await letters.load_letters(connection, user, history_only=True)
+    assert result.letters == []
+    statement = connection.execute.call_args_list[1].args[0]
+    where = str(statement.whereclause)
+    assert "ai_referent_letters.status" in where
+    assert "ai_referent_letters.created_by_user_id" in where
+    assert "reviewer_user_id" not in where
+
+    connection.execute.reset_mock(side_effect=True)
+    connection.execute.side_effect = [mapped([]), mapped([])]
+    await letters.load_letters(connection, actor("manager"), history_only=True)
+    manager_where = str(connection.execute.call_args_list[1].args[0].whereclause)
+    assert "ai_referent_letters.status" in manager_where
+    assert "created_by_user_id" not in manager_where
+
+
+@pytest.mark.anyio
+async def test_telegram_archive_reads_are_blocked_but_workspace_route_remains():
+    with pytest.raises(HTTPException) as listing:
+        await shared.agent_archive(Mock(), Mock())
+    assert listing.value.status_code == 403
+    with pytest.raises(HTTPException) as packet:
+        await shared.agent_packet("archive", uuid4(), Mock(), Mock())
+    assert packet.value.status_code == 403
+    with pytest.raises(HTTPException) as file:
+        await shared.agent_download_file(
+            "archive", uuid4(), uuid4(), Mock(), Mock(), Mock()
+        )
+    assert file.value.status_code == 403
+    assert shared.get_archive is not shared.agent_archive
 
 
 @pytest.mark.anyio

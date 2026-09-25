@@ -272,6 +272,37 @@ def test_bot_uses_real_private_actor_and_server_revision(modules, tmp_path):
     assert "Stale revision" in telegram.send_message.call_args.args[1]
 
 
+def test_shared_bot_history_is_sent_only_and_archive_is_unavailable(modules, tmp_path):
+    api, telegram = Mock(), Mock()
+    telegram.send_message.return_value = {"ok": True}
+    api.request.return_value = {"letters": [{
+        "id": str(uuid4()), "status": "sent", "subject": "Письмо",
+        "displayNumber": "0001/26-AI",
+    }]}
+    bot = modules.shared_bot.SharedBot(
+        telegram, api, modules.state.State(tmp_path / "state.sqlite")
+    )
+    bot.history("123", "sent", 0)
+    assert "sentOnly=true" in api.request.call_args.args[0]
+    history_markup = telegram.send_message.call_args.kwargs["reply_markup"]
+    assert history_markup["inline_keyboard"][0][0]["text"].startswith("✉️ ")
+
+    api.request.reset_mock()
+    bot.handle({
+        "update_id": 2,
+        "message": {"from": {"id": 123}, "chat": {"type": "private", "id": 123},
+                    "text": "/archive"},
+    })
+    api.request.assert_not_called()
+    assert "только в Workspace" in telegram.send_message.call_args.args[1]
+
+    bot.say("123", "Меню")
+    menu = telegram.send_message.call_args.kwargs["reply_markup"]["keyboard"]
+    assert all(row[0]["text"][0] in "📤✍📚📬🏠" for row in menu)
+    assert all("Архив" not in entry["text"] for row in menu for entry in row)
+    assert modules.shared_bot.button("Далее", "list:sent:1")["text"].startswith("➡️ ")
+
+
 def test_sign_only_worker_uploads_one_pdf_per_page_without_send(modules, monkeypatch, tmp_path):
     service = Mock(archive_root=str(tmp_path))
     api = Mock(agent_id="referent")

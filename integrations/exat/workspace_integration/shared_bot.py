@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlencode
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+from .button_labels import button_label
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
 from .state import State, single_instance
 from .wizard import LetterWizard
@@ -101,7 +102,7 @@ def enabled() -> bool:
 
 
 def button(text: str, data: str) -> dict[str, str]:
-    return {"text": text, "callback_data": data}
+    return {"text": button_label(text, data), "callback_data": data}
 
 
 class SharedBot:
@@ -122,8 +123,8 @@ class SharedBot:
         menu = {
             "keyboard": [
                 [{"text": "📤 Новое письмо"}, {"text": "✍️ Только подпись"}],
-                [{"text": "📚 История"}, {"text": "🗂 Архив"}],
-                [{"text": "📬 Согласование"}, {"text": "Главное меню"}],
+                [{"text": "📚 История"}, {"text": "📬 Согласование"}],
+                [{"text": "🏠 Главное меню"}],
             ],
             "resize_keyboard": True,
             "is_persistent": True,
@@ -246,7 +247,7 @@ class SharedBot:
         result = self.request(
             actor,
             f"/letters?offset={page * 10}&limit=10"
-            + ("&activeOnly=true" if kind == "pending" else ""),
+            + ("&activeOnly=true" if kind == "pending" else "&sentOnly=true"),
         )
         rows = [
             [
@@ -539,6 +540,8 @@ class SharedBot:
             if callback:
                 self.telegram.answer_callback_query(callback["id"])
                 data = str(callback.get("data") or "").split(":")
+                if data[0] == "f" and len(data) > 1 and data[1] == "a":
+                    raise WorkspaceError("Архив доступен только в Workspace.")
                 if self.wizard.callback(actor, str(callback.get("data") or ""), operation):
                     return
                 if data[0] == "o":
@@ -803,9 +806,12 @@ class SharedBot:
                 )
                 return
             menu = menu_action(text)
+            if menu == "archive" or text.partition(" ")[0] == "/archive":
+                self.say(actor, "Архив доступен только в Workspace. Здесь откройте «Историю».")
+                return
             if menu == "legacy":
                 self.say(actor, "Эта кнопка осталась от прежнего режима. Откройте «История» "
-                         "или «Архив»; для нового письма нажмите «Новое письмо».")
+                         "или «Согласование»; для нового письма нажмите «Новое письмо».")
                 return
             if menu:
                 text = "/" + menu
@@ -816,8 +822,9 @@ class SharedBot:
                 self.say(
                     actor,
                     "AI Referent · общая база Workspace\n/new — новое письмо\n"
-                    "/history — письма и согласования\n/sign — подписать без отправки\n"
-                    "/archive — архив Exat\n"
+                    "/history — отправленные вами письма\n"
+                    "/pending — согласования и черновики\n"
+                    "/sign — подписать без отправки\n"
                     "/cancel — отменить ввод\nДоступ выдаёт администратор Workspace: "
                     "он указывает ваш Telegram ID и разрешает AI Referent. "
                     "Код привязки не требуется.",
@@ -832,34 +839,10 @@ class SharedBot:
                 self.say(actor, "Ввод отменён. Сохранённые письма не удалены.")
             elif text.startswith("/pending"):
                 self.history(actor, "pending", 0)
-            elif text.startswith("/history") or text.startswith("/archive"):
-                archive = text.startswith("/archive")
+            elif text.startswith("/history"):
                 parts = text.split()
                 page = max(0, int(parts[1]) - 1) if len(parts) > 1 else 0
-                route = "/archive" if archive else "/letters"
-                letters = self.request(actor, route + f"?offset={page * 12}&limit=12")["letters"]
-                rows = [
-                    [
-                        button(
-                            (letter.get("displayNumber") or (
-                                "На подпись" if letter.get("workflowKind") == "sign_only"
-                                else "Черновик"
-                            ))
-                            + " · "
-                            + letter["subject"][:40],
-                            f"f:a:{UUID(letter['id']).hex}:0"
-                            if archive
-                            else "o:" + UUID(letter["id"]).hex,
-                        )
-                    ]
-                    for letter in letters
-                ]
-                self.say(
-                    actor,
-                    f"{'Архив' if archive else 'Общие письма'} · страница {page + 1}.\n"
-                    f"Следующая: {'/archive' if archive else '/history'} {page + 2}",
-                    rows,
-                )
+                self.history(actor, "sent", page)
             elif text == "/new":
                 self.request(actor, "/reviewers")
                 self.state.put(key, {"step": "subject", "createOperation": operation})
@@ -1029,13 +1012,12 @@ def _run_shared(
     try:
         bot.client.set_my_commands(
             [
-                {"command": "start", "description": "Открыть меню"},
-                {"command": "new", "description": "Новое исходящее письмо"},
-                {"command": "sign", "description": "Подписать DOCX без отправки"},
-                {"command": "history", "description": "История писем"},
-                {"command": "pending", "description": "Согласование и черновики"},
-                {"command": "archive", "description": "Архив документов"},
-                {"command": "cancel", "description": "Отмена текущего действия"},
+                {"command": "start", "description": "🏠 Открыть меню"},
+                {"command": "new", "description": "📤 Новое исходящее письмо"},
+                {"command": "sign", "description": "✍️ Подписать DOCX без отправки"},
+                {"command": "history", "description": "📚 История отправленных писем"},
+                {"command": "pending", "description": "📬 Согласование и черновики"},
+                {"command": "cancel", "description": "🛑 Отмена текущего действия"},
             ]
         )
     except Exception as error:

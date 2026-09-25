@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, cast, func, insert, or_, select, update
+from sqlalchemy import String, and_, cast, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -56,10 +56,15 @@ def _is_privileged(user: AuthenticatedUser) -> bool:
     return user.role in _PRIVILEGED_ROLES
 
 
+def _may_view_all_sent(user: AuthenticatedUser) -> bool:
+    return _is_privileged(user) or user.role == "manager"
+
+
 def _may_view(row: RowMapping, user: AuthenticatedUser) -> bool:
+    if row["status"] == "sent":
+        return _may_view_all_sent(user) or row["created_by_user_id"] == user.id
     return bool(
         _is_privileged(user)
-        or row["status"] == "sent"
         or row["created_by_user_id"] == user.id
         or row["reviewer_user_id"] == user.id
         or row.get("final_reviewer_user_id") == user.id
@@ -530,9 +535,11 @@ async def load_letters(
     status: str | None = None,
     workflow_kind: str | None = None,
     active_only: bool = False,
+    history_only: bool = False,
     offset: int = 0,
     limit: int = 50,
 ) -> AIReferentRegistryResponse:
+    await ensure_module_action(connection, current_user, "ai_referent", "view")
     creator = users.alias("ai_creator")
     reviewer = users.alias("ai_reviewer")
     final_reviewer = users.alias("ai_final_reviewer")
@@ -551,15 +558,27 @@ async def load_letters(
         )
     )
     permissions = await module_permissions_for_user(connection, current_user)
-    if not _is_privileged(current_user) and not permissions.get("ai_referent", {}).get("admin"):
-        statement = statement.where(
-            or_(
-                ai_referent_letters.c.status == "sent",
-                ai_referent_letters.c.created_by_user_id == current_user.id,
-                ai_referent_letters.c.reviewer_user_id == current_user.id,
-                ai_referent_letters.c.final_reviewer_user_id == current_user.id,
-                ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
+    if history_only:
+        statement = statement.where(ai_referent_letters.c.status == "sent")
+        if not _may_view_all_sent(current_user):
+            statement = statement.where(
+                ai_referent_letters.c.created_by_user_id == current_user.id
             )
+    elif not _is_privileged(current_user):
+        participants = or_(
+            ai_referent_letters.c.created_by_user_id == current_user.id,
+            ai_referent_letters.c.reviewer_user_id == current_user.id,
+            ai_referent_letters.c.final_reviewer_user_id == current_user.id,
+            ai_referent_letters.c.initial_reviewer_user_id == current_user.id,
+        )
+        non_sent = ai_referent_letters.c.status != "sent"
+        if not permissions.get("ai_referent", {}).get("admin"):
+            non_sent = and_(non_sent, participants)
+        sent = ai_referent_letters.c.status == "sent"
+        if current_user.role != "manager":
+            sent = and_(sent, ai_referent_letters.c.created_by_user_id == current_user.id)
+        statement = statement.where(
+            or_(sent, ai_referent_letters.c.created_by_user_id == current_user.id, non_sent)
         )
     if status:
         statement = statement.where(ai_referent_letters.c.status == status)
@@ -640,10 +659,11 @@ async def load_letter(
     current_user: AuthenticatedUser,
     letter_id: UUID,
 ) -> AIReferentLetterResponse:
+    await ensure_module_action(connection, current_user, "ai_referent", "view")
     row = await _letter_row(connection, letter_id)
     if not _may_view(row, current_user):
         permissions = await module_permissions_for_user(connection, current_user)
-        if not permissions.get("ai_referent", {}).get("admin"):
+        if row["status"] == "sent" or not permissions.get("ai_referent", {}).get("admin"):
             raise AIReferentServiceError(404, "Исходящее письмо не найдено.")
     return await _response(connection, row, current_user)
 

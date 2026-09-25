@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
+from .button_labels import button_label
 from .client import WorkspaceError
 
 CATEGORIES = {
@@ -56,7 +57,7 @@ class LetterWizard:
                 "value": value,
             },
         )
-        return {"text": label, "callback_data": "w:" + token}
+        return {"text": button_label(label, action), "callback_data": "w:" + token}
 
     def letter(self, actor: str, context: dict[str, Any]) -> dict[str, Any]:
         letter = self.bot.request(actor, "/letters/" + context["letterId"])
