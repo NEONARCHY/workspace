@@ -187,11 +187,12 @@ function supportedVoiceMimeType() {
 
 interface VoiceRecorderProps {
   readonly disabled?: boolean;
+  readonly maxDurationMs?: number;
   readonly onClose: () => void;
   readonly onSend: (file: File, durationMs: number) => Promise<boolean>;
 }
 
-export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps) {
+export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS, onClose, onSend }: VoiceRecorderProps) {
   const [state, setState] = useState<"requesting" | "recording" | "ready" | "error">("requesting");
   const [durationMs, setDurationMs] = useState(0);
   const [blob, setBlob] = useState<Blob>();
@@ -331,7 +332,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
           clearTimer();
           releaseStream();
           if (!mountedRef.current) return;
-          const elapsed = Math.min(VOICE_MAX_DURATION_MS, Math.max(0, performance.now() - startedAtRef.current));
+          const elapsed = Math.min(maxDurationMs, Math.max(0, performance.now() - startedAtRef.current));
           setDurationMs(elapsed);
           const recorded = new Blob(chunksRef.current, {
             type: recorder.mimeType || supportedVoiceMimeType(),
@@ -350,9 +351,9 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
         recorder.start(1_000);
         setState("recording");
         timerRef.current = window.setInterval(() => {
-          const elapsed = Math.min(VOICE_MAX_DURATION_MS, performance.now() - startedAtRef.current);
+          const elapsed = Math.min(maxDurationMs, performance.now() - startedAtRef.current);
           setDurationMs(elapsed);
-          if (elapsed >= VOICE_MAX_DURATION_MS) {
+          if (elapsed >= maxDurationMs) {
             clearTimer();
             if (recorder.state === "recording") recorder.stop();
           }
@@ -381,7 +382,7 @@ export function VoiceRecorder({ disabled, onClose, onSend }: VoiceRecorderProps)
       }
       releaseStream();
     };
-  }, [attempt]);
+  }, [attempt, maxDurationMs]);
 
   useEffect(() => subscribeToAudioDevicePreferences(setPreferences), []);
 

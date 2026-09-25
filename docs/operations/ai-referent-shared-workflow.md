@@ -1,5 +1,7 @@
 # AI Referent: запуск общего цикла Workspace + Telegram + Exat
 
+Текущее обновление: [проверка DOCX, голосовые комментарии и финальный PDF — 0055](ai-referent-preflight-final-review.md).
+
 ## Что меняется
 
 PostgreSQL Workspace хранит актуальное письмо, согласующих, решения, номер и очередь

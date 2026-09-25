@@ -879,10 +879,46 @@ ai_referent_letters = sa.Table(
     sa.Column("initial_reviewer_key", sa.String(32)),
     sa.Column("delivery_error", sa.Text()),
     sa.Column("legacy_id", sa.String(128)),
+    sa.Column("final_pdf_file_id", uuid_type),
     sa.Column("revision", sa.Integer()),
     sa.Column("sent_at", sa.DateTime(timezone=True)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_document_checks = sa.Table(
+    "ai_referent_document_checks",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("sha256", sa.String(64)),
+    sa.Column("workflow_kind", sa.String(16)),
+    sa.Column("configuration_revision", sa.Integer()),
+    sa.Column("file_name", sa.String(500)),
+    sa.Column("storage_key", sa.String(1000)),
+    sa.Column("status", sa.String(16)),
+    sa.Column("reviewer_keys", postgresql.JSONB()),
+    sa.Column("detail", sa.Text()),
+    sa.Column("claimed_by", sa.String(128)),
+    sa.Column("lease_token", uuid_type),
+    sa.Column("lease_until", sa.DateTime(timezone=True)),
+    sa.Column("attempt_count", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+ai_referent_comment_audio = sa.Table(
+    "ai_referent_comment_audio",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("letter_id", uuid_type),
+    sa.Column("user_id", uuid_type),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("storage_key", sa.String(1000)),
+    sa.Column("content_type", sa.String(120)),
+    sa.Column("byte_size", sa.BigInteger()),
+    sa.Column("duration_ms", sa.Integer()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 ai_referent_number_counters = sa.Table(

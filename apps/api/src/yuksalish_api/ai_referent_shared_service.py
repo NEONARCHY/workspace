@@ -288,6 +288,8 @@ async def notify_letter(
     recipients = {row["created_by_user_id"]}
     if row["status"] != "needs_revision":
         recipients.add(row["reviewer_user_id"])
+    if row["status"] in {"sent", "signed"}:
+        recipients.update({row.get("initial_reviewer_user_id"), row.get("final_reviewer_user_id")})
     action_recipients = set()
     if row["status"] == "needs_revision":
         action_recipients.add(row["created_by_user_id"])

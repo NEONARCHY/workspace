@@ -13,6 +13,8 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action, module_permissions_for_user
+from .ai_referent_audio import audio_response, decision_audio
+from .ai_referent_preflight import check_response, letter_check, require_passed
 from .ai_referent_schemas import (
     AIReferentAction,
     AIReferentActionRequest,
@@ -25,6 +27,7 @@ from .ai_referent_schemas import (
 from .ai_referent_shared_service import notify_letter, operation_replay, remember_operation
 from .auth import AuthenticatedUser
 from .tables import (
+    ai_referent_comment_audio,
     ai_referent_configuration,
     ai_referent_delivery_commands,
     ai_referent_events,
@@ -264,6 +267,18 @@ async def _letter_events(
         .mappings()
         .all()
     )
+    audio_rows = (
+        (
+            await connection.execute(
+                select(ai_referent_comment_audio).where(
+                    ai_referent_comment_audio.c.letter_id == letter_id,
+                )
+            )
+        )
+        .mappings()
+        .all()
+    )
+    audio_by_id = {str(item["id"]): audio_response(item) for item in audio_rows}
     return [
         AIReferentEventResponse(
             id=str(row["id"]),
@@ -273,6 +288,7 @@ async def _letter_events(
             from_status=row["from_status"],
             to_status=row["to_status"],
             comment=row["comment"] or "",
+            audio=audio_by_id.get((row["metadata"] or {}).get("audioId", "")),
             created_at=row["created_at"],
         )
         for row in rows
@@ -353,6 +369,18 @@ async def _response(
     if not permissions.get("ai_referent", {}).get("edit", False):
         can_edit = False
         actions = [action for action in actions if action not in {"submit", "cancel"}]
+    check = await letter_check(connection, row)
+    if "submit" in actions and (
+        not check
+        or check["status"] != "passed"
+        or (row.get("final_reviewer_key") or row["reviewer_key"]) not in check["reviewer_keys"]
+        or (
+            row["workflow_kind"] == "delivery"
+            and row["reviewer_key"] == "bobur"
+            and not row.get("final_reviewer_user_id")
+        )
+    ):
+        actions.remove("submit")
     return AIReferentLetterResponse(
         id=str(row["id"]),
         display_number=_display_number(row),
@@ -385,7 +413,13 @@ async def _response(
         attachments=letter_attachments,
         events=await _letter_events(connection, row["id"]),
         available_actions=actions,
+        document_check=check_response(check) if check else None,
+        final_pdf_file_id=str(row["final_pdf_file_id"]) if row.get("final_pdf_file_id") else None,
         can_edit=can_edit,
+        can_delete=bool(
+            permissions.get("ai_referent", {}).get("edit")
+            and (row["created_by_user_id"] == current_user.id or _is_privileged(current_user))
+        ),
         can_replace_document=(
             row["status"] == "operator_revision"
             and permissions.get("ai_referent", {}).get("admin", False)
@@ -402,6 +436,7 @@ async def _event(
     from_status: str | None,
     to_status: str | None,
     comment: str = "",
+    metadata: dict[str, object] | None = None,
 ) -> None:
     await connection.execute(
         insert(ai_referent_events).values(
@@ -412,7 +447,7 @@ async def _event(
             from_status=from_status,
             to_status=to_status,
             comment=comment,
-            metadata={},
+            metadata=metadata or {},
             created_at=datetime.now(UTC),
         )
     )
@@ -730,6 +765,12 @@ async def act_on_letter(
     next_status: str
     values: dict[str, object] = {}
     command_kind: str | None = None
+    if payload.comment_audio_id is not None:
+        if action != "return_for_revision":
+            raise AIReferentServiceError(422, "Голосовая запись предназначена для возврата письма.")
+        await decision_audio(
+            connection, payload.comment_audio_id, letter_id, current_user.id, row["revision"]
+        )
 
     if action == "remind":
         await ensure_module_action(connection, current_user, "ai_referent", "edit")
@@ -764,6 +805,7 @@ async def act_on_letter(
             )
             if not primary_count:
                 raise AIReferentServiceError(422, "Нужен основной DOCX для подписи.")
+            await require_passed(connection, row)
             next_status = "pending_review"
         elif action == "approve":
             await ensure_module_action(connection, current_user, "ai_referent", "approve")
@@ -780,7 +822,7 @@ async def act_on_letter(
             await ensure_module_action(connection, current_user, "ai_referent", "approve")
             if current_status not in {"pending_review", "failed"} or not is_reviewer:
                 raise AIReferentServiceError(403, "Вернуть может выбранный согласующий.")
-            if len(payload.comment) < 3:
+            if len(payload.comment) < 3 and payload.comment_audio_id is None:
                 raise AIReferentServiceError(422, "Укажите причину возврата.")
             next_status = "needs_revision"
         elif action == "retry_delivery":
@@ -821,6 +863,11 @@ async def act_on_letter(
         )
         if not file_count:
             raise AIReferentServiceError(422, "Перед согласованием приложите основной файл письма.")
+        if values["reviewer_key"] == "bobur" and not row.get("final_reviewer_user_id"):
+            raise AIReferentServiceError(
+                422, "Перед Бобуром обязательно выберите предварительного согласующего."
+            )
+        await require_passed(connection, row)
         next_status = "pending_review"
     elif action == "prepare_replacement":
         await ensure_module_action(connection, current_user, "ai_referent", "admin")
@@ -845,6 +892,7 @@ async def act_on_letter(
         if (
             action in {"confirm_sent", "confirm_not_sent", "return_for_revision"}
             and len(payload.comment) < 3
+            and payload.comment_audio_id is None
         ):
             raise AIReferentServiceError(422, "Укажите основание и результат проверки доставки.")
         next_status = {
@@ -906,13 +954,15 @@ async def act_on_letter(
         elif action == "return_for_revision":
             if current_status not in {"pending_review", "awaiting_final_send", "failed"}:
                 raise AIReferentServiceError(409, "Письмо не ожидает согласования.")
-            if len(payload.comment) < 3:
+            if len(payload.comment) < 3 and payload.comment_audio_id is None:
                 raise AIReferentServiceError(422, "Укажите причину возврата на доработку.")
             next_status = "needs_revision"
         elif action == "release_delivery":
             if current_status != "awaiting_final_send":
                 raise AIReferentServiceError(409, "Подписанный документ не ожидает решения.")
-            next_status = "referent_review_pending"
+            if not row.get("final_pdf_file_id"):
+                raise AIReferentServiceError(409, "Итоговый PDF ещё не подготовлен.")
+            next_status, command_kind = "queued", "dispatch"
         else:
             expected = "approved" if action == "queue_delivery" else "failed"
             if current_status != expected:
@@ -933,6 +983,8 @@ async def act_on_letter(
 
     now = datetime.now(UTC)
     next_revision = row["revision"] + 1
+    if next_status == "needs_revision":
+        values["final_pdf_file_id"] = None
     if next_status == "needs_revision" and row.get("initial_reviewer_key"):
         # A changed document restarts the configured route, never skips preliminary review.
         values.update(
@@ -969,6 +1021,7 @@ async def act_on_letter(
         from_status=current_status,
         to_status=next_status,
         comment=payload.comment,
+        metadata={"audioId": str(payload.comment_audio_id)} if payload.comment_audio_id else None,
     )
     await connection.execute(
         insert(audit_events).values(
@@ -989,7 +1042,7 @@ async def act_on_letter(
         "return_for_revision": "Письмо возвращено с комментарием",
         "queue_delivery": "Подготовка подписанного письма",
         "retry_delivery": "Повторная подготовка письма",
-        "release_delivery": "Письмо ожидает отправки референтом",
+        "release_delivery": "Окончательный PDF подтверждён: подготовка отправки",
         "send": "Письмо передано на отправку",
         "cancel": "Письмо отменено",
         "confirm_sent": "Доставка письма подтверждена",

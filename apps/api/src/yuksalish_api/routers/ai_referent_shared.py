@@ -4,9 +4,11 @@
 import hashlib
 from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
 from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import NAMESPACE_URL, UUID, uuid5
+from zipfile import BadZipFile, ZipFile
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.routing import APIRoute
@@ -17,8 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from ..access_control import ensure_module_action
 from ..ai_referent_agent_service import claim_job, complete_job, heartbeat_job
+from ..ai_referent_audio import save_audio
 from ..ai_referent_configuration_schemas import ReviewerConfigurationResponse
 from ..ai_referent_configuration_service import read_configuration
+from ..ai_referent_deletion import request_deletion
 from ..ai_referent_files_service import (
     file_metadata,
     packet_download_filename,
@@ -28,6 +32,14 @@ from ..ai_referent_files_service import (
     require_packet_access,
     store_packet_file,
 )
+from ..ai_referent_preflight import (
+    check_response,
+    checked_lease,
+    claim_check,
+    ensure_check,
+    finish_check,
+    reviewer_names,
+)
 from ..ai_referent_recipient_service import (
     RecipientRegistry,
     RecipientSnapshot,
@@ -36,6 +48,8 @@ from ..ai_referent_recipient_service import (
 )
 from ..ai_referent_schemas import (
     AIReferentActionRequest,
+    AIReferentCommentAudio,
+    AIReferentDocumentCheck,
     AIReferentLetterResponse,
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
@@ -62,6 +76,7 @@ from ..object_storage import ObjectStorageError
 from ..tables import (
     ai_referent_archive,
     ai_referent_configuration,
+    ai_referent_events,
     ai_referent_files,
     ai_referent_incoming_letters,
     ai_referent_letters,
@@ -72,7 +87,13 @@ from ..tables import (
     attachments,
 )
 from ..tables import (
+    ai_referent_comment_audio as audio,
+)
+from ..tables import (
     ai_referent_delivery_commands as commands,
+)
+from ..tables import (
+    ai_referent_document_checks as checks,
 )
 from ..workspace_schemas import ApiModel, AttachmentResponse
 from .ai_referent import _storage, require_agent_token
@@ -111,7 +132,9 @@ class AgentLease(ApiModel):
 
 
 class AgentResult(AgentLease):
-    outcome: Literal["prepared", "sent", "failed", "unknown", "cancelled", "revision_needed"]
+    outcome: Literal[
+        "prepared", "ready", "sent", "failed", "unknown", "cancelled", "revision_needed", "deleted"
+    ]
     detail: str = Field(default="", max_length=2000)
     signed_pages: int | None = Field(default=None, ge=1, le=100)
     auto_send: bool = False
@@ -147,6 +170,266 @@ async def agent_actor(
 
 
 Actor = Annotated[AuthenticatedUser, Depends(agent_actor)]
+
+
+@router.delete("/letters/{letter_id}")
+async def delete_letter(
+    letter_id: UUID,
+    connection: Connection,
+    user: User,
+    expected_revision: Annotated[int, Query(alias="expectedRevision", ge=1)],
+) -> dict[str, bool]:
+    return await request_deletion(connection, user, letter_id, expected_revision)
+
+
+@router.delete("/agent/letters/{letter_id}")
+async def delete_agent_letter(
+    letter_id: UUID,
+    connection: Connection,
+    actor: Actor,
+    expected_revision: Annotated[int, Query(alias="expectedRevision", ge=1)],
+) -> dict[str, bool]:
+    return await request_deletion(connection, actor, letter_id, expected_revision)
+
+
+async def upload_comment_audio(
+    letter_id: UUID,
+    request: Request,
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    expected_revision: int,
+    duration_ms: int,
+) -> AIReferentCommentAudio:
+    content = await read_limited_packet(request.stream(), 10 * 1024 * 1024)
+    return await save_audio(
+        connection,
+        _storage(request),
+        user,
+        letter_id,
+        expected_revision,
+        duration_ms,
+        content,
+        request.headers.get("content-type", "").split(";")[0],
+    )
+
+
+@router.put("/letters/{letter_id}/comment-audio", response_model=AIReferentCommentAudio)
+async def put_comment_audio(
+    letter_id: UUID,
+    request: Request,
+    connection: Connection,
+    user: User,
+    expected_revision: Annotated[int, Query(alias="expectedRevision", ge=1)],
+    duration_ms: Annotated[int, Query(alias="durationMs", ge=1, le=300000)],
+) -> AIReferentCommentAudio:
+    return await upload_comment_audio(
+        letter_id, request, connection, user, expected_revision, duration_ms
+    )
+
+
+@router.put("/agent/letters/{letter_id}/comment-audio", response_model=AIReferentCommentAudio)
+async def put_agent_comment_audio(
+    letter_id: UUID,
+    request: Request,
+    connection: Connection,
+    actor: Actor,
+    expected_revision: Annotated[int, Query(alias="expectedRevision", ge=1)],
+    duration_ms: Annotated[int, Query(alias="durationMs", ge=1, le=300000)],
+) -> AIReferentCommentAudio:
+    return await upload_comment_audio(
+        letter_id, request, connection, actor, expected_revision, duration_ms
+    )
+
+
+async def download_comment_audio(
+    audio_id: UUID,
+    request: Request,
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+) -> Response:
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    row = (await connection.execute(select(audio).where(audio.c.id == audio_id))).mappings().first()
+    if row is None:
+        raise HTTPException(404, "Голосовой комментарий не найден.")
+    await load_letter(connection, user, row["letter_id"])
+    published = await connection.scalar(
+        select(ai_referent_events.c.id)
+        .where(
+            ai_referent_events.c.letter_id == row["letter_id"],
+            ai_referent_events.c.metadata["audioId"].astext == str(audio_id),
+        )
+        .limit(1)
+    )
+    if row["user_id"] != user.id and not published:
+        raise HTTPException(404, "Голосовой комментарий ещё не опубликован.")
+    return Response(
+        await _storage(request).get(row["storage_key"]),
+        media_type=row["content_type"],
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.get("/comment-audio/{audio_id}")
+async def get_comment_audio(
+    audio_id: UUID, request: Request, connection: Connection, user: User
+) -> Response:
+    return await download_comment_audio(audio_id, request, connection, user)
+
+
+@router.get("/agent/comment-audio/{audio_id}")
+async def get_agent_comment_audio(
+    audio_id: UUID, request: Request, connection: Connection, actor: Actor
+) -> Response:
+    return await download_comment_audio(audio_id, request, connection, actor)
+
+
+@router.put("/document-checks", response_model=AIReferentDocumentCheck)
+async def upload_document_check(
+    request: Request,
+    connection: Connection,
+    user: User,
+    file_name: Annotated[str, Query(alias="fileName", min_length=1, max_length=500)],
+    workflow_kind: Annotated[
+        Literal["delivery", "sign_only"], Query(alias="workflowKind")
+    ] = "delivery",
+) -> AIReferentDocumentCheck:
+    await ensure_module_action(connection, user, "ai_referent", "create")
+    content = await read_limited_packet(request.stream(), 20 * 1024 * 1024)
+    if not file_name.lower().endswith(".docx"):
+        raise HTTPException(422, "Для проверки загрузите DOCX.")
+    try:
+        with ZipFile(BytesIO(content)) as document:
+            if (
+                "word/document.xml" not in document.namelist()
+                or any(item.file_size > 50 * 1024 * 1024 for item in document.infolist())
+                or sum(item.file_size for item in document.infolist()) > 100 * 1024 * 1024
+            ):
+                raise HTTPException(422, "Некорректный или слишком большой DOCX.")
+    except BadZipFile as error:
+        raise HTTPException(422, "Файл не является DOCX.") from error
+    await connection.execute(select(ai_referent_configuration).with_for_update())
+    pending = await connection.scalar(
+        select(func.count())
+        .select_from(checks)
+        .where(
+            checks.c.user_id == user.id,
+            checks.c.status.in_(["pending", "checking"]),
+        )
+    )
+    if int(pending or 0) >= 10:
+        raise HTTPException(429, "Дождитесь завершения предыдущих проверок.")
+    digest = hashlib.sha256(content).hexdigest()
+    key = f"ai-referent/preflight/{user.id}/{digest}.docx"
+    await _storage(request).put(
+        key, content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    row = await ensure_check(connection, user.id, digest, workflow_kind, file_name, key)
+    if row["status"] == "failed":
+        row = (
+            (
+                await connection.execute(
+                    update(checks)
+                    .where(checks.c.id == row["id"])
+                    .values(
+                        status="pending",
+                        detail="",
+                        updated_at=datetime.now(UTC),
+                    )
+                    .returning(checks)
+                )
+            )
+            .mappings()
+            .one()
+        )
+    return check_response(row)
+
+
+@router.get("/document-checks/{check_id}", response_model=AIReferentDocumentCheck)
+async def get_document_check(
+    check_id: UUID, connection: Connection, user: User
+) -> AIReferentDocumentCheck:
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    row = (
+        (
+            await connection.execute(
+                select(checks).where(
+                    checks.c.id == check_id,
+                    checks.c.user_id == user.id,
+                )
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise HTTPException(404, "Проверка не найдена.")
+    return check_response(row)
+
+
+@router.post("/agent/document-checks/claim", dependencies=[Depends(require_agent_token)])
+async def claim_document_check(
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", max_length=128)],
+) -> dict[str, object]:
+    row = await claim_check(connection, agent_id)
+    return {
+        "check": None
+        if row is None
+        else {
+            "id": str(row["id"]),
+            "leaseToken": str(row["lease_token"]),
+            "sha256": row["sha256"],
+            "workflowKind": row["workflow_kind"],
+            "reviewers": await reviewer_names(connection),
+        }
+    }
+
+
+@router.get("/agent/document-checks/{check_id}/file", dependencies=[Depends(require_agent_token)])
+async def check_file(
+    check_id: UUID,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId")],
+    lease_token: Annotated[UUID, Query(alias="leaseToken")],
+) -> Response:
+    row = await checked_lease(connection, check_id, agent_id, lease_token)
+    return Response(
+        await _storage(request).get(row["storage_key"]), media_type="application/octet-stream"
+    )
+
+
+@router.post(
+    "/agent/document-checks/{check_id}/heartbeat", dependencies=[Depends(require_agent_token)]
+)
+async def check_heartbeat(
+    check_id: UUID, payload: AgentLease, connection: Connection
+) -> dict[str, bool]:
+    await checked_lease(connection, check_id, payload.agent_id, payload.lease_token)
+    await connection.execute(
+        update(checks)
+        .where(checks.c.id == check_id)
+        .values(
+            lease_until=datetime.now(UTC) + timedelta(minutes=3),
+        )
+    )
+    return {"ok": True}
+
+
+class CheckResult(AgentLease):
+    reviewer_keys: list[str] = Field(default_factory=list, max_length=20)
+
+
+@router.post(
+    "/agent/document-checks/{check_id}/result", dependencies=[Depends(require_agent_token)]
+)
+async def check_result(
+    check_id: UUID, payload: CheckResult, connection: Connection
+) -> dict[str, bool]:
+    await finish_check(
+        connection, check_id, payload.agent_id, payload.lease_token, payload.reviewer_keys
+    )
+    return {"ok": True}
 
 
 @router.put("/agent/recipients", dependencies=[Depends(require_agent_token)])
