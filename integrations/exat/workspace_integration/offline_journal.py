@@ -78,6 +78,8 @@ class OfflineJournal:
                         CHECK (outcome IN ('unknown', 'confirmed', 'not_sent')),
                     detail TEXT NOT NULL DEFAULT ''
                 );
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_offline_external_letter
+                    ON external_effects(letter_id);
                 CREATE TABLE IF NOT EXISTS number_reservations (
                     reservation_id TEXT PRIMARY KEY,
                     agent_id TEXT NOT NULL,
@@ -97,7 +99,51 @@ class OfflineJournal:
                     assigned_at TEXT NOT NULL,
                     UNIQUE (year_suffix, outgoing_number)
                 );
+                CREATE TABLE IF NOT EXISTS authority_state (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    agent_id TEXT NOT NULL,
+                    epoch TEXT NOT NULL,
+                    phase TEXT NOT NULL CHECK (phase IN ('online', 'offline', 'replay')),
+                    updated_at TEXT NOT NULL
+                );
                 """
+            )
+
+    def authority_state(self) -> dict[str, str] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT agent_id, epoch, phase, updated_at FROM authority_state WHERE id = 1"
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def set_authority_phase(self, agent_id: str, epoch: str, phase: str) -> None:
+        """Durably fence a phase transition; a restarted bot cannot invent a lease."""
+        epoch = str(UUID(epoch))
+        if not agent_id or len(agent_id) > 128 or phase not in {"online", "offline", "replay"}:
+            raise ValueError("Недействительное состояние аренды робота.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT agent_id, epoch, phase FROM authority_state WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                if phase != "online":
+                    raise ValueError("Нельзя работать автономно без подтверждённой аренды.")
+                connection.execute(
+                    "INSERT INTO authority_state VALUES (1, ?, ?, ?, ?)",
+                    (agent_id, epoch, phase, _now()),
+                )
+                return
+            if row["agent_id"] != agent_id or row["epoch"] != epoch:
+                raise ValueError("Аренда относится к другому роботу или эпохе.")
+            if (row["phase"], phase) not in {
+                ("online", "online"), ("online", "offline"), ("online", "replay"),
+                ("offline", "offline"), ("offline", "replay"), ("replay", "replay"),
+            }:
+                raise ValueError("Нельзя возобновить запись до сверки журнала.")
+            connection.execute(
+                "UPDATE authority_state SET phase = ?, updated_at = ? WHERE id = 1",
+                (phase, _now()),
             )
 
     def prepare_number_reservation(self, agent_id: str, count: int) -> str:
@@ -376,6 +422,15 @@ class OfflineJournal:
         if kind not in {"exat_send", "webmail_send"}:
             raise ValueError("Недопустимый вид внешней отправки.")
         with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            existing = connection.execute(
+                "SELECT letter_id, kind FROM external_effects WHERE effect_id = ?",
+                (effect_id,),
+            ).fetchone()
+            if existing is not None and (existing["letter_id"], existing["kind"]) != (
+                letter_id, kind
+            ):
+                raise ValueError("Повторный идентификатор отправки относится к другому письму.")
             cursor = connection.execute(
                 "INSERT OR IGNORE INTO external_effects "
                 "(effect_id, letter_id, kind, started_at) VALUES (?, ?, ?, ?)",

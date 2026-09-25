@@ -92,6 +92,10 @@ def test_external_send_is_never_replayed_after_crash(tmp_path):
     reopened.resolve_external_effect(effect_id, sent=True, evidence="Проверено в E-XAT")
     assert reopened.external_effect(effect_id)["outcome"] == "confirmed"
     assert not reopened.begin_external_effect(effect_id, letter_id, "exat_send")
+    assert not reopened.begin_external_effect(str(uuid4()), letter_id, "exat_send")
+    assert not reopened.begin_external_effect(str(uuid4()), letter_id, "webmail_send")
+    with pytest.raises(ValueError, match="другому письму"):
+        reopened.begin_external_effect(effect_id, str(uuid4()), "exat_send")
 
 
 def test_bot_reads_only_its_own_last_verified_server_snapshot(tmp_path):

@@ -207,6 +207,21 @@ class WorkspaceClient:
             method="POST",
         )
 
+    def start_offline_authority(self) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/authority:start?"
+            + urlencode({"agentId": self.agent_id}),
+            {}, method="POST",
+        )
+
+    def heartbeat_offline_authority(self, epoch: str) -> dict[str, Any]:
+        return self.request(
+            "/ai-referent/agent/offline/authority:heartbeat",
+            {"agentId": self.agent_id, "epoch": epoch}, method="POST",
+        )
+
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(
             "/auth/login",
