@@ -1155,7 +1155,38 @@ telegram_bot_grants = sa.Table(
     "core_telegram_bot_grants", metadata,
     sa.Column("user_id", uuid_type, primary_key=True),
     sa.Column("bot_key", sa.String(40), primary_key=True),
+    sa.Column("report_scope", sa.String(16)),
+    sa.Column("region_name", sa.String(100)),
+    sa.Column("report_required", sa.Boolean()),
+    sa.Column("hisobot_manager", sa.Boolean()),
     sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hisobot_live_reports = sa.Table(
+    "hisobot_live_reports", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("telegram_id", sa.String(20)),
+    sa.Column("employee_key", sa.String(100)),
+    sa.Column("full_name", sa.String(200)),
+    sa.Column("position", sa.String(500)),
+    sa.Column("report_scope", sa.String(16)),
+    sa.Column("region_name", sa.String(100)),
+    sa.Column("report_date", sa.Date()),
+    sa.Column("content", sa.Text()),
+    sa.Column("submitted_at", sa.DateTime(timezone=True)),
+    sa.Column("is_late", sa.Boolean()),
+    sa.Column("source", sa.String(12)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+hisobot_live_vacations = sa.Table(
+    "hisobot_live_vacations", metadata,
+    sa.Column("telegram_id", sa.String(20), primary_key=True),
+    sa.Column("starts_date", sa.Date()),
+    sa.Column("through_date", sa.Date()),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 

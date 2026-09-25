@@ -57,6 +57,7 @@ import {
   Chat24Filled,
   Chat24Regular,
   DocumentBulletList24Regular,
+  DocumentBulletList24Filled,
   Mail24Regular,
   FolderPeople24Regular,
   Navigation24Regular,
@@ -102,6 +103,7 @@ import { AdaptiveNavigation } from "./AdaptiveNavigation";
 import { MembersView } from "./MembersView";
 import { HrView } from "./HrView";
 import { AIReferentView } from "./AIReferentView";
+import { AIHisobotView } from "./AIHisobotView";
 import { TelegramAccessView } from "./TelegramAccessView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -301,6 +303,7 @@ const navItems: readonly NavItem[] = [
     icon: <DocumentBulletList24Regular />,
   },
   { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
+  { key: "ai_hisobot", label: "AI Hisobot", icon: <DocumentBulletList24Filled /> },
   { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
   { key: "projects", label: "Список проектов", icon: <FolderPeople24Regular /> },
@@ -648,10 +651,14 @@ export function App() {
 
   useEffect(() => {
     if (session === undefined) return;
-    const known = knownNotificationIds.current;
+    let known = knownNotificationIds.current;
     if (known === null) {
-      knownNotificationIds.current = new Set(workspace.notifications.map((item) => item.id));
-      return;
+      // Other kinds keep their existing no-replay behaviour. A mandatory Hisobot
+      // reminder still needs to appear after restarting an offline desktop app.
+      known = new Set(workspace.notifications
+        .filter((item) => item.kind !== "hisobot" || item.readAt || item.desktopDeliveredAt)
+        .map((item) => item.id));
+      knownNotificationIds.current = known;
     }
     const preferences = workspace.notificationPreferences;
     const kindEnabled: Record<WorkspaceNotification["kind"], boolean> = {
@@ -662,14 +669,15 @@ export function App() {
       calendar: preferences.calendarEnabled,
       absence: preferences.absencesEnabled,
       zoom: preferences.zoomEnabled,
+      hisobot: true,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
       known.add(notification.id);
       if (
-        !preferences.desktopEnabled
+        (notification.kind !== "hisobot" && !preferences.desktopEnabled)
         || !kindEnabled[notification.kind]
-        || (notification.isReminder && !preferences.remindersEnabled)
+        || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
         || notification.desktopDeliveredAt
         || notification.readAt
       ) continue;
@@ -1938,6 +1946,9 @@ export function App() {
                 focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
               />
+            ) : null}
+            {displayedSection === "ai_hisobot" ? (
+              <AIHisobotView token={session.accessToken} />
             ) : null}
             {displayedSection === "telegram_access" && isAdmin ? (
               <TelegramAccessView token={session.accessToken} />

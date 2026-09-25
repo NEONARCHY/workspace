@@ -4,6 +4,7 @@ export const moduleKeys = [
   "team_overview",
   "payment_requests",
   "ai_referent",
+  "ai_hisobot",
   "telegram_access",
   "feed",
   "projects",
@@ -613,7 +614,8 @@ export type NotificationKind =
   | "trip"
   | "calendar"
   | "absence"
-  | "zoom";
+  | "zoom"
+  | "hisobot";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -628,6 +630,7 @@ export type NotificationSection = Extract<
   | "zoom_meetings"
   | "hr"
   | "ai_referent"
+  | "ai_hisobot"
 >;
 
 export interface WorkspaceNotification {
@@ -1003,6 +1006,10 @@ export interface TelegramAccessPerson {
   readonly verified: boolean;
   readonly verificationSource: string | null;
   readonly botKeys: readonly TelegramBotKey[];
+  readonly hisobotScope: "central" | "hudud" | null;
+  readonly hisobotRegion: string | null;
+  readonly hisobotReportRequired: boolean;
+  readonly hisobotManager: boolean;
   readonly revision: number;
 }
 
@@ -1014,7 +1021,43 @@ export interface TelegramAccessRegistry {
 export interface TelegramAccessUpdate {
   readonly telegramId: string | null;
   readonly botKeys: readonly TelegramBotKey[];
+  readonly hisobotScope: "central" | "hudud" | null;
+  readonly hisobotRegion: string | null;
+  readonly hisobotReportRequired: boolean;
+  readonly hisobotManager: boolean;
   readonly expectedRevision: number;
+}
+
+export interface HisobotReport {
+  readonly id: string;
+  readonly userId: string | null;
+  readonly telegramId: string;
+  readonly employeeKey: string;
+  readonly fullName: string;
+  readonly position: string;
+  readonly reportScope: "central" | "hudud";
+  readonly regionName: string | null;
+  readonly reportDate: string;
+  readonly content: string;
+  readonly submittedAt: string;
+  readonly isLate: boolean;
+  readonly source: "telegram" | "workspace";
+}
+
+export interface HisobotProfile {
+  readonly telegramId: string;
+  readonly fullName: string;
+  readonly position: string;
+  readonly reportScope: "central" | "hudud";
+  readonly regionName: string | null;
+  readonly reportRequired: boolean;
+  readonly managementAccess: boolean;
+  readonly absenceKind: "vacation" | "sick_leave" | "personal_time" | null;
+  readonly today: string;
+  readonly canSubmit: boolean;
+  readonly windowOpensAt: string;
+  readonly windowClosesAt: string;
+  readonly todayReport: HisobotReport | null;
 }
 
 export interface AIReferentIncomingRegistry {

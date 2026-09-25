@@ -1,0 +1,68 @@
+.app-content > .ai-hisobot-view {
+  display: flex; flex-direction: column; gap: 14px; width: auto;
+  height: calc(100% - var(--ws-view-edge-double, 8px)); min-height: 0;
+  margin: var(--ws-view-edge, 4px); padding: 18px var(--ws-view-panel-title-inline, 20px) 20px;
+  overflow: hidden; border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: var(--ws-radius, 22px); color: var(--ws-text, #293a55);
+  background: radial-gradient(ellipse at 83% -12%, #d8edeb 0, transparent 42%),
+    radial-gradient(ellipse at 0% 100%, #edf1f8 0, transparent 46%), #f5f9f8;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+}
+.ai-hisobot-header { position: relative; isolation: isolate; flex: none; min-height: 94px; padding: 4px 2px 8px; }
+.ai-hisobot-header-copy { position: relative; z-index: 2; }
+.ai-hisobot-header .view-kicker { color: #006779; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.ai-hisobot-header h1 { margin: 1px 0 4px; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.1; letter-spacing: -.035em; }
+.ai-hisobot-header p { margin: 0; font-size: 13px; color: var(--ws-muted, #566b7c); }
+.ai-hisobot-header-art { position: absolute; z-index: 1; top: -19px; right: -3px; width: clamp(340px, 37vw, 600px); height: 154px; color: #168da0; pointer-events: none; opacity: .88; mask-image: linear-gradient(to bottom, #000 0%, #000 66%, transparent 100%); }
+.ai-hisobot-header-art::before { position: absolute; inset: -48px -35px -7px 2%; border-radius: 50%; background: radial-gradient(circle at 64% 34%, rgb(99 205 201 / 28%), rgb(224 246 242 / 31%) 42%, transparent 76%); content: ""; }
+.ai-hisobot-header-art svg { position: absolute; box-sizing: content-box; padding: 13px; border: 1px solid rgb(125 193 198 / 34%); border-radius: 20px; background: rgb(255 255 255 / 88%); box-shadow: 0 18px 32px -25px rgb(20 72 87 / 44%); }
+.hisobot-art-main { top: -26px; right: 65px; width: 110px; height: 110px; rotate: 8deg; color: #006f82; }
+.hisobot-art-pdf { top: 25px; right: 265px; width: 65px; height: 65px; rotate: -10deg; }
+.ai-hisobot-header-art .hisobot-art-history { top: 75px; right: 160px; width: 56px; height: 56px; rotate: 6deg; background: #e8f7f4; }
+.hisobot-tabs { display: flex; gap: 4px; flex: none; width: fit-content; max-width: 100%; padding: 4px; border: 1px solid #dce8e8; border-radius: 15px; background: #eaf1f1; overflow-x: auto; }
+.hisobot-tabs button { border: 0; border-radius: 11px; padding: 10px 18px; background: transparent; color: #445c68; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.hisobot-tabs button.active { background: #fff; color: #006779; box-shadow: 0 3px 11px rgb(28 77 91 / 9%); }
+.hisobot-tabs button:focus-visible, .ai-hisobot-view button:focus-visible, .ai-hisobot-view input:focus-visible, .ai-hisobot-view textarea:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
+.hisobot-today-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(270px, .8fr); gap: 14px; min-height: 0; overflow-y: auto; }
+.hisobot-panel { padding: 22px; border: 1px solid #e0eae9; border-radius: 18px; background: #fff; box-shadow: 0 10px 24px -22px #214d53; }
+.hisobot-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 18px; font-weight: 750; }
+.hisobot-panel-heading span { display: flex; align-items: center; gap: 8px; }
+.hisobot-panel-heading svg { width: 23px; color: #0b8994; }
+.hisobot-panel-heading strong { border-radius: 30px; padding: 6px 10px; background: #e5f5ef; color: #176b56; font-size: 11px; }
+.hisobot-panel-description { margin: 7px 0 24px; color: #657781; font-size: 13px; }
+.hisobot-compose label { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 650; }
+.hisobot-compose textarea { display: block; width: 100%; min-height: 260px; box-sizing: border-box; resize: vertical; border: 1px solid #d5e4e3; border-radius: 12px; padding: 16px; background: #fcfefd; color: #203c47; font: inherit; line-height: 1.55; }
+.hisobot-compose textarea:disabled { background: #f3f6f6; }
+.hisobot-compose-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; color: #7a898f; font-size: 12px; }
+.hisobot-compose-footer button, .hisobot-filters button { border: 0; border-radius: 10px; padding: 11px 16px; background: #08798a; color: white; font-weight: 700; cursor: pointer; }
+.hisobot-compose-footer button:disabled { opacity: .45; cursor: not-allowed; }
+.hisobot-status-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: #e7f4f1; color: #08798a; }
+.hisobot-status h2 { margin: 18px 0 7px; font-size: 20px; }
+.hisobot-status p { color: #657781; line-height: 1.55; font-size: 13px; }
+.hisobot-window { display: flex; justify-content: space-between; border-top: 1px solid #e7eeee; padding: 12px 0; color: #71818a; font-size: 13px; }
+.hisobot-window strong { color: #294953; }
+.hisobot-list-page { min-height: 0; overflow-y: auto; padding-bottom: 12px; }
+.hisobot-list-heading { display: flex; align-items: baseline; gap: 14px; margin: 2px 0 14px; }
+.hisobot-list-heading h2 { margin: 0; font-size: 20px; }
+.hisobot-list-heading span { color: #71818a; font-size: 12px; }
+.hisobot-report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(325px, 1fr)); gap: 12px; }
+.hisobot-report-card { border: 1px solid #dfe9e8; border-radius: 16px; padding: 18px; background: white; box-shadow: 0 8px 20px -22px #214d53; }
+.hisobot-report-topline { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hisobot-report-date { display: flex; align-items: center; gap: 6px; color: #08798a; font-size: 12px; font-weight: 700; }
+.hisobot-report-date svg { width: 16px; height: 16px; }
+.hisobot-source { border-radius: 20px; padding: 4px 8px; background: #eef2f7; color: #53667a; font-size: 11px; }
+.hisobot-source.telegram { background: #e8f4f7; color: #19698c; }
+.hisobot-report-card h3 { margin: 15px 0 4px; font-size: 16px; }
+.hisobot-report-byline { margin: 0; color: #77878e; font-size: 12px; }
+.hisobot-report-content { max-height: 280px; overflow-y: auto; margin: 14px 0; white-space: pre-wrap; line-height: 1.55; font-size: 13px; }
+.hisobot-report-foot { border-top: 1px solid #edf1f1; padding-top: 10px; color: #809098; font-size: 11px; }
+.hisobot-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.hisobot-filters label { display: flex; align-items: center; font-size: 12px; }
+.hisobot-filters input, .hisobot-filters select { min-height: 38px; border: 1px solid #d6e3e3; border-radius: 9px; padding: 6px 10px; background: white; color: #2a4650; font: inherit; }
+.hisobot-filters input[type="search"] { min-width: 220px; flex: 1; }
+.hisobot-load-more { display: block; margin: 16px auto 0; border: 1px solid #afced0; border-radius: 10px; padding: 10px 15px; background: #fff; color: #006779; font-weight: 700; cursor: pointer; }
+.hisobot-error, .hisobot-success, .hisobot-empty, .hisobot-loading, .hisobot-exempt { border-radius: 11px; padding: 13px 15px; font-size: 13px; }
+.hisobot-error { background: #fff0ed; color: #a54232; }
+.hisobot-success { background: #ebf7f1; color: #176b56; }
+.hisobot-empty, .hisobot-loading, .hisobot-exempt { background: #fff; color: #647782; }
+@media (max-width: 900px) { .hisobot-today-layout { grid-template-columns: 1fr; } .ai-hisobot-header-art { opacity: .25; } }
