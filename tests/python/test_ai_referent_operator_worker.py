@@ -96,7 +96,9 @@ def test_operator_replacement_preserves_number_and_requires_explicit_send(
     service.confirm_manual_send.assert_not_called()
 
 
-def test_failed_bootstrap_keeps_polling_but_never_ticks(modules, tmp_path, monkeypatch):
+def test_failed_bootstrap_keeps_polling_and_checks_docx_without_delivery(
+    modules, tmp_path, monkeypatch
+):
     monkeypatch.setitem(
         sys.modules,
         "src.outgoing.telegram_bot",
@@ -106,6 +108,7 @@ def test_failed_bootstrap_keeps_polling_but_never_ticks(modules, tmp_path, monke
     )
     controller, worker, bot = Mock(), Mock(), Mock()
     failed = threading.Event()
+    checked = threading.Event()
     bootstrap_threads = []
 
     def bootstrap():
@@ -122,11 +125,13 @@ def test_failed_bootstrap_keeps_polling_but_never_ticks(modules, tmp_path, monke
             failed.set()
 
     worker.bootstrap.side_effect = bootstrap
+    worker.check_documents.side_effect = checked.set
     bot._status_log.side_effect = status
     polls = []
 
     def poll(**_kwargs):
         assert failed.wait(2), "Bootstrap was not scheduled in the background"
+        assert checked.wait(2), "DOCX checks must not wait for the archive bootstrap"
         polls.append(len(polls) + 1)
         return {"result": [{"update_id": polls[-1], "message": {"text": "/start"}}]}
 
@@ -140,9 +145,46 @@ def test_failed_bootstrap_keeps_polling_but_never_ticks(modules, tmp_path, monke
     assert result[:3] == ("stopped", 2, 2)
     assert polls == [1, 2] and controller.handle.call_count == 2
     assert bootstrap_threads == ["workspace-executor"]
+    assert worker.check_documents.called
     worker.tick.assert_not_called()
     worker.sync.run.assert_not_called()
     assert modules.sync.MAX_ARCHIVE_FILE_BYTES == 200 * 1024 * 1024
+
+
+def test_document_check_runs_while_archive_bootstrap_is_still_busy(
+    modules, tmp_path, monkeypatch
+):
+    monkeypatch.setitem(
+        sys.modules,
+        "src.outgoing.telegram_bot",
+        SimpleNamespace(PollingResult=lambda *args: args),
+    )
+    worker, bot = Mock(), Mock()
+    entered, release, checked = threading.Event(), threading.Event(), threading.Event()
+
+    def bootstrap():
+        entered.set()
+        assert release.wait(3), "The test must release archive reconciliation"
+
+    worker.bootstrap.side_effect = bootstrap
+    worker.check_documents.side_effect = checked.set
+
+    def poll(**_kwargs):
+        try:
+            assert entered.wait(2)
+            assert checked.wait(2), "Preflight was blocked by the archive reconciliation"
+        finally:
+            release.set()
+        return {"result": [{"update_id": 1}]}
+
+    bot.client.get_updates.side_effect = poll
+    monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock())
+    monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock())
+    monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
+    monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
+    result = modules.shared_bot._run_shared(bot, max_updates=1)
+    assert result[:3] == ("stopped", 1, 1)
+    worker.check_documents.assert_called()
 
 
 def test_send_guard_checks_identity_and_lease_at_actual_adapter_call(modules, monkeypatch):
@@ -196,10 +238,10 @@ def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
         def set(self):
             now[0] = 200
 
-    targets = []
+    targets = {}
 
-    def thread(*, target, **_kwargs):
-        targets.append(target)
+    def thread(*, target, name, **_kwargs):
+        targets[name] = target
         return SimpleNamespace(start=lambda: None, join=lambda **_kwargs: None)
 
     worker, bot = Mock(), Mock()
@@ -219,7 +261,7 @@ def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
     worker.tick.side_effect = lambda: ticks.append(now[0])
 
     def poll(**_kwargs):
-        targets[0]()
+        targets["workspace-executor"]()
         return {"result": [{"update_id": 1}]}
 
     bot.client.get_updates.side_effect = poll
