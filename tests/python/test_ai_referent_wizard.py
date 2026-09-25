@@ -14,7 +14,12 @@ from test_ai_referent_shared_adapter import modules as modules
 @pytest.fixture
 def wizard(modules, tmp_path):
     telegram = Mock()
-    telegram.send_message.return_value = {"ok": True}
+    message_ids = iter(range(1000, 9000))
+    telegram.send_message.side_effect = lambda *args, **kwargs: {
+        "ok": True,
+        "result": {"message_id": next(message_ids)},
+    }
+    telegram.delete_message.return_value = {"ok": True}
     telegram.get_file.return_value = {"result": {"file_path": "safe-document"}}
     telegram.download_file.side_effect = lambda _remote, path: path.write_bytes(b"docx fixture")
     api = Mock()
@@ -95,6 +100,10 @@ def wizard(modules, tmp_path):
         assert kwargs["telegram_id"] == "123"
         assert content == b"docx fixture"
         letter["attachments"].append({"id": str(uuid4()), "documentRole": query["role"][0]})
+        if query["role"][0] == "primary":
+            letter["documentCheck"] = {
+                "id": str(uuid4()), "status": "pending", "reviewerKeys": [], "detail": ""
+            }
         letter["revision"] += 1
 
     api.request.side_effect = request
@@ -159,6 +168,38 @@ def wizard(modules, tmp_path):
     )
 
 
+def test_failed_check_keeps_sender_before_attachments_and_deletes_only_system_prompts(wizard):
+    w = wizard
+    w.message("/new")
+    w.click("Пропустить")
+    w.message(document=True)
+    checking_message = w.state.get("system:123:wizard")["id"]
+    assert "проверяет" in w.telegram.send_message.call_args.args[1]
+    w.letter()["documentCheck"]["status"] = "failed"
+    w.bot.wizard.poll_checks()
+    assert "IT-специалисту" in w.telegram.send_message.call_args.args[1]
+    assert w.state.get("wizard:123")["step"] == "checking"
+    assert all(call.args[1] >= 1000 for call in w.telegram.delete_message.call_args_list)
+    w.telegram.delete_message.assert_any_call("123", checking_message)
+    w.click("Назад")
+    w.message(document=True)
+    w.letter()["documentCheck"].update(status="passed", reviewerKeys=["askar"])
+    w.bot.wizard.poll_checks()
+    assert w.state.get("wizard:123")["step"] == "attachments"
+    w.click("Назад")
+    assert w.state.get("wizard:123")["step"] == "document"
+
+
+def test_old_telegram_system_message_loses_controls_when_deletion_is_forbidden(wizard):
+    w = wizard
+    w.bot.system("123", "test", "Old", [])
+    w.telegram.delete_message.return_value = {"ok": False}
+    w.telegram.edit_message_text.return_value = {"ok": True}
+    w.bot.system("123", "test", "New", [])
+    assert w.telegram.edit_message_text.call_args.kwargs["reply_markup"] == {"inline_keyboard": []}
+    assert w.state.get("system:123:test")["id"] == 1001
+
+
 def test_delivery_optional_subject_document_first_catalog_and_single_reviewer(wizard):
     w = wizard
     w.message("📤 Отправить письмо")
@@ -166,6 +207,9 @@ def test_delivery_optional_subject_document_first_catalog_and_single_reviewer(wi
     assert w.state.get("wizard:123")["step"] == "document"
     assert w.letter()["subject"] == ""
     w.message(document=True)
+    assert w.state.get("wizard:123")["step"] == "checking"
+    w.letter()["documentCheck"].update(status="passed", reviewerKeys=["askar", "bobur"])
+    w.bot.wizard.poll_checks()
     w.click("Без приложений")
     w.click("Справочник")
     old_organization = w.data("Example ministry")
@@ -173,6 +217,8 @@ def test_delivery_optional_subject_document_first_catalog_and_single_reviewer(wi
     w.click(raw=old_organization)  # immutable payload, not a new page's index
     w.click("ministry@exat.uz")
     w.click("askar")
+    assert w.state.get("wizard:123")["step"] == "confirm"
+    w.click("Отправить на согласование")
     assert w.letter()["status"] == "pending_review"
     assert w.letter()["finalReviewerUserId"] is None
     assert not w.state.get("wizard:123")
@@ -187,6 +233,8 @@ def test_custom_address_bobur_preliminary_route_and_custom_subject(wizard, addre
     w.message("/new")
     w.message("Моя точная тема")
     w.message(document=True)
+    w.letter()["documentCheck"].update(status="passed", reviewerKeys=["askar", "bobur"])
+    w.bot.wizard.poll_checks()
     w.message(document=True)  # optional additional attachment
     w.click("Далее")
     w.click("Свой адрес")
@@ -196,6 +244,7 @@ def test_custom_address_bobur_preliminary_route_and_custom_subject(wizard, addre
     w.click("bobur")
     assert w.state.get("wizard:123")["step"] == "preliminary"
     w.click("umid")
+    w.click("Отправить на согласование")
     assert w.letter()["subject"] == "Моя точная тема"
     assert w.letter()["route"] == route
     assert w.letter()["reviewerUserId"] == w.reviewers[2]["userId"]
@@ -207,7 +256,10 @@ def test_sign_only_has_one_reviewer_and_never_asks_for_recipient(wizard):
     w.message("✍️ Только подпись")
     w.click("Пропустить")
     w.message(document=True)
+    w.letter()["documentCheck"].update(status="passed", reviewerKeys=["bobur"])
+    w.bot.wizard.poll_checks()
     w.click("bobur")
+    w.click("Отправить на согласование")
     assert w.letter()["workflowKind"] == "sign_only"
     assert w.letter()["status"] == "pending_review"
     assert w.letter()["finalReviewerUserId"] is None
@@ -222,6 +274,8 @@ def test_back_menu_search_and_resume_from_workspace(wizard):
     assert w.state.get("wizard:123")["step"] == "subject"
     w.click("Пропустить")
     w.message(document=True)
+    w.letter()["documentCheck"].update(status="passed", reviewerKeys=["askar", "bobur"])
+    w.bot.wizard.poll_checks()
     w.click("Без приложений")
     w.click("Поиск")
     w.message("Министерство")

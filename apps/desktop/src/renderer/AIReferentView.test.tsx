@@ -6,11 +6,16 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, uploadWorkspaceAttachment } from "./workspace-api";
+import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
+  checkAIReferentDocument: vi.fn(),
+  loadAIReferentDocumentCheck: vi.fn(),
+  uploadAIReferentCommentAudio: vi.fn(),
+  downloadAIReferentCommentAudio: vi.fn(),
+  deleteAIReferentLetter: vi.fn(),
   createAIReferentLetter: vi.fn(),
   downloadAIReferentJournal: vi.fn(),
   downloadWorkspaceAttachment: vi.fn(),
@@ -142,6 +147,51 @@ describe("AIReferentView", () => {
       .toBe("0439-26-AI — Материалы Навои.zip");
   });
 
+  it("accepts dropped DOCX and blocks saving until the robot finishes", async () => {
+    vi.mocked(checkAIReferentDocument).mockResolvedValue({ id: "check", status: "pending", reviewerKeys: [], detail: "" });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    const input = screen.getByLabelText("Выбрать основной документ DOCX");
+    const zone = input.closest("label")!;
+    const file = new File(["PK"], "Letter.docx");
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } });
+    await waitFor(() => expect(checkAIReferentDocument).toHaveBeenCalledWith("token", file, "delivery"));
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    expect(screen.getByText(/Подождите: робот проверяет/)).toBeInTheDocument();
+    const attachment = new File(["PDF"], "Appendix.pdf");
+    fireEvent.drop(screen.getByLabelText("Выбрать дополнительные вложения").closest("label")!, { dataTransfer: { files: [attachment] } });
+    expect(screen.getByText("Appendix.pdf")).toBeInTheDocument();
+  });
+
+  it("shows failed checks, retries them and removes the checking message on success", async () => {
+    vi.mocked(checkAIReferentDocument).mockResolvedValueOnce({ id: "check", status: "failed", reviewerKeys: [], detail: "Обратитесь к IT-специалисту." })
+      .mockResolvedValueOnce({ id: "check", status: "passed", reviewerKeys: ["askar"], detail: "" });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [new File(["PK"], "letter.docx")] } });
+    expect(await screen.findByText("Обратитесь к IT-специалисту.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled());
+    expect(screen.queryByText(/Подождите: робот проверяет/)).not.toBeInTheDocument();
+  });
+
+  it("requires a preliminary reviewer for Bobur and does not wrap dropdowns in labels", async () => {
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue({ revision: 1, updatedAt: "2026-09-25", runtimes: [], reviewers: [
+      { key: "bobur", userId: "bobur", username: "bobur", fullName: "Бобур", telegramId: null, enabled: true, canApprove: true, suggestedUsername: "bobur", label: "Бобур", accountActive: true },
+      { key: "askar", userId: "askar", username: "askar", fullName: "Аскар", telegramId: null, enabled: true, canApprove: true, suggestedUsername: "askar", label: "Аскар", accountActive: true },
+    ] });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
+    await waitFor(() => expect(loadAIReferentReviewers).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    const reviewer = screen.getByRole("combobox", { name: "Согласующий" });
+    fireEvent.change(reviewer, { target: { value: "bobur" } });
+    expect(screen.getByRole("combobox", { name: /Предварительный согласующий/ })).toHaveTextContent("Выберите предварительного согласующего");
+    expect(screen.queryByRole("option", { name: "Только Бобур" })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Канал отправки" }).closest("label")).toBeNull();
+  });
+
   it("opens a notification target and requires a reason before returning a letter", async () => {
     vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Письмо уже изменилось"));
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
@@ -152,7 +202,7 @@ describe("AIReferentView", () => {
     expect(action).toBeDisabled();
     fireEvent.change(comment, { target: { value: "Уточните адрес" } });
     fireEvent.click(action);
-    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ id: "letter-1", revision: 2 }), "return_for_revision", "Уточните адрес", expect.any(String)));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ id: "letter-1", revision: 2 }), "return_for_revision", "Уточните адрес", expect.any(String), undefined));
     expect(await screen.findAllByText("Письмо уже изменилось")).not.toHaveLength(0);
     expect(comment).toHaveValue("Уточните адрес");
   });
@@ -176,7 +226,7 @@ describe("AIReferentView", () => {
     expect(actOnAIReferentLetter).not.toHaveBeenCalled();
     vi.mocked(actOnAIReferentLetter).mockResolvedValue({ ...letter, revision: 14, status: "queued", availableActions: [], canReplaceDocument: false });
     fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
-    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ revision: 13 }), "prepare_replacement", "", expect.any(String)));
+    await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ revision: 13 }), "prepare_replacement", "", expect.any(String), undefined));
     expect(screen.queryByRole("button", { name: "Отправить на согласование" })).not.toBeInTheDocument();
   });
 

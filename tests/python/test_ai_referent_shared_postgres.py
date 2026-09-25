@@ -13,6 +13,7 @@ from pydantic import SecretStr
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from ai_referent_test_support import pass_preflight
 from test_zoom_postgres import zoom_settings
 from yuksalish_api.auth import issue_access_token
 from yuksalish_api.main import create_app
@@ -213,6 +214,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert duplicate["id"] == file["id"]
         letter = await call("GET", path, author)
         assert len(letter["attachments"]) == 1
+        await action("submit", author, 409)
+        await pass_preflight(client, engine, letter["id"], author, "shared-test-agent")
         await action("submit", author)
         await action("approve", telegram("910002"), 403)
         await action("return_for_revision", telegram("910001"), comment="Please correct the draft")
@@ -260,9 +263,26 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         signed = b"%PDF-1.4 signed fixture"
         params = {**lease, "jobId": job["id"], "name": f"signed/{job['id']}.pdf"}
         await call("PUT", f"/agent/files/outgoing/{letter['id']}", params=params, content=signed)
-        completion = {**lease, "outcome": "prepared", "detail": "Prepared only"}
+        completion = {**lease, "outcome": "prepared", "detail": "Prepared only", "autoSend": True}
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
         await call("POST", f"/agent/jobs/{job['id']}/result", expected=204, json=completion)
+        letter = await call("GET", path, author)
+        assert letter["status"] == "awaiting_final_send" and letter["finalPdfFileId"]
+        await action("send", admin, 409)
+        await action("release_delivery", telegram("910001"), 403)
+        await action("release_delivery", telegram("910002"))
+        dispatch = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        assert dispatch["kind"] == "dispatch"
+        await call(
+            "POST",
+            f"/agent/jobs/{dispatch['id']}/result",
+            expected=204,
+            json={
+                "agentId": "referent-test",
+                "leaseToken": dispatch["leaseToken"],
+                "outcome": "ready",
+            },
+        )
         letter = await call("GET", path, author)
         assert letter["status"] == "referent_review_pending"
         packet = await call("GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910002"))
@@ -569,6 +589,7 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
                 },
             )
 
+        await pass_preflight(client, engine, letter["id"], author, "shared-test-agent")
         await action("submit", author)
         bindings[1] = {**bindings[1], "enabled": False}
         await configure()
@@ -613,6 +634,7 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
         assert current["status"] == "failed" and "retry_delivery" in current["availableActions"]
         await action("return_for_revision", auth("baxtiyor"), comment="Replace source document")
         # Revisions preserve the allocated number while repeating the entire route.
+        await pass_preflight(client, engine, letter["id"], author, "shared-test-agent")
         await action("submit", author)
         await action("approve", auth("aziza"))
         again = await action("approve", auth("baxtiyor"))
@@ -642,6 +664,49 @@ async def test_reassignment_failed_preparation_and_operator_delivery():
             f"/agent/jobs/{job['id']}/result",
             expected=204,
             json={**lease, "outcome": "prepared"},
+        )
+        # Bobur may reject the actual signed PDF. That exact file loses its
+        # send authorization and the whole route repeats without a new number.
+        final_view = await call("GET", path, author)
+        assert final_view["status"] == "awaiting_final_send"
+        old_pdf = final_view["finalPdfFileId"]
+        returned = await action(
+            "return_for_revision", auth("baxtiyor"), comment="Fix the final PDF layout"
+        )
+        assert returned["status"] == "needs_revision"
+        assert returned["finalPdfFileId"] is None
+        assert returned["reviewerUserId"] == str(accounts["aziza"]["id"])
+        await action("release_delivery", auth("baxtiyor"), 403)
+        await action("submit", author)
+        await action("approve", auth("aziza"))
+        await action("approve", auth("baxtiyor"))
+        job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        lease = {"agentId": "referent-test", "leaseToken": job["leaseToken"]}
+        await call(
+            "PUT", f"/agent/files/outgoing/{letter['id']}",
+            params={**lease, "jobId": job["id"], "name": f"signed/{job['id']}.pdf"},
+            content=b"%PDF-1.4 new approved revision",
+        )
+        await call(
+            "POST", f"/agent/jobs/{job['id']}/result", expected=204,
+            json={**lease, "outcome": "prepared", "autoSend": True},
+        )
+        final_view = await call("GET", path, author)
+        assert final_view["status"] == "awaiting_final_send"  # even with auto-send on
+        assert final_view["displayNumber"] == returned["displayNumber"]
+        assert final_view["finalPdfFileId"] != old_pdf
+        await action("release_delivery", auth("baxtiyor"))
+        dispatch = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]
+        assert dispatch["kind"] == "dispatch"
+        await call(
+            "POST",
+            f"/agent/jobs/{dispatch['id']}/result",
+            expected=204,
+            json={
+                "agentId": "referent-test",
+                "leaseToken": dispatch["leaseToken"],
+                "outcome": "ready",
+            },
         )
         await action("send")
         job = (await call("POST", "/agent/jobs/claim?agentId=referent-test"))["job"]

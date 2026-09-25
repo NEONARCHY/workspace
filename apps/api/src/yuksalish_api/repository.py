@@ -5673,6 +5673,23 @@ async def create_attachment(
 ) -> AttachmentResponse:
     await validate_attachment_owner(connection, current_user, owner_type, owner_id, write=True)
     if owner_type == "ai_referent_letter":
+        if document_role == "primary" and file_name.lower().endswith(".docx"):
+            from .ai_referent_preflight import ensure_check
+
+            workflow_kind = await connection.scalar(
+                select(ai_referent_letters.c.workflow_kind).where(
+                    ai_referent_letters.c.id == owner_id
+                )
+            )
+            await ensure_check(
+                connection,
+                current_user.id,
+                sha256,
+                str(workflow_kind),
+                file_name,
+                storage_key,
+                restart_failed=True,
+            )
         existing = (await connection.execute(select(attachments).where(
             attachments.c.owner_type == owner_type,
             attachments.c.owner_id == owner_id,

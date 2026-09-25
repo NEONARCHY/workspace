@@ -21,11 +21,11 @@ from .worker import DeliveryWorker
 ACTIONS = {
     "s": ("submit", "На согласование"),
     "a": ("approve", "Согласовать"),
-    "r": ("return_for_revision", "Дать комментарий"),
+    "r": ("return_for_revision", "Вернуть на доработку"),
     "c": ("cancel", "Отклонить отправку"),
     "p": ("queue_delivery", "Подготовить PDF"),
     "t": ("retry_delivery", "Повторить подготовку"),
-    "l": ("release_delivery", "Разрешить отправку"),
+    "l": ("release_delivery", "Отправить"),
     "d": ("send", "Отправить"),
     "y": ("confirm_sent", "Подтвердить: доставлено"),
     "n": ("confirm_not_sent", "Подтвердить: не доставлено"),
@@ -116,7 +116,9 @@ class SharedBot:
             "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
         )
 
-    def say(self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None) -> None:
+    def say(
+        self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None
+    ) -> int | None:
         menu = {
             "keyboard": [
                 [{"text": "📤 Новое письмо"}, {"text": "✍️ Только подпись"}],
@@ -131,6 +133,70 @@ class SharedBot:
         )
         if result.get("ok") is False:
             raise WorkspaceError("Telegram не подтвердил доставку сообщения.")
+        return result.get("result", {}).get("message_id")
+
+    def clear_system(self, actor: str, scope: str) -> None:
+        key = f"system:{actor}:{scope}"
+        record = self.state.get(key)
+        if not record:
+            return
+        try:
+            result = self.telegram.delete_message(actor, record["id"])
+            if result.get("ok") is False:
+                raise WorkspaceError("Telegram refused deletion")
+        except Exception:
+            # Telegram can forbid deletion of old messages. Remove controls instead;
+            # server revision checks remain the authority even if this call also fails.
+            try:
+                result = self.telegram.edit_message_text(
+                    actor,
+                    record["id"],
+                    "Этот этап завершён. Актуальное состояние — в «Согласование».",
+                    reply_markup={"inline_keyboard": []},
+                )
+                if result.get("ok") is False:
+                    return
+            except Exception:
+                return
+        self.state.remove(key)
+
+    def system(
+        self,
+        actor: str,
+        scope: str,
+        text: str,
+        rows: list[list[dict[str, str]]] | None = None,
+        *,
+        letter_id: str | None = None,
+        revision: int | None = None,
+    ) -> None:
+        message_id = self.say(actor, text, rows)
+        self.clear_system(actor, scope)
+        key = f"system:{actor}:{scope}"
+        old = self.state.get(key)
+        if old:
+            self.state.put(f"system:{actor}:obsolete-{old['id']}", old)
+        if message_id is not None:
+            self.state.put(
+                key, {"id": message_id, "actor": actor, "letterId": letter_id, "revision": revision}
+            )
+
+    def clean_obsolete_controls(self) -> None:
+        for key, record in self.state.pending("system:"):
+            actor = record["actor"]
+            scope = key.split(":", 2)[2]
+            if scope.startswith("obsolete-"):
+                self.clear_system(actor, scope)
+                continue
+            if not record.get("letterId") or record.get("revision") is None:
+                continue
+            try:
+                letter = self.request(actor, "/letters/" + record["letterId"])
+                if letter["revision"] != record["revision"]:
+                    self.clear_system(actor, scope)
+            except WorkspaceError as error:
+                if error.status in {403, 404}:
+                    self.clear_system(actor, scope)
 
     def show(self, actor: str, letter_id: str) -> None:
         letter = self.request(actor, f"/letters/{UUID(letter_id)}")
@@ -141,6 +207,8 @@ class SharedBot:
             if action in letter["availableActions"]
         ]
         rows.append([button("Пакет документов", f"f:o:{compact}:0")])
+        if letter.get("canDelete"):
+            rows.append([button("Удалить письмо из базы", f"z:{compact}:{letter['revision']}")])
         if letter.get("canReplaceDocument"):
             rows.append([button("Загрузить новый DOCX или PDF", f"e:{compact}")])
         if letter["canEdit"]:
@@ -158,8 +226,9 @@ class SharedBot:
             "Без отправки адресату\n" if letter.get("workflowKind") == "sign_only"
             else f"Кому: {letter['recipientOrganization']}\n"
         )
-        self.say(
+        self.system(
             actor,
+            "letter-" + letter["id"],
             f"{number} · {STATUSES[letter['status']]}\n"
             f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
             f"{destination}"
@@ -168,6 +237,8 @@ class SharedBot:
             + (f"\nСлужебная заметка: {letter['note']}" if letter.get("note") else "")
             + (f"\n{letter['deliveryError']}" if letter.get("deliveryError") else ""),
             rows,
+            letter_id=letter["id"],
+            revision=letter["revision"],
         )
 
     def history(self, actor: str, kind: str, page: int) -> None:
@@ -195,8 +266,9 @@ class SharedBot:
             navigation.append(button("Далее →", f"list:{kind}:{page + 1}"))
         if navigation:
             rows.append(navigation)
-        self.say(
+        self.system(
             actor,
+            "history",
             f"{'Согласование и черновики' if kind == 'pending' else 'История'} · "
             f"страница {page + 1}" + ("\nПисем пока нет." if not result["letters"] else ""),
             rows,
@@ -208,12 +280,19 @@ class SharedBot:
     ) -> list[dict[str, Any]]:
         """History stays in the packet; decisions receive only the current document version."""
         roles = {item["id"]: item.get("documentRole") for item in letter.get("attachments", [])}
-        final = letter["status"] == "referent_review_pending"
+        final = letter["status"] in {"referent_review_pending", "awaiting_final_send", "sent"}
         selected = [
             entry
             for entry in files
             if entry["source"] == "attachment"
-            and roles.get(entry["id"]) in ({"additional"} if final else {"primary", "additional"})
+            and roles.get(entry["id"])
+            in (
+                set()
+                if letter["status"] in {"awaiting_final_send", "sent"}
+                else {"additional"}
+                if final
+                else {"primary", "additional"}
+            )
         ]
         if final:
             signed = [
@@ -222,42 +301,88 @@ class SharedBot:
                 if entry["source"] == "packet"
                 and entry["name"].startswith("signed/")
                 and entry["name"].lower().endswith(".pdf")
+                and (not letter.get("finalPdfFileId") or entry["id"] == letter["finalPdfFileId"])
             ]
             if signed:
                 selected.insert(0, max(signed, key=lambda entry: entry["createdAt"]))
         return selected
 
+    def deliver_comments(self, actor: str, letter: dict[str, Any]) -> None:
+        for event in reversed(letter.get("events", [])):
+            if event["eventType"] != "letter.return_for_revision":
+                continue
+            receipt = f"comment-delivered:{actor}:{event['id']}"
+            if self.state.get(receipt):
+                continue
+            title = letter.get("displayNumber") or letter["subject"] or "без номера"
+            caption = f"Комментарий к письму {title} · {event['actorName']}"
+            audio = event.get("audio")
+            if audio:
+                content = self.api.transfer(
+                    "/ai-referent/agent/comment-audio/" + audio["id"], telegram_id=actor
+                )
+                with tempfile.TemporaryDirectory(prefix="referent-voice-") as folder:
+                    ogg = audio["contentType"] == "audio/ogg"
+                    path = Path(folder) / ("Комментарий.ogg" if ogg else "Комментарий.webm")
+                    path.write_bytes(content)
+                    response = (
+                        self.telegram._multipart_api(
+                            "sendVoice", {"chat_id": actor, "caption": caption}, "voice", path
+                        )
+                        if ogg
+                        else self.telegram.send_document(actor, path, caption=caption)
+                    )
+                    if response.get("ok") is False:
+                        raise WorkspaceError("Telegram не принял голосовой комментарий.")
+            if event.get("comment"):
+                self.say(actor, caption + "\n" + event["comment"])
+            self.state.put(receipt, True)
+
     def notifications(self) -> None:
+        self.wizard.poll_checks()
+        self.clean_obsolete_controls()
         for item in self.api.request("/ai-referent/agent/notifications/claim", method="POST").get(
             "notifications", []
         ):
             delivered, error = False, ""
             try:
-                text_receipt = f"notice-text:{item['id']}"
-                if not self.state.get(text_receipt):
-                    self.say(
-                        item["telegramId"],
-                        item["text"],
-                        [[button("Открыть актуальное письмо", "o:" + UUID(item["letterId"]).hex)]],
-                    )
-                    self.state.put(text_receipt, True)
                 letter = self.api.request(
                     f"/ai-referent/agent/letters/{item['letterId']}",
                     telegram_id=item["telegramId"],
                 )
+                # Queued notifications may be older than the current decision. Show
+                # current state; deliver substantive comments independently by event ID.
+                text_receipt = f"notice-text:{item['id']}"
+                if not self.state.get(text_receipt):
+                    self.system(
+                        item["telegramId"],
+                        "notice-" + item["letterId"],
+                        f"{letter.get('displayNumber') or letter['subject'] or 'Письмо'} · "
+                        + STATUSES[letter["status"]],
+                        [[button("Открыть актуальное письмо", "o:" + UUID(item["letterId"]).hex)]],
+                        letter_id=letter["id"],
+                        revision=letter["revision"],
+                    )
+                    self.state.put(text_receipt, True)
+                self.deliver_comments(item["telegramId"], letter)
                 action_receipt = f"notice-actions:{item['id']}"
                 if not self.state.get(action_receipt):
                     if letter["status"] in {
                         "pending_review",
                         "needs_revision",
                         "referent_review_pending",
+                        "awaiting_final_send",
+                        "sent",
                     }:
                         packet = self.request(
                             item["telegramId"], f"/packets/outgoing/{item['letterId']}"
                         )
                         candidates = self.current_documents(letter, packet["files"])
                         for entry in candidates:
-                            file_receipt = f"notice-file:{item['id']}:{entry['id']}"
+                            file_receipt = (
+                                f"notice-file:{item['telegramId']}:{letter['id']}:"
+                                f"{letter['status']}:{entry['id']}"
+                            )
                             if self.state.get(file_receipt):
                                 continue
                             if int(entry.get("byteSize", 0)) > 20 * 1024 * 1024:
@@ -490,6 +615,40 @@ class SharedBot:
                         actor,
                         "Заявка создана. Пришлите DOCX: каждая страница — отдельное письмо.",
                     )
+                elif data[0] == "z":
+                    self.system(
+                        actor,
+                        "delete-" + str(UUID(data[1])),
+                        "Удалить письмо из общей базы? Оно исчезнет и в Workspace, и в Telegram. "
+                        "Отправленные письма и выполняемую отправку удалять нельзя. "
+                        "Сохраняется журнал удаления.",
+                        [
+                            [
+                                button("Да, удалить", f"v:z:{data[1]}:{data[2]}"),
+                                button("Не удалять", "o:" + data[1]),
+                            ]
+                        ],
+                        letter_id=str(UUID(data[1])),
+                        revision=int(data[2]),
+                    )
+                elif data[0] == "v" and data[1] == "z":
+                    letter_id = str(UUID(data[2]))
+                    result = self.request(
+                        actor,
+                        f"/letters/{letter_id}?expectedRevision={int(data[3])}",
+                        method="DELETE",
+                    )
+                    self.state.remove("wizard:" + actor)
+                    self.state.remove("conversation:" + actor)
+                    self.clear_system(actor, "wizard")
+                    self.clear_system(actor, "delete-" + letter_id)
+                    self.clear_system(actor, "letter-" + letter_id)
+                    self.say(
+                        actor,
+                        "Робот закроет подготовленное окно и удалит запись."
+                        if result.get("queued")
+                        else "Письмо удалено из общей базы.",
+                    )
                 elif data[0] == "a":
                     self.state.remove("wizard:" + actor)
                     action = ACTIONS[data[1]][0]
@@ -503,14 +662,19 @@ class SharedBot:
                             key,
                             {"step": "comment", "letterId": str(UUID(data[2])), "payload": payload},
                         )
-                        self.say(
+                        self.system(
                             actor,
-                            "Напишите комментарий или основание проверки (не менее 3 символов). "
+                            "comment-" + str(UUID(data[2])),
+                            "Напишите комментарий (не менее 3 символов) "
+                            "или отправьте голосовое сообщение. "
                             "/cancel — отменить ввод.",
+                            letter_id=str(UUID(data[2])),
+                            revision=int(data[3]),
                         )
                     elif action in {"send", "cancel", "mark_sent", "replace_document"}:
-                        self.say(
+                        self.system(
                             actor,
+                            "confirm-" + str(UUID(data[2])),
                             "Подтвердите действие: "
                             + ACTIONS[data[1]][1]
                             + (
@@ -519,6 +683,7 @@ class SharedBot:
                                 else ""
                             ),
                             [[button("Подтвердить", f"v:{data[1]}:{data[2]}:{data[3]}")]],
+                            letter_id=str(UUID(data[2])), revision=int(data[3]),
                         )
                     else:
                         self.request(actor, f"/letters/{UUID(data[2])}/actions", payload, "POST")
@@ -660,6 +825,9 @@ class SharedBot:
                 return
             # Any further data request is authenticated and authorized by the server.
             if text == "/cancel":
+                context = self.state.get(key) or {}
+                if context.get("letterId"):
+                    self.clear_system(actor, "comment-" + context["letterId"])
                 self.state.remove(key)
                 self.say(actor, "Ввод отменён. Сохранённые письма не удалены.")
             elif text.startswith("/pending"):
@@ -714,11 +882,48 @@ class SharedBot:
                     for entry in reviewers if entry["canApprove"]
                 ])
             elif context.get("step") == "comment":
-                if len(text) < 3:
+                audio_id = None
+                if message.get("voice") and context["payload"]["action"] == "return_for_revision":
+                    voice = message["voice"]
+                    duration = int(voice.get("duration") or 0) * 1000
+                    if (
+                        not 1 <= duration <= 300000
+                        or int(voice.get("file_size") or 0) > 10 * 1024 * 1024
+                    ):
+                        raise WorkspaceError("Запишите комментарий до 5 минут и 10 МБ.")
+                    metadata = self.telegram.get_file(voice["file_id"])
+                    with tempfile.TemporaryDirectory(prefix="referent-comment-") as folder:
+                        path = Path(folder) / "comment.ogg"
+                        self.telegram.download_file(metadata["result"]["file_path"], path)
+                        if path.stat().st_size > 10 * 1024 * 1024:
+                            raise WorkspaceError("Голосовой комментарий слишком большой.")
+                        response = self.api.transfer(
+                            f"/ai-referent/agent/letters/{context['letterId']}/comment-audio?"
+                            + urlencode(
+                                {
+                                    "expectedRevision": context["payload"]["expectedRevision"],
+                                    "durationMs": duration,
+                                }
+                            ),
+                            path.read_bytes(),
+                            method="PUT",
+                            telegram_id=actor,
+                            content_type="audio/ogg",
+                        )
+                        import json
+
+                        audio_id = json.loads(response)["id"]
+                if len(text) < 3 and audio_id is None:
                     raise WorkspaceError("Комментарий должен содержать не менее 3 символов.")
-                payload = {**context["payload"], "comment": text, "operationId": operation}
+                payload = {
+                    **context["payload"],
+                    "comment": text,
+                    "operationId": operation,
+                    "commentAudioId": audio_id,
+                }
                 self.request(actor, f"/letters/{context['letterId']}/actions", payload, "POST")
                 self.state.remove(key)
+                self.clear_system(actor, "comment-" + context["letterId"])
                 self.show(actor, context["letterId"])
             elif context.get("step") == "upload" and message.get("document"):
                 document = message["document"]

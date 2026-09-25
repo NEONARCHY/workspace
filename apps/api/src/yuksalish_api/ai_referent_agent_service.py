@@ -1,19 +1,23 @@
 """Fenced jobs: never silently repeat a possibly completed external send."""
 
 from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import insert, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .ai_referent_deletion import purge_letter
 from .ai_referent_service import _display_number, _event, _letter_row
 from .ai_referent_shared_service import notify_letter, telegram_id_for
 from .tables import (
     ai_referent_configuration,
+    ai_referent_document_checks,
     ai_referent_events,
     ai_referent_files,
     attachments,
+    audit_events,
     users,
 )
 from .tables import (
@@ -49,6 +53,8 @@ async def expire_jobs(connection: AsyncConnection) -> int:
             if job["kind"] in {"cancel", "replace"}
             else "operator_revision"
             if job["kind"] == "reprepare"
+            else "delivery_unknown"
+            if job["kind"] == "delete"
             else "failed"
         )
         await connection.execute(
@@ -100,6 +106,15 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         select(commands.c.id).where(commands.c.status == "claimed").limit(1)
     )
     if active:
+        return None
+    if await connection.scalar(
+        select(ai_referent_document_checks.c.id)
+        .where(
+            ai_referent_document_checks.c.status == "checking",
+            ai_referent_document_checks.c.lease_until > datetime.now(UTC),
+        )
+        .limit(1)
+    ):
         return None
     waiting_for_operator = await connection.scalar(
         select(letters.c.id)
@@ -193,6 +208,7 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
                     ai_referent_files.c.kind == "outgoing",
                     ai_referent_files.c.owner_id == row["id"],
                     ai_referent_files.c.relative_path.like("signed/%"),
+                    ai_referent_files.c.id == row["final_pdf_file_id"],
                 )
                 .order_by(ai_referent_files.c.created_at.desc())
                 .limit(1)
@@ -205,6 +221,7 @@ async def claim_job(connection: AsyncConnection, agent_id: str) -> dict[str, obj
         "id": str(job["id"]),
         "leaseToken": str(lease),
         "kind": job["kind"],
+        "requiresFinalCheck": row["reviewer_key"] == "bobur" and job["kind"] == "prepare",
         "letterId": str(row["id"]),
         "revision": row["revision"] + 1,
         "outgoingNumber": row["outgoing_number"],
@@ -269,6 +286,20 @@ async def complete_job(
         .mappings()
         .one_or_none()
     )
+    if job is None and outcome == "deleted":
+        # Deletion removes its command too. A lost HTTP response must not poison
+        # the robot's durable result queue; only the original executor may retry.
+        receipt = await connection.scalar(
+            select(audit_events.c.id).where(
+                audit_events.c.target_id == job_id,
+                audit_events.c.action == "ai_referent.agent_delete_complete",
+                audit_events.c.details["agentId"].astext == agent_id,
+                audit_events.c.details["leaseDigest"].astext
+                == sha256(str(lease).encode()).hexdigest(),
+            )
+        )
+        if receipt:
+            return
     if job is None or job["lease_token"] != lease or job["claimed_by"] != agent_id:
         raise HTTPException(409, "Устаревшее подтверждение задания.")
     result: dict[str, object] = {"outcome": outcome, "detail": detail}
@@ -283,10 +314,39 @@ async def complete_job(
     row = await _letter_row(connection, job["letter_id"], lock=True)
     if row["status"] != "sending":
         raise HTTPException(409, "Состояние письма уже изменилось.")
+    if outcome == "deleted":
+        if job["kind"] != "delete":
+            raise HTTPException(422, "Удаление не было запрошено.")
+        requestor = await connection.scalar(
+            select(audit_events.c.actor_user_id)
+            .where(
+                audit_events.c.target_id == row["id"],
+                audit_events.c.action == "ai_referent.delete",
+            )
+            .order_by(audit_events.c.created_at.desc())
+            .limit(1)
+        )
+        await connection.execute(
+            insert(audit_events).values(
+                id=uuid4(),
+                actor_user_id=requestor or row["created_by_user_id"],
+                action="ai_referent.agent_delete_complete",
+                target_type="ai_referent_command",
+                target_id=job_id,
+                details={
+                    "agentId": agent_id,
+                    "leaseDigest": sha256(str(lease).encode()).hexdigest(),
+                },
+                created_at=datetime.now(UTC),
+            )
+        )
+        await purge_letter(connection, row["id"])
+        return
     if row["workflow_kind"] == "sign_only" and job["kind"] != "sign_only":
         raise HTTPException(409, "Для подписи без отправки назначено неверное задание.")
     if row["workflow_kind"] == "sign_only" and outcome == "sent":
         raise HTTPException(422, "Внешняя отправка в режиме подписи запрещена.")
+    final_pdf_id = row["final_pdf_file_id"]
     if outcome == "prepared":
         if job["kind"] not in {"prepare", "reprepare", "sign_only"}:
             raise HTTPException(422, "Неверный результат отправки.")
@@ -316,9 +376,18 @@ async def complete_job(
             )
             if not signed:
                 raise HTTPException(422, "Сначала загрузите подписанный PDF этого задания.")
+            final_pdf_id = signed
             status = (
-                "queued" if auto_send and job["kind"] == "prepare" else "referent_review_pending"
+                "awaiting_final_send"
+                if row["reviewer_key"] == "bobur" and job["kind"] == "prepare"
+                else "queued"
+                if auto_send and job["kind"] == "prepare"
+                else "referent_review_pending"
             )
+    elif outcome == "ready":
+        if job["kind"] != "dispatch" or not final_pdf_id:
+            raise HTTPException(422, "Нет подтверждённого PDF для отправки.")
+        status = "queued" if auto_send else "referent_review_pending"
     elif outcome == "sent":
         if job["kind"] not in {"send", "record_sent"} or len(detail.strip()) < 3:
             raise HTTPException(422, "Требуется подтверждение фактической отправки.")
@@ -337,6 +406,8 @@ async def complete_job(
             if job["kind"] in {"cancel", "replace"}
             else "operator_revision"
             if job["kind"] == "reprepare"
+            else "delivery_unknown"
+            if job["kind"] == "delete"
             else "failed"
         )
     now = datetime.now(UTC)
@@ -359,6 +430,7 @@ async def complete_job(
             revision=row["revision"] + 1,
             updated_at=now,
             sent_at=now if status == "sent" else row["sent_at"],
+            final_pdf_file_id=final_pdf_id,
             delivery_error=detail if outcome in {"failed", "unknown"} else "",
         )
     )
