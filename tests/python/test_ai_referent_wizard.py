@@ -137,7 +137,10 @@ def wizard(modules, tmp_path):
         )
 
     def data(label):
-        rows = telegram.send_message.call_args.kwargs["reply_markup"]["inline_keyboard"]
+        current = state.get("system:123:wizard")
+        rows = current["rows"] if current else telegram.send_message.call_args.kwargs[
+            "reply_markup"
+        ]["inline_keyboard"]
         return next(item["callback_data"] for row in rows for item in row if label in item["text"])
 
     def click(label=None, raw=None):
@@ -175,12 +178,20 @@ def test_failed_check_keeps_sender_before_attachments_and_deletes_only_system_pr
     w.message(document=True)
     checking_message = w.state.get("system:123:wizard")["id"]
     assert "проверяет" in w.telegram.send_message.call_args.args[1]
+    assert w.telegram.send_message.call_count == 3
+    assert w.telegram.edit_message_text.call_args.args[1] == checking_message
+    assert all(
+        "Проверить состояние" not in item["text"]
+        for row in w.state.get("system:123:wizard")["rows"] for item in row
+    )
     w.letter()["documentCheck"]["status"] = "failed"
     w.bot.wizard.poll_checks()
-    assert "IT-специалисту" in w.telegram.send_message.call_args.args[1]
+    assert "IT-специалисту" in w.telegram.edit_message_text.call_args.args[2]
+    assert w.telegram.send_message.call_count == 3
     assert w.state.get("wizard:123")["step"] == "checking"
     assert all(call.args[1] >= 1000 for call in w.telegram.delete_message.call_args_list)
-    w.telegram.delete_message.assert_any_call("123", checking_message)
+    w.bot.wizard.poll_checks()
+    assert w.telegram.edit_message_text.call_count == 2
     w.click("Назад")
     w.message(document=True)
     w.letter()["documentCheck"].update(status="passed", reviewerKeys=["askar"])
@@ -198,6 +209,18 @@ def test_old_telegram_system_message_loses_controls_when_deletion_is_forbidden(w
     w.bot.system("123", "test", "New", [])
     assert w.telegram.edit_message_text.call_args.kwargs["reply_markup"] == {"inline_keyboard": []}
     assert w.state.get("system:123:test")["id"] == 1001
+
+
+def test_check_status_falls_back_to_new_message_if_telegram_cannot_edit(wizard):
+    w = wizard
+    rows = [[{"text": "Назад", "callback_data": "back"}]]
+    w.bot.system("123", "test", "Проверка идёт", rows)
+    previous = w.state.get("system:123:test")["id"]
+    w.telegram.edit_message_text.return_value = {"ok": False}
+    w.bot.system("123", "test", "Проверка завершена", rows, edit_existing=True)
+    assert w.telegram.send_message.call_count == 2
+    w.telegram.delete_message.assert_called_once_with("123", previous)
+    assert w.state.get("system:123:test")["id"] != previous
 
 
 def test_delivery_optional_subject_document_first_catalog_and_single_reviewer(wizard):

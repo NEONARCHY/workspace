@@ -170,16 +170,42 @@ class SharedBot:
         *,
         letter_id: str | None = None,
         revision: int | None = None,
+        edit_existing: bool = False,
     ) -> None:
-        message_id = self.say(actor, text, rows)
-        self.clear_system(actor, scope)
         key = f"system:{actor}:{scope}"
         old = self.state.get(key)
+        markup = {"inline_keyboard": rows} if rows else None
+        if edit_existing and old and old.get("id") and markup:
+            if old.get("text") == text and old.get("rows") == rows:
+                return
+            try:
+                result = self.telegram.edit_message_text(
+                    actor, old["id"], text, reply_markup=markup
+                )
+                if result.get("ok") is not False:
+                    self.state.put(
+                        key,
+                        {
+                            "id": old["id"], "actor": actor, "letterId": letter_id,
+                            "revision": revision, "text": text, "rows": rows,
+                        },
+                    )
+                    return
+            except Exception:
+                pass
+        message_id = self.say(actor, text, rows)
         if old:
-            self.state.put(f"system:{actor}:obsolete-{old['id']}", old)
+            self.clear_system(actor, scope)
+            if self.state.get(key):
+                self.state.put(f"system:{actor}:obsolete-{old['id']}", old)
+                self.state.remove(key)
         if message_id is not None:
             self.state.put(
-                key, {"id": message_id, "actor": actor, "letterId": letter_id, "revision": revision}
+                key,
+                {
+                    "id": message_id, "actor": actor, "letterId": letter_id,
+                    "revision": revision, "text": text, "rows": rows,
+                },
             )
 
     def clean_obsolete_controls(self) -> None:
