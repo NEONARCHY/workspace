@@ -38,6 +38,7 @@ from ..ai_referent_files_service import (
     store_packet_file,
 )
 from ..ai_referent_offline_numbers import reserve_offline_numbers
+from ..ai_referent_offline_rights import export_offline_rights
 from ..ai_referent_preflight import (
     check_response,
     checked_lease,
@@ -66,6 +67,7 @@ from ..ai_referent_schemas import (
     OfflineAuthorityLease,
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
+    OfflineRightsSnapshot,
     UpdateAIReferentLetterRequest,
 )
 from ..ai_referent_service import (
@@ -848,6 +850,23 @@ async def heartbeat_agent_authority(
 ) -> OfflineAuthorityLease:
     return await heartbeat_authority(
         connection, agent_id=payload.agent_id, epoch=payload.epoch
+    )
+
+
+@router.get(
+    "/agent/offline/rights",
+    response_model=OfflineRightsSnapshot,
+    dependencies=[Depends(require_agent_token)],
+)
+async def get_agent_offline_rights(
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineRightsSnapshot:
+    return await export_offline_rights(
+        connection, agent_id=agent_id, epoch=epoch,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
 
 

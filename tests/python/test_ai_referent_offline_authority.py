@@ -1,5 +1,7 @@
 """Offline writes require a server lease, conservative wait and durable fence."""
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -81,8 +83,40 @@ def test_client_uses_agent_token_routes_for_lease(monkeypatch):
     epoch = str(uuid4())
     assert client.start_offline_authority() == {"ok": True}
     assert client.heartbeat_offline_authority(epoch) == {"ok": True}
+    assert client.offline_rights(epoch) == {"ok": True}
     assert calls == [
         ("/ai-referent/agent/offline/authority:start?agentId=referent-pc", {}, "POST"),
         ("/ai-referent/agent/offline/authority:heartbeat",
          {"agentId": "referent-pc", "epoch": epoch}, "POST"),
+        (f"/ai-referent/agent/offline/rights?agentId=referent-pc&epoch={epoch}",
+         None, "GET"),
     ]
+
+
+def test_last_verified_rights_replace_revoked_ids_atomically(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+
+    def response(actor_ids, stamp):
+        actors = [{"telegramId": value, "userId": str(uuid4()),
+                   "fullName": "Сотрудник", "role": "employee", "reviewerKeys": []}
+                  for value in actor_ids]
+        canonical = json.dumps(actors, ensure_ascii=False, sort_keys=True,
+                               separators=(",", ":"))
+        return {"epoch": epoch, "actors": actors, "verifiedAt": stamp,
+                "contentSha256": hashlib.sha256(canonical.encode()).hexdigest()}
+
+    first = response(["123"], "2026-09-25T12:00:00Z")
+    journal.save_offline_rights(first)
+    assert journal.offline_actor("123")["telegramId"] == "123"
+    later = response(["456"], "2026-09-25T12:00:01Z")
+    journal.save_offline_rights(later)
+    assert journal.offline_actor("123") is None
+    assert journal.offline_actor("456")["telegramId"] == "456"
+    with pytest.raises(ValueError, match="старой"):
+        journal.save_offline_rights(first)
+    damaged = dict(later, contentSha256="0" * 64)
+    with pytest.raises(ValueError, match="сумма"):
+        journal.save_offline_rights(damaged)
+    assert journal.offline_actor("456") is not None

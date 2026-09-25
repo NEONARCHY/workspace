@@ -222,6 +222,14 @@ class WorkspaceClient:
             {"agentId": self.agent_id, "epoch": epoch}, method="POST",
         )
 
+    def offline_rights(self, epoch: str) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/rights?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch})
+        )
+
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(
             "/auth/login",

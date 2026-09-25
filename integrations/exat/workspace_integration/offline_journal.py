@@ -106,6 +106,13 @@ class OfflineJournal:
                     phase TEXT NOT NULL CHECK (phase IN ('online', 'offline', 'replay')),
                     updated_at TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS rights_snapshot (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    epoch TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    verified_at TEXT NOT NULL,
+                    content_sha256 TEXT NOT NULL
+                );
                 """
             )
 
@@ -145,6 +152,67 @@ class OfflineJournal:
                 "UPDATE authority_state SET phase = ?, updated_at = ? WHERE id = 1",
                 (phase, _now()),
             )
+
+    def save_offline_rights(self, response: dict[str, Any]) -> None:
+        """Atomically replace the last server-verified actor set, including revocations."""
+        epoch = str(UUID(str(response["epoch"])))
+        actors = response["actors"]
+        if not isinstance(actors, list):
+            raise ValueError("Сервер вернул неверный список Telegram-доступов.")
+        ids = [actor.get("telegramId") for actor in actors if isinstance(actor, dict)]
+        if (
+            len(ids) != len(actors)
+            or any(not isinstance(value, str) or not value.isdecimal() for value in ids)
+            or len(ids) != len(set(ids))
+        ):
+            raise ValueError("Telegram-доступы содержат дубли или неверные ID.")
+        canonical = _json(actors)
+        digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        if digest != response.get("contentSha256"):
+            raise ValueError("Контрольная сумма Telegram-доступов не совпала.")
+        verified_at = datetime.fromisoformat(
+            str(response["verifiedAt"]).replace("Z", "+00:00")
+        )
+        if verified_at.tzinfo is None:
+            raise ValueError("Время проверки Telegram-доступов не указано.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            state = connection.execute(
+                "SELECT epoch, phase FROM authority_state WHERE id = 1"
+            ).fetchone()
+            if state is None or state["epoch"] != epoch or state["phase"] != "online":
+                raise ValueError("Нет действующей аренды для сохранения прав.")
+            previous = connection.execute(
+                "SELECT verified_at, content_sha256 FROM rights_snapshot WHERE id = 1"
+            ).fetchone()
+            if previous is not None:
+                prior_time = datetime.fromisoformat(previous["verified_at"])
+                if verified_at < prior_time or (
+                    verified_at == prior_time and digest != previous["content_sha256"]
+                ):
+                    raise ValueError("Нельзя заменить права более старой или иной копией.")
+            connection.execute(
+                "INSERT INTO rights_snapshot VALUES (1, ?, ?, ?, ?) "
+                "ON CONFLICT(id) DO UPDATE SET epoch = excluded.epoch, "
+                "payload = excluded.payload, verified_at = excluded.verified_at, "
+                "content_sha256 = excluded.content_sha256",
+                (epoch, canonical, verified_at.isoformat(), digest),
+            )
+
+    def offline_actor(self, telegram_id: str) -> dict[str, Any] | None:
+        """Missing or revoked IDs have no access; old cache cannot grant it."""
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT payload, content_sha256 FROM rights_snapshot WHERE id = 1"
+            ).fetchone()
+        if row is None:
+            return None
+        if hashlib.sha256(row["payload"].encode("utf-8")).hexdigest() != row["content_sha256"]:
+            raise ValueError("Локальная копия Telegram-доступов повреждена.")
+        for actor in json.loads(row["payload"]):
+            if actor["telegramId"] == telegram_id:
+                return actor
+        return None
 
     def prepare_number_reservation(self, agent_id: str, count: int) -> str:
         """Persist the idempotency key before asking the server for a range."""

@@ -117,6 +117,22 @@ class OfflineAuthorityStatus(ApiModel):
     detail: str = ""
 
 
+class OfflineTelegramActor(ApiModel):
+    telegram_id: str
+    user_id: UUID
+    full_name: str
+    role: str
+    reviewer_keys: list[str]
+
+
+class OfflineRightsSnapshot(ApiModel):
+    epoch: UUID
+    verified_at: datetime
+    reviewer_revision: int
+    actors: list[OfflineTelegramActor]
+    content_sha256: str
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]
