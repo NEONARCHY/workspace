@@ -317,7 +317,7 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
       </main>
     </div> : <div className="project-hub-funding-layout">
       <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
-      <div className="project-hub-funding-board approval-kanban" role="region" aria-label="Канбан проектных заявок">
+      <div className="project-hub-funding-board project-request-kanban" role="region" aria-label="Канбан проектных заявок">
         {(["draft", "pending", "approved", "rejected"] as const).map((status) => {
           const columnRequests = requests.filter((request) => request.status === status);
           return <section className={`project-hub-funding-lane approval-column ${status}`} key={status} aria-label={requestStatus[status]} style={{ "--approval-stage-color": requestStageColors[status] } as CSSProperties}>
@@ -329,7 +329,6 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
             </div>
           </section>;
         })}
-        {!requests.length ? <p className="project-hub-empty">Доступных проектных заявок пока нет.</p> : null}
       </div>
       <aside className="project-hub-funding-detail" aria-label="Карточка проектной заявки">{actionError ? <p className="project-hub-error" role="alert">{actionError}</p> : null}{selectedRequest ? <><span className="view-kicker">{selectedRequest.projectTitle} · {selectedRequest.itemTitle}</span><h2>{selectedRequest.title}</h2><p>{selectedRequest.purpose || "Назначение не указано"}</p><div className="project-hub-funding-amount">{formatMoney(selectedRequest.amount, selectedRequest.currency)}</div><div className={`project-hub-state ${selectedRequest.status}`}>{requestStatus[selectedRequest.status]}</div><p className={selectedRequest.status === "pending" && selectedRequest.approvalDueAt && new Date(selectedRequest.approvalDueAt).getTime() < asOf ? "project-hub-deadline-overdue" : ""}>Срок согласования: {formatDate(selectedRequest.approvalDueAt)}</p>
         <h3>Файлы</h3><div className="project-hub-files">{selectedRequest.attachments.map((file) => <Button appearance="subtle" key={file.id} onClick={() => void downloadFile(file.id, file.fileName)}>{file.fileName}</Button>)}{!selectedRequest.attachments.length ? <p>Файлов пока нет.</p> : null}</div>
