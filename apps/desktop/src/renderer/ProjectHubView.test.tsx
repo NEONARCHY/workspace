@@ -75,6 +75,7 @@ describe("standalone project hub", () => {
   it("shows the own project work and multiple requests without global task/payment data", async () => {
     setup();
     expect(await screen.findByRole("heading", { name: project.title })).toBeInTheDocument();
+    expect(screen.getByLabelText("Всего проектов: 1")).toHaveTextContent("1");
     const work = screen.getByRole("region", { name: "Направления и работы проекта" });
     expect(within(work).getByText("Проведение форума")).toBeInTheDocument();
     expect(within(work).queryByText("Форум")).not.toBeInTheDocument();
@@ -103,6 +104,9 @@ describe("standalone project hub", () => {
     setup("funding");
     const card = await screen.findByRole("button", { name: /Печать баннеров/ });
     fireEvent.click(card);
+    expect(screen.getByLabelText("Всего проектных заявок: 2")).toHaveTextContent("2");
+    expect(screen.getByLabelText("Сводка проектных заявок")).toHaveTextContent("Ожидают решения");
+    expect(card).toHaveAttribute("aria-current", "true");
     const detail = screen.getByLabelText("Карточка проектной заявки");
     expect(within(detail).getByText("Печать баннеров")).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Согласовать" }));
@@ -123,7 +127,7 @@ describe("standalone project hub", () => {
     ));
   });
 
-  it("groups requests into three approval lanes", async () => {
+  it("groups requests into four approval lanes", async () => {
     setup("funding");
     const board = await screen.findByRole("region", { name: "Канбан проектных заявок" });
     expect(within(board).getByRole("region", { name: "На согласовании" })).toHaveTextContent("Печать баннеров");

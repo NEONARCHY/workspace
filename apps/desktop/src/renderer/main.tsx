@@ -34,6 +34,7 @@ import "./desktop-updates.css";
 import "./window-titlebar.css";
 import "./web-platform.css";
 import "./workspace-2-focus.css";
+import "./project-hub.css";
 import "./ai-referent-workspace.css";
 import "./ai-hisobot.css";
 import "./telegram-access.css";
