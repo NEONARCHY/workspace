@@ -81,6 +81,16 @@ async function main() {
       throw error;
     }
     await page.evaluate(() => document.fonts.ready);
+    const headerArtBounds = await page.locator(".ai-referent-header-art").boundingBox();
+    const referentViewBounds = await page.locator(".ai-referent-view").boundingBox();
+    assert.ok(headerArtBounds && referentViewBounds, "AI Referent header artwork must be visible");
+    assert.ok(
+      Math.abs(
+        (headerArtBounds.x + headerArtBounds.width)
+        - (referentViewBounds.x + referentViewBounds.width),
+      ) <= 1,
+      "AI Referent header artwork mask must reach the right edge of the view",
+    );
     for (const [width, height, suffix] of (focusCompose ? [] : [[1440, 900, "1440"], [1024, 768, "1024"], [800, 640, "800"]])) {
       await page.setViewportSize({ width, height });
       const box = await page.locator(".ai-incoming-table-wrap").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));

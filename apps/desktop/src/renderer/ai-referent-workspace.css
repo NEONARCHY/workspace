@@ -39,8 +39,8 @@
   position: absolute;
   z-index: 1;
   top: -19px;
-  right: -3px;
-  width: clamp(410px, 38vw, 650px);
+  right: calc(0px - var(--ws-view-panel-title-inline, 20px));
+  width: calc(clamp(410px, 38vw, 650px) + var(--ws-view-panel-title-inline, 20px) - 3px);
   height: 154px;
   color: #168da0;
   pointer-events: none;
