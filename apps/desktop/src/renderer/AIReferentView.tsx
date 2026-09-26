@@ -48,6 +48,7 @@ import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import {
   actOnAIReferentLetter,
   deleteAIReferentLetter,
@@ -617,21 +618,32 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 </div>
                 {form.workflowKind === "delivery" && boburId && form.reviewerUserId === boburId ? <div className="ai-referent-select-field"><span id="referent-preliminary-label">Предварительный согласующий — до Бобура · обязательно</span><Select aria-labelledby="referent-preliminary-label" required value={form.finalReviewerUserId} onChange={(event) => setForm((current) => ({ ...current, finalReviewerUserId: event.target.value }))}><option value="" disabled>Выберите предварительного согласующего</option>{reviewers.filter((person) => person.id !== boburId).map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div> : null}
                 <label>Служебная заметка<Textarea resize="vertical" value={form.note} onChange={(_e, d) => setForm((current) => ({ ...current, note: d.value }))} /></label>
-                <label className="ai-referent-upload-zone ai-referent-upload-primary" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); if (!busy) selectDocument(event.dataTransfer.files[0]); }}>
-                  <input className="ai-referent-upload-input" disabled={busy} type="file" accept=".docx" aria-label="Выбрать основной документ DOCX" onChange={(event) => selectDocument(event.target.files?.[0])} />
-                  <span className="ai-referent-upload-icon"><Document20Regular aria-hidden="true" /></span>
-                  <span className="ai-referent-upload-copy"><strong>Основной документ</strong><small>{editingId ? "Новая версия письма в формате DOCX" : "Письмо в формате DOCX"}</small>{form.file ? <span className="ai-referent-upload-selected"><em title={form.file.name}>{form.file.name}</em></span> : null}</span>
-                  <span className="ai-referent-upload-action">{form.file ? "Заменить" : "Выбрать DOCX"}</span>
-                </label>
+                <WorkspaceFileDropzone
+                  label="Основной документ"
+                  hint={editingId ? "Новая версия письма в формате DOCX" : "Письмо в формате DOCX"}
+                  actionLabel={form.file ? "Заменить" : "Выбрать DOCX"}
+                  files={form.file ? [form.file] : []}
+                  accept=".docx"
+                  disabled={busy}
+                  emphasized
+                  icon={<Document20Regular aria-hidden="true" />}
+                  ariaLabel="Выбрать основной документ DOCX"
+                  onFiles={(files) => selectDocument(files[0])}
+                />
                 {form.file && (checkingFile || activeCheck?.error || activeCheck?.result?.status === "failed") ? <div className="ai-referent-preflight" role="status" aria-live="polite">
                   {activeCheck?.error || activeCheck?.result?.status === "failed" ? <><p>{activeCheck.error || activeCheck.result?.detail}</p><Button onClick={() => { setDocumentCheck(undefined); setCheckAttempt((attempt) => attempt + 1); }}>Повторить проверку</Button></> : <><Spinner size="tiny" /><span>Подождите: робот проверяет форматирование и место для подписи.<small>Проверка выполняется на ПК референта. Если он выключен, письмо останется в ожидании.</small></span></>}
                 </div> : null}
-                {form.workflowKind === "delivery" ? <label className="ai-referent-upload-zone" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; }} onDrop={(event) => { event.preventDefault(); const files = Array.from(event.dataTransfer.files); if (!busy) setForm((current) => ({ ...current, additionalFiles: [...(current.additionalFiles ?? []), ...files] })); }}>
-                  <input className="ai-referent-upload-input" type="file" multiple aria-label="Выбрать дополнительные вложения" onChange={(event) => setForm((current) => ({ ...current, additionalFiles: Array.from(event.target.files ?? []) }))} />
-                  <span className="ai-referent-upload-icon"><Attach20Regular aria-hidden="true" /></span>
-                  <span className="ai-referent-upload-copy"><strong>Дополнительные вложения</strong><small>Приложения, таблицы и сопроводительные файлы</small>{selectedAdditionalFiles.length ? <span className="ai-referent-upload-selected">{selectedAdditionalFiles.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{selectedAdditionalFiles.length > 2 ? <em>+{selectedAdditionalFiles.length - 2}</em> : null}</span> : null}</span>
-                  <span className="ai-referent-upload-action">{selectedAdditionalFiles.length ? "Изменить" : "Добавить файлы"}</span>
-                </label> : null}
+                {form.workflowKind === "delivery" ? <WorkspaceFileDropzone
+                  label="Дополнительные вложения"
+                  hint="Приложения, таблицы и сопроводительные файлы"
+                  actionLabel={selectedAdditionalFiles.length ? "Добавить ещё" : "Добавить файлы"}
+                  files={selectedAdditionalFiles}
+                  multiple
+                  disabled={busy}
+                  icon={<Attach20Regular aria-hidden="true" />}
+                  ariaLabel="Выбрать дополнительные вложения"
+                  onFiles={(files) => setForm((current) => ({ ...current, additionalFiles: [...(current.additionalFiles ?? []), ...files] }))}
+                /> : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
               </div>
             </DialogContent>
@@ -722,10 +734,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 {selected.canReplaceDocument ? <section className="ai-referent-detail-card">
                   <h3>Замена администратором</h3>
                   <p>Без нового согласования. DOCX получит прежний номер и подпись; готовый PDF будет использован как есть. Проверьте номер, подпись и содержимое.</p>
-                  <label className="ai-referent-upload-zone" key={selected.id}>
-                    <input className="ai-referent-upload-input" type="file" accept=".docx,.pdf" aria-label="Новый документ администратора" onChange={(event) => { const file = event.target.files?.[0]; setReplacement(file ? { letterId: selected.id, file } : undefined); }} />
-                    <Document20Regular /><span>{replacementFile?.name ?? "Выбрать DOCX или PDF"}</span>
-                  </label>
+                  <WorkspaceFileDropzone key={selected.id} label="Новый документ" hint="DOCX или готовый PDF" actionLabel={replacementFile ? "Заменить" : "Выбрать файл"} files={replacementFile ? [replacementFile] : []} accept=".docx,.pdf" icon={<Document20Regular aria-hidden="true" />} ariaLabel="Новый документ администратора" onFiles={(files) => { const file = files[0]; setReplacement(file ? { letterId: selected.id, file } : undefined); }} />
                   <Button disabled={busy || !replacementFile} onClick={() => {
                     if (!replacementFile || busyRef.current) return;
                     busyRef.current = true; setBusy(true); setError("");

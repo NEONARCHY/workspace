@@ -19,6 +19,7 @@ import {
 
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import {
   cancelZoomMeeting,
   createZoomMeeting,
@@ -140,13 +141,6 @@ export function invitationText(meeting: ZoomMeeting, timeZone: string): string {
 
 function durationOptions(): number[] {
   return Array.from({ length: 480 / SLOT_MINUTES }, (_, index) => (index + 1) * SLOT_MINUTES);
-}
-
-function timeOptions(): string[] {
-  return Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => {
-    const minutes = index * SLOT_MINUTES;
-    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-  });
 }
 
 interface Draft {
@@ -482,20 +476,11 @@ export function ZoomView({
               <div className="zoom-field-row">
                 <label className="zoom-field">
                   Дата
-                  <Input
-                    type="date"
-                    value={draft.date}
-                    onChange={(_event, data) => setDraft({ ...draft, date: data.value })}
-                  />
+                  <WorkspaceDateTimePicker mode="date" ariaLabel="Дата Zoom-встречи" value={draft.date} onChange={(value) => setDraft({ ...draft, date: value })} />
                 </label>
                 <label className="zoom-field">
                   Начало
-                  <Select
-                    value={draft.time}
-                    onChange={(event) => setDraft({ ...draft, time: event.target.value })}
-                  >
-                    {timeOptions().map((option) => <option key={option} value={option}>{option}</option>)}
-                  </Select>
+                  <WorkspaceDateTimePicker mode="time" ariaLabel="Начало Zoom-встречи" value={draft.time} onChange={(value) => setDraft({ ...draft, time: value })} />
                 </label>
               </div>
               <fieldset className="zoom-durations">
