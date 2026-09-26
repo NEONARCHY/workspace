@@ -13,21 +13,28 @@ from ..hisobot_schemas import (
     BridgeReportBatch,
     BridgeReportExemption,
     BridgeRosterMember,
+    BridgeUnitReportBatch,
     BridgeVacationSnapshot,
     HisobotProfile,
     HisobotReport,
     HisobotReportInput,
+    HisobotUnitReport,
 )
 from ..hisobot_service import (
     bridge_reports,
     bridge_roster,
+    bridge_unit_reports,
     history,
     import_reports,
+    import_unit_reports,
     management_history,
+    management_unit_history,
     profile,
     replace_vacations,
     report_exemptions,
     submit_report,
+    submit_unit_report,
+    unit_history,
 )
 
 router = APIRouter(prefix="/hisobot", tags=["hisobot"])
@@ -62,6 +69,18 @@ async def put_my_report(
     return report
 
 
+@router.put("/me/unit-report", response_model=HisobotUnitReport)
+async def put_my_unit_report(
+    payload: HisobotReportInput,
+    user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    request: Request,
+) -> HisobotUnitReport:
+    report = await submit_unit_report(connection, user, payload)
+    await request.app.state.event_bus.publish({"type": "hisobot.report.updated"})
+    return report
+
+
 @router.get("/me/history", response_model=list[HisobotReport])
 async def get_my_history(
     user: Annotated[AuthenticatedUser, Depends(require_user)],
@@ -69,6 +88,15 @@ async def get_my_history(
     before_date: date | None = None,
 ) -> list[HisobotReport]:
     return await history(connection, user, before_date=before_date)
+
+
+@router.get("/me/unit-history", response_model=list[HisobotUnitReport])
+async def get_my_unit_history(
+    user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    before_date: date | None = None,
+) -> list[HisobotUnitReport]:
+    return await unit_history(connection, user, before_date=before_date)
 
 
 @router.get("/reports", response_model=list[HisobotReport])
@@ -79,6 +107,16 @@ async def get_reports(
     end_date: date,
 ) -> list[HisobotReport]:
     return await management_history(connection, user, start_date, end_date)
+
+
+@router.get("/unit-reports", response_model=list[HisobotUnitReport])
+async def get_unit_reports(
+    user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    start_date: date,
+    end_date: date,
+) -> list[HisobotUnitReport]:
+    return await management_unit_history(connection, user, start_date, end_date)
 
 
 @router.get("/bridge/roster", response_model=list[BridgeRosterMember],
@@ -110,6 +148,29 @@ async def get_bridge_reports(
     end_date: Annotated[date, Query()],
 ) -> list[HisobotReport]:
     return await bridge_reports(connection, start_date, end_date)
+
+
+@router.put("/bridge/unit-reports", response_model=list[HisobotUnitReport],
+            dependencies=[Depends(require_bridge)])
+async def put_bridge_unit_reports(
+    payload: BridgeUnitReportBatch,
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    request: Request,
+) -> list[HisobotUnitReport]:
+    reports = await import_unit_reports(connection, payload.reports)
+    if reports:
+        await request.app.state.event_bus.publish({"type": "hisobot.report.updated"})
+    return reports
+
+
+@router.get("/bridge/unit-reports", response_model=list[HisobotUnitReport],
+            dependencies=[Depends(require_bridge)])
+async def get_bridge_unit_reports(
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    start_date: Annotated[date, Query()],
+    end_date: Annotated[date, Query()],
+) -> list[HisobotUnitReport]:
+    return await bridge_unit_reports(connection, start_date, end_date)
 
 
 @router.put("/bridge/vacations", dependencies=[Depends(require_bridge)])

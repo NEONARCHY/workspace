@@ -10,6 +10,7 @@
 }
 .ai-hisobot-header { position: relative; isolation: isolate; flex: none; min-height: 94px; padding: 4px 2px 8px; }
 .ai-hisobot-header-copy { position: relative; z-index: 2; }
+.hisobot-help-button { position: absolute; z-index: 3; top: 4px; right: 4px; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid var(--ws-border, #d5e4e3); border-radius: 11px; background: #fff; color: var(--ws-link, #006779); font-size: 21px; font-weight: 700; cursor: pointer; }
 .ai-hisobot-header .view-kicker { color: #006779; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .ai-hisobot-header h1 { margin: 1px 0 4px; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.1; letter-spacing: -.035em; }
 .ai-hisobot-header p { margin: 0; font-size: 13px; color: var(--ws-muted, #566b7c); }
@@ -33,6 +34,9 @@
 .hisobot-compose label { display: block; margin-bottom: 9px; font-size: 13px; font-weight: 650; }
 .hisobot-compose textarea { display: block; width: 100%; min-height: 260px; box-sizing: border-box; resize: vertical; border: 1px solid #d5e4e3; border-radius: 12px; padding: 16px; background: #fcfefd; color: #203c47; font: inherit; line-height: 1.55; }
 .hisobot-compose textarea:disabled { background: #f3f6f6; }
+.hisobot-unit-compose { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--ws-border, #d5e4e3); }
+.hisobot-unit-compose .hisobot-panel-description { margin-bottom: 16px; }
+.hisobot-unit-compose textarea { min-height: 180px; }
 .hisobot-compose-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 13px; color: #7a898f; font-size: 12px; }
 .hisobot-compose-footer button, .hisobot-filters button { border: 0; border-radius: 10px; padding: 11px 16px; background: #08798a; color: white; font-weight: 700; cursor: pointer; }
 .hisobot-compose-footer button:disabled { opacity: .45; cursor: not-allowed; }
@@ -65,4 +69,13 @@
 .hisobot-error { background: #fff0ed; color: #a54232; }
 .hisobot-success { background: #ebf7f1; color: #176b56; }
 .hisobot-empty, .hisobot-loading, .hisobot-exempt { background: #fff; color: #647782; }
+.hisobot-help-overlay { position: fixed; z-index: 60; inset: 0; display: flex; justify-content: flex-end; background: rgb(17 42 63 / 32%); }
+.hisobot-help { display: grid; grid-template-rows: auto minmax(0, 1fr); width: min(560px, 92vw); min-height: 0; border-left: 1px solid var(--ws-border, #d5e4e3); background: #f8fafb; box-shadow: -18px 0 48px rgb(18 48 72 / 18%); }
+.hisobot-help > header { display: flex; justify-content: space-between; gap: 18px; padding: 22px 24px 17px; border-bottom: 1px solid var(--ws-border, #d5e4e3); background: #fff; }
+.hisobot-help > header h2 { margin: 6px 0 0; color: var(--ws-text, #293a55); font-size: 22px; }
+.hisobot-help > header button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 9px; background: transparent; color: var(--ws-text, #293a55); cursor: pointer; }
+.hisobot-help-content { min-height: 0; overflow-y: auto; padding: 4px 24px 32px; }
+.hisobot-help-content section { padding: 19px 0; border-bottom: 1px solid var(--ws-border, #d5e4e3); }
+.hisobot-help-content h3 { margin: 0 0 9px; font-size: 16px; }
+.hisobot-help-content p { margin: 0 0 10px; color: var(--ws-muted, #566b7c); font-size: 14px; line-height: 1.6; }
 @media (max-width: 900px) { .hisobot-today-layout { grid-template-columns: 1fr; } .ai-hisobot-header-art { opacity: .25; } }
