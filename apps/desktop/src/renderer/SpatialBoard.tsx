@@ -10,6 +10,7 @@ interface DropTransaction {
   readonly lane: string;
   outcome: "pending" | "confirmed" | "rejected";
 }
+interface PointerLocation { x: number; y: number; pointerType: string }
 interface BoardContext {
   cards: Map<string, CardRecord>;
   positions: Map<string, DOMRect>;
@@ -18,8 +19,10 @@ interface BoardContext {
   pending: boolean;
   pendingId: string | null;
   landingLane: string | null;
+  hoverSuppressedId: string | null;
   interactionMode: "standard" | "payment";
   canDrop: (id: string, lane: string) => boolean;
+  clearHoverSuppression: (id: string) => void;
 }
 const Context = createContext<BoardContext | null>(null);
 const useBoard = () => { const board = useContext(Context); if (!board) throw new Error("SpatialCard requires SpatialBoard"); return board; };
@@ -55,12 +58,15 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
   const [pending, setPending] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [landingLane, setLandingLane] = useState<string | null>(null);
+  const [hoverSuppressedId, setHoverSuppressedId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const transition = useRef<Promise<unknown>>(Promise.resolve());
   const drop = useRef<DropTransaction | null>(null);
   const previewNode = useRef<HTMLElement | null>(null);
   const previousDelta = useRef({ x: 0, y: 0 });
+  const pointerStart = useRef<PointerLocation | null>(null);
+  const pointerLocation = useRef<PointerLocation | null>(null);
   const motionFrame = useRef(0);
   const motionReleaseTimer = useRef(0);
   const releaseTimer = useRef(0);
@@ -78,6 +84,8 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
     setPending(false);
     setPendingId(null);
     drop.current = null;
+    pointerStart.current = null;
+    pointerLocation.current = null;
   };
   useEffect(() => () => {
     window.clearTimeout(releaseTimer.current);
@@ -96,10 +104,24 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
     previewNode.current?.style.setProperty("--spatial-stretch-x", "1");
     previewNode.current?.style.setProperty("--spatial-stretch-y", "1");
   };
+  const suppressHoverUnderPointer = (id: string, element: HTMLElement) => {
+    const pointer = pointerLocation.current;
+    if (!pointer || pointer.pointerType === "touch") return;
+    const bounds = element.getBoundingClientRect();
+    const containsPointer = pointer.x >= bounds.left && pointer.x <= bounds.right
+      && pointer.y >= bounds.top && pointer.y <= bounds.bottom;
+    if (!containsPointer) return;
+    element.classList.add("is-hover-suppressed");
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && element.contains(focused)) focused.blur();
+    setHoverSuppressedId(id);
+  };
   const finish = ({ active: picked, over: target }: DragEndEvent) => {
     const id = String(picked.id), lane = target ? String(target.id) : null;
     if (lock.current || !lane || !canDrop(id, lane)) {
       drop.current = { id, lane: "", outcome: "rejected" };
+      pointerStart.current = null;
+      pointerLocation.current = null;
       reset();
       return;
     }
@@ -119,6 +141,9 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
         window.clearTimeout(landingReleaseTimer.current);
         setLandingLane(null);
         landingStartTimer.current = window.setTimeout(() => {
+          const destinationNode = cards.get(id)?.node;
+          const destinationLane = destinationNode?.closest<HTMLElement>("[data-spatial-lane]")?.dataset.spatialLane;
+          if (destinationNode && destinationLane === lane) suppressHoverUnderPointer(id, destinationNode);
           setLandingLane(lane);
           landingReleaseTimer.current = window.setTimeout(() => setLandingLane(null), 720);
         }, 20);
@@ -158,6 +183,9 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       const destinationNode = cards.get(String(picked.id))?.node;
       const destination = destinationNode?.getBoundingClientRect();
       const destinationLane = destinationNode?.closest<HTMLElement>("[data-spatial-lane]")?.dataset.spatialLane;
+      if (destinationNode && destination && destinationLane === transaction.lane) {
+        suppressHoverUnderPointer(String(picked.id), destinationNode);
+      }
       if (destination && destinationLane === transaction.lane && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches && dragOverlay.node.animate) {
         dragOverlay.node.classList.add("is-settling");
         const animation = dragOverlay.node.animate([
@@ -173,11 +201,34 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
       if (transaction) release(transaction);
     }
   };
-  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, landingLane, interactionMode, canDrop }}>
+  return <Context.Provider value={{ cards, positions, active, over, pending, pendingId, landingLane, hoverSuppressedId, interactionMode, canDrop,
+    clearHoverSuppression: id => setHoverSuppressedId(current => current === id ? null : current) }}>
     <DndContext sensors={sensors} collisionDetection={args => args.pointerCoordinates ? pointerWithin(args) : rectIntersection(args)}
       autoScroll={{ threshold: { x: 0.12, y: 0.1 }, acceleration: 8, interval: 10 }}
-      onDragStart={({ active: picked }) => { if (lock.current) return; const id = String(picked.id); drop.current = null; transition.current = Promise.resolve(); resetPreviewMotion(); setPreview(cards.get(id) ?? null); setActive(id); setNotice(""); onPick?.(id); }}
+      onDragStart={({ active: picked, activatorEvent }) => {
+        if (lock.current) return;
+        const pointer = activatorEvent as Event & { clientX?: unknown; clientY?: unknown; pointerType?: unknown };
+        pointerStart.current = typeof pointer.clientX === "number" && typeof pointer.clientY === "number"
+          ? { x: pointer.clientX, y: pointer.clientY, pointerType: typeof pointer.pointerType === "string" ? pointer.pointerType : "mouse" }
+          : null;
+        pointerLocation.current = pointerStart.current;
+        const id = String(picked.id);
+        drop.current = null;
+        transition.current = Promise.resolve();
+        resetPreviewMotion();
+        setHoverSuppressedId(null);
+        setPreview(cards.get(id) ?? null);
+        setActive(id);
+        setNotice("");
+        onPick?.(id);
+      }}
       onDragMove={({ delta }) => {
+        const start = pointerStart.current;
+        if (start) pointerLocation.current = {
+          x: start.x + delta.x,
+          y: start.y + delta.y,
+          pointerType: start.pointerType,
+        };
         const velocityX = delta.x - previousDelta.current.x;
         const velocityY = delta.y - previousDelta.current.y;
         previousDelta.current = delta;
@@ -193,7 +244,9 @@ export function SpatialBoard({ children, canDrop, onMove, onPick, interactionMod
         window.clearTimeout(motionReleaseTimer.current);
         motionReleaseTimer.current = window.setTimeout(resetPreviewMotion, 115);
       }}
-      onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)} onDragCancel={reset} onDragEnd={event => { void finish(event); }}
+      onDragOver={({ over: target }) => setOver(target ? String(target.id) : null)}
+      onDragCancel={() => { pointerStart.current = null; pointerLocation.current = null; reset(); }}
+      onDragEnd={event => { void finish(event); }}
       accessibility={{ screenReaderInstructions: { draggable: "Нажмите пробел, чтобы поднять карточку. Стрелками выберите этап. Пробел — перенести, Escape — отменить." }, announcements: {
         onDragStart: ({ active: picked }) => `Поднята карточка: ${cards.get(String(picked.id))?.label ?? ""}`,
         onDragOver: ({ active: picked, over: target }) => target
@@ -226,11 +279,12 @@ export function SpatialLane({ id, children, className = "", ...props }: HTMLAttr
   </section>;
 }
 
-export function SpatialCard({ id, lane, label, disabled, children, className = "", style, ...props }: HTMLAttributes<HTMLElement> & { id: string; lane: string; label: string; disabled?: boolean; style?: CSSProperties }) {
+export function SpatialCard({ id, lane, label, disabled, children, className = "", style, onPointerLeave, ...props }: HTMLAttributes<HTMLElement> & { id: string; lane: string; label: string; disabled?: boolean; style?: CSSProperties }) {
   const board = useBoard();
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({ id, disabled: disabled || board.pending });
   const node = useRef<HTMLElement | null>(null);
   const movement = useRef<Animation | undefined>(undefined);
+  const hoverSuppressed = board.hoverSuppressedId === id;
   useLayoutEffect(() => {
     const element = node.current;
     if (!element) return;
@@ -248,8 +302,10 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     if (node.current) board.cards.set(id, { node: node.current, content: children, className, label, lane });
     return () => { board.cards.delete(id); };
   }, [board.cards, id, children, className, label, lane]);
-  return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={style}
-    className={`${className} spatial-card ${disabled ? "" : "is-draggable"} ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""}`} data-spatial-card={id}
+  return <article {...props} ref={element => { node.current = element; setNodeRef(element); }} style={hoverSuppressed ? { ...style, transform: "none" } : style}
+    className={`${className} spatial-card ${disabled ? "" : "is-draggable"} ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""} ${hoverSuppressed ? "is-hover-suppressed" : ""}`} data-spatial-card={id}
+    data-hover-suppressed={hoverSuppressed ? "true" : undefined}
+    onPointerLeave={event => { board.clearHoverSuppression(id); onPointerLeave?.(event); }}
     onPointerDown={event => listeners?.onPointerDown?.(event)}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}

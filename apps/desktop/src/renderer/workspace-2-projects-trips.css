@@ -342,10 +342,10 @@
   box-shadow: 0 9px 24px -17px rgb(31 62 72 / 36%), 0 1px 2px rgb(31 62 72 / 4%);
   transition: border-color 170ms var(--ws-ease), box-shadow 190ms var(--ws-ease), transform 180ms var(--ws-ease), opacity 160ms var(--ws-ease);
 }
-.projects-view .project-card:hover,
-.trips-view .trip-board-card:hover,
-.projects-view .project-card:focus-within,
-.trips-view .trip-board-card:focus-within {
+.projects-view .project-card:not(.is-hover-suppressed):hover,
+.trips-view .trip-board-card:not(.is-hover-suppressed):hover,
+.projects-view .project-card:not(.is-hover-suppressed):focus-within,
+.trips-view .trip-board-card:not(.is-hover-suppressed):focus-within {
   border-color: rgb(121 174 175 / 54%);
   box-shadow: 0 15px 30px -19px rgb(31 62 72 / 42%), 0 2px 5px rgb(31 62 72 / 6%);
   transform: translateY(-2px);

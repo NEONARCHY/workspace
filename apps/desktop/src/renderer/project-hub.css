@@ -288,7 +288,7 @@
 .project-hub-lane-head { padding-bottom: 10px; border-bottom: 1px solid var(--project-line); }
 .project-hub-lane-head h3, .project-hub-lane-head h4 { color: #293a55; font-size: 14px; }
 .project-hub-task-card, .project-hub-funding-card { border-color: #dce8eb; background: #fff; box-shadow: 0 5px 16px rgb(41 58 85 / 5%); }
-.project-hub-task-card:hover, .project-hub-funding-card:hover { border-color: #a9d3d8; background: #fff; }
+.project-hub-task-card:not(.is-hover-suppressed):hover, .project-hub-funding-card:hover { border-color: #a9d3d8; background: #fff; }
 .project-hub-task-card.selected { border-color: #7fc7d0; }
 .project-hub-item-detail, .project-hub-funding-detail { border-radius: 21px; background: #eef5f3; }
 .project-hub-item-detail { border-color: #dcebe8; }

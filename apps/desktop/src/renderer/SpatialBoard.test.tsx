@@ -72,6 +72,12 @@ describe("Spatial object transfer", () => {
     await waitFor(() => expect(document.querySelector('[data-spatial-lane="next"] [data-spatial-card="one"]')).not.toBeNull());
     await waitFor(() => expect(document.querySelector('[data-spatial-lane="next"]')).toHaveClass("is-landing"));
     await waitFor(() => expect(document.querySelector('[data-spatial-card="one"]')).not.toHaveClass("is-lifted"));
+    const landedCard = document.querySelector<HTMLElement>('[data-spatial-lane="next"] [data-spatial-card="one"]')!;
+    await waitFor(() => expect(landedCard).toHaveAttribute("data-hover-suppressed", "true"));
+    expect(landedCard.style.transform).toBe("none");
+    fireEvent.pointerLeave(landedCard);
+    expect(landedCard).not.toHaveAttribute("data-hover-suppressed");
+    expect(landedCard.style.transform).toBe("");
   });
   it("restores the source and permits retry after a server rejection", async () => {
     const onMove = vi.fn(async () => { throw new Error("Permission changed"); });

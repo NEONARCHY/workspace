@@ -185,7 +185,8 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
   transition: opacity 160ms var(--ws-ease);
 }
 .spatial-grip { position: absolute; top: 9px; right: 6px; display: grid; place-items: center; width: 28px; height: 30px; padding: 0; border: 0; border-radius: 9px; color: #557781; background: transparent; opacity: 0; pointer-events: none; cursor: pointer; touch-action: none; transition: opacity 140ms var(--ws-ease-out); }
-.spatial-card:hover .spatial-grip, .spatial-card:focus-within .spatial-grip { opacity: 1; pointer-events: auto; }
+.spatial-card:not(.is-hover-suppressed):hover .spatial-grip,
+.spatial-card:not(.is-hover-suppressed):focus-within .spatial-grip { opacity: 1; pointer-events: auto; }
 .spatial-grip:active { cursor: pointer; }
 .spatial-drop-marker {
   position: absolute;
@@ -247,9 +248,12 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .project-card, .kanban-card, .approval-board-card { border: 1px solid rgb(255 255 255 / 90%); border-radius: 17px; background: #fcfdfd; box-shadow: var(--ws-shadow-card); }
 .project-card.spatial-card, .kanban-card.spatial-card { padding: 0; }
 .project-card-topline > [data-tone] { transition: transform 160ms var(--ws-ease-out, cubic-bezier(.2, 0, 0, 1)); }
-.project-card:hover .project-card-topline > [data-tone], .project-card:focus-within .project-card-topline > [data-tone] { transform: translateX(-24px); }
+.project-card:not(.is-hover-suppressed):hover .project-card-topline > [data-tone],
+.project-card:not(.is-hover-suppressed):focus-within .project-card-topline > [data-tone] { transform: translateX(-24px); }
 .spatial-drag-preview .spatial-grip { display: none; }
-.project-card:hover, .kanban-card:hover, .approval-board-card:hover { border-color: #a9c9c9; }
+.project-card:not(.is-hover-suppressed):hover,
+.kanban-card:not(.is-hover-suppressed):hover,
+.approval-board-card:not(.is-hover-suppressed):hover { border-color: #a9c9c9; }
 .project-card.selected, .kanban-card.selected { border-color: #8ab9bc; box-shadow: 0 0 0 2px rgb(0 145 168 / 8%); background: #fff; }
 .approval-card-open { padding: 18px 16px 14px; gap: 12px; }
 .approval-card-open > strong { font-size: 14px; font-weight: 600; }
