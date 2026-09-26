@@ -320,7 +320,7 @@
 .project-hub-funding-stat.approved { border-color: #cfe8d8; background: #f0f9f3; }
 .project-hub-funding-stat.rejected { border-color: #f0d9d9; background: #fff6f5; }
 .project-hub-funding-board { gap: 10px; scrollbar-width: thin; }
-.project-hub-funding-board.approval-kanban { grid-template-columns: repeat(4, minmax(258px, 1fr)); align-items: stretch; padding: 0 4px 13px; }
+.project-hub-funding-board.project-request-kanban { grid-template-columns: repeat(4, minmax(258px, 1fr)); align-items: stretch; padding: 0 4px 13px; }
 .project-hub-funding-lane.approval-column { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-width: 258px; min-height: 420px; max-height: min(610px, calc(100dvh - 250px)); padding: 0; overflow: hidden; border: 1px solid #d7e5e7; border-radius: 22px; background: color-mix(in srgb, var(--approval-stage-color) 7%, #f7fbfb); box-shadow: inset 0 1px 0 rgb(255 255 255 / 82%), 0 10px 24px -26px rgb(20 43 67 / 34%); }
 .project-hub-funding-lane.approval-column > header { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 57px; padding: 14px 14px 6px; }
 .project-hub-funding-lane.approval-column > header::before { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--approval-stage-color) 65%, #708991); box-shadow: 0 0 0 3px color-mix(in srgb, var(--approval-stage-color) 9%, transparent); content: ""; }
