@@ -76,7 +76,12 @@ describe("AI Referent gooey search", () => {
     ).replaceAll("\r\n", "\n");
     expect(css).not.toContain("--ai-gooey-expanded");
     expect(css).toContain(
-      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {\n  transform: translateX(var(--ai-gooey-offset));',
+      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {\n  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-active-text-inset) - 17px));\n  transform: translateX(calc(var(--ai-gooey-offset) - var(--ai-gooey-text-compensation)));',
+    );
+    expect(css).toContain("--ai-gooey-text-inset: 48px;");
+    expect(css).toContain("--ai-gooey-active-text-inset: 16px;");
+    expect(css).toContain(
+      '.app-provider .ai-gooey-search[data-expanded="true"] input.ai-gooey-search-input {\n  padding-left: var(--ai-gooey-active-text-inset);',
     );
     expect(css).toContain(
       '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-row {\n  transform: translateX(var(--ai-gooey-offset));',

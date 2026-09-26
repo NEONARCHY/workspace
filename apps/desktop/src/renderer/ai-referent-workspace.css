@@ -205,6 +205,10 @@
   box-shadow: 0 5px 18px -17px rgb(28 65 76 / 35%);
 }
 .ai-gooey-search {
+  --ai-gooey-text-inset: 48px;
+  --ai-gooey-active-text-inset: 16px;
+  --ai-gooey-text-compensation: calc(var(--ai-gooey-text-inset) - var(--ai-gooey-active-text-inset));
+
   position: relative;
   isolation: isolate;
   flex: 0 0 var(--ai-gooey-collapsed);
@@ -321,7 +325,7 @@
   height: 40px;
   border: 0;
   outline: 0;
-  padding: 0 17px 0 48px;
+  padding: 0 17px 0 var(--ai-gooey-text-inset);
   background: transparent;
   box-shadow: none;
   color: #293a55;
@@ -332,10 +336,10 @@
   position: absolute;
   z-index: 2;
   top: 2px;
-  left: 48px;
+  left: var(--ai-gooey-text-inset);
   display: flex;
   align-items: center;
-  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - 65px));
+  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-text-inset) - 17px));
   height: 40px;
   overflow: hidden;
   color: #718397;
@@ -346,7 +350,8 @@
   transition: transform 520ms cubic-bezier(.22, 1, .36, 1);
 }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {
-  transform: translateX(var(--ai-gooey-offset));
+  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-active-text-inset) - 17px));
+  transform: translateX(calc(var(--ai-gooey-offset) - var(--ai-gooey-text-compensation)));
 }
 .ai-gooey-search[data-has-value="true"] .ai-gooey-search-placeholder { visibility: hidden; }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-plinth {
@@ -365,6 +370,9 @@
   opacity: 1;
   pointer-events: auto;
   transition-delay: 300ms;
+}
+.app-provider .ai-gooey-search[data-expanded="true"] input.ai-gooey-search-input {
+  padding-left: var(--ai-gooey-active-text-inset);
 }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-bubble {
   background: #fff;
