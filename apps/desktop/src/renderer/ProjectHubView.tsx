@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise24Regular, Attach20Regular, CheckmarkCircle24Regular, Dismiss20Regular } from "@fluentui/react-icons";
 import type {
@@ -17,7 +17,6 @@ import { WorkspaceSelect } from "./WorkspaceSelect";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
-import { approvalColumnTotals } from "./approval-board";
 
 type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
@@ -42,10 +41,6 @@ const itemStatus: Record<ProjectHubItem["status"], string> = {
 const requestStatus: Record<ProjectHubRequest["status"], string> = {
   draft: "Черновик", pending: "На согласовании", approved: "Согласовано", rejected: "Отклонено",
 };
-const requestStageColors: Record<ProjectHubRequest["status"], string> = {
-  draft: "#b8c7d1", pending: "#00bbb4", approved: "#7bc56f", rejected: "#f26b47",
-};
-
 function formatMoney(value: number | bigint, currency: string): string {
   return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value)} ${currency}`;
 }
@@ -315,22 +310,17 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
           <section className="project-hub-route" aria-label="Порядок согласования"><div><span className="view-kicker">ДЕНЕЖНЫЕ РЕШЕНИЯ</span><h3>Маршрут согласования</h3><p>Новые заявки сохраняют действующий порядок; начатые идут по своей версии.</p></div><div>{selectedProject.approverUserIds.length ? selectedProject.approverUserIds.map((id, index) => <span key={id}><b>{index + 1}</b>{personName(id)}</span>) : <em>Согласующие ещё не назначены</em>}</div></section>
         </> : <div className="project-hub-empty">Выберите проект или создайте новый.</div>}
       </main>
-    </div> : <div className={`project-hub-funding-layout ${selectedRequest ? "has-selection" : ""}`}>
+    </div> : <div className="project-hub-funding-layout">
       <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
-      <div className="project-hub-funding-board project-request-kanban" role="region" aria-label="Канбан проектных заявок">
-        {(["draft", "pending", "approved", "rejected"] as const).map((status) => {
-          const columnRequests = requests.filter((request) => request.status === status);
-          return <section className={`project-hub-funding-lane approval-column ${status}`} key={status} aria-label={requestStatus[status]} style={{ "--approval-stage-color": requestStageColors[status] } as CSSProperties}>
-            <header><strong>{requestStatus[status]}</strong><span className="approval-column-count">{columnRequests.length}</span></header>
-            <div className="approval-column-total"><span>Сумма в колонке</span>{approvalColumnTotals(columnRequests).map((total) => <strong key={total.currency}>{total.formatted}</strong>)}</div>
-            <div className="approval-column-stack">
-              {columnRequests.map((request) => <button type="button" key={request.id} aria-current={selectedRequestId === request.id ? "true" : undefined} className={`project-hub-funding-card ${selectedRequestId === request.id ? "selected" : ""}`} onClick={() => { setSelectedRequestId(request.id); setDecisionComment(""); }}><span>{request.projectTitle} · {request.itemTitle}</span><strong>{request.title}</strong><b>{formatMoney(request.amount, request.currency)}</b><small>{status === "pending" && request.approverUserIds[request.currentStep] ? `Сейчас: ${personName(request.approverUserIds[request.currentStep]!)}` : requestStatus[status]}</small>{request.approvalDueAt ? <small className={status === "pending" && new Date(request.approvalDueAt).getTime() < asOf ? "overdue" : ""}>Срок: {formatDate(request.approvalDueAt)}</small> : null}</button>)}
-              {!columnRequests.length ? <p className="approval-column-empty">Пока пусто</p> : null}
-            </div>
-          </section>;
-        })}
+      <div className="project-hub-funding-board" role="region" aria-label="Канбан проектных заявок">
+        {(["draft", "pending", "approved", "rejected"] as const).map((status) => <section className={`project-hub-funding-lane ${status}`} key={status} aria-label={requestStatus[status]}>
+          <div className="project-hub-lane-head"><h3>{requestStatus[status]}</h3><span>{requests.filter((request) => request.status === status).length}</span></div>
+          {requests.filter((request) => request.status === status).map((request) => <button type="button" key={request.id} aria-current={selectedRequestId === request.id ? "true" : undefined} className={`project-hub-funding-card ${selectedRequestId === request.id ? "selected" : ""}`} onClick={() => { setSelectedRequestId(request.id); setDecisionComment(""); }}><span>{request.projectTitle} · {request.itemTitle}</span><strong>{request.title}</strong><b>{formatMoney(request.amount, request.currency)}</b><small>{status === "pending" && request.approverUserIds[request.currentStep] ? `Сейчас: ${personName(request.approverUserIds[request.currentStep]!)}` : requestStatus[status]}</small>{request.approvalDueAt ? <small className={status === "pending" && new Date(request.approvalDueAt).getTime() < asOf ? "overdue" : ""}>Срок: {formatDate(request.approvalDueAt)}</small> : null}</button>)}
+          {!requests.some((request) => request.status === status) ? <p className="project-hub-lane-empty">Пока пусто</p> : null}
+        </section>)}
+        {!requests.length ? <p className="project-hub-empty">Доступных проектных заявок пока нет.</p> : null}
       </div>
-      <aside className={`project-hub-funding-detail ${selectedRequest ? "" : "is-empty"}`} aria-label="Карточка проектной заявки">{actionError ? <p className="project-hub-error" role="alert">{actionError}</p> : null}{selectedRequest ? <><span className="view-kicker">{selectedRequest.projectTitle} · {selectedRequest.itemTitle}</span><h2>{selectedRequest.title}</h2><p>{selectedRequest.purpose || "Назначение не указано"}</p><div className="project-hub-funding-amount">{formatMoney(selectedRequest.amount, selectedRequest.currency)}</div><div className={`project-hub-state ${selectedRequest.status}`}>{requestStatus[selectedRequest.status]}</div><p className={selectedRequest.status === "pending" && selectedRequest.approvalDueAt && new Date(selectedRequest.approvalDueAt).getTime() < asOf ? "project-hub-deadline-overdue" : ""}>Срок согласования: {formatDate(selectedRequest.approvalDueAt)}</p>
+      <aside className="project-hub-funding-detail" aria-label="Карточка проектной заявки">{actionError ? <p className="project-hub-error" role="alert">{actionError}</p> : null}{selectedRequest ? <><span className="view-kicker">{selectedRequest.projectTitle} · {selectedRequest.itemTitle}</span><h2>{selectedRequest.title}</h2><p>{selectedRequest.purpose || "Назначение не указано"}</p><div className="project-hub-funding-amount">{formatMoney(selectedRequest.amount, selectedRequest.currency)}</div><div className={`project-hub-state ${selectedRequest.status}`}>{requestStatus[selectedRequest.status]}</div><p className={selectedRequest.status === "pending" && selectedRequest.approvalDueAt && new Date(selectedRequest.approvalDueAt).getTime() < asOf ? "project-hub-deadline-overdue" : ""}>Срок согласования: {formatDate(selectedRequest.approvalDueAt)}</p>
         <h3>Файлы</h3><div className="project-hub-files">{selectedRequest.attachments.map((file) => <Button appearance="subtle" key={file.id} onClick={() => void downloadFile(file.id, file.fileName)}>{file.fileName}</Button>)}{!selectedRequest.attachments.length ? <p>Файлов пока нет.</p> : null}</div>
         {(selectedRequest.status === "draft" || selectedRequest.status === "pending") && selectedRequest.requesterUserId === currentUserId ? <WorkspaceFileDropzone label="Прикрепить файл" hint="До 25 МБ. Файл станет доступен участникам заявки." actionLabel="Выбрать файл" disabled={busy} icon={<Attach20Regular aria-hidden="true" />} onFiles={(files) => { const file = files[0]; if (file) void mutate(() => uploadWorkspaceAttachment(token, "project_funding_request", selectedRequest.id, file)); }} /> : null}
         {selectedRequest.status === "draft" && selectedRequest.requesterUserId === currentUserId ? <Button appearance="primary" disabled={busy} onClick={() => void mutate(() => submitProjectHubRequestDraft(token, selectedRequest.id))}>Отправить на согласование</Button> : null}
