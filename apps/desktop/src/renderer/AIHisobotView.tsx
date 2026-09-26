@@ -9,6 +9,7 @@ import type { HisobotProfile, HisobotReport } from "@yuksalish/contracts";
 import {
   loadHisobotHistory, loadHisobotProfile, loadHisobotReports, saveHisobotReport,
 } from "./workspace-api";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const dateLabel = (value: string) => value.split("-").reverse().join(".");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить AI Hisobot.";
@@ -163,8 +164,8 @@ export function AIHisobotView({ token }: { readonly token: string }) {
       {tab === "team" && profile.managementAccess ? <div className="hisobot-list-page">
         <div className="hisobot-list-heading"><h2>Отчёты сотрудников</h2><span>{visibleTeam.length} записей</span></div>
         <div className="hisobot-filters">
-          <label>С&nbsp;<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-          <label>По&nbsp;<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+          <label>С&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
+          <label>По&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
           <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></select>
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>

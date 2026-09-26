@@ -11,6 +11,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -245,8 +246,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                 <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
               </div></RecordSection>
               <RecordSection title="Даты поездки"><div className="record-field-grid">
-                <label>Дата начала<Input aria-label="Дата начала" aria-required type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
-                <label>Дата окончания<Input aria-label="Дата окончания" aria-required type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
+                <label>Дата начала<WorkspaceDateTimePicker mode="date" ariaLabel="Дата начала" required value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>
+                <label>Дата окончания<WorkspaceDateTimePicker mode="date" ariaLabel="Дата окончания" required value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>
               </div></RecordSection>
               <RecordSection title="Участники поездки" description={canChooseOthers ? "Отметьте сотрудников, которые отправятся в поездку. Поиск не сбрасывает выбор." : "Вы можете создать поездку для себя."}>
                 {canChooseOthers ? <Input aria-label="Найти участника поездки" placeholder="Имя или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} /> : null}
