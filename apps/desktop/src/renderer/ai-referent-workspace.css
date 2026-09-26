@@ -127,8 +127,8 @@
 }
 .ai-referent-view .ai-referent-summary button:hover { transform: translateY(-2px); border-color: #b9dadd; box-shadow: 0 13px 27px -18px rgb(28 65 76 / 30%); }
 .ai-referent-view .ai-referent-summary button:active { transform: translateY(-2px); }
-.ai-referent-view .ai-referent-summary button[aria-pressed="true"] { transform: translateY(-2px); border-color: #66b2b8; box-shadow: inset 0 0 0 1px #66b2b8, 0 10px 27px -19px rgb(0 103 121 / 34%); }
-.ai-referent-view .ai-referent-summary button[aria-pressed="true"]:hover { transform: translateY(-2px); }
+.ai-referent-view .ai-referent-summary button[aria-pressed="true"] { transform: none; border-color: #66b2b8; box-shadow: inset 0 0 0 1px #66b2b8, 0 10px 27px -19px rgb(0 103 121 / 34%); }
+.ai-referent-view .ai-referent-summary button[aria-pressed="true"]:hover { transform: none; }
 .ai-referent-view .ai-referent-summary .primary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -143,6 +143,11 @@
 .ai-referent-view .ai-referent-summary small { font-size: 11px; line-height: 1.25; }
 
 .ai-referent-view .ai-referent-toolbar {
+  --ai-toolbar-search-shift: 51px;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: none;
   min-height: 50px;
   padding: 6px;
@@ -154,9 +159,9 @@
 .ai-gooey-search {
   position: relative;
   isolation: isolate;
-  flex: 1 1 280px;
-  width: min(100%, calc(var(--ai-gooey-expanded) + var(--ai-gooey-offset)));
-  max-width: calc(var(--ai-gooey-expanded) + var(--ai-gooey-offset));
+  flex: 0 1 var(--ai-gooey-collapsed);
+  width: min(100%, var(--ai-gooey-collapsed));
+  max-width: var(--ai-gooey-collapsed);
   min-width: 210px;
   height: 44px;
 }
@@ -166,15 +171,14 @@
   z-index: -2;
   top: 0;
   left: 0;
-  width: min(var(--ai-gooey-collapsed), calc(100% - 2px));
+  width: min(var(--ai-gooey-collapsed), 100%);
   height: 44px;
   border: 1px solid #dbe5e6;
   border-radius: 999px;
   background: #fff;
   box-shadow: 0 9px 20px -15px rgb(24 64 76 / 62%), inset 0 1px rgb(255 255 255 / 86%);
   transition:
-    margin-left 520ms cubic-bezier(.22, 1, .36, 1),
-    width 520ms cubic-bezier(.22, 1, .36, 1),
+    transform 520ms cubic-bezier(.22, 1, .36, 1),
     border-color 170ms var(--ws-ease, ease);
 }
 .ai-gooey-search-bubble-plinth {
@@ -206,9 +210,7 @@
   width: min(var(--ai-gooey-collapsed), 100%);
   height: 40px;
   pointer-events: auto;
-  transition:
-    margin-left 520ms cubic-bezier(.22, 1, .36, 1),
-    width 520ms cubic-bezier(.22, 1, .36, 1);
+  transition: transform 520ms cubic-bezier(.22, 1, .36, 1);
 }
 .ai-gooey-search-trigger,
 .ai-gooey-search-input-surface {
@@ -271,7 +273,7 @@
   height: 40px;
   border: 0;
   outline: 0;
-  padding: 0 17px;
+  padding: 0 17px 0 48px;
   background: transparent;
   box-shadow: none;
   color: #293a55;
@@ -282,10 +284,10 @@
   position: absolute;
   z-index: 2;
   top: 2px;
-  left: calc(var(--ai-gooey-offset) + 17px);
+  left: 48px;
   display: flex;
   align-items: center;
-  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-offset) - 34px));
+  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - 65px));
   height: 40px;
   overflow: hidden;
   color: #718397;
@@ -293,27 +295,24 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;
-  transition: width 520ms cubic-bezier(.22, 1, .36, 1);
+  transition: transform 520ms cubic-bezier(.22, 1, .36, 1);
 }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {
-  width: max(0px, calc(min(var(--ai-gooey-expanded), calc(100% - var(--ai-gooey-offset))) - 34px));
+  transform: translateX(var(--ai-gooey-offset));
 }
 .ai-gooey-search[data-has-value="true"] .ai-gooey-search-placeholder { visibility: hidden; }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-plinth {
-  width: min(var(--ai-gooey-expanded), calc(100% - var(--ai-gooey-offset)));
-  margin-left: var(--ai-gooey-offset);
+  transform: translateX(var(--ai-gooey-offset));
   border-color: #dbe5e6;
 }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-row {
-  width: min(var(--ai-gooey-expanded), calc(100% - var(--ai-gooey-offset)));
-  margin-left: var(--ai-gooey-offset);
+  transform: translateX(var(--ai-gooey-offset));
 }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-trigger {
   opacity: 0;
   pointer-events: none;
   transition-delay: 300ms;
 }
-.ai-gooey-search[data-expanded="true"] .ai-gooey-search-trigger span { transform: translateX(-28px); }
 .ai-gooey-search[data-expanded="true"] .ai-gooey-search-input-surface {
   opacity: 1;
   pointer-events: auto;
@@ -338,10 +337,14 @@
   display: flex;
   flex: 0 1 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
-  margin-left: auto;
+  margin-left: 0;
+  transition: transform 520ms cubic-bezier(.22, 1, .36, 1);
+}
+.ai-referent-view .ai-referent-toolbar > .ai-gooey-search[data-expanded="true"] + .ai-referent-toolbar-actions {
+  transform: translateX(var(--ai-toolbar-search-shift));
 }
 .ai-referent-view .ai-referent-toolbar .ai-referent-filters { flex: none; gap: 2px; }
 .ai-referent-view .ai-referent-filters button { padding: 7px 11px; white-space: nowrap; }
@@ -583,6 +586,7 @@
   .ai-referent-view .ai-incoming-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 5px; }
   .ai-referent-view .ai-incoming-toolbar > .ai-gooey-search { grid-column: 1 / -1; }
   .ai-referent-view .ai-referent-toolbar-actions { width: 100%; overflow-x: auto; scrollbar-width: thin; }
+  .ai-referent-view .ai-referent-toolbar > .ai-gooey-search[data-expanded="true"] + .ai-referent-toolbar-actions { transform: none; }
   .ai-referent-view .ai-incoming-toolbar .ai-referent-filters { min-width: 0; width: auto; flex-wrap: nowrap; }
   .ai-referent-view .ai-referent-header { min-height: 70px; }
   .ai-referent-view .ai-referent-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -644,7 +648,8 @@
   .ai-gooey-search-trigger,
   .ai-gooey-search-input-surface,
   .ai-gooey-search-placeholder,
-  .ai-gooey-search-bubble { transition: none; }
+  .ai-gooey-search-bubble,
+  .ai-referent-view .ai-referent-toolbar-actions { transition: none; }
 }
 @media (forced-colors: active) {
   .ai-referent-view .ai-referent-summary button,

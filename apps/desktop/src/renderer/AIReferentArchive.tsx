@@ -46,7 +46,9 @@ export function AIReferentArchive({ token }: { readonly token: string }) {
         value={query}
         onValueChange={(value) => { setQuery(value); setPage(0); }}
       />
-      <Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
+      <div className="ai-referent-toolbar-actions">
+        <Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={() => setRevision((value) => value + 1)}>Обновить</Button>
+      </div>
     </div>
     {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
     {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем архив" /></div> : null}
