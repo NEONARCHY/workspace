@@ -73,7 +73,7 @@ describe("AI Referent gooey search", () => {
     const css = readFileSync(
       resolve(process.cwd(), "src/renderer/ai-referent-workspace.css"),
       "utf8",
-    );
+    ).replaceAll("\r\n", "\n");
     expect(css).not.toContain("--ai-gooey-expanded");
     expect(css).toContain(
       '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {\n  transform: translateX(var(--ai-gooey-offset));',
@@ -83,6 +83,15 @@ describe("AI Referent gooey search", () => {
     );
     expect(css).toContain(
       '.ai-referent-view .ai-referent-toolbar > .ai-gooey-search[data-expanded="true"] + .ai-referent-toolbar-actions {\n  transform: translateX(var(--ai-toolbar-search-shift));',
+    );
+    expect(css).toContain(
+      ".ai-referent-view .ai-referent-toolbar {\n  --ai-toolbar-search-shift: 51px;",
+    );
+    expect(css).toContain("  justify-content: flex-start;\n  gap: 8px;");
+    expect(css).toContain("flex: 0 0 var(--ai-gooey-collapsed);");
+    expect(css).toContain("padding: 4px 0 0;");
+    expect(css).toContain(
+      '.ai-referent-view .ai-referent-summary button[aria-pressed="true"] { transform: translateY(-2px);',
     );
     expect(css).not.toContain("width 520ms");
   });
