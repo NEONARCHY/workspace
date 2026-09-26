@@ -1108,6 +1108,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(screen.getByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Новые уведомления/ })).toBeInTheDocument();
     expect(screen.getByText("2", { selector: ".rail-badge" })).toBeInTheDocument();
     expect(screen.getByText("1", { selector: ".notification-metrics strong" })).toBeInTheDocument();
 

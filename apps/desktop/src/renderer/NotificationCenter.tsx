@@ -192,7 +192,7 @@ export function NotificationCenter({
           onClick={() => setFilter("unread")}
         >
           <strong>{unreadCount}</strong>
-          <span><b>Новые сигналы</b><small>Ещё не просмотрены</small></span>
+          <span><b>Новые уведомления</b><small>Ещё не просмотрены</small></span>
         </button>
         <button
           className={filter === "all" ? "active" : ""}
