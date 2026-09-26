@@ -79,7 +79,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
-import { ConnectionIndicator, WorkspaceIdentity, type ProfilePanelAnchor } from "./WorkspaceIdentity";
+import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
@@ -387,9 +387,8 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountAnchor, setAccountAnchor] = useState<ProfilePanelAnchor>();
   const [accountInvite, setAccountInvite] = useState(false);
-  const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); setAccountAnchor(undefined); };
+  const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); };
   const [navigationEditing, setNavigationEditing] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
@@ -1766,7 +1765,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -2104,7 +2103,6 @@ export function App() {
       {accountOpen ? (
         <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
-          anchor={accountAnchor}
           token={session.accessToken}
           user={workspace.currentUser}
           locale={workspace.personalPreferences.locale}

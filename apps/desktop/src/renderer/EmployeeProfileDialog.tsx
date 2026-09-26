@@ -10,20 +10,8 @@ import {
 } from "@fluentui/react-components";
 import {
   BookQuestionMark24Regular,
-  CheckmarkCircle24Regular,
   Dismiss24Regular,
-  Flash24Regular,
-  Lightbulb24Regular,
-  Mail24Regular,
-  Money24Regular,
-  News24Regular,
-  PeopleTeam24Regular,
-  PersonHeart24Regular,
   Reward24Regular,
-  ShieldCheckmark24Regular,
-  Sparkle24Regular,
-  Star24Regular,
-  Video24Regular,
 } from "@fluentui/react-icons";
 import {
   useEffect,
@@ -32,7 +20,6 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent,
-  type ReactNode,
 } from "react";
 import type {
   EmployeeAchievement,
@@ -43,26 +30,11 @@ import type {
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
+import { RecognitionBadgeArtwork } from "./RecognitionBadgeArtwork";
 import {
   issueEmployeeReward,
   loadEmployeeRecognitionProfile,
 } from "./workspace-api";
-
-const achievementIcons: Readonly<Record<string, ReactNode>> = {
-  check: <CheckmarkCircle24Regular />,
-  layers: <Reward24Regular />,
-  compass: <Flash24Regular />,
-  signal: <PeopleTeam24Regular />,
-  spark: <PersonHeart24Regular />,
-  pulse: <ShieldCheckmark24Regular />,
-  orbit: <Sparkle24Regular />,
-  gem: <Star24Regular />,
-  camera: <Video24Regular />,
-  mail: <Mail24Regular />,
-  megaphone: <News24Regular />,
-  receipt: <Money24Regular />,
-  target: <CheckmarkCircle24Regular />,
-};
 
 const tierLabels: Readonly<Record<EmployeeAchievement["tier"], string>> = {
   bronze: "Бронза",
@@ -73,15 +45,6 @@ const tierLabels: Readonly<Record<EmployeeAchievement["tier"], string>> = {
   amethyst: "Аметист",
   prism: "Призма",
   cosmic: "Космос",
-};
-
-const rewardIcons: Readonly<Record<string, ReactNode>> = {
-  appreciation: <PersonHeart24Regular />,
-  leadership: <Star24Regular />,
-  rescue: <Flash24Regular />,
-  mentorship: <PeopleTeam24Regular />,
-  innovation: <Lightbulb24Regular />,
-  reliability: <ShieldCheckmark24Regular />,
 };
 
 const rewardOptions: readonly {
@@ -190,7 +153,7 @@ function RecognitionEmblem({
     className={`recognition-emblem recognition-${tier}${unlocked ? " is-unlocked" : " is-locked"}${compact ? " is-compact" : ""}`}
     aria-hidden="true"
   >
-    <span>{achievementIcons[iconKey] ?? rewardIcons[iconKey] ?? <Reward24Regular />}</span>
+    <span><RecognitionBadgeArtwork iconKey={iconKey} /></span>
   </span>;
 }
 
@@ -270,7 +233,7 @@ function RecognitionGuide({ open, onOpenChange }: {
         >Как работают достижения</DialogTitle>
         <DialogContent>
           <div className="recognition-guide-copy">
-            <p>Workspace считает только подтверждённые рабочие события. Процессные линейки проходят восемь уровней — от бронзы до космической редкости.</p>
+            <p>Workspace считает только подтверждённые рабочие события. У каждой линейки есть понятная лестница «Бронза → Серебро → Золото → Призма»; у самых активных процессов между ними добавлены редкие коллекционные уровни.</p>
             <h3>Что учитывается</h3>
             <ul>
               <li>принятые задачи, успешно завершённые проекты и согласованные поездки;</li>

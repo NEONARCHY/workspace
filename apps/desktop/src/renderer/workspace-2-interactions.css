@@ -285,29 +285,131 @@
 .identity-popover-actions .fui-Button:active { box-shadow: none; transform: translateY(0); }
 .identity-popover-actions .identity-signout { margin-top: 3px; border-top: 1px solid rgb(41 58 85 / 7%); border-radius: 0 0 12px 12px; }
 
-/* Profile settings grow from the same top-right identity point as the compact menu. */
+/* Account settings use the same full, centered workspace shell as the employee profile. */
 .account-scrim.account-profile-anchor {
-  display: block;
-  padding: 0;
-  background: rgb(31 52 66 / 16%);
-  backdrop-filter: blur(3px);
+  display: grid;
+  padding: 20px 24px;
+  background: rgb(31 52 66 / 22%);
+  backdrop-filter: blur(4px);
+  place-items: center;
 }
 .account-profile-anchor .account-panel {
+  position: relative;
+  width: min(1220px, calc(100vw - 48px));
+  max-width: none;
+  height: min(860px, calc(100dvh - 40px));
+  max-height: none;
+  overflow-y: auto;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgb(251 254 254 / 99%), rgb(234 245 248 / 99%));
+  box-shadow: 0 30px 80px rgb(27 46 66 / 28%);
+  scrollbar-width: thin;
+}
+.account-profile-anchor .account-panel > header {
+  position: sticky;
+  z-index: 12;
+  top: 0;
+  min-height: 64px;
+  margin: 0 -24px;
+  padding: 12px 26px 10px;
+  border: 0;
+  background: linear-gradient(180deg, rgb(248 253 253 / 99%), rgb(244 251 251 / 97%));
+}
+.account-profile-anchor .account-panel > header > div { display: flex; align-items: baseline; gap: 10px; }
+.account-profile-anchor .account-panel > header span { font-size: 10px; }
+.account-profile-anchor .account-panel > header h2 { margin: 0; font-size: 18px; }
+.account-settings-sticky {
+  position: sticky;
+  z-index: 10;
+  top: 62px;
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 12px;
+  background: linear-gradient(180deg, rgb(246 252 252 / 99%) 0%, rgb(240 249 250 / 97%) 84%, rgb(240 249 250 / 0%) 100%);
+}
+.account-profile-anchor .account-profile {
+  position: relative;
+  display: grid;
+  min-height: 116px;
+  grid-template-columns: auto minmax(190px, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  overflow: hidden;
+  border: 1px solid rgb(0 145 168 / 12%);
+  border-radius: 20px;
+  background: radial-gradient(circle at 84% 10%, rgb(122 226 224 / 34%), transparent 38%), linear-gradient(135deg, #f8ffff, #e5f3f5 62%, #e8eef9);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 85%), 0 10px 26px rgb(41 58 85 / 8%);
+}
+.account-profile-anchor .account-profile::after {
   position: absolute;
-  top: var(--account-anchor-top, 72px);
-  right: var(--account-anchor-right, 18px);
-  width: min(600px, calc(100vw - 36px));
-  height: min(760px, calc(100dvh - var(--account-anchor-top, 72px) - 18px));
-  max-height: calc(100dvh - var(--account-anchor-top, 72px) - 18px);
+  inset: auto -50px -90px auto;
+  width: 260px;
+  height: 180px;
+  border-radius: 50%;
+  background: conic-gradient(from 110deg, rgb(0 145 168 / 14%), rgb(126 110 255 / 12%), rgb(255 177 92 / 12%), rgb(0 145 168 / 14%));
+  filter: blur(18px);
+  content: "";
+}
+.account-profile-anchor .account-profile > * { position: relative; z-index: 1; }
+.account-profile-anchor .account-profile .fui-Avatar { border: 4px solid rgb(255 255 255 / 76%); box-shadow: 0 10px 24px rgb(41 58 85 / 16%); }
+.account-profile-copy { display: grid; min-width: 0; gap: 2px; }
+.account-profile-copy > span { color: var(--ws-link); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.account-profile-copy strong { overflow: hidden; color: var(--ws-navy); font-size: 24px; line-height: 1.08; text-overflow: ellipsis; white-space: nowrap; }
+.account-profile-copy p, .account-profile-copy small { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.account-profile-status { display: grid; gap: 6px; }
+.account-profile-status > span { display: flex; min-height: 30px; align-items: center; gap: 7px; padding: 4px 9px; border: 1px solid rgb(255 255 255 / 80%); border-radius: 11px; color: var(--ws-muted); background: rgb(255 255 255 / 62%); box-shadow: inset 0 1px 0 #fff; font-size: 11px; white-space: nowrap; }
+.account-profile-status svg { width: 17px; height: 17px; color: var(--ws-link); }
+.account-profile-status .needs-attention svg { color: #a76819; }
+.account-profile-anchor .account-avatar-action { min-height: 38px; margin-left: 0; padding-inline: 13px; border: 1px solid rgb(41 58 85 / 10%); border-radius: 12px; color: var(--ws-navy); background: rgb(255 255 255 / 82%); box-shadow: 0 8px 20px rgb(41 58 85 / 7%); }
+.account-profile-anchor .account-avatar-action:hover { color: var(--ws-link); background: #fff; transform: translateY(-1px); }
+.account-profile-anchor .account-section-nav {
+  position: static;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid rgb(41 58 85 / 8%);
+  border-radius: 15px;
+  background: rgb(236 245 246 / 94%);
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+}
+.account-profile-anchor .account-section-nav::-webkit-scrollbar { display: none; }
+.account-profile-anchor .account-section-nav button { display: inline-flex; min-height: 38px; flex: none; align-items: center; gap: 7px; padding: 7px 12px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 12px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease), transform 180ms var(--ws-ease); }
+.account-profile-anchor .account-section-nav button > span { display: grid; place-items: center; }
+.account-profile-anchor .account-section-nav button svg { width: 18px; height: 18px; }
+.account-profile-anchor .account-section-nav button:hover { color: var(--ws-navy); background: rgb(255 255 255 / 58%); transform: translateY(-1px); }
+.account-profile-anchor .account-section-nav button.is-active { color: var(--ws-navy); background: rgb(255 255 255 / 94%); box-shadow: 0 6px 18px rgb(41 58 85 / 10%), inset 0 0 0 1px rgb(255 255 255 / 88%); }
+.account-profile-anchor .account-section-nav button:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 1px; }
+.account-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; padding: 2px 0 24px; }
+.account-profile-anchor .account-section { min-width: 0; margin: 0; padding: 20px; border: 1px solid rgb(41 58 85 / 7%); border-radius: 20px; background: rgb(255 255 255 / 76%); box-shadow: inset 0 1px 0 #fff, 0 10px 24px rgb(41 58 85 / 5%); scroll-margin-top: 244px; }
+.account-profile-anchor .account-section[data-account-section="updates"],
+.account-profile-anchor .desktop-update-settings { grid-column: 1 / -1; }
+.account-profile-anchor .account-section-title { margin-bottom: 16px; }
+.account-profile-anchor .account-section-title h3 { color: var(--ws-navy); font-size: 15px; }
+.account-profile-anchor .account-feedback { z-index: 14; border: 1px solid rgb(0 145 168 / 16%); border-radius: 14px; color: var(--ws-navy); background: rgb(228 246 245 / 96%); box-shadow: 0 12px 30px rgb(41 58 85 / 10%); }
+@media (max-width: 980px) {
+  .account-profile-anchor .account-profile { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .account-profile-status { display: none; }
+  .account-settings-grid { grid-template-columns: 1fr; }
+  .account-profile-anchor .account-section[data-account-section="updates"],
+  .account-profile-anchor .desktop-update-settings { grid-column: auto; }
 }
 @media (max-width: 720px), (max-height: 620px) {
+  .account-scrim.account-profile-anchor { padding: 8px; }
   .account-profile-anchor .account-panel {
-    top: var(--account-anchor-top, 58px);
-    right: 10px;
-    width: min(600px, calc(100vw - 20px));
-    height: calc(100dvh - var(--account-anchor-top, 58px) - 10px);
-    max-height: calc(100dvh - var(--account-anchor-top, 58px) - 10px);
+    width: calc(100vw - 16px);
+    height: calc(100dvh - 16px);
+    border-radius: 20px;
   }
+  .account-profile-anchor .account-panel > header { margin-inline: -16px; padding-inline: 18px; }
+  .account-profile-anchor .account-profile { grid-template-columns: auto minmax(0, 1fr); padding: 13px; }
+  .account-profile-copy strong { font-size: 20px; }
+  .account-profile-anchor .account-avatar-action { grid-column: 1 / -1; width: 100%; justify-content: center; }
+  .account-settings-sticky { top: 62px; }
+  .account-profile-anchor .account-section { scroll-margin-top: 282px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fui-PopoverSurface.identity-popover,

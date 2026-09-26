@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type WheelEvent } from "react";
 
 import type {
   DirectoryEmployee,
@@ -11,7 +11,18 @@ import type {
   InterfaceLocale,
 } from "@yuksalish/contracts";
 import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
-import { Camera24Regular, Dismiss24Regular } from "@fluentui/react-icons";
+import {
+  ArrowSync24Regular,
+  Camera24Regular,
+  Desktop24Regular,
+  Dismiss24Regular,
+  Key24Regular,
+  LocalLanguage24Regular,
+  PersonAdd24Regular,
+  PersonKey24Regular,
+  ShieldLock24Regular,
+  Speaker224Regular,
+} from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
@@ -34,7 +45,6 @@ import {
 } from "./workspace-api";
 
 interface AccountPanelProps {
-  readonly anchor?: { readonly offsetRight: number; readonly originRight: number; readonly top: number };
   readonly initialSection?: "invite";
   readonly token: string;
   readonly user: WorkspacePerson;
@@ -45,7 +55,26 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange, anchor }: AccountPanelProps) {
+type AccountSectionKey = "language" | "audio" | "security" | "password" | "sessions" | "invite" | "managed-password" | "updates";
+
+interface AccountNavigationItem {
+  readonly key: AccountSectionKey;
+  readonly label: string;
+  readonly selector: string;
+  readonly icon: ReactNode;
+}
+
+export function scrollAccountNavigation(event: WheelEvent<HTMLElement>) {
+  const navigation = event.currentTarget;
+  if (navigation.scrollWidth <= navigation.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  const maximum = navigation.scrollWidth - navigation.clientWidth;
+  const next = Math.max(0, Math.min(maximum, navigation.scrollLeft + event.deltaY));
+  if (next === navigation.scrollLeft) return;
+  event.preventDefault();
+  navigation.scrollLeft = next;
+}
+
+export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   useModalFocus(panelRef, true, onClose);
   const inviteRef = useRef<HTMLElement>(null);
@@ -78,7 +107,9 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [feedback, setFeedback] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [localeBusy, setLocaleBusy] = useState(false);
-  const jumpToSection = (selector: string) => {
+  const [activeSection, setActiveSection] = useState<AccountSectionKey>("language");
+  const jumpToSection = (sectionKey: AccountSectionKey, selector: string) => {
+    setActiveSection(sectionKey);
     const section = panelRef.current?.querySelector<HTMLElement>(selector);
     section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     const heading = section?.querySelector<HTMLElement>("h3");
@@ -206,14 +237,21 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
     (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
   );
 
-  const anchorStyle = anchor ? {
-    "--account-anchor-top": `${anchor.top}px`,
-    "--account-anchor-right": `${anchor.offsetRight}px`,
-    "--account-origin-right": `${anchor.originRight}px`,
-  } as CSSProperties : undefined;
+  const navigationItems: readonly AccountNavigationItem[] = [
+    { key: "language", label: "Общее", selector: "[data-account-section=language]", icon: <LocalLanguage24Regular /> },
+    { key: "audio", label: "Звук", selector: ".audio-device-settings", icon: <Speaker224Regular /> },
+    { key: "security", label: "Защита", selector: "[data-account-section=security]", icon: <ShieldLock24Regular /> },
+    { key: "password", label: "Пароль", selector: "[data-account-section=password]", icon: <Key24Regular /> },
+    { key: "sessions", label: "Устройства", selector: "[data-account-section=sessions]", icon: <Desktop24Regular /> },
+    ...(["admin", "superadmin"].includes(user.role) ? [
+      { key: "invite" as const, label: "Доступ", selector: "[data-account-section=invite]", icon: <PersonAdd24Regular /> },
+      { key: "managed-password" as const, label: "Пароли", selector: "[data-account-section=managed-password]", icon: <PersonKey24Regular /> },
+      { key: "updates" as const, label: "Обновления", selector: "[data-account-section=updates]", icon: <ArrowSync24Regular /> },
+    ] : []),
+  ];
 
   return (
-    <div className="account-scrim account-profile-anchor" style={anchorStyle} role="presentation" onMouseDown={onClose}>
+    <div className="account-scrim account-profile-anchor" role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
         ref={panelRef}
@@ -231,45 +269,53 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
         </header>
 
-        {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
-          <button type="button" onClick={() => jumpToSection(".audio-device-settings")}>Звук</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=language]")}>Язык</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=security]")}>Защита</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=password]")}>Пароль</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=invite]")}>Доступ сотрудников</button>}
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=managed-password]")}>Пароли сотрудников</button>}
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=updates]")}>Обновления</button>}
-        </nav>}
-
-        {initialSection !== "invite" && <><section className="account-profile">
-          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
-            <ProfileAvatar person={user} token={token} size={48} />
-          </EmployeeProfileLink>
-          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
-            <div>
-              <strong>{user.name}</strong>
-              <span>{user.jobTitle ?? user.role}</span>
-              <small>@{user.username}</small>
+        {initialSection !== "invite" && <div className="account-settings-sticky">
+          <section className="account-profile">
+            <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+              <ProfileAvatar person={user} token={token} size={72} />
+            </EmployeeProfileLink>
+            <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+              <div className="account-profile-copy">
+                <span>Личное пространство</span>
+                <strong>{user.name}</strong>
+                <p>{user.jobTitle ?? user.role}</p>
+                <small>@{user.username}</small>
+              </div>
+            </EmployeeProfileLink>
+            <div className="account-profile-status" aria-label="Состояние аккаунта">
+              <span className={totpActive ? "is-secure" : "needs-attention"}><ShieldLock24Regular />{totpActive ? "Защита включена" : "Защита не включена"}</span>
+              <span><Desktop24Regular />Устройств: {sessions.length}</span>
             </div>
-          </EmployeeProfileLink>
-          <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
-            <Camera24Regular />
-            <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
-            <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!file) return;
-                setAvatarBusy(true);
-                void uploadProfileAvatar(token, file).then((result) => {
-                  onAvatarChanged?.(result.avatarVersion);
-                  setFeedback("Аватар обновлён и сохранён на сервере.");
-                }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
-                  .finally(() => setAvatarBusy(false));
-              }} />
-          </label>
-        </section>
+            <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
+              <Camera24Regular />
+              <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
+              <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setAvatarBusy(true);
+                  void uploadProfileAvatar(token, file).then((result) => {
+                    onAvatarChanged?.(result.avatarVersion);
+                    setFeedback("Аватар обновлён и сохранён на сервере.");
+                  }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
+                    .finally(() => setAvatarBusy(false));
+                }} />
+            </label>
+          </section>
+          <nav className="account-section-nav" aria-label="Разделы настроек" onWheel={scrollAccountNavigation}>
+            {navigationItems.map((item) => <button
+              key={item.key}
+              type="button"
+              className={activeSection === item.key ? "is-active" : ""}
+              aria-pressed={activeSection === item.key}
+              onClick={() => jumpToSection(item.key, item.selector)}
+            ><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
+          </nav>
+        </div>}
+
+        <div className="account-settings-grid">
+        {initialSection !== "invite" && <>
 
         <section className="account-section" data-account-section="language">
           <div className="account-section-title"><div>
@@ -480,6 +526,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </>
         ) : null}
 
+        </div>
         {feedback ? <div className="account-feedback" role="status">{feedback}</div> : null}
       </aside>
     </div>

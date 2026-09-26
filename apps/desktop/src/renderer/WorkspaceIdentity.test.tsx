@@ -19,28 +19,32 @@ const person = {
 afterEach(() => vi.useRealTimers());
 
 describe("WorkspaceIdentity", () => {
-  it("opens the profile without morph animation and switches directly to settings", () => {
+  it("opens profile, settings and logout actions from one avatar menu", () => {
     const onProfile = vi.fn();
     const onSettings = vi.fn();
+    const onLogout = vi.fn();
     render(
       <FluentProvider theme={workspaceTheme}>
-        <WorkspaceIdentity person={person} token="token" onProfile={onProfile} onSettings={onSettings} onLogout={vi.fn()} />
+        <WorkspaceIdentity person={person} token="token" onProfile={onProfile} onSettings={onSettings} onLogout={onLogout} />
       </FluentProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Открыть профиль: Малика Нурова" }));
-    expect(onProfile).toHaveBeenCalledOnce();
-
-    fireEvent.click(screen.getByRole("button", { name: "Меню профиля" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }));
     expect(document.querySelector(".identity-popover")).not.toHaveClass("is-opening");
     expect(document.querySelector(".identity-popover")).not.toHaveClass("is-closing");
-    fireEvent.click(screen.getByRole("button", { name: "Открыть рабочий профиль" }));
-    expect(onProfile).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("button", { name: "Профиль сотрудника" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Настройки" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Выйти" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Профиль сотрудника" }));
+    expect(onProfile).toHaveBeenCalledOnce();
 
-    fireEvent.click(screen.getByRole("button", { name: "Меню профиля" }));
-    fireEvent.click(screen.getByRole("button", { name: "Настройки профиля" }));
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настройки" }));
     expect(onSettings).toHaveBeenCalledOnce();
-    expect(onSettings).toHaveBeenCalledWith({ top: 8, offsetRight: window.innerWidth, originRight: 0 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Открыть меню профиля: Малика Нурова" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выйти" }));
+    expect(onLogout).toHaveBeenCalledOnce();
   });
 
   it("opens versioned release history from the connection popover", () => {

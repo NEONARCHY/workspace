@@ -50,9 +50,20 @@ def test_achievement_catalog_backfills_levels_and_tenure() -> None:
     assert by_code["trips_50"].tier == "prism"
     assert by_code["reactions_50"].unlocked is True
     assert by_code["efficiency_streak_2"].unlocked is True
+    assert by_code["efficiency_months_1"].tier == "bronze"
+    assert by_code["efficiency_months_3"].tier == "silver"
+    assert by_code["efficiency_months_6"].tier == "gold"
+    assert by_code["efficiency_months_12"].tier == "prism"
     assert by_code["tenure_12"].unlocked is True
     assert by_code["tenure_24"].unlocked is False
     assert by_code["tenure_12"].earned_at == date(2026, 3, 15)
+
+    by_category: dict[str, set[str]] = {}
+    for item in achievements:
+        by_category.setdefault(item.category, set()).add(item.tier)
+    for category, tiers in by_category.items():
+        if "bronze" in tiers:
+            assert {"silver", "gold", "prism"}.issubset(tiers), category
 
 
 def test_efficiency_streak_uses_consecutive_calendar_months() -> None:

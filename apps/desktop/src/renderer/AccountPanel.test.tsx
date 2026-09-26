@@ -35,12 +35,11 @@ afterEach(() => {
   api.changeUserPassword.mockReset();
 });
 
-it("opens settings at the top-right anchor and closes without a transition", () => {
+it("opens settings as a full profile-sized dialog and closes without a transition", () => {
   const onClose = vi.fn();
   render(
     <FluentProvider theme={webLightTheme}>
       <AccountPanel token="test-token"
-        anchor={{ top: 64, offsetRight: 22, originRight: 48 }}
         user={{ id: "admin-1", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "#0091a8" }}
         onClose={onClose} onLogout={vi.fn()} />
     </FluentProvider>,
@@ -49,10 +48,22 @@ it("opens settings at the top-right anchor and closes without a transition", () 
   const scrim = document.querySelector(".account-profile-anchor");
   expect(scrim).not.toHaveClass("is-opening");
   expect(scrim).not.toHaveClass("is-closing");
-  expect(scrim).toHaveStyle({ "--account-anchor-top": "64px", "--account-anchor-right": "22px", "--account-origin-right": "48px" });
   expect(screen.getByRole("dialog", { name: "Настройки профиля" })).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Разделы настроек" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Закрыть" }));
   expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("scrolls the horizontal settings navigation with the mouse wheel", () => {
+  renderPanel();
+  const navigation = screen.getByRole("navigation", { name: "Разделы настроек" });
+  Object.defineProperty(navigation, "scrollWidth", { configurable: true, value: 900 });
+  Object.defineProperty(navigation, "clientWidth", { configurable: true, value: 320 });
+  Object.defineProperty(navigation, "scrollLeft", { configurable: true, writable: true, value: 0 });
+
+  fireEvent.wheel(navigation, { deltaY: 140, deltaX: 0 });
+
+  expect(navigation.scrollLeft).toBe(140);
 });
 
 it("uploads a profile avatar and reports the new server version", async () => {

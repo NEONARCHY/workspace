@@ -98,6 +98,7 @@ describe("EmployeeProfileDialog", () => {
     expect(cosmicCard).toHaveClass("recognition-rarity-cosmic");
     expect(cosmicCard?.querySelector(".recognition-card-foil")).toBeInTheDocument();
     expect(cosmicCard?.querySelector(".recognition-card-glare")).toBeInTheDocument();
+    expect(cosmicCard?.querySelector(".recognition-badge-artwork")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Как это работает" }));
     expect(screen.getByRole("dialog", { name: "Как работают достижения" })).toHaveTextContent(
       "Личные чаты один на один",

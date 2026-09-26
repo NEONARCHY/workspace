@@ -430,12 +430,12 @@ def _achievements(
         (
             "efficiency_months", "Стабильная эффективность",
             "Месяцы с результатом от 90% при выборке от пяти задач", "efficiency", "pulse",
-            ((1, "gold"), (3, "prism")),
+            ((1, "bronze"), (3, "silver"), (6, "gold"), (12, "prism")),
         ),
         (
             "efficiency_streak", "Серия эффективности",
             "Последовательные месяцы с результатом от 90%", "efficiency", "orbit",
-            ((2, "gold"), (4, "prism")),
+            ((2, "bronze"), (3, "silver"), (6, "gold"), (12, "prism")),
         ),
     )
     for metric, title, description, category, icon, levels in ladders:

@@ -42,49 +42,58 @@
 .achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: .7; }
 .achievement-card.is-unlocked { opacity: 1; }
 .recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }
-.recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: #fff; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
-.recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: var(--recognition-active, 0); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
+.recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: var(--recognition-card-base, linear-gradient(145deg, #fff, #eef8f7)); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
+.recognition-card-surface::before { position: absolute; inset: 0; background: linear-gradient(118deg, rgb(255 255 255 / 66%) 0 18%, transparent 36% 62%, rgb(255 255 255 / 34%) 82% 100%); content: ""; opacity: .76; pointer-events: none; }
+.recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: calc(.12 + var(--recognition-active, 0) * .72); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
 .recognition-card-glare { position: absolute; z-index: 3; inset: 0; pointer-events: none; background: radial-gradient(circle 320px at var(--recognition-light-x, 50%) var(--recognition-light-y, 50%), rgb(255 255 255 / 88%) 0%, rgb(255 255 255 / 20%) 40%, transparent 80%); mix-blend-mode: overlay; opacity: var(--recognition-active, 0); }
 .recognition-card-content { position: relative; z-index: 4; display: grid; min-height: inherit; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 16px; padding: 18px; transform: translateZ(30px); }
 .recognition-card-details { min-width: 0; }
 .recognition-holographic-card:hover .recognition-card-surface, .recognition-holographic-card:focus-within .recognition-card-surface { border-color: color-mix(in srgb, var(--tier-accent), white 70%); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 4%), 0 25px 40px -10px rgb(30 41 59 / 12%), 0 0 30px var(--recognition-glow); }
 .recognition-rarity-bronze {
   --tier-accent: #9a6f4b; --recognition-holo-a: rgb(215 175 130 / 35%); --recognition-holo-b: rgb(255 235 200 / 65%); --recognition-holo-c: rgb(180 130 90 / 44%); --recognition-glow: rgb(163 122 84 / 18%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(255 247 231 / 92%), transparent 34%), linear-gradient(145deg, #fffaf2, #f1ddc8 58%, #e7c4a5);
   --recognition-card-foil: linear-gradient(115deg, transparent 15%, rgb(215 175 130 / 30%) 30%, rgb(255 235 200 / 60%) 45%, rgb(180 130 90 / 40%) 60%, transparent 80%);
   --recognition-icon-foil: linear-gradient(130deg, transparent 12%, rgb(222 179 131 / 50%) 40%, rgb(255 243 220 / 90%) 54%, transparent 82%);
 }
 .recognition-rarity-silver {
   --tier-accent: #5f7185; --recognition-holo-a: rgb(180 210 230 / 38%); --recognition-holo-b: rgb(255 255 255 / 84%); --recognition-holo-c: rgb(140 170 200 / 44%); --recognition-glow: rgb(100 116 139 / 18%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(255 255 255 / 98%), transparent 34%), linear-gradient(145deg, #fbfdff, #e3ebf1 58%, #d1dde7);
   --recognition-card-foil: linear-gradient(108deg, transparent 14%, rgb(180 210 230 / 35%) 31%, rgb(255 255 255 / 82%) 46%, rgb(140 170 200 / 40%) 61%, transparent 82%);
   --recognition-icon-foil: linear-gradient(145deg, transparent 8%, rgb(171 199 219 / 44%) 35%, rgb(255 255 255 / 96%) 52%, rgb(151 176 204 / 52%) 70%, transparent 90%);
 }
 .recognition-rarity-gold {
   --tier-accent: #b76705; --recognition-holo-a: rgb(240 195 90 / 40%); --recognition-holo-b: rgb(255 250 210 / 84%); --recognition-holo-c: rgb(220 160 50 / 45%); --recognition-glow: rgb(217 119 6 / 22%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(255 255 230 / 96%), transparent 34%), linear-gradient(145deg, #fffdf2, #f7e5a8 56%, #eec66c);
   --recognition-card-foil: linear-gradient(120deg, transparent 12%, rgb(240 195 90 / 34%) 29%, rgb(255 250 210 / 82%) 45%, rgb(250 204 21 / 42%) 57%, rgb(220 160 50 / 34%) 68%, transparent 88%);
   --recognition-icon-foil: conic-gradient(from 200deg, transparent, rgb(255 224 130 / 74%), rgb(255 255 235 / 94%), rgb(222 159 54 / 52%), transparent);
 }
 .recognition-rarity-platinum {
   --tier-accent: #287f86; --recognition-holo-a: rgb(196 239 241 / 45%); --recognition-holo-b: rgb(255 255 255 / 84%); --recognition-holo-c: rgb(166 193 230 / 44%); --recognition-glow: rgb(76 172 178 / 22%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(255 255 255 / 96%), transparent 34%), linear-gradient(145deg, #f8ffff, #d8efee 54%, #c9dced);
   --recognition-card-foil: linear-gradient(125deg, transparent 8%, rgb(177 230 229 / 42%) 24%, rgb(255 255 255 / 86%) 43%, rgb(181 203 235 / 46%) 61%, rgb(201 245 239 / 34%) 74%, transparent 92%);
   --recognition-icon-foil: radial-gradient(circle at 36% 34%, rgb(255 255 255 / 96%), rgb(177 230 229 / 58%) 28%, rgb(170 191 225 / 44%) 54%, transparent 76%);
 }
 .recognition-rarity-sapphire {
   --tier-accent: #3169c6; --recognition-holo-a: rgb(117 202 255 / 42%); --recognition-holo-b: rgb(215 240 255 / 78%); --recognition-holo-c: rgb(74 103 224 / 46%); --recognition-glow: rgb(65 119 234 / 25%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(236 250 255 / 96%), transparent 34%), linear-gradient(145deg, #f6fbff, #cfeaff 52%, #cfd4fb);
   --recognition-card-foil: linear-gradient(102deg, transparent 10%, rgb(89 190 255 / 42%) 26%, rgb(225 247 255 / 82%) 43%, rgb(78 111 230 / 48%) 59%, rgb(106 211 255 / 36%) 72%, transparent 90%);
   --recognition-icon-foil: conic-gradient(from 145deg, rgb(79 117 226 / 28%), rgb(135 224 255 / 78%), rgb(242 253 255 / 94%), rgb(72 103 210 / 48%), rgb(79 117 226 / 28%));
 }
 .recognition-rarity-amethyst {
   --tier-accent: #8050b9; --recognition-holo-a: rgb(229 157 255 / 44%); --recognition-holo-b: rgb(246 220 255 / 76%); --recognition-holo-c: rgb(137 90 222 / 46%); --recognition-glow: rgb(146 94 226 / 26%);
+  --recognition-card-base: radial-gradient(circle at 18% 12%, rgb(255 244 255 / 96%), transparent 34%), linear-gradient(145deg, #fff9ff, #ebd8fa 52%, #d5c9f4);
   --recognition-card-foil: linear-gradient(132deg, transparent 9%, rgb(238 174 255 / 42%) 25%, rgb(255 232 255 / 80%) 41%, rgb(151 95 231 / 48%) 58%, rgb(231 161 255 / 35%) 72%, transparent 92%);
   --recognition-icon-foil: radial-gradient(circle at 65% 32%, rgb(255 243 255 / 94%), rgb(226 157 255 / 72%) 27%, rgb(132 82 211 / 48%) 58%, transparent 79%);
 }
 .recognition-rarity-prism {
   --tier-accent: #087fa0; --recognition-holo-a: rgb(255 180 220 / 46%); --recognition-holo-b: rgb(130 230 255 / 64%); --recognition-holo-c: rgb(200 180 255 / 46%); --recognition-glow: rgb(14 165 233 / 25%);
+  --recognition-card-base: radial-gradient(circle at 14% 10%, rgb(255 255 255 / 98%), transparent 31%), conic-gradient(from 235deg at 76% 28%, #e5f9fb, #f7e5f5, #fff5cf, #dff5ff, #e9e2ff, #e5f9fb);
   --recognition-card-foil: linear-gradient(115deg, transparent 10%, rgb(255 180 220 / 40%) 25%, rgb(130 230 255 / 60%) 40%, rgb(255 240 150 / 50%) 55%, rgb(200 180 255 / 40%) 70%, transparent 90%);
   --recognition-icon-foil: conic-gradient(from 230deg, rgb(255 167 214 / 58%), rgb(107 225 255 / 78%), rgb(255 242 155 / 72%), rgb(196 167 255 / 64%), rgb(255 167 214 / 58%));
 }
 .recognition-rarity-cosmic {
   --tier-accent: #6350bb; --recognition-holo-a: rgb(255 112 232 / 48%); --recognition-holo-b: rgb(80 211 255 / 66%); --recognition-holo-c: rgb(255 223 105 / 50%); --recognition-glow: rgb(118 94 255 / 32%);
+  --recognition-card-base: radial-gradient(circle at 16% 12%, rgb(255 255 255 / 84%), transparent 30%), linear-gradient(145deg, #f8f2ff, #d9ecff 42%, #ead7f7 72%, #f6e9bf);
   --recognition-card-foil: conic-gradient(from 210deg at 50% 50%, transparent, rgb(255 112 232 / 44%), rgb(80 211 255 / 62%), rgb(255 223 105 / 48%), rgb(122 92 255 / 54%), transparent);
   --recognition-icon-foil: radial-gradient(circle at 38% 30%, rgb(255 255 255 / 96%), rgb(90 220 255 / 76%) 20%, rgb(255 107 230 / 64%) 43%, rgb(112 80 229 / 54%) 66%, transparent 84%);
 }
@@ -94,23 +103,34 @@
 .achievement-tier { color: var(--tier-accent); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .achievement-progress { height: 4px; margin: 6px 0 0; overflow: hidden; border-radius: 999px; background: rgb(41 58 85 / 9%); }
 .achievement-progress i { display: block; height: 100%; border-radius: inherit; background: var(--tier-accent); }
-.recognition-emblem { --emblem-base: #80d8d5; --tier-accent: #087f91; position: relative; display: grid; width: 72px; height: 72px; flex: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 94%); border-radius: 50%; background: linear-gradient(135deg, #edf3f6 0%, #fff 100%); box-shadow: inset 0 2px 5px rgb(0 0 0 / 8%), inset 0 -1px 2px #fff, 0 4px 12px rgb(0 0 0 / 4%); place-items: center; transform: translateZ(10px); }
-.recognition-emblem::before { position: absolute; z-index: 1; inset: -40%; border-radius: 50%; background: var(--recognition-icon-foil, linear-gradient(125deg, transparent 18%, var(--recognition-holo-a, rgb(255 205 112 / 35%)) 36%, rgb(255 255 255 / 86%) 49%, var(--recognition-holo-b, rgb(111 229 255 / 50%)) 61%, var(--recognition-holo-c, rgb(195 146 255 / 40%)) 74%, transparent 88%)); content: ""; mix-blend-mode: color-dodge; opacity: var(--recognition-active, 0); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
-.recognition-emblem::after { position: absolute; z-index: 3; inset: 0; border-radius: 50%; background: radial-gradient(circle 48px at var(--recognition-light-x, 50%) var(--recognition-light-y, 50%), rgb(255 255 255 / 90%), transparent 68%); content: ""; mix-blend-mode: screen; opacity: calc(var(--recognition-active, 0) * .75); pointer-events: none; }
-.recognition-emblem > span { position: relative; z-index: 2; display: grid; width: 42px; height: 42px; place-items: center; color: var(--tier-accent); filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--tier-accent), transparent 65%)); transform: translate3d(var(--recognition-icon-x, 0px), var(--recognition-icon-y, 0px), 22px); }
-.recognition-emblem > span svg { width: 25px; height: 25px; }
-.recognition-emblem.recognition-bronze { --emblem-base: #d99b6c; --tier-accent: #9a6f4b; }
-.recognition-emblem.recognition-silver { --emblem-base: #b8cbd5; --tier-accent: #5f7185; }
-.recognition-emblem.recognition-gold { --emblem-base: #f1c768; --tier-accent: #b76705; }
-.recognition-emblem.recognition-platinum { --emblem-base: #a9e0df; --tier-accent: #287f86; }
-.recognition-emblem.recognition-sapphire { --emblem-base: #6ea9f5; --tier-accent: #3169c6; }
-.recognition-emblem.recognition-amethyst { --emblem-base: #b58af2; --tier-accent: #8050b9; }
-.recognition-emblem.recognition-prism { --emblem-base: #69d5c9; --tier-accent: #087fa0; }
-.recognition-emblem.recognition-cosmic { --emblem-base: #7868e8; --tier-accent: #6350bb; }
+.recognition-emblem { --tier-accent: #087f91; --badge-highlight: #eaffff; --badge-main: #69d5c9; --badge-shadow: #277e8c; --badge-face: #dff8f6; position: relative; display: grid; width: 76px; height: 76px; flex: none; overflow: visible; place-items: center; transform: translateZ(10px); }
+.recognition-emblem::before { position: absolute; z-index: 0; inset: 10px; border-radius: 50%; background: color-mix(in srgb, var(--tier-accent), transparent 70%); box-shadow: 0 11px 24px color-mix(in srgb, var(--tier-accent), transparent 76%); content: ""; filter: blur(6px); }
+.recognition-emblem::after { position: absolute; z-index: 3; inset: 7px; border-radius: 50%; background: radial-gradient(circle 48px at var(--recognition-light-x, 50%) var(--recognition-light-y, 50%), rgb(255 255 255 / 88%), transparent 68%); content: ""; mix-blend-mode: screen; opacity: calc(.14 + var(--recognition-active, 0) * .62); pointer-events: none; }
+.recognition-emblem > span { position: relative; z-index: 2; display: grid; width: 70px; height: 70px; place-items: center; filter: drop-shadow(0 7px 8px color-mix(in srgb, var(--tier-accent), transparent 74%)); transform: translate3d(var(--recognition-icon-x, 0px), var(--recognition-icon-y, 0px), 22px); }
+.recognition-emblem > span svg { width: 64px; height: 64px; overflow: visible; }
+.recognition-badge-stop-highlight { stop-color: var(--badge-highlight); }
+.recognition-badge-stop-main { stop-color: var(--badge-main); }
+.recognition-badge-stop-shadow { stop-color: var(--badge-shadow); }
+.recognition-badge-depth { fill: color-mix(in srgb, var(--badge-shadow), #182b3d 28%); }
+.recognition-badge-rim { stroke: rgb(255 255 255 / 82%); stroke-width: 1.2; }
+.recognition-badge-face { fill: var(--badge-face); stroke: rgb(255 255 255 / 72%); stroke-width: 1.2; }
+.recognition-badge-facet { fill: rgb(255 255 255 / 16%); }
+.recognition-badge-shine { fill: rgb(255 255 255 / 42%); }
+.recognition-badge-glyph { fill: none; stroke: var(--tier-accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.recognition-badge-glyph .recognition-glyph-solid { fill: var(--tier-accent); stroke: none; }
+.recognition-badge-glyph .recognition-glyph-cut { fill: none; stroke: white; stroke-width: 1.8; }
+.recognition-emblem.recognition-bronze { --tier-accent: #8b5939; --badge-highlight: #ffe9cc; --badge-main: #d99b6c; --badge-shadow: #8f5535; --badge-face: #f5d5b7; }
+.recognition-emblem.recognition-silver { --tier-accent: #54697b; --badge-highlight: #f8fdff; --badge-main: #b8cbd5; --badge-shadow: #687d91; --badge-face: #e5eef3; }
+.recognition-emblem.recognition-gold { --tier-accent: #9a5b05; --badge-highlight: #fff8c8; --badge-main: #f1c768; --badge-shadow: #b66b0b; --badge-face: #ffecac; }
+.recognition-emblem.recognition-platinum { --tier-accent: #27777e; --badge-highlight: #f5ffff; --badge-main: #a9e0df; --badge-shadow: #5b8ca4; --badge-face: #dff7f5; }
+.recognition-emblem.recognition-sapphire { --tier-accent: #315fb0; --badge-highlight: #e5f8ff; --badge-main: #6ea9f5; --badge-shadow: #4c55b9; --badge-face: #d8ebff; }
+.recognition-emblem.recognition-amethyst { --tier-accent: #7648a8; --badge-highlight: #fff0ff; --badge-main: #b58af2; --badge-shadow: #6b50b0; --badge-face: #eadcff; }
+.recognition-emblem.recognition-prism { --tier-accent: #08758f; --badge-highlight: #fff8dc; --badge-main: #72dcd0; --badge-shadow: #7c65ca; --badge-face: #e5fbf8; }
+.recognition-emblem.recognition-cosmic { --tier-accent: #5540ad; --badge-highlight: #ffefff; --badge-main: #7868e8; --badge-shadow: #3f4c9c; --badge-face: #e7e3ff; }
 .recognition-emblem.is-locked { filter: saturate(.18) opacity(.68); }
 .recognition-emblem.is-compact { width: 54px; height: 54px; }
-.recognition-emblem.is-compact > span { width: 29px; height: 29px; }
-.recognition-emblem.is-compact > span svg { width: 18px; height: 18px; }
+.recognition-emblem.is-compact > span { width: 51px; height: 51px; }
+.recognition-emblem.is-compact > span svg { width: 48px; height: 48px; }
 .employee-reward-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .employee-reward-card { min-height: 112px; border: 0; border-radius: 20px; background: transparent; }
 .reward-composer { display: grid; gap: 12px; padding: 16px; border: 1px solid rgb(0 145 168 / 14%); border-radius: 20px; background: rgb(255 255 255 / 72%); }
