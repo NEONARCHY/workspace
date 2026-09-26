@@ -288,6 +288,8 @@
 /* Account settings use the same full, centered workspace shell as the employee profile. */
 .account-scrim.account-profile-anchor {
   display: grid;
+  align-items: center;
+  justify-content: center;
   padding: 20px 24px;
   background: rgb(31 52 66 / 22%);
   backdrop-filter: blur(4px);
