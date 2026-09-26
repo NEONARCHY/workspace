@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  CalendarLtr24Regular, Clock24Regular, DocumentBulletList24Regular,
-  DocumentPdf24Regular, History24Regular,
+  CalendarClock24Regular, CalendarLtr24Regular, Clock24Regular,
+  DataBarVertical24Regular, DocumentBulletList24Regular, DocumentPdf24Regular,
+  Globe24Regular, History24Regular, PeopleTeam24Regular,
 } from "@fluentui/react-icons";
 import type { HisobotProfile, HisobotReport } from "@yuksalish/contracts";
 
@@ -122,6 +123,10 @@ export function AIHisobotView({ token }: { readonly token: string }) {
         <DocumentBulletList24Regular className="hisobot-art-main" />
         <DocumentPdf24Regular className="hisobot-art-pdf" />
         <History24Regular className="hisobot-art-history" />
+        <DataBarVertical24Regular className="hisobot-art-chart" />
+        <PeopleTeam24Regular className="hisobot-art-team" />
+        <Globe24Regular className="hisobot-art-region" />
+        <CalendarClock24Regular className="hisobot-art-calendar" />
       </div>
     </header>
 
