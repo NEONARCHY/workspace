@@ -21,6 +21,7 @@ import {
 } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { TaskComposer } from "./TaskComposer";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import {
   CalendarEventComposer,
   type PreparedEventPayment,
@@ -684,11 +685,11 @@ export function CalendarView({
             <div className="calendar-form-dates">
               <label>
                 Начало
-                <Input type="datetime-local" value={draft.startsAt} min={selected ? undefined : localInput(startOfDay(new Date()))} onChange={(_event, data) => setDraft({ ...draft, startsAt: data.value })} />
+                <WorkspaceDateTimePicker ariaLabel="Начало события" value={draft.startsAt} min={selected ? undefined : localInput(startOfDay(new Date()))} onChange={(value) => setDraft({ ...draft, startsAt: value })} />
               </label>
               <label>
                 Окончание
-                <Input type="datetime-local" value={draft.endsAt} onChange={(_event, data) => setDraft({ ...draft, endsAt: data.value })} />
+                <WorkspaceDateTimePicker ariaLabel="Окончание события" value={draft.endsAt} min={draft.startsAt} onChange={(value) => setDraft({ ...draft, endsAt: value })} />
               </label>
             </div>
             <Checkbox checked={draft.allDay} label="Событие на весь день" onChange={(_event, data) => setDraft({ ...draft, allDay: data.checked === true })} />

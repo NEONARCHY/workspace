@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 
 import type { WorkdayTeam, WorkdayTeamMember } from "@yuksalish/contracts";
 import {
-  Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input,
+  Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field,
 } from "@fluentui/react-components";
 import { ArrowSync20Regular, Clock20Regular, PeopleTeam24Regular } from "@fluentui/react-icons";
 
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const absenceLabels: Record<string, string> = {
   vacation: "В отпуске",
@@ -139,8 +140,8 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
           <DialogContent>
             <p>Новый график применяется к будущим отметкам. Уже начатый рабочий день сохранит прежнее время.</p>
             <div className="workday-schedule-fields">
-              <Field label="Начало"><Input type="time" value={start} onChange={(_event, value) => setStart(value.value)} /></Field>
-              <Field label="Окончание"><Input type="time" value={end} onChange={(_event, value) => setEnd(value.value)} /></Field>
+              <Field label="Начало"><WorkspaceDateTimePicker mode="time" ariaLabel="Начало рабочего дня" value={start} onChange={setStart} /></Field>
+              <Field label="Окончание"><WorkspaceDateTimePicker mode="time" ariaLabel="Окончание рабочего дня" value={end} onChange={setEnd} /></Field>
             </div>
             {formError ? <p className="team-presence-error" role="alert">{formError}</p> : null}
           </DialogContent>

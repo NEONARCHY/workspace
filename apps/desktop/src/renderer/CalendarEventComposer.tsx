@@ -13,6 +13,7 @@ import { PersonPicker } from "./PersonPicker";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -159,11 +160,11 @@ export function CalendarEventComposer({
                 </label>
                 <label>
                   <span>Начало <b aria-hidden="true">*</b></span>
-                  <Input type="datetime-local" aria-label="Начало" value={draft.startsAt} min={minimumStart} onChange={(_event, data) => onDraftChange({ ...draft, startsAt: data.value })} />
+                  <WorkspaceDateTimePicker ariaLabel="Начало" value={draft.startsAt} min={minimumStart} onChange={(value) => onDraftChange({ ...draft, startsAt: value })} />
                 </label>
                 <label>
                   <span>Окончание <b aria-hidden="true">*</b></span>
-                  <Input type="datetime-local" aria-label="Окончание" value={draft.endsAt} onChange={(_event, data) => onDraftChange({ ...draft, endsAt: data.value })} />
+                  <WorkspaceDateTimePicker ariaLabel="Окончание" value={draft.endsAt} min={draft.startsAt} onChange={(value) => onDraftChange({ ...draft, endsAt: value })} />
                 </label>
                 <div className="record-field-wide">
                   <Checkbox checked={draft.allDay} label="Событие на весь день" onChange={(_event, data) => onDraftChange({ ...draft, allDay: data.checked === true })} />
@@ -218,7 +219,7 @@ export function CalendarEventComposer({
                     </label>
                     <label>
                       <span>Срок</span>
-                      <Input type="datetime-local" aria-label={`Срок внутренней задачи ${index + 1}`} value={task.dueAt} onChange={(_event, data) => onUpdateTask(task.key, { dueAt: data.value })} />
+                      <WorkspaceDateTimePicker ariaLabel={`Срок внутренней задачи ${index + 1}`} value={task.dueAt} onChange={(value) => onUpdateTask(task.key, { dueAt: value })} />
                     </label>
                     <label>
                       <span>Приоритет</span>

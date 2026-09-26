@@ -7,6 +7,7 @@ import { WorkspaceSelect } from "./WorkspaceSelect";
 import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
 import { nextAvailableStageColor, workflowStageColor } from "./workflow-stage-colors";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 import type {
   ApprovalNodeData,
@@ -809,7 +810,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
           </label>
           <label>
             Срок оплаты
-            <input aria-label={`${prefix}срок оплаты`} type="datetime-local" value={form.deadline} onChange={(event) => update("deadline", event.target.value)} />
+            <WorkspaceDateTimePicker ariaLabel={`${prefix}срок оплаты`} value={form.deadline} onChange={(value) => update("deadline", value)} />
           </label>
           <label className="payment-field-wide">
             Комментарий
@@ -824,11 +825,11 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
           <Input aria-label={`${prefix}цель поездки`} placeholder="Цель поездки" value={form.tripPurpose} onChange={(_event, data) => update("tripPurpose", data.value)} />
           <label>
             Начало
-            <input aria-label={`${prefix}дата начала поездки`} type="date" value={form.tripStartDate} onChange={(event) => update("tripStartDate", event.target.value)} />
+            <WorkspaceDateTimePicker mode="date" ariaLabel={`${prefix}дата начала поездки`} value={form.tripStartDate} onChange={(value) => update("tripStartDate", value)} />
           </label>
           <label>
             Окончание
-            <input aria-label={`${prefix}дата окончания поездки`} type="date" value={form.tripEndDate} onChange={(event) => update("tripEndDate", event.target.value)} />
+            <WorkspaceDateTimePicker mode="date" ariaLabel={`${prefix}дата окончания поездки`} value={form.tripEndDate} min={form.tripStartDate} onChange={(value) => update("tripEndDate", value)} />
           </label>
           <label className="payment-trip-employees">
             Сотрудники поездки
