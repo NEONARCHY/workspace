@@ -378,7 +378,13 @@ function Conversation({
       scrollToLatest(pane, scrollInitialized.current);
     }
     scrollInitialized.current = true;
-  }, [latestMessage?.id, latestMessage?.authorId, currentUserId]);
+  }, [
+    latestMessage?.id,
+    latestMessage?.authorId,
+    currentUserId,
+    outgoingReveal?.messageId,
+    outgoingReveal?.phase,
+  ]);
   useEffect(() => {
     if (editing) {
       const input = composerInputRef.current;
@@ -448,6 +454,7 @@ function Conversation({
   const send = () => {
     if (!canSend || busy || (!draft.trim() && pendingFiles.length === 0)) return;
     const sentText = draft.trim();
+    const sentScrollLeft = composerInputRef.current?.scrollLeft ?? 0;
     const sentFiles = pendingFiles;
     const sentReplyId = reply?.id;
     const sentMentions = mentions.filter((id) => activeMemberIds.has(id));
@@ -457,7 +464,11 @@ function Conversation({
       transitionId = vanishSequence.current;
       const request = { id: transitionId, text: sentText };
       setOutgoingReveal({ request, composerFinished: false, phase: "waiting" });
-      setVanishRequest({ ...request, direction: "vanish" });
+      setVanishRequest({
+        ...request,
+        direction: "vanish",
+        scrollLeft: sentScrollLeft,
+      });
       setDraft("");
     }
     focusAfterSend.current = true;
@@ -484,7 +495,12 @@ function Conversation({
         if (transitionId !== undefined) {
           setOutgoingReveal(undefined);
           setDraft(sentText);
-          setVanishRequest({ id: transitionId, text: sentText, direction: "restore" });
+          setVanishRequest({
+            id: transitionId,
+            text: sentText,
+            direction: "restore",
+            scrollLeft: sentScrollLeft,
+          });
         }
         throw cause;
       }
@@ -621,7 +637,7 @@ function Conversation({
               ? " message-particle-revealing"
               : "";
           return (
-            <div key={message.id}>
+            <div key={message.id} hidden={revealPhase === "waiting"}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
@@ -997,7 +1013,7 @@ function Conversation({
                   ))}
                 </div>
               )}
-              <div className={`composer-field-shell${vanishRequest ? " is-message-animating" : ""}${vanishRequest?.direction === "restore" ? " is-restoring-message" : ""}`}>
+              <div className={`composer-field-shell${vanishRequest ? " is-message-animating" : ""}`}>
                 <Input
                   input={{ ref: composerInputRef }}
                   aria-label={editing ? "Редактирование сообщения" : "Новое сообщение"}

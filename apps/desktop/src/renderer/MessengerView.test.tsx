@@ -12,6 +12,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
+import { getMessageParticleTiming } from "./MessageVanishOverlay";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { MessengerView } from "./MessengerView";
 
@@ -429,11 +430,14 @@ describe("Private messenger", () => {
 
     const message = screen.getByText("Собираюсь из частиц").closest(".message");
     expect(message).toHaveClass("message-awaiting-reveal");
+    expect(message?.parentElement).toHaveAttribute("hidden");
 
+    const transitionMs = getMessageParticleTiming("Собираюсь из частиц").totalMs;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(330);
+      await vi.advanceTimersByTimeAsync(transitionMs + 20);
     });
     expect(message).toHaveClass("message-particle-revealing");
+    expect(message?.parentElement).not.toHaveAttribute("hidden");
     expect(canvasContext.textBaseline).toBe("alphabetic");
     expect(canvasContext.fillText.mock.calls.at(-1)?.[2]).toBeGreaterThan(10);
 
@@ -446,7 +450,7 @@ describe("Private messenger", () => {
     expect(canvasContext.fill).not.toHaveBeenCalled();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(330);
+      await vi.advanceTimersByTimeAsync(transitionMs + 20);
     });
     expect(message).not.toHaveClass("message-awaiting-reveal");
     expect(message).not.toHaveClass("message-particle-revealing");

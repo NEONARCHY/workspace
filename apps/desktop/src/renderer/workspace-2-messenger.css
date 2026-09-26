@@ -431,10 +431,7 @@
   box-shadow: none;
 }
 
-.messenger-view .message.message-awaiting-reveal {
-  visibility: hidden;
-  pointer-events: none;
-}
+.messenger-view .message.message-awaiting-reveal { pointer-events: none; }
 
 .messenger-view .message.message-particle-revealing .message-body > :not(.message-reveal-canvas),
 .messenger-view .message.message-particle-revealing .message-reactions,
@@ -465,7 +462,7 @@
   color: transparent;
 }
 
-.messenger-view .composer-field-shell.is-restoring-message input {
+.messenger-view .composer-field-shell.is-message-animating input {
   color: transparent;
   caret-color: transparent;
 }
