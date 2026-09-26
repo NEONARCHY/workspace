@@ -98,7 +98,10 @@ describe("EmployeeProfileDialog", () => {
     expect(cosmicCard).toHaveClass("recognition-rarity-cosmic");
     expect(cosmicCard?.querySelector(".recognition-card-foil")).toBeInTheDocument();
     expect(cosmicCard?.querySelector(".recognition-card-glare")).toBeInTheDocument();
-    expect(cosmicCard?.querySelector(".recognition-badge-artwork")).toBeInTheDocument();
+    const cosmicArtwork = cosmicCard?.querySelector<HTMLImageElement>(".recognition-badge-artwork");
+    expect(cosmicArtwork).toHaveAttribute("data-recognition-icon", "layers");
+    expect(cosmicArtwork?.src).toContain("cube");
+    expect(cosmicCard?.querySelector("svg.recognition-badge-artwork")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Как это работает" }));
     expect(screen.getByRole("dialog", { name: "Как работают достижения" })).toHaveTextContent(
       "Личные чаты один на один",
