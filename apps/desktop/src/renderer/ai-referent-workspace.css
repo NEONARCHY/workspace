@@ -34,7 +34,6 @@
 .ai-referent-view .ai-referent-header > div:first-child { position: relative; z-index: 2; }
 .ai-referent-header .view-kicker,
 .ai-referent-eyebrow { color: #006779; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.ai-referent-view .ai-referent-header-actions { position: relative; z-index: 2; flex: none; align-items: center; }
 .ai-referent-header-art {
   position: absolute;
   z-index: 1;
@@ -69,23 +68,71 @@
 .ai-referent-header-mail.mail-forward { top: 8px; right: 6px; width: 48px; height: 48px; rotate: 15deg; }
 .ai-referent-header-mail.mail-edge { top: 79px; right: -34px; width: 72px; height: 72px; rotate: -8deg; color: #54aeb8; }
 
+.ai-referent-register-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
 .ai-referent-view .ai-referent-register-tabs {
   flex: none;
   width: fit-content;
-  max-width: 100%;
+  max-width: none;
   min-height: 46px;
   margin: 0;
   padding: 4px;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: visible;
   background: #eaf1f1;
   border-color: #dce8e8;
   border-radius: 15px;
 }
-.ai-referent-register-tabs button { flex: none; min-width: auto; white-space: nowrap; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
+.ai-referent-register-tabs button { flex: none; min-width: auto; height: 38px; white-space: nowrap; transition: background 160ms ease, color 160ms ease, transform 160ms ease; }
 .ai-referent-register-tabs button:hover { background: #f5faf9; }
 .ai-referent-register-tabs button:active { transform: translateY(1px); }
+.ai-referent-register-actions { flex: none; align-items: center; }
+.ai-referent-register-actions .ai-referent-register-action {
+  min-width: auto;
+  height: 38px;
+  padding-inline: 14px;
+  border-radius: 11px;
+  font-family: var(--ws-font, Gilroy, sans-serif);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: transform 160ms var(--ws-ease-spatial, ease), border-color 160ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+.ai-referent-register-actions .ai-referent-register-action.primary {
+  border-color: #293a55;
+  background: linear-gradient(135deg, #344862 0%, #293a55 58%, #223149 100%);
+  color: #fff;
+  box-shadow: 0 8px 17px -13px rgb(24 49 76 / 72%);
+}
+.ai-referent-register-actions .ai-referent-register-action.secondary {
+  border-color: #bfd7da;
+  background: linear-gradient(135deg, #fff 0%, #f1f8f7 100%);
+  color: #293a55;
+  box-shadow: 0 7px 16px -14px rgb(24 64 76 / 58%);
+}
+.ai-referent-register-actions .ai-referent-register-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 22px -14px rgb(24 64 76 / 48%);
+}
+.ai-referent-register-actions .ai-referent-register-action.primary:hover {
+  background: linear-gradient(135deg, #3b506b 0%, #2c405c 58%, #263751 100%);
+}
+.ai-referent-register-actions .ai-referent-register-action.secondary:hover {
+  border-color: #73b7be;
+  background: linear-gradient(135deg, #fff 0%, #e9f6f4 100%);
+}
+.ai-referent-register-actions .ai-referent-register-action:active { transform: translateY(0); }
 .ai-referent-register-tabs button:focus-visible,
+.ai-referent-register-actions .ai-referent-register-action:focus-visible,
 .ai-referent-detail-tabs button:focus-visible,
 .ai-referent-filters button:focus-visible,
 .ai-referent-summary button:focus-visible { outline: 2px solid #006779; outline-offset: -2px; }
@@ -628,6 +675,8 @@
 @media (max-height: 700px) {
   .ai-referent-view .ai-referent-header { min-height: 56px; padding-block: 0; }
   .ai-referent-view .ai-referent-register-tabs { min-height: 40px; }
+  .ai-referent-register-tabs button,
+  .ai-referent-register-actions .ai-referent-register-action { height: 32px; }
   .ai-referent-view .ai-referent-summary button { min-height: 51px; padding-block: 7px; }
   .ai-referent-view .ai-incoming-sync-line { min-height: 17px; padding-block: 0; }
   .ai-referent-view .ai-referent-pagination { min-height: 33px; padding-block: 0; }
@@ -635,6 +684,7 @@
 @media (prefers-reduced-motion: reduce) {
   .ai-referent-upload-selected em { animation: none; }
   .ai-referent-register-tabs button,
+  .ai-referent-register-actions .ai-referent-register-action,
   .ai-referent-view .ai-referent-summary button,
   .ai-referent-upload-zone { transition: none; }
   .ai-referent-view .ai-referent-summary button:hover,
@@ -642,6 +692,8 @@
   .ai-referent-view .ai-referent-summary button[aria-pressed="true"],
   .ai-referent-view .ai-referent-summary button[aria-pressed="true"]:hover,
   .ai-referent-register-tabs button:active { transform: none; }
+  .ai-referent-register-actions .ai-referent-register-action:hover,
+  .ai-referent-register-actions .ai-referent-register-action:active { transform: none; }
   .ai-referent-upload-zone:hover { transform: none; }
   .ai-gooey-search-plinth,
   .ai-gooey-search-bubble-plinth,
@@ -655,6 +707,7 @@
 @media (forced-colors: active) {
   .ai-referent-view .ai-referent-summary button,
   .ai-referent-view .ai-referent-toolbar,
+  .ai-referent-register-actions .ai-referent-register-action,
   .ai-referent-telegram-card,
   .ai-referent-reviewer-card { border: 1px solid CanvasText; }
   .ai-referent-view .ai-referent-summary button[aria-pressed="true"],

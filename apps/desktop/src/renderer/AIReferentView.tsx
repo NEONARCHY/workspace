@@ -23,7 +23,7 @@ import {
   Textarea,
 } from "@fluentui/react-components";
 import {
-  Add24Regular,
+  Add20Regular,
   ArrowClockwise20Regular,
   ArrowDownload20Regular,
   Attach20Regular,
@@ -426,47 +426,47 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           <MailArrowForward20Regular className="ai-referent-header-mail mail-forward" />
           <Mail24Regular className="ai-referent-header-mail mail-edge" />
         </div>
-        <div className="ai-referent-header-actions">
-          {canCreate ? (<>
-            <Button appearance="primary" icon={<Add24Regular />} onClick={() => openCreate("delivery")}>
-              Новое письмо
-            </Button>
-            <Button appearance="secondary" icon={<Document20Regular />} onClick={() => openCreate("sign_only")}>
-              На подпись
-            </Button>
-          </>) : null}
-        </div>
       </header>
 
-      <div className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={registerKind === "incoming"}
-          className={registerKind === "incoming" ? "active" : ""}
-          onClick={() => setRegisterKind("incoming")}
-        >
-          Входящие
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={registerKind === "outgoing"}
-          className={registerKind === "outgoing" ? "active" : ""}
-          onClick={() => { setRegisterKind("outgoing"); setFilter("all"); setPage(0); }}
-        >
-          Исходящие
-        </button>
-        <button type="button" role="tab" aria-selected={registerKind === "sign_only"}
-          className={registerKind === "sign_only" ? "active" : ""}
-          onClick={() => { setRegisterKind("sign_only"); setFilter("all"); setPage(0); }}>
-          На подпись
-        </button>
-        {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
-          className={registerKind === "settings" ? "active" : ""}
-          onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
-        <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
-        <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
+      <div className="ai-referent-register-bar">
+        <div className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={registerKind === "incoming"}
+            className={registerKind === "incoming" ? "active" : ""}
+            onClick={() => setRegisterKind("incoming")}
+          >
+            Входящие
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={registerKind === "outgoing"}
+            className={registerKind === "outgoing" ? "active" : ""}
+            onClick={() => { setRegisterKind("outgoing"); setFilter("all"); setPage(0); }}
+          >
+            Исходящие
+          </button>
+          <button type="button" role="tab" aria-selected={registerKind === "sign_only"}
+            className={registerKind === "sign_only" ? "active" : ""}
+            onClick={() => { setRegisterKind("sign_only"); setFilter("all"); setPage(0); }}>
+            На подпись
+          </button>
+          {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
+            className={registerKind === "settings" ? "active" : ""}
+            onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
+          <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
+          <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
+        </div>
+        {canCreate ? <div className="ai-referent-register-actions">
+          <Button className="ai-referent-register-action primary" appearance="primary" icon={<Add20Regular />} onClick={() => openCreate("delivery")}>
+            Новое письмо
+          </Button>
+          <Button className="ai-referent-register-action secondary" appearance="secondary" icon={<Document20Regular />} onClick={() => openCreate("sign_only")}>
+            На подпись
+          </Button>
+        </div> : null}
       </div>
 
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} /> :

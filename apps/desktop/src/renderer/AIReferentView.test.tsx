@@ -265,7 +265,13 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(screen.getByText("Ответ партнёру")).toBeInTheDocument());
     expect(screen.getByText("Организация-получатель")).toBeInTheDocument();
     expect(screen.getAllByText("На согласовании")).not.toHaveLength(0);
-    expect(screen.getByRole("button", { name: /Новое письмо/ })).toBeEnabled();
+    const registerBar = screen.getByRole("tablist", { name: "Реестры корреспонденции" }).parentElement;
+    const newLetter = screen.getByRole("button", { name: /Новое письмо/ });
+    const signOnly = screen.getByRole("button", { name: "На подпись" });
+    expect(newLetter).toBeEnabled();
+    expect(newLetter.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
+    expect(signOnly.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
+    expect(document.querySelector(".ai-referent-header-actions")).toBeNull();
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();
