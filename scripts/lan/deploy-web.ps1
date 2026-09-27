@@ -18,8 +18,15 @@ $previousBuildId = $env:YUKSALISH_WEB_BUILD_ID
 
 Push-Location $projectRoot
 try {
+    $runtimeLine = Get-Content -LiteralPath $resolvedEnvFile |
+        Where-Object { $_ -match '^YUKSALISH_ENVIRONMENT=' } | Select-Object -First 1
+    if (-not $runtimeLine) { throw "YUKSALISH_ENVIRONMENT is missing." }
+    $runtimeEnvironment = $runtimeLine.Substring("YUKSALISH_ENVIRONMENT=".Length).Trim()
+    if ($runtimeEnvironment -notin @("test", "production")) {
+        throw "LAN deployment supports only test or production environments."
+    }
     & (Join-Path $projectRoot "scripts\validate-environment.ps1") `
-        -Environment production -NetworkMode lan -EnvFile $resolvedEnvFile | Out-Host
+        -Environment $runtimeEnvironment -NetworkMode lan -EnvFile $resolvedEnvFile | Out-Host
     docker info --format '{{.ServerVersion}}' | Out-Null
     $env:YUKSALISH_ENV_FILE = $resolvedEnvFile
     $env:YUKSALISH_WEB_BUILD_ID = (git rev-parse HEAD).Trim()

@@ -37,6 +37,9 @@ localhost origins or development-only values.
 For a LAN handoff, use `scripts/lan/new-server-environment.ps1` and validate with
 `-Environment production -NetworkMode lan -EnvFile .env.lan`. Follow
 `docs/operations/lan-server-transfer.md`; do not use Cloudflare credentials for LAN mode.
+The separate local demo site may use `YUKSALISH_ENVIRONMENT=test`. `scripts/lan/deploy-web.ps1`
+reads the mode from `.env.lan`, validates the LAN origin, and deploys that same environment;
+it does not convert a test site into production.
 
 ## Start Compose with an explicit environment
 
