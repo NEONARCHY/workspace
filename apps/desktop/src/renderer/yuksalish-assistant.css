@@ -4,7 +4,7 @@
 /* Modal focus belongs to the foreground dialog; do not let the orb peek through its scrim. */
 body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop) .yuksalish-assistant-root { visibility: hidden; }
 .assistant-launcher { position: absolute; right: 12px; bottom: 14px; width: 72px; height: 72px; border: 0; padding: 0; background: transparent; cursor: pointer; pointer-events: auto; border-radius: 50%; filter: drop-shadow(0 7px 11px rgba(7, 80, 94, .12)); transition: transform 340ms cubic-bezier(.22, 1, .36, 1); }
-.assistant-launcher:hover { transform: translateY(-4px) scale(1.1); }
+@media (hover: hover) { .assistant-launcher:hover { transform: translateY(-4px) scale(1.1); } }
 .assistant-launcher:focus-visible { outline: 3px solid #0e6e77; outline-offset: 3px; }
 .gradient-orb, .gradient-orb-fallback { display: block; width: 100%; height: 100%; background: transparent; }
 .gradient-orb canvas { display: block; }
@@ -64,7 +64,7 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 @keyframes thinking-dot { to { transform: translateY(-4px); opacity: .5; } }
 @media (max-width: 800px) { .app-content { padding-right: 70px; } .assistant-launcher { right: 6px; bottom: 8px; width: 58px; height: 58px; } }
 @media (max-width: 600px) { .assistant-stream { padding-inline: 12px; } .assistant-composer-area { padding-inline: 12px; } .assistant-model-description { display: none; } .assistant-empty .gradient-orb, .assistant-empty .gradient-orb-fallback { width: 108px; height: 108px; } }
-@media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span, .border-beam.is-active { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span, .border-beam.is-active { transition: none; animation: none; } .assistant-launcher:hover { transform: none; } }
 @media (forced-colors: active) { .assistant-panel, .assistant-message, .assistant-composer { border: 1px solid CanvasText; } .assistant-launcher:focus-visible { outline-color: Highlight; } }
 
 .account-birthday-fields { display: grid; grid-template-columns: minmax(120px, 180px) minmax(160px, 240px); gap: 12px; max-width: 460px; }
