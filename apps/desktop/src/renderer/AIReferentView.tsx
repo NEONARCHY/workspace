@@ -473,7 +473,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         registerKind === "archive" ? <AIReferentArchive token={token} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
-        <div className="ai-referent-page ai-referent-outgoing-page">
+        <div className="ai-referent-page ai-referent-outgoing-page" key={registerKind}>
 
       <section className="ai-referent-summary" aria-label={registerKind === "sign_only" ? "Сводка заявок на подпись" : "Сводка исходящих писем"}>
         <button type="button" className="primary" aria-pressed={filter === "pending_review"} onClick={() => { setFilter("pending_review"); setPage(0); }}>

@@ -583,6 +583,7 @@ export function CalendarView({
           </div>
           <div
             className="calendar-grid"
+            key={`${month.getFullYear()}-${month.getMonth()}`}
             role="grid"
             aria-label={monthLabel}
             style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(0, 1fr))` }}

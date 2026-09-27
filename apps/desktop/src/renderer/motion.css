@@ -44,6 +44,18 @@
 @keyframes ws-view-enter { from { opacity: .84; } to { opacity: 1; } }
 @keyframes ws-panel-enter { from { opacity: .35; } to { opacity: 1; } }
 
+/* Context swaps mount new content without moving layouts or delaying actions.
+   Keep conversation and board surfaces opacity-only so their scroll and drag
+   coordinates remain stable. These selectors do not replay on data refresh. */
+.tasks-view :is(.task-records, .task-kanban, .task-calendar-embedded, .efficiency-view),
+.ai-referent-view .ai-referent-page,
+.ai-hisobot-view :is(.hisobot-today-layout, .hisobot-list-page),
+.calendar-view .calendar-grid,
+.messenger-view:not(.embedded-chat) > .conversation-pane {
+  animation: ws-context-arrive 220ms var(--ws-ease);
+}
+@keyframes ws-context-arrive { from { opacity: .72; } to { opacity: 1; } }
+
 /* Respect system preferences; never smooth wheel/drag/keyboard scrolling globally. */
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .app-provider *, .app-provider *::before, .app-provider *::after {
