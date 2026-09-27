@@ -29,6 +29,9 @@ for (const [index, entry] of entries.entries()) {
     fail("every pending entry needs a unique lowercase id");
   }
   ids.add(entry.id);
+  if (entry.title !== undefined && (typeof entry.title !== "string" || entry.title.trim().length < 8 || entry.title.length > 50)) {
+    fail(`${entry.id} title must contain 8–50 characters when provided`);
+  }
   if (!Array.isArray(entry.items) || entry.items.length < 1 || entry.items.length > 12) {
     fail(`${entry.id} must contain 1–12 changes`);
   }

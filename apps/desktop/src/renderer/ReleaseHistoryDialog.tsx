@@ -48,7 +48,7 @@ export function ReleaseHistoryDialog({ open, onOpenChange }: {
           {selectedEntry ? <>
             <label className="release-version-picker">
               <span>Обновление</span>
-              <WorkspaceSelect aria-label="Обновление" value={selectedKey} onChange={(event) => setSelectedKey(event.target.value)}>
+              <WorkspaceSelect aria-label="Обновление" listboxClassName="release-history-options" value={selectedKey} onChange={(event) => setSelectedKey(event.target.value)}>
                 {entries.map((entry) => <option value={entry.key} key={entry.key}>{entry.label}</option>)}
               </WorkspaceSelect>
             </label>

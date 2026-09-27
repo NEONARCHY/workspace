@@ -39,6 +39,7 @@ interface WorkspaceSelectProps {
   readonly id?: string;
   readonly name?: string;
   readonly multiple?: boolean;
+  readonly listboxClassName?: string;
   readonly onBlur?: () => void;
   readonly onChange?: (event: WorkspaceSelectChangeEvent) => void;
   readonly onFocus?: () => void;
@@ -83,6 +84,7 @@ export function WorkspaceSelect({
   children,
   className,
   defaultValue,
+  listboxClassName,
   multiple,
   onChange,
   value,
@@ -139,6 +141,7 @@ export function WorkspaceSelect({
       {...props}
       ref={controlRef}
       className={["workspace-select", isPersonSelect ? "workspace-select-person" : "", className].filter(Boolean).join(" ")}
+      listbox={listboxClassName ? { className: listboxClassName } : undefined}
       multiselect={multiple}
       selectedOptions={selectedValues}
       value={selected.map((option) => option.text).join(", ")}

@@ -16,7 +16,7 @@ const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", imp
   version: string;
   title: string;
 };
-type ReleaseNoteEntry = { id: string; items: string[]; fileName: string };
+type ReleaseNoteEntry = { id: string; title?: string; items: string[]; fileName: string };
 type ReleaseHistoryEntry = { version: string; title: string; items: string[] };
 
 function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
@@ -31,7 +31,7 @@ function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
 }
 
 function previewLabel(entry: ReleaseNoteEntry): string {
-  const topic = entry.items[0]?.trim() ?? "Изменение";
+  const topic = entry.title?.trim() || entry.items[0]?.trim() || "Изменение";
   const shortTopic = topic.length > 38 ? `${topic.slice(0, 37).trimEnd()}…` : topic;
   return `${entry.fileName.slice(6, 8)}.${entry.fileName.slice(4, 6)} · ${shortTopic}`;
 }
