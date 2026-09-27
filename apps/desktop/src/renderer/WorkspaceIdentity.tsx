@@ -56,7 +56,7 @@ export function ConnectionIndicator({ detail, error, updateAvailable = false }: 
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   return <>
-    <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end">
+    <Popover open={popoverOpen} onOpenChange={(_event, data) => setPopoverOpen(data.open)} positioning="below-end" withArrow>
       <PopoverTrigger disableButtonEnhancement><button type="button" className={`connection-indicator ${error ? "has-error" : ""}`} aria-label={`Подключение: ${detail}`}><i /><span>{detail}</span></button></PopoverTrigger>
       <PopoverSurface className="connection-popover">
         <strong>Связь с рабочим сервером</strong><p>{detail}</p>

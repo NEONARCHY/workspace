@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { workspaceTheme } from "./workspace-theme";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
-import releaseNotes from "../../release-notes.json";
 
 const person = {
   id: "person-1",
@@ -71,22 +70,20 @@ describe("WorkspaceIdentity", () => {
     expect(onSupport).toHaveBeenCalledOnce();
   });
 
-  it("opens versioned release history from the connection popover", () => {
+  it("separates test changes from published releases in the connection popover", () => {
     render(<FluentProvider theme={workspaceTheme}><ConnectionIndicator detail="Сервер подключён" error={false} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Подключение: Сервер подключён" }));
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
-    const versionPicker = screen.getByRole("combobox", { name: "Версия обновления" });
-    expect(versionPicker).toHaveValue(releaseNotes.version);
+    const versionPicker = screen.getByRole("combobox", { name: "Обновление" });
+    expect(versionPicker).toHaveValue("preview:20260928-preview-history-status-pointer");
+    expect(screen.getByText(/Тестовые изменения показаны по отдельности/)).toBeInTheDocument();
     fireEvent.click(versionPicker);
-    expect(screen.getAllByRole("option").slice(0, 4).map((option) => option.textContent)).toEqual([
-      "Версия 1.0.18",
-      "Версия 1.0.17",
-      "Версия 1.0.16",
-      "Версия 1.0.15",
-    ]);
-    fireEvent.click(screen.getByRole("option", { name: "Версия 1.0.0" }));
-    expect(versionPicker).toHaveValue("1.0.0");
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent(/^28\.09 · /);
+    expect(screen.queryByRole("option", { name: "Версия 1.0.18" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Версия 1.0.17" })).toBeInTheDocument();
+    fireEvent.change(versionPicker, { target: { value: "release:1.0.0" } });
+    expect(versionPicker).toHaveValue("release:1.0.0");
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toHaveTextContent("Обновление 1.0.0");
   });
 });

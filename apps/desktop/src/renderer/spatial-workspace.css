@@ -66,26 +66,14 @@ body { background: var(--ws-canvas); }
 .identity-popover h3, .identity-popover p { margin: 0; }
 .identity-popover p, .connection-popover small { color: var(--ws-muted); font-size: 12px; }
 .connection-popover { position: relative; display: grid; gap: 10px; overflow: visible; }
-.connection-popover::before {
-  position: absolute;
-  top: -7px;
-  right: 7px;
-  width: 14px;
-  height: 14px;
-  border-top: 1px solid #fff;
-  border-left: 1px solid #fff;
-  background: inherit;
-  box-shadow: -3px -3px 8px -7px rgb(41 58 85 / 35%);
-  transform: rotate(45deg);
-  content: "";
-}
 .connection-popover :is(p,small) { margin: 0; }
 .connection-popover .fui-Button { justify-content: flex-start; margin: 4px -8px -8px; }
 .release-history-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border-radius: 24px; }
 .release-history-content { display: grid; gap: 14px; padding-right: 6px; overflow-y: auto; scrollbar-gutter: stable; }
-.release-version-picker { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 210px); align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 14px; color: var(--ws-text); background: rgb(255 255 255 / 94%); box-shadow: 0 10px 26px -24px rgb(41 58 85 / 45%); backdrop-filter: blur(12px); }
+.release-version-picker { position: sticky; z-index: 2; top: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 360px); align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 14px; color: var(--ws-text); background: rgb(255 255 255 / 94%); box-shadow: 0 10px 26px -24px rgb(41 58 85 / 45%); backdrop-filter: blur(12px); }
 .release-version-picker > span { font-size: 13px; font-weight: 600; }
 .app-provider .release-version-picker .workspace-select.workspace-select { width: 100%; min-height: 38px; border-radius: 10px; cursor: pointer; }
+.release-preview-note { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
 .release-history-content section { padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: #f8fbfa; }
 .release-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .release-history-heading h3 { margin: 0; font-size: 16px; }

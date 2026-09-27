@@ -17,7 +17,14 @@ const entryFiles = readdirSync(pendingPath).filter((name) => name.endsWith(".jso
 const entries = entryFiles.map((name) => JSON.parse(readFileSync(join(pendingPath, name), "utf8")));
 if (entries.length === 0) fail("at least one pending entry is required");
 const ids = new Set();
-for (const entry of entries) {
+for (const [index, entry] of entries.entries()) {
+  const fileName = entryFiles[index];
+  const dateMatch = /^(\d{4})(\d{2})(\d{2})-[a-z0-9-]+\.json$/u.exec(fileName);
+  if (!dateMatch) fail(`${fileName} must begin with a YYYYMMDD date`);
+  const date = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T12:00:00Z`);
+  if (Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`) {
+    fail(`${fileName} must contain a valid calendar date`);
+  }
   if (typeof entry.id !== "string" || !/^[a-z0-9-]{8,80}$/u.test(entry.id) || ids.has(entry.id)) {
     fail("every pending entry needs a unique lowercase id");
   }

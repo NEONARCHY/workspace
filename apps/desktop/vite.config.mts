@@ -16,7 +16,7 @@ const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", imp
   version: string;
   title: string;
 };
-type ReleaseNoteEntry = { id: string; items: string[] };
+type ReleaseNoteEntry = { id: string; items: string[]; fileName: string };
 type ReleaseHistoryEntry = { version: string; title: string; items: string[] };
 
 function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
@@ -24,7 +24,16 @@ function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
   return readdirSync(directory)
   .filter((name) => name.endsWith(".json"))
   .sort()
-    .map((name) => JSON.parse(readFileSync(new URL(name, directory), "utf8")) as ReleaseNoteEntry);
+    .map((name) => ({
+      ...JSON.parse(readFileSync(new URL(name, directory), "utf8")) as Omit<ReleaseNoteEntry, "fileName">,
+      fileName: name,
+    }));
+}
+
+function previewLabel(entry: ReleaseNoteEntry): string {
+  const topic = entry.items[0]?.trim() ?? "Изменение";
+  const shortTopic = topic.length > 38 ? `${topic.slice(0, 37).trimEnd()}…` : topic;
+  return `${entry.fileName.slice(6, 8)}.${entry.fileName.slice(4, 6)} · ${shortTopic}`;
 }
 
 const releasedRoot = new URL("./release-notes/released/", import.meta.url);
@@ -38,8 +47,14 @@ const releaseHistory: ReleaseHistoryEntry[] = existsSync(releasedRoot)
       items: readNoteEntries(new URL(`${version}/`, releasedRoot)).flatMap((entry) => entry.items),
     })).filter((entry) => entry.items.length > 0)
   : [];
-const pendingItems = readNoteEntries(new URL("./release-notes/pending/", import.meta.url))
-  .flatMap((entry) => entry.items);
+const pendingEntries = readNoteEntries(new URL("./release-notes/pending/", import.meta.url));
+const pendingItems = pendingEntries.flatMap((entry) => entry.items);
+const previewEntries = pendingEntries.map((entry) => ({
+  id: entry.id,
+  date: `${entry.fileName.slice(0, 4)}-${entry.fileName.slice(4, 6)}-${entry.fileName.slice(6, 8)}`,
+  label: previewLabel(entry),
+  items: entry.items,
+})).reverse();
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
 const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
@@ -58,6 +73,7 @@ export default defineConfig(({ mode }) => ({
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
     __YUKSALISH_APP_VERSION__: JSON.stringify(packageJson.version),
     __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
+    __YUKSALISH_RELEASE_PREVIEW__: JSON.stringify(previewEntries),
     __YUKSALISH_RELEASE_HISTORY__: JSON.stringify(releaseHistory),
   },
   resolve: {
