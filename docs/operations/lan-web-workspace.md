@@ -99,6 +99,23 @@ docker compose --env-file .env.lan `
 хешами кешируются как immutable. Обычная web-выкладка не меняет версию Electron и не запускает
 его update gate.
 
+Для быстрой проверки владельцем единственный актуальный адрес —
+`https://192.168.31.176:8443/`. Если менялся только renderer, пересобирайте лишь `web`, не
+трогая API и его миграции. Укажите именно действующий `.env.lan`; если его окружение не
+соответствует `production`, не меняйте файл ради прохождения проверки скрипта выше.
+
+```powershell
+$env:YUKSALISH_ENV_FILE = (Resolve-Path -LiteralPath .env.lan).Path
+$env:YUKSALISH_WEB_BUILD_ID = (git rev-parse HEAD).Trim()
+docker compose --env-file .env.lan -f infrastructure/compose.yaml -f infrastructure/compose.lan.yaml config --quiet
+docker compose --env-file .env.lan -f infrastructure/compose.yaml -f infrastructure/compose.lan.yaml build web
+docker compose --env-file .env.lan -f infrastructure/compose.yaml -f infrastructure/compose.lan.yaml up -d --no-build --no-deps --wait web
+```
+
+После этого сравните `version.json` с текущим коммитом и проверьте страницу и
+`/api/v1/health/ready` через тот же HTTPS-адрес. Если затронуты сервер, контракты или БД,
+этот web-only сценарий недостаточен: нужна отдельная оценка совместимости и миграций.
+
 ## Проверка
 
 На сервере:
