@@ -615,7 +615,8 @@ export type NotificationKind =
   | "calendar"
   | "absence"
   | "zoom"
-  | "hisobot";
+  | "hisobot"
+  | "support";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -631,7 +632,7 @@ export type NotificationSection = Extract<
   | "hr"
   | "ai_referent"
   | "ai_hisobot"
->;
+> | "notifications";
 
 export interface WorkspaceNotification {
   readonly id: string;
@@ -659,6 +660,62 @@ export interface NotificationPreferences {
   readonly absencesEnabled: boolean;
   readonly zoomEnabled: boolean;
   readonly remindersEnabled: boolean;
+}
+
+export type SupportRequestCategory = "comment" | "bug" | "improvement";
+export type SupportRequestStatus = "open" | "implemented" | "rejected";
+export type SupportResponseTone = "positive" | "negative";
+export type SupportRejectionReason =
+  | "insufficient_information"
+  | "not_needed"
+  | "already_implemented";
+export type SupportMessageKind = "submission" | "comment" | "implemented" | "rejected";
+
+export interface SupportRequestMessage {
+  readonly id: string;
+  readonly requestId: string;
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly kind: SupportMessageKind;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface SupportRequest {
+  readonly id: string;
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly authorUsername: string;
+  readonly category: SupportRequestCategory;
+  readonly subject: string;
+  readonly body: string;
+  readonly status: SupportRequestStatus;
+  readonly resolutionCode?: SupportRejectionReason | "implemented" | null;
+  readonly responseUnread: boolean;
+  readonly latestResponseTone?: SupportResponseTone | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly resolvedAt?: string | null;
+  readonly messages: readonly SupportRequestMessage[];
+}
+
+export interface SupportRegistry {
+  readonly mode: "support" | "inbox";
+  readonly indicator?: SupportResponseTone | null;
+  readonly unreadResponseCount: number;
+  readonly requests: readonly SupportRequest[];
+}
+
+export interface SupportRequestInput {
+  readonly category: SupportRequestCategory;
+  readonly subject: string;
+  readonly body: string;
+}
+
+export interface SupportAdminActionInput {
+  readonly action: "comment" | "implement" | "reject";
+  readonly body?: string;
+  readonly rejectionReason?: SupportRejectionReason;
 }
 
 export type ZoomMeetingStatus =

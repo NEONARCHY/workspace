@@ -65,6 +65,10 @@ import type {
   ProjectHubRequest,
   ProjectStage,
   SessionSummary,
+  SupportAdminActionInput,
+  SupportRegistry,
+  SupportRequest,
+  SupportRequestInput,
   TaskParticipantRole,
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
@@ -889,6 +893,37 @@ export function updateWorkspaceNotificationPreferences(
     { method: "PUT", body: JSON.stringify(preferences) },
     token,
   );
+}
+
+export function loadSupportRegistry(token: string): Promise<SupportRegistry> {
+  return apiRequest<SupportRegistry>("/support-requests", {}, token);
+}
+
+export function createSupportRequest(
+  token: string,
+  payload: SupportRequestInput,
+): Promise<SupportRequest> {
+  return apiRequest<SupportRequest>(
+    "/support-requests",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function actOnSupportRequest(
+  token: string,
+  requestId: string,
+  payload: SupportAdminActionInput,
+): Promise<SupportRequest> {
+  return apiRequest<SupportRequest>(
+    `/support-requests/${encodeURIComponent(requestId)}/actions`,
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function markSupportResponsesRead(token: string): Promise<void> {
+  return apiRequest<void>("/support-requests/responses/read", { method: "POST" }, token);
 }
 
 export function sendWorkspaceMessage(

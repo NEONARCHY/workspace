@@ -1145,7 +1145,8 @@ class RespondCalendarEventRequest(ApiModel):
 
 
 NotificationKind = Literal[
-    "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot"
+    "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot",
+    "support",
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
@@ -1162,6 +1163,7 @@ NotificationSection = Literal[
     "hr",
     "project_hub",
     "project_funding",
+    "notifications",
 ]
 
 

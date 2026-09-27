@@ -1786,6 +1786,7 @@ async def _sync_notifications_for_user(
         and not item["event_key"].startswith("hr:")
         and not item["event_key"].startswith("ai-letter:")
         and not item["event_key"].startswith("hisobot:")
+        and not item["event_key"].startswith("support:")
     ]
     if stale_ids:
         await connection.execute(
@@ -1861,6 +1862,7 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "project_hub",
                         workspace_notifications.c.section == "project_funding",
                         workspace_notifications.c.section == "ai_hisobot",
+                        workspace_notifications.c.section == "notifications",
                         and_(workspace_notifications.c.section == "ai_referent",
                              workspace_notifications.c.entity_id.in_(referent_letters)),
                     ),
@@ -2757,7 +2759,9 @@ async def load_workspace(
         if can("calendar")
         else [],
         notifications=[
-            notification for notification in notification_responses if can(notification.section)
+            notification
+            for notification in notification_responses
+            if notification.section == "notifications" or can(notification.section)
         ],
         notification_preferences=notification_preferences,
         personal_preferences=await get_personal_preferences(connection, current_user),

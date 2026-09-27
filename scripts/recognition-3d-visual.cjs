@@ -143,7 +143,21 @@ async function main() {
     }
     assert.equal(await page.locator("svg.recognition-badge-artwork").count(), 0);
     assert.equal(await page.locator("img.recognition-badge-artwork").count(), achievements.length);
+    const cardStates = await page.locator(".achievement-card").evaluateAll((cards) => cards.map((card) => ({
+      unlocked: card.classList.contains("is-unlocked"),
+      opacity: Number.parseFloat(getComputedStyle(card).opacity),
+      decoration: getComputedStyle(card.querySelector(".recognition-card-surface"), "::after").content,
+    })));
+    const unlockedOpacity = cardStates.find((card) => card.unlocked)?.opacity ?? 0;
+    const lockedOpacity = cardStates.find((card) => !card.unlocked)?.opacity ?? 1;
+    assert(
+      lockedOpacity < unlockedOpacity,
+      `locked achievements must be visually quieter: ${JSON.stringify(cardStates)}`,
+    );
+    assert(cardStates.every((card) => card.decoration === "none"), "card dots and diagonal stripes must be absent");
     await dialog.screenshot({ path: path.join(output, "all-tiers.png") });
+    await dialog.getByText("Следующие цели", { exact: true }).scrollIntoViewIfNeeded();
+    await dialog.screenshot({ path: path.join(output, "locked-achievements.png") });
 
     const cosmicCard = page.locator(".recognition-rarity-cosmic");
     await cosmicCard.hover();
@@ -170,6 +184,7 @@ async function main() {
       renderedTiers,
       iconCount: achievements.length,
       rewardTypeCount: 6,
+      cardStates,
       reducedMotion,
       errors,
     }, null, 2));

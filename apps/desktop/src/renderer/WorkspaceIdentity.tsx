@@ -1,11 +1,23 @@
 import { Button, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
-import { ChevronDown16Regular, Person20Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
+import { ChatHelp20Regular, ChevronDown16Regular, MailInbox20Regular, Person20Regular, Settings20Regular, SignOut20Regular } from "@fluentui/react-icons";
 import { useState } from "react";
 import type { WorkspacePerson } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReleaseHistoryDialog } from "./ReleaseHistoryDialog";
 
-export function WorkspaceIdentity({ person, token, onProfile, onSettings, onLogout }: { person: WorkspacePerson; token: string; onProfile?: () => void; onSettings: () => void; onLogout: () => void }) {
+interface WorkspaceIdentityProps {
+  readonly person: WorkspacePerson;
+  readonly token: string;
+  readonly onProfile?: () => void;
+  readonly onSupport: () => void;
+  readonly supportMode: "support" | "inbox";
+  readonly supportIndicator?: "positive" | "negative" | null;
+  readonly supportUnreadCount?: number;
+  readonly onSettings: () => void;
+  readonly onLogout: () => void;
+}
+
+export function WorkspaceIdentity({ person, token, onProfile, onSupport, supportMode, supportIndicator, supportUnreadCount = 0, onSettings, onLogout }: WorkspaceIdentityProps) {
   const [open, setOpen] = useState(false);
   const close = (afterClose?: () => void) => {
     setOpen(false);
@@ -16,9 +28,10 @@ export function WorkspaceIdentity({ person, token, onProfile, onSettings, onLogo
       setOpen(data.open);
     }} positioning="below-end" withArrow>
       <PopoverTrigger disableButtonEnhancement>
-        <button className="workspace-identity-menu" type="button" aria-label={`Открыть меню профиля: ${person.name}`}>
+        <button className="workspace-identity-menu" type="button" aria-label={`Открыть меню профиля: ${person.name}${supportIndicator ? `. Есть ${supportUnreadCount || 1} ${supportIndicator === "negative" ? "отклонённых" : "новых"} ответов по обращениям` : ""}`}>
           <ProfileAvatar person={person} token={token} size={32} />
-          <span>{person.name}</span>
+          <span className="workspace-identity-name">{person.name}</span>
+          {supportIndicator ? <i className={`identity-support-indicator tone-${supportIndicator}`} title={supportIndicator === "negative" ? "Есть отклонённое обращение" : "Есть новый ответ по обращению"} /> : null}
           <ChevronDown16Regular />
         </button>
       </PopoverTrigger>
@@ -27,6 +40,9 @@ export function WorkspaceIdentity({ person, token, onProfile, onSettings, onLogo
         <div className="identity-popover-profile"><span className="identity-popover-avatar"><ProfileAvatar person={person} token={token} size={48} /></span><span><h3>{person.name}</h3><p>{person.jobTitle ?? person.role}</p></span></div>
         <div className="identity-popover-actions">
           {onProfile ? <Button appearance="subtle" icon={<Person20Regular />} onClick={() => close(onProfile)}>Профиль сотрудника</Button> : null}
+          <Button appearance="subtle" icon={supportMode === "inbox" ? <MailInbox20Regular /> : <ChatHelp20Regular />} onClick={() => close(onSupport)}>
+            {supportMode === "inbox" ? "Обращения" : "Поддержка"}
+          </Button>
           <Button appearance="subtle" icon={<Settings20Regular />} onClick={() => close(onSettings)}>Настройки</Button>
           <Button className="identity-signout" appearance="subtle" icon={<SignOut20Regular />} onClick={() => close(onLogout)}>Выйти</Button>
         </div>

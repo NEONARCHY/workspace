@@ -16,6 +16,7 @@ import {
   CalendarLtr24Regular,
   PersonAvailable24Regular,
   Chat24Regular,
+  ChatHelp24Regular,
   CheckmarkCircle24Regular,
   Search24Regular,
   TaskListSquareLtr24Regular,
@@ -47,6 +48,7 @@ const kindLabels: Record<NotificationKind, string> = {
   absence: "Отсутствия",
   zoom: "Zoom-конференции",
   hisobot: "AI Hisobot",
+  support: "Поддержка",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -57,6 +59,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "absence") return <PersonAvailable24Regular />;
   if (kind === "zoom") return <Video24Regular />;
   if (kind === "hisobot") return <TaskListSquareLtr24Regular />;
+  if (kind === "support") return <ChatHelp24Regular />;
   return <CalendarLtr24Regular />;
 }
 

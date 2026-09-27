@@ -35,6 +35,7 @@ from .routers import (
     personal,
     project_hub,
     recognition,
+    support,
     telegram_access,
     updates,
     workday,
@@ -164,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(hisobot.router, prefix=runtime_settings.api_prefix)
     application.include_router(personal.router, prefix=runtime_settings.api_prefix)
     application.include_router(recognition.router, prefix=runtime_settings.api_prefix)
+    application.include_router(support.router, prefix=runtime_settings.api_prefix)
     application.include_router(updates.router, prefix=runtime_settings.api_prefix)
     application.include_router(zoom.router, prefix=runtime_settings.api_prefix)
     return application

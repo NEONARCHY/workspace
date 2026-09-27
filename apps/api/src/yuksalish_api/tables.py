@@ -837,6 +837,34 @@ workspace_notification_preferences = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+support_requests = sa.Table(
+    "workspace_support_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("category", sa.String(24)),
+    sa.Column("subject", sa.String(160)),
+    sa.Column("body", sa.Text()),
+    sa.Column("status", sa.String(24)),
+    sa.Column("resolution_code", sa.String(40)),
+    sa.Column("response_unread", sa.Boolean()),
+    sa.Column("latest_response_tone", sa.String(16)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("resolved_at", sa.DateTime(timezone=True)),
+)
+
+support_request_messages = sa.Table(
+    "workspace_support_request_messages",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 # HR service-tenure records deliberately live outside ``core_users``: an employee's
 # account can be archived without losing statutory personnel history.
 hr_settings = sa.Table(

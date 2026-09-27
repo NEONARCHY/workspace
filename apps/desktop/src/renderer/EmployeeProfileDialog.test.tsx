@@ -92,9 +92,11 @@ describe("EmployeeProfileDialog", () => {
     expect(screen.getByText("Проектный офис")).toBeVisible();
     expect(screen.getByText("2 г. 7 мес. 23 дн.")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Достижения" }));
-    expect(screen.getByText("Завершённые задачи · 1")).toBeVisible();
+    const unlockedCard = screen.getByText("Завершённые задачи · 1").closest("article");
+    expect(unlockedCard).toHaveClass("is-unlocked");
     expect(screen.getByText("Завершённые задачи · 10")).toBeVisible();
     const cosmicCard = screen.getByText("Проекты · 100").closest("article");
+    expect(cosmicCard).not.toHaveClass("is-unlocked");
     expect(cosmicCard).toHaveClass("recognition-rarity-cosmic");
     expect(cosmicCard?.querySelector(".recognition-card-foil")).toBeInTheDocument();
     expect(cosmicCard?.querySelector(".recognition-card-glare")).toBeInTheDocument();

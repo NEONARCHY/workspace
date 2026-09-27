@@ -29,6 +29,7 @@ import "./workspace-2-interactions.css";
 import "./workspace-2-auth.css";
 import "./workspace-2-messenger.css";
 import "./workspace-2-notifications.css";
+import "./support-dialog.css";
 import "./calendar-event-composer.css";
 import "./desktop-updates.css";
 import "./window-titlebar.css";

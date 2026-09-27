@@ -22,6 +22,7 @@ import type {
   PersonalPreferences,
   ProjectInput,
   ProjectStage,
+  SupportRegistry,
   TaskStatus,
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
@@ -92,6 +93,7 @@ import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
+import { SupportDialog } from "./SupportDialog";
 import { ProjectsView } from "./ProjectsView";
 import { ProjectHubView } from "./ProjectHubView";
 import { TasksView } from "./TasksView";
@@ -140,6 +142,7 @@ import {
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
+  loadSupportRegistry,
   loadWorkspaceEfficiency,
   loadMembersRegistry,
   loadZoomMeetings,
@@ -369,6 +372,20 @@ function readableAuthError(error: unknown): string {
   return messages[message] ?? message;
 }
 
+const supportOwnerUsernames = new Set(["almazovtemur", "temuralmazov", "baxtiyorsamugov"]);
+
+function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
+  const isOperator = person.role === "admin"
+    || person.role === "superadmin"
+    || supportOwnerUsernames.has(person.username?.toLowerCase() ?? "");
+  return {
+    mode: isOperator ? "inbox" : "support",
+    indicator: null,
+    unreadResponseCount: 0,
+    requests: [],
+  };
+}
+
 export function App() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
@@ -398,6 +415,9 @@ export function App() {
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
   const [webUpdateAvailable, setWebUpdateAvailable] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string>();
+  const [supportRegistry, setSupportRegistry] = useState<SupportRegistry>();
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
@@ -424,12 +444,16 @@ export function App() {
   }, []);
 
   const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
-    const loaded = await loadWorkspace(authenticated.accessToken);
+    const [loaded, loadedSupport] = await Promise.all([
+      loadWorkspace(authenticated.accessToken),
+      loadSupportRegistry(authenticated.accessToken).catch(() => undefined),
+    ]);
     setUpdatePolicy(undefined);
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setSupportRegistry(loadedSupport ?? emptySupportRegistry(loaded.currentUser));
     setEfficiency(undefined);
     setEfficiencyError(undefined);
     setMembersRegistry(undefined);
@@ -499,6 +523,9 @@ export function App() {
     setSession(undefined);
     setUpdatePolicy(undefined);
     setMembersRegistry(undefined);
+    setSupportRegistry(undefined);
+    setSupportOpen(false);
+    setSupportFocusRequestId(undefined);
     setMembersError(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
@@ -669,6 +696,7 @@ export function App() {
       absence: preferences.absencesEnabled,
       zoom: preferences.zoomEnabled,
       hisobot: true,
+      support: preferences.desktopEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -711,6 +739,7 @@ export function App() {
     if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
       void refreshWorkspace(session.accessToken).catch(reportError);
+      void loadSupportRegistry(session.accessToken).then(setSupportRegistry).catch(reportError);
       if (workspacePlatform.kind === "electron") {
         void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
       }
@@ -1576,12 +1605,22 @@ export function App() {
 
   const openNotification = (notification: WorkspaceNotification) => {
     void handleMarkNotificationRead(notification);
+    if (notification.kind === "support") {
+      setSupportFocusRequestId(notification.entityId ?? undefined);
+      setSupportOpen(true);
+      return;
+    }
+    const section = notification.section;
+    if (section === "notifications") {
+      setActiveSection("notifications");
+      return;
+    }
     setFocusTarget((current) => ({
-      section: notification.section,
+      section,
       entityId: notification.entityId ?? undefined,
       revision: (current?.revision ?? 0) + 1,
     }));
-    setActiveSection(notification.section);
+    setActiveSection(section);
   };
 
   useEffect(() => {
@@ -1593,12 +1632,22 @@ export function App() {
           .then(mergeNotification)
           .catch(reportError);
       }
+      if (notification.kind === "support") {
+        setSupportFocusRequestId(notification.entityId ?? undefined);
+        setSupportOpen(true);
+        return;
+      }
+      const section = notification.section;
+      if (section === "notifications") {
+        setActiveSection("notifications");
+        return;
+      }
       setFocusTarget((current) => ({
-        section: notification.section,
+        section,
         entityId: notification.entityId ?? undefined,
         revision: (current?.revision ?? 0) + 1,
       }));
-      setActiveSection(notification.section);
+      setActiveSection(section);
     });
   }, [reportError, session, workspace.notifications]);
 
@@ -1765,7 +1814,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -2124,6 +2173,19 @@ export function App() {
         open={profileUserId !== undefined}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
       />
+      {supportOpen ? (
+        <SupportDialog
+          token={session.accessToken}
+          open
+          registry={supportRegistry}
+          focusRequestId={supportFocusRequestId}
+          onOpenChange={(open) => {
+            setSupportOpen(open);
+            if (!open) setSupportFocusRequestId(undefined);
+          }}
+          onRegistryChange={setSupportRegistry}
+        />
+      ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
     </FluentProvider>
