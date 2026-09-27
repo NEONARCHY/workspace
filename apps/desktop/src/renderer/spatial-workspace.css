@@ -74,8 +74,10 @@ body { background: var(--ws-canvas); }
 .release-version-picker > span { font-size: 13px; font-weight: 600; }
 .app-provider .release-version-picker .workspace-select.workspace-select { width: 100%; min-height: 38px; border-radius: 10px; cursor: pointer; }
 .release-version-picker .fui-Dropdown__button { white-space: nowrap; }
-.release-history-options.fui-Listbox { max-height: min(320px, calc(100vh - 80px)); overflow-y: auto; }
-.release-history-options .fui-Option { min-height: 36px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Fluent writes viewport height inline; cap this one long history menu so it stays anchored below the field. */
+.release-history-options.fui-Listbox { max-height: min(320px, calc(100vh - 80px)) !important; overflow-y: auto; scrollbar-width: thin; }
+.release-history-options .fui-Option { min-height: 36px; }
+.release-history-option-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .release-preview-note { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
 .release-history-content section { padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: #f8fbfa; }
 .release-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
