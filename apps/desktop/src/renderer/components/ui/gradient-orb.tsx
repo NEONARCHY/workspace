@@ -97,12 +97,15 @@ const fragmentShader = /* glsl */ `
     vec3 shadow = vec3(.015, .10, .15);
     vec3 color = mix(deep, ice, colorMotion);
     color = mix(color, teal, noise);
-    color = mix(shadow, color, light);
-    color = clamp((color + movingLight * vec3(.52, .98, .94)) * outer * inner, 0.0, 1.0);
+    color = mix(shadow, color, clamp(light * 1.7, 0.0, 1.0));
+    color = clamp((color + movingLight * vec3(.52, .98, .94) * .7)
+      * mix(.8, 1.0, outer) * mix(.82, 1.0, inner), 0.0, 1.0);
     // The original shader sat on an opaque dark canvas. A feathered alpha
     // retains its fluid silhouette without exposing a square or hard rim.
-    float feather = 1.0 - smoothstep(.72, .97, radius);
-    float alpha = clamp(max(max(color.r, color.g), color.b) * 1.35, 0.0, 1.0) * feather;
+    float boundary = .79 + (noise - .5) * .09;
+    float body = 1.0 - smoothstep(boundary - .18, boundary + .14, radius);
+    float glow = (1.0 - smoothstep(boundary, .97, radius)) * .1;
+    float alpha = clamp(body + (1.0 - body) * glow, 0.0, 1.0);
     gl_FragColor = vec4(color, alpha);
   }
 `;
