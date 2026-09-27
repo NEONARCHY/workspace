@@ -802,18 +802,26 @@ def _feed_post(
     like_user_ids = grouped_reactions.get("👍", set())
     return FeedPostResponse(
         id=str(row["id"]),
-        author_user_id=str(row["author_user_id"]),
+        author_user_id=str(row["author_user_id"]) if row["author_user_id"] else None,
+        system_kind=row["system_kind"],
+        birthday_user_id=str(row["birthday_user_id"]) if row["birthday_user_id"] else None,
         title=row["title"],
         body=row["body"],
         is_pinned=row["is_pinned"],
         liked_by_current_user=current_user.id in like_user_ids,
         like_count=len(like_user_ids),
         reactions=_reaction_summaries(grouped_reactions, current_user),
-        can_edit=row["author_user_id"] == current_user.id or _is_privileged(current_user),
-        can_delete=row["author_user_id"] == current_user.id
-        or current_user.role in {"admin", "superadmin"},
-        can_pin=row["author_user_id"] == current_user.id
-        or current_user.role in {"admin", "superadmin"},
+        can_edit=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id or _is_privileged(current_user)
+        ),
+        can_delete=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id
+            or current_user.role in {"admin", "superadmin"}
+        ),
+        can_pin=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id
+            or current_user.role in {"admin", "superadmin"}
+        ),
         comments=list(comments),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -3096,7 +3104,8 @@ async def pin_feed_post(
     post = (
         (
             await connection.execute(
-                select(feed_posts.c.author_user_id).where(feed_posts.c.id == post_id)
+                select(feed_posts.c.author_user_id, feed_posts.c.system_kind)
+                .where(feed_posts.c.id == post_id)
             )
         )
         .mappings()
@@ -3104,6 +3113,8 @@ async def pin_feed_post(
     )
     if post is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["system_kind"]:
+        raise WorkspaceRepositoryError(403, "System posts cannot be pinned")
     if post["author_user_id"] != current_user.id and current_user.role not in {
         "admin",
         "superadmin",
@@ -3138,6 +3149,8 @@ async def delete_feed_post(
     )
     if post is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["system_kind"]:
+        raise WorkspaceRepositoryError(403, "System posts cannot be deleted")
     if post["author_user_id"] != current_user.id and current_user.role not in {
         "admin",
         "superadmin",

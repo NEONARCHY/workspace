@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   changeOwnPassword: vi.fn(),
   changeUserPassword: vi.fn(),
   getTotpStatus: vi.fn().mockResolvedValue({ enabled: false }),
+  loadBirthdayPreference: vi.fn().mockResolvedValue({ month: null, day: null }),
+  saveBirthdayPreference: vi.fn(),
   loadSessions: vi.fn().mockResolvedValue([]),
   loadDirectory: vi.fn().mockResolvedValue({
     positions: [],

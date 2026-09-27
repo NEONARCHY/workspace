@@ -1,4 +1,8 @@
 import type {
+  AssistantMessage,
+  AssistantModel,
+  BirthdayPreference,
+  GreetingLanguage,
   AIReferentCommentAudio,
   AIReferentDocumentCheck,
   AIReferentArchiveLetter,
@@ -540,6 +544,7 @@ async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
+  timeout?: number,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -549,7 +554,35 @@ async function apiRequest<T>(
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
   return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
-    response.status === 204 ? undefined as T : await response.json() as T);
+    response.status === 204 ? undefined as T : await response.json() as T, timeout);
+}
+
+export function loadAssistantMessages(token: string): Promise<readonly AssistantMessage[]> {
+  return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
+}
+
+export function sendAssistantMessage(token: string, model: AssistantModel, message: string): Promise<AssistantMessage> {
+  return apiRequest<AssistantMessage>("/assistant/messages", {
+    method: "POST", body: JSON.stringify({ model, message }),
+  }, token, 65_000);
+}
+
+export function loadBirthdayPreference(token: string): Promise<BirthdayPreference> {
+  return apiRequest<BirthdayPreference>("/assistant/birthday", {}, token);
+}
+
+export function saveBirthdayPreference(token: string, value: BirthdayPreference): Promise<BirthdayPreference> {
+  return apiRequest<BirthdayPreference>("/assistant/birthday", {
+    method: "PUT", body: JSON.stringify(value),
+  }, token);
+}
+
+export function generateBirthdayGreeting(
+  token: string, postId: string, language: GreetingLanguage,
+): Promise<{ readonly text: string }> {
+  return apiRequest<{ readonly text: string }>("/assistant/birthday-greeting", {
+    method: "POST", body: JSON.stringify({ post_id: postId, language }),
+  }, token, 65_000);
 }
 
 export function login(

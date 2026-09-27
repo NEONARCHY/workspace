@@ -13,6 +13,7 @@ import type {
 import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
 import {
   ArrowSync24Regular,
+  CalendarLtr24Regular,
   Camera24Regular,
   Desktop24Regular,
   Dismiss24Regular,
@@ -38,9 +39,11 @@ import {
   createPasswordReset,
   getTotpStatus,
   loadDirectory,
+  loadBirthdayPreference,
   loadSessions,
   revokeSession,
   setupTotp,
+  saveBirthdayPreference,
   uploadProfileAvatar,
 } from "./workspace-api";
 
@@ -55,7 +58,7 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-type AccountSectionKey = "language" | "audio" | "security" | "password" | "sessions" | "invite" | "managed-password" | "updates";
+type AccountSectionKey = "language" | "birthday" | "audio" | "security" | "password" | "sessions" | "invite" | "managed-password" | "updates";
 
 interface AccountNavigationItem {
   readonly key: AccountSectionKey;
@@ -107,6 +110,9 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [feedback, setFeedback] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [localeBusy, setLocaleBusy] = useState(false);
+  const [birthdayMonth, setBirthdayMonth] = useState("");
+  const [birthdayDay, setBirthdayDay] = useState("");
+  const [birthdayBusy, setBirthdayBusy] = useState(false);
   const [activeSection, setActiveSection] = useState<AccountSectionKey>("language");
   const jumpToSection = (sectionKey: AccountSectionKey, selector: string) => {
     setActiveSection(sectionKey);
@@ -144,6 +150,35 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
       active = false;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (initialSection === "invite") return;
+    let active = true;
+    void loadBirthdayPreference(token)
+      .then((value) => {
+        if (active) {
+          setBirthdayMonth(value.month ? String(value.month) : "");
+          setBirthdayDay(value.day ? String(value.day) : "");
+        }
+      })
+      .catch(() => { if (active) setFeedback("Не удалось загрузить дату рождения. Попробуйте открыть настройки снова."); });
+    return () => { active = false; };
+  }, [initialSection, token]);
+
+  const saveBirthday = async (clear = false) => {
+    const month = clear ? null : Number(birthdayMonth);
+    const day = clear ? null : Number(birthdayDay);
+    if (!clear && (!month || !day)) { setFeedback("Выберите день и месяц рождения."); return; }
+    setBirthdayBusy(true);
+    try {
+      const saved = await saveBirthdayPreference(token, { month, day });
+      setBirthdayMonth(saved.month ? String(saved.month) : "");
+      setBirthdayDay(saved.day ? String(saved.day) : "");
+      setFeedback(clear ? "Дата рождения удалена." : "Дата рождения сохранена. Коллеги увидят поздравление в этот день.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось сохранить дату рождения.");
+    } finally { setBirthdayBusy(false); }
+  };
 
   const startTotp = async () => {
     try {
@@ -239,6 +274,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
   const navigationItems: readonly AccountNavigationItem[] = [
     { key: "language", label: "Общее", selector: "[data-account-section=language]", icon: <LocalLanguage24Regular /> },
+    { key: "birthday", label: "День рождения", selector: "[data-account-section=birthday]", icon: <CalendarLtr24Regular /> },
     { key: "audio", label: "Звук", selector: ".audio-device-settings", icon: <Speaker224Regular /> },
     { key: "security", label: "Защита", selector: "[data-account-section=security]", icon: <ShieldLock24Regular /> },
     { key: "password", label: "Пароль", selector: "[data-account-section=password]", icon: <Key24Regular /> },
@@ -335,6 +371,34 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <option value="uz_latn">O‘zbekcha</option>
             </Select>
           </Field>
+        </section>
+
+        <section className="account-section" data-account-section="birthday">
+          <div className="account-section-title"><div>
+            <h3>День рождения</h3>
+            <p>Сохраняем только день и месяц. В этот день организация поздравит вас в ленте, а коллеги получат уведомление.</p>
+          </div></div>
+          <div className="account-birthday-fields">
+            <Field label="День">
+              <Input type="number" min={1} max={31} placeholder="День" value={birthdayDay}
+                onChange={(_, data) => setBirthdayDay(data.value)} />
+            </Field>
+            <Field label="Месяц">
+              <Select value={birthdayMonth} onChange={(event) => setBirthdayMonth(event.target.value)}>
+                <option value="">Выберите месяц</option>
+                {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>
+                  {new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(new Date(2000, index, 1))}
+                </option>)}
+              </Select>
+            </Field>
+          </div>
+          <div className="account-birthday-actions">
+            <Button appearance="primary" disabled={birthdayBusy || !birthdayDay || !birthdayMonth}
+              onClick={() => void saveBirthday()}>Сохранить дату</Button>
+            <Button appearance="subtle" disabled={birthdayBusy || (!birthdayDay && !birthdayMonth)}
+              onClick={() => void saveBirthday(true)}>Убрать дату</Button>
+          </div>
+          <p className="account-birthday-note">29 февраля в невисокосный год отмечается 28 февраля.</p>
         </section>
 
         <AudioDeviceSettings />

@@ -442,7 +442,9 @@ export interface FeedComment {
 
 export interface FeedPost {
   readonly id: string;
-  readonly authorUserId: string;
+  readonly authorUserId: string | null;
+  readonly systemKind?: "birthday" | null;
+  readonly birthdayUserId?: string | null;
   readonly title: string;
   readonly body: string;
   readonly isPinned: boolean;
@@ -456,6 +458,23 @@ export interface FeedPost {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+export type AssistantModel = "pro" | "flash" | "flash-lite";
+
+export interface AssistantMessage {
+  readonly id: string;
+  readonly role: "user" | "assistant";
+  readonly model: AssistantModel;
+  readonly content: string;
+  readonly createdAt: string;
+}
+
+export interface BirthdayPreference {
+  readonly month: number | null;
+  readonly day: number | null;
+}
+
+export type GreetingLanguage = "ru" | "uz_latn" | "uz_cyrl";
 
 export type CalendarEventType = "meeting" | "deadline" | "trip" | "task" | "general";
 export type CalendarAttendanceStatus = "accepted" | "pending" | "declined";
@@ -634,7 +653,8 @@ export type NotificationKind =
   | "absence"
   | "zoom"
   | "hisobot"
-  | "support";
+  | "support"
+  | "birthday";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -650,6 +670,7 @@ export type NotificationSection = Extract<
   | "hr"
   | "ai_referent"
   | "ai_hisobot"
+  | "feed"
 > | "notifications";
 
 export interface WorkspaceNotification {

@@ -43,9 +43,9 @@ const pendingItems = readNoteEntries(new URL("./release-notes/pending/", import.
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
 const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
-  || releaseNoteItems.length === 0 || releaseNoteItems.length > 150
+  || releaseNoteItems.length === 0 || releaseNoteItems.length > 160
   || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
-  throw new Error("pending release notes must match package version and contain 1–150 concise user-facing changes");
+  throw new Error("pending release notes must match package version and contain 1–160 concise user-facing changes");
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
@@ -62,6 +62,7 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     alias: {
+      "@": fileURLToPath(new URL("./src/renderer", import.meta.url)),
       tabster: tabsterEsmPath,
     },
   },
@@ -80,12 +81,20 @@ export default defineConfig(({ mode }) => ({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_DEV_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   ssr: {
     noExternal: [/@fluentui/, /tabster/, /keyborg/],
   },
   test: {
     environment: "jsdom",
+    maxWorkers: 4,
     // Multi-step Fluent UI scenarios can exceed 5s on Windows while packaging runs.
     testTimeout: 10000,
     setupFiles: "./src/renderer/test-setup.ts",

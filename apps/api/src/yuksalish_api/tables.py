@@ -71,6 +71,18 @@ users = sa.Table(
     sa.Column("avatar_storage_key", sa.String(500)),
     sa.Column("avatar_content_type", sa.String(80)),
     sa.Column("avatar_updated_at", sa.DateTime(timezone=True)),
+    sa.Column("birthday_month", sa.SmallInteger()),
+    sa.Column("birthday_day", sa.SmallInteger()),
+)
+
+assistant_messages = sa.Table(
+    "assistant_messages", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("role", sa.String(16)),
+    sa.Column("model", sa.String(64)),
+    sa.Column("content", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 workday_schedules = sa.Table(
@@ -747,6 +759,9 @@ feed_posts = sa.Table(
     sa.Column("is_pinned", sa.Boolean()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("system_kind", sa.String(32)),
+    sa.Column("birthday_user_id", uuid_type),
+    sa.Column("birthday_year", sa.SmallInteger()),
 )
 
 feed_comments = sa.Table(

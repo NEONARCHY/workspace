@@ -1032,7 +1032,9 @@ class FeedCommentResponse(ApiModel):
 
 class FeedPostResponse(ApiModel):
     id: str
-    author_user_id: str
+    author_user_id: str | None
+    system_kind: str | None = None
+    birthday_user_id: str | None = None
     title: str
     body: str
     is_pinned: bool

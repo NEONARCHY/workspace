@@ -49,6 +49,7 @@ const kindLabels: Record<NotificationKind, string> = {
   zoom: "Zoom-конференции",
   hisobot: "AI Hisobot",
   support: "Поддержка",
+  birthday: "Дни рождения",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -60,6 +61,7 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "zoom") return <Video24Regular />;
   if (kind === "hisobot") return <TaskListSquareLtr24Regular />;
   if (kind === "support") return <ChatHelp24Regular />;
+  if (kind === "birthday") return <CalendarLtr24Regular />;
   return <CalendarLtr24Regular />;
 }
 

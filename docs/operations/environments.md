@@ -50,6 +50,8 @@ For production, use `.env.production` in both places. Do not rely on an implicit
 
 ## Secret handling
 
+The optional assistant key is `YUKSALISH_GEMINI_API_KEY` in the server's local environment file (for the test LAN site, `.env.lan`). Never put it in desktop/Vite variables or commit it. Without a key the assistant and generated greetings show a configuration message; scheduled birthday posts and notifications still work.
+
 - Generate unique random values of at least 32 characters for PostgreSQL and MinIO.
 - Generate separate random values for `YUKSALISH_AUTH_SIGNING_KEY` and
   `YUKSALISH_AUTH_ENCRYPTION_KEY`; rotating the encryption key requires a planned TOTP reset.

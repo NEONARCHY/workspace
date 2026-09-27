@@ -73,6 +73,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
+import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspacePlatform } from "./platform-adapter";
@@ -672,6 +673,7 @@ export function App() {
       zoom: preferences.zoomEnabled,
       hisobot: true,
       support: preferences.desktopEnabled,
+      birthday: preferences.calendarEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -2157,6 +2159,7 @@ export function App() {
         />
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
+      <YuksalishAssistant token={session.accessToken} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
     </FluentProvider>

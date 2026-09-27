@@ -11,6 +11,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from . import __version__
 from .absence_service import materialize_sick_document_notifications
 from .ai_referent_agent_service import expire_jobs
+from .birthday_service import materialize_birthdays
 from .database import create_database_engine
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
@@ -24,6 +25,7 @@ from .routers import (
     administration,
     ai_referent,
     ai_referent_shared,
+    assistant,
     authentication,
     directory,
     health,
@@ -85,6 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         created += await materialize_zoom_reminders(connection, runtime_settings)
                         created += await materialize_project_reminders(connection)
                         created += await materialize_hisobot_reminders(connection)
+                        created += await materialize_birthdays(connection)
                         await close_overdue_sessions(connection)
                     async with engine.begin() as connection:
                         created += await expire_jobs(connection)
@@ -153,6 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(hr.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)
     application.include_router(authentication.router, prefix=runtime_settings.api_prefix)
+    application.include_router(assistant.router, prefix=runtime_settings.api_prefix)
     application.include_router(directory.router, prefix=runtime_settings.api_prefix)
     application.include_router(workspace.router, prefix=runtime_settings.api_prefix)
     application.include_router(project_hub.router, prefix=runtime_settings.api_prefix)
