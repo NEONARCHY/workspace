@@ -74,38 +74,28 @@ const fragmentShader = /* glsl */ `
     float angle = iTime * rotationSpeed;
     uv = mat2(cos(angle), -sin(angle), sin(angle), cos(angle)) * uv;
     float radius = length(uv);
-    float invRadius = radius > 0.0 ? 1.0 / radius : 0.0;
-    float pulse = sin(iTime * 2.25) * .02;
-    float noise = snoise3(vec3(uv * noiseScale, iTime * .75)) * .5 + .5;
-    float r0 = mix(mix(innerRadius + pulse, 1.0, .4),
-      mix(innerRadius + pulse, 1.0, .6), noise);
-    float radialDistance = distance(uv, (r0 * invRadius) * uv);
-    float light = light1(1.0, 10.0, radialDistance);
-    light *= 1.0 - smoothstep(r0, r0 * 1.05, radius);
-    float colorMotion = cos(atan(uv.y, uv.x) + iTime * 2.8) * .5 + .5;
-    float lightAngle = iTime * -1.5;
-    vec2 lightPosition = vec2(cos(lightAngle), sin(lightAngle)) * r0;
-    float lightDistance = distance(uv, lightPosition);
-    float movingLight = light2(1.5, 5.0, lightDistance);
-    movingLight *= light1(1.0, 50.0, radialDistance);
-    float outer = 1.0 - smoothstep(mix(innerRadius, 1.0, noise * .5), 1.0, radius);
-    float inner = smoothstep(innerRadius, mix(innerRadius, 1.0, .5), radius);
-
-    vec3 deep = adjustHue(vec3(.035, .34, .43), hue);
-    vec3 teal = adjustHue(vec3(.03, .67, .68), hue);
-    vec3 ice = adjustHue(vec3(.64, .96, .91), hue);
-    vec3 shadow = vec3(.015, .10, .15);
-    vec3 color = mix(deep, ice, colorMotion);
-    color = mix(color, teal, noise);
-    color = mix(shadow, color, clamp(light * 1.7, 0.0, 1.0));
-    color = clamp((color + movingLight * vec3(.52, .98, .94) * .7)
-      * mix(.8, 1.0, outer) * mix(.82, 1.0, inner), 0.0, 1.0);
-    // The original shader sat on an opaque dark canvas. A feathered alpha
-    // retains its fluid silhouette without exposing a square or hard rim.
-    float boundary = .79 + (noise - .5) * .09;
-    float body = 1.0 - smoothstep(boundary - .18, boundary + .14, radius);
-    float glow = (1.0 - smoothstep(boundary, .97, radius)) * .1;
+    float noise = snoise3(vec3(uv * noiseScale * 3.3, iTime * .7)) * .5 + .5;
+    float shapeNoise = snoise3(vec3(uv * 2.4, iTime * .48));
+    float pulse = sin(iTime * 2.1) * .015;
+    float boundary = .72 + shapeNoise * .075 + pulse;
+    float body = 1.0 - smoothstep(boundary - .18, boundary + .16, radius);
+    float glow = (1.0 - smoothstep(boundary, .96, radius)) * .1;
     float alpha = clamp(body + (1.0 - body) * glow, 0.0, 1.0);
+
+    vec3 deep = adjustHue(vec3(.025, .35, .48), hue);
+    vec3 teal = adjustHue(vec3(.015, .72, .73), hue);
+    vec3 ice = adjustHue(vec3(.57, .97, .91), hue);
+    float swirl = cos(atan(uv.y, uv.x) * 2.0 + iTime * 2.4 + noise * 2.0) * .5 + .5;
+    vec3 color = mix(deep, teal, noise);
+    color = mix(color, ice, swirl * .44);
+    float lightAngle = -iTime * 1.3;
+    vec2 lightPosition = vec2(cos(lightAngle), sin(lightAngle)) * (innerRadius + .26);
+    float lightDistance = distance(uv, lightPosition);
+    float movingLight = light2(1.5, 5.0, lightDistance) * light1(1.0, 5.0, lightDistance);
+    color = clamp(color + ice * movingLight * .3, 0.0, 1.0);
+    // This shader is used over light UI. Preserve a filled, colored core
+    // rather than the source's black-on-black center, and dissolve its rim.
+    color = mix(color, ice, (1.0 - body) * .6);
     gl_FragColor = vec4(color, alpha);
   }
 `;
