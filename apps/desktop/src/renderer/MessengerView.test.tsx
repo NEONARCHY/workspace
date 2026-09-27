@@ -131,7 +131,7 @@ describe("Private messenger", () => {
     });
 
     openChatMenu("finance");
-    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить группу" }));
     expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
     expect(chatActions.delete).not.toHaveBeenCalled();
 
@@ -180,6 +180,8 @@ describe("Private messenger", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Вы станете владельцем",
     );
+    expect(screen.queryByRole("switch", { name: /предыдущую историю/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Внешние гости/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Проектная команда" },
     });
@@ -264,10 +266,65 @@ describe("Private messenger", () => {
     expect(
       screen.queryByRole("button", { name: "Добавить выбранных" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Выйти" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Выйти из группы" })).toBeInTheDocument();
     expect(
       screen.getByRole("textbox", { name: /Название группы/ }),
     ).toBeDisabled();
+  });
+
+  it("offers previous history only when inviting colleagues to an existing group", async () => {
+    const chatActions = actions();
+    const group = {
+      ...initialChats[0]!,
+      canDelete: true,
+      members: initialChats[0]!.members.filter((member) => member.userId !== "malika"),
+    };
+    renderMessenger({ chats: [group], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Участники и права" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("button", { name: "Удалить группу" })).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: /^Закрыть$/ })).not.toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Закрыть окно группы" })).toBeInTheDocument();
+    const history = dialog.getByRole("switch", { name: /предыдущую историю/ });
+    expect(history).not.toBeChecked();
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Добавить выбранных" }));
+    await waitFor(() => expect(chatActions.add).toHaveBeenCalledWith("finance", ["malika"], false));
+    fireEvent.click(history);
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Добавить выбранных" }));
+    await waitFor(() => expect(chatActions.add).toHaveBeenLastCalledWith("finance", ["malika"], true));
+  });
+
+  it("keeps exit notices in the chat flow when later messages arrive", () => {
+    const leftNotice: ChatMessage = {
+      ...initialMessages[0]!, id: "left-notice", chatId: "finance",
+      body: "Бахтиёр Самугов больше не в группе", systemKind: "member_left",
+      createdAt: "2026-09-27T09:00:00Z", time: "14:00",
+    };
+    const ownerNotice: ChatMessage = {
+      ...leftNotice, id: "owner-notice",
+      body: "Вам автоматически передалось право управления данной группой",
+      systemKind: "ownership_transferred", createdAt: "2026-09-27T09:00:01Z",
+    };
+    const laterMessage: ChatMessage = {
+      ...initialMessages[0]!, id: "later-message", chatId: "finance",
+      body: "Продолжаем работу", createdAt: "2026-09-27T09:01:00Z", time: "14:01",
+    };
+    const messages = [...initialMessages, leftNotice, ownerNotice];
+    const { rerender, props } = renderMessenger({ messages });
+    expect(screen.getAllByRole("note").map((note) => note.textContent)).toEqual([
+      expect.stringContaining("Бахтиёр Самугов больше не в группе"),
+      expect.stringContaining("Вам автоматически передалось право управления данной группой"),
+    ]);
+    rerender(<FluentProvider theme={webLightTheme}><MessengerView {...props} messages={[...messages, laterMessage]} /></FluentProvider>);
+    const notes = screen.getAllByRole("note");
+    const conversation = screen.getByLabelText("Переписка");
+    expect(notes).toHaveLength(2);
+    expect(conversation.textContent?.indexOf(ownerNotice.body)).toBeLessThan(
+      conversation.textContent!.indexOf(laterMessage.body),
+    );
+    expect(notes[0]).toHaveClass("message-system");
   });
 
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
@@ -874,6 +931,19 @@ describe("Private messenger", () => {
     fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
 
     await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
+  });
+
+  it("lets an owner leave while keeping the group for remaining members", async () => {
+    const chatActions = actions();
+    vi.mocked(chatActions.remove).mockResolvedValue(undefined);
+    renderMessenger({ chats: [{ ...initialChats[0]!, canDelete: true }], chatActions });
+
+    openChatMenu("finance");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
+
+    await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
+    expect(chatActions.delete).not.toHaveBeenCalled();
   });
 
   it("never exposes deletion for a service chat even if stale data says it is allowed", () => {

@@ -46,7 +46,6 @@ async def test_module_catalog_has_all_locales() -> None:
 
     assert response.status_code == 200
     assert [module["key"] for module in payload["modules"]] == [
-        "crm",
         "tasks",
         "team_overview",
         "payment_requests",

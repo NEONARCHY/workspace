@@ -220,6 +220,7 @@ chat_members = sa.Table(
     sa.Column("member_role", sa.String(16)),
     sa.Column("permissions", postgresql.JSONB()),
     sa.Column("joined_at", sa.DateTime(timezone=True)),
+    sa.Column("history_visible_from", sa.DateTime(timezone=True)),
     sa.Column("muted_until", sa.DateTime(timezone=True)),
 )
 
@@ -236,6 +237,8 @@ messages = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("edited_at", sa.DateTime(timezone=True)),
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("system_kind", sa.String(32)),
+    sa.Column("system_target_user_id", uuid_type),
 )
 
 message_receipts = sa.Table(

@@ -107,6 +107,7 @@ class UpdateChatRequest(ApiModel):
 
 class AddChatMembersRequest(ApiModel):
     member_ids: list[UUID] = Field(min_length=1, max_length=200)
+    show_history: bool = False
 
 
 class SetChatMemberRequest(ApiModel):
@@ -146,6 +147,7 @@ class ChatMessageResponse(ApiModel):
     chat_id: str
     author_id: str
     body: str
+    system_kind: Literal["member_left", "ownership_transferred"] | None = None
     time: str
     created_at: datetime
     own: bool
@@ -1208,7 +1210,6 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
-    "crm",
     "tasks",
     "team_overview",
     "payment_requests",
@@ -1231,7 +1232,6 @@ NavigationKey = Literal[
     "settings",
 ]
 DEFAULT_NAVIGATION: list[NavigationKey] = [
-    "crm",
     "tasks",
     "team_overview",
     "payment_requests",

@@ -951,8 +951,8 @@ export function deleteWorkspaceChat(token: string, id: string): Promise<void> {
   return apiRequest(`/chats/${id}`, { method: "DELETE" }, token);
 }
 
-export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[]): Promise<ChatSummary> {
-  return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds }) }, token);
+export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[], showHistory: boolean): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds, showHistory }) }, token);
 }
 
 export function setWorkspaceChatMember(token: string, id: string, member: ChatMember): Promise<ChatSummary> {

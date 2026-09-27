@@ -53,7 +53,6 @@ import {
   Alert24Regular,
   ApprovalsApp24Regular,
   Board24Regular,
-  Building24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
   Chat24Regular,
@@ -294,7 +293,6 @@ const initialWorkspace: WorkspaceState = {
 };
 
 const navItems: readonly NavItem[] = [
-  { key: "crm", label: "CRM", icon: <Building24Regular /> },
   {
     key: "tasks",
     label: "Задачи",
@@ -334,30 +332,6 @@ const navItems: readonly NavItem[] = [
 ];
 
 const navigationLabels = Object.fromEntries(navItems.map((item) => [item.key, item.label])) as Record<NavigationKey, string>;
-
-interface ModulePreviewProps {
-  readonly icon: ReactNode;
-  readonly title: string;
-  readonly evidence: string;
-  readonly packageLabel: string;
-}
-
-function ModulePreview({ icon, title, evidence, packageLabel }: ModulePreviewProps) {
-  return (
-    <section className="workspace-view parity-preview" aria-label={title}>
-      <div className="parity-preview-card">
-        <span className="parity-preview-icon">{icon}</span>
-        <span className="parity-kicker">Вкладка закреплена в общей навигации</span>
-        <h1>{title}</h1>
-        <p>{evidence}</p>
-        <div>
-          <strong>{packageLabel}</strong>
-          <span>Назначение CRM определим отдельно, когда она понадобится команде.</span>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function readableAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Не удалось войти";
@@ -919,7 +893,7 @@ export function App() {
       return chat;
     },
     update: (id, title, description) => messengerMutation((token) => updateWorkspaceChat(token, id, title, description)),
-    add: (id, ids) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids)),
+    add: (id, ids, showHistory) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids, showHistory)),
     setMember: (id, member) => messengerMutation((token) => setWorkspaceChatMember(token, id, member)),
     remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId)),
     transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
@@ -1839,14 +1813,6 @@ export function App() {
                 onAbsenceAction={async (absenceRequest, action) => {
                   await handleAbsenceAction(absenceRequest, action);
                 }}
-              />
-            ) : null}
-            {displayedSection === "crm" ? (
-              <ModulePreview
-                icon={<Building24Regular />}
-                title="CRM"
-                evidence="CRM пока не используется. Этот раздел сохранён в меню; рабочие задачи, проекты и согласования доступны в своих разделах."
-                packageLabel="Раздел отложен"
               />
             ) : null}
             {displayedSection === "zoom_meetings" ? (

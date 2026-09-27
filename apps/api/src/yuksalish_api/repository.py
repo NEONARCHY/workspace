@@ -2438,9 +2438,24 @@ async def load_workspace(
         (
             await connection.execute(
                 select(messages)
+                .outerjoin(
+                    chat_members,
+                    and_(
+                        chat_members.c.chat_id == messages.c.chat_id,
+                        chat_members.c.user_id == current_user.id,
+                    ),
+                )
                 .where(
                     messages.c.chat_id.in_(accessible_chat_ids),
                     messages.c.deleted_at.is_(None),
+                    or_(
+                        chat_members.c.history_visible_from.is_(None),
+                        messages.c.created_at >= chat_members.c.history_visible_from,
+                    ),
+                    or_(
+                        messages.c.system_target_user_id.is_(None),
+                        messages.c.system_target_user_id == current_user.id,
+                    ),
                 )
                 .order_by(messages.c.created_at)
             )
@@ -2846,6 +2861,14 @@ async def search_messages(
                 .where(
                     messages.c.deleted_at.is_(None),
                     messages.c.body.ilike(f"%{normalized}%"),
+                    or_(
+                        chat_members.c.history_visible_from.is_(None),
+                        messages.c.created_at >= chat_members.c.history_visible_from,
+                    ),
+                    or_(
+                        messages.c.system_target_user_id.is_(None),
+                        messages.c.system_target_user_id == current_user.id,
+                    ),
                 )
                 .order_by(messages.c.created_at.desc())
                 .limit(100)
@@ -5631,7 +5654,16 @@ async def validate_attachment_owner(
                     .where(
                         messages.c.id == owner_id,
                         messages.c.deleted_at.is_(None),
+                        messages.c.system_kind.is_(None),
                         chat_members.c.user_id == current_user.id,
+                        or_(
+                            chat_members.c.history_visible_from.is_(None),
+                            messages.c.created_at >= chat_members.c.history_visible_from,
+                        ),
+                        or_(
+                            messages.c.system_target_user_id.is_(None),
+                            messages.c.system_target_user_id == current_user.id,
+                        ),
                     )
                 )
             )

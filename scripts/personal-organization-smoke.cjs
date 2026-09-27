@@ -111,7 +111,7 @@ async function main() {
     await page.getByRole("alert").filter({ hasText: "QA: сервер временно недоступен" }).waitFor();
     assert.deepEqual(await pinOrder(), [second.id]);
     await page.getByRole("button", { name: "Изменить порядок меню", exact: true }).click();
-    await dragPointer(page.locator('[data-navigation-key="calendar"] .spatial-sort-grip'), page.locator('[data-navigation-key="crm"] .spatial-sort-grip'));
+    await dragPointer(page.locator('[data-navigation-key="calendar"] .spatial-sort-grip'), page.locator('[data-navigation-key="tasks"] .spatial-sort-grip'));
     assert.equal(await page.locator(".navigation-edit-row").first().getAttribute("data-navigation-key"), "calendar");
     await page.screenshot({ path: path.join(output, "navigation-editor.png") });
     await page.getByRole("button", { name: "Сохранить", exact: true }).click(); await page.locator(".personal-rail-nav").waitFor();

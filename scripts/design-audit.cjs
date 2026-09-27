@@ -55,7 +55,7 @@ async function main() {
     await page.getByLabel(/Пароль/).fill("Yuksalish-Local-2026!");
     await page.getByRole("button", { name: "Войти", exact: true }).click();
     await page.locator(".app-shell").waitFor();
-    for (const [key, label] of Object.entries({ messenger: "Мессенджер", tasks: "Задачи", payments: "Заявки на оплату", feed: "Лента", projects: "Список проектов", trips: "Согласование поездок", calendar: "Календарь", employees: "Сотрудники", notifications: "Уведомления", crm: "CRM" })) {
+    for (const [key, label] of Object.entries({ messenger: "Мессенджер", tasks: "Задачи", payments: "Заявки на оплату", feed: "Лента", projects: "Список проектов", trips: "Согласование поездок", calendar: "Календарь", employees: "Сотрудники", notifications: "Уведомления" })) {
       await page.locator(`.rail-action[aria-label="${label}"]`).click();
       if (key === "employees") await page.locator(".directory-layout").waitFor();
       await scan(key);

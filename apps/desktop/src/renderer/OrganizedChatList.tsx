@@ -206,8 +206,8 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
                 {pinned && <MenuItem icon={<ArrowUp20Regular />} disabled={!onReorder || pinIndex === 0 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex - 1]!)}>Переместить выше</MenuItem>}
                 {pinned && <MenuItem icon={<ArrowDown20Regular />} disabled={!onReorder || pinIndex === pinnedIds.length - 1 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex + 1]!)}>Переместить ниже</MenuItem>}
                 {onChange ? <MenuItem icon={<Archive20Regular />} onClick={() => void run(() => onChange(chat.id, archive ? "unarchive" : "archive"), archive ? "Чат возвращён из архива" : "Чат убран в архив; переписка сохранена")}>{archive ? "Вернуть из архива" : "В архив"}</MenuItem> : null}
-                {userManaged && chat.kind === "group" && currentMembership?.role !== "owner" && onLeave ? <MenuItem icon={<SignOut20Regular />} onClick={() => onLeave(chat)}>Выйти из группы</MenuItem> : null}
-                {userManaged && chat.canDelete && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>Удалить чат</MenuItem> : null}
+                {userManaged && chat.kind === "group" && currentMembership && onLeave ? <MenuItem icon={<SignOut20Regular />} disabled={currentMembership.role === "owner" && chat.members.length < 2} title={currentMembership.role === "owner" && chat.members.length < 2 ? "Сначала добавьте участника для передачи владения" : undefined} onClick={() => onLeave(chat)}>Выйти из группы</MenuItem> : null}
+                {userManaged && chat.canDelete && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>{chat.kind === "group" ? "Удалить группу" : "Удалить чат"}</MenuItem> : null}
               </MenuList></MenuPopover>
             </Menu>
           </SpatialSortItem>,

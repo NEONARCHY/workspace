@@ -1,5 +1,4 @@
 export const moduleKeys = [
-  "crm",
   "tasks",
   "team_overview",
   "payment_requests",
@@ -393,6 +392,7 @@ export interface ChatMessage {
   readonly chatId: string;
   readonly authorId: string;
   readonly body: string;
+  readonly systemKind?: "member_left" | "ownership_transferred" | null;
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;

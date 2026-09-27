@@ -4,9 +4,10 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, insert, select, text, update
+from sqlalchemy import and_, delete, func, insert, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.sql.elements import ColumnElement
 
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
@@ -42,6 +43,25 @@ from .workspace_schemas import (
 )
 
 Record = Mapping[Any, Any]
+
+
+def message_visible_to_member(message: Record, member: Record) -> bool:
+    cutoff = member.get("history_visible_from")
+    target = message.get("system_target_user_id")
+    return (cutoff is None or message["created_at"] >= cutoff) and (
+        target is None or target == member["user_id"]
+    )
+
+
+def message_access_filter(member: Record, user_id: UUID) -> ColumnElement[bool]:
+    target_filter = or_(
+        messages.c.system_target_user_id.is_(None),
+        messages.c.system_target_user_id == user_id,
+    )
+    cutoff = member.get("history_visible_from")
+    return target_filter if cutoff is None else and_(
+        target_filter, messages.c.created_at >= cutoff
+    )
 FULL_PERMISSIONS = ChatPermissions(
     send_messages=True,
     upload_files=True,
@@ -201,6 +221,7 @@ async def chat_summary(
                 .where(
                     messages.c.chat_id == chat_id,
                     messages.c.deleted_at.is_(None),
+                    message_access_filter(membership, user.id),
                 )
                 .order_by(messages.c.created_at.desc())
                 .limit(1)
@@ -217,6 +238,7 @@ async def chat_summary(
         .where(
             messages.c.chat_id == chat_id,
             messages.c.deleted_at.is_(None),
+            message_access_filter(membership, user.id),
             message_receipts.c.user_id == user.id,
             message_receipts.c.read_at.is_(None),
         )
@@ -237,11 +259,11 @@ async def chat_summary(
         can_delete=(
             chat["context_type"] is None
             and chat["kind"] in {"direct", "group"}
-            and (
+            and (chat["created_by_user_id"] == user.id if chat["kind"] == "group" else (
                 membership["member_role"] == "owner"
                 or chat["created_by_user_id"] == user.id
                 or user.role in {"admin", "superadmin"}
-            )
+            ))
         ),
         members=[
             ChatMemberResponse(
@@ -389,9 +411,12 @@ async def delete_chat(
     is_owner = member["member_role"] == "owner"
     is_creator = chat["created_by_user_id"] == user.id
     is_workspace_admin = user.role in {"admin", "superadmin"}
-    if not (is_owner or is_creator or is_workspace_admin):
+    if not (is_creator if chat["kind"] == "group" else (
+        is_owner or is_creator or is_workspace_admin
+    )):
         raise WorkspaceRepositoryError(
-            403, "Удалить чат может его создатель или администратор"  # noqa: RUF001
+            403, "Удалить группу может только её создатель" if chat["kind"] == "group"
+            else "Удалить чат может его создатель или администратор"  # noqa: RUF001
         )
     now = datetime.now(UTC)
     await connection.execute(
@@ -419,6 +444,7 @@ async def add_chat_members(
         raise WorkspaceRepositoryError(403, "Нет права добавлять участников")
     ids = set(payload.member_ids)
     await active_people(connection, ids)
+    joined_at = datetime.now(UTC)
     await connection.execute(
         pg_insert(chat_members)
         .values(
@@ -428,7 +454,8 @@ async def add_chat_members(
                     "user_id": person_id,
                     "member_role": "member",
                     "permissions": ChatPermissions().model_dump(),
-                    "joined_at": datetime.now(UTC),
+                    "joined_at": joined_at,
+                    "history_visible_from": None if payload.show_history else joined_at,
                 }
                 for person_id in sorted(ids)
             ]
@@ -436,7 +463,8 @@ async def add_chat_members(
         .on_conflict_do_nothing()
     )
     await audit(
-        connection, user, "chat.members_added", chat_id, {"user_ids": sorted(map(str, ids))}
+        connection, user, "chat.members_added", chat_id,
+        {"user_ids": sorted(map(str, ids)), "show_history": payload.show_history},
     )
     return await chat_summary(connection, user, chat_id)
 
@@ -505,8 +533,23 @@ async def remove_chat_member(
     )
     if target is None:
         raise WorkspaceRepositoryError(404, "Участник не найден")
+    next_owner_id: UUID | None = None
     if target["member_role"] == "owner":
-        raise WorkspaceRepositoryError(409, "Перед выходом передайте владение группой")
+        if member_id != user.id:
+            raise WorkspaceRepositoryError(403, "Нельзя исключить владельца группы")
+        next_owner_id = await connection.scalar(
+            select(chat_members.c.user_id)
+            .join(users, users.c.id == chat_members.c.user_id)
+            .where(
+                chat_members.c.chat_id == chat_id,
+                chat_members.c.user_id != user.id,
+                users.c.status == "active",
+            )
+            .order_by(chat_members.c.joined_at, chat_members.c.user_id)
+            .limit(1)
+        )
+        if next_owner_id is None:
+            raise WorkspaceRepositoryError(409, "Нет участников для передачи владения")
     if member_id != user.id and (
         not member_permissions(actor).manage_members
         or (target["member_role"] == "moderator" and actor["member_role"] != "owner")
@@ -518,6 +561,12 @@ async def remove_chat_member(
             chat_members.c.user_id == member_id,
         )
     )
+    if next_owner_id is not None:
+        await connection.execute(
+            update(chat_members)
+            .where(chat_members.c.chat_id == chat_id, chat_members.c.user_id == next_owner_id)
+            .values(member_role="owner", permissions=FULL_PERMISSIONS.model_dump())
+        )
     await connection.execute(
         delete(message_receipts).where(
             message_receipts.c.user_id == member_id,
@@ -535,7 +584,64 @@ async def remove_chat_member(
         )
         .values(read_at=datetime.now(UTC), resolved_at=datetime.now(UTC))
     )
-    await audit(connection, user, "chat.member_removed", chat_id, {"user_id": str(member_id)})
+    leaver_name = await connection.scalar(
+        select(users.c.full_name).where(users.c.id == member_id)
+    ) or "Сотрудник"
+    system_events: list[tuple[str, str, UUID | None]] = [
+        ("member_left", f"{leaver_name} больше не в группе", None)
+    ]
+    if next_owner_id is not None:
+        system_events.append((
+            "ownership_transferred",
+            "Вам автоматически передалось право управления данной группой",
+            next_owner_id,
+        ))
+    recipients = list((await connection.execute(
+        select(chat_members.c.user_id)
+        .join(users, users.c.id == chat_members.c.user_id)
+        .where(chat_members.c.chat_id == chat_id, users.c.status == "active")
+    )).scalars().all())
+    for kind, body, target_user_id in system_events:
+        event_id, occurred_at = uuid4(), datetime.now(UTC)
+        await connection.execute(insert(messages).values(
+            id=event_id,
+            chat_id=chat_id,
+            author_user_id=member_id,
+            body=body,
+            reply_to_message_id=None,
+            mention_user_ids=[],
+            created_at=occurred_at,
+            edited_at=None,
+            deleted_at=None,
+            revision=1,
+            system_kind=kind,
+            system_target_user_id=target_user_id,
+        ))
+        await connection.execute(insert(message_versions).values(
+            message_id=event_id,
+            body=body,
+            mention_user_ids=[],
+            actor_user_id=user.id,
+            change_reason="system",
+            created_at=occurred_at,
+        ))
+        await connection.execute(insert(message_receipts), [
+            {
+                "message_id": event_id,
+                "user_id": recipient,
+                "delivered_at": occurred_at,
+                "read_at": occurred_at if recipient == user.id else None,
+            }
+            for recipient in recipients
+            if target_user_id is None or recipient == target_user_id
+        ])
+    await connection.execute(
+        update(chats).where(chats.c.id == chat_id).values(updated_at=datetime.now(UTC))
+    )
+    await audit(connection, user, "chat.member_removed", chat_id, {
+        "user_id": str(member_id),
+        "new_owner_id": str(next_owner_id) if next_owner_id else None,
+    })
 
 
 async def transfer_chat_owner(
@@ -647,6 +753,7 @@ def message_response(
         chat_id=str(row["chat_id"]),
         author_id=str(row["author_user_id"]),
         body="" if deleted else row["body"],
+        system_kind=row["system_kind"],
         own=own,
         time=row["created_at"].astimezone(ZoneInfo("Asia/Tashkent")).strftime("%H:%M"),
         created_at=row["created_at"],
@@ -657,16 +764,19 @@ def message_response(
         revision=row["revision"],
         can_edit=own
         and not deleted
+        and row["system_kind"] is None
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
-        can_delete=not deleted and (own or user.role in {"admin", "superadmin"} or can_pin),
+        can_delete=not deleted and row["system_kind"] is None and (
+            own or user.role in {"admin", "superadmin"} or can_pin
+        ),
         reactions=[] if deleted else (reactions or []),
         is_pinned=not deleted and pin is not None,
         pinned_at=None if deleted or pin is None else pin["pinned_at"],
         pinned_by_user_id=(
             None if deleted or pin is None else str(pin["pinned_by_user_id"])
         ),
-        can_pin=not deleted and can_pin,
+        can_pin=not deleted and row["system_kind"] is None and can_pin,
     )
 
 
@@ -677,6 +787,8 @@ async def message_with_details(
     chat: Record,
     member: Record,
 ) -> ChatMessageResponse:
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     reactions, pins = await message_detail_maps(connection, user, [row["id"]])
     return message_response(
         row,
@@ -769,6 +881,8 @@ async def send_chat_message(
                 messages.c.id == payload.reply_to_message_id,
                 messages.c.chat_id == chat_id,
                 messages.c.deleted_at.is_(None),
+                messages.c.system_kind.is_(None),
+                message_access_filter(member, user.id),
             )
         )
         if parent is None:
@@ -850,9 +964,11 @@ async def toggle_message_reaction(
         .mappings()
         .first()
     )
-    if row is None or row["deleted_at"] is not None:
+    if row is None or row["deleted_at"] is not None or row["system_kind"] is not None:
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     if not member_permissions(member).send_messages:
         raise WorkspaceRepositoryError(403, "Доступно только чтение сообщений")
     existing = await connection.scalar(
@@ -893,9 +1009,11 @@ async def set_message_pin(
         .mappings()
         .first()
     )
-    if row is None or row["deleted_at"] is not None:
+    if row is None or row["deleted_at"] is not None or row["system_kind"] is not None:
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     chat, member = await chat_access(connection, user, row["chat_id"], lock=True)
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     if not can_manage_messages(chat, member):
         raise WorkspaceRepositoryError(403, "Нет права закреплять сообщения")
     if payload.pinned:
@@ -967,6 +1085,10 @@ async def change_message(
         .mappings()
         .one()
     )
+    if not message_visible_to_member(row, member):
+        raise WorkspaceRepositoryError(404, "Сообщение не найдено")
+    if row["system_kind"] is not None:
+        raise WorkspaceRepositoryError(403, "Системную запись нельзя изменить или удалить")
     deleting = isinstance(payload, DeleteMessageRequest)
     may_moderate = user.role in {"admin", "superadmin"} or can_manage_messages(chat, member)
     response = message_response(

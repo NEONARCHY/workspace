@@ -603,6 +603,12 @@ function Conversation({
           const previousDate = previous
             ? new Date(previous).toLocaleDateString("ru-RU")
             : "История переписки";
+          if (message.systemKind) return <div key={message.id}>
+            {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
+            <div className="message-system" data-message-id={message.id} role="note">
+              <span>{message.body}</span><time>{message.time}</time>
+            </div>
+          </div>;
           const own = message.authorId === currentUserId;
           const messageAttachments = attachments.filter(
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
@@ -1214,6 +1220,7 @@ export function MessengerView(props: MessengerViewProps) {
             setPanel(undefined);
           }}
           onRequestDelete={requestChatDeletion}
+          onRequestLeave={(group) => { setPanel(undefined); setPendingLeave(group); }}
           allowDelete={Boolean(activeChat?.canDelete)}
         />
       )}

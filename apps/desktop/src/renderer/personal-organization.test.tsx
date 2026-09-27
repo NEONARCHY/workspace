@@ -38,7 +38,7 @@ describe("Personal organization", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 4));
     await waitFor(() => expect(close).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(close).toHaveBeenCalledTimes(2);
   });
@@ -49,7 +49,7 @@ describe("Personal organization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Конфликт версий");
     expect(close).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
   });
   it("hides legacy project and payment entries without deleting their saved positions", async () => {
     const save = vi.fn().mockResolvedValue(undefined);

@@ -39,7 +39,7 @@ Use axe-core on local authenticated screens with read-only test routes; save bef
 
 ## Boundaries
 
-API and PostgreSQL remain at 0.14.0 / migration 0017. No backend rewrite, production import, public publishing, new CRM implementation or real organisation data modification. Dark mode and a formal external accessibility certification are separate deliverables; this package implements the supplied light visual direction.
+API and PostgreSQL remain at 0.14.0 / migration 0017. No backend rewrite, production import, public publishing, new business module implementation or real organisation data modification. Dark mode and a formal external accessibility certification are separate deliverables; this package implements the supplied light visual direction.
 
 ## Verified delivery — 2026-09-04
 

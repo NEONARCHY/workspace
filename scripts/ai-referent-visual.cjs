@@ -81,6 +81,12 @@ async function main() {
       throw error;
     }
     await page.evaluate(() => document.fonts.ready);
+    const shadowRoom = await page.locator(".ai-referent-register-action.primary").evaluate(button => {
+      const bar = button.closest(".ai-referent-register-bar");
+      if (!bar) return 0;
+      return bar.getBoundingClientRect().bottom - button.getBoundingClientRect().bottom;
+    });
+    assert.ok(shadowRoom >= 12, `action shadow needs room inside the scrolling mask: ${shadowRoom}`);
     const headerArtBounds = await page.locator(".ai-referent-header-art").boundingBox();
     const referentViewBounds = await page.locator(".ai-referent-view").boundingBox();
     assert.ok(headerArtBounds && referentViewBounds, "AI Referent header artwork must be visible");
@@ -163,7 +169,7 @@ async function main() {
     await page.locator(".ai-referent-row").first().click();
     const detail = page.getByRole("dialog");
     await detail.getByRole("tab", { name: "Документы · 0" }).click();
-    await detail.getByText("Файл письма ещё не приложен.").waitFor();
+    await detail.getByRole("heading", { name: /Пакет письма/ }).waitFor();
     await detail.getByRole("tab", { name: "История · 0" }).click();
     await detail.getByRole("tab", { name: "Обзор" }).click();
     await page.waitForTimeout(400);

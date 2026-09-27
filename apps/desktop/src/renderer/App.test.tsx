@@ -1837,7 +1837,6 @@ describe("corporate workspace authentication alpha", () => {
       button.getAttribute("aria-label"),
     );
     expect(labels).toEqual([
-      "CRM",
       "Задачи",
       "AI Referent",
       "AI Hisobot",

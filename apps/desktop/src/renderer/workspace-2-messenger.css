@@ -450,6 +450,24 @@
   color: transparent;
   caret-color: transparent;
 }
+.messenger-view .message-system {
+  width: fit-content;
+  max-width: min(80%, 520px);
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px auto;
+  padding: 7px 12px;
+  border: 1px solid rgb(60 110 125 / 12%);
+  border-radius: 999px;
+  background: rgb(234 244 244 / 92%);
+  color: #516d78;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+}
+.messenger-view .message-system time { flex: none; color: #7a929a; font-size: 10px; font-variant-numeric: tabular-nums; }
 
 /* A dropped pinned row can still be under the pointer; don't lift it a second time. */
 .messenger-view .chat-list-item.pinned .chat-row:hover { transform: none; }

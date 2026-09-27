@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from sqlalchemy import delete, insert, select
+from sqlalchemy import delete, insert, select, update
 
 from yuksalish_api.auth_service import hash_password
 from yuksalish_api.main import create_app
@@ -24,7 +24,7 @@ async def test_support_requests_notify_owners_and_return_admin_responses() -> No
     database_url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
-    password = "Yuksalish-Support-2026!"
+    password = "Yuksalish-Local-2026!"
     app = create_app(
         Settings(
             environment="test",
@@ -64,20 +64,35 @@ async def test_support_requests_notify_owners_and_return_admin_responses() -> No
             await connection.execute(
                 delete(workspace_notifications).where(workspace_notifications.c.kind == "support")
             )
-            await connection.execute(delete(users).where(users.c.username == "temuralmazov"))
-            await connection.execute(
-                insert(users).values(
-                    id=named_owner_id,
-                    username="temuralmazov",
-                    full_name="Темур Алмазов",
-                    password_hash=hash_password(password),
-                    role="employee",
-                    status="active",
-                    created_at=datetime.now(UTC),
-                    updated_at=datetime.now(UTC),
-                    failed_login_count=0,
-                )
+            existing_owner_id = await connection.scalar(
+                select(users.c.id).where(users.c.username == "temuralmazov")
             )
+            if existing_owner_id is not None:
+                named_owner_id = existing_owner_id
+                await connection.execute(
+                    update(users)
+                    .where(users.c.id == named_owner_id)
+                    .values(
+                        password_hash=hash_password(password),
+                        status="active",
+                        failed_login_count=0,
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+            else:
+                await connection.execute(
+                    insert(users).values(
+                        id=named_owner_id,
+                        username="temuralmazov",
+                        full_name="Темур Алмазов",
+                        password_hash=hash_password(password),
+                        role="employee",
+                        status="active",
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                        failed_login_count=0,
+                    )
+                )
         owner = await login("temuralmazov")
 
         created = await client.post(
@@ -164,3 +179,9 @@ async def test_support_requests_notify_owners_and_return_admin_responses() -> No
         final = (await client.get("/api/v1/support-requests", headers=employee)).json()
         assert final["indicator"] == "negative"
         assert final["requests"][0]["resolutionCode"] == "already_implemented"
+        async with app.state.database_engine.begin() as connection:
+            await connection.execute(
+                update(users)
+                .where(users.c.id == named_owner_id)
+                .values(status="archived", updated_at=datetime.now(UTC))
+            )
