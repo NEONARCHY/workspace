@@ -111,6 +111,7 @@ import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
+import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
@@ -1740,6 +1741,7 @@ export function App() {
 
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
+      <WorkspacePeopleProvider people={workspace.people}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
@@ -2188,6 +2190,7 @@ export function App() {
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
+      </WorkspacePeopleProvider>
     </FluentProvider>
   );
 }

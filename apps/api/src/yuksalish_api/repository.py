@@ -2440,6 +2440,7 @@ async def load_workspace(
                 select(messages)
                 .where(
                     messages.c.chat_id.in_(accessible_chat_ids),
+                    messages.c.deleted_at.is_(None),
                 )
                 .order_by(messages.c.created_at)
             )

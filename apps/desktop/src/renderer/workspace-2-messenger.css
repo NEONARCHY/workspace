@@ -56,6 +56,9 @@
 .messenger-pane-heading > .fui-Button {
   width: 38px;
   height: 38px;
+  min-width: 38px;
+  flex: 0 0 38px;
+  padding: 0;
   border-radius: 13px;
   color: white;
   background: var(--ws-navy);
@@ -146,7 +149,7 @@
   width: 100%;
   min-height: 72px;
   margin: 0;
-  padding: 12px 38px 12px 11px;
+  padding: 12px 11px;
   border: 1px solid transparent;
   border-radius: 17px;
   background: transparent;
@@ -174,25 +177,6 @@
   box-shadow: 0 12px 28px rgb(35 69 80 / 12%);
 }
 
-.messenger-view .chat-list-item .chat-more,
-.messenger-view .chat-list-item .spatial-sort-grip {
-  z-index: 3;
-  right: 7px;
-  width: 24px;
-  min-width: 24px;
-  height: 24px;
-  min-height: 24px;
-  padding: 0;
-  border: 1px solid rgb(0 145 168 / 10%);
-  border-radius: 9px;
-  background: rgb(241 248 247 / 94%);
-  color: var(--ws-link);
-}
-.messenger-view .chat-list-item .chat-more { top: 7px; }
-.messenger-view .chat-list-item:hover .chat-more,
-.messenger-view .chat-list-item:focus-within .chat-more,
-.messenger-view .chat-list-item .chat-more[aria-expanded="true"] { pointer-events: auto; }
-.messenger-view .chat-list-item .spatial-sort-grip { bottom: 7px; }
 
 .messenger-view .chat-list-item .chat-row.selected {
   border-color: rgb(101 200 197 / 26%);
@@ -346,7 +330,6 @@
 .messenger-view .message-actions .reaction-picker-trigger:focus-visible { border-color: #00869d; color: #fff !important; background: linear-gradient(145deg, #11a8b9, #00869d) !important; transform: scale(1.04); }
 .messenger-view .message-actions .reaction-picker-trigger:hover .fui-Button__icon,
 .messenger-view .message-actions .reaction-picker-trigger:focus-visible .fui-Button__icon { color: #fff !important; }
-.messenger-view .message.is-pending-delete { opacity: .45; }
 .message-context-menu { position: fixed; z-index: 10000; display: grid; width: 190px; padding: 7px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 17px; background: rgb(255 255 255 / 97%); box-shadow: 0 18px 44px rgb(41 58 85 / 18%); backdrop-filter: blur(16px); }
 .message-context-menu { gap: 3px; }
 .message-context-menu .fui-Button { justify-content: flex-start; width: 100%; min-height: 36px; padding: 7px 10px; border-radius: 10px; line-height: 20px; }
@@ -370,14 +353,15 @@
 .messenger-undo { position: absolute; z-index: 20; right: 22px; bottom: 78px; display: flex; align-items: center; gap: 14px; padding: 10px 12px 10px 16px; border: 1px solid #d5e4e4; border-radius: 14px; color: var(--ws-text); background: #fff; box-shadow: 0 16px 42px rgb(41 58 85 / 16%); }
 .messenger-chat-delete-error { position: absolute; z-index: 20; right: 22px; bottom: 78px; display: flex; align-items: center; gap: 12px; }
 .mention-empty { padding: 4px 2px; color: var(--ws-muted); font-size: 12px; }
-.mention-person { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 210px; padding: 7px 9px; border: 0; border-radius: 12px; color: var(--ws-text); background: transparent; text-align: left; cursor: pointer; }
+.mention-person { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 210px; padding: 8px 10px; border: 0; border-radius: 12px; color: var(--ws-text); background: transparent; text-align: left; cursor: pointer; }
 .mention-person:hover, .mention-person:focus-visible { outline: 0; background: #edf6f4; }
 .mention-person[aria-pressed="true"] { background: #e3f2ef; }
-.mention-person > span { display: grid; min-width: 0; }
+.mention-person-identity { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.mention-person-identity > .fui-Avatar { flex: none; margin-right: 2px; }
 .mention-person strong, .mention-person small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mention-person strong { font-size: 12px; }
-.mention-person small { color: var(--ws-muted); font-size: 10px; }
-.mention-person > b { color: var(--ws-link); }
+.mention-person small { color: var(--ws-muted); font-size: 11px; }
+.mention-person > b { display: grid; place-items: center; flex: none; width: 18px; height: 18px; color: var(--ws-link); }
 .messenger-view .composer > .composer-mention-button {
   position: relative;
   display: inline-flex;
@@ -404,7 +388,7 @@
   font-weight: 400;
   line-height: 22px;
   text-align: center;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, calc(-50% - 2px));
 }
 .messenger-view .composer-mention-count { position: absolute; top: 2px; right: 2px; min-width: 14px; padding: 0 3px; border-radius: 7px; color: #276b77; background: #deefec; font-size: 9px; font-variant-numeric: tabular-nums; line-height: 13px; }
 
@@ -466,6 +450,14 @@
   color: transparent;
   caret-color: transparent;
 }
+
+/* A dropped pinned row can still be under the pointer; don't lift it a second time. */
+.messenger-view .chat-list-item.pinned .chat-row:hover { transform: none; }
+
+.messenger-view .chat-list-item.pinned:not(.is-lifted) .chat-row { cursor: grab; }
+.messenger-view .chat-list-item.pinned.is-lifted .chat-row { cursor: grabbing; }
+.messenger-view .chat-row-meta { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; flex: none; margin-left: auto; }
+.messenger-view .chat-row-meta time { font-variant-numeric: tabular-nums; }
 
 .messenger-view .message-vanish-canvas {
   position: absolute;

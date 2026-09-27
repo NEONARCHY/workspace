@@ -526,9 +526,9 @@ export function ZoomView({
                     .map((person) => (
                       <Checkbox
                         key={person.id}
-                        label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                        label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
                           {person.name}
-                        </EmployeeProfileLink>}
+                        </EmployeeProfileLink></span>}
                         checked={draft.participantIds.includes(person.id)}
                         onChange={(_event, data) => setDraft({
                           ...draft,

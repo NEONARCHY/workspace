@@ -1,7 +1,7 @@
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
-import { Fragment, useEffect, useMemo, useRef, useState, type TransitionEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode, type TransitionEvent } from "react";
 import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspacePerson } from "@yuksalish/contracts";
-import { Avatar, Badge, Button, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
+import { Avatar, Badge, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
 import { Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, SignOut20Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -38,6 +38,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
     : "chats";
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pendingPinnedOrder, setPendingPinnedOrder] = useState<{ order: string[]; revision: number } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [bucket, setBucket] = useState<ChatBucket>(initialBucket);
@@ -46,7 +47,11 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
   const moreOpenPending = useRef(false);
   const moreOpenFallback = useRef<number | undefined>(undefined);
   const archive = bucket === "archive";
-  const pinnedIds = preferences.pinnedChatIds.filter((id) => chats.some((chat) => chat.id === id) && !preferences.archivedChatIds.includes(id));
+  const hasServerOrder = pendingPinnedOrder !== null && (preferences.revision > pendingPinnedOrder.revision ||
+    preferences.pinnedChatIds.length === pendingPinnedOrder.order.length &&
+    preferences.pinnedChatIds.every((id, index) => id === pendingPinnedOrder.order[index]));
+  const pinnedOrder = pendingPinnedOrder && !hasServerOrder ? pendingPinnedOrder.order : preferences.pinnedChatIds;
+  const pinnedIds = pinnedOrder.filter((id) => chats.some((chat) => chat.id === id) && !preferences.archivedChatIds.includes(id));
   const archivedChats = chats.filter((chat) => preferences.archivedChatIds.includes(chat.id));
   const regularChats = chats.filter((chat) => !isTaskChat(chat) && !isContextChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const directPeerIds = new Set(chats.filter((chat) => chat.kind === "direct").flatMap((chat) => chat.members.map((member) => member.userId).filter((id) => id !== currentUserId)));
@@ -62,7 +67,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
     const base = bucket === "archive" ? [...archivedRegularChats, ...archivedTaskChats] : bucket === "task-chats" ? taskChats : bucket === "project-chats" ? projectChats : bucket === "trip-chats" ? tripChats : regularChats;
     const selected = base.filter((chat) => !normalized || chat.title.toLowerCase().includes(normalized) || matching.has(chat.id));
     if (archive) return selected;
-    const positions = new Map(preferences.pinnedChatIds.map((id, index) => [id, index]));
+    const positions = new Map(pinnedOrder.map((id, index) => [id, index]));
     const sourcePositions = new Map(chats.map((chat, index) => [chat.id, index]));
     const activity = new Map<string, number>();
     messages.forEach((message, index) => {
@@ -80,7 +85,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
       const activityDifference = (activity.get(b.id) ?? -1) - (activity.get(a.id) ?? -1);
       return activityDifference || (sourcePositions.get(a.id) ?? 0) - (sourcePositions.get(b.id) ?? 0);
     });
-  }, [archive, bucket, archivedRegularChats, archivedTaskChats, regularChats, taskChats, projectChats, tripChats, chats, messages, preferences, query]);
+  }, [archive, bucket, archivedRegularChats, archivedTaskChats, regularChats, taskChats, projectChats, tripChats, chats, messages, pinnedOrder, query]);
   const normalizedQuery = query.trim().toLowerCase();
   const visiblePeople = bucket === "chats" && !archive
     ? availablePeople.filter((person) => !normalizedQuery || `${person.name} ${person.username ?? ""} ${person.jobTitle ?? ""}`.toLowerCase().includes(normalizedQuery)).sort((a, b) => a.name.localeCompare(b.name, "ru"))
@@ -96,7 +101,13 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
   };
   const move = (source: string, target: string) => {
     if (!onReorder || busy || query.trim() || source === target || !pinnedIds.includes(source) || !pinnedIds.includes(target)) return;
-    void run(() => onReorder(moveBefore(pinnedIds, source, target)), "Порядок закреплённых чатов сохранён");
+    const order = moveBefore(pinnedIds, source, target);
+    // Keep the dropped row in its new slot while the server confirms the order.
+    setPendingPinnedOrder({ order, revision: preferences.revision });
+    void run(async () => {
+      try { await onReorder(order); }
+      catch (cause) { setPendingPinnedOrder(null); throw cause; }
+    }, "Порядок закреплённых чатов сохранён");
   };
   useEffect(() => () => window.clearTimeout(moreOpenFallback.current), []);
   const finishMoreOpen = () => {
@@ -164,7 +175,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
     <span className="organization-live" role="status">{busy ? "Сохраняем настройки чатов…" : notice}</span>
     <SpatialSort ids={visibleChats.map(chat => chat.id)} onMove={move}>
     <div className="chat-list" role="list" aria-label={bucketLabel(bucket)} aria-busy={busy}>
-      {visibleChats.map((chat, index) => {
+      {visibleChats.flatMap((chat, index): ReactNode[] => {
         const pinned = !archive && pinnedIds.includes(chat.id);
         const pinIndex = pinnedIds.indexOf(chat.id);
         const peer = chat.kind === "direct"
@@ -174,23 +185,22 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
         const currentMembership = chat.members.find((member) => member.userId === currentUserId);
         const startGroup = hasPins && (index === 0 || (pinnedIds.includes(visibleChats[index - 1]!.id) && !pinned));
         const groupLabel = bucket === "task-chats" ? (pinned ? "Закреплённые чаты задач" : "Остальные чаты задач") : bucket === "project-chats" ? "Чаты проектов" : bucket === "trip-chats" ? "Чаты поездок" : (pinned ? "Закреплённые" : "Остальные чаты");
-        return <Fragment key={chat.id}>
-          {startGroup && <div className="chat-group-label">{groupLabel}{pinned && <small>{query.trim() ? "Очистите поиск для перестановки" : "Перетащите для перестановки"}</small>}</div>}
-          <SpatialSortItem id={chat.id} label={chat.title} disabled={!pinned || busy || !!query.trim() || !onReorder} role="listitem" className={`chat-list-item ${pinned ? "pinned" : ""}`}
+        return [
+          startGroup ? <div key={`group:${groupLabel}`} className="chat-group-label">{groupLabel}</div> : null,
+          <SpatialSortItem key={chat.id} id={chat.id} label={chat.title} activation="item" disabled={!pinned || busy || !!query.trim() || !onReorder} role="listitem" className={`chat-list-item ${pinned ? "pinned" : ""}`}
             data-chat-id={chat.id} data-pinned={pinned}>
-            <button className={`chat-row ${chat.id === activeChatId ? "selected" : ""}`} type="button" onClick={() => onSelect(chat.id)}>
-              {peer && token ? <ProfileAvatar person={peer} token={token} size={40} /> : <Avatar name={chat.title} size={40} color="colorful" />}
-              <span className="chat-row-copy">
-                <span className="chat-row-line"><strong>{chat.title}</strong><time>{chat.time}</time></span>
-                <span className="chat-row-line preview-line"><span>{chat.preview}</span>
-                  {pinned && <Pin16Filled aria-label="Закреплённый чат" className="chat-pin-indicator" />}
-                  {chat.unread > 0 && <Badge appearance="filled" color="brand" size="small">{chat.unread}</Badge>}
-                </span>
-              </span>
-            </button>
-            <Menu>
-              <MenuTrigger disableButtonEnhancement><Button className="chat-more" appearance="subtle" size="small" icon={<MoreHorizontal20Regular />}
-                aria-label={`Действия чата «${chat.title}»`} disabled={busy || (!onChange && !onDelete)} /></MenuTrigger>
+            <Menu openOnContext>
+              <MenuTrigger disableButtonEnhancement>
+                <button className={`chat-row ${chat.id === activeChatId ? "selected" : ""}`} type="button" onClick={() => onSelect(chat.id)}>
+                  {peer && token ? <ProfileAvatar person={peer} token={token} size={40} /> : <Avatar name={chat.title} size={40} color="colorful" />}
+                  <span className="chat-row-copy">
+                    <span className="chat-row-line"><strong>{chat.title}</strong><span className="chat-row-meta">{pinned && <Pin16Filled aria-label="Закреплённый чат" className="chat-pin-indicator" />}<time>{chat.time}</time></span></span>
+                    <span className="chat-row-line preview-line"><span>{chat.preview}</span>
+                      {chat.unread > 0 && <Badge appearance="filled" color="brand" size="small">{chat.unread}</Badge>}
+                    </span>
+                  </span>
+                </button>
+              </MenuTrigger>
               <MenuPopover><MenuList>
                 {!archive && onChange ? <MenuItem icon={pinned ? <PinOff20Regular /> : <Pin20Regular />} onClick={() => void run(() => onChange(chat.id, pinned ? "unpin" : "pin"), pinned ? "Чат откреплён" : "Чат закреплён")}>{pinned ? "Открепить" : "Закрепить"}</MenuItem> : null}
                 {pinned && <MenuItem icon={<ArrowUp20Regular />} disabled={!onReorder || pinIndex === 0 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex - 1]!)}>Переместить выше</MenuItem>}
@@ -200,8 +210,8 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
                 {userManaged && chat.canDelete && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>Удалить чат</MenuItem> : null}
               </MenuList></MenuPopover>
             </Menu>
-          </SpatialSortItem>
-        </Fragment>;
+          </SpatialSortItem>,
+        ];
       })}
       {visiblePeople.map((person) => (
         <div className="chat-list-item chat-contact-item" role="listitem" key={`person:${person.id}`} data-person-id={person.id}>

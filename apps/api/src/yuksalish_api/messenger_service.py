@@ -200,6 +200,7 @@ async def chat_summary(
                 select(messages)
                 .where(
                     messages.c.chat_id == chat_id,
+                    messages.c.deleted_at.is_(None),
                 )
                 .order_by(messages.c.created_at.desc())
                 .limit(1)
@@ -223,7 +224,7 @@ async def chat_summary(
     preview = (
         "Сообщений пока нет"
         if latest is None
-        else ("Сообщение удалено" if latest["deleted_at"] else latest["body"])
+        else latest["body"]
     )
     return ChatSummaryResponse(
         id=str(chat_id),
@@ -285,6 +286,7 @@ async def create_chat(
                         select(chats.c.id).where(
                             chats.c.kind == "direct",
                             chats.c.direct_key.is_(None),
+                            chats.c.deleted_at.is_(None),
                             chats.c.id.in_(
                                 select(chat_members.c.chat_id).where(
                                     chat_members.c.user_id == user.id

@@ -66,6 +66,12 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+function openChatMenu(chatId: string) {
+  const row = document.querySelector(`[data-chat-id="${chatId}"] .chat-row`);
+  if (!row) throw new Error(`Chat not found: ${chatId}`);
+  fireEvent.contextMenu(row);
+}
+
 describe("Private messenger", () => {
   afterEach(() => {
     cleanup();
@@ -124,7 +130,7 @@ describe("Private messenger", () => {
       chatActions,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Действия чата «Финансы и закупки»" }));
+    openChatMenu("finance");
     fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
     expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
     expect(chatActions.delete).not.toHaveBeenCalled();
@@ -177,9 +183,9 @@ describe("Private messenger", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Проектная команда" },
     });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Бахтиёр Самугов" }));
+    fireEvent.click(screen.getByRole("button", { name: "Бахтиёр Самугов" }));
     expect(
-      screen.queryByRole("checkbox", { name: "Дилшод Рахимов" }),
+      screen.queryByRole("button", { name: "Дилшод Рахимов" }),
     ).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Создать группу" }));
     await waitFor(() =>
@@ -507,10 +513,8 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDeleteMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
-    expect(screen.getByText(/Сообщение будет удалено через/)).toBeInTheDocument();
-    expect(onDeleteMessage).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Вернуть" }));
-    expect(onDeleteMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
+    expect(screen.queryByText(/Сообщение будет удалено через/)).not.toBeInTheDocument();
   });
 
   it("copies the last own message into the composer with ArrowUp and saves it with Enter", async () => {
@@ -559,12 +563,12 @@ describe("Private messenger", () => {
 
     expect(screen.getByRole("region", { name: "Упомянуть участников" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
-    expect(editor).toHaveValue("Проверьте документ @baxtiyor ");
+    expect(editor).toHaveValue("Проверьте документ");
 
     fireEvent.keyDown(editor, { key: "Enter" });
     await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(
       own,
-      "Проверьте документ @baxtiyor",
+      "Проверьте документ",
       ["baxtiyor"],
     ));
   });
@@ -640,7 +644,7 @@ describe("Private messenger", () => {
     });
     expect(screen.queryByLabelText("Новое сообщение")).not.toBeInTheDocument();
     expect(screen.getByText(/Вам доступно только чтение/)).toBeInTheDocument();
-    expect(screen.getByText("Сообщение удалено")).toBeInTheDocument();
+    expect(screen.queryByText("Сообщение удалено")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Ответить:/ }),
     ).not.toBeInTheDocument();
@@ -808,8 +812,8 @@ describe("Private messenger", () => {
     fireEvent.change(dialog.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Команда запуска" },
     });
-    fireEvent.click(dialog.getByRole("checkbox", { name: "Бахтиёр Самугов" }));
-    fireEvent.click(dialog.getByRole("checkbox", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Бахтиёр Самугов" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
     fireEvent.click(dialog.getByRole("button", { name: "Создать группу" }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -823,8 +827,8 @@ describe("Private messenger", () => {
       memberIds: ["baxtiyor", "malika"],
     });
     expect(
-      dialog.getByRole("checkbox", { name: "Малика Нурова" }),
-    ).toBeChecked();
+      dialog.getByRole("button", { name: "Малика Нурова" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(dialog.getByRole("textbox", { name: /Название группы/ })).toHaveValue("Команда запуска");
   });
 
@@ -865,7 +869,7 @@ describe("Private messenger", () => {
     };
     renderMessenger({ chats: [group], chatActions });
 
-    fireEvent.click(screen.getByRole("button", { name: "Действия чата «Финансы и закупки»" }));
+    openChatMenu("finance");
     fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
 
@@ -875,7 +879,7 @@ describe("Private messenger", () => {
   it("never exposes deletion for a service chat even if stale data says it is allowed", () => {
     renderMessenger({ chats: [{ ...initialChats[4]!, canDelete: true }] });
     fireEvent.click(screen.getByRole("button", { name: /^Чаты задач/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Действия чата/ }));
+    openChatMenu(initialChats[4]!.id);
     expect(screen.queryByRole("menuitem", { name: "Удалить чат" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Выйти из группы" })).not.toBeInTheDocument();
   });

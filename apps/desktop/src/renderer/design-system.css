@@ -115,7 +115,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .chat-row { border-radius: 14px; padding-block: 14px; }
 .chat-row.selected { background: var(--ws-selected); }
 .chat-row-line strong { color: var(--ws-navy); font-size: 14px; font-weight: 600; }
-.chat-row-line time, .preview-line > span:first-child, .chat-group-label small { color: var(--ws-muted); font-size: 12px; }
+.chat-row-line time, .preview-line > span:first-child { color: var(--ws-muted); font-size: 12px; }
 .chat-list-item { margin-bottom: 4px; }
 .chat-list-item .chat-more { top: 12px; }
 .conversation-pane { background: var(--ws-muted-surface); }

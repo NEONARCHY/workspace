@@ -5,7 +5,7 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add20Regular } from "@fluentui/react-icons";
 
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -182,10 +182,9 @@ export function CalendarEventComposer({
                 {visiblePeople.map((person) => (
                   <Checkbox
                     key={person.id}
-                    label={<EmployeeProfileLink userId={person.id} personName={person.name}>
-                      {person.name}
-                      {person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}
-                    </EmployeeProfileLink>}
+                    label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
+                      <span>{person.name}{person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}</span>
+                    </EmployeeProfileLink></span>}
                     checked={draft.attendeeIds.includes(person.id)}
                     disabled={person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
                     onChange={(_event, data) => onDraftChange({

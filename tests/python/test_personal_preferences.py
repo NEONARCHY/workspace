@@ -43,6 +43,7 @@ async def exercise_personal_preferences(url: str) -> None:
         environment="test",
         database_url=url,
         seed_demo_data=True,
+        demo_password=SecretStr("Yuksalish-Local-2026!"),
         auth_signing_key=SecretStr("personal-preferences-test-signing-key"),
     )
     app = create_app(settings)

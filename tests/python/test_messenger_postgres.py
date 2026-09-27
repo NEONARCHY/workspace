@@ -316,6 +316,21 @@ async def exercise_permissions(url: str) -> None:
                         UUID(direct.id),
                         AddChatMembersRequest(member_ids=[admin.id]),
                     )
+                await service.delete_chat(connection, other, UUID(direct.id))
+                reopened = await service.create_chat(
+                    connection,
+                    peer,
+                    CreateChatRequest(kind="direct", member_ids=[other.id]),
+                )
+                assert reopened.id != direct.id
+                assert reopened.preview == "Сообщений пока нет"
+                assert (
+                    await service.create_chat(
+                        connection,
+                        other,
+                        CreateChatRequest(kind="direct", member_ids=[peer.id]),
+                    )
+                ).id == reopened.id
             finally:
                 await transaction.rollback()
     finally:
@@ -516,7 +531,10 @@ async def exercise_messages(url: str) -> None:
                     )
                 await nested.rollback()
                 snapshot = await load_workspace(connection, peer)
-                assert next(item for item in snapshot.messages if item.id == parent.id).body == ""
+                assert all(item.id != parent.id for item in snapshot.messages)
+                assert all(item.id != reply.id for item in snapshot.messages)
+                summary = await service.chat_summary(connection, peer, group_id)
+                assert summary.preview == "Сообщений пока нет"
                 assert not await search_messages(connection, peer, "Changed private text")
                 assert not any("private text" in item.body for item in snapshot.notifications)
                 with pytest.raises(WorkspaceRepositoryError):

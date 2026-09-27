@@ -280,7 +280,7 @@
 .approvals-view .approval-card-context,
 .approvals-view .approval-card-meta { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 9px; }
 .approvals-view .approval-card-peopleline { margin-top: 12px; }
-.approvals-view .approval-card-owner { display: flex; min-width: 0; align-items: center; gap: 7px; color: #465f6f; font-size: 11px; }
+.approvals-view .approval-card-owner { display: flex; min-width: 0; align-items: center; gap: 10px; color: #465f6f; font-size: 11px; }
 .approvals-view .approval-card-owner > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .approvals-view .approval-card-deadline {
   display: inline-flex;

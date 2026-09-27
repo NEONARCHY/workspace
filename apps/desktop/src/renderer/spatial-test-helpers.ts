@@ -30,4 +30,7 @@ export async function startSpatialDrag(card: Element, target: Element) {
 export async function dropSpatialCard(card: Element, target: Element) {
   await startSpatialDrag(card, target);
   await act(async () => { fireEvent.pointerUp(document, { pointerId: 1, isPrimary: true }); });
+  // dnd-kit keeps its document click suppressor for 50 ms after pointerup.
+  // Wait for listener cleanup so a later test's first click is not swallowed.
+  await new Promise((resolve) => window.setTimeout(resolve, 60));
 }

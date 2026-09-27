@@ -415,6 +415,9 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .record-field-grid input[type=datetime-local] { min-height: 36px; padding: 7px 10px; border: 1px solid var(--ws-control-line); border-radius: 12px; background: #fff; }
 .task-composer .record-composer-summary .record-summary-card { background: transparent; border-radius: 0; box-shadow: none; }
 .person-picker-trigger { display: flex; align-items: center; gap: 9px; min-height: 42px; width: 100%; padding: 6px 10px; border: 1px solid var(--ws-control-line); border-radius: 12px; background: #fff; color: var(--ws-text); cursor: pointer; text-align: left; }
+.person-picker-value { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
+.person-picker-value > .fui-Avatar { flex: none; }
+.person-picker-value > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker-trigger > span:not(.fui-Avatar) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker-trigger > svg:last-child { margin-left: auto; flex: none; }
 .person-picker-surface { width: min(370px,calc(100vw - 40px)); max-height: min(420px,calc(100dvh - 40px)); padding: 14px; border: 1px solid #fff; border-radius: 20px; background: #fbfdfc; box-shadow: var(--ws-shadow-float); }

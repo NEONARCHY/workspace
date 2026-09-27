@@ -5,6 +5,7 @@ import { Add20Regular, ArrowClockwise20Regular, Checkmark20Regular, DocumentArro
 import { actHrRegister, createHrProfile, generateHrRegister, importHrProfiles, loadHrOverview, previewHrWorkbook, saveHrSettings, terminateHrProfile } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 
 type TabKey = "staff" | "tenure" | "registers";
 const today = () => new Date().toISOString().slice(0, 10);
@@ -54,6 +55,6 @@ export function HrView({ token, people, currentUser }: Props) {
 
 function HrSettingsDialog({ people, settings, busy, onClose, onSave }: { readonly people: readonly WorkspacePerson[]; readonly settings: HrOverview["settings"]; readonly busy: boolean; readonly onClose: () => void; readonly onSave: (value: HrOverview["settings"]) => Promise<void>; }) {
   const [hrUserId, setHr] = useState(settings.hrUserId ?? ""); const [chairUserId, setChair] = useState(settings.chairUserId ?? ""); const [accountantUserId, setAccountant] = useState(settings.accountantUserId ?? "");
-  const picker = (label: string, value: string, setValue: (value: string) => void) => <label>{label}<select value={value} onChange={(event) => setValue(event.target.value)}><option value="">Не назначен</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}{person.jobTitle ? ` — ${person.jobTitle}` : ""}</option>)}</select></label>;
+  const picker = (label: string, value: string, setValue: (value: string) => void) => <label>{label}<WorkspaceSelect aria-label={label} value={value} onChange={(event) => setValue(event.target.value)}><option value="">Не назначен</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}{person.jobTitle ? ` — ${person.jobTitle}` : ""}</option>)}</WorkspaceSelect></label>;
   return <div className="hr-editor" role="dialog" aria-modal="true" aria-label="Маршрут HR"><div><span className="hr-kicker">НАСТРОЙКИ HR</span><h2>Участники маршрута</h2><p>Один и тот же человек может временно выполнять несколько ролей.</p></div><div className="hr-form-grid hr-route-form">{picker("HR", hrUserId, setHr)}{picker("Председатель", chairUserId, setChair)}{picker("Главный бухгалтер", accountantUserId, setAccountant)}</div><footer><Button onClick={onClose}>Отмена</Button><Button appearance="primary" disabled={busy || !hrUserId || !chairUserId || !accountantUserId} onClick={() => void onSave({ hrUserId, chairUserId, accountantUserId })}>Сохранить маршрут</Button></footer></div>;
 }

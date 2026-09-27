@@ -292,8 +292,6 @@ function Conversation({
   const [editBody, setEditBody] = useState("");
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
-  const [pendingDeletion, setPendingDeletion] = useState<{ message: ChatMessage; deadline: number }>();
-  const [deleteSeconds, setDeleteSeconds] = useState(6);
   const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number }>();
   const [reactionTargetId, setReactionTargetId] = useState<string>();
   const [query, setQuery] = useState("");
@@ -344,7 +342,7 @@ function Conversation({
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personById = (id: string) => people.find((person) => person.id === id);
   const activeMessages = messages.filter(
-    (message) => message.chatId === chat.id,
+    (message) => message.chatId === chat.id && !message.deletedAt,
   );
   const visibleMessages = activeMessages.filter(
     (message) =>
@@ -401,24 +399,6 @@ function Conversation({
       composerInputRef.current?.focus();
     }
   }, [busy, draft]);
-  useEffect(() => {
-    if (!pendingDeletion) return;
-    const tick = () => setDeleteSeconds(Math.max(0, Math.ceil((pendingDeletion.deadline - Date.now()) / 1_000)));
-    tick();
-    const interval = window.setInterval(tick, 200);
-    const timeout = window.setTimeout(() => {
-      setBusy(true);
-      setError("");
-      void onDeleteMessage(pendingDeletion.message)
-        .then(() => {
-          if (reply?.id === pendingDeletion.message.id) setReply(undefined);
-          setPendingDeletion(undefined);
-        })
-        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Не удалось удалить сообщение"))
-        .finally(() => setBusy(false));
-    }, Math.max(0, pendingDeletion.deadline - Date.now()));
-    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
-  }, [onDeleteMessage, pendingDeletion, reply?.id]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => setContextMenu(undefined);
@@ -643,7 +623,7 @@ function Conversation({
               )}
               <div
                 data-message-id={message.id}
-                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""} ${pendingDeletion?.message.id === message.id ? "is-pending-delete" : ""}${revealClass}`}
+                className={`message ${own ? "own" : ""} ${message.isPinned ? "message-pinned" : ""} ${message.mentionUserIds?.includes(currentUserId) ? "message-mentioned" : ""}${revealClass}`}
                 aria-hidden={revealPhase ? true : undefined}
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -674,25 +654,13 @@ function Conversation({
                 <div className="message-content">
                   <div className="message-body">
                     {!own && <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>}
-                    {message.replyToMessageId && (
+                    {parent && (
                       <blockquote className="message-quote">
-                        {parent ? <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink> : <strong>Ответ на сообщение</strong>}
-                        <span>
-                          {parent?.deletedAt
-                            ? "Сообщение удалено"
-                            : (parent?.body ?? "Сообщение недоступно")}
-                        </span>
+                        <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
+                        <span>{parent.body}</span>
                       </blockquote>
                     )}
-                    {message.deletedAt || voiceAttachments.length === 0 ? (
-                      <p
-                        className={
-                          message.deletedAt ? "message-deleted" : "message-text"
-                        }
-                      >
-                        {message.deletedAt ? "Сообщение удалено" : message.body}
-                      </p>
-                    ) : null}
+                    {voiceAttachments.length === 0 ? <p className="message-text">{message.body}</p> : null}
                     {revealPhase === "revealing" ? (
                       <MessageRevealOverlay
                         request={outgoingReveal?.request}
@@ -786,7 +754,8 @@ function Conversation({
             appearance="primary"
             onClick={() =>
               void run(async () => {
-                setPendingDeletion({ message: deleting, deadline: Date.now() + 6_000 });
+                await onDeleteMessage(deleting);
+                if (reply?.id === deleting.id) setReply(undefined);
                 setDeleting(undefined);
               })
             }
@@ -798,10 +767,6 @@ function Conversation({
           </Button>
         </div>
       )}
-      {pendingDeletion ? <div className="messenger-undo" role="status">
-        <span>Сообщение будет удалено через {deleteSeconds} сек.</span>
-        <Button size="small" appearance="primary" onClick={() => setPendingDeletion(undefined)}>Вернуть</Button>
-      </div> : null}
       {taskSource ? <TaskComposer
         open
         people={people}
@@ -843,10 +808,7 @@ function Conversation({
               <div>
                 <small>Ответ · <EmployeeProfileLink userId={reply.authorId} personName={personName(reply.authorId)}>{personName(reply.authorId)}</EmployeeProfileLink></small>
                 <p>
-                  {activeMessages.find((item) => item.id === reply.id)
-                    ?.deletedAt
-                    ? "Сообщение удалено — выберите другой ответ"
-                    : reply.body.slice(0, 200)}
+                  {reply.body.slice(0, 200)}
                 </p>
               </div>
               <Button
@@ -898,8 +860,7 @@ function Conversation({
                     if (editing) setEditMentions(nextMentions);
                     else setMentions(nextMentions);
                     if (!selected && mentionMatch) {
-                      const handle = person.username || person.name.replace(/\s+/gu, "_");
-                      const nextBody = `${activeComposerBody.slice(0, mentionMatch.index! + mentionMatch[0].lastIndexOf("@"))}@${handle} `;
+                      const nextBody = activeComposerBody.slice(0, mentionMatch.index! + mentionMatch[0].lastIndexOf("@")).trimEnd();
                       if (editing) setEditBody(nextBody);
                       else setDraft(nextBody);
                       setMentionPicker(false);
@@ -907,10 +868,11 @@ function Conversation({
                     }
                   }}
                 >
-                  <EmployeeProfileLink userId={person.id} personName={person.name}>
+                  <span className="mention-person-identity">
                     <ProfileAvatar person={person} token={token} size={28} />
-                    <span><strong>{person.name}</strong><small>@{person.username || person.name.replace(/\s+/gu, "_")}</small></span>
-                  </EmployeeProfileLink>
+                    <strong>{person.name}</strong>
+                    <small>@{person.username || person.name.replace(/\s+/gu, "_")}</small>
+                  </span>
                   {selected ? <b aria-hidden="true">✓</b> : null}
                 </button>;
               })}

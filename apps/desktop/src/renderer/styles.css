@@ -225,9 +225,14 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-create-kicker svg { width: 14px; height: 14px; }
 .chat-people-picker { display: grid; gap: 8px; }
 .chat-people-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; max-height: 260px; overflow-y: auto; padding: 8px; border: 1px solid #d7e5e7; border-radius: 16px; background: rgb(244 249 249 / 72%); }
-.chat-person-option { min-width: 0; padding: 8px 10px; border: 1px solid transparent; border-radius: 13px; background: rgb(255 255 255 / 72%); transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease; }
+.chat-person-option { position: relative; min-width: 0; padding: 8px 10px; border: 1px solid transparent; border-radius: 13px; background: rgb(255 255 255 / 72%); text-align: left; cursor: pointer; transition: border-color 180ms ease, background-color 180ms ease, transform 180ms ease; }
+.chat-person-option::before { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(125deg, rgb(0 145 168 / 16%), rgb(68 112 186 / 11%)); opacity: 0; content: ""; pointer-events: none; transition: opacity 190ms ease; }
+.chat-person-option[aria-pressed="true"] { border-color: rgb(0 145 168 / 44%); }
+.chat-person-option[aria-pressed="true"]::before { opacity: 1; }
+.chat-person-option > span { position: relative; }
 .chat-person-option:hover { border-color: rgb(0 145 168 / 18%); background: #fff; transform: translateY(-1px); }
-.chat-person-identity { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.chat-person-option:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.chat-person-identity { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .chat-person-identity > span:last-child { display: grid; gap: 2px; min-width: 0; }
 .chat-person-identity strong, .chat-person-identity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-person-identity strong { color: #293a55; font-size: 12px; }
@@ -247,7 +252,8 @@ button { -webkit-tap-highlight-color: transparent; }
 .chat-confirmation button + button { margin-left: 8px; }
 .chat-member-avatar-fallback { display: block; width: 32px; height: 32px; border-radius: 50%; background: #e8f0f1; }
 @media (max-width: 620px) { .chat-people-options { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .chat-person-option { transition: none; } .chat-person-option:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .chat-person-option, .chat-person-option::before { transition: none; } .chat-person-option:hover { transform: none; } }
+@media (forced-colors: active) { .chat-person-option[aria-pressed="true"] { outline: 2px solid Highlight; outline-offset: -2px; } }
 .confirm-action-dialog { width: min(430px, calc(100vw - 32px)); border: 1px solid rgb(255 255 255 / 90%); border-radius: 24px; background: linear-gradient(145deg, #fff, #f8faf9); box-shadow: 0 30px 80px -38px rgb(24 42 57 / 72%); }
 .confirm-action-dialog .fui-DialogBody { gap: 10px; }
 .confirm-action-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 5px; border-radius: 14px; color: #a13e47; background: #fdebed; }
@@ -349,7 +355,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .task-card-editor > label { display: grid; grid-template-columns: 96px 1fr; align-items: center; gap: 8px; color: #637689; font-size: 11px; }
 .task-editor-actions { display: flex; gap: 8px; }
 .participant-list { display: flex; flex-wrap: wrap; gap: 7px; }
-.participant-chip { display: flex; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid #dce4eb; border-radius: 9px; background: #fafcfd; }
+.participant-chip { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid #dce4eb; border-radius: 9px; background: #fafcfd; }
 .participant-chip > span { display: grid; color: #31485d; font-size: 12px; }
 .participant-chip small { color: #718397; font-size: 11px; }
 .participant-chip > button, .checklist-row > button, .dependency-row > button { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; border: 0; border-radius: 50%; color: #708294; background: transparent; cursor: pointer; }

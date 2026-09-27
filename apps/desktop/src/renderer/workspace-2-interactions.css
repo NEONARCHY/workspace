@@ -85,6 +85,16 @@
   color: var(--ws-text);
 }
 .workspace-select .fui-Dropdown__button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-select-person-wrap { position: relative; display: block; width: 100%; min-width: 0; }
+.workspace-select-person-wrap > .workspace-select { width: 100%; }
+.workspace-select-person-avatar { position: absolute; z-index: 1; top: 50%; left: 10px; pointer-events: none; transform: translateY(-50%); }
+.workspace-select-person-wrap:has(.workspace-select-person-avatar) .fui-Dropdown__button { padding-left: 46px; }
+.workspace-select-person-option { display: inline-flex; align-items: center; gap: 11px; min-width: 0; }
+.workspace-select-person-option > .fui-Avatar { flex: none; }
+.workspace-select-person-option > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-person-choice { display: inline-flex; align-items: center; gap: 10px; min-width: 0; vertical-align: middle; }
+.workspace-person-choice > .fui-Avatar { flex: none; }
+.workspace-person-choice > span:last-child { min-width: 0; }
 .record-list-controls .workspace-select { min-width: 165px; }
 .app-provider .workspace-select.task-role-filter { flex: 0 1 158px; width: 158px; }
 .app-provider .record-table-paging .workspace-select.workspace-select {
@@ -99,7 +109,9 @@
 .record-field-grid .workspace-select,
 .task-composer-add-row .workspace-select { width: 100%; }
 .inline-task-form > .workspace-select:first-child { grid-column: 1 / -1; width: 100%; }
+.inline-task-form > .workspace-select-person-wrap:first-child { grid-column: 1 / -1; }
 .decision-editor > .workspace-select { grid-column: 1 / -1; }
+.decision-editor > .workspace-select-person-wrap { grid-column: 1 / -1; }
 
 /* The caret remains an ordinary editing affordance. A narrow, gently blinking
    line is used only while a collapsed selection is active; selections keep the

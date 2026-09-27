@@ -11,7 +11,7 @@ import type {
   WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
@@ -700,9 +700,9 @@ export function CalendarView({
               {people.map((person) => (
                 <Checkbox
                   key={person.id}
-                  label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                  label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
                     {person.name}{busyAttendeeIds.has(person.id) ? " · занят" : ""}
-                  </EmployeeProfileLink>}
+                  </EmployeeProfileLink></span>}
                   checked={draft.attendeeIds.includes(person.id)}
                   disabled={
                     person.id !== currentUserId

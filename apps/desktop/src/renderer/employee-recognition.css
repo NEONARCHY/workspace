@@ -1,4 +1,5 @@
 .employee-profile-link { min-width: 0; }
+.employee-profile-link:has(> .fui-Avatar + span) { display: inline-flex; align-items: center; gap: 10px; }
 .employee-profile-link.is-interactive { cursor: pointer; border-radius: 10px; outline: none; }
 .employee-profile-link.is-interactive:focus-visible { box-shadow: 0 0 0 2px var(--ws-turquoise), 0 0 0 4px rgb(0 145 168 / 13%); }
 

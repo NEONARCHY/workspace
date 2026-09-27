@@ -96,31 +96,27 @@ function PeoplePicker({
       />
       <div className="chat-people-options">
         {found.map((person) => (
-          <Checkbox
+          <button
+            type="button"
             key={person.id}
             className="chat-person-option"
             aria-label={person.name}
+            aria-pressed={selected.includes(person.id)}
             disabled={disabled}
-            checked={selected.includes(person.id)}
-            label={
-              <span className="chat-person-identity">
-                <ProfileAvatar person={person} token={token} size={36} />
-                <span>
-                  <strong>{person.name}</strong>
-                  <small>{person.jobTitle || "Сотрудник"}</small>
-                </span>
+            onClick={() => onChange(
+              selected.includes(person.id)
+                ? selected.filter((id) => id !== person.id)
+                : single ? [person.id] : [...selected, person.id],
+            )}
+          >
+            <span className="chat-person-identity">
+              <ProfileAvatar person={person} token={token} size={36} />
+              <span>
+                <strong>{person.name}</strong>
+                <small>{person.jobTitle || "Сотрудник"}</small>
               </span>
-            }
-            onChange={(_, data) =>
-              onChange(
-                data.checked
-                  ? single
-                    ? [person.id]
-                    : [...selected, person.id]
-                  : selected.filter((id) => id !== person.id),
-              )
-            }
-          />
+            </span>
+          </button>
         ))}
         {!found.length && <p className="muted">Сотрудники не найдены</p>}
       </div>
