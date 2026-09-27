@@ -114,13 +114,13 @@ export function AIHisobotView({ token }: { readonly token: string }) {
   };
 
   return <section className="workspace-view ai-hisobot-view" aria-label="AI Hisobot">
-    <header className="ai-hisobot-header">
-      <div className="ai-hisobot-header-copy">
+    <header className="ai-hisobot-header ws-illustrated-header">
+      <div className="ai-hisobot-header-copy ws-illustrated-header-copy">
         <span className="view-kicker">Единая отчётность</span>
         <h1>AI Hisobot</h1>
         <p>Ежедневные отчёты, история и региональная сводка — в одном месте.</p>
       </div>
-      <div className="ai-hisobot-header-art" aria-hidden="true">
+      <div className="ai-hisobot-header-art ws-illustrated-header-art" aria-hidden="true">
         <DocumentBulletList24Regular className="hisobot-art-main" />
         <DocumentPdf24Regular className="hisobot-art-pdf" />
         <History24Regular className="hisobot-art-history" />

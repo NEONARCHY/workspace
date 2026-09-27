@@ -5,6 +5,26 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const focusCompose = process.env.AI_REFERENT_VISUAL_FOCUS_COMPOSE === "1";
 
+async function assertIllustrationBehindContent(page, viewSelector) {
+  const layers = await page.locator(viewSelector).evaluate(view => {
+    const header = view.querySelector(":scope > .ws-illustrated-header");
+    const copy = header?.querySelector(":scope > .ws-illustrated-header-copy");
+    const art = header?.querySelector(":scope > .ws-illustrated-header-art");
+    const foreground = [...view.children].filter(child => child !== header);
+    return {
+      header: header && getComputedStyle(header).zIndex,
+      copy: copy && getComputedStyle(copy).zIndex,
+      art: art && getComputedStyle(art).zIndex,
+      foreground: foreground.map(child => ({ tag: child.tagName, z: getComputedStyle(child).zIndex })),
+    };
+  });
+  assert.equal(layers.header, "0", `${viewSelector}: header must be behind the content`);
+  assert.equal(layers.art, "0", `${viewSelector}: artwork must be below the title`);
+  assert.equal(layers.copy, "1", `${viewSelector}: title must be above artwork`);
+  assert.ok(layers.foreground.length > 0, `${viewSelector}: expected content after the header`);
+  assert.ok(layers.foreground.every(item => Number(item.z) >= 1), `${viewSelector}: content must be above artwork: ${JSON.stringify(layers)}`);
+}
+
 const person = { id: "reviewer-1", username: "reviewer", name: "Руководитель отдела", initials: "РО", role: "admin", status: "active", color: "#0091a8" };
 const incoming = Array.from({ length: 56 }, (_, index) => ({
   id: `incoming-${index}`, agentId: "demo-agent", externalId: `${index}`, sequenceNumber: `${index + 1}`,
@@ -50,6 +70,8 @@ async function main() {
     if (url.endsWith("/auth/web/login")) return route.fulfill({ json: { accessToken: "visual-token", tokenType: "bearer", expiresIn: 900, user: person } });
     if (url.endsWith("/workspace/bootstrap")) return route.fulfill({ json: { currentUser: person, canCreatePaymentRequests: true, people: [person], positions: [], chats: [], messages: [], tasks: [], requests: [], projects: [], tripRequests: [], feedPosts: [], calendarEvents: [], notifications: [], attachments: [], workflow: null, requestWorkflows: [], notificationPreferences: { desktopEnabled: false } } });
     if (url.endsWith("/directory")) return route.fulfill({ json: { people: [person], departments: [], positions: [] } });
+    if (url.endsWith("/hisobot/me")) return route.fulfill({ json: { telegramId: "demo", fullName: person.name, position: "Руководитель", reportScope: "central", regionName: null, reportRequired: true, managementAccess: false, absenceKind: null, today: "2026-09-27", canSubmit: true, windowOpensAt: "12:00", windowClosesAt: "18:30", todayReport: null } });
+    if (url.includes("/hisobot/me/history")) return route.fulfill({ json: [] });
     if (url.includes("/ai-referent/incoming")) return route.fulfill({ json: { letters: incoming, totalCount: incoming.length, registeredCount: 50, attentionCount: 6, withAttachmentsCount: 56, lastSyncAt: "2026-09-23T09:15:00Z", journal: { available: true, fileName: "register.xlsx", updatedAt: "2026-09-23T09:15:00Z" } } });
     if (/\/ai-referent\/letters\/outgoing-\d+$/.test(url)) return route.fulfill({ json: outgoing[0] });
     if (url.includes("/ai-referent/document-checks")) return route.fulfill({ json: { id: "check-visual", status: "passed", reviewerKeys: ["askar", "bobur"], detail: "" } });
@@ -99,6 +121,10 @@ async function main() {
     );
     for (const [width, height, suffix] of (focusCompose ? [] : [[1440, 900, "1440"], [1024, 768, "1024"], [800, 640, "800"]])) {
       await page.setViewportSize({ width, height });
+      await assertIllustrationBehindContent(page, ".ai-referent-view");
+      if (width === 1024) {
+        assert.equal(await page.locator(".ai-referent-header-mail.mail-edge").evaluate(node => getComputedStyle(node).display), "none", "the edge illustration must clear the compact action row");
+      }
       const box = await page.locator(".ai-incoming-table-wrap").evaluate(node => ({ client: node.clientHeight, scroll: node.scrollHeight }));
       await page.screenshot({ path: path.join(output, `incoming-${suffix}.png`) });
       assert.ok(box.client > 80, `incoming list should remain visible at ${width}: ${JSON.stringify(box)}`);
@@ -184,8 +210,24 @@ async function main() {
     await page.getByRole("tab", { name: "Мой Telegram" }).click();
     await page.getByText("Попросите администратора подключить Telegram").waitFor();
     await page.screenshot({ path: path.join(output, "telegram.png") });
+    if (!focusCompose) {
+      await page.locator('.rail-action[aria-label="AI Hisobot"]').click();
+      await page.locator(".hisobot-tabs").waitFor();
+      await page.waitForTimeout(300); // The shared view entrance must settle before screenshots.
+      for (const [width, height] of [[1024, 768], [800, 640]]) {
+        await page.setViewportSize({ width, height });
+        await assertIllustrationBehindContent(page, ".ai-hisobot-view");
+        const hiddenArt = width === 800
+          ? [".hisobot-art-team", ".hisobot-art-chart", ".hisobot-art-pdf", ".hisobot-art-history", ".hisobot-art-calendar"]
+          : [".hisobot-art-team", ".hisobot-art-chart"];
+        for (const selector of hiddenArt) {
+          assert.equal(await page.locator(`.ai-hisobot-header-art ${selector}`).evaluate(node => getComputedStyle(node).display), "none", `${selector} must not sit behind compact header text`);
+        }
+        await page.screenshot({ path: path.join(output, `hisobot-${width}.png`) });
+      }
+    }
     assert.deepEqual(errors, []);
-    console.log(`PASS: AI Referent visual smoke: ${output}`);
+    console.log(`PASS: AI illustrated headers visual smoke: ${output}`);
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

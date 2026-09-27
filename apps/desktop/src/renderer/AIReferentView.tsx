@@ -413,13 +413,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     : selected?.attachments.length ?? 0;
   return (
     <section className="workspace-view ai-referent-view" aria-label="AI Referent">
-      <header className="ai-referent-header">
-        <div>
+      <header className="ai-referent-header ws-illustrated-header">
+        <div className="ws-illustrated-header-copy">
           <span className="view-kicker">Единая корреспонденция</span>
           <h1>AI Referent</h1>
           <p>Письма, согласования и архив — в одном рабочем пространстве.</p>
         </div>
-        <div className="ai-referent-header-art" aria-hidden="true">
+        <div className="ai-referent-header-art ws-illustrated-header-art" aria-hidden="true">
           <MailInbox48Regular className="ai-referent-header-mail mail-inbox" />
           <Mail32Regular className="ai-referent-header-mail mail-main" />
           <MailMultiple32Regular className="ai-referent-header-mail mail-stack" />

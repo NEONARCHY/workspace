@@ -31,12 +31,10 @@
 }
 .ai-referent-view .ai-referent-header h1 { margin: 1px 0 4px; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.1; letter-spacing: -.035em; }
 .ai-referent-view .ai-referent-header p { font-size: 13px; color: var(--ai-soft); }
-.ai-referent-view .ai-referent-header > div:first-child { position: relative; z-index: 2; }
 .ai-referent-header .view-kicker,
 .ai-referent-eyebrow { color: #006779; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .ai-referent-header-art {
   position: absolute;
-  z-index: 1;
   top: -19px;
   right: calc(0px - var(--ws-view-panel-title-inline, 20px));
   width: calc(clamp(410px, 38vw, 650px) + var(--ws-view-panel-title-inline, 20px) - 3px);
@@ -627,6 +625,7 @@
 }
 
 @container workspace (max-width: 1030px) {
+  .ai-referent-header-mail.mail-edge { display: none; }
   .ai-referent-view .ai-referent-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .ai-referent-view .ai-referent-summary .primary { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
   .ai-referent-view .ai-referent-summary .primary strong { order: -1; font-size: 30px; }
