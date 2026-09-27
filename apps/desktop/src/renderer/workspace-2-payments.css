@@ -357,7 +357,7 @@
 .approvals-view .approval-timeline-event :is(span,time), .approvals-view .approval-version-list span { color: #536b78; font-size: 12px; }
 .approvals-view .approval-version-list { padding: 18px; }
 .approvals-view .approval-action-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #efc6c8; border-radius: 12px; color: #84333e; background: #fff3f2; font-size: 12px; line-height: 1.4; }
-.approvals-view .approval-action-error > button { flex: none; width: 27px; height: 27px; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
+.approvals-view .approval-action-error > button { display: inline-grid; place-items: center; flex: none; width: 27px; height: 27px; padding: 0; line-height: 1; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
 .approvals-view .approval-detail-process > .approval-action-error { margin-bottom: 12px; }
 
 /* Payment request inspector: one contextual surface, one scroll container. */

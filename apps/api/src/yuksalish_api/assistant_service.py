@@ -93,7 +93,7 @@ async def generate_text(
     api_key: str, model: AssistantModel, system_text: str, contents: list[dict[str, object]],
 ) -> str:
     if not api_key:
-        raise ValueError("Ключ Gemini пока не настроен администратором.")
+        raise ValueError("Ассистент пока не настроен администратором.")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELS[model]}:generateContent"
     async with httpx.AsyncClient(timeout=45.0) as client:
         response = await client.post(
@@ -111,7 +111,7 @@ async def generate_text(
     parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
     result = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict)).strip()
     if not result:
-        raise ValueError("Gemini не вернул текст. Попробуйте ещё раз.")
+        raise ValueError("Ассистент не вернул ответ. Попробуйте ещё раз.")
     return result
 
 
@@ -120,7 +120,7 @@ async def ask_assistant(
     model: AssistantModel, message: str,
 ) -> dict[str, str]:
     if not api_key:
-        raise ValueError("Ключ Gemini пока не настроен администратором.")
+        raise ValueError("Ассистент пока не настроен администратором.")
     one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
     recent_count = await connection.scalar(
         select(func.count()).select_from(assistant_messages).where(

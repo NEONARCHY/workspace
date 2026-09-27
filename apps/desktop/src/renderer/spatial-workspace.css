@@ -458,7 +458,7 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .team-dash-week-bars i { box-shadow: 0 0 16px rgb(0 145 168 / 9%); }
 .notification-context { display: grid; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #cbded9; animation: spatial-appear 220ms ease; }
 .notification-context > div { display: flex; align-items: center; justify-content: space-between; }
-.notification-context > div > button { border: 0; border-radius: 50%; width: 28px; height: 28px; background: #fff; cursor: pointer; }
+.notification-context > div > button { display: inline-grid; place-items: center; padding: 0; line-height: 1; border: 0; border-radius: 50%; width: 28px; height: 28px; background: #fff; cursor: pointer; }
 .notification-context h2 { font-size: 20px; margin: 0; }
 .notification-context p { font-size: 13px; margin: 0; }
 .notification-context small { color: var(--ws-muted); }

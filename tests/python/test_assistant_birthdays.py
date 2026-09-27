@@ -51,5 +51,5 @@ def test_text_model_allowlist_and_server_only_key(monkeypatch: pytest.MonkeyPatc
 
 
 def test_unconfigured_key_fails_without_network() -> None:
-    with pytest.raises(ValueError, match="Ключ Gemini"):
+    with pytest.raises(ValueError, match="Ассистент пока не настроен"):
         asyncio.run(generate_text("", "flash", "", []))

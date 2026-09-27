@@ -78,7 +78,7 @@ async def post_message(
     except ValueError as error:
         raise HTTPException(503 if not key else 502, str(error)) from error
     except (httpx.HTTPError, KeyError, TypeError, IndexError) as error:
-        raise HTTPException(502, "Gemini временно недоступен. Попробуйте ещё раз.") from error
+        raise HTTPException(502, "Ассистент временно недоступен. Попробуйте ещё раз.") from error
 
 
 @router.get("/birthday")
