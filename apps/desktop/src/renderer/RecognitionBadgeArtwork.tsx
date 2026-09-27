@@ -24,9 +24,11 @@ const artworkByIconKey: Readonly<Record<string, string>> = {
   compass: mapPinArtwork,
   gem: medalArtwork,
   innovation: bulbArtwork,
+  initiative: starArtwork,
   layers: cubeArtwork,
   leadership: crownArtwork,
   mail: mailArtwork,
+  mastery: medalArtwork,
   megaphone: megaphoneArtwork,
   mentorship: notebookArtwork,
   orbit: sphereArtwork,
@@ -37,6 +39,7 @@ const artworkByIconKey: Readonly<Record<string, string>> = {
   signal: chatArtwork,
   spark: heartArtwork,
   target: targetArtwork,
+  teamwork: chatArtwork,
 };
 
 export function RecognitionBadgeArtwork({ iconKey }: { readonly iconKey: string }) {

@@ -29,6 +29,17 @@ RecognitionCategory = Literal[
     "communication",
     "support",
 ]
+RewardIcon = Literal[
+    "appreciation",
+    "leadership",
+    "rescue",
+    "mentorship",
+    "innovation",
+    "reliability",
+    "teamwork",
+    "initiative",
+    "mastery",
+]
 
 
 class EmployeeAchievementResponse(ApiModel):
@@ -46,13 +57,20 @@ class EmployeeAchievementResponse(ApiModel):
 
 class EmployeeRewardResponse(ApiModel):
     id: str
-    icon_key: str
+    icon_key: RewardIcon
     title: str
     description: str
+    context_note: str | None = None
     recipient_user_id: str
     issuer_user_id: str
     issuer_name: str
     created_at: datetime
+
+
+class EmployeeRewardCatalogItem(ApiModel):
+    icon_key: RewardIcon
+    title: str
+    description: str
 
 
 class PublicEmployeeResponse(ApiModel):
@@ -79,6 +97,7 @@ class EmployeeRecognitionProfileResponse(ApiModel):
     active_task_count_visible: bool
     achievements: list[EmployeeAchievementResponse]
     rewards: list[EmployeeRewardResponse]
+    reward_catalog: list[EmployeeRewardCatalogItem]
     can_issue_reward: bool
     can_manage_settings: bool
 
@@ -93,18 +112,12 @@ class RecognitionSettingsWrite(ApiModel):
 
 
 class EmployeeRewardCreate(ApiModel):
-    icon_key: Literal[
-        "appreciation",
-        "leadership",
-        "rescue",
-        "mentorship",
-        "innovation",
-        "reliability",
-    ]
-    title: str = Field(min_length=2, max_length=100)
-    description: str = Field(min_length=8, max_length=600)
+    icon_key: RewardIcon
+    context_note: str | None = Field(default=None, max_length=240)
 
-    @field_validator("title", "description")
+    @field_validator("context_note", mode="before")
     @classmethod
-    def strip_text(cls, value: str) -> str:
-        return value.strip()
+    def strip_context(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip() or None
+        return value

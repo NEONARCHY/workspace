@@ -928,6 +928,7 @@ employee_rewards = sa.Table(
     sa.Column("icon_key", sa.String(32)),
     sa.Column("title", sa.String(100)),
     sa.Column("description", sa.Text()),
+    sa.Column("context_note", sa.String(240)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 

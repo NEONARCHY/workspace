@@ -290,10 +290,28 @@ export interface EmployeeReward {
   readonly iconKey: string;
   readonly title: string;
   readonly description: string;
+  readonly contextNote?: string | null;
   readonly recipientUserId: string;
   readonly issuerUserId: string;
   readonly issuerName: string;
   readonly createdAt: string;
+}
+
+export type EmployeeRewardIcon =
+  | "appreciation"
+  | "leadership"
+  | "rescue"
+  | "mentorship"
+  | "innovation"
+  | "reliability"
+  | "teamwork"
+  | "initiative"
+  | "mastery";
+
+export interface EmployeeRewardCatalogItem {
+  readonly iconKey: EmployeeRewardIcon;
+  readonly title: string;
+  readonly description: string;
 }
 
 export interface EmployeeRecognitionProfile {
@@ -307,6 +325,7 @@ export interface EmployeeRecognitionProfile {
   readonly activeTaskCountVisible: boolean;
   readonly achievements: readonly EmployeeAchievement[];
   readonly rewards: readonly EmployeeReward[];
+  readonly rewardCatalog: readonly EmployeeRewardCatalogItem[];
   readonly canIssueReward: boolean;
   readonly canManageSettings: boolean;
 }
@@ -317,9 +336,8 @@ export interface RecognitionSettings {
 }
 
 export interface EmployeeRewardInput {
-  readonly iconKey: string;
-  readonly title: string;
-  readonly description: string;
+  readonly iconKey: EmployeeRewardIcon;
+  readonly contextNote?: string | null;
 }
 
 export interface WorkflowPosition {

@@ -20,6 +20,7 @@
 .employee-profile-hero-stat { display: grid; min-width: 102px; padding: 10px 13px; border: 1px solid rgb(255 255 255 / 76%); border-radius: 16px; background: rgb(255 255 255 / 62%); box-shadow: inset 0 1px 0 #fff, 0 8px 20px rgb(41 58 85 / 8%); text-align: center; }
 .employee-profile-hero-stat strong { color: var(--ws-navy); font-size: 22px; font-variant-numeric: tabular-nums; }
 .employee-profile-hero-stat span { font-size: 10px; }
+.employee-profile-hero-stat small { margin-top: 3px; font-size: 10px; text-transform: none; letter-spacing: 0; }
 .employee-profile-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: rgb(236 245 246 / 94%); backdrop-filter: blur(14px); }
 .employee-profile-tabs button { min-height: 34px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
 .employee-profile-tabs button:hover { color: var(--ws-navy); }
@@ -40,7 +41,7 @@
 .employee-achievements-section h4 { margin: 8px 2px -4px; color: var(--ws-navy); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
 .achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: 1; transition: filter 220ms var(--ws-ease), opacity 220ms var(--ws-ease); }
-.achievement-card:not(.is-unlocked) { filter: saturate(.72); opacity: .76; }
+.achievement-card.is-locked { filter: saturate(.72); opacity: .76; }
 .recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }
 .recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: var(--recognition-card-base, linear-gradient(145deg, #fff, #eef8f7)); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
 .recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: calc(.12 + var(--recognition-active, 0) * .72); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
@@ -120,11 +121,23 @@
 .recognition-emblem.is-compact > span { width: 51px; height: 51px; }
 .recognition-emblem.is-compact .recognition-badge-artwork { width: 52px; height: 52px; }
 .employee-reward-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.employee-reward-card { min-height: 112px; border: 0; border-radius: 20px; background: transparent; }
+.employee-reward-card { display: block; width: 100%; min-height: 124px; padding: 0; border: 0; border-radius: 20px; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.employee-reward-card:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.employee-reward-card .recognition-card-content { padding-right: 52px; }
+.reward-card-title { display: block; margin: 2px 0 4px; color: var(--ws-navy); font-size: 14px; }
+.reward-card-description { display: block; margin-bottom: 7px; color: var(--ws-muted); font-size: 12px; line-height: 1.35; }
+.reward-count { position: absolute; top: 15px; right: 15px; display: grid; min-width: 30px; height: 28px; place-items: center; border: 1px solid rgb(0 145 168 / 17%); border-radius: 10px; color: var(--ws-link); background: rgb(255 255 255 / 78%); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.reward-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.reward-history-tooltip { display: grid; gap: 7px; max-width: 300px; padding: 3px 4px; font-size: 12px; line-height: 1.35; }
+.reward-history-tooltip > span { display: grid; gap: 2px; padding-top: 6px; border-top: 1px solid rgb(255 255 255 / 20%); }
+.reward-history-tooltip small, .reward-history-tooltip em { opacity: .83; font-size: 11px; font-style: normal; }
 .reward-composer { display: grid; gap: 12px; padding: 16px; border: 1px solid rgb(0 145 168 / 14%); border-radius: 20px; background: rgb(255 255 255 / 72%); }
+.reward-composer-heading { display: grid; gap: 3px; color: var(--ws-navy); }
+.reward-composer-heading > span { color: var(--ws-muted); font-size: 12px; }
 .reward-icon-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .reward-icon-picker button { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 7px; padding: 7px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 14px; color: var(--ws-text); background: rgb(247 251 252 / 90%); text-align: left; cursor: pointer; }
 .reward-icon-picker button.is-active { border-color: rgb(0 145 168 / 42%); background: #e8f7f7; box-shadow: 0 0 0 2px rgb(0 145 168 / 8%); }
+.reward-icon-picker button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .reward-icon-picker button strong, .reward-icon-picker button small { display: block; }
 .reward-icon-picker button strong { color: var(--ws-navy); font-size: 12px; }
 .reward-icon-picker button small { margin-top: 2px; color: var(--ws-muted); font-size: 10px; line-height: 1.2; }
@@ -132,12 +145,55 @@
 .reward-composer textarea { min-height: 76px; }
 .reward-composer input:focus, .reward-composer textarea:focus { border-color: var(--ws-turquoise); outline: 2px solid rgb(0 145 168 / 12%); }
 .reward-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.reward-composer-error { margin: 0; color: #9a3340; font-size: 12px; }
 .recognition-empty { grid-column: 1 / -1; margin: 0; padding: 28px; border: 1px dashed rgb(41 58 85 / 15%); border-radius: 16px; color: var(--ws-muted); background: rgb(255 255 255 / 42%); text-align: center; }
-.recognition-guide-dialog { width: min(650px, calc(100vw - 32px)); max-width: none; border-radius: 24px; }
-.recognition-guide-copy { color: var(--ws-text); line-height: 1.55; }
-.recognition-guide-copy h3 { margin: 18px 0 4px; color: var(--ws-navy); }
-.recognition-guide-copy p { margin: 0; }
-.recognition-guide-copy ul { margin: 7px 0 0; padding-left: 22px; }
+.fui-DialogSurface.reward-history-dialog, .fui-DialogSurface.recognition-guide-dialog { max-width: none; max-height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid rgb(255 255 255 / 75%); border-radius: 24px; background: #f6fbfc; }
+.fui-DialogSurface.reward-history-dialog { width: min(620px, calc(100vw - 24px)); }
+.fui-DialogSurface.recognition-guide-dialog { width: min(920px, calc(100vw - 24px)); height: min(760px, calc(100vh - 32px)); }
+.reward-history-dialog .fui-DialogBody, .recognition-guide-dialog .fui-DialogBody { min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
+.reward-history-dialog .fui-DialogBody { max-height: calc(100vh - 80px); }
+.recognition-guide-dialog .fui-DialogBody { height: 100%; }
+.reward-history-dialog .fui-DialogContent, .recognition-guide-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.reward-history-content { display: grid; gap: 16px; }
+.reward-history-content > header { display: flex; align-items: center; gap: 15px; padding: 16px; border: 1px solid rgb(0 145 168 / 14%); border-radius: 18px; background: linear-gradient(120deg, #eaf8f7, #f5f8ff); }
+.reward-history-content > header img { width: 76px; height: 76px; object-fit: contain; }
+.reward-history-content > header span, .recognition-guide-section-title > span, .recognition-guide-hero > span { color: var(--ws-link); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
+.reward-history-content h2 { margin: 4px 0; color: var(--ws-navy); }
+.reward-history-content p { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
+.reward-history-content > header strong { display: inline-block; margin-top: 8px; color: var(--ws-link); font-size: 12px; }
+.reward-history-content ol { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.reward-history-content li { padding: 12px 14px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 14px; background: #fff; }
+.reward-history-content li > div { display: flex; justify-content: space-between; gap: 10px; color: var(--ws-navy); font-size: 12px; }
+.reward-history-content time { flex: none; color: var(--ws-muted); }
+.reward-history-content li p { margin-top: 6px; }
+.recognition-guide-content { display: grid; gap: 20px; padding-bottom: 10px; color: var(--ws-text); }
+.recognition-guide-hero { position: relative; overflow: hidden; padding: 24px; border: 1px solid rgb(0 145 168 / 13%); border-radius: 20px; background: radial-gradient(circle at 88% 5%, rgb(123 225 222 / 38%), transparent 35%), linear-gradient(135deg, #f9ffff, #e9f5f6 64%, #e8effa); }
+.recognition-guide-hero h2 { margin: 10px 0 8px; color: var(--ws-navy); font-size: clamp(22px, 3vw, 28px); line-height: 1.13; }
+.recognition-guide-hero p { max-width: 620px; margin: 0; color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+.recognition-guide-hero-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.recognition-guide-hero-stats strong { display: flex; align-items: baseline; gap: 7px; padding: 7px 11px; border: 1px solid rgb(255 255 255 / 78%); border-radius: 11px; color: var(--ws-navy); background: rgb(255 255 255 / 70%); font-size: 18px; font-variant-numeric: tabular-nums; }
+.recognition-guide-hero-stats small { color: var(--ws-muted); font-size: 11px; font-weight: 500; }
+.recognition-guide-section { display: grid; gap: 12px; }
+.recognition-guide-section-title h3 { margin: 4px 0; color: var(--ws-navy); font-size: 19px; }
+.recognition-guide-section-title p { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
+.recognition-guide-reward-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.recognition-guide-reward-grid article { display: flex; align-items: center; gap: 9px; min-height: 82px; padding: 10px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 14px; background: rgb(255 255 255 / 82%); }
+.recognition-guide-reward-grid img { width: 52px; height: 52px; flex: none; object-fit: contain; }
+.recognition-guide-reward-grid strong, .recognition-guide-ladder-head strong { color: var(--ws-navy); font-size: 12px; }
+.recognition-guide-reward-grid p, .recognition-guide-ladder-head p { margin: 3px 0 0; color: var(--ws-muted); font-size: 11px; line-height: 1.3; }
+.recognition-guide-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.recognition-guide-rules span { padding: 12px; border: 1px solid rgb(0 145 168 / 11%); border-radius: 13px; color: var(--ws-text); background: rgb(232 248 247 / 62%); font-size: 12px; line-height: 1.4; }
+.recognition-guide-ladder-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.recognition-guide-ladder-grid article { min-width: 0; padding: 11px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: #fff; }
+.recognition-guide-ladder-head { display: flex; align-items: center; gap: 9px; }
+.recognition-guide-ladder-head img { width: 48px; height: 48px; flex: none; object-fit: contain; }
+.recognition-guide-levels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.recognition-guide-levels span { display: inline-flex; align-items: baseline; gap: 3px; padding: 4px 6px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 8px; color: var(--ws-muted); background: #f5f8f9; font-size: 10px; }
+.recognition-guide-levels span.is-earned { border-color: rgb(0 145 168 / 22%); color: var(--ws-link); background: #e7f7f6; }
+.recognition-guide-levels small { font-size: 9px; }
+.recognition-guide-fairness { display: grid; gap: 7px; padding: 16px; border: 1px solid rgb(41 58 85 / 9%); border-radius: 17px; background: linear-gradient(115deg, #fff, #f0f7fa); }
+.recognition-guide-fairness strong { color: var(--ws-navy); }
+.recognition-guide-fairness p { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
 
 @media (max-width: 760px) {
   .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: calc(100vw - 16px); height: calc(100vh - 16px); border-radius: 20px; }
@@ -149,6 +205,9 @@
   .employee-profile-overview, .achievement-grid, .employee-reward-list { grid-template-columns: 1fr; }
   .employee-profile-overview, .employee-achievements-section, .employee-rewards-section { scroll-margin-top: 248px; }
   .reward-icon-picker { grid-template-columns: 1fr 1fr; }
+  .recognition-guide-reward-grid, .recognition-guide-ladder-grid, .recognition-guide-rules { grid-template-columns: 1fr; }
+  .recognition-guide-hero { padding: 17px; }
+  .reward-history-content li > div { flex-wrap: wrap; }
 }
 
 @media (min-width: 761px) and (max-width: 1080px) {
@@ -166,4 +225,6 @@
   .recognition-card-surface, .recognition-emblem, .employee-profile-hero, .employee-profile-dialog { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
   .recognition-card-foil, .recognition-card-glare, .recognition-emblem::before, .recognition-emblem::after { display: none; }
   .recognition-emblem > span { color: CanvasText; background: Canvas; }
+  .employee-reward-card:focus-visible { outline-color: Highlight; }
+  .recognition-guide-reward-grid article, .recognition-guide-ladder-grid article, .recognition-guide-rules span, .reward-history-content li { border-color: CanvasText; background: Canvas; }
 }

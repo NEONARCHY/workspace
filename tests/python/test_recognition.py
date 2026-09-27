@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from yuksalish_api.main import create_app
 from yuksalish_api.recognition_schemas import EmployeeRewardCreate
-from yuksalish_api.recognition_service import _achievements, _longest_month_streak
+from yuksalish_api.recognition_service import REWARD_CATALOG, _achievements, _longest_month_streak
 
 
 def test_recognition_routes_are_present_in_openapi() -> None:
@@ -72,17 +72,15 @@ def test_efficiency_streak_uses_consecutive_calendar_months() -> None:
     assert _longest_month_streak([]) == 0
 
 
-def test_reward_copy_is_free_form_but_meaningful() -> None:
+def test_reward_catalog_is_fixed_and_context_is_optional() -> None:
     reward = EmployeeRewardCreate(
         icon_key="mentorship",
-        title="Сильный наставник",
-        description="Помог команде освоить новый процесс без потери темпа.",
+        context_note="  После завершения проекта  ",
     )
-    assert reward.title == "Сильный наставник"
+    assert reward.context_note == "После завершения проекта"
+    assert len(REWARD_CATALOG) == 9
+    assert REWARD_CATALOG["mastery"][0] == "Мастерство"
+    assert EmployeeRewardCreate(icon_key="teamwork", context_note="   ").context_note is None
 
     with pytest.raises(ValidationError):
-        EmployeeRewardCreate(
-            icon_key="mentorship",
-            title="Ок",
-            description="Коротко",
-        )
+        EmployeeRewardCreate(icon_key="unknown")

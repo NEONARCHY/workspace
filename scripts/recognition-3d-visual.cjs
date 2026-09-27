@@ -45,6 +45,30 @@ const achievements = [...tierFixtures, ...otherTypes].map(([tier, iconKey, title
   unlocked: index < tierFixtures.length,
 }));
 
+const rewardCatalog = [
+  ["appreciation", "Благодарность", "За помощь и поддержку"],
+  ["leadership", "Лидерство", "За ответственность"],
+  ["rescue", "Спасение срока", "За вклад в критический момент"],
+  ["mentorship", "Наставничество", "За развитие коллег"],
+  ["innovation", "Новаторство", "За полезную идею"],
+  ["reliability", "Надёжность", "За устойчивый результат"],
+  ["teamwork", "Командная работа", "За общий результат"],
+  ["initiative", "Инициатива", "За полезное дело"],
+  ["mastery", "Мастерство", "За высокое качество"],
+].map(([iconKey, title, description]) => ({ iconKey, title, description }));
+
+const rewards = ["После запуска проекта", "После сложной задачи"].map((contextNote, index) => ({
+  id: `reward-${index}`,
+  iconKey: "teamwork",
+  title: "Командная работа",
+  description: "За общий результат",
+  contextNote,
+  recipientUserId: person.id,
+  issuerUserId: `issuer-${index}`,
+  issuerName: index === 0 ? "Малика Нурова" : "Дилшод Рахимов",
+  createdAt: `2026-09-${27 - index}T12:00:00Z`,
+}));
+
 const profile = {
   person,
   departmentName: "Проектный офис",
@@ -55,7 +79,8 @@ const profile = {
   activeTaskCount: 4,
   activeTaskCountVisible: true,
   achievements,
-  rewards: [],
+  rewards,
+  rewardCatalog,
   canIssueReward: true,
   canManageSettings: false,
 };
@@ -142,7 +167,11 @@ async function main() {
       assert(renderedTiers.includes(`recognition-rarity-${tier}`), `missing ${tier} card`);
     }
     assert.equal(await page.locator("svg.recognition-badge-artwork").count(), 0);
-    assert.equal(await page.locator("img.recognition-badge-artwork").count(), achievements.length);
+    assert.equal(
+      await page.locator(".achievement-card img.recognition-badge-artwork").count(),
+      await page.locator(".achievement-card").count(),
+    );
+    await page.waitForTimeout(300);
     const cardStates = await page.locator(".achievement-card").evaluateAll((cards) => cards.map((card) => ({
       unlocked: card.classList.contains("is-unlocked"),
       opacity: Number.parseFloat(getComputedStyle(card).opacity),
@@ -156,7 +185,8 @@ async function main() {
       `locked achievements must be visually quieter: ${JSON.stringify(cardStates)}`,
     );
     assert(
-      cardStates.every((card) => card.decorationBefore === "none" && card.decorationAfter === "none"),
+      cardStates.every((card) => ["none", '""'].includes(card.decorationBefore)
+        && ["none", '""'].includes(card.decorationAfter)),
       "card dots and diagonal stripes must be absent",
     );
     await dialog.screenshot({ path: path.join(output, "all-tiers.png") });
@@ -175,13 +205,78 @@ async function main() {
     await dialog.screenshot({ path: path.join(output, "cosmic-hover.png") });
 
     await dialog.getByRole("button", { name: "Награды", exact: true }).click();
+    assert.equal(await dialog.locator(".employee-reward-card").count(), 1);
+    await dialog.getByRole("button", { name: /Командная работа: 2 наград/ }).hover();
+    await page.getByText("После запуска проекта", { exact: true }).waitFor();
+    await dialog.screenshot({ path: path.join(output, "rewards-first.png") });
+    const profileScrollBeforeHistory = await dialog.locator(".fui-DialogContent").evaluate((content) => content.scrollTop);
+    await dialog.getByRole("button", { name: /Командная работа: 2 наград/ }).click();
+    const history = page.getByRole("dialog", { name: "История награды" });
+    await history.waitFor();
+    assert.equal(await history.locator(".reward-history-content li").count(), 2);
+    await page.waitForTimeout(450);
+    await history.screenshot({ path: path.join(output, "reward-history.png") });
+    const longHistory = await history.evaluate((surface) => {
+      const list = surface.querySelector(".reward-history-content ol");
+      for (let index = 0; index < 18; index += 1) {
+        list.append(list.firstElementChild.cloneNode(true));
+      }
+      const content = surface.querySelector(".fui-DialogContent");
+      content.scrollTop = content.scrollHeight;
+      return {
+        scrollHeight: content.scrollHeight,
+        clientHeight: content.clientHeight,
+        titleTop: surface.querySelector(".fui-DialogTitle").getBoundingClientRect().top,
+        surfaceTop: surface.getBoundingClientRect().top,
+      };
+    });
+    assert(longHistory.scrollHeight > longHistory.clientHeight);
+    assert(longHistory.titleTop >= longHistory.surfaceTop);
+    await history.screenshot({ path: path.join(output, "reward-history-long.png") });
+    await history.getByRole("button", { name: "Вернуться к профилю" }).click();
+    await dialog.waitFor();
+    await page.waitForFunction(() => document.activeElement?.matches(".employee-reward-card"));
+    const profileScrollAfterHistory = await dialog.locator(".fui-DialogContent").evaluate((content) => content.scrollTop);
+    assert(Math.abs(profileScrollAfterHistory - profileScrollBeforeHistory) < 8);
     await dialog.getByRole("button", { name: "Выдать награду", exact: true }).click();
     await page.locator(".reward-icon-picker").waitFor();
     await page.waitForFunction(() => [...document.querySelectorAll(".reward-icon-picker img")]
       .every((image) => image.complete && image.naturalWidth > 0));
-    assert.equal(await page.locator(".reward-icon-picker img.recognition-badge-artwork").count(), 6);
+    assert.equal(await page.locator(".reward-icon-picker img.recognition-badge-artwork").count(), 9);
     await dialog.screenshot({ path: path.join(output, "reward-types.png") });
     await page.locator(".reward-icon-picker").screenshot({ path: path.join(output, "reward-picker.png") });
+    await dialog.getByRole("button", { name: "Как это работает" }).click();
+    const guide = page.getByRole("dialog", { name: "Как работают награды и достижения" });
+    await guide.waitFor();
+    await page.waitForTimeout(450);
+    assert.equal(await guide.locator(".recognition-guide-reward-grid article").count(), 9);
+    await guide.screenshot({ path: path.join(output, "recognition-guide.png") });
+    await guide.getByText("Карта достижений", { exact: true }).scrollIntoViewIfNeeded();
+    const guideGeometry = await guide.evaluate((dialog) => {
+      const title = dialog.querySelector(".fui-DialogTitle");
+      const content = dialog.querySelector(".fui-DialogContent");
+      return {
+        top: dialog.getBoundingClientRect().top,
+        titleTop: title.getBoundingClientRect().top,
+        contentHeight: content.clientHeight,
+        contentScrollHeight: content.scrollHeight,
+        contentScrollTop: content.scrollTop,
+      };
+    });
+    assert(guideGeometry.contentScrollHeight > guideGeometry.contentHeight);
+    assert(guideGeometry.contentScrollTop > 0);
+    assert(guideGeometry.titleTop >= guideGeometry.top, "guide title should remain visible while scrolling");
+    await guide.screenshot({ path: path.join(output, "recognition-guide-ladders.png") });
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await guide.screenshot({ path: path.join(output, "recognition-guide-compact.png") });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.setViewportSize({ width: 720, height: 720 });
+    await guide.screenshot({ path: path.join(output, "recognition-guide-narrow.png") });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    await page.setViewportSize({ width: 1440, height: 960 });
+    await guide.getByRole("button", { name: "Вернуться к профилю" }).click();
+    await dialog.waitFor();
+    await page.waitForFunction(() => document.activeElement?.textContent?.includes("Как это работает"));
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     const reducedMotion = await page.locator(".recognition-holographic-card").first().evaluate((card) => ({
@@ -192,9 +287,10 @@ async function main() {
     assert.deepEqual(errors, []);
     await fs.writeFile(path.join(output, "results.json"), JSON.stringify({
       renderedTiers,
-      iconCount: achievements.length,
-      rewardTypeCount: 6,
+      iconCount: await page.locator(".achievement-card").count(),
+      rewardTypeCount: 9,
       cardStates,
+      guideGeometry,
       reducedMotion,
       errors,
     }, null, 2));
