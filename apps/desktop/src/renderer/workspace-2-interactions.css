@@ -434,8 +434,7 @@
   .account-profile-anchor .account-panel { animation: none !important; }
 }
 .fui-PopoverSurface.person-picker-surface { padding: 12px; border-radius: 20px; }
-.person-picker-list > button { border-radius: 13px; transition: background-color 160ms var(--ws-ease), transform 160ms var(--ws-ease); }
-.person-picker-list > button:hover { transform: translateX(2px); }
+.person-picker-list > button { border-radius: 11px; transition: background-color 160ms var(--ws-ease), border-color 160ms var(--ws-ease); }
 .person-picker-surface .person-picker-list small { color: #4d6372; }
 .person-picker-surface .fui-Avatar__initials { color: #293a55; }
 

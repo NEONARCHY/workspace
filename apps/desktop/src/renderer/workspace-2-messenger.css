@@ -266,6 +266,30 @@
   scrollbar-color: #b7c9c9 transparent;
 }
 
+.messenger-view .message-scroll[data-chat-background="dawn"] { background: radial-gradient(circle at 12% 9%, rgb(255 218 196 / 48%), transparent 36%), radial-gradient(circle at 86% 78%, rgb(221 214 251 / 58%), transparent 46%), linear-gradient(145deg, #fffaf5, #f5f2fb); }
+.messenger-view .message-scroll[data-chat-background="sky"] { background: radial-gradient(circle at 82% 12%, rgb(190 226 248 / 55%), transparent 42%), radial-gradient(circle at 16% 82%, rgb(219 244 249 / 58%), transparent 38%), linear-gradient(160deg, #f8fcff, #eaf3fa); }
+.messenger-view .message-scroll[data-chat-background="sage"] { background: radial-gradient(circle at 18% 18%, rgb(210 236 216 / 58%), transparent 40%), radial-gradient(circle at 84% 85%, rgb(230 240 212 / 55%), transparent 42%), linear-gradient(145deg, #f9fcf7, #ecf4ec); }
+.messenger-view .message-scroll[data-chat-background="paper"] { background-color: #f5faf9; background-image: radial-gradient(circle at 18px 20px, rgb(91 157 162 / 11%) 1px, transparent 2px), radial-gradient(circle at 58px 64px, rgb(109 169 174 / 9%) 2px, transparent 3px), linear-gradient(135deg, rgb(206 232 231 / 28%), transparent 55%, rgb(216 228 243 / 28%)); background-size: 96px 96px, 96px 96px, 100% 100%; }
+.messenger-view .message-row.is-removing { overflow: hidden; opacity: 1; transition: height 220ms var(--ws-ease), opacity 180ms var(--ws-ease); }
+.messenger-view .message-row.is-removing.is-exiting { opacity: 0; }
+.chat-background-picker.fui-PopoverSurface { box-sizing: border-box; width: min(380px, calc(100vw - 24px)); padding: 16px; border: 1px solid rgb(41 58 85 / 10%); border-radius: 18px; background: #fbfdfd; box-shadow: 0 22px 54px rgb(37 64 76 / 20%); }
+.chat-background-picker > strong { color: var(--ws-navy); font-size: 15px; }
+.chat-background-picker > p { margin: 3px 0 12px; color: var(--ws-muted); font-size: 11px; }
+.chat-background-options { display: grid; gap: 6px; max-height: min(420px, 60vh); overflow-y: auto; }
+.chat-background-options > button { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 8px; border: 1px solid transparent; border-radius: 13px; color: var(--ws-text); background: transparent; text-align: left; cursor: pointer; }
+.chat-background-options > button:hover { background: #f0f6f6; }
+.chat-background-options > button[aria-pressed="true"] { border-color: rgb(0 145 168 / 36%); background: #eaf7f6; }
+.chat-background-options > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.chat-background-options > button > span:last-child { display: grid; gap: 2px; }
+.chat-background-options strong { font-size: 12px; }
+.chat-background-options small { color: var(--ws-muted); font-size: 11px; }
+.chat-background-preview { display: block; width: 48px; height: 40px; flex: none; border: 1px solid rgb(41 58 85 / 10%); border-radius: 10px; }
+.chat-background-preview.is-mist { background: radial-gradient(circle at 20% 10%, #cceceb, transparent 60%), linear-gradient(145deg, #f2f8f7, #e9f5f4); }
+.chat-background-preview.is-dawn { background: radial-gradient(circle at 16% 22%, #f9d8c7, transparent 60%), linear-gradient(145deg, #fff7ee, #e9e2f8); }
+.chat-background-preview.is-sky { background: radial-gradient(circle at 80% 15%, #c5e3f7, transparent 60%), linear-gradient(145deg, #f8fcff, #e5f2f9); }
+.chat-background-preview.is-sage { background: radial-gradient(circle at 15% 15%, #d5ecd9, transparent 60%), linear-gradient(145deg, #f9fcf7, #e6f0e4); }
+.chat-background-preview.is-paper { background: radial-gradient(circle at 12px 12px, #c3dddd 1px, transparent 2px) 0 0 / 24px 24px, #f4faf9; }
+
 .messenger-view .date-separator {
   width: max-content;
   margin: 2px auto 22px;
@@ -293,7 +317,7 @@
 .messenger-view .message.own .message-body {
   border-color: rgb(0 145 168 / 12%);
   border-radius: 17px 17px 5px 17px;
-  background: #dff2f1;
+  background: #fff;
 }
 
 .messenger-view .message-body > p { display: inline; margin: 1px 0; line-height: 1.48; }

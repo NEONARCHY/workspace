@@ -6,6 +6,9 @@ import {
   DialogTitle,
   Field,
   Input,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
   Spinner,
   Tooltip,
 } from "@fluentui/react-components";
@@ -29,6 +32,8 @@ import type {
   EmployeeReward,
   EmployeeRewardCatalogItem,
   EmployeeRewardInput,
+  EmployeeEfficiency,
+  WorkspacePerson,
 } from "@yuksalish/contracts";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
@@ -37,6 +42,7 @@ import { RecognitionGuide } from "./RecognitionGuide";
 import {
   issueEmployeeReward,
   loadEmployeeRecognitionProfile,
+  loadWorkspaceEfficiency,
 } from "./workspace-api";
 
 const tierLabels: Readonly<Record<EmployeeAchievement["tier"], string>> = {
@@ -81,6 +87,16 @@ function groupRewards(rewards: readonly EmployeeReward[], catalog: readonly Empl
 
 function issuedAt(value: string) {
   return new Date(value).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function countLabel(value: number, forms: readonly [string, string, string]): string {
+  const mod100 = value % 100;
+  const mod10 = value % 10;
+  return `${value} ${mod100 >= 11 && mod100 <= 14 ? forms[2] : mod10 === 1 ? forms[0] : mod10 >= 2 && mod10 <= 4 ? forms[1] : forms[2]}`;
+}
+
+function countWord(value: number, forms: readonly [string, string, string]): string {
+  return countLabel(value, forms).replace(/^\d+ /, "");
 }
 
 type HolographicStyle = CSSProperties & {
@@ -220,20 +236,44 @@ function AchievementCard({ achievement }: { readonly achievement: EmployeeAchiev
   </article>;
 }
 
-function RewardCard({ group, onOpenHistory }: {
+function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
   readonly group: RewardGroup;
   readonly onOpenHistory: () => void;
+  readonly people: readonly WorkspacePerson[];
+  readonly token: string;
+  readonly onOpenIssuer: (userId: string) => void;
 }) {
   const [elementRef, onPointerMove, onPointerLeave] = useHolographicMotion<HTMLButtonElement>();
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const historyRequested = useRef(false);
+  const previewCloseTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => { if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current); }, []);
+  const keepPreviewOpen = () => {
+    historyRequested.current = false;
+    if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current);
+    setPreviewOpen(true);
+  };
+  const closePreviewSoon = () => {
+    previewCloseTimer.current = window.setTimeout(() => setPreviewOpen(false), 140);
+  };
   const preview = <div className="reward-history-tooltip">
-    <strong>{group.title} · {group.issuances.length}</strong>
-    {group.issuances.slice(0, 3).map((reward) => <span key={reward.id}>
-      {reward.issuerName} · {issuedAt(reward.createdAt)}
-      {reward.contextNote ? <small>{reward.contextNote}</small> : null}
-    </span>)}
-    {group.issuances.length > 3 ? <em>Остальные выдачи — в истории</em> : null}
+    <strong>{group.title} · {countLabel(group.issuances.length, ["выдача", "выдачи", "выдач"])}</strong>
+    {group.issuances.slice(0, 3).map((reward) => {
+      const issuer = people.find((person) => person.id === reward.issuerUserId);
+      return <div className="reward-history-preview-entry" key={reward.id}>
+        <span>Кто выдал:</span>
+        <button type="button" className="reward-issuer-link" aria-label={reward.issuerName} onClick={() => onOpenIssuer(reward.issuerUserId)}>
+          {issuer ? <ProfileAvatar person={issuer} token={token} size={24} /> : <span className="reward-issuer-fallback" aria-hidden="true">{reward.issuerName.slice(0, 1)}</span>}
+          <strong>{reward.issuerName}</strong>
+        </button>
+        <time dateTime={reward.createdAt}>{issuedAt(reward.createdAt)}</time>
+        {reward.contextNote ? <small>{reward.contextNote}</small> : null}
+      </div>;
+    })}
+    {group.issuances.length > 3 ? <em>Все выдачи — в истории награды</em> : null}
   </div>;
-  return <Tooltip content={preview} relationship="description" positioning="above">
+  return <Popover open={previewOpen} onOpenChange={(_, data) => { if (!historyRequested.current) setPreviewOpen(data.open); }} positioning="above" trapFocus={false}>
+    <PopoverTrigger disableButtonEnhancement>
     <button
       type="button"
       ref={elementRef}
@@ -241,9 +281,10 @@ function RewardCard({ group, onOpenHistory }: {
       data-reward-icon={group.iconKey}
       style={holographicStyle}
       onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
-      onClick={onOpenHistory}
-      aria-label={`${group.title}: ${group.issuances.length} наград. Открыть историю выдач`}
+      onPointerEnter={keepPreviewOpen}
+      onPointerLeave={() => { onPointerLeave(); closePreviewSoon(); }}
+      onClick={() => { historyRequested.current = true; setPreviewOpen(false); onOpenHistory(); }}
+      aria-label={`${group.title}: ${countLabel(group.issuances.length, ["награда", "награды", "наград"])}. Открыть историю выдач`}
     >
       <span className="recognition-card-surface" aria-hidden="true">
         <span className="recognition-card-foil" />
@@ -259,12 +300,39 @@ function RewardCard({ group, onOpenHistory }: {
         <span className="reward-count" aria-hidden="true">×{group.issuances.length}</span>
       </span>
     </button>
-  </Tooltip>;
+    </PopoverTrigger>
+    <PopoverSurface className="reward-history-popover" onPointerEnter={keepPreviewOpen} onPointerLeave={closePreviewSoon}>{preview}</PopoverSurface>
+  </Popover>;
 }
 
-function RewardHistoryContent({ group, onBack }: {
+function RewardCatalogOption({ option, selected, onSelect }: {
+  readonly option: EmployeeRewardCatalogItem;
+  readonly selected: boolean;
+  readonly onSelect: () => void;
+}) {
+  const [elementRef, onPointerMove, onPointerLeave] = useHolographicMotion<HTMLButtonElement>();
+  return <button
+    ref={elementRef}
+    type="button"
+    aria-pressed={selected}
+    className={`recognition-holographic-card reward-catalog-option${selected ? " is-active" : ""}`}
+    data-reward-icon={option.iconKey}
+    style={holographicStyle}
+    onPointerMove={onPointerMove}
+    onPointerLeave={onPointerLeave}
+    onClick={onSelect}
+  >
+    <span className="recognition-card-surface" aria-hidden="true"><span className="recognition-card-foil" /><span className="recognition-card-glare" /></span>
+    <span className="recognition-card-content"><RecognitionEmblem iconKey={option.iconKey} compact /><span><strong>{option.title}</strong><small>{option.description}</small></span></span>
+  </button>;
+}
+
+function RewardHistoryContent({ group, onBack, people, token, onOpenIssuer }: {
   readonly group: RewardGroup;
   readonly onBack: () => void;
+  readonly people: readonly WorkspacePerson[];
+  readonly token: string;
+  readonly onOpenIssuer: (userId: string) => void;
 }) {
   return <DialogBody>
         <DialogTitle action={<Button autoFocus appearance="subtle" icon={<ArrowLeft24Regular />} aria-label="Вернуться к профилю" onClick={onBack} />}>
@@ -272,13 +340,16 @@ function RewardHistoryContent({ group, onBack }: {
         </DialogTitle>
         <DialogContent>
           <div className="reward-history-content">
-            <header><RecognitionBadgeArtwork iconKey={group.iconKey} /><div><span>ПРИЗНАНИЕ КОЛЛЕГ</span><h2>{group.title}</h2><p>{group.description}</p><strong>{group.issuances.length} выдач</strong></div></header>
-            <ol>{group.issuances.map((reward) => <li key={reward.id}>
-              <div><strong>{reward.issuerName}</strong><time dateTime={reward.createdAt}>{issuedAt(reward.createdAt)}</time></div>
+            <header><RecognitionBadgeArtwork iconKey={group.iconKey} /><div><span>ПРИЗНАНИЕ КОЛЛЕГ</span><h2>{group.title}</h2><p>{group.description}</p><strong>{countLabel(group.issuances.length, ["выдача", "выдачи", "выдач"])}</strong></div></header>
+            <ol>{group.issuances.map((reward) => {
+              const issuer = people.find((person) => person.id === reward.issuerUserId);
+              return <li key={reward.id}>
+              <div><span className="reward-history-issuer-label">Кто выдал:</span><button type="button" className="reward-issuer-link" aria-label={reward.issuerName} onClick={() => onOpenIssuer(reward.issuerUserId)}>{issuer ? <ProfileAvatar person={issuer} token={token} size={24} /> : <span className="reward-issuer-fallback" aria-hidden="true">{reward.issuerName.slice(0, 1)}</span>}<strong>{reward.issuerName}</strong></button><time dateTime={reward.createdAt}>{issuedAt(reward.createdAt)}</time></div>
               {reward.contextNote ? <p>Повод: {reward.contextNote}</p> : null}
               {reward.title !== group.title ? <p>Ранее называлась: {reward.title}</p> : null}
               {reward.description !== group.description ? <p>Ранее указано: {reward.description}</p> : null}
-            </li>)}</ol>
+            </li>;
+            })}</ol>
           </div>
         </DialogContent>
       </DialogBody>;
@@ -289,11 +360,15 @@ export function EmployeeProfileDialog({
   userId,
   open,
   onOpenChange,
+  people = [],
+  onOpenPersonProfile,
 }: {
   readonly token: string;
   readonly userId?: string;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  readonly people?: readonly WorkspacePerson[];
+  readonly onOpenPersonProfile?: (userId: string) => void;
 }) {
   const [profileState, setProfileState] = useState<{
     readonly userId: string;
@@ -315,6 +390,7 @@ export function EmployeeProfileDialog({
   const [rewardContext, setRewardContext] = useState("");
   const [selectedRewardIcon, setSelectedRewardIcon] = useState<string>();
   const [rewardBusy, setRewardBusy] = useState(false);
+  const [efficiencyState, setEfficiencyState] = useState<{ readonly userId: string; readonly value?: EmployeeEfficiency }>();
   const profile = profileState && profileState.userId === userId
     ? profileState.profile
     : undefined;
@@ -331,6 +407,17 @@ export function EmployeeProfileDialog({
           message: cause instanceof Error ? cause.message : "Не удалось открыть профиль",
         });
       });
+    return () => { active = false; };
+  }, [open, token, userId]);
+
+  useEffect(() => {
+    if (!open || !userId) return;
+    let active = true;
+    void loadWorkspaceEfficiency(token).then((overview) => {
+      if (active) setEfficiencyState({ userId, value: overview.employees.find((employee) => employee.userId === userId) });
+    }).catch(() => {
+      if (active) setEfficiencyState({ userId });
+    });
     return () => { active = false; };
   }, [open, token, userId]);
 
@@ -351,6 +438,12 @@ export function EmployeeProfileDialog({
     [profile],
   );
   const selectedRewardGroup = rewardGroups.find((group) => group.iconKey === selectedRewardIcon);
+  const efficiency = efficiencyState?.userId === userId ? efficiencyState?.value : undefined;
+  const openIssuerProfile = (issuerId: string) => {
+    setSelectedRewardIcon(undefined);
+    setGuideOpen(false);
+    onOpenPersonProfile?.(issuerId);
+  };
 
   useEffect(() => {
     if (guideOpen || selectedRewardIcon || !returnFocusRef.current) return;
@@ -358,14 +451,18 @@ export function EmployeeProfileDialog({
     const rewardIconToFocus = returnRewardIconRef.current;
     returnFocusRef.current = null;
     returnRewardIconRef.current = null;
+    const restoreScroll = () => {
+      if (profileContentRef.current) profileContentRef.current.scrollTop = profileScrollRef.current;
+    };
     const frame = requestAnimationFrame(() => {
-      profileContentRef.current?.scrollTo({ top: profileScrollRef.current });
+      restoreScroll();
     });
     const timer = window.setTimeout(() => {
       const rewardCard = [...document.querySelectorAll<HTMLButtonElement>(".employee-reward-card")]
         .find((card) => card.dataset.rewardIcon === rewardIconToFocus);
       (target === "guide" ? guideTriggerRef.current : rewardCard)
         ?.focus({ preventScroll: true });
+      restoreScroll();
     }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 260);
     return () => {
       cancelAnimationFrame(frame);
@@ -441,13 +538,8 @@ export function EmployeeProfileDialog({
       }
       onOpenChange(data.open);
     }}>
-      <DialogSurface
-        className={guideOpen ? "recognition-guide-dialog" : selectedRewardGroup ? "reward-history-dialog" : "employee-profile-dialog"}
-        aria-label={guideOpen ? "Как работают награды и достижения" : selectedRewardGroup ? "История награды" : "Публичный профиль сотрудника"}
-      >
-        {guideOpen ? <RecognitionGuide onBack={returnFromGuide} achievements={profile?.achievements ?? []} rewardCatalog={profile?.rewardCatalog ?? []} />
-          : selectedRewardGroup ? <RewardHistoryContent group={selectedRewardGroup} onBack={returnFromHistory} />
-          : <DialogBody>
+      <DialogSurface className="employee-profile-dialog" aria-label="Публичный профиль сотрудника">
+        <DialogBody>
           <DialogTitle
             action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть профиль" onClick={() => onOpenChange(false)} />}
           >Профиль сотрудника</DialogTitle>
@@ -466,8 +558,8 @@ export function EmployeeProfileDialog({
                   </div>
                   <div className="employee-profile-hero-stat">
                     <strong>{profile.rewards.length}</strong>
-                    <span>наград от коллег</span>
-                    <small>{unlocked.length} достижений системы</small>
+                    <span>{countWord(profile.rewards.length, ["награда", "награды", "наград"])} от коллег</span>
+                    <small>{countLabel(unlocked.length, ["достижение", "достижения", "достижений"])}</small>
                   </div>
                 </header>
 
@@ -487,10 +579,11 @@ export function EmployeeProfileDialog({
                 <article><span>Стаж работы</span><strong>{serviceLabel(profile)}</strong>{profile.employmentDate ? <small>с {new Date(`${profile.employmentDate}T00:00:00`).toLocaleDateString("ru-RU")}</small> : null}</article>
                 <article><span>Активные задачи</span><strong>{profile.activeTaskCount == null ? "Скрыто" : profile.activeTaskCount}</strong><small>{profile.activeTaskCountVisible ? "Видно всем сотрудникам" : "Видимость отключена администратором"}</small></article>
                 <article><span>Награды коллег</span><strong>{profile.rewards.length}</strong><small>{rewardGroups.length} видов · выдаются сотрудниками</small></article>
+                <article className="employee-profile-efficiency"><span>Выполнение задач в срок</span><strong>{efficiency?.percentage == null ? "Нет данных" : `${Math.round(efficiency.percentage)}%`}</strong><div className="employee-profile-efficiency-track" role="meter" aria-label="Эффективность выполнения задач в срок" aria-valuemin={0} aria-valuemax={100} aria-valuenow={efficiency?.percentage == null ? undefined : Math.round(efficiency.percentage)}><i style={{ width: `${Math.min(100, Math.max(0, efficiency?.percentage ?? 0))}%` }} /></div><small>{efficiency ? `${efficiency.onTimeCount} из ${efficiency.eligibleCount} задач в срок · ${efficiency.period}` : "Показатель появится после подтверждённых задач"}</small></article>
                 <div className="employee-profile-highlight">
                   <div><h3>Последние достижения</h3><p>Автоматически подтверждены рабочими событиями</p></div>
                   <div className="employee-profile-emblem-row">
-                    {unlocked.slice(-4).reverse().map((item) => <RecognitionEmblem key={item.code} iconKey={item.iconKey} tier={item.tier} compact />)}
+                    {unlocked.slice(-4).reverse().map((item) => <Tooltip key={item.code} content={item.title} relationship="label" positioning="above"><button type="button" className="employee-profile-latest-achievement" aria-label={item.title} onClick={() => navigateTo("achievements")}><RecognitionEmblem iconKey={item.iconKey} tier={item.tier} compact /></button></Tooltip>)}
                     {!unlocked.length ? <span>Первые достижения появятся после выполнения критериев.</span> : null}
                   </div>
                 </div>
@@ -501,17 +594,14 @@ export function EmployeeProfileDialog({
                 {rewardOpen ? <div className="reward-composer">
                   <div className="reward-composer-heading"><strong>Выберите готовую награду</strong><span>Название и смысл награды одинаковы для всех сотрудников.</span></div>
                   <div className="reward-icon-picker" role="group" aria-label="Вид награды">
-                    {profile.rewardCatalog.map((option) => <button key={option.iconKey} type="button" aria-pressed={rewardIcon === option.iconKey} className={rewardIcon === option.iconKey ? "is-active" : ""} onClick={() => setRewardIcon(option.iconKey)}>
-                      <RecognitionEmblem iconKey={option.iconKey} compact />
-                      <span><strong>{option.title}</strong><small>{option.description}</small></span>
-                    </button>)}
+                    {profile.rewardCatalog.map((option) => <RewardCatalogOption key={option.iconKey} option={option} selected={rewardIcon === option.iconKey} onSelect={() => setRewardIcon(option.iconKey)} />)}
                   </div>
                   <Field label="Повод · необязательно" hint="Например, после завершения проекта или конкретной задачи"><Input maxLength={240} value={rewardContext} onChange={(_, data) => setRewardContext(data.value)} placeholder="Что хочется отметить именно сейчас?" /></Field>
                   {error ? <p className="reward-composer-error" role="alert">{error}</p> : null}
                   <div className="reward-composer-actions"><Button disabled={rewardBusy} onClick={() => { setRewardOpen(false); setErrorState(undefined); }}>Отмена</Button><Button appearance="primary" disabled={rewardBusy || !profile.rewardCatalog.some((item) => item.iconKey === rewardIcon)} onClick={() => void submitReward()}>{rewardBusy ? "Сохраняем…" : "Выдать награду"}</Button></div>
                 </div> : null}
                 <div className="employee-reward-list">
-                  {rewardGroups.length ? rewardGroups.map((group) => <RewardCard key={group.iconKey} group={group} onOpenHistory={() => openRewardHistory(group.iconKey)} />) : <p className="recognition-empty">Наград пока нет. Коллеги смогут отметить вклад сотрудника здесь.</p>}
+                  {rewardGroups.length ? rewardGroups.map((group) => <RewardCard key={group.iconKey} group={group} people={people} token={token} onOpenIssuer={openIssuerProfile} onOpenHistory={() => openRewardHistory(group.iconKey)} />) : <p className="recognition-empty">Наград пока нет. Коллеги смогут отметить вклад сотрудника здесь.</p>}
                 </div>
               </section>
 
@@ -525,8 +615,10 @@ export function EmployeeProfileDialog({
               </section>
             </div> : null}
           </DialogContent>
-        </DialogBody>}
+        </DialogBody>
       </DialogSurface>
     </Dialog>
+    <Dialog open={open && guideOpen} onOpenChange={(_, data) => { if (!data.open) returnFromGuide(); }}><DialogSurface className="recognition-guide-dialog" aria-label="Как работают награды и достижения"><RecognitionGuide onBack={returnFromGuide} achievements={profile?.achievements ?? []} rewardCatalog={profile?.rewardCatalog ?? []} /></DialogSurface></Dialog>
+    <Dialog open={open && Boolean(selectedRewardGroup)} onOpenChange={(_, data) => { if (!data.open) returnFromHistory(); }}><DialogSurface className="reward-history-dialog" aria-label="История награды">{selectedRewardGroup ? <RewardHistoryContent group={selectedRewardGroup} onBack={returnFromHistory} people={people} token={token} onOpenIssuer={openIssuerProfile} /> : null}</DialogSurface></Dialog>
   </>;
 }

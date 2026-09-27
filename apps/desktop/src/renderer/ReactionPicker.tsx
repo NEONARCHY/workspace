@@ -42,15 +42,15 @@ export function orderedReactionsForUser(userId: string): readonly string[] {
   return orderedReactions(readUsage(userId));
 }
 
-export function ReactionPicker({ userId, disabled = false, active = [], onSelect, className = "" }: {
+export function ReactionPicker({ userId, disabled = false, active = [], onSelect, className = "", ownMessage = false }: {
   readonly userId: string; readonly disabled?: boolean; readonly active?: readonly string[];
-  readonly onSelect: (emoji: string) => void; readonly className?: string;
+  readonly onSelect: (emoji: string) => void; readonly className?: string; readonly ownMessage?: boolean;
 }) {
   const [usage, setUsage] = useState<ReactionUsageMap>(() => readUsage(userId));
   const emojis = useMemo(() => orderedReactions(usage), [usage]);
-  return <Menu positioning={{ position: "after", align: "top" }}>
+  return <Menu positioning={{ position: ownMessage ? "before" : "after", align: "top", offset: 12 }}>
     <MenuTrigger disableButtonEnhancement><Button className={`reaction-picker-trigger ${className}`} size="small" appearance="subtle" icon={<EmojiAdd24Regular />} aria-label="Добавить реакцию" disabled={disabled} /></MenuTrigger>
-    <MenuPopover className="reaction-picker-popover"><MenuList className="reaction-picker-grid" aria-label="Выберите реакцию">
+    <MenuPopover className={`reaction-picker-popover${ownMessage ? " is-own-message" : ""}`}><MenuList className="reaction-picker-grid" aria-label="Выберите реакцию">
       {emojis.map((emoji) => <MenuItem aria-label={emoji} aria-checked={active.includes(emoji)} role="menuitemcheckbox" key={emoji} onClick={() => {
         setUsage(rememberReaction(userId, emoji)); onSelect(emoji);
       }}>{emoji}</MenuItem>)}

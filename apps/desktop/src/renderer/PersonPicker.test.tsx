@@ -28,4 +28,14 @@ describe("Contextual person selection", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Сотрудники не найдены");
     expect(within(screen.getByLabelText("Доступные сотрудники")).queryByRole("button")).toBeNull();
   });
+  it("keeps the list limited to people and offers clearing outside it", () => {
+    const onChange = vi.fn();
+    render(<FluentProvider theme={workspaceTheme}><PersonPicker people={people} value="aziza" label="Ответственный" onChange={onChange} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Ответственный" }));
+    const list = screen.getByLabelText("Доступные сотрудники");
+    expect(within(list).getAllByRole("button")).toHaveLength(2);
+    expect(within(list).getByRole("button", { name: /Азиза Каримова/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Снять выбор сотрудника" }));
+    expect(onChange).toHaveBeenCalledWith("");
+  });
 });

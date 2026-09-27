@@ -87,7 +87,7 @@ const profile = {
 
 async function main() {
   const origin = process.env.YUKSALISH_VISUAL_URL || "http://127.0.0.1:4173";
-  const output = path.resolve("tmp/recognition-3d");
+  const output = path.resolve(process.env.YUKSALISH_VISUAL_OUTPUT || "tmp/recognition-3d");
   await fs.mkdir(output, { recursive: true });
   const browser = await chromium.launch({ channel: "msedge", headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
@@ -141,6 +141,10 @@ async function main() {
       } });
     }
     if (url.includes("/recognition/profiles/aziza")) return route.fulfill({ json: profile });
+    if (url.endsWith("/efficiency")) return route.fulfill({ json: {
+      period: "2026-09", timezone: "Asia/Tashkent", methodologyVersion: "EFF-1.0", trackingStartedAt: "2026-09-01", currentUserId: person.id,
+      employees: [{ userId: person.id, name: person.name, jobTitle: person.jobTitle, period: "2026-09", timezone: "Asia/Tashkent", percentage: 80, onTimeCount: 4, eligibleCount: 5, overdueCount: 1, awaitingReviewCount: 0, noDueDateCount: 0, returnedForRevisionCount: 0, excludedCount: 0, sampleSize: 5, methodologyVersion: "EFF-1.0", trackingStartedAt: "2026-09-01", historyCompleteness: "complete", smallSample: false, history: [] }],
+    } });
     return route.fulfill({ status: 204, body: "" });
   });
 
@@ -154,6 +158,12 @@ async function main() {
     await page.getByRole("button", { name: "Профиль сотрудника", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Публичный профиль сотрудника" });
     await dialog.waitFor();
+    await dialog.getByRole("meter", { name: "Эффективность выполнения задач в срок" }).waitFor();
+    assert.equal(await dialog.getByRole("meter", { name: "Эффективность выполнения задач в срок" }).getAttribute("aria-valuenow"), "80");
+    await page.waitForTimeout(280);
+    await dialog.screenshot({ path: path.join(output, "profile-overview.png") });
+    await dialog.locator(".employee-profile-latest-achievement").first().hover();
+    await page.getByRole("tooltip").waitFor();
     await dialog.getByRole("button", { name: "Достижения", exact: true }).click();
     await page.waitForFunction(() => {
       const images = [...document.querySelectorAll(".recognition-badge-artwork")];
@@ -206,13 +216,17 @@ async function main() {
 
     await dialog.getByRole("button", { name: "Награды", exact: true }).click();
     assert.equal(await dialog.locator(".employee-reward-card").count(), 1);
-    await dialog.getByRole("button", { name: /Командная работа: 2 наград/ }).hover();
+    await dialog.getByRole("button", { name: /Командная работа: 2 награды/ }).hover();
     await page.getByText("После запуска проекта", { exact: true }).waitFor();
+    await page.waitForTimeout(220);
     await dialog.screenshot({ path: path.join(output, "rewards-first.png") });
     const profileScrollBeforeHistory = await dialog.locator(".fui-DialogContent").evaluate((content) => content.scrollTop);
-    await dialog.getByRole("button", { name: /Командная работа: 2 наград/ }).click();
+    await dialog.getByRole("button", { name: /Командная работа: 2 награды/ }).click();
     const history = page.getByRole("dialog", { name: "История награды" });
     await history.waitFor();
+    assert.equal(await dialog.count(), 1, "profile must remain mounted under reward history");
+    await page.waitForTimeout(280);
+    await page.screenshot({ path: path.join(output, "reward-history-layer.png") });
     assert.equal(await history.locator(".reward-history-content li").count(), 2);
     await page.waitForTimeout(450);
     await history.screenshot({ path: path.join(output, "reward-history.png") });
@@ -234,20 +248,28 @@ async function main() {
     assert(longHistory.titleTop >= longHistory.surfaceTop);
     await history.screenshot({ path: path.join(output, "reward-history-long.png") });
     await history.getByRole("button", { name: "Вернуться к профилю" }).click();
-    await dialog.waitFor();
+    await history.waitFor({ state: "hidden" });
     await page.waitForFunction(() => document.activeElement?.matches(".employee-reward-card"));
+    await page.waitForFunction((expected) => {
+      const scrollTop = document.querySelector(".employee-profile-dialog .fui-DialogContent")?.scrollTop ?? 0;
+      return Math.abs(scrollTop - expected) < 8;
+    }, profileScrollBeforeHistory);
     const profileScrollAfterHistory = await dialog.locator(".fui-DialogContent").evaluate((content) => content.scrollTop);
-    assert(Math.abs(profileScrollAfterHistory - profileScrollBeforeHistory) < 8);
+    assert(Math.abs(profileScrollAfterHistory - profileScrollBeforeHistory) < 8,
+      `profile scroll changed: ${profileScrollBeforeHistory} → ${profileScrollAfterHistory}`);
     await dialog.getByRole("button", { name: "Выдать награду", exact: true }).click();
     await page.locator(".reward-icon-picker").waitFor();
     await page.waitForFunction(() => [...document.querySelectorAll(".reward-icon-picker img")]
       .every((image) => image.complete && image.naturalWidth > 0));
     assert.equal(await page.locator(".reward-icon-picker img.recognition-badge-artwork").count(), 9);
+    const rewardBases = await page.locator(".reward-catalog-option .recognition-card-surface").evaluateAll((surfaces) => surfaces.map((surface) => getComputedStyle(surface).backgroundImage));
+    assert.equal(new Set(rewardBases).size, 9, "every reward must have a distinct shimmer palette");
     await dialog.screenshot({ path: path.join(output, "reward-types.png") });
     await page.locator(".reward-icon-picker").screenshot({ path: path.join(output, "reward-picker.png") });
     await dialog.getByRole("button", { name: "Как это работает" }).click();
     const guide = page.getByRole("dialog", { name: "Как работают награды и достижения" });
     await guide.waitFor();
+    assert.equal(await dialog.count(), 1, "profile must remain mounted under guide");
     await page.waitForTimeout(450);
     assert.equal(await guide.locator(".recognition-guide-reward-grid article").count(), 9);
     await guide.screenshot({ path: path.join(output, "recognition-guide.png") });

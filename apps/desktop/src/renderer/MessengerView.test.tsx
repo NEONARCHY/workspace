@@ -574,6 +574,57 @@ describe("Private messenger", () => {
     expect(screen.queryByText(/Сообщение будет удалено через/)).not.toBeInTheDocument();
   });
 
+  it("removes an own message from an open chat with a collapsing row", async () => {
+    const message: ChatMessage = { id: "own-to-remove", chatId: "finance", authorId: "aziza", body: "Удаляемое сообщение", time: "12:00", canEdit: true };
+    const onDeleteMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [message], onDeleteMessage });
+    const row = screen.getByText(message.body).closest(".message-row");
+    expect(row).not.toBeNull();
+    openMessageMenu(message.body);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
+    expect(row).toHaveClass("is-removing");
+    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
+  });
+
+  it("animates a colleague's deletion only while this conversation is visible", () => {
+    const removed: ChatMessage = { id: "remote-removed", chatId: "finance", authorId: "baxtiyor", body: "Коллега удалил это", time: "12:00" };
+    const kept: ChatMessage = { id: "remote-kept", chatId: "finance", authorId: "aziza", body: "Оставшееся сообщение", time: "12:01" };
+    const view = renderMessenger({ messages: [removed, kept] });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!;
+    const row = screen.getByText(removed.body).closest<HTMLElement>(".message-row")!;
+    const visible = vi.spyOn(pane, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const bounds = vi.spyOn(row, "getBoundingClientRect").mockReturnValue({ height: 60 } as DOMRect);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[removed, kept]} /></FluentProvider>);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[kept]} /></FluentProvider>);
+    expect(screen.getByText(removed.body).closest(".message-row")).toHaveClass("is-removing");
+    bounds.mockRestore();
+    visible.mockRestore();
+  });
+
+  it("does not replay a deletion that happened while the conversation was hidden", () => {
+    const removed: ChatMessage = { id: "closed-removed", chatId: "finance", authorId: "baxtiyor", body: "Удалено в закрытом чате", time: "12:00" };
+    const kept: ChatMessage = { id: "closed-kept", chatId: "finance", authorId: "aziza", body: "Остаётся в чате", time: "12:01" };
+    const view = renderMessenger({ messages: [removed, kept] });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!;
+    const hidden = vi.spyOn(pane, "getClientRects").mockReturnValue({ length: 0 } as DOMRectList);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[kept]} /></FluentProvider>);
+    expect(screen.queryByText(removed.body)).not.toBeInTheDocument();
+    expect(document.querySelector(".message-row.is-removing")).not.toBeInTheDocument();
+    hidden.mockRestore();
+  });
+
+  it("saves each employee's chat background without changing messages", async () => {
+    localStorage.removeItem("yuksalish:chat-background:aziza");
+    renderMessenger();
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
+    fireEvent.click(screen.getByRole("button", { name: /Тихий рассвет/ }));
+    expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "dawn");
+    expect(localStorage.getItem("yuksalish:chat-background:aziza")).toBe("dawn");
+    expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
+    localStorage.removeItem("yuksalish:chat-background:aziza");
+  });
+
   it("copies the last own message into the composer with ArrowUp and saves it with Enter", async () => {
     const own: ChatMessage = { id: "latest-own", chatId: "finance", authorId: "aziza", body: "Последнее своё", time: "12:00", canEdit: true, revision: 3 };
     const onEditMessage = vi.fn().mockResolvedValue(undefined);

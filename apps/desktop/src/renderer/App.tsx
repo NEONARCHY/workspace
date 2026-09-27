@@ -2139,6 +2139,8 @@ export function App() {
         token={session.accessToken}
         userId={profileUserId}
         open={profileUserId !== undefined}
+        people={workspace.people}
+        onOpenPersonProfile={setProfileUserId}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
       />
       {supportOpen ? (

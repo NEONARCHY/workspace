@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { scrollToLatest } from "./message-scroll";
 import type {
@@ -19,6 +19,9 @@ import {
   Avatar,
   Button,
   Input,
+  Popover,
+  PopoverSurface,
+  PopoverTrigger,
   Tooltip,
   useRestoreFocusTarget,
 } from "@fluentui/react-components";
@@ -26,6 +29,7 @@ import {
   Add24Regular,
   Attach24Regular,
   CalendarLtr24Regular,
+  Color24Regular,
   Mic24Regular,
   Pin24Regular,
   PinOff24Regular,
@@ -45,6 +49,7 @@ import { ReactionPicker } from "./ReactionPicker";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import {
   MessageRevealOverlay,
   MessageVanishOverlay,
@@ -292,8 +297,13 @@ function Conversation({
   const [editBody, setEditBody] = useState("");
   const [editMentions, setEditMentions] = useState<readonly string[]>([]);
   const [deleting, setDeleting] = useState<ChatMessage>();
+  const [removingMessage, setRemovingMessage] = useState<{ message: ChatMessage; index: number; height: number; phase: "ready" | "exiting" | "done" }>();
+  const removalTimer = useRef<number | undefined>(undefined);
+  const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
+  const locallyRemovedIds = useRef(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number }>();
   const [reactionTargetId, setReactionTargetId] = useState<string>();
+  const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -341,16 +351,42 @@ function Conversation({
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personById = (id: string) => people.find((person) => person.id === id);
-  const activeMessages = messages.filter(
+  const activeMessages = useMemo(() => messages.filter(
     (message) => message.chatId === chat.id && !message.deletedAt,
-  );
-  const visibleMessages = activeMessages.filter(
-    (message) =>
-      message.id === editing?.id ||
-      !query ||
-      (!message.deletedAt &&
-        message.body.toLowerCase().includes(query.toLowerCase())),
-  );
+  ), [messages, chat.id]);
+  const visibleMessages = useMemo(() => activeMessages.filter(
+    (message) => message.id === editing?.id || !query
+      || message.body.toLowerCase().includes(query.toLowerCase()),
+  ), [activeMessages, editing?.id, query]);
+  const renderedMessages = visibleMessages.filter((message) => message.id !== removingMessage?.message.id);
+  if (removingMessage && removingMessage.phase !== "done") {
+    renderedMessages.splice(Math.min(removingMessage.index, renderedMessages.length), 0, removingMessage.message);
+  }
+  useLayoutEffect(() => {
+    const pane = scrollRef.current;
+    const currentRows = new Map<string, { message: ChatMessage; index: number; height: number }>();
+    const measuredRows = new Map([...pane?.querySelectorAll<HTMLElement>(".message-row") ?? []]
+      .map((element) => [element.querySelector<HTMLElement>("[data-message-id]")?.dataset.messageId, element.getBoundingClientRect().height] as const));
+    activeMessages.forEach((message, index) => {
+      currentRows.set(message.id, { message, index, height: measuredRows.get(message.id) ?? 0 });
+    });
+    const vanished = [...previousRows.current].find(([id, entry]) =>
+      !currentRows.has(id) && !locallyRemovedIds.current.has(id)
+      && !entry.message.systemKind && entry.height > 0,
+    )?.[1];
+    for (const id of locallyRemovedIds.current) {
+      if (!currentRows.has(id)) locallyRemovedIds.current.delete(id);
+    }
+    previousRows.current = currentRows;
+    if (!vanished || (removingMessage && removingMessage.phase !== "done")
+      || !pane?.getClientRects().length || document.visibilityState !== "visible"
+      || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    setRemovingMessage({ ...vanished, phase: "ready" });
+    requestAnimationFrame(() => requestAnimationFrame(() => setRemovingMessage((current) => current?.message.id === vanished.message.id ? { ...current, phase: "exiting" } : current)));
+    if (removalTimer.current) window.clearTimeout(removalTimer.current);
+    removalTimer.current = window.setTimeout(() => setRemovingMessage((current) => current?.message.id === vanished.message.id ? { ...current, phase: "done" } : current), 230);
+  }, [activeMessages, visibleMessages, removingMessage]);
+  useEffect(() => () => { if (removalTimer.current) window.clearTimeout(removalTimer.current); }, []);
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
   const activeComposerBody = editing ? editBody : draft;
   const activeMentions = editing ? editMentions : mentions;
@@ -524,7 +560,21 @@ function Conversation({
           </p>
           </div>
         </div>
-        {!embedded ? <div className="conversation-header-actions">
+        <div className="conversation-header-actions">
+          <Popover positioning="below-end" trapFocus>
+            <PopoverTrigger disableButtonEnhancement><Button className="chat-background-trigger" appearance="subtle" icon={<Color24Regular />} aria-label="Выбрать фон переписки">Фон</Button></PopoverTrigger>
+            <PopoverSurface className="chat-background-picker" aria-label="Фон переписки">
+              <strong>Фон переписки</strong>
+              <p>Ваш выбор действует во всех чатах на этом устройстве.</p>
+              <div className="chat-background-options">
+                {chatBackgrounds.map((option) => <button key={option.id} type="button" aria-pressed={chatBackground === option.id} onClick={() => { setChatBackground(option.id); saveChatBackground(currentUserId, option.id); }}>
+                  <span className={`chat-background-preview is-${option.id}`} aria-hidden="true" />
+                  <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                </button>)}
+              </div>
+            </PopoverSurface>
+          </Popover>
+          {!embedded ? <>
           {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "trip", chat.contextId!)}>
             {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "project" ? "Открыть проект" : "Открыть поездку"}
           </Button> : null}
@@ -540,7 +590,8 @@ function Conversation({
           <Button {...restoreFocusTarget} onClick={onManage}>
             {chat.kind === "group" ? "Участники и права" : "Участники"}
           </Button>
-        </div> : null}
+          </> : null}
+        </div>
       </header>
       {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
         <span>Этот чат в вашем архиве</span>
@@ -583,23 +634,23 @@ function Conversation({
           </div>
         </div>
       ) : null}
-      <div className="message-scroll" aria-label="Переписка" aria-live="polite" ref={scrollRef}
+      <div className="message-scroll" data-chat-background={chatBackground} aria-label="Переписка" aria-live="polite" ref={scrollRef}
         onScroll={(event) => { const pane = event.currentTarget; followLatest.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80; }}>
-        {!visibleMessages.length && (
+        {!renderedMessages.length && (
           <div className="empty-compact">
             {query
               ? "Сообщения не найдены"
               : "Начните разговор — отправьте первое сообщение"}
           </div>
         )}
-        {visibleMessages.map((message, index) => {
+        {renderedMessages.map((message, index) => {
           const parent = activeMessages.find(
             (item) => item.id === message.replyToMessageId,
           );
           const date = message.createdAt
             ? new Date(message.createdAt).toLocaleDateString("ru-RU")
             : "История переписки";
-          const previous = visibleMessages[index - 1]?.createdAt;
+          const previous = renderedMessages[index - 1]?.createdAt;
           const previousDate = previous
             ? new Date(previous).toLocaleDateString("ru-RU")
             : "История переписки";
@@ -623,7 +674,7 @@ function Conversation({
               ? " message-particle-revealing"
               : "";
           return (
-            <div key={message.id} hidden={revealPhase === "waiting"}>
+            <div key={message.id} className={`message-row${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
@@ -719,7 +770,7 @@ function Conversation({
                   )}
                   {!message.deletedAt && (
                     <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
-                      <ReactionPicker userId={currentUserId} disabled={!canSend || busy}
+                      <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
                         active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
                         onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
                     </div>
@@ -758,13 +809,30 @@ function Conversation({
           <Button
             disabled={busy}
             appearance="primary"
-            onClick={() =>
+            onClick={() => {
+              const target = deleting;
+              const row = [...scrollRef.current?.querySelectorAll<HTMLElement>(".message-row") ?? []]
+                .find((element) => element.querySelector<HTMLElement>("[data-message-id]")?.dataset.messageId === target.id);
+              const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+              locallyRemovedIds.current.add(target.id);
+              if (row && target.authorId === currentUserId && !reduceMotion) {
+                setRemovingMessage({ message: target, index: visibleMessages.findIndex((message) => message.id === target.id), height: row.getBoundingClientRect().height, phase: "ready" });
+                requestAnimationFrame(() => requestAnimationFrame(() => setRemovingMessage((current) => current?.message.id === target.id ? { ...current, phase: "exiting" } : current)));
+                removalTimer.current = window.setTimeout(() => setRemovingMessage((current) => current?.message.id === target.id ? { ...current, phase: "done" } : current), 230);
+              }
+              setDeleting(undefined);
               void run(async () => {
-                await onDeleteMessage(deleting);
-                if (reply?.id === deleting.id) setReply(undefined);
-                setDeleting(undefined);
-              })
-            }
+                try {
+                  await onDeleteMessage(target);
+                  if (reply?.id === target.id) setReply(undefined);
+                } catch (cause) {
+                  if (removalTimer.current) window.clearTimeout(removalTimer.current);
+                  setRemovingMessage(undefined);
+                  locallyRemovedIds.current.delete(target.id);
+                  throw cause;
+                }
+              });
+            }}
           >
             Удалить для всех
           </Button>

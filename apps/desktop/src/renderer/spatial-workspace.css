@@ -420,13 +420,21 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .person-picker-value > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker-trigger > span:not(.fui-Avatar) { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker-trigger > svg:last-child { margin-left: auto; flex: none; }
-.person-picker-surface { width: min(370px,calc(100vw - 40px)); max-height: min(420px,calc(100dvh - 40px)); padding: 14px; border: 1px solid #fff; border-radius: 20px; background: #fbfdfc; box-shadow: var(--ws-shadow-float); }
-.person-picker-surface > .fui-Input { width: 100%; border-radius: 12px; }
-.person-picker-list { max-height: min(320px,calc(100dvh - 120px)); overflow-y: auto; padding-top: 9px; }
-.person-picker-list > button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 8px; border: 0; border-radius: 14px; background: transparent; color: var(--ws-text); text-align: left; cursor: pointer; }
-.person-picker-list > button:hover, .person-picker-list > button[aria-pressed=true] { background: #e8f3ed; }
-.person-picker-list > button > span:not(.fui-Avatar) { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.person-picker-surface { box-sizing: border-box; width: min(370px,calc(100vw - 40px)); max-height: min(420px,calc(100dvh - 40px)); padding: 12px; overflow-x: hidden; border: 1px solid #fff; border-radius: 20px; background: #fbfdfc; box-shadow: var(--ws-shadow-float); }
+.person-picker-search-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.person-picker-search-row > .fui-Input { flex: 1; min-width: 0; border-radius: 12px; }
+.person-picker-search-row > button { display: grid; width: 30px; height: 30px; flex: none; place-items: center; border: 0; border-radius: 9px; color: var(--ws-muted); background: #eff4f3; cursor: pointer; }
+.person-picker-search-row > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.person-picker-list { box-sizing: border-box; max-height: min(320px,calc(100dvh - 120px)); min-width: 0; overflow-x: hidden; overflow-y: scroll; padding-top: 6px; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #9fb9bc #edf3f2; }
+.person-picker-list > button { display: grid; grid-template-columns: 36px minmax(0, 1fr) 20px; align-items: center; gap: 10px; box-sizing: border-box; width: 100%; min-width: 0; min-height: 51px; padding: 5px 7px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--ws-text); text-align: left; cursor: pointer; }
+.person-picker-list > button > .fui-Avatar { flex: none; }
+.person-picker-list > button:hover { background: #f1f5f4; }
+.person-picker-list > button[aria-pressed=true] { border-color: rgb(0 145 168 / 28%); background: #e3f5f5; }
+.person-picker-list > button[aria-pressed=true]:hover { background: #d9f0f0; }
+.person-picker-list > button > span:not(.fui-Avatar) { display: grid; gap: 2px; min-width: 0; }
+.person-picker-list > button > svg:last-child { grid-column: 3; justify-self: center; }
 .person-picker-list strong { font-size: 13px; font-weight: 600; }
+.person-picker-list strong, .person-picker-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .person-picker-list small { color: var(--ws-muted); font-size: 11px; line-height: 1.3; }
 .team-dashboard { padding: 0 4px 28px; background: transparent; }
 .team-dash-hero { min-height: 142px; padding: 26px 30px; border: 0; border-radius: 26px; background: linear-gradient(110deg,#e1eeeb,#f8fbf7); box-shadow: none; }

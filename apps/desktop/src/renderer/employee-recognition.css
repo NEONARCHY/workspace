@@ -229,3 +229,40 @@
   .employee-reward-card:focus-visible { outline-color: Highlight; }
   .recognition-guide-reward-grid article, .recognition-guide-ladder-grid article, .recognition-guide-rules span, .reward-history-content li { border-color: CanvasText; background: Canvas; }
 }
+
+/* Reward artwork stays clipped at the card edge, even at extreme hover positions. */
+.recognition-card-foil { inset: 0; background-size: 125% 125%; background-position: calc(50% + var(--recognition-foil-x, 0%)) calc(50% + var(--recognition-foil-y, 0%)); transform: none; }
+.employee-reward-card[data-reward-icon="appreciation"], .reward-catalog-option[data-reward-icon="appreciation"] { --tier-accent: #b43d55; --recognition-glow: rgb(221 92 110 / 22%); --recognition-card-base: linear-gradient(125deg, #fffafa, #fae8ed 54%, #edf6fa); --recognition-card-foil: linear-gradient(105deg, transparent 12%, rgb(255 186 199 / 72%) 32%, rgb(255 243 229 / 65%) 52%, rgb(209 123 156 / 58%) 72%, transparent 90%); }
+.employee-reward-card[data-reward-icon="leadership"], .reward-catalog-option[data-reward-icon="leadership"] { --tier-accent: #a77319; --recognition-glow: rgb(196 146 52 / 22%); --recognition-card-base: linear-gradient(125deg, #fffdf8, #faedcf 52%, #f5f5e8); --recognition-card-foil: linear-gradient(120deg, transparent 12%, rgb(255 226 153 / 68%) 33%, rgb(255 250 221 / 85%) 50%, rgb(204 155 58 / 46%) 72%, transparent 90%); }
+.employee-reward-card[data-reward-icon="rescue"], .reward-catalog-option[data-reward-icon="rescue"] { --tier-accent: #d76b48; --recognition-glow: rgb(245 139 90 / 20%); --recognition-card-base: linear-gradient(125deg, #fffaf6, #fce9dc 55%, #eef8fa); --recognition-card-foil: linear-gradient(103deg, transparent 14%, rgb(255 196 151 / 70%) 31%, rgb(255 239 197 / 65%) 53%, rgb(235 117 93 / 42%) 72%, transparent 88%); }
+.employee-reward-card[data-reward-icon="mentorship"], .reward-catalog-option[data-reward-icon="mentorship"] { --tier-accent: #5754ba; --recognition-glow: rgb(105 96 209 / 20%); --recognition-card-base: linear-gradient(125deg, #fcfbff, #eae8fc 55%, #e9f7fb); --recognition-card-foil: linear-gradient(113deg, transparent 12%, rgb(183 170 255 / 70%) 33%, rgb(235 232 255 / 75%) 53%, rgb(99 122 214 / 42%) 74%, transparent 90%); }
+.employee-reward-card[data-reward-icon="innovation"], .reward-catalog-option[data-reward-icon="innovation"] { --tier-accent: #b95baa; --recognition-glow: rgb(223 125 200 / 20%); --recognition-card-base: linear-gradient(125deg, #fffaff, #fbe8f4 52%, #e8f8fb); --recognition-card-foil: linear-gradient(127deg, transparent 12%, rgb(255 178 224 / 70%) 32%, rgb(255 239 251 / 72%) 52%, rgb(130 210 231 / 50%) 75%, transparent 90%); }
+.employee-reward-card[data-reward-icon="reliability"], .reward-catalog-option[data-reward-icon="reliability"] { --tier-accent: #368f80; --recognition-glow: rgb(90 182 154 / 22%); --recognition-card-base: linear-gradient(125deg, #fafffd, #e0f4eb 52%, #e5f4f8); --recognition-card-foil: linear-gradient(118deg, transparent 13%, rgb(153 231 195 / 70%) 32%, rgb(235 255 242 / 75%) 52%, rgb(91 174 183 / 44%) 73%, transparent 90%); }
+.employee-reward-card[data-reward-icon="teamwork"], .reward-catalog-option[data-reward-icon="teamwork"] { --tier-accent: #3472bc; --recognition-glow: rgb(80 152 214 / 22%); --recognition-card-base: linear-gradient(125deg, #faffff, #e2f2fb 50%, #e6e9fc); --recognition-card-foil: linear-gradient(108deg, transparent 12%, rgb(145 220 253 / 75%) 33%, rgb(230 249 255 / 72%) 52%, rgb(118 130 226 / 46%) 73%, transparent 90%); }
+.employee-reward-card[data-reward-icon="initiative"], .reward-catalog-option[data-reward-icon="initiative"] { --tier-accent: #ba5967; --recognition-glow: rgb(211 98 110 / 20%); --recognition-card-base: linear-gradient(125deg, #fffaf9, #fce3e5 50%, #fff0da); --recognition-card-foil: linear-gradient(123deg, transparent 12%, rgb(250 160 169 / 73%) 31%, rgb(255 238 199 / 78%) 52%, rgb(223 113 137 / 42%) 72%, transparent 90%); }
+.employee-reward-card[data-reward-icon="mastery"], .reward-catalog-option[data-reward-icon="mastery"] { --tier-accent: #a66d23; --recognition-glow: rgb(220 159 65 / 22%); --recognition-card-base: linear-gradient(125deg, #fffdf8, #faefd7 50%, #f3e5d8); --recognition-card-foil: linear-gradient(111deg, transparent 13%, rgb(255 218 132 / 75%) 31%, rgb(255 247 209 / 74%) 52%, rgb(181 121 63 / 42%), transparent 90%); }
+.reward-history-popover { max-width: min(320px, calc(100vw - 24px)); padding: 9px; border: 1px solid rgb(41 58 85 / 12%); border-radius: 14px; background: #fff; box-shadow: 0 14px 32px rgb(41 58 85 / 16%); }
+.reward-history-tooltip { display: grid; gap: 8px; max-width: none; padding: 0; color: var(--ws-text); font-size: 12px; line-height: 1.35; }
+.reward-history-tooltip > strong { color: var(--ws-navy); }
+.reward-history-preview-entry { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 3px 7px; padding-top: 7px; border-top: 1px solid rgb(41 58 85 / 9%); }
+.reward-history-preview-entry > span, .reward-history-preview-entry > time { color: var(--ws-muted); }
+.reward-history-preview-entry > time, .reward-history-preview-entry > small { grid-column: 2; }
+.reward-history-tooltip small, .reward-history-tooltip em { color: var(--ws-muted); font-size: 11px; font-style: normal; }
+.reward-issuer-link { display: inline-flex; min-width: 0; align-items: center; gap: 8px; padding: 0; border: 0; color: var(--ws-navy); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.reward-issuer-link strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reward-issuer-link:hover { color: var(--ws-navy); background: transparent; }
+.reward-issuer-link:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; border-radius: 4px; }
+.reward-issuer-fallback { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 50%; background: #dcefed; }
+.reward-icon-picker button.reward-catalog-option { display: block; min-height: 74px; padding: 0; border: 0; border-radius: 14px; background: transparent; }
+.reward-icon-picker button.reward-catalog-option .recognition-card-content { grid-template-columns: auto minmax(0, 1fr); gap: 7px; padding: 7px; }
+.reward-icon-picker button.reward-catalog-option.is-active .recognition-card-surface { border-color: rgb(0 145 168 / 48%); box-shadow: 0 0 0 2px rgb(0 145 168 / 12%); }
+.reward-icon-picker button.reward-catalog-option:hover .recognition-card-surface, .reward-icon-picker button.reward-catalog-option:focus-visible .recognition-card-surface { box-shadow: 0 9px 24px var(--recognition-glow); }
+.reward-history-issuer-label { color: var(--ws-muted); }
+.reward-history-content li .reward-issuer-link { margin-right: auto; }
+.employee-profile-overview > article.employee-profile-efficiency { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) auto; align-items: center; min-height: 92px; background: linear-gradient(110deg, #f9ffff, #e7f5f3 60%, #ecf1fb); }
+.employee-profile-efficiency > strong { grid-column: 2; grid-row: 1 / 3; font-size: 24px; font-variant-numeric: tabular-nums; }
+.employee-profile-efficiency-track { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: 999px; background: rgb(41 58 85 / 9%); }
+.employee-profile-efficiency-track i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #0091a8, #62beb0, #7eaae5); transition: width 240ms var(--ws-ease); }
+.employee-profile-efficiency > small { grid-column: 1 / -1; }
+.employee-profile-latest-achievement { display: grid; padding: 0; border: 0; border-radius: 12px; background: transparent; cursor: pointer; }
+.employee-profile-latest-achievement:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }

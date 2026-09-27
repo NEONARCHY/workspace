@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { EmployeeRecognitionProfile } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -7,12 +7,14 @@ import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
 import {
   issueEmployeeReward,
   loadEmployeeRecognitionProfile,
+  loadWorkspaceEfficiency,
 } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
 
 vi.mock("./workspace-api", () => ({
   issueEmployeeReward: vi.fn(),
   loadEmployeeRecognitionProfile: vi.fn(),
+  loadWorkspaceEfficiency: vi.fn(),
   loadProfileAvatar: vi.fn(),
 }));
 
@@ -90,9 +92,15 @@ afterEach(() => {
 
 function renderProfile(value: EmployeeRecognitionProfile = profile) {
   vi.mocked(loadEmployeeRecognitionProfile).mockResolvedValue(value);
+  vi.mocked(loadWorkspaceEfficiency).mockResolvedValue({
+    period: "2026-09", timezone: "Asia/Tashkent", methodologyVersion: "1", trackingStartedAt: "2026-01-01", currentUserId: "manager",
+    employees: [{ userId: "baxtiyor", name: "Бахтиёр Самугов", jobTitle: "Руководитель проекта", period: "2026-09", timezone: "Asia/Tashkent", percentage: 80, onTimeCount: 4, eligibleCount: 5, overdueCount: 1, awaitingReviewCount: 0, noDueDateCount: 0, returnedForRevisionCount: 0, excludedCount: 0, sampleSize: 5, methodologyVersion: "1", trackingStartedAt: "2026-01-01", historyCompleteness: "complete", smallSample: false, history: [] }],
+  });
+  const onOpenPersonProfile = vi.fn();
   render(<FluentProvider theme={workspaceTheme}>
-    <EmployeeProfileDialog token="token" userId="baxtiyor" open onOpenChange={vi.fn()} />
+    <EmployeeProfileDialog token="token" userId="baxtiyor" open onOpenChange={vi.fn()} onOpenPersonProfile={onOpenPersonProfile} people={[value.person, { id: "temur", name: "Темур Алмазов", initials: "ТА", role: "employee", color: "#0091a8" }]} />
   </FluentProvider>);
+  return onOpenPersonProfile;
 }
 
 describe("EmployeeProfileDialog", () => {
@@ -102,6 +110,7 @@ describe("EmployeeProfileDialog", () => {
     expect(await screen.findByRole("heading", { name: "Бахтиёр Самугов" })).toBeVisible();
     expect(screen.getByText("Проектный офис")).toBeVisible();
     expect(screen.getByText("2 г. 7 мес. 23 дн.")).toBeVisible();
+    expect(await screen.findByRole("meter", { name: "Эффективность выполнения задач в срок" })).toHaveAttribute("aria-valuenow", "80");
     fireEvent.click(screen.getByRole("button", { name: "Достижения" }));
     const unlockedCard = screen.getByText("Завершённые задачи · 1").closest("article");
     expect(unlockedCard).toHaveClass("is-unlocked");
@@ -120,6 +129,7 @@ describe("EmployeeProfileDialog", () => {
       "Личные чаты один на один",
     );
     expect(screen.getByRole("dialog", { name: "Как работают награды и достижения" })).toHaveTextContent("100");
+    expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника", hidden: true })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Вернуться к профилю" }));
     expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника" })).toBeVisible();
   });
@@ -156,23 +166,36 @@ describe("EmployeeProfileDialog", () => {
         contextNote: "После запуска проекта",
       },
     ));
-    expect(await screen.findByRole("button", { name: /Командная работа: 1 наград/ })).toBeVisible();
+    expect(await screen.findByRole("button", { name: /Командная работа: 1 награда/ })).toBeVisible();
   });
 
   it("groups repeated rewards and opens the full issuer history", async () => {
-    renderProfile({ ...profile, rewards: [
+    const onOpenPersonProfile = renderProfile({ ...profile, rewards: [
       { id: "reward-2", iconKey: "teamwork", title: "Командная работа", description: "За объединение коллег ради общего результата.", contextNote: "Проект Ташкент", recipientUserId: "baxtiyor", issuerUserId: "temur", issuerName: "Темур Алмазов", createdAt: "2026-09-25T10:00:00Z" },
       { id: "reward-1", iconKey: "teamwork", title: "Старая подпись", description: "Историческое описание награды.", recipientUserId: "baxtiyor", issuerUserId: "malika", issuerName: "Малика Нурова", createdAt: "2026-09-24T10:00:00Z" },
     ] });
-    const card = await screen.findByRole("button", { name: /Командная работа: 2 наград/ });
+    const card = await screen.findByRole("button", { name: /Командная работа: 2 награды/ });
     expect(screen.getByText("×2")).toBeVisible();
     fireEvent.click(card);
     const history = screen.getByRole("dialog", { name: "История награды" });
+    expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника", hidden: true })).toBeInTheDocument();
     expect(history).toHaveTextContent("Темур Алмазов");
     expect(history).toHaveTextContent("Малика Нурова");
     expect(history).toHaveTextContent("Проект Ташкент");
     expect(history).toHaveTextContent("Историческое описание награды.");
+    fireEvent.click(within(history).getByRole("button", { name: "Темур Алмазов" }));
+    expect(onOpenPersonProfile).toHaveBeenCalledWith("temur");
+    expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника", hidden: true })).toBeInTheDocument();
+  });
+
+  it("returns to the same profile after closing reward history", async () => {
+    renderProfile({ ...profile, rewards: [
+      { id: "reward-1", iconKey: "teamwork", title: "Командная работа", description: "За объединение коллег ради общего результата.", recipientUserId: "baxtiyor", issuerUserId: "temur", issuerName: "Темур Алмазов", createdAt: "2026-09-25T10:00:00Z" },
+    ] });
+    const card = await screen.findByRole("button", { name: /Командная работа: 1 награда/ });
+    fireEvent.click(card);
+    expect(screen.getByRole("dialog", { name: "История награды" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Вернуться к профилю" }));
-    expect(screen.getByRole("button", { name: /Командная работа: 2 наград/ })).toBeVisible();
+    expect(screen.getByRole("button", { name: /Командная работа: 1 награда/ })).toBeVisible();
   });
 });
