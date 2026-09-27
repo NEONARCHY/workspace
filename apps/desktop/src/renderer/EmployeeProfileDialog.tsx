@@ -171,8 +171,8 @@ function AchievementCard({ achievement }: { readonly achievement: EmployeeAchiev
     ref={elementRef}
     className={`achievement-card recognition-holographic-card recognition-rarity-${achievement.tier}${achievement.unlocked ? " is-unlocked" : ""}`}
     style={holographicStyle}
-    onPointerMove={onPointerMove}
-    onPointerLeave={onPointerLeave}
+    onPointerMove={achievement.unlocked ? onPointerMove : undefined}
+    onPointerLeave={achievement.unlocked ? onPointerLeave : undefined}
   >
     <div className="recognition-card-surface" aria-hidden="true">
       <span className="recognition-card-foil" />

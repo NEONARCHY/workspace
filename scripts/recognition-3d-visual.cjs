@@ -146,7 +146,8 @@ async function main() {
     const cardStates = await page.locator(".achievement-card").evaluateAll((cards) => cards.map((card) => ({
       unlocked: card.classList.contains("is-unlocked"),
       opacity: Number.parseFloat(getComputedStyle(card).opacity),
-      decoration: getComputedStyle(card.querySelector(".recognition-card-surface"), "::after").content,
+      decorationBefore: getComputedStyle(card.querySelector(".recognition-card-surface"), "::before").content,
+      decorationAfter: getComputedStyle(card.querySelector(".recognition-card-surface"), "::after").content,
     })));
     const unlockedOpacity = cardStates.find((card) => card.unlocked)?.opacity ?? 0;
     const lockedOpacity = cardStates.find((card) => !card.unlocked)?.opacity ?? 1;
@@ -154,10 +155,19 @@ async function main() {
       lockedOpacity < unlockedOpacity,
       `locked achievements must be visually quieter: ${JSON.stringify(cardStates)}`,
     );
-    assert(cardStates.every((card) => card.decoration === "none"), "card dots and diagonal stripes must be absent");
+    assert(
+      cardStates.every((card) => card.decorationBefore === "none" && card.decorationAfter === "none"),
+      "card dots and diagonal stripes must be absent",
+    );
     await dialog.screenshot({ path: path.join(output, "all-tiers.png") });
     await dialog.getByText("Следующие цели", { exact: true }).scrollIntoViewIfNeeded();
     await dialog.screenshot({ path: path.join(output, "locked-achievements.png") });
+    const lockedCard = page.locator(".achievement-card:not(.is-unlocked)").first();
+    const lockedShadow = await lockedCard.locator(".recognition-card-surface").evaluate((surface) => getComputedStyle(surface).boxShadow);
+    await lockedCard.hover();
+    await page.waitForTimeout(250);
+    assert.equal(await lockedCard.evaluate((card) => card.style.getPropertyValue("--recognition-active")), "0");
+    assert.equal(await lockedCard.locator(".recognition-card-surface").evaluate((surface) => getComputedStyle(surface).boxShadow), lockedShadow);
 
     const cosmicCard = page.locator(".recognition-rarity-cosmic");
     await cosmicCard.hover();
