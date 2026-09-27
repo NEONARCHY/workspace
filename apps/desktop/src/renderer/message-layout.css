@@ -26,7 +26,7 @@
 .message.own .message-reactions { justify-content: flex-end; }
 .message-reaction-chip { position: relative; display: inline-flex; }
 .message-reactions .fui-Button { display: inline-flex; min-width: 30px; min-height: 30px; align-items: center; justify-content: center; gap: 4px; padding: 2px 6px; border: 1px solid #d8e4e8; border-radius: 999px; background: #fff; font-size: 18px; line-height: 1; box-shadow: none; }
-.message-reactions .fui-Button[data-appearance="primary"] { border-color: #76cad3; color: var(--ws-navy); background: #def4f6; }
+.message-reactions .fui-Button[data-appearance="primary"] { border-color: #76cad3; color: var(--ws-navy); background: #fff; box-shadow: inset 0 0 0 1px rgb(0 145 168 / 8%); }
 .message-reactions .fui-Button[data-appearance="primary"],
 .feed-reactions .fui-Button:not(.feed-reaction-trigger) { border-color: #cadfe3; color: var(--ws-navy); background: #fff; box-shadow: inset 0 0 0 1px rgb(0 145 168 / 6%); }
 .feed-reactions .fui-Button:not(.feed-reaction-trigger)[data-appearance="primary"] { border-color: #86cbd1; color: var(--ws-navy); background: #fff; }

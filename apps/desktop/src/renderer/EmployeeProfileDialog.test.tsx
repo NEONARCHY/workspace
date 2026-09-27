@@ -134,6 +134,19 @@ describe("EmployeeProfileDialog", () => {
     expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника" })).toBeVisible();
   });
 
+  it("shows an efficiency load failure and retries without pretending the employee has no data", async () => {
+    vi.mocked(loadWorkspaceEfficiency).mockRejectedValueOnce(new Error("Network unavailable"));
+    renderProfile();
+
+    expect(await screen.findByText("Не удалось загрузить показатель")).toBeVisible();
+    expect(screen.getByText("Недоступно")).toBeVisible();
+    expect(screen.queryByRole("meter", { name: "Эффективность выполнения задач в срок" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Повторить загрузку эффективности" }));
+    expect(await screen.findByRole("meter", { name: "Эффективность выполнения задач в срок" })).toHaveAttribute("aria-valuenow", "80");
+    expect(loadWorkspaceEfficiency).toHaveBeenCalledTimes(2);
+  });
+
   it("issues a ready-made reward with optional context instead of editable title and description", async () => {
     renderProfile();
     vi.mocked(issueEmployeeReward).mockResolvedValue({

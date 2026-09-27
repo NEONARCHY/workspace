@@ -390,7 +390,14 @@ export function EmployeeProfileDialog({
   const [rewardContext, setRewardContext] = useState("");
   const [selectedRewardIcon, setSelectedRewardIcon] = useState<string>();
   const [rewardBusy, setRewardBusy] = useState(false);
-  const [efficiencyState, setEfficiencyState] = useState<{ readonly userId: string; readonly value?: EmployeeEfficiency }>();
+  const [efficiencyState, setEfficiencyState] = useState<{
+    readonly userId: string;
+    readonly token: string;
+    readonly retry: number;
+    readonly status: "ready" | "error";
+    readonly value?: EmployeeEfficiency;
+  }>();
+  const [efficiencyRetry, setEfficiencyRetry] = useState(0);
   const profile = profileState && profileState.userId === userId
     ? profileState.profile
     : undefined;
@@ -414,12 +421,12 @@ export function EmployeeProfileDialog({
     if (!open || !userId) return;
     let active = true;
     void loadWorkspaceEfficiency(token).then((overview) => {
-      if (active) setEfficiencyState({ userId, value: overview.employees.find((employee) => employee.userId === userId) });
+      if (active) setEfficiencyState({ userId, token, retry: efficiencyRetry, status: "ready", value: overview.employees.find((employee) => employee.userId === userId) });
     }).catch(() => {
-      if (active) setEfficiencyState({ userId });
+      if (active) setEfficiencyState({ userId, token, retry: efficiencyRetry, status: "error" });
     });
     return () => { active = false; };
-  }, [open, token, userId]);
+  }, [open, token, userId, efficiencyRetry]);
 
   const unlocked = useMemo(
     () => profile?.achievements.filter((item) => item.unlocked) ?? [],
@@ -438,7 +445,11 @@ export function EmployeeProfileDialog({
     [profile],
   );
   const selectedRewardGroup = rewardGroups.find((group) => group.iconKey === selectedRewardIcon);
-  const efficiency = efficiencyState?.userId === userId ? efficiencyState?.value : undefined;
+  const currentEfficiencyState = efficiencyState && efficiencyState.userId === userId && efficiencyState.token === token && efficiencyState.retry === efficiencyRetry
+    ? efficiencyState : undefined;
+  const efficiency = currentEfficiencyState?.status === "ready" ? currentEfficiencyState.value : undefined;
+  const efficiencyLoading = !currentEfficiencyState;
+  const efficiencyError = currentEfficiencyState?.status === "error";
   const openIssuerProfile = (issuerId: string) => {
     setSelectedRewardIcon(undefined);
     setGuideOpen(false);
@@ -579,7 +590,13 @@ export function EmployeeProfileDialog({
                 <article><span>Стаж работы</span><strong>{serviceLabel(profile)}</strong>{profile.employmentDate ? <small>с {new Date(`${profile.employmentDate}T00:00:00`).toLocaleDateString("ru-RU")}</small> : null}</article>
                 <article><span>Активные задачи</span><strong>{profile.activeTaskCount == null ? "Скрыто" : profile.activeTaskCount}</strong><small>{profile.activeTaskCountVisible ? "Видно всем сотрудникам" : "Видимость отключена администратором"}</small></article>
                 <article><span>Награды коллег</span><strong>{profile.rewards.length}</strong><small>{rewardGroups.length} видов · выдаются сотрудниками</small></article>
-                <article className="employee-profile-efficiency"><span>Выполнение задач в срок</span><strong>{efficiency?.percentage == null ? "Нет данных" : `${Math.round(efficiency.percentage)}%`}</strong><div className="employee-profile-efficiency-track" role="meter" aria-label="Эффективность выполнения задач в срок" aria-valuemin={0} aria-valuemax={100} aria-valuenow={efficiency?.percentage == null ? undefined : Math.round(efficiency.percentage)}><i style={{ width: `${Math.min(100, Math.max(0, efficiency?.percentage ?? 0))}%` }} /></div><small>{efficiency ? `${efficiency.onTimeCount} из ${efficiency.eligibleCount} задач в срок · ${efficiency.period}` : "Показатель появится после подтверждённых задач"}</small></article>
+                <article className="employee-profile-efficiency" aria-busy={efficiencyLoading}>
+                  <span>Выполнение задач в срок</span>
+                  <strong>{efficiencyLoading ? "Загрузка…" : efficiencyError ? "Недоступно" : efficiency?.percentage == null ? "Нет данных" : `${Math.round(efficiency.percentage)}%`}</strong>
+                  <div className="employee-profile-efficiency-track" role={efficiency?.percentage == null ? undefined : "meter"} aria-hidden={efficiency?.percentage == null} aria-label="Эффективность выполнения задач в срок" aria-valuemin={0} aria-valuemax={100} aria-valuenow={efficiency?.percentage == null ? undefined : Math.round(efficiency.percentage)}><i style={{ width: `${Math.min(100, Math.max(0, efficiency?.percentage ?? 0))}%` }} /></div>
+                  <small>{efficiencyLoading ? "Загружаем подтверждённые показатели" : efficiencyError ? "Не удалось загрузить показатель" : efficiency ? `${efficiency.onTimeCount} из ${efficiency.eligibleCount} задач в срок · ${efficiency.period}` : "Показатель появится после подтверждённых задач"}</small>
+                  {efficiencyError ? <Button size="small" appearance="secondary" onClick={() => setEfficiencyRetry((value) => value + 1)}>Повторить загрузку эффективности</Button> : null}
+                </article>
                 <div className="employee-profile-highlight">
                   <div><h3>Последние достижения</h3><p>Автоматически подтверждены рабочими событиями</p></div>
                   <div className="employee-profile-emblem-row">
