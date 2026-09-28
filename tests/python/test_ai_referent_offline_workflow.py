@@ -992,6 +992,30 @@ def test_offline_bobur_release_prepares_compose_without_physical_send(tmp_path, 
     )["status"] == current["status"]
 
 
+def test_dispatch_replay_has_no_blob_to_stage(tmp_path):
+    journal, _, _ = _offline_journal(tmp_path)
+    epoch = journal.authority_state()["epoch"]
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+    letter_id, operation_id = str(uuid4()), str(uuid4())
+    journal.pending_authorized = Mock(return_value=[{
+        "kind": "letter.dispatched", "payload": {"expectedRevision": 7},
+        "operation_id": operation_id, "sequence": 1, "actor_id": "999",
+        "letter_id": letter_id, "blob_sha256": None,
+        "authority_epoch": epoch, "rights_snapshot_id": str(uuid4()),
+        "rights_content_sha256": "a" * 64, "required_action": "approve",
+        "occurred_at": datetime.now(UTC).isoformat(),
+    }])
+    journal.finish = Mock()
+    client = Mock()
+    client.replay_offline_operation.return_value = {
+        "operationId": operation_id, "sequence": 1, "letterId": letter_id,
+        "resultRevision": 8,
+    }
+    assert replay_one_draft_operation(journal, client)
+    client.upload_offline_blob.assert_not_called()
+    journal.finish.assert_called_once()
+
+
 def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     workflow = OfflineWorkflow(journal)

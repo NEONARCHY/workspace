@@ -71,7 +71,7 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
         raise ValueError("Воспроизведение разрешено только после подтверждения эпохи.")
     if operation["kind"] in {
         "letter.attachment", "letter.document_check", "letter.comment_audio",
-        "letter.prepared", "letter.signed", "letter.dispatched",
+        "letter.prepared", "letter.signed",
     }:
         digest = operation["blob_sha256"]
         if not isinstance(digest, str):
