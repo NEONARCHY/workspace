@@ -32,14 +32,14 @@ def anyio_backend():
     return "asyncio"
 
 
-def _manifest(epoch, entries):
+def _manifest(epoch, entries, *, external_count=0):
     return OfflineReplayCompleteRequest(
         epoch=epoch, operation_count=len(entries),
         last_sequence=entries[-1][0] if entries else None,
         operations_sha256=hashlib.sha256(
             json.dumps(entries, separators=(",", ":")).encode()
         ).hexdigest(),
-        external_effect_count=0,
+        external_effect_count=external_count,
     )
 
 
@@ -175,6 +175,67 @@ async def test_replay_refuses_claimed_send_but_releases_pending_server_job():
                 assert lease.mode == "online"
                 assert await connection.scalar(select(ai_referent_delivery_commands.c.status)
                     .where(ai_referent_delivery_commands.c.id == command_id)) == "pending"
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_replay_counts_confirmed_external_results_before_unfencing():
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(url)
+    agent_id = f"offline-complete-{uuid4().hex}"
+    letter_id, user_id, result_id = uuid4(), uuid4(), uuid4()
+    now = datetime.now(UTC)
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await connection.execute(delete(ai_referent_authority))
+                await connection.execute(update(ai_referent_configuration).values(
+                    execution_agent_id=agent_id
+                ))
+                epoch = (await start_authority(
+                    connection, agent_id=agent_id, enabled=True
+                )).epoch
+                await connection.execute(update(ai_referent_authority).values(
+                    mode="replay_required"
+                ))
+                await connection.execute(insert(users).values(
+                    id=user_id, username=f"offline-{user_id.hex[:12]}",
+                    full_name="Offline Employee", role="employee", status="active",
+                    created_at=now, updated_at=now,
+                ))
+                await connection.execute(insert(ai_referent_letters).values(
+                    id=letter_id, subject="Sent offline", recipient_organization="Test",
+                    recipient_address="test@example.org", route="exat", note="",
+                    status="sent", workflow_kind="delivery", source="telegram",
+                    created_by_user_id=user_id, revision=3, delivery_error="",
+                    created_at=now, updated_at=now,
+                ))
+                await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+                    operation_id=result_id, agent_id=agent_id, epoch=epoch,
+                    sequence=1, letter_id=letter_id, kind="letter.external_result",
+                    fingerprint="0" * 64, result_revision=3,
+                    occurred_at=now, accepted_at=now,
+                ))
+                entries = [[1, str(result_id)]]
+                with pytest.raises(HTTPException) as missing:
+                    await complete_authority_replay(
+                        connection, agent_id=agent_id,
+                        payload=_manifest(epoch, entries), enabled=True,
+                    )
+                assert missing.value.status_code == 409
+                assert not (await read_authority_status(connection)).writable
+                lease = await complete_authority_replay(
+                    connection, agent_id=agent_id,
+                    payload=_manifest(epoch, entries, external_count=1), enabled=True,
+                )
+                assert lease.mode == "online"
             finally:
                 await transaction.rollback()
     finally:

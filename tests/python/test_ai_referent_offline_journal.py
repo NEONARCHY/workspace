@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
@@ -198,6 +198,9 @@ def test_external_send_is_never_replayed_after_crash(tmp_path):
     effect_id = str(uuid4())
     letter_id = str(uuid4())
     journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    journal.set_authority_phase("referent-pc", epoch, "offline")
     assert journal.begin_external_effect(effect_id, letter_id, "exat_send")
     reopened = OfflineJournal(tmp_path)
     assert not reopened.begin_external_effect(effect_id, letter_id, "exat_send")
@@ -249,10 +252,61 @@ def test_replay_cannot_finish_with_unknown_external_effect(tmp_path):
     journal = OfflineJournal(tmp_path)
     epoch = str(uuid4())
     journal.set_authority_phase("referent-pc", epoch, "online")
+    journal.set_authority_phase("referent-pc", epoch, "offline")
     journal.begin_external_effect(str(uuid4()), str(uuid4()), "exat_send")
     journal.set_authority_phase("referent-pc", epoch, "replay")
-    with pytest.raises(ValueError, match="Внешние отправки"):
+    with pytest.raises(ValueError, match="Результат внешней отправки"):
         journal.replay_manifest()
+
+
+def test_confirmed_external_effect_requires_its_replayed_result(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch, effect_id, letter_id = str(uuid4()), str(uuid4()), str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    assert journal.begin_external_effect(effect_id, letter_id, "exat_send")
+    journal.resolve_external_effect(effect_id, sent=True, evidence="Проверено по журналу E-XAT")
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+    with pytest.raises(ValueError, match="не подтверждён сервером"):
+        journal.replay_manifest()
+    result_id = str(uuid5(NAMESPACE_URL, "ai-offline-result:" + effect_id))
+    sequence = journal.append(
+        operation_id=result_id, actor_id="123", letter_id=letter_id,
+        kind="letter.external_result",
+        payload={"effectId": effect_id, "sent": True,
+                 "evidence": "Проверено по журналу E-XAT"},
+    )
+    with journal.connect() as connection:
+        connection.execute(
+            "UPDATE operations SET authority_epoch = ? WHERE sequence = ?",
+            (epoch, sequence),
+        )
+    journal.finish(sequence, accepted=True, result={
+        "operationId": result_id, "sequence": sequence,
+    })
+    assert journal.replay_manifest()["externalEffectCount"] == 1
+    next_epoch = str(uuid4())
+    journal.finish_replay(epoch, next_epoch, 45, journal.replay_manifest())
+    journal.set_authority_phase("referent-pc", next_epoch, "offline")
+    journal.set_authority_phase("referent-pc", next_epoch, "replay")
+    assert OfflineJournal(tmp_path).replay_manifest()["externalEffectCount"] == 0
+
+
+def test_confirmed_non_delivery_allows_new_fenced_attempt(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    letter_id, first, second = str(uuid4()), str(uuid4()), str(uuid4())
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    assert journal.begin_external_effect(first, letter_id, "webmail_send")
+    journal.resolve_external_effect(first, sent=False, evidence="Проверено: доставки нет")
+    reopened = OfflineJournal(tmp_path)
+    assert reopened.begin_external_effect(second, letter_id, "webmail_send")
+    assert reopened.external_effect_for_letter(letter_id)["effect_id"] == second
+    assert not reopened.begin_external_effect(str(uuid4()), letter_id, "webmail_send")
+    assert not OfflineJournal(tmp_path).begin_external_effect(
+        str(uuid4()), letter_id, "webmail_send"
+    )
 
 
 def test_expired_replay_receipt_advances_epoch_without_enabling_writes(tmp_path):

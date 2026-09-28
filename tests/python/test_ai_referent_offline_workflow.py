@@ -1016,6 +1016,76 @@ def test_dispatch_replay_has_no_blob_to_stage(tmp_path):
     journal.finish.assert_called_once()
 
 
+@pytest.mark.parametrize("crash_after_fence,manual_sent", [
+    (False, None), (True, True), (True, False),
+])
+def test_offline_send_is_fenced_before_click_and_never_retried(
+    tmp_path, crash_after_fence, manual_sent,
+):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation({
+        "reservationId": reservation_id, "agentId": "referent-pc",
+        "yearSuffix": now.strftime("%y"), "firstNumber": 443, "lastNumber": 443,
+        "validUntil": (now + timedelta(days=1)).isoformat(),
+    })
+    approval_id = str(uuid4())
+    workflow.act("789", letter["id"], approval_id, action="approve", expected_revision=3)
+    workflow.record_prepared("789", letter["id"], approval_id, b"%PDF-1.7 signed")
+    send_id = str(uuid4())
+    workflow.act("321", letter["id"], send_id, action="send", expected_revision=5)
+    assert journal.next_unsent_command()["operation_id"] == send_id
+    worker = Mock()
+
+    def send(_job, _lost, *, offline_fence):
+        assert journal.external_effect_for_letter(letter["id"]) is None
+        offline_fence()
+        assert journal.external_effect_for_letter(letter["id"])["outcome"] == "unknown"
+        if crash_after_fence:
+            raise WorkspaceError("Сбой после начала отправки.")
+        return {"outcome": "sent", "detail": "Журнал E-XAT: запись 443 подтверждена"}
+
+    worker.send.side_effect = send
+    executor = OfflinePreparationWorker(worker, journal)
+    if crash_after_fence:
+        with pytest.raises(WorkspaceError):
+            executor.run_send_once()
+        unknown = workflow.read("321", letter["id"])
+        assert unknown["status"] == "delivery_unknown"
+        assert unknown["availableActions"] == ["confirm_sent", "confirm_not_sent"]
+        assert journal.unresolved_external_effects()
+    else:
+        assert executor.run_send_once()
+        assert workflow.read("123", letter["id"])["status"] == "sent"
+        assert journal.external_effect_for_letter(letter["id"])["outcome"] == "confirmed"
+        assert workflow.list_letters("123", offset=0, limit=10, sent_only=True)["totalCount"] == 1
+    assert not executor.run_send_once()
+    worker.send.assert_called_once()
+    if crash_after_fence:
+        action = "confirm_sent" if manual_sent else "confirm_not_sent"
+        reconciled = workflow.act(
+            "321", letter["id"], str(uuid4()), action=action,
+            expected_revision=6, comment="Проверено по журналу E-XAT",
+        )
+        assert reconciled["status"] == ("sent" if manual_sent else "referent_review_pending")
+        assert journal.unresolved_external_effects() == []
+        if not manual_sent:
+            retry_id = str(uuid4())
+            workflow.act(
+                "321", letter["id"], retry_id, action="send", expected_revision=7
+            )
+            assert journal.next_unsent_command()["operation_id"] == retry_id
+
+
 def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     workflow = OfflineWorkflow(journal)
@@ -1039,7 +1109,7 @@ def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path
     workflow.act("789", letter["id"], approval_id, action="approve", expected_revision=3)
     workflow.record_prepared("789", letter["id"], approval_id, b"%PDF-1.7 test")
     admin_letter = workflow.read("321", letter["id"])
-    assert admin_letter["availableActions"] == ["return_for_revision"]
+    assert admin_letter["availableActions"] == ["send", "return_for_revision"]
     returned = workflow.act(
         "321", letter["id"], str(uuid4()), action="return_for_revision",
         expected_revision=5, comment="Нужна новая версия",

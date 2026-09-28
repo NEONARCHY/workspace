@@ -373,7 +373,9 @@ async def _replay_action(
     comment = values.get("comment")
     revision = values.get("expectedRevision")
     if (
-        action not in {"submit", "approve", "return_for_revision", "cancel", "release_delivery"}
+        action not in {
+            "submit", "approve", "return_for_revision", "cancel", "release_delivery", "send",
+        }
         or type(revision) is not int or revision < 1
         or not isinstance(comment, str) or comment != comment.strip()
         or len(comment) > 2000
@@ -405,8 +407,10 @@ async def _replay_action(
     if values.get("creatorUserId") not in {None, str(letter["created_by_user_id"])}:
         raise HTTPException(409, "Автор автономного письма не совпал с базой.")
     expected_right = (
-        "admin" if action == "return_for_revision"
-        and letter["status"] == "referent_review_pending"
+        "admin" if action == "send" or (
+            action == "return_for_revision"
+            and letter["status"] == "referent_review_pending"
+        )
         else "approve" if action in {
             "approve", "return_for_revision", "release_delivery"
         } else "edit"
@@ -420,7 +424,15 @@ async def _replay_action(
     number: int | None = None
     year_suffix: str | None = None
     command_kind: str | None = None
-    if action == "release_delivery":
+    if action == "send":
+        if (
+            letter["status"] != "referent_review_pending"
+            or letter["workflow_kind"] != "delivery"
+            or letter["final_pdf_file_id"] is None
+        ):
+            raise HTTPException(409, "Письмо не ожидает отправки референтом.")
+        next_status, command_kind = "queued", "send"
+    elif action == "release_delivery":
         if (
             not reviewer or letter["status"] != "awaiting_final_send"
             or letter["workflow_kind"] != "delivery"
@@ -954,6 +966,141 @@ async def _replay_dispatched(
     )
 
 
+async def _replay_external_result(
+    connection: AsyncConnection,
+    *,
+    agent_id: str,
+    epoch: UUID,
+    operation: OfflineReplayOperation,
+    actor: dict[str, object],
+    fingerprint: str,
+    occurred_at: datetime,
+    now: datetime,
+) -> OfflineReplayReceipt:
+    values = operation.payload
+    try:
+        effect_id = UUID(str(values["effectId"]))
+        source_id = UUID(str(values["sendOperationId"]))
+        command_id = UUID(str(values["commandId"]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise HTTPException(422, "Квитанция не связана с заданием отправки.") from error
+    sent, revision = values.get("sent"), values.get("expectedRevision")
+    evidence, signed_hash = values.get("evidence"), values.get("signedSha256")
+    manual = values.get("manual", False)
+    next_status = "sent" if sent else "referent_review_pending"
+    if (
+        operation.operation_id != uuid5(NAMESPACE_URL, "ai-offline-result:" + str(effect_id))
+        or effect_id != uuid5(NAMESPACE_URL, "ai-offline-effect:" + str(source_id))
+        or operation.required_action not in {"approve", "admin"}
+        or type(manual) is not bool or (manual and operation.required_action != "admin")
+        or (not sent and not manual)
+        or type(sent) is not bool or type(revision) is not int or revision < 2
+        or values.get("fromStatus") != "queued" or values.get("toStatus") != next_status
+        or not isinstance(evidence, str) or not 3 <= len(evidence) <= 2000
+        or evidence != evidence.strip() or not isinstance(signed_hash, str)
+        or len(signed_hash) != 64 or operation.blob_sha256 is not None
+    ):
+        raise HTTPException(422, "Поля автономной квитанции отправки недействительны.")
+    source = (
+        await connection.execute(select(ai_referent_offline_operation_receipts).where(
+            ai_referent_offline_operation_receipts.c.operation_id == source_id,
+            ai_referent_offline_operation_receipts.c.epoch == epoch,
+            ai_referent_offline_operation_receipts.c.agent_id == agent_id,
+            ai_referent_offline_operation_receipts.c.letter_id == operation.letter_id,
+        ))
+    ).mappings().one_or_none()
+    if source is None or source["kind"] not in {"letter.dispatched", "letter.action"}:
+        raise HTTPException(409, "Исходная операция отправки не сверена.")
+    if (
+        (not manual and operation.required_action != (
+            "approve" if source["kind"] == "letter.dispatched" else "admin"
+        ))
+        or command_id != uuid5(
+            NAMESPACE_URL,
+            ("ai-offline-send-command:" if source["kind"] == "letter.dispatched"
+             else "ai-offline-command:") + str(source_id),
+        )
+    ):
+        raise HTTPException(403, "Квитанция не соответствует отправившему сотруднику.")
+    letter = (
+        await connection.execute(select(ai_referent_letters).where(
+            ai_referent_letters.c.id == operation.letter_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if (
+        letter is None or letter["status"] != "queued" or letter["revision"] != revision
+        or letter["workflow_kind"] != "delivery" or letter["final_pdf_file_id"] is None
+    ):
+        raise HTTPException(409, "Письмо не ожидает квитанцию отправки.")
+    if operation.required_action == "approve":
+        reviewer_keys = actor.get("reviewerKeys")
+        if (
+            letter["reviewer_user_id"] != UUID(str(actor["userId"]))
+            or not isinstance(reviewer_keys, list)
+            or letter["reviewer_key"] not in reviewer_keys
+        ):
+            raise HTTPException(403, "Квитанция не относится к итоговому согласующему.")
+    command = (
+        await connection.execute(select(ai_referent_delivery_commands).where(
+            ai_referent_delivery_commands.c.id == command_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if (
+        command is None or command["letter_id"] != operation.letter_id
+        or command["kind"] != "send" or command["status"] != "pending"
+        or command["created_at"] > occurred_at
+    ):
+        raise HTTPException(409, "Задание физической отправки отсутствует.")
+    signed_file = (
+        await connection.execute(select(ai_referent_files).where(
+            ai_referent_files.c.id == letter["final_pdf_file_id"],
+            ai_referent_files.c.owner_id == operation.letter_id,
+            ai_referent_files.c.kind == "outgoing",
+        ))
+    ).mappings().one_or_none()
+    if signed_file is None or signed_file["sha256"] != signed_hash:
+        raise HTTPException(409, "Подписанный PDF отличается от отправленного.")
+    await connection.execute(update(ai_referent_delivery_commands).where(
+        ai_referent_delivery_commands.c.id == command_id
+    ).values(
+        status="completed", result={"outcome": "sent" if sent else "not_sent",
+                                    "detail": evidence, "offlineEffectId": str(effect_id)},
+        completed_at=occurred_at, updated_at=occurred_at, last_error="",
+    ))
+    await connection.execute(update(ai_referent_letters).where(
+        ai_referent_letters.c.id == operation.letter_id
+    ).values(
+        status=next_status, revision=revision + 1, updated_at=occurred_at,
+        sent_at=occurred_at if sent else letter["sent_at"], delivery_error="",
+    ))
+    await connection.execute(insert(ai_referent_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-event:" + str(operation.operation_id)),
+        letter_id=operation.letter_id, actor_user_id=None,
+        event_type="agent.sent" if sent else "agent.not_sent",
+        from_status="queued", to_status=next_status, comment=evidence,
+        metadata={"offlineOperationId": str(operation.operation_id),
+                  "effectId": str(effect_id)}, created_at=occurred_at,
+    ))
+    await connection.execute(insert(audit_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-audit:" + str(operation.operation_id)),
+        actor_user_id=UUID(str(actor["userId"])),
+        action="ai_referent.offline_external_result",
+        target_type="ai_referent_letter", target_id=operation.letter_id,
+        details={"agentId": agent_id, "epoch": str(epoch), "effectId": str(effect_id),
+                 "sent": sent, "evidence": evidence}, created_at=now,
+    ))
+    await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+        operation_id=operation.operation_id, agent_id=agent_id, epoch=epoch,
+        sequence=operation.sequence, letter_id=operation.letter_id,
+        kind=operation.kind, fingerprint=fingerprint, result_revision=revision + 1,
+        occurred_at=occurred_at, accepted_at=now,
+    ))
+    return OfflineReplayReceipt(
+        operation_id=operation.operation_id, sequence=operation.sequence,
+        letter_id=operation.letter_id, result_revision=revision + 1, accepted_at=now,
+    )
+
+
 async def replay_offline_operation(
     connection: AsyncConnection,
     *,
@@ -1044,6 +1191,7 @@ async def replay_offline_operation(
         ("letter.comment_audio", "approve"), ("letter.comment_audio", "admin"),
         ("letter.prepared", "approve"), ("letter.signed", "approve"),
         ("letter.dispatched", "approve"),
+        ("letter.external_result", "approve"), ("letter.external_result", "admin"),
         ("letter.action", "edit"), ("letter.action", "approve"),
         ("letter.action", "admin"),
     }:
@@ -1100,6 +1248,12 @@ async def replay_offline_operation(
         )
     if operation.kind == "letter.dispatched":
         return await _replay_dispatched(
+            connection, agent_id=agent_id, epoch=epoch,
+            operation=operation, actor=actor, fingerprint=fingerprint,
+            occurred_at=occurred_at, now=now,
+        )
+    if operation.kind == "letter.external_result":
+        return await _replay_external_result(
             connection, agent_id=agent_id, epoch=epoch,
             operation=operation, actor=actor, fingerprint=fingerprint,
             occurred_at=occurred_at, now=now,

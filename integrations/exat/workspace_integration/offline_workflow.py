@@ -478,6 +478,140 @@ class OfflineWorkflow:
                         "revision": letter["revision"] + 1}
             return self.read(telegram_id, letter_id)
 
+    def record_external_result(
+        self, telegram_id: str, letter_id: str, send_operation_id: str, *,
+        sent: bool, evidence: str, manual: bool = False,
+    ) -> dict[str, Any]:
+        """Turn a durable, resolved click into an ordered replay operation."""
+        try:
+            letter_id, send_operation_id = str(UUID(letter_id)), str(UUID(send_operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный ID письма или отправки.", 422) from error
+        if (
+            type(sent) is not bool or type(manual) is not bool
+            or not 3 <= len(evidence.strip()) <= 2000
+            or (not sent and not manual)
+        ):
+            raise WorkspaceError("Укажите проверяемый результат отправки.", 422)
+        effect_id = str(uuid5(NAMESPACE_URL, "ai-offline-effect:" + send_operation_id))
+        operation_id = str(uuid5(NAMESPACE_URL, "ai-offline-result:" + effect_id))
+        with self._lock:
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (
+                    old["actor_id"] != telegram_id or old["letter_id"] != letter_id
+                    or old["payload"].get("sent") != sent
+                    or old["payload"].get("evidence") != evidence.strip()
+                    or old["payload"].get("manual", False) != manual
+                ):
+                    raise WorkspaceError("Результат отправки уже записан иначе.", 409)
+                if old["required_action"] == "approve":
+                    return {"id": letter_id,
+                            "status": "sent" if sent else "referent_review_pending",
+                            "revision": old["payload"]["expectedRevision"] + 1}
+                return self.read(telegram_id, letter_id)
+            source = self.journal.operation(send_operation_id)
+            if (
+                source is None or source["letter_id"] != letter_id
+                or not (
+                    (source["kind"] == "letter.action"
+                     and source["payload"].get("action") == "send")
+                    or (source["kind"] == "letter.dispatched"
+                        and source["payload"].get("autoSend") is True)
+                )
+                or (not manual and source["actor_id"] != telegram_id)
+            ):
+                raise WorkspaceError("Автономное задание отправки не найдено.", 409)
+            required_action = "admin" if manual else source["required_action"]
+            actor = self._actor(telegram_id, required_action)
+            effect = self.journal.external_effect(effect_id)
+            if (
+                effect is None or effect["letter_id"] != letter_id
+                or effect["outcome"] != ("confirmed" if sent else "not_sent")
+                or effect["detail"] != evidence.strip()
+            ):
+                raise WorkspaceError("Квитанция внешней отправки ещё не сверена.", 409)
+            letter = self.read(telegram_id, letter_id)
+            if letter["revision"] != source["payload"]["expectedRevision"] + 1:
+                raise WorkspaceError("Письмо изменилось после начала отправки.", 409)
+            prepared = next(
+                (item for item in reversed(self.journal.letter_operations(letter_id))
+                 if item["kind"] == "letter.prepared"), None,
+            )
+            if prepared is None or prepared["blob_sha256"] is None:
+                raise WorkspaceError("Подписанный PDF для сверки не найден.", 409)
+            command_id = (
+                str(uuid5(NAMESPACE_URL, "ai-offline-command:" + send_operation_id))
+                if source["kind"] == "letter.action" else
+                str(uuid5(NAMESPACE_URL, "ai-offline-send-command:" + send_operation_id))
+            )
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id, actor_id=telegram_id, letter_id=letter_id,
+                kind="letter.external_result", payload={
+                    "effectId": effect_id, "sendOperationId": send_operation_id,
+                    "commandId": command_id, "expectedRevision": letter["revision"],
+                    "fromStatus": "queued",
+                    "toStatus": "sent" if sent else "referent_review_pending",
+                    "sent": sent, "evidence": evidence.strip(), "manual": manual,
+                    "signedSha256": prepared["blob_sha256"],
+                    "actorUserId": actor["userId"], "actorName": actor["fullName"],
+                    "creatorUserId": letter["createdByUserId"],
+                }, required_action=required_action,
+            )
+            if required_action == "approve":
+                return {"id": letter_id,
+                        "status": "sent" if sent else "referent_review_pending",
+                        "revision": letter["revision"] + 1}
+            return self.read(telegram_id, letter_id)
+
+    def reconcile_external_result(
+        self, telegram_id: str, letter_id: str, *,
+        expected_revision: int, sent: bool, evidence: str,
+    ) -> dict[str, Any]:
+        """Allow an administrator to attest the E-XAT/Webmail journal outcome."""
+        self._actor(telegram_id, "admin")
+        try:
+            letter_id = str(UUID(letter_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный ID письма.", 422) from error
+        effect = self.journal.external_effect_for_letter(letter_id)
+        if effect is None:
+            raise WorkspaceError("Неизвестная отправка для сверки не найдена.", 409)
+        if effect["outcome"] not in {
+            "unknown", "confirmed" if sent else "not_sent"
+        }:
+            raise WorkspaceError("Результат отправки уже зафиксирован.", 409)
+        source = next(
+            (item for item in reversed(self.journal.letter_operations(letter_id))
+             if str(uuid5(
+                 NAMESPACE_URL, "ai-offline-effect:" + item["operation_id"]
+             )) == effect["effect_id"]), None,
+        )
+        if source is None:
+            raise WorkspaceError("Причина автономной отправки не найдена.", 409)
+        if expected_revision != source["payload"]["expectedRevision"] + 1:
+            raise WorkspaceError("Версия письма после отправки изменилась.", 409)
+        current = self.read(telegram_id, letter_id)
+        if current["revision"] != expected_revision:
+            result_id = str(uuid5(
+                NAMESPACE_URL, "ai-offline-result:" + effect["effect_id"]
+            ))
+            if self.journal.operation(result_id) is None:
+                raise WorkspaceError("Письмо изменилось до сверки доставки.", 409)
+            return self.record_external_result(
+                telegram_id, letter_id, source["operation_id"],
+                sent=sent, evidence=evidence.strip(), manual=True,
+            )
+        if current["status"] not in {"delivery_unknown", "queued"}:
+            raise WorkspaceError("Письмо не ожидает сверки доставки.", 409)
+        self.journal.resolve_external_effect(
+            effect["effect_id"], sent=sent, evidence=evidence.strip()
+        )
+        return self.record_external_result(
+            telegram_id, letter_id, source["operation_id"],
+            sent=sent, evidence=evidence.strip(), manual=True,
+        )
+
     @staticmethod
     def _fields(payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):
@@ -864,7 +998,10 @@ class OfflineWorkflow:
         comment_audio_id: str | None = None,
     ) -> dict[str, Any]:
         """Handle only decisions whose complete local effects are implemented."""
-        if action not in {"submit", "approve", "return_for_revision", "cancel", "release_delivery"}:
+        if action not in {
+            "submit", "approve", "return_for_revision", "cancel", "release_delivery", "send",
+            "confirm_sent", "confirm_not_sent",
+        }:
             raise WorkspaceError("Это решение пока недоступно без связи с сервером.", 503)
         actor = self._actor(telegram_id, "view")
         try:
@@ -891,6 +1028,13 @@ class OfflineWorkflow:
                 raise WorkspaceError("Голосовой комментарий доступен только при возврате.", 422)
         if action == "return_for_revision" and len(comment) < 3 and comment_audio_id is None:
             raise WorkspaceError("Укажите причину возврата.", 422)
+        if action in {"confirm_sent", "confirm_not_sent"}:
+            if comment_audio_id is not None:
+                raise WorkspaceError("Для сверки отправки нужна текстовая запись журнала.", 422)
+            return self.reconcile_external_result(
+                telegram_id, letter_id, expected_revision=expected_revision,
+                sent=action == "confirm_sent", evidence=comment,
+            )
         with self._lock:
             old = self.journal.operation(operation_id)
             if old is not None:
@@ -924,8 +1068,10 @@ class OfflineWorkflow:
                 return self.read(telegram_id, letter_id)
             letter = self.read(telegram_id, letter_id)
             required = (
-                "admin" if action == "return_for_revision"
-                and letter["status"] == "referent_review_pending"
+                "admin" if action == "send" or (
+                    action == "return_for_revision"
+                    and letter["status"] == "referent_review_pending"
+                )
                 else "approve" if action in {
                     "approve", "return_for_revision", "release_delivery"
                 } else "edit"
@@ -956,7 +1102,15 @@ class OfflineWorkflow:
             next_reviewer = None
             outgoing_number = None
             year_suffix = None
-            if action == "release_delivery":
+            if action == "send":
+                if (
+                    letter["status"] != "referent_review_pending"
+                    or letter["workflowKind"] != "delivery"
+                    or letter["finalPdfFileId"] is None
+                ):
+                    raise WorkspaceError("Письмо не ожидает отправки референтом.", 409)
+                next_status = "queued"
+            elif action == "release_delivery":
                 if (
                     not reviewer or letter["status"] != "awaiting_final_send"
                     or letter["workflowKind"] != "delivery"
@@ -1410,6 +1564,29 @@ class OfflineWorkflow:
                     "createdAt": operation["occurred_at"],
                 })
                 continue
+            elif operation["kind"] == "letter.external_result":
+                if (
+                    letter is None or letter["status"] != "queued"
+                    or payload["fromStatus"] != "queued"
+                    or letter["revision"] != payload["expectedRevision"]
+                ):
+                    raise ValueError("Квитанция отправки потеряла порядок стадий.")
+                letter["status"] = payload["toStatus"]
+                letter["revision"] += 1
+                letter["updatedAt"] = operation["occurred_at"]
+                if payload["sent"]:
+                    letter["sentAt"] = operation["occurred_at"]
+                letter["events"].append({
+                    "id": str(uuid5(
+                        NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"]
+                    )),
+                    "eventType": "agent.sent" if payload["sent"] else "agent.not_sent",
+                    "actorUserId": None, "actorName": "Робот",
+                    "fromStatus": "queued", "toStatus": payload["toStatus"],
+                    "comment": payload["evidence"], "audio": None,
+                    "createdAt": operation["occurred_at"],
+                })
+                continue
             else:
                 continue  # Later reducers own worker receipts.
             letter["events"].append(
@@ -1435,6 +1612,16 @@ class OfflineWorkflow:
             )
         if letter is None:
             raise WorkspaceError("Письмо не сохранено в локальной копии.", 404)
+        effect = self.journal.external_effect_for_letter(letter_id)
+        if (
+            effect is not None and effect["outcome"] != "not_sent"
+            and letter["status"] == "queued"
+        ):
+            letter["status"] = "delivery_unknown"
+            letter["deliveryError"] = (
+                "Результат внешней отправки требует сверки по журналу E-XAT/Webmail. "
+                "Повторная отправка заблокирована."
+            )
         participant_ids = {
             letter["createdByUserId"],
             letter.get("reviewerUserId"),
@@ -1447,6 +1634,12 @@ class OfflineWorkflow:
             "delivery_unknown",
             "sent",
         }
+        operator_send_queued = letter["status"] == "queued" and any(
+            operation["kind"] == "letter.action"
+            and operation["payload"].get("action") == "send"
+            and operation["actor_id"] == telegram_id
+            for operation in self.journal.letter_operations(letter_id)
+        )
         if letter["status"] == "sent":
             visible = bool(
                 actor["userId"] == letter["createdByUserId"]
@@ -1456,7 +1649,9 @@ class OfflineWorkflow:
         else:
             visible = bool(
                 actor["userId"] in participant_ids
-                or ("admin" in actor["moduleActions"] and letter["status"] in operator_statuses)
+                or ("admin" in actor["moduleActions"] and (
+                    letter["status"] in operator_statuses or operator_send_queued
+                ))
             )
         if not visible:
             raise WorkspaceError("Письмо недоступно этому сотруднику.", 403)
@@ -1517,6 +1712,8 @@ class OfflineWorkflow:
             elif letter["status"] == "awaiting_final_send":
                 actions.extend(("release_delivery", "return_for_revision"))
         if letter["status"] == "referent_review_pending" and "admin" in actor["moduleActions"]:
-            actions.append("return_for_revision")
+            actions.extend(("send", "return_for_revision"))
+        if letter["status"] == "delivery_unknown" and "admin" in actor["moduleActions"]:
+            actions.extend(("confirm_sent", "confirm_not_sent"))
         letter["availableActions"] = actions
         return letter

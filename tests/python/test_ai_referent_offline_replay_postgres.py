@@ -79,7 +79,10 @@ def _operation(
 @pytest.mark.anyio
 @pytest.mark.postgres
 @pytest.mark.parametrize("auto_send", [False, True])
-async def test_draft_replay_retries_same_receipt_and_preserves_original_time(auto_send):
+@pytest.mark.parametrize("sent_outcome", [False, True])
+async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
+    auto_send, sent_outcome,
+):
     url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
     if not url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
@@ -956,6 +959,85 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(aut
                 assert set(command_kinds) == (
                     {"prepare", "dispatch", "send"} if auto_send else {"prepare", "dispatch"}
                 )
+                send_source = dispatched
+                if not auto_send:
+                    admin_send = release.model_copy(update={
+                        "operation_id": uuid4(), "sequence": 65,
+                        "actor_id": operator_actor_id,
+                        "payload": {**release.payload, "action": "send",
+                                    "expectedRevision": 8,
+                                    "fromStatus": "referent_review_pending",
+                                    "actorUserId": str(operator_id),
+                                    "actorName": "Offline Test Operator"},
+                        "required_action": "admin",
+                        "occurred_at": dispatched.occurred_at + timedelta(seconds=10),
+                    })
+                    assert (await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=admin_send, enabled=True,
+                    )).result_revision == 9
+                    send_source = admin_send
+                send_command_id = uuid5(
+                    NAMESPACE_URL,
+                    ("ai-offline-send-command:" if auto_send else "ai-offline-command:")
+                    + str(send_source.operation_id),
+                )
+                effect_id = uuid5(
+                    NAMESPACE_URL, "ai-offline-effect:" + str(send_source.operation_id)
+                )
+                external_result = OfflineReplayOperation(
+                    operation_id=uuid5(
+                        NAMESPACE_URL, "ai-offline-result:" + str(effect_id)
+                    ),
+                    sequence=65 if auto_send else 66,
+                    actor_id=bobur_actor_id if auto_send and sent_outcome
+                    else operator_actor_id,
+                    letter_id=bobur_create.letter_id, kind="letter.external_result",
+                    payload={
+                        "effectId": str(effect_id),
+                        "sendOperationId": str(send_source.operation_id),
+                        "commandId": str(send_command_id),
+                        "expectedRevision": 8 if auto_send else 9,
+                        "fromStatus": "queued",
+                        "toStatus": "sent" if sent_outcome else "referent_review_pending",
+                        "sent": sent_outcome,
+                        "manual": not sent_outcome,
+                        "evidence": "Журнал E-XAT подтвердил отправку" if sent_outcome
+                        else "Журнал E-XAT подтвердил отсутствие отправки",
+                        "signedSha256": bobur_pdf_hash,
+                        "actorUserId": str(bobur_id if auto_send and sent_outcome else operator_id),
+                        "actorName": "Offline Test Bobur" if auto_send and sent_outcome
+                        else "Offline Test Operator",
+                        "creatorUserId": str(user_id),
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash,
+                    required_action="approve" if auto_send and sent_outcome else "admin",
+                    occurred_at=send_source.occurred_at + timedelta(seconds=10),
+                )
+                wrong_pdf = external_result.model_copy(deep=True)
+                wrong_pdf.payload["signedSha256"] = "0" * 64
+                with pytest.raises(HTTPException) as bad_sent:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=wrong_pdf, enabled=True,
+                    )
+                assert bad_sent.value.status_code == 409
+                sent_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=external_result, enabled=True,
+                )
+                assert sent_receipt.result_revision == (9 if auto_send else 10)
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=external_result, enabled=True,
+                )) == sent_receipt
+                assert await connection.scalar(select(ai_referent_letters.c.status).where(
+                    ai_referent_letters.c.id == bobur_create.letter_id
+                )) == ("sent" if sent_outcome else "referent_review_pending")
+                assert await connection.scalar(select(
+                    ai_referent_delivery_commands.c.status
+                ).where(ai_referent_delivery_commands.c.id == send_command_id)) == "completed"
             finally:
                 await transaction.rollback()
     finally:

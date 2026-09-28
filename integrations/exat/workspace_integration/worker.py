@@ -326,7 +326,10 @@ class DeliveryWorker:
             "signedPages": len(pages),
         }
 
-    def send(self, job: dict[str, Any], lost: threading.Event) -> dict[str, Any]:
+    def send(
+        self, job: dict[str, Any], lost: threading.Event, *,
+        offline_fence: Callable[[], None] | None = None,
+    ) -> dict[str, Any]:
         local_id = self.state.get("letter:" + job["letterId"])
         if local_id is None:
             raise WorkspaceError(
@@ -352,20 +355,7 @@ class DeliveryWorker:
         if lost.is_set():
             raise WorkspaceError("Потеряна связь перед отправкой.")
         # Check ownership immediately before the irreversible external operation.
-        self.client.request(
-            f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
-            {
-                "agentId": self.client.agent_id,
-                "leaseToken": job["leaseToken"],
-            },
-            method="POST",
-        )
-        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
-            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
-        current = self.service.database.get_outgoing_letter(local_id)
-        if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
-            if lost.is_set():
-                raise WorkspaceError("Связь потеряна перед подтверждением отправки.")
+        if offline_fence is None:
             self.client.request(
                 f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
                 {
@@ -374,6 +364,21 @@ class DeliveryWorker:
                 },
                 method="POST",
             )
+        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
+            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
+        current = self.service.database.get_outgoing_letter(local_id)
+        if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
+            if lost.is_set():
+                raise WorkspaceError("Связь потеряна перед подтверждением отправки.")
+            if offline_fence is None:
+                self.client.request(
+                    f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
+                    {
+                        "agentId": self.client.agent_id,
+                        "leaseToken": job["leaseToken"],
+                    },
+                    method="POST",
+                )
 
             def fence() -> None:
                 if (
@@ -382,11 +387,14 @@ class DeliveryWorker:
                     != job["signedFile"]["sha256"]
                 ):
                     raise WorkspaceError("Связь или подписанный файл изменились перед отправкой.")
-                self.client.request(
-                    f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
-                    {"agentId": self.client.agent_id, "leaseToken": job["leaseToken"]},
-                    method="POST",
-                )
+                if offline_fence is None:
+                    self.client.request(
+                        f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
+                        {"agentId": self.client.agent_id, "leaseToken": job["leaseToken"]},
+                        method="POST",
+                    )
+                else:
+                    offline_fence()
 
             with guarded_send(self.service, row, self.prepared_handles.get(local_id), fence):
                 self.service.confirm_manual_send(local_id)

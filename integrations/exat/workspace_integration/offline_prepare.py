@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -131,5 +132,63 @@ class OfflinePreparationWorker:
         self.workflow.record_dispatched(
             actor_id, letter_id, release["operation_id"],
             auto_send=bool(result.get("autoSend", False)),
+        )
+        return True
+
+    def run_send_once(self) -> bool:
+        """Send once behind an fsynced fence; never retry an uncertain click."""
+        authority = self.journal.authority_state()
+        if authority is None or authority["phase"] != "offline":
+            return False
+        source = self.journal.next_unsent_command()
+        if source is None:
+            return False
+        actor_id, letter_id = source["actor_id"], source["letter_id"]
+        letter = self.workflow.read(actor_id, letter_id)
+        prepared = next(
+            (item for item in reversed(self.journal.letter_operations(letter_id))
+             if item["kind"] == "letter.prepared"), None,
+        )
+        if (
+            letter["status"] != "queued" or prepared is None
+            or prepared["blob_sha256"] is None
+            or letter["workflowKind"] != "delivery"
+        ):
+            raise WorkspaceError("Подписанный PDF для отправки не найден.", 409)
+        command_id = str(uuid5(
+            NAMESPACE_URL,
+            ("ai-offline-command:" if source["kind"] == "letter.action"
+             else "ai-offline-send-command:") + source["operation_id"],
+        ))
+        effect_id = str(uuid5(
+            NAMESPACE_URL, "ai-offline-effect:" + source["operation_id"]
+        ))
+        job: dict[str, Any] = {
+            "id": command_id, "kind": "send", "letterId": letter_id,
+            "leaseToken": "offline-only",
+            "signedFile": {"sha256": prepared["blob_sha256"]},
+        }
+
+        def fence() -> None:
+            current = self.journal.authority_state()
+            if current is None or current["phase"] != "offline":
+                raise WorkspaceError("Автономная аренда изменилась перед отправкой.", 409)
+            if not self.journal.begin_external_effect(
+                effect_id, letter_id, letter["route"] + "_send"
+            ):
+                raise WorkspaceError(
+                    "Отправка уже начиналась. Повтор заблокирован до ручной сверки.", 409
+                )
+
+        result = self.worker.send(job, threading.Event(), offline_fence=fence)
+        effect = self.journal.external_effect(effect_id)
+        if effect is None:
+            raise WorkspaceError("Робот не записал начало внешней отправки.", 409)
+        if result.get("outcome") != "sent":
+            raise WorkspaceError("Исход внешней отправки неизвестен. Нужна ручная сверка.", 409)
+        evidence = str(result.get("detail") or "")
+        self.journal.resolve_external_effect(effect_id, sent=True, evidence=evidence)
+        self.workflow.record_external_result(
+            actor_id, letter_id, source["operation_id"], sent=True, evidence=evidence
         )
         return True

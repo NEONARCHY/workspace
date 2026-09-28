@@ -1,5 +1,6 @@
 """Administrator correction must not ask for approval or silently send a letter."""
 
+import hashlib
 import importlib
 import json
 import sys
@@ -217,6 +218,45 @@ def test_send_guard_checks_identity_and_lease_at_actual_adapter_call(modules, mo
     with delivery.guarded_send(service, row, None, fence):
         service.webmail_sender.click_prepared_send(7, logs_root="test")
     original.assert_called_once_with(7, logs_root="test")
+
+
+@pytest.mark.parametrize("route", ["exat", "webmail"])
+def test_offline_send_calls_durable_fence_at_click_without_workspace(
+    modules, tmp_path, monkeypatch, route,
+):
+    delivery = importlib.import_module("workspace_integration.delivery")
+    worker_module = importlib.import_module("workspace_integration.worker")
+    signed = tmp_path / "signed.pdf"
+    signed.write_bytes(b"%PDF-1.7 checked")
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    letter_id = str(uuid4())
+    row = {"id": 7, "status": "approved", "destination_route": route,
+           "signed_file_path": str(signed)}
+    prepared = {**row, "status": "webmail_dry_run_prepared" if route == "webmail"
+                else "exat_compose_prepared"}
+    sent = {**row, "status": "webmail_sent" if route == "webmail" else "exat_sent"}
+    service = Mock(archive_root=tmp_path)
+    service.database.get_outgoing_letter.side_effect = [row, prepared, sent]
+    client = Mock(agent_id="referent-pc")
+    state = modules.shared_bot.State(tmp_path / "worker-state.sqlite")
+    state.put("letter:" + letter_id, 7)
+    worker = worker_module.DeliveryWorker(service, client, state)
+    monkeypatch.setattr(delivery, "prepared_open", Mock(return_value=True))
+    monkeypatch.setattr(worker_module, "prepared_open", Mock(return_value=True))
+    fence = Mock()
+    adapter = service.webmail_sender if route == "webmail" else service.exat_compose
+    service.confirm_manual_send.side_effect = lambda local_id: (
+        adapter.click_prepared_send(local_id)
+    )
+    result = worker.send(
+        {"id": str(uuid4()), "letterId": letter_id, "leaseToken": "offline-only",
+         "signedFile": {"sha256": digest}},
+        threading.Event(), offline_fence=fence,
+    )
+    assert result["outcome"] == "sent"
+    fence.assert_called_once_with()
+    adapter.click_prepared_send.assert_called_once_with(7)
+    client.request.assert_not_called()
 
 
 def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(

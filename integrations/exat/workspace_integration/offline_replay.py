@@ -52,6 +52,7 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
         "letter.create", "letter.update", "letter.attachment", "letter.document_check",
         "letter.comment_audio", "letter.action",
         "letter.prepared", "letter.signed", "letter.dispatched",
+        "letter.external_result",
     }:
         raise ValueError("Следующая автономная операция ещё не поддерживается сервером.")
     expected_revision = 1

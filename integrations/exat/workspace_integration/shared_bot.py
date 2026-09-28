@@ -659,9 +659,12 @@ class SharedBot:
                     recipient_ids = [payload.get("creatorUserId")]
                 else:
                     continue
-            elif kind in {"letter.prepared", "letter.signed", "letter.dispatched"}:
+            elif kind in {
+                "letter.prepared", "letter.signed", "letter.dispatched",
+                "letter.external_result",
+            }:
                 reader = operation["actor_id"]
-                if kind == "letter.dispatched":
+                if kind in {"letter.dispatched", "letter.external_result"}:
                     reader = next(
                         (item["telegramId"] for item in actors
                          if item["userId"] == payload["creatorUserId"]), reader,
@@ -673,8 +676,9 @@ class SharedBot:
                 if kind == "letter.prepared" and letter["status"] == "awaiting_final_send":
                     recipient_ids.append(letter["reviewerUserId"])
                 elif (
-                    kind in {"letter.prepared", "letter.dispatched"}
-                    and letter["status"] == "referent_review_pending"
+                    (kind in {"letter.prepared", "letter.dispatched"}
+                     and letter["status"] == "referent_review_pending")
+                    or kind == "letter.external_result"
                 ):
                     recipient_ids.extend(
                         item["userId"] for item in actors
@@ -771,6 +775,21 @@ class SharedBot:
                 self.show(recipient, current["id"])
                 self.state.put(key, True)
                 delivered += 1
+        for effect in self.offline.unresolved_external_effects():
+            for item in actors:
+                if "admin" not in item["moduleActions"]:
+                    continue
+                recipient = item["telegramId"]
+                key = f"offline-unknown-send:{effect['effect_id']}:{recipient}"
+                if self.state.get(key):
+                    continue
+                self.say(
+                    recipient,
+                    "⚠️ Результат автономной отправки письма неизвестен. "
+                    "Проверьте журнал E-XAT/Webmail; повторная отправка заблокирована. "
+                    f"ID письма: {effect['letter_id']}",
+                )
+                self.state.put(key, True)
 
     def notifications(self) -> None:
         self.wizard.poll_checks()
@@ -1594,6 +1613,7 @@ def _run_shared(
                 try:
                     offline_preparer.run_once()
                     offline_preparer.run_dispatch_once()
+                    offline_preparer.run_send_once()
                     last_prepare_error = None
                 except Exception as error:
                     reason = (type(error).__name__, safe_error_text(error))

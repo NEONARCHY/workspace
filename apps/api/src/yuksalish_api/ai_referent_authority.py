@@ -172,8 +172,6 @@ async def complete_authority_replay(
         or authority["mode"] != "replay_required"
     ):
         raise HTTPException(409, "Сервер ещё не ожидает сверку этой эпохи.")
-    if payload.external_effect_count != 0:
-        raise HTTPException(409, "Внешняя отправка требует отдельной сверки референтом.")
     receipts = (
         await connection.execute(select(ai_referent_offline_operation_receipts).where(
             ai_referent_offline_operation_receipts.c.agent_id == agent_id,
@@ -181,6 +179,9 @@ async def complete_authority_replay(
         ).order_by(ai_referent_offline_operation_receipts.c.sequence))
     ).mappings().all()
     entries = [[int(row["sequence"]), str(row["operation_id"])] for row in receipts]
+    external_results = sum(row["kind"] == "letter.external_result" for row in receipts)
+    if payload.external_effect_count != external_results:
+        raise HTTPException(409, "Сверены не все внешние отправки автономного журнала.")
     digest = hashlib.sha256(json.dumps(entries, separators=(",", ":")).encode()).hexdigest()
     if (
         len(receipts) != payload.operation_count

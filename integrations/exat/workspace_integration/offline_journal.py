@@ -88,13 +88,12 @@ class OfflineJournal:
                     effect_id TEXT PRIMARY KEY,
                     letter_id TEXT NOT NULL,
                     kind TEXT NOT NULL,
+                    authority_epoch TEXT,
                     started_at TEXT NOT NULL,
                     outcome TEXT NOT NULL DEFAULT 'unknown'
                         CHECK (outcome IN ('unknown', 'confirmed', 'not_sent')),
                     detail TEXT NOT NULL DEFAULT ''
                 );
-                CREATE UNIQUE INDEX IF NOT EXISTS uq_offline_external_letter
-                    ON external_effects(letter_id);
                 CREATE TABLE IF NOT EXISTS number_reservations (
                     reservation_id TEXT PRIMARY KEY,
                     agent_id TEXT NOT NULL,
@@ -150,6 +149,18 @@ class OfflineJournal:
                 );
                 """
             )
+            # A human-confirmed non-delivery may be retried with a new send
+            # command; an unknown or confirmed click still fences the letter.
+            connection.execute("DROP INDEX IF EXISTS uq_offline_external_letter")
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_offline_external_active_letter "
+                "ON external_effects(letter_id) WHERE outcome != 'not_sent'"
+            )
+            effect_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(external_effects)")
+            }
+            if "authority_epoch" not in effect_columns:
+                connection.execute("ALTER TABLE external_effects ADD COLUMN authority_epoch TEXT")
             columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(rights_snapshot)")
             }
@@ -865,11 +876,29 @@ class OfflineJournal:
         ).fetchone()
         if unfinished is not None:
             raise ValueError("Остались операции без подтверждения сервера.")
-        external_count = int(connection.execute(
-            "SELECT COUNT(*) FROM external_effects"
-        ).fetchone()[0])
-        if external_count:
-            raise ValueError("Внешние отправки требуют отдельной сверки референтом.")
+        effects = connection.execute(
+            "SELECT * FROM external_effects WHERE authority_epoch = ? "
+            "OR authority_epoch IS NULL", (state["epoch"],)
+        ).fetchall()
+        for effect in effects:
+            if effect["outcome"] == "unknown":
+                raise ValueError("Результат внешней отправки требует сверки референтом.")
+            result_id = str(uuid5(
+                NAMESPACE_URL, "ai-offline-result:" + effect["effect_id"]
+            ))
+            operation = connection.execute(
+                "SELECT payload, status FROM operations WHERE operation_id = ?",
+                (result_id,),
+            ).fetchone()
+            if operation is None or operation["status"] != "acknowledged":
+                raise ValueError("Результат внешней отправки не подтверждён сервером.")
+            payload = json.loads(operation["payload"])
+            if (
+                payload.get("effectId") != effect["effect_id"]
+                or payload.get("sent") != (effect["outcome"] == "confirmed")
+                or payload.get("evidence") != effect["detail"]
+            ):
+                raise ValueError("Квитанция внешней отправки отличается от журнала.")
         rows = connection.execute(
             "SELECT sequence, operation_id, result FROM operations "
             "WHERE authority_epoch = ? ORDER BY sequence", (state["epoch"],)
@@ -890,7 +919,7 @@ class OfflineJournal:
             "operationCount": len(entries),
             "lastSequence": entries[-1][0] if entries else None,
             "operationsSha256": digest,
-            "externalEffectCount": 0,
+            "externalEffectCount": len(effects),
         }
 
     def finish_replay(
@@ -1127,6 +1156,45 @@ class OfflineJournal:
                 return operation
         return None
 
+    def next_unsent_command(self) -> dict[str, Any] | None:
+        """Return one queued send whose irreversible click has never begun."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations WHERE status = 'pending' "
+                "AND kind IN ('letter.action', 'letter.dispatched') ORDER BY sequence"
+            ).fetchall()
+        for row in rows:
+            operation = {**dict(row), "payload": json.loads(row["payload"])}
+            if not (
+                (operation["kind"] == "letter.action"
+                 and operation["payload"].get("action") == "send")
+                or (operation["kind"] == "letter.dispatched"
+                    and operation["payload"].get("autoSend") is True)
+            ):
+                continue
+            effect_id = str(uuid5(
+                NAMESPACE_URL, "ai-offline-effect:" + operation["operation_id"]
+            ))
+            if self.external_effect(effect_id) is None:
+                return operation
+        return None
+
+    def external_effect_for_letter(self, letter_id: str) -> dict[str, Any] | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM external_effects WHERE letter_id = ? "
+                "ORDER BY started_at DESC, effect_id DESC LIMIT 1",
+                (str(UUID(letter_id)),),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def unresolved_external_effects(self) -> list[dict[str, Any]]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM external_effects WHERE outcome = 'unknown' ORDER BY started_at"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def begin_external_effect(self, effect_id: str, letter_id: str, kind: str) -> bool:
         """False after a crash or retry: physical send must never auto-repeat."""
         effect_id, letter_id = str(UUID(effect_id)), str(UUID(letter_id))
@@ -1134,6 +1202,11 @@ class OfflineJournal:
             raise ValueError("Недопустимый вид внешней отправки.")
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            state = connection.execute(
+                "SELECT epoch, phase FROM authority_state WHERE id = 1"
+            ).fetchone()
+            if state is None or state["phase"] != "offline":
+                raise ValueError("Внешнее действие доступно только в автономной эпохе.")
             existing = connection.execute(
                 "SELECT letter_id, kind FROM external_effects WHERE effect_id = ?",
                 (effect_id,),
@@ -1144,8 +1217,9 @@ class OfflineJournal:
                 raise ValueError("Повторный идентификатор отправки относится к другому письму.")
             cursor = connection.execute(
                 "INSERT OR IGNORE INTO external_effects "
-                "(effect_id, letter_id, kind, started_at) VALUES (?, ?, ?, ?)",
-                (effect_id, letter_id, kind, _now()),
+                "(effect_id, letter_id, kind, authority_epoch, started_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (effect_id, letter_id, kind, state["epoch"], _now()),
             )
             return cursor.rowcount == 1
 
