@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
+  AssistantActionDraft,
   EfficiencyOverview,
   TaskParticipantRole,
   TaskEfficiencyExclusionReason,
@@ -128,6 +129,7 @@ interface CyclePayload {
 }
 
 interface TasksViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly focusTaskId?: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
@@ -181,6 +183,7 @@ export function TasksView(props: TasksViewProps) {
     onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
   } = props;
+  const { assistantDraft } = props;
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
   const [query, setQuery] = useState("");
@@ -203,7 +206,10 @@ export function TasksView(props: TasksViewProps) {
     setDetailOpen(true);
   };
   const [dateError, setDateError] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(assistantDraft?.kind === "task");
+  const [assistantTaskFields, setAssistantTaskFields] = useState<Readonly<Record<string, string>>>(
+    assistantDraft?.kind === "task" ? assistantDraft.fields : {},
+  );
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pendingTaskDelete, setPendingTaskDelete] = useState<WorkspaceTask>();
@@ -478,7 +484,7 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </div>;
-  const newTaskButton = mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null;
+  const newTaskButton = mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button> : null;
 
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
@@ -528,6 +534,10 @@ export function TasksView(props: TasksViewProps) {
         departments={departments}
         tasks={tasks}
         currentUserId={currentUserId}
+        initialTitle={assistantTaskFields.title}
+        initialDescription={assistantTaskFields.description}
+        initialAssigneeName={assistantTaskFields.assignee}
+        initialDueAt={assistantTaskFields.dueAt}
         onClose={() => setCreating(false)}
         onSubmit={createTask}
       /> : null}

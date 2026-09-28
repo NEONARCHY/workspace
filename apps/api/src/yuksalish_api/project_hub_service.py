@@ -155,6 +155,80 @@ async def _can_view_project(
     )
 
 
+async def visible_employee_project_summaries(
+    connection: AsyncConnection,
+    viewer: AuthenticatedUser,
+    employee_id: UUID,
+) -> list[tuple[str, str, tuple[str, ...]]]:
+    """Active project roles for one employee, filtered by the viewer's object access."""
+    member_rows = (
+        await connection.execute(
+            select(project_hub_people.c.project_id, project_hub_people.c.kind)
+            .where(project_hub_people.c.user_id == employee_id)
+        )
+    ).all()
+    roles_by_project: dict[UUID, set[str]] = {}
+    for project_id, kind in member_rows:
+        label = {"responsible": "ответственный", "approver": "согласующий"}.get(
+            kind, "участник"
+        )
+        roles_by_project.setdefault(project_id, set()).add(label)
+    assigned_ids = set(
+        (
+            await connection.execute(
+                select(project_hub_items.c.project_id)
+                .select_from(
+                    project_hub_items.join(
+                        project_hub_item_assignees,
+                        project_hub_items.c.id == project_hub_item_assignees.c.item_id,
+                    )
+                )
+                .where(project_hub_item_assignees.c.user_id == employee_id)
+                .distinct()
+            )
+        ).scalars()
+    )
+    project_ids = set(roles_by_project) | assigned_ids
+    project_rows = (
+        (
+            await connection.execute(
+                select(
+                    project_hub_projects.c.id,
+                    project_hub_projects.c.code,
+                    project_hub_projects.c.title,
+                    project_hub_projects.c.manager_user_id,
+                    project_hub_projects.c.created_by_user_id,
+                    project_hub_projects.c.access_status,
+                )
+                .where(
+                    project_hub_projects.c.lifecycle_status == "active",
+                    or_(
+                        project_hub_projects.c.manager_user_id == employee_id,
+                        project_hub_projects.c.id.in_(project_ids),
+                    ),
+                )
+                .order_by(project_hub_projects.c.updated_at.desc())
+                .limit(100)
+            )
+        )
+        .mappings()
+        .all()
+    )
+    visible: list[tuple[str, str, tuple[str, ...]]] = []
+    for row in project_rows:
+        if not await _can_view_project(connection, viewer, row):
+            continue
+        roles = roles_by_project.get(row["id"], set()).copy()
+        if row["manager_user_id"] == employee_id:
+            roles.add("руководитель")
+        if row["id"] in assigned_ids:
+            roles.add("исполнитель задач")
+        visible.append((row["code"], row["title"], tuple(sorted(roles))))
+        if len(visible) == 8:
+            break
+    return visible
+
+
 async def _require_project(
     connection: AsyncConnection,
     user: AuthenticatedUser,

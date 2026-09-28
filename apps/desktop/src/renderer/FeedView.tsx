@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
+import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
 import {
   Comment24Regular,
@@ -19,6 +19,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { generateBirthdayGreeting } from "./workspace-api";
 
 interface FeedViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly posts: readonly FeedPost[];
   readonly people: readonly WorkspacePerson[];
   readonly token: string;
@@ -62,12 +63,12 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: 
   </div>;
 }
 
-export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete }: FeedViewProps) {
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
+export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft }: FeedViewProps) {
+  const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
+  const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [composerOpen, setComposerOpen] = useState(false);
+  const [composerOpen, setComposerOpen] = useState(assistantDraft?.kind === "feed");
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
   const [pendingDelete, setPendingDelete] = useState<{ post: FeedPost; commentId?: string }>();
   const [greetingPostId, setGreetingPostId] = useState<string>();

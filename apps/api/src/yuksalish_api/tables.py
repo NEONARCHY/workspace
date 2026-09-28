@@ -83,6 +83,9 @@ assistant_messages = sa.Table(
     sa.Column("role", sa.String(16)),
     sa.Column("model", sa.String(64)),
     sa.Column("content", sa.Text()),
+    sa.Column("source_labels", postgresql.JSONB()),
+    sa.Column("references", postgresql.JSONB()),
+    sa.Column("action_draft", postgresql.JSONB()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 

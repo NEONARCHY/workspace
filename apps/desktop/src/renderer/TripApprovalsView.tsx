@@ -5,7 +5,7 @@ import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripDropAction } from "./trip-board";
-import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
+import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
@@ -27,6 +27,7 @@ const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateS
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
 
 interface TripApprovalsViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly focusRequestId?: string;
   readonly requests: readonly TripRequest[];
   readonly people: readonly WorkspacePerson[];
@@ -51,15 +52,24 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
-  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(
+    assistantDraft?.kind === "trip" ? "create" : null,
+  );
+  const [formOpen, setFormOpen] = useState(assistantDraft?.kind === "trip");
+  const [form, setForm] = useState<TripFormState>(() =>
+    assistantDraft?.kind === "trip" ? {
+      purpose: assistantDraft.fields.purpose ?? "",
+      destination: assistantDraft.fields.destination ?? "",
+      startDate: (assistantDraft.fields.startDate ?? "").slice(0, 10),
+      endDate: (assistantDraft.fields.endDate ?? "").slice(0, 10),
+      employeeIds: [currentUser.id],
+    } : emptyForm(currentUser.id));
   const [employeeListScope, setEmployeeListScope] = useState<EmployeeScope>("central");
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [section, setSection] = useState<"requests" | "designer">("requests");

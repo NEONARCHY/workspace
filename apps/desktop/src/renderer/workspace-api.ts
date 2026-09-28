@@ -561,9 +561,19 @@ export function loadAssistantMessages(token: string): Promise<readonly Assistant
   return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
 }
 
-export function sendAssistantMessage(token: string, model: AssistantModel, message: string): Promise<AssistantMessage> {
+export interface AssistantAttachmentInput {
+  readonly name: string;
+  readonly mime_type: "application/pdf" | "image/png" | "image/jpeg" | "image/webp" | "text/plain"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  readonly data_base64: string;
+}
+
+export function sendAssistantMessage(
+  token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
+  continueDraft = false,
+): Promise<AssistantMessage> {
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message }),
+    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft }),
   }, token, 65_000);
 }
 
@@ -811,6 +821,17 @@ export function setModuleAccessRule(
   return apiRequest<ModuleAccessRule>(
     `/directory/access-rules/${subjectType}/${subjectKey}/${moduleKey}`,
     { method: "PUT", body: JSON.stringify({ permissions }) },
+    token,
+  );
+}
+
+export function setRegionalAssistantAccess(
+  token: string,
+  enabled: boolean,
+): Promise<readonly ModuleAccessRule[]> {
+  return apiRequest<readonly ModuleAccessRule[]>(
+    "/directory/assistant-regional-access",
+    { method: "POST", body: JSON.stringify({ enabled }) },
     token,
   );
 }

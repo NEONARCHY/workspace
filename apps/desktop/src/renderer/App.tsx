@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 
 import type {
   ApprovalRequestSummary,
+  AssistantReference,
+  AssistantActionDraft,
   AbsenceAction,
   AbsenceRequest,
   AbsenceRequestInput,
@@ -398,6 +400,21 @@ export function App() {
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
   }>();
+  const [focusNotification, setFocusNotification] = useState<{
+    id: string; revision: number;
+  }>();
+  const [preparedAction, setPreparedAction] = useState<AssistantActionDraft>();
+  const [assistantRecipientId, setAssistantRecipientId] = useState<string>();
+  useEffect(() => {
+    if (!preparedAction) return;
+    const section = {
+      task: "tasks", project: "project_hub", trip: "trip_approvals",
+      absence: "absences", feed: "feed", message: "messenger",
+    } as const;
+    if (activeSection === section[preparedAction.kind]) return;
+    const timer = window.setTimeout(() => setPreparedAction(undefined), 0);
+    return () => window.clearTimeout(timer);
+  }, [activeSection, preparedAction]);
   const [calendarChatDraft, setCalendarChatDraft] = useState<{
     key: string;
     title: string;
@@ -1669,6 +1686,83 @@ export function App() {
   const isAdmin = session.user.role === "admin" || session.user.role === "superadmin";
   const canView = (key: NavigationKey) => key === "notifications" || key === "settings"
     || (key !== "telegram_access" || isAdmin) && modulePermissions[key]?.view !== false;
+  const prepareAssistantAction = async (draft: AssistantActionDraft) => {
+    const target = {
+      task: "tasks", project: "project_hub", trip: "trip_approvals",
+      absence: "absences", feed: "feed", message: "messenger",
+    } as const;
+    const section = target[draft.kind];
+    const requiredAction = draft.kind === "message" ? "edit" : "create";
+    if (!draft.ready || modulePermissions[section]?.[requiredAction] !== true) {
+      throw new Error("Недостаточно прав для подготовки формы в этом разделе.");
+    }
+    let entityId: string | undefined;
+    let recipientId: string | undefined;
+    if (draft.kind === "message") {
+      const tokens = (draft.fields.recipient ?? "").toLocaleLowerCase("ru-RU")
+        .split(/[^\p{L}]+/u).filter((word) => word && !["ака", "aka"].includes(word));
+      const matches = workspace.people.filter((person) => {
+        const nameWords = person.name.toLocaleLowerCase("ru-RU").split(/[^\p{L}]+/u);
+        return tokens.length > 0 && tokens.every((word) => nameWords.some((part) =>
+          word.length === 1 ? part.startsWith(word) : part === word));
+      });
+      if (matches.length !== 1) {
+        throw new Error("Не удалось однозначно определить получателя. Уточните имя и фамилию в чате с ассистентом.");
+      }
+      const recipient = matches[0]!;
+      if (recipient.id === workspace.currentUser.id) {
+        throw new Error("Укажите другого сотрудника: сообщение самому себе подготовить нельзя.");
+      }
+      recipientId = recipient.id;
+      const existing = workspace.chats.find((chat) => chat.kind === "direct"
+        && chat.members.some((member) => member.userId === recipient.id)
+        && chat.members.some((member) => member.userId === workspace.currentUser.id));
+      if (existing && !existing.permissions.sendMessages) {
+        throw new Error("В этот чат нельзя отправлять сообщения.");
+      }
+      if (!existing && modulePermissions.messenger?.create !== true) {
+        throw new Error("Нет права создавать новый чат с этим сотрудником.");
+      }
+      entityId = existing?.id;
+    }
+    setAssistantRecipientId(recipientId);
+    setPreparedAction(draft);
+    setFocusTarget((current) => ({
+      section, entityId, revision: (current?.revision ?? 0) + 1,
+    }));
+    setActiveSection(section);
+  };
+  const openAssistantReference = (reference: AssistantReference) => {
+    setPreparedAction(undefined);
+    if (reference.section !== "notifications" && modulePermissions[reference.section]?.view !== true) {
+      reportError(new Error("Доступ к этой записи больше не разрешён."));
+      return;
+    }
+    if (reference.section === "notifications") {
+      if (reference.entityId) {
+        const notificationId = reference.entityId;
+        setFocusNotification((current) => ({
+          id: notificationId, revision: (current?.revision ?? 0) + 1,
+        }));
+      }
+      setActiveSection("notifications");
+      return;
+    }
+    const section = reference.section;
+    const navigate = () => {
+      setFocusTarget((current) => ({
+        section,
+        entityId: reference.entityId ?? undefined,
+        revision: (current?.revision ?? 0) + 1,
+      }));
+      setActiveSection(section);
+    };
+    if (section === "ai_referent") {
+      navigate();
+    } else {
+      void refreshWorkspace(session.accessToken).then(navigate).catch(reportError);
+    }
+  };
   const badgeBySection: Partial<Record<NavigationKey, number>> = {
     messenger: workspace.chats.reduce((total, chat) => total + chat.unread, 0),
     tasks: workspace.tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
@@ -1764,6 +1858,7 @@ export function App() {
                   onClick={() => {
                     if (item.key === "settings") { setAccountOpen(true); return; }
                     if (item.key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
+                    setPreparedAction(undefined);
                     setFocusTarget(undefined);
                     setActiveSection(item.key);
                   }}
@@ -1785,11 +1880,12 @@ export function App() {
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
             <SectionJump items={orderedNavItems} commands={[
-              ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
-              ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
+              ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
+              ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
             ]} onNavigate={(key) => {
               if (key === "settings") { setAccountOpen(true); return; }
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
+              setPreparedAction(undefined);
               setFocusTarget(undefined); setActiveSection(key);
             }} />
             <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
@@ -1805,6 +1901,8 @@ export function App() {
             <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("messenger")}>
             {displayedSection === "notifications" ? (
               <NotificationCenter
+                key={focusNotification?.revision}
+                focusNotification={focusNotification}
                 notifications={workspace.notifications}
                 preferences={workspace.notificationPreferences}
                 onOpen={openNotification}
@@ -1834,6 +1932,8 @@ export function App() {
             {displayedSection === "messenger" ? (
               <MessengerView
                 key={focusTarget?.revision}
+                assistantDraft={preparedAction?.kind === "message" ? preparedAction : undefined}
+                assistantRecipientId={preparedAction?.kind === "message" ? assistantRecipientId : undefined}
                 token={session.accessToken}
                 chats={workspace.chats}
                 personalPreferences={workspace.personalPreferences}
@@ -1877,6 +1977,7 @@ export function App() {
             {displayedSection === "tasks" ? (
               <TasksView
                 key={focusTarget?.revision}
+                assistantDraft={preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
@@ -1976,6 +2077,8 @@ export function App() {
             ) : null}
             {displayedSection === "feed" ? (
               <FeedView
+                key={focusTarget?.section === "feed" ? focusTarget.revision : undefined}
+                assistantDraft={preparedAction?.kind === "feed" ? preparedAction : undefined}
                 posts={workspace.feedPosts}
                 people={workspace.people}
                 token={session.accessToken}
@@ -2013,6 +2116,7 @@ export function App() {
             {displayedSection === "project_hub" || displayedSection === "project_funding" ? (
               <ProjectHubView
                 key={`${displayedSection}:${focusTarget?.revision ?? 0}`}
+                assistantDraft={preparedAction?.kind === "project" ? preparedAction : undefined}
                 mode={displayedSection === "project_hub" ? "projects" : "funding"}
                 token={session.accessToken}
                 people={workspace.people}
@@ -2031,6 +2135,7 @@ export function App() {
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
+                assistantDraft={preparedAction?.kind === "trip" ? preparedAction : undefined}
                 requests={workspace.tripRequests}
                 people={workspace.people}
                 departments={workspace.departments}
@@ -2081,6 +2186,8 @@ export function App() {
             ) : null}
             {displayedSection === "absences" ? (
               <AbsencesView
+                key={focusTarget?.section === "absences" ? focusTarget.revision : undefined}
+                assistantDraft={preparedAction?.kind === "absence" ? preparedAction : undefined}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
                 requests={workspace.absenceRequests}
@@ -2182,7 +2289,10 @@ export function App() {
         />
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
-      <YuksalishAssistant token={session.accessToken} />
+      {modulePermissions.assistant?.view === true ? (
+        <YuksalishAssistant token={session.accessToken} onOpenReference={openAssistantReference}
+          onPrepareAction={prepareAssistantAction} />
+      ) : null}
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
     </FluentProvider>

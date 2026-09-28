@@ -27,6 +27,7 @@ type NotificationFilter = "attention" | "unread" | "all";
 type NotificationKindFilter = NotificationKind | "all";
 
 interface NotificationCenterProps {
+  readonly focusNotification?: { readonly id: string; readonly revision: number };
   readonly notifications: readonly WorkspaceNotification[];
   readonly preferences: NotificationPreferences;
   readonly onOpen: (notification: WorkspaceNotification) => void | Promise<void>;
@@ -75,6 +76,7 @@ function timeLabel(value: string): string {
 }
 
 export function NotificationCenter({
+  focusNotification,
   notifications,
   preferences,
   onOpen,
@@ -84,11 +86,11 @@ export function NotificationCenter({
   absenceRequests = [],
   onAbsenceAction,
 }: NotificationCenterProps) {
-  const [filter, setFilter] = useState<NotificationFilter>("attention");
+  const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "attention");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
   const [savingPreferences, setSavingPreferences] = useState(false);
-  const [contextId, setContextId] = useState<string>();
+  const [contextId, setContextId] = useState<string | undefined>(focusNotification?.id);
   const contextRef = useRef<HTMLElement>(null);
   const contextTrigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
