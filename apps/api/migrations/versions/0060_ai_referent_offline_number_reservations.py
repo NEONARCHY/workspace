@@ -7,7 +7,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0060_ai_referent_offline_number_reservations"
-down_revision: str = "0059_project_workstream_details"
+down_revision: str = "0059a_alembic_version_128"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
