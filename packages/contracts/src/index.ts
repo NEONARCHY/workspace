@@ -95,6 +95,7 @@ export interface WorkspaceDepartment {
   readonly name: string;
   readonly scope?: "central" | "regional";
   readonly parentId?: string | null;
+  readonly leadUserId?: string | null;
   readonly assignedUsersCount: number;
   readonly memberIds?: readonly string[];
   readonly chatId?: string | null;
@@ -1163,6 +1164,31 @@ export interface HisobotReport {
   readonly source: "telegram" | "workspace";
 }
 
+export interface HisobotUnitReport {
+  readonly id: string;
+  readonly departmentId: string;
+  readonly departmentName: string;
+  readonly reporterTelegramId: string;
+  readonly reporterEmployeeKey: string;
+  readonly reporterName: string;
+  readonly reporterPosition: string;
+  readonly reportScope: "central" | "hudud";
+  readonly regionName: string | null;
+  readonly coveredTelegramIds: readonly string[];
+  readonly reportDate: string;
+  readonly content: string;
+  readonly submittedAt: string;
+  readonly isLate: boolean;
+  readonly source: "telegram" | "workspace";
+}
+
+export interface HisobotUnit {
+  readonly id: string;
+  readonly name: string;
+  readonly isLead: boolean;
+  readonly memberCount: number;
+}
+
 export interface HisobotProfile {
   readonly telegramId: string;
   readonly fullName: string;
@@ -1174,9 +1200,13 @@ export interface HisobotProfile {
   readonly absenceKind: "vacation" | "sick_leave" | "personal_time" | null;
   readonly today: string;
   readonly canSubmit: boolean;
+  readonly canSubmitUnit?: boolean;
   readonly windowOpensAt: string;
   readonly windowClosesAt: string;
   readonly todayReport: HisobotReport | null;
+  readonly unit?: HisobotUnit | null;
+  readonly todayUnitReport?: HisobotUnitReport | null;
+  readonly coveredByReport?: boolean;
 }
 
 export interface AIReferentIncomingRegistry {

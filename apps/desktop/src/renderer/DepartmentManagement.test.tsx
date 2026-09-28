@@ -74,4 +74,24 @@ describe("DepartmentManagement", () => {
     expect(onChanged).toHaveBeenCalledWith(created);
     expect(await screen.findByText("Подразделение создано. Служебная группа готова.")).toBeInTheDocument();
   });
+
+  it("assigns an active member as the department lead", async () => {
+    const department = {
+      id: "department-1", code: "media", name: "Пример отдела",
+      assignedUsersCount: 1, memberIds: ["user-1"], leadUserId: null,
+    };
+    updateDepartment.mockResolvedValue({ ...department, leadUserId: "user-1" });
+    render(<DepartmentManagement token="token" departments={[department]} employees={[{
+      id: "user-1", username: "employee", name: "Пример Сотрудник",
+      role: "employee", departmentId: "department-1", status: "active",
+    }]} onChanged={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox", {
+      name: "Главное лицо отдела или подразделения",
+    }), { target: { value: "user-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить главное лицо" }));
+    await waitFor(() => expect(updateDepartment).toHaveBeenCalledWith(
+      "token", "department-1", { leadUserId: "user-1" },
+    ));
+    expect(await screen.findByText(/Главное лицо назначено/)).toBeInTheDocument();
+  });
 });

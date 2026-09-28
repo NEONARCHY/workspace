@@ -52,6 +52,7 @@ class DepartmentResponse(ApiModel):
     name: str
     scope: Literal["central", "regional"]
     parent_id: str | None
+    lead_user_id: str | None = None
     assigned_users_count: int
     member_ids: list[str] = Field(default_factory=list)
     chat_id: str | None = None
@@ -86,6 +87,7 @@ class DepartmentUpdateRequest(ApiModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     scope: Literal["central", "regional"] | None = None
     parent_id: UUID | None = None
+    lead_user_id: UUID | None = None
 
     @field_validator("code", "name")
     @classmethod
