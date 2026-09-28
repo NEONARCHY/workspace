@@ -5,6 +5,7 @@ import type {
   ChatSummary,
   CreateChatInput,
   WorkspacePerson,
+  WorkspaceDepartment,
 } from "@yuksalish/contracts";
 import {
   Button,
@@ -23,6 +24,8 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 export interface ChatActions {
   readonly create: (input: CreateChatInput) => Promise<ChatSummary>;
@@ -69,6 +72,7 @@ const roleLabels = {
 function PeoplePicker({
   token,
   people,
+  departments,
   selected,
   onChange,
   single = false,
@@ -76,19 +80,23 @@ function PeoplePicker({
 }: {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly selected: readonly string[];
   readonly onChange: (ids: readonly string[]) => void;
   readonly single?: boolean;
   readonly disabled?: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<EmployeeScope>("central");
   const found = people.filter((person) =>
-    `${person.name} ${person.jobTitle ?? ""}`
+    (!departments || employeeScope(person.departmentId, departments) === scope)
+    && `${person.name} ${person.jobTitle ?? ""}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
   return (
     <div className="chat-people-picker">
+      {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Группа сотрудников для чата" /> : null}
       <Input
         aria-label="Найти сотрудника"
         placeholder="Имя или должность"
@@ -214,6 +222,7 @@ export function ChatManagement({
   chat,
   currentUserId,
   people,
+  departments,
   actions,
   onClose,
   onCreated,
@@ -225,6 +234,7 @@ export function ChatManagement({
   readonly chat?: ChatSummary;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly actions: ChatActions;
   readonly onClose: () => void;
   readonly onCreated: (chat: ChatSummary) => void;
@@ -437,6 +447,7 @@ export function ChatManagement({
                 <PeoplePicker
                   token={token}
                   people={eligible}
+                  departments={departments}
                   selected={selected}
                   onChange={setSelected}
                   disabled={busy}

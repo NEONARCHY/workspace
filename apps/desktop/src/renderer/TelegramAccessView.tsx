@@ -5,9 +5,12 @@ import type {
   TelegramAccessRegistry,
   TelegramBotDescriptor,
   TelegramBotKey,
+  WorkspaceDepartment,
 } from "@yuksalish/contracts";
 
 import { loadTelegramAccess, saveTelegramAccess } from "./workspace-api";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 const regions = [
   "Андижон вилояти", "Бухоро вилояти", "Фарғона вилояти", "Жиззах вилояти",
@@ -167,10 +170,11 @@ function PersonAccessRow({
   );
 }
 
-export function TelegramAccessView({ token }: { readonly token: string }) {
+export function TelegramAccessView({ token, departments }: { readonly token: string; readonly departments?: readonly WorkspaceDepartment[] }) {
   const [registry, setRegistry] = useState<TelegramAccessRegistry>();
   const [refreshEpoch, setRefreshEpoch] = useState(0);
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<EmployeeScope>("central");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const refresh = async () => {
@@ -195,8 +199,9 @@ export function TelegramAccessView({ token }: { readonly token: string }) {
     return () => { active = false; };
   }, [token]);
   const people = useMemo(() => (registry?.people ?? []).filter((person) =>
-    `${person.fullName} ${person.username} ${person.jobTitle ?? ""}`
-      .toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"))), [registry, query]);
+    (!departments || employeeScope(person.departmentId, departments) === scope)
+      && `${person.fullName} ${person.username} ${person.jobTitle ?? ""}`
+        .toLocaleLowerCase("ru-RU").includes(query.trim().toLocaleLowerCase("ru-RU"))), [registry, query, departments, scope]);
   const verified = registry?.people.filter((person) => person.verified).length ?? 0;
   const referentAccess = registry?.people.filter((person) => person.verified && person.botKeys.includes("ai_referent")).length ?? 0;
   return <section className="telegram-access-view" aria-labelledby="telegram-access-title">
@@ -223,6 +228,7 @@ export function TelegramAccessView({ token }: { readonly token: string }) {
       <span>Найти сотрудника</span>
       <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Имя, логин или должность" />
     </label>
+    {departments ? <EmployeeScopeSwitch value={scope} onChange={setScope} label="Сотрудники с доступом к Telegram-ботам" /> : null}
     {error ? <div className="telegram-access-page-error" role="alert">{error} <button type="button" onClick={() => void refresh()}>Повторить</button></div> : null}
     {loading && !registry ? <p className="telegram-access-loading" role="status">Загружаем сотрудников…</p> : null}
     {registry ? <div className="telegram-access-list" aria-label="Сотрудники и доступ к ботам">

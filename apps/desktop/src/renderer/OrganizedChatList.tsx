@@ -1,10 +1,12 @@
 import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useEffect, useMemo, useRef, useState, type ReactNode, type TransitionEvent } from "react";
-import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspacePerson } from "@yuksalish/contracts";
+import type { ChatMessage, ChatSummary, PersonalChatAction, PersonalPreferences, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Input, Menu, MenuItem, MenuList, MenuPopover, MenuTrigger } from "@fluentui/react-components";
 import { Airplane20Regular, Archive20Regular, ArrowDown20Regular, ArrowUp20Regular, Delete20Regular, Folder20Regular, MoreHorizontal20Regular, Pin16Filled, Pin20Regular, PinOff20Regular, Search24Regular, SignOut20Regular, TaskListSquareLtr24Regular } from "@fluentui/react-icons";
 import { moveBefore } from "./personal-organization";
 import { ProfileAvatar } from "./ProfileAvatar";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 type ChatBucket = "chats" | "task-chats" | "project-chats" | "trip-chats" | "archive";
 
@@ -17,11 +19,12 @@ const bucketLabel = (bucket: ChatBucket): string => bucket === "chats" ? "Чат
 
 const bucketEmptyMessage = (bucket: ChatBucket): string => bucket === "archive" ? "Архив пуст" : bucket === "task-chats" ? "Чатов задач не найдено" : bucket === "project-chats" ? "Чатов проектов не найдено" : bucket === "trip-chats" ? "Чатов поездок не найдено" : "Все чаты в архиве";
 
-export function OrganizedChatList({ token, chats, messages, people = [], currentUserId, activeChatId, focusChatId, preferences, onSelect, onOpenDirect, onChange, onReorder, onDelete, onLeave }: {
+export function OrganizedChatList({ token, chats, messages, people = [], departments, currentUserId, activeChatId, focusChatId, preferences, onSelect, onOpenDirect, onChange, onReorder, onDelete, onLeave }: {
   readonly token?: string;
   readonly chats: readonly ChatSummary[];
   readonly messages: readonly ChatMessage[];
   readonly people?: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId?: string;
   readonly activeChatId?: string;
   readonly focusChatId?: string;
@@ -37,6 +40,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
     ? "archive"
     : "chats";
   const [query, setQuery] = useState("");
+  const [peopleScope, setPeopleScope] = useState<EmployeeScope>("central");
   const [busy, setBusy] = useState(false);
   const [pendingPinnedOrder, setPendingPinnedOrder] = useState<{ order: string[]; revision: number } | null>(null);
   const [error, setError] = useState("");
@@ -56,6 +60,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
   const regularChats = chats.filter((chat) => !isTaskChat(chat) && !isContextChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const directPeerIds = new Set(chats.filter((chat) => chat.kind === "direct").flatMap((chat) => chat.members.map((member) => member.userId).filter((id) => id !== currentUserId)));
   const availablePeople = people.filter((person) => person.id !== currentUserId && (person.status === undefined || person.status === "active") && !directPeerIds.has(person.id));
+  const scopedPeople = availablePeople.filter((person) => !departments || employeeScope(person.departmentId, departments) === peopleScope);
   const taskChats = chats.filter((chat) => isTaskChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const projectChats = chats.filter((chat) => isProjectChat(chat) && !preferences.archivedChatIds.includes(chat.id));
   const tripChats = chats.filter((chat) => isTripChat(chat) && !preferences.archivedChatIds.includes(chat.id));
@@ -88,7 +93,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
   }, [archive, bucket, archivedRegularChats, archivedTaskChats, regularChats, taskChats, projectChats, tripChats, chats, messages, pinnedOrder, query]);
   const normalizedQuery = query.trim().toLowerCase();
   const visiblePeople = bucket === "chats" && !archive
-    ? availablePeople.filter((person) => !normalizedQuery || `${person.name} ${person.username ?? ""} ${person.jobTitle ?? ""}`.toLowerCase().includes(normalizedQuery)).sort((a, b) => a.name.localeCompare(b.name, "ru"))
+    ? scopedPeople.filter((person) => !normalizedQuery || `${person.name} ${person.username ?? ""} ${person.jobTitle ?? ""}`.toLowerCase().includes(normalizedQuery)).sort((a, b) => a.name.localeCompare(b.name, "ru"))
     : [];
   const hasPins = !archive && visibleChats.some((chat) => pinnedIds.includes(chat.id));
   const emptyMessage = bucket === "chats" && query.trim() ? "Чаты не найдены" : bucket === "task-chats" && query.trim() ? "Чаты задач не найдены" : bucket === "archive" && query.trim() ? "В архиве чатов не найдено" : bucketEmptyMessage(bucket);
@@ -150,7 +155,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
         finishMoreOpen();
       }} />
       <button type="button" aria-pressed={bucket === "chats" && !morePreviewActive} onClick={() => selectBucket("chats")}>
-        <span className="chat-bucket-label">Чаты</span><span>{regularChats.length + availablePeople.length}</span>
+        <span className="chat-bucket-label">Чаты</span><span>{regularChats.length + scopedPeople.length}</span>
       </button>
       <button type="button" aria-pressed={bucket === "task-chats" && !morePreviewActive} onClick={() => selectBucket("task-chats")}>
         <TaskListSquareLtr24Regular /><span className="chat-bucket-label">Чаты задач</span><span>{taskChats.length}</span>
@@ -173,6 +178,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
     {archive && <p className="chat-organization-hint">Архив только для вас. Переписка и уведомления сохраняются.</p>}
     {error && <div className="organization-error" role="alert">{error}</div>}
     <span className="organization-live" role="status">{busy ? "Сохраняем настройки чатов…" : notice}</span>
+    {bucket === "chats" && departments ? <EmployeeScopeSwitch value={peopleScope} onChange={setPeopleScope} label="Контакты" /> : null}
     <SpatialSort ids={visibleChats.map(chat => chat.id)} onMove={move}>
     <div className="chat-list" role="list" aria-label={bucketLabel(bucket)} aria-busy={busy}>
       {visibleChats.flatMap((chat, index): ReactNode[] => {

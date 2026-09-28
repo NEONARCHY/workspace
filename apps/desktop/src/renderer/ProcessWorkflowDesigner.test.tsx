@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorkflowDefinition } from "@yuksalish/contracts";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
@@ -65,5 +65,32 @@ describe("ProcessWorkflowDesigner", () => {
         expect.objectContaining({ id: "start", config: expect.objectContaining({ stageColor: "#72b9dc" }) }),
       ]),
     }));
+  });
+
+  it("filters a concrete approver by central and regional department", () => {
+    const approvalWorkflow: WorkflowDefinition = {
+      ...workflow,
+      nodes: [
+        { id: "approval", kind: "approval", label: "Решение", detail: "", positionX: 0, positionY: 0, config: {} },
+        ...workflow.nodes,
+      ],
+    };
+    render(<ProcessWorkflowDesigner workflow={approvalWorkflow} processName="Маршрут проектов" accent="project"
+      people={[
+        { id: "a", name: "Азиза", initials: "А", role: "employee", color: "#0091a8", departmentId: "central" },
+        { id: "b", name: "Бобур", initials: "Б", role: "employee", color: "#293a55", departmentId: "regional" },
+      ]}
+      departments={[
+        { id: "central", code: "central", name: "ЦА", scope: "central", assignedUsersCount: 1 },
+        { id: "regional", code: "regional", name: "Регион", scope: "regional", assignedUsersCount: 1 },
+      ]}
+      onSave={vi.fn()} onPublish={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Конкретный согласующий" }));
+    const list = screen.getByLabelText("Доступные сотрудники");
+    expect(within(list).getByText("Азиза")).toBeInTheDocument();
+    expect(within(list).queryByText("Бобур")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(within(list).queryByText("Азиза")).toBeNull();
+    expect(within(list).getByText("Бобур")).toBeInTheDocument();
   });
 });

@@ -7,6 +7,7 @@ import type {
   SessionSummary,
   TotpSetup,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspacePosition,
   InterfaceLocale,
 } from "@yuksalish/contracts";
@@ -30,6 +31,8 @@ import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 import {
   changeOwnPassword,
@@ -100,6 +103,8 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [invitePositionId, setInvitePositionId] = useState("");
   const [positions, setPositions] = useState<readonly WorkspacePosition[]>([]);
   const [employees, setEmployees] = useState<readonly DirectoryEmployee[]>([]);
+  const [departments, setDepartments] = useState<readonly WorkspaceDepartment[]>([]);
+  const [managedScope, setManagedScope] = useState<EmployeeScope>("central");
   const [ownPassword, setOwnPassword] = useState("");
   const [managedUserId, setManagedUserId] = useState("");
   const [managedPassword, setManagedPassword] = useState("");
@@ -140,6 +145,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         setSessions(currentSessions);
         setPositions(directory.positions.filter((position) => position.isActive));
         setEmployees(directory.employees);
+        setDepartments(directory.departments);
       })
       .catch((error: unknown) => {
         if (active) {
@@ -269,6 +275,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
   const manageableEmployees = employees.filter((employee) =>
     employee.id !== user.id && employee.status === "active" &&
+    employeeScope(employee.departmentId, departments) === managedScope &&
     (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
   );
 
@@ -536,6 +543,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                 </div>
               </div>
               <form className="invite-form" onSubmit={(event) => void submitManagedPassword(event)}>
+                <EmployeeScopeSwitch value={managedScope} onChange={(next) => { setManagedScope(next); setManagedUserId(""); }} label="Группа сотрудников для смены пароля" disabled={passwordBusy} />
                 <Field label="Сотрудник" required>
                   <Select value={managedUserId} onChange={(event) => setManagedUserId(event.target.value)}>
                     <option value="">Выберите сотрудника</option>

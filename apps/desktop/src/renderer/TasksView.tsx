@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
+  AssistantActionDraft,
   EfficiencyOverview,
   TaskParticipantRole,
   TaskEfficiencyExclusionReason,
@@ -47,6 +48,8 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
@@ -126,6 +129,7 @@ interface CyclePayload {
 }
 
 interface TasksViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly focusTaskId?: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
@@ -179,6 +183,7 @@ export function TasksView(props: TasksViewProps) {
     onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
   } = props;
+  const { assistantDraft } = props;
   const [mode, setMode] = useState<TaskMode>("list");
   const [filter, setFilter] = useState<TaskFilter>("active");
   const [query, setQuery] = useState("");
@@ -201,7 +206,10 @@ export function TasksView(props: TasksViewProps) {
     setDetailOpen(true);
   };
   const [dateError, setDateError] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(assistantDraft?.kind === "task");
+  const [assistantTaskFields, setAssistantTaskFields] = useState<Readonly<Record<string, string>>>(
+    assistantDraft?.kind === "task" ? assistantDraft.fields : {},
+  );
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pendingTaskDelete, setPendingTaskDelete] = useState<WorkspaceTask>();
@@ -209,9 +217,11 @@ export function TasksView(props: TasksViewProps) {
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
   const [editAssigneeId, setEditAssigneeId] = useState("");
+  const [editAssigneeScope, setEditAssigneeScope] = useState<EmployeeScope>("central");
   const [editPriority, setEditPriority] = useState<WorkspaceTask["priority"]>("normal");
   const [editDueAt, setEditDueAt] = useState("");
   const [participantId, setParticipantId] = useState("");
+  const [participantScope, setParticipantScope] = useState<EmployeeScope>("central");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");
   const [checklistTitle, setChecklistTitle] = useState("");
   const [commentBody, setCommentBody] = useState("");
@@ -234,8 +244,11 @@ export function TasksView(props: TasksViewProps) {
   const [creatingSubtask, setCreatingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [subtaskAssigneeId, setSubtaskAssigneeId] = useState(currentUserId);
+  const [subtaskAssigneeScope, setSubtaskAssigneeScope] = useState<EmployeeScope>("central");
   const [subtaskDueAt, setSubtaskDueAt] = useState("");
   const newTaskFocusTarget = useRestoreFocusTarget();
+  const inEmployeeScope = (person: WorkspacePerson, scope: EmployeeScope) =>
+    !departments || employeeScope(person.departmentId, departments) === scope;
 
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
@@ -304,6 +317,7 @@ export function TasksView(props: TasksViewProps) {
     setEditDescription(selectedTask.description ?? "");
     setEditProject(selectedTask.project);
     setEditAssigneeId(selectedTask.assigneeId);
+    setEditAssigneeScope(employeeScope(people.find((person) => person.id === selectedTask.assigneeId)?.departmentId, departments ?? []));
     setEditPriority(selectedTask.priority);
     setEditDueAt(localDateTime(selectedTask.dueAt));
     setEditing(true);
@@ -470,7 +484,7 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </div>;
-  const newTaskButton = mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => setCreating(true)}>Новая задача</Button> : null;
+  const newTaskButton = mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button> : null;
 
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
@@ -520,6 +534,10 @@ export function TasksView(props: TasksViewProps) {
         departments={departments}
         tasks={tasks}
         currentUserId={currentUserId}
+        initialTitle={assistantTaskFields.title}
+        initialDescription={assistantTaskFields.description}
+        initialAssigneeName={assistantTaskFields.assignee}
+        initialDueAt={assistantTaskFields.dueAt}
         onClose={() => setCreating(false)}
         onSubmit={createTask}
       /> : null}
@@ -546,7 +564,7 @@ export function TasksView(props: TasksViewProps) {
           <Input aria-label="Название в карточке" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} />
           <Textarea aria-label="Описание задачи" value={editDescription} onChange={(_event, data) => setEditDescription(data.value)} />
           <Input aria-label="Проект задачи" value={editProject} onChange={(_event, data) => setEditProject(data.value)} />
-          <label><span>Ответственный</span><WorkspaceSelect aria-label="Ответственный задачи" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label>
+          <div className="task-people-scope-field"><span>Ответственный</span>{departments ? <EmployeeScopeSwitch value={editAssigneeScope} onChange={(next) => { setEditAssigneeScope(next); setEditAssigneeId(""); }} label="Группа ответственных" /> : null}<WorkspaceSelect aria-label="Ответственный задачи" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, editAssigneeScope)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></div>
           <label><span>Приоритет</span><WorkspaceSelect aria-label="Приоритет задачи" variant="priority" value={editPriority} onChange={(event) => setEditPriority(event.target.value as WorkspaceTask["priority"])}><option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option></WorkspaceSelect></label>
           <label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок задачи" value={editDueAt} onChange={setEditDueAt} /></label>
           <div className="task-editor-actions"><Button appearance="primary" onClick={() => void saveTask()}>Сохранить карточку</Button><Button appearance="subtle" onClick={() => setEditing(false)}>Отмена</Button></div>
@@ -563,13 +581,13 @@ export function TasksView(props: TasksViewProps) {
         <div className="detail-section task-participants-section"><div className="detail-section-line"><h3>Участники</h3><span>{selectedTask.participants.length + 1}</span></div><div className="participant-list">
           <ParticipantChip person={personById(selectedTask.assigneeId)} label="Ответственный" />
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
-        </div>{canManageParticipants ? <div className="inline-task-form"><WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
+        </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
         <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment} />
 
         <div className="detail-section task-subtasks-section"><div className="detail-section-line"><h3>Подзадачи</h3><span>{selectedSubtasks.filter((task) => task.status === "completed").length}/{selectedSubtasks.length}</span></div>
           <div className="task-subtask-list">{selectedSubtasks.map((task) => <button type="button" className="task-subtask-row" key={task.id} onClick={() => setSelectedId(task.id)}><span><strong>{task.title}</strong><small><EmployeeProfileLink userId={task.assigneeId} personName={personById(task.assigneeId)?.name ?? "Сотрудник"}>{personById(task.assigneeId)?.name ?? "Сотрудник"}</EmployeeProfileLink> · {task.dueLabel}</small></span><Badge appearance="tint" color={task.status === "completed" ? "success" : task.status === "overdue" ? "danger" : "informative"}>{statusLabels[task.status]}</Badge></button>)}</div>
-          {canEdit && selectedTask.status !== "completed" && selectedTask.status !== "cancelled" ? creatingSubtask ? <div className="task-card-editor subtask-create-form" role="region" aria-label="Новая подзадача"><Input autoFocus aria-label="Название подзадачи" placeholder="Что нужно сделать?" value={subtaskTitle} onChange={(_, data) => setSubtaskTitle(data.value)} /><label><span>Исполнитель</span><WorkspaceSelect aria-label="Исполнитель подзадачи" value={subtaskAssigneeId} onChange={(event) => setSubtaskAssigneeId(event.target.value)}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label><label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок подзадачи" value={subtaskDueAt} onChange={setSubtaskDueAt} /></label><div className="task-editor-actions"><Button appearance="primary" onClick={() => void createSubtask()} disabled={!subtaskTitle.trim()}>Создать подзадачу</Button><Button appearance="subtle" onClick={() => setCreatingSubtask(false)}>Отмена</Button></div></div> : <Button appearance="subtle" icon={<Add24Regular />} onClick={() => { setSubtaskAssigneeId(selectedTask.assigneeId); setCreatingSubtask(true); }}>Добавить подзадачу</Button> : null}
+          {canEdit && selectedTask.status !== "completed" && selectedTask.status !== "cancelled" ? creatingSubtask ? <div className="task-card-editor subtask-create-form" role="region" aria-label="Новая подзадача"><Input autoFocus aria-label="Название подзадачи" placeholder="Что нужно сделать?" value={subtaskTitle} onChange={(_, data) => setSubtaskTitle(data.value)} /><div className="task-people-scope-field"><span>Исполнитель</span>{departments ? <EmployeeScopeSwitch value={subtaskAssigneeScope} onChange={(next) => { setSubtaskAssigneeScope(next); setSubtaskAssigneeId(""); }} label="Группа исполнителей подзадачи" /> : null}<WorkspaceSelect aria-label="Исполнитель подзадачи" value={subtaskAssigneeId} onChange={(event) => setSubtaskAssigneeId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, subtaskAssigneeScope)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></div><label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок подзадачи" value={subtaskDueAt} onChange={setSubtaskDueAt} /></label><div className="task-editor-actions"><Button appearance="primary" onClick={() => void createSubtask()} disabled={!subtaskTitle.trim() || !subtaskAssigneeId}>Создать подзадачу</Button><Button appearance="subtle" onClick={() => setCreatingSubtask(false)}>Отмена</Button></div></div> : <Button appearance="subtle" icon={<Add24Regular />} onClick={() => { setSubtaskAssigneeId(selectedTask.assigneeId); setSubtaskAssigneeScope(employeeScope(people.find((person) => person.id === selectedTask.assigneeId)?.departmentId, departments ?? [])); setCreatingSubtask(true); }}>Добавить подзадачу</Button> : null}
         </div>
 
         <div className="detail-section task-checklist-section"><div className="detail-section-line"><h3>Чек-лист</h3><span>{selectedTask.checklistDone}/{selectedTask.checklistTotal}</span></div><ProgressBar aria-label="Выполнено пунктов чек-листа" value={selectedTask.checklistTotal ? selectedTask.checklistDone / selectedTask.checklistTotal : 0} /><div className="checklist-items">{selectedTask.checklist.map((item) => <div className="checklist-row" key={item.id}><Checkbox checked={item.isCompleted} disabled={!canEdit} label={item.title} onChange={(_event, data) => void onToggleChecklistItem(selectedTask, item.id, data.checked === true)} />{canEdit ? <button aria-label={`Удалить пункт ${item.title}`} onClick={() => void onDeleteChecklistItem(selectedTask, item.id)} type="button"><Delete24Regular /></button> : null}</div>)}</div>{canEdit ? <div className="inline-task-form"><Input aria-label="Новый пункт чек-листа" placeholder="Добавить пункт" value={checklistTitle} onChange={(_event, data) => setChecklistTitle(data.value)} /><Button appearance="secondary" onClick={() => void addChecklistItem()} disabled={!checklistTitle.trim()}>Добавить</Button></div> : null}</div>

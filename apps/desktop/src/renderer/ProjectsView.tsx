@@ -13,6 +13,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import type {
   ProjectInput,
   ProjectStage,
+  WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceProject,
   WorkflowDefinition,
@@ -22,6 +23,7 @@ import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { PersonPicker } from "./PersonPicker";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -54,6 +56,7 @@ function isBackwardStage(current: ProjectStage, target: ProjectStage): boolean {
 interface ProjectsViewProps {
   readonly projects: readonly WorkspaceProject[];
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUser: WorkspacePerson;
   readonly onCreate: (payload: ProjectInput) => Promise<WorkspaceProject | undefined>;
   readonly onUpdate: (
@@ -150,7 +153,7 @@ function deadlineTone(project: WorkspaceProject): "neutral" | "soon" | "overdue"
   return days <= 14 ? "soon" : "neutral";
 }
 
-export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate, onMove, onOpenChat, renderProjectChat, focusProjectId, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
+export function ProjectsView({ projects, people, departments, currentUser, onCreate, onUpdate, onMove, onOpenChat, renderProjectChat, focusProjectId, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: ProjectsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const [view, setView] = useState<"board" | "designer">("board");
   const [presentation, setPresentation] = useState<"kanban" | "list">("kanban");
@@ -261,7 +264,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
         ) : null}
       </header>
 
-      {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
+      {view === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут проектов" accent="project" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview project-overview" aria-label="Сводка по проектам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("active")}>
           <strong>{activeCount}</strong>
@@ -419,7 +422,7 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
                 </div>
               </RecordSection>
               <RecordSection title="Сроки и ответственность"><div className="record-field-grid">
-                <label className="record-field-wide">Руководитель<WorkspaceSelect aria-label="Руководитель проекта" value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label>
+                <div className="record-field-wide scoped-person-field"><span>Руководитель</span><PersonPicker label="Руководитель проекта" people={people} departments={departments} value={form.managerUserId} onChange={(managerUserId) => setForm({ ...form, managerUserId })} /></div>
                 <label>Начало<WorkspaceDateTimePicker mode="date" ariaLabel="Начало проекта" value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>
                 <label>Окончание<WorkspaceDateTimePicker mode="date" ariaLabel="Окончание проекта" value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>
               </div></RecordSection>

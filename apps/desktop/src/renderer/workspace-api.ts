@@ -22,6 +22,7 @@ import type {
   TelegramAccessUpdate,
   HisobotProfile,
   HisobotReport,
+  HisobotUnitReport,
   AIReferentRecipientRegistry,
   AIReferentRecipient,
   AIReferentManualRecipientInput,
@@ -384,14 +385,30 @@ export function saveHisobotReport(token: string, content: string): Promise<Hisob
   );
 }
 
+export function saveHisobotUnitReport(token: string, content: string): Promise<HisobotUnitReport> {
+  return apiRequest<HisobotUnitReport>(
+    "/hisobot/me/unit-report", { method: "PUT", body: JSON.stringify({ content }) }, token,
+  );
+}
+
 export function loadHisobotHistory(token: string, beforeDate?: string): Promise<readonly HisobotReport[]> {
   const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
   return apiRequest<readonly HisobotReport[]>(`/hisobot/me/history${suffix}`, {}, token);
 }
 
+export function loadHisobotUnitHistory(token: string, beforeDate?: string): Promise<readonly HisobotUnitReport[]> {
+  const suffix = beforeDate ? `?before_date=${encodeURIComponent(beforeDate)}` : "";
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/me/unit-history${suffix}`, {}, token);
+}
+
 export function loadHisobotReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotReport[]> {
   const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
   return apiRequest<readonly HisobotReport[]>(`/hisobot/reports?${params}`, {}, token);
+}
+
+export function loadHisobotUnitReports(token: string, startDate: string, endDate: string): Promise<readonly HisobotUnitReport[]> {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate });
+  return apiRequest<readonly HisobotUnitReport[]>(`/hisobot/unit-reports?${params}`, {}, token);
 }
 
 export function loadHrOverview(token: string): Promise<HrOverview> {
@@ -586,9 +603,19 @@ export function loadAssistantMessages(token: string): Promise<readonly Assistant
   return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
 }
 
-export function sendAssistantMessage(token: string, model: AssistantModel, message: string): Promise<AssistantMessage> {
+export interface AssistantAttachmentInput {
+  readonly name: string;
+  readonly mime_type: "application/pdf" | "image/png" | "image/jpeg" | "image/webp" | "text/plain"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  readonly data_base64: string;
+}
+
+export function sendAssistantMessage(
+  token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
+  continueDraft = false,
+): Promise<AssistantMessage> {
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message }),
+    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft }),
   }, token, 65_000);
 }
 
@@ -793,7 +820,7 @@ export function revokeAdministrativeChatInspection(token: string, inspectionId: 
 
 export function createDepartment(
   token: string,
-  payload: { readonly code: string; readonly name: string; readonly parentId?: string },
+  payload: { readonly code: string; readonly name: string; readonly scope: NonNullable<WorkspaceDepartment["scope"]>; readonly parentId?: string },
 ): Promise<WorkspaceDepartment> {
   return apiRequest<WorkspaceDepartment>(
     "/directory/departments",
@@ -805,7 +832,7 @@ export function createDepartment(
 export function updateDepartment(
   token: string,
   departmentId: string,
-  payload: { readonly code?: string; readonly name?: string; readonly parentId?: string | null },
+  payload: { readonly code?: string; readonly name?: string; readonly scope?: WorkspaceDepartment["scope"]; readonly parentId?: string | null; readonly leadUserId?: string | null },
 ): Promise<WorkspaceDepartment> {
   return apiRequest<WorkspaceDepartment>(
     `/directory/departments/${departmentId}`,
@@ -836,6 +863,17 @@ export function setModuleAccessRule(
   return apiRequest<ModuleAccessRule>(
     `/directory/access-rules/${subjectType}/${subjectKey}/${moduleKey}`,
     { method: "PUT", body: JSON.stringify({ permissions }) },
+    token,
+  );
+}
+
+export function setRegionalAssistantAccess(
+  token: string,
+  enabled: boolean,
+): Promise<readonly ModuleAccessRule[]> {
+  return apiRequest<readonly ModuleAccessRule[]>(
+    "/directory/assistant-regional-access",
+    { method: "POST", body: JSON.stringify({ enabled }) },
     token,
   );
 }

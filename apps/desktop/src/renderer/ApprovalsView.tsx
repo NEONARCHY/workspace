@@ -8,6 +8,9 @@ import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
 import { nextAvailableStageColor, workflowStageColor } from "./workflow-stage-colors";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { PersonPicker } from "./PersonPicker";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 import type {
   ApprovalNodeData,
@@ -16,6 +19,7 @@ import type {
   PaymentRequestDetails,
   WorkflowDefinition,
   WorkspaceAttachment,
+  WorkspaceDepartment,
   WorkspacePerson,
   WorkflowPosition,
 } from "@yuksalish/contracts";
@@ -108,6 +112,7 @@ interface ApprovalsViewProps {
   readonly canCreateRequest: boolean;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
   readonly requests: readonly ApprovalRequestSummary[];
   readonly attachments: readonly WorkspaceAttachment[];
@@ -694,11 +699,18 @@ function formatDateTime(value: string | null | undefined): string {
 interface PaymentFieldsProps {
   readonly form: PaymentFormState;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly onChange: (form: PaymentFormState) => void;
   readonly revision?: boolean;
 }
 
-function PaymentFields({ form, people, onChange, revision = false }: PaymentFieldsProps) {
+function PaymentFields({ form, people, departments, onChange, revision = false }: PaymentFieldsProps) {
+  const [tripScope, setTripScope] = useState<EmployeeScope>(() => employeeScope(
+    people.find((person) => person.id === form.employeeIds[0])?.departmentId,
+    departments ?? [],
+  ));
+  const tripPeople = people.filter((person) => !departments || employeeScope(person.departmentId, departments) === tripScope);
+  const tripPeopleIds = new Set(tripPeople.map((person) => person.id));
   const update = <Key extends keyof PaymentFormState>(
     key: Key,
     value: PaymentFormState[Key],
@@ -801,14 +813,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
           </div>
         </header>
         <div className="payment-field-grid">
-          <label>
-            Ответственный
-            <WorkspaceSelect aria-label={`${prefix}ответственный за заявку`} value={form.responsibleUserId} onChange={(event) => update("responsibleUserId", event.target.value)}>
-              {people.map((person) => (
-                <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
-              ))}
-            </WorkspaceSelect>
-          </label>
+          <div className="scoped-person-field"><span>Ответственный</span><PersonPicker label={`${prefix}ответственный за заявку`} people={people} departments={departments} value={form.responsibleUserId} onChange={(id) => update("responsibleUserId", id)} /></div>
           <label>
             Срок оплаты
             <WorkspaceDateTimePicker ariaLabel={`${prefix}срок оплаты`} value={form.deadline} onChange={(value) => update("deadline", value)} />
@@ -832,19 +837,23 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
             Окончание
             <WorkspaceDateTimePicker mode="date" ariaLabel={`${prefix}дата окончания поездки`} value={form.tripEndDate} min={form.tripStartDate} onChange={(value) => update("tripEndDate", value)} />
           </label>
-          <label className="payment-trip-employees">
-            Сотрудники поездки
+          <div className="payment-trip-employees scoped-person-field">
+            <span>Сотрудники поездки · выбрано {form.employeeIds.length}</span>
+            {departments ? <EmployeeScopeSwitch value={tripScope} onChange={setTripScope} label="Группа сотрудников поездки" /> : null}
             <WorkspaceSelect
               multiple
               aria-label={`${prefix}сотрудники поездки`}
-              value={[...form.employeeIds]}
-              onChange={(event) => update("employeeIds", Array.from(event.currentTarget.selectedOptions, (option) => option.value))}
+              value={form.employeeIds.filter((id) => tripPeopleIds.has(id))}
+              onChange={(event) => update("employeeIds", [
+                ...form.employeeIds.filter((id) => !tripPeopleIds.has(id)),
+                ...Array.from(event.currentTarget.selectedOptions, (option) => option.value),
+              ])}
             >
-              {people.map((person) => (
+              {tripPeople.map((person) => (
                 <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
               ))}
             </WorkspaceSelect>
-          </label>
+          </div>
         </div>
       </details>
     </div>
@@ -857,6 +866,7 @@ export function ApprovalsView({
   canCreateRequest,
   currentUserId,
   people,
+  departments,
   positions,
   requests,
   attachments,
@@ -1809,7 +1819,7 @@ export function ApprovalsView({
                       </label>
                     </div>
                   </section>
-                  <PaymentFields form={requestDetails} people={people} onChange={setRequestDetails} />
+                  <PaymentFields form={requestDetails} people={people} departments={departments} onChange={setRequestDetails} />
                   <section className="payment-form-section approval-documents-section">
                     <header>
                       <span>04</span>
@@ -2003,10 +2013,7 @@ export function ApprovalsView({
                     {decision?.requestId === selectedRequest.id ? (
                       <div className="request-inline-editor decision-editor detail-overview">
                         {decision.action === "delegate" ? (
-                          <WorkspaceSelect aria-label={`Новый согласующий заявки ${selectedRequest.number}`} value={delegateToUserId} onChange={(event) => setDelegateToUserId(event.target.value)}>
-                            <option value="">Выберите сотрудника</option>
-                            {people.filter((person) => person.id !== currentUserId).map((person) => <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>)}
-                          </WorkspaceSelect>
+                          <PersonPicker label={`Новый согласующий заявки ${selectedRequest.number}`} people={people.filter((person) => person.id !== currentUserId)} departments={departments} value={delegateToUserId} onChange={setDelegateToUserId} />
                         ) : null}
                         <Textarea aria-label={`Комментарий решения по заявке ${selectedRequest.number}`} placeholder={decision.action === "reject" ? "Причина отклонения обязательна" : "Комментарий"} value={decisionComment} onChange={(_event, data) => setDecisionComment(data.value)} />
                         <Button appearance="primary" disabled={actionBusy || (decision.action === "reject" && !decisionComment.trim()) || (decision.action === "delegate" && !delegateToUserId)} onClick={() => void completeDecision()}>Подтвердить</Button>
@@ -2019,7 +2026,7 @@ export function ApprovalsView({
                         <label>Название<Input aria-label="Исправленное название заявки" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} /></label>
                         <label>Сумма<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
                         <label>Назначение<Textarea aria-label="Исправленное назначение платежа" value={editPurpose} onChange={(_event, data) => setEditPurpose(data.value)} /></label>
-                        <PaymentFields form={editDetails} people={people} onChange={setEditDetails} revision />
+                        <PaymentFields form={editDetails} people={people} departments={departments} onChange={setEditDetails} revision />
                         <PendingFilePicker files={editFiles} onChange={setEditFiles} label="Добавить исправленные документы" />
                         <PendingFilePicker files={editAdditionalFiles} onChange={setEditAdditionalFiles} label="Добавить дополнительные документы" />
                         {editError ? <div className="approval-form-error" role="alert">{editError}</div> : null}
@@ -2238,22 +2245,7 @@ export function ApprovalsView({
                         <option value="employee">Сотрудник</option>
                       </WorkspaceSelect>
                     </label>
-                    <label>
-                      Конкретный сотрудник
-                      <WorkspaceSelect
-                        aria-label="Конкретный согласующий"
-                        value={String(selectedNode.data.approverUserId ?? "")}
-                        onChange={(event) => updateSelected({
-                          approverUserId: event.target.value || undefined,
-                          approverPositionId: undefined,
-                        })}
-                      >
-                        <option value="">Определяется ролью</option>
-                        {people.map((person) => (
-                          <option key={person.id} value={person.id}>{person.name} · {person.jobTitle ?? person.role}</option>
-                        ))}
-                      </WorkspaceSelect>
-                    </label>
+                    <div className="scoped-person-field"><span>Конкретный сотрудник</span><PersonPicker label="Конкретный согласующий" people={people} departments={departments} value={String(selectedNode.data.approverUserId ?? "")} onChange={(id) => updateSelected({ approverUserId: id || undefined, approverPositionId: undefined })} emptyLabel="Определяется ролью" /></div>
                     <fieldset className="workflow-deadline-settings">
                       <legend>Сроки и эскалация</legend>
                       <div>
@@ -2267,12 +2259,7 @@ export function ApprovalsView({
                       <label>Эскалировать после просрочки, ч.
                         <input type="number" min={1} max={720} value={Number(selectedNode.data.escalationAfterHours ?? 4)} onChange={(event) => updateSelected({ escalationAfterHours: Math.max(1, Number(event.target.value) || 4) })} />
                       </label>
-                      <label>Получатель эскалации
-                        <WorkspaceSelect aria-label="Получатель эскалации" value={String(selectedNode.data.escalationUserId ?? "")} onChange={(event) => updateSelected({ escalationUserId: event.target.value || undefined })}>
-                          <option value="">Владелец маршрута</option>
-                          {people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                        </WorkspaceSelect>
-                      </label>
+                      <div className="scoped-person-field"><span>Получатель эскалации</span><PersonPicker label="Получатель эскалации" people={people} departments={departments} value={String(selectedNode.data.escalationUserId ?? "")} onChange={(id) => updateSelected({ escalationUserId: id || undefined })} emptyLabel="Владелец маршрута" /></div>
                       <small>Напоминания получают согласующие этапа. Инициатор видит просрочку отдельно.</small>
                     </fieldset>
                   </>

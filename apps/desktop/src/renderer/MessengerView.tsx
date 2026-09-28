@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
 import type {
+  AssistantActionDraft,
   ChatMessage,
   ChatSummary,
   MessageReaction,
@@ -56,6 +57,8 @@ import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import {
   MessageRevealOverlay,
@@ -72,6 +75,8 @@ interface OutgoingMessageReveal {
 }
 
 export interface MessengerViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
+  readonly assistantRecipientId?: string;
   readonly token: string;
   readonly personalPreferences?: PersonalPreferences;
   readonly onPersonalChat?: (id: string, action: PersonalChatAction) => Promise<void>;
@@ -245,6 +250,7 @@ function Conversation({
   onOpenContext,
   onOpenPersonProfile,
   embedded = false,
+  assistantDraft,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
@@ -252,13 +258,14 @@ function Conversation({
   readonly onBack: () => void;
   readonly embedded?: boolean;
 }) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "");
   const draftKey = `chat:${currentUserId}:${chat.id}`;
-  const draftEdited = useRef(false);
-  const draftReady = useRef(false);
+  const draftEdited = useRef(assistantDraft?.kind === "message");
+  const draftReady = useRef(assistantDraft?.kind === "message");
   const [reply, setReply] = useState<ChatMessage>();
   const [mentions, setMentions] = useState<readonly string[]>([]);
   const [mentionPicker, setMentionPicker] = useState(false);
+  const [mentionScope, setMentionScope] = useState<EmployeeScope>("central");
   const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
   const [forwarding, setForwarding] = useState<ChatMessage>();
@@ -303,13 +310,14 @@ function Conversation({
     const bridge = workspacePlatform;
     let active = true;
     void bridge.loadDraft(draftKey).then((saved) => {
-      if (active && !draftEdited.current && saved !== null) {
-        setDraft(saved);
+      if (active && saved !== null && (assistantDraft?.kind === "message" || !draftEdited.current)) {
+        setDraft((current) => assistantDraft?.kind === "message" && saved.trim()
+          ? `${saved.trimEnd()}\n\n${current}` : assistantDraft?.kind === "message" ? current : saved);
         void bridge.clearDraft(draftKey).catch(() => undefined);
       }
     }).catch(() => undefined).finally(() => { draftReady.current = true; });
     return () => { active = false; };
-  }, [draftKey]);
+  }, [assistantDraft, draftKey]);
   useEffect(() => {
     const bridge = workspacePlatform;
     if (!draftReady.current || !draftEdited.current) return;
@@ -402,7 +410,8 @@ function Conversation({
   const mentionCandidates = chat.members.filter((member) => {
     if (member.userId === currentUserId) return false;
     const person = people.find((item) => item.id === member.userId);
-    return !mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery);
+    return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
+      && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
   const latestMessage = activeMessages.at(-1);
   const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
@@ -820,12 +829,12 @@ function Conversation({
         <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
         <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
       </MessageContextMenu> : null}
-      <Dialog open={Boolean(reactionDialog)} onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
+      {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
         <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
           <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>
           <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
         </DialogContent></DialogBody>
-      </DialogSurface></Dialog>
+      </DialogSurface></Dialog>}
       {error && (
         <div className="messenger-error" role="alert">
           {error}
@@ -947,6 +956,7 @@ function Conversation({
               aria-label="Упомянуть участников"
             >
               <small>Кому отправить уведомление об упоминании</small>
+              {departments ? <EmployeeScopeSwitch value={mentionScope} onChange={setMentionScope} label="Группа участников для упоминания" /> : null}
               {mentionCandidates.map((member) => {
                 const person = people.find((item) => item.id === member.userId);
                 if (!person) return null;
@@ -1244,7 +1254,39 @@ export function MessengerView(props: MessengerViewProps) {
   const [listRevision, setListRevision] = useState(0);
   const [panel, setPanel] = useState<"create" | "manage">();
   const [conversationOpen, setConversationOpen] = useState(Boolean(focusChatId));
-  const activeChat = visibleChats.find((chat) => chat.id === activeChatId) ?? firstActive;
+  const [assistantChat, setAssistantChat] = useState<ChatSummary>();
+  const [assistantChatBusy, setAssistantChatBusy] = useState(false);
+  const [assistantChatError, setAssistantChatError] = useState("");
+  const [assistantPreparationDismissed, setAssistantPreparationDismissed] = useState(false);
+  const activeChat = visibleChats.find((chat) => chat.id === activeChatId)
+    ?? (assistantChat?.id === activeChatId ? assistantChat : undefined) ?? firstActive;
+  const assistantRecipient = props.assistantDraft?.kind === "message" && props.assistantRecipientId
+    ? props.people.find((person) => person.id === props.assistantRecipientId) : undefined;
+  const pendingAssistantChat = assistantRecipient && !assistantChat && !assistantPreparationDismissed
+    && !visibleChats.some((chat) => chat.kind === "direct"
+      && chat.members.some((member) => member.userId === assistantRecipient.id));
+  const openAssistantChat = async () => {
+    if (!assistantRecipient || assistantChatBusy) return;
+    setAssistantChatBusy(true);
+    setAssistantChatError("");
+    try {
+      const chat = await props.chatActions.create({
+        kind: "direct", title: "", description: "", memberIds: [assistantRecipient.id],
+      });
+      if (!chat.permissions.sendMessages) {
+        setAssistantChatError("Диалог открыт, но отправка сообщений в нём недоступна.");
+        return;
+      }
+      setAssistantChat(chat);
+      setActiveChatId(chat.id);
+      setConversationOpen(true);
+      setListRevision((revision) => revision + 1);
+    } catch (cause) {
+      setAssistantChatError(cause instanceof Error ? cause.message : "Не удалось открыть диалог.");
+    } finally {
+      setAssistantChatBusy(false);
+    }
+  };
   const requestChatDeletion = (chat: ChatSummary) => {
     if (chat.contextType || (chat.kind !== "direct" && chat.kind !== "group")) return;
     setChatDeletionError("");
@@ -1261,6 +1303,7 @@ export function MessengerView(props: MessengerViewProps) {
       memberIds: [person.id],
     });
     setActiveChatId(chat.id);
+    setAssistantPreparationDismissed(true);
     setConversationOpen(true);
     setPanel(undefined);
     setListRevision((revision) => revision + 1);
@@ -1320,15 +1363,32 @@ export function MessengerView(props: MessengerViewProps) {
             />
           </Tooltip>
         </div>
-          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
-          onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
+          onSelect={(id) => { setActiveChatId(id); setAssistantPreparationDismissed(true); setConversationOpen(true); setPanel(undefined); }} />
       </aside>
-      {activeChat ? (
+      {pendingAssistantChat ? (
+        <div className="conversation-pane assistant-message-prepare" role="region" aria-label="Подготовка сообщения">
+          <span className="view-kicker">ЧЕРНОВИК ОТ ИИ-АССИСТЕНТА</span>
+          <h2>Сообщение для {assistantRecipient.name}</h2>
+          <p>Проверьте получателя и текст. При открытии диалога сообщение останется черновиком — отправить его сможете только вы.</p>
+          <blockquote>{props.assistantDraft?.fields.body}</blockquote>
+          {assistantChatError ? <p role="alert" className="messenger-error">{assistantChatError}</p> : null}
+          <div className="assistant-message-prepare-actions">
+            <Button appearance="primary" disabled={assistantChatBusy} onClick={() => void openAssistantChat()}>
+              {assistantChatBusy ? "Открываем…" : "Открыть диалог с черновиком"}
+            </Button>
+            <Button disabled={assistantChatBusy} onClick={() => setAssistantPreparationDismissed(true)}>Отмена</Button>
+          </div>
+        </div>
+      ) : activeChat ? (
         <Conversation
           key={`${props.currentUserId}:${activeChat.id}`}
           {...props}
+          assistantDraft={assistantRecipient && activeChat.kind === "direct"
+            && activeChat.members.some((member) => member.userId === assistantRecipient.id)
+            ? props.assistantDraft : undefined}
           chat={activeChat}
           availableChats={visibleChats}
           onManage={() => setPanel("manage")}
@@ -1346,6 +1406,7 @@ export function MessengerView(props: MessengerViewProps) {
           chat={panel === "manage" ? activeChat : undefined}
           currentUserId={props.currentUserId}
           people={props.people}
+          departments={props.departments}
           actions={props.chatActions}
           onClose={() => setPanel(undefined)}
           onCreated={(chat) => {

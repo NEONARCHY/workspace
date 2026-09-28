@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
+import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, AssistantActionDraft, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Textarea } from "@fluentui/react-components";
 import { Add24Regular, CalendarLtr24Regular, Checkmark24Regular, Dismiss24Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -11,6 +11,7 @@ const labels: Record<AbsenceKind, string> = { vacation: "Отпуск", personal
 const statusLabels: Record<string, string> = { working: "На работе", trip: "В поездке", vacation: "В отпуске", personal_time: "Отсутствует", late_arrival: "Опаздывает", sick_leave: "Болеет", business_event: "На мероприятии" };
 
 interface Props {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly currentUserId: string;
   readonly people: readonly WorkspacePerson[];
   readonly requests: readonly AbsenceRequest[];
@@ -22,13 +23,21 @@ interface Props {
 }
 
 function toInputDate(value: Date): string { return value.toISOString().slice(0, 16); }
+function assistantInputDate(value: string | undefined, defaultTime: string): string {
+  if (!value) return "";
+  return value.length === 10 ? `${value}T${defaultTime}` : value.slice(0, 16);
+}
 
-export function AbsencesView({ currentUserId, people, requests, summary, canAdmin, onCreate, onAction, onUploadDocument }: Props) {
-  const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<AbsenceKind>("personal_time");
-  const [reason, setReason] = useState("");
-  const [startsAt, setStartsAt] = useState(toInputDate(new Date()));
+export function AbsencesView({ currentUserId, people, requests, summary, canAdmin, onCreate, onAction, onUploadDocument, assistantDraft }: Props) {
+  const [open, setOpen] = useState(assistantDraft?.kind === "absence");
+  const [kind, setKind] = useState<AbsenceKind>(
+    assistantDraft?.kind === "absence" ? (assistantDraft.fields.absenceKind || "personal_time") as AbsenceKind : "personal_time",
+  );
+  const [reason, setReason] = useState(assistantDraft?.kind === "absence" ? assistantDraft.fields.reason ?? "" : "");
+  const [startsAt, setStartsAt] = useState(assistantDraft?.kind === "absence"
+    ? assistantInputDate(assistantDraft.fields.startDate, "09:00") : toInputDate(new Date()));
   const [endsAt, setEndsAt] = useState(() => {
+    if (assistantDraft?.kind === "absence") return assistantInputDate(assistantDraft.fields.endDate, "18:00");
     const end = new Date();
     end.setHours(end.getHours() + 1);
     return toInputDate(end);

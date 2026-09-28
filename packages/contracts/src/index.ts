@@ -4,6 +4,7 @@ export const moduleKeys = [
   "payment_requests",
   "ai_referent",
   "ai_hisobot",
+  "assistant",
   "telegram_access",
   "feed",
   "projects",
@@ -20,7 +21,11 @@ export const moduleKeys = [
 ] as const;
 
 export type ModuleKey = (typeof moduleKeys)[number];
-export const navigationKeys = [...moduleKeys, "notifications", "settings"] as const;
+export const navigationKeys = [
+  ...moduleKeys.filter((key): key is Exclude<ModuleKey, "assistant"> => key !== "assistant"),
+  "notifications",
+  "settings",
+] as const;
 export type NavigationKey = (typeof navigationKeys)[number];
 export type PersonalChatAction = "pin" | "unpin" | "archive" | "unarchive";
 export const interfaceLocales = ["ru", "uz_cyrl", "uz_latn"] as const;
@@ -51,7 +56,7 @@ export interface ModuleCatalogResponse {
   readonly modules: readonly ModuleDescriptor[];
 }
 
-export type WorkspaceSection = ModuleKey;
+export type WorkspaceSection = Exclude<ModuleKey, "assistant">;
 
 export type WorkspaceRole = "superadmin" | "admin" | "manager" | "employee";
 export type ModuleAccessAction = "view" | "create" | "edit" | "approve" | "admin";
@@ -88,7 +93,9 @@ export interface WorkspaceDepartment {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  readonly scope?: "central" | "regional";
   readonly parentId?: string | null;
+  readonly leadUserId?: string | null;
   readonly assignedUsersCount: number;
   readonly memberIds?: readonly string[];
   readonly chatId?: string | null;
@@ -461,12 +468,28 @@ export interface FeedPost {
 
 export type AssistantModel = "pro" | "flash" | "flash-lite";
 
+export interface AssistantReference {
+  readonly label: string;
+  readonly section: "tasks" | "notifications" | "messenger" | "ai_referent" | "payment_requests" | "trip_approvals";
+  readonly entityId: string | null;
+}
+
+export type AssistantActionKind = "task" | "project" | "trip" | "absence" | "feed" | "message";
+export interface AssistantActionDraft {
+  readonly kind: AssistantActionKind;
+  readonly fields: Readonly<Record<string, string>>;
+  readonly ready: boolean;
+}
+
 export interface AssistantMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
   readonly model: AssistantModel;
   readonly content: string;
   readonly createdAt: string;
+  readonly sourceLabels?: readonly string[];
+  readonly references?: readonly AssistantReference[];
+  readonly actionDraft?: AssistantActionDraft;
 }
 
 export interface BirthdayPreference {
@@ -1111,6 +1134,7 @@ export interface TelegramAccessPerson {
   readonly username: string;
   readonly fullName: string;
   readonly jobTitle: string | null;
+  readonly departmentId?: string | null;
   readonly telegramId: string | null;
   readonly verified: boolean;
   readonly verificationSource: string | null;
@@ -1153,6 +1177,31 @@ export interface HisobotReport {
   readonly source: "telegram" | "workspace";
 }
 
+export interface HisobotUnitReport {
+  readonly id: string;
+  readonly departmentId: string;
+  readonly departmentName: string;
+  readonly reporterTelegramId: string;
+  readonly reporterEmployeeKey: string;
+  readonly reporterName: string;
+  readonly reporterPosition: string;
+  readonly reportScope: "central" | "hudud";
+  readonly regionName: string | null;
+  readonly coveredTelegramIds: readonly string[];
+  readonly reportDate: string;
+  readonly content: string;
+  readonly submittedAt: string;
+  readonly isLate: boolean;
+  readonly source: "telegram" | "workspace";
+}
+
+export interface HisobotUnit {
+  readonly id: string;
+  readonly name: string;
+  readonly isLead: boolean;
+  readonly memberCount: number;
+}
+
 export interface HisobotProfile {
   readonly telegramId: string;
   readonly fullName: string;
@@ -1164,9 +1213,13 @@ export interface HisobotProfile {
   readonly absenceKind: "vacation" | "sick_leave" | "personal_time" | null;
   readonly today: string;
   readonly canSubmit: boolean;
+  readonly canSubmitUnit?: boolean;
   readonly windowOpensAt: string;
   readonly windowClosesAt: string;
   readonly todayReport: HisobotReport | null;
+  readonly unit?: HisobotUnit | null;
+  readonly todayUnitReport?: HisobotUnitReport | null;
+  readonly coveredByReport?: boolean;
 }
 
 export interface AIReferentIncomingRegistry {

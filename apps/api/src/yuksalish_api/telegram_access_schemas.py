@@ -27,6 +27,7 @@ class TelegramAccessPerson(ApiModel):
     username: str
     full_name: str
     job_title: str | None
+    department_id: UUID | None = None
     telegram_id: str | None
     verified: bool
     verification_source: str | None

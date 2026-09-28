@@ -2,6 +2,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.administration_schemas import EmployeeStatusUpdateRequest
@@ -29,6 +30,7 @@ from yuksalish_api.directory_service import (
     delete_position,
     load_directory,
     set_module_access_rule,
+    set_regional_assistant_access,
     update_department,
     update_department_members,
     update_employee_access,
@@ -38,6 +40,10 @@ from yuksalish_api.directory_service import (
 from yuksalish_api.events import WorkspaceEventBus
 
 router = APIRouter(prefix="/directory", tags=["directory"])
+
+
+class RegionalAssistantAccessRequest(BaseModel):
+    enabled: bool
 
 
 def _translate(error: DirectoryServiceError) -> HTTPException:
@@ -133,6 +139,25 @@ async def put_access_rule(
         {"type": "directory.access_updated", "entityId": result.id}
     )
     return result
+
+
+@router.post("/assistant-regional-access", response_model=list[ModuleAccessRuleResponse])
+async def post_assistant_regional_access(
+    payload: RegionalAssistantAccessRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> list[ModuleAccessRuleResponse]:
+    try:
+        rules = await set_regional_assistant_access(
+            connection, current_user, payload.enabled
+        )
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.access_updated", "entityId": "assistant:regions"}
+    )
+    return rules
 
 
 @router.delete(

@@ -12,10 +12,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.assistant_service import (
+    AssistantMessageRecord,
     AssistantModel,
     ask_assistant,
     generate_text,
     message_history,
+    parse_assistant_attachment,
     transcribe_audio,
 )
 from yuksalish_api.auth import AuthenticatedUser, require_user
@@ -29,8 +31,10 @@ Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 
 class AskRequest(BaseModel):
-    model: AssistantModel = "flash"
+    model: AssistantModel = "flash-lite"
     message: str = Field(min_length=1, max_length=4000)
+    attachment: "AskAttachment | None" = None
+    continue_draft: bool = False
 
     @field_validator("message")
     @classmethod
@@ -38,6 +42,22 @@ class AskRequest(BaseModel):
         if not value.strip():
             raise ValueError("Напишите сообщение")
         return value.strip()
+
+
+class AskAttachment(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    mime_type: Literal[
+        "application/pdf", "image/png", "image/jpeg", "image/webp", "text/plain",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ]
+    data_base64: str = Field(min_length=1, max_length=7_000_000)
+
+    @field_validator("name")
+    @classmethod
+    def safe_name(cls, value: str) -> str:
+        if "/" in value or "\\" in value or any(ord(character) < 32 for character in value):
+            raise ValueError("Некорректное имя вложения")
+        return value
 
 
 class BirthdayRequest(BaseModel):
@@ -85,7 +105,7 @@ class RewriteRequest(BaseModel):
 
 
 @router.get("/messages")
-async def get_messages(user: User, connection: Connection) -> list[dict[str, str]]:
+async def get_messages(user: User, connection: Connection) -> list[AssistantMessageRecord]:
     return await message_history(connection, user.id)
 
 
@@ -95,10 +115,23 @@ async def post_message(
     user: User,
     connection: Connection,
     request: Request,
-) -> dict[str, str]:
+) -> AssistantMessageRecord:
     key = request.app.state.settings.gemini_api_key.get_secret_value()
+    attachment = None
+    if payload.attachment is not None:
+        try:
+            attachment = parse_assistant_attachment(
+                payload.attachment.name,
+                payload.attachment.mime_type,
+                payload.attachment.data_base64,
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from error
     try:
-        return await ask_assistant(connection, user, key, payload.model, payload.message.strip())
+        return await ask_assistant(
+            connection, user, key, payload.model, payload.message.strip(), attachment,
+            payload.continue_draft,
+        )
     except OverflowError as error:
         raise HTTPException(429, str(error)) from error
     except ValueError as error:

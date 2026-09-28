@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import type {
   EfficiencyOverview,
+  WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
@@ -21,11 +22,14 @@ import {
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 interface TeamDashboardViewProps {
   readonly token: string;
   readonly tasks: readonly WorkspaceTask[];
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
   readonly efficiencyLoading: boolean;
@@ -137,6 +141,7 @@ export function TeamDashboardView({
   token,
   tasks,
   people,
+  departments,
   currentUserId,
   efficiency,
   efficiencyLoading,
@@ -145,6 +150,7 @@ export function TeamDashboardView({
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
+  const [scope, setScope] = useState<EmployeeScope>("central");
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
@@ -153,6 +159,7 @@ export function TeamDashboardView({
   const todayEnd = endOfDay(now);
   const weekEnd = endOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
   const currentUser = people.find((person) => person.id === currentUserId);
+  const visiblePeople = people.filter((person) => !departments || employeeScope(person.departmentId, departments) === scope);
   const activeTasks = tasks.filter((task) => activeStatuses.has(task.status));
   const overdueTasks = activeTasks.filter((task) => isTaskOverdue(task, now));
   const reviewTasks = activeTasks.filter((task) => task.status === "awaiting_review");
@@ -176,7 +183,7 @@ export function TeamDashboardView({
     .slice(0, 8);
 
   const teamRows = (() => {
-    const rows = people.map((person) => {
+    const rows = visiblePeople.map((person) => {
       const assigned = activeTasks.filter((task) => task.assigneeId === person.id);
       const overdue = assigned.filter((task) => isTaskOverdue(task, now)).length;
       const review = assigned.filter((task) => task.status === "awaiting_review").length;
@@ -263,16 +270,17 @@ export function TeamDashboardView({
       </div>
       <div className="team-dash-hero-summary" aria-label="Краткая сводка команды">
         <PeopleTeam24Regular aria-hidden="true" />
-        <div><strong>{people.length}</strong><span>сотрудников в обзоре</span></div>
+        <div><strong>{visiblePeople.length}</strong><span>сотрудников в обзоре</span></div>
       </div>
     </section>
 
     {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
       ? <TeamPresencePanel token={token} /> : null}
 
+    {departments ? <EmployeeScopeSwitch value={scope} onChange={(next) => { setScope(next); setSelectedPersonId(undefined); }} label="Сотрудники в обзоре команды" /> : null}
     <div className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
       <button type="button" aria-pressed={!selectedPersonId} className="team-focus-all" onClick={() => setSelectedPersonId(undefined)}><PeopleTeam24Regular /><span>Вся команда</span></button>
-      {people.map(person => <button key={person.id} type="button" className="team-focus-person" aria-pressed={selectedPersonId === person.id} onClick={() => setSelectedPersonId(current => current === person.id ? undefined : person.id)} title={person.jobTitle ?? person.name}><EmployeeProfileLink userId={person.id} personName={person.name}><Avatar size={36} name={person.name} color="colorful" /><span>{person.name}</span></EmployeeProfileLink></button>)}
+      {visiblePeople.map(person => <button key={person.id} type="button" className="team-focus-person" aria-pressed={selectedPersonId === person.id} onClick={() => setSelectedPersonId(current => current === person.id ? undefined : person.id)} title={person.jobTitle ?? person.name}><EmployeeProfileLink userId={person.id} personName={person.name}><Avatar size={36} name={person.name} color="colorful" /><span>{person.name}</span></EmployeeProfileLink></button>)}
     </div>
 
     <section className="team-dash-metrics" aria-label="Ключевые показатели команды">
