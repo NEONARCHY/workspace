@@ -1,4 +1,4 @@
-"""Offline draft replay is ordered, authorized and atomic on PostgreSQL."""
+"""Offline letter replay is ordered, authorized and atomic on PostgreSQL."""
 
 import hashlib
 import json
@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.ai_referent_authority import start_authority
 from yuksalish_api.ai_referent_offline_blobs import stage_offline_blob
+from yuksalish_api.ai_referent_offline_numbers import reserve_offline_numbers
 from yuksalish_api.ai_referent_offline_replay import replay_offline_operation
 from yuksalish_api.ai_referent_schemas import OfflineReplayOperation
 from yuksalish_api.object_storage import InMemoryObjectStorage
@@ -22,9 +23,11 @@ from yuksalish_api.tables import (
     ai_referent_authority,
     ai_referent_comment_audio,
     ai_referent_configuration,
+    ai_referent_delivery_commands,
     ai_referent_document_checks,
     ai_referent_events,
     ai_referent_letters,
+    ai_referent_offline_number_reservations,
     ai_referent_offline_operation_receipts,
     ai_referent_offline_rights_snapshots,
     ai_referent_reviewers,
@@ -126,6 +129,14 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 epoch = (await start_authority(
                     connection, agent_id=agent_id, enabled=True
                 )).epoch
+                number_reservation = await reserve_offline_numbers(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    reservation_id=uuid4(), count=2, enabled=True,
+                )
+                await connection.execute(update(ai_referent_offline_number_reservations).where(
+                    ai_referent_offline_number_reservations.c.id
+                    == number_reservation.reservation_id
+                ).values(created_at=datetime.now(UTC) - timedelta(days=1)))
                 await connection.execute(
                     update(ai_referent_authority).values(mode="replay_required")
                 )
@@ -315,9 +326,25 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 ).mappings().one()
                 assert check["status"] == "passed"
                 assert check["reviewer_keys"] == ["askar"]
-                await connection.execute(update(ai_referent_letters).where(
-                    ai_referent_letters.c.id == operation.letter_id
-                ).values(status="pending_review"))
+                submit = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=41, actor_id=actor_id,
+                    letter_id=operation.letter_id, kind="letter.action",
+                    payload={
+                        "action": "submit", "comment": "", "commentAudioId": None,
+                        "expectedRevision": 3, "fromStatus": "draft",
+                        "toStatus": "pending_review", "nextReviewerUserId": None,
+                        "outgoingNumber": None, "yearSuffix": None,
+                        "actorUserId": str(user_id),
+                        "actorName": "Offline Test Employee",
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="edit",
+                    occurred_at=check_operation.occurred_at + timedelta(seconds=20),
+                )
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=submit, enabled=True,
+                )).result_revision == 4
                 voice = b"OggS" + b"\0" * 12 + b"OpusHead" + b"\0" * 20
                 voice_digest = hashlib.sha256(voice).hexdigest()
                 await stage_offline_blob(
@@ -325,10 +352,10 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     sha256=voice_digest, content=voice, enabled=True,
                 )
                 audio_operation = OfflineReplayOperation(
-                    operation_id=uuid4(), sequence=41, actor_id=reviewer_actor_id,
+                    operation_id=uuid4(), sequence=42, actor_id=reviewer_actor_id,
                     letter_id=operation.letter_id, kind="letter.comment_audio",
                     payload={
-                        "revision": 3, "durationMs": 1400,
+                        "revision": 4, "durationMs": 1400,
                         "byteSize": len(voice), "contentType": "audio/ogg",
                         "actorUserId": str(reviewer_id),
                         "actorName": "Offline Test Reviewer",
@@ -336,13 +363,13 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     blob_sha256=voice_digest, authority_epoch=epoch,
                     rights_snapshot_id=snapshot_id, rights_content_sha256=rights_hash,
                     required_action="approve",
-                    occurred_at=check_operation.occurred_at + timedelta(seconds=20),
+                    occurred_at=submit.occurred_at + timedelta(seconds=20),
                 )
                 voice_receipt = await replay_offline_operation(
                     connection, agent_id=agent_id, epoch=epoch,
                     operation=audio_operation, enabled=True, storage=storage,
                 )
-                assert voice_receipt.result_revision == 3
+                assert voice_receipt.result_revision == 4
                 assert await replay_offline_operation(
                     connection, agent_id=agent_id, epoch=epoch,
                     operation=audio_operation, enabled=True, storage=storage,
@@ -358,7 +385,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 assert voice_row["created_at"] == audio_operation.occurred_at
                 assert await storage.get(voice_row["storage_key"]) == voice
                 invalid_voice = audio_operation.model_copy(update={
-                    "operation_id": uuid4(), "sequence": 42,
+                    "operation_id": uuid4(), "sequence": 43,
                     "payload": {**audio_operation.payload, "contentType": "audio/webm"},
                 })
                 with pytest.raises(HTTPException) as bad_voice:
@@ -373,6 +400,110 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                         "ai-offline-audio:" + str(invalid_voice.operation_id),
                     )
                 )) is None
+                returned = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=43, actor_id=reviewer_actor_id,
+                    letter_id=operation.letter_id, kind="letter.action",
+                    payload={
+                        "action": "return_for_revision", "comment": "", "expectedRevision": 4,
+                        "commentAudioId": str(voice_row["id"]),
+                        "fromStatus": "pending_review", "toStatus": "needs_revision",
+                        "nextReviewerUserId": str(reviewer_id),
+                        "outgoingNumber": None, "yearSuffix": None,
+                        "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="approve",
+                    occurred_at=audio_operation.occurred_at + timedelta(seconds=20),
+                )
+                return_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=returned, enabled=True,
+                )
+                assert return_receipt.result_revision == 5
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=returned, enabled=True,
+                ) == return_receipt
+                final = (
+                    await connection.execute(select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert final["status"] == "needs_revision"
+                assert final["revision"] == 5
+                assert await connection.scalar(select(ai_referent_delivery_commands.c.id).where(
+                    ai_referent_delivery_commands.c.letter_id == operation.letter_id
+                )) is None
+                event = (
+                    await connection.execute(select(ai_referent_events).where(
+                        ai_referent_events.c.id == uuid5(
+                            NAMESPACE_URL, "ai-offline-event:" + str(returned.operation_id)
+                        )
+                    ))
+                ).mappings().one()
+                assert event["metadata"]["audioId"] == str(voice_row["id"])
+                assert event["created_at"] == returned.occurred_at
+                submit_again = submit.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 44,
+                    "payload": {
+                        **submit.payload,
+                        "expectedRevision": 5,
+                        "fromStatus": "needs_revision",
+                    },
+                    "occurred_at": returned.occurred_at + timedelta(seconds=20),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=submit_again, enabled=True,
+                )).result_revision == 6
+                approved = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=45, actor_id=reviewer_actor_id,
+                    letter_id=operation.letter_id, kind="letter.action",
+                    payload={
+                        "action": "approve", "comment": "", "commentAudioId": None,
+                        "expectedRevision": 6, "fromStatus": "pending_review",
+                        "toStatus": "queued", "nextReviewerUserId": None,
+                        "outgoingNumber": number_reservation.first_number,
+                        "yearSuffix": number_reservation.year_suffix,
+                        "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="approve",
+                    occurred_at=submit_again.occurred_at + timedelta(seconds=20),
+                )
+                unreserved = approved.model_copy(update={
+                    "operation_id": uuid4(),
+                    "payload": {
+                        **approved.payload,
+                        "outgoingNumber": number_reservation.last_number + 1,
+                    },
+                })
+                with pytest.raises(HTTPException) as bad_number:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=unreserved, enabled=True,
+                    )
+                assert bad_number.value.status_code == 409
+                approval_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=approved, enabled=True,
+                )
+                assert approval_receipt.result_revision == 7
+                queued = (
+                    await connection.execute(select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert queued["status"] == "queued"
+                assert queued["outgoing_number"] == number_reservation.first_number
+                command = (
+                    await connection.execute(select(ai_referent_delivery_commands).where(
+                        ai_referent_delivery_commands.c.letter_id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert command["kind"] == "prepare"
             finally:
                 await transaction.rollback()
     finally:

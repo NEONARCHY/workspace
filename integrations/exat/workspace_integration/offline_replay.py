@@ -1,7 +1,7 @@
 """Small, retry-safe steps toward replaying autonomous AI Referent activity.
 
-Only draft changes and voice comments can be acknowledged. Do not resume Workspace writes until
-every operation kind and the final reconciliation protocol are implemented.
+Only draft changes, voice comments and decisions can be acknowledged. Do not resume
+Workspace writes until every operation kind and the final reconciliation protocol are implemented.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     operation = pending[0]
     if operation["kind"] not in {
         "letter.create", "letter.update", "letter.attachment", "letter.document_check",
-        "letter.comment_audio",
+        "letter.comment_audio", "letter.action",
     }:
         raise ValueError("Следующая автономная операция ещё не поддерживается сервером.")
     expected_revision = 1

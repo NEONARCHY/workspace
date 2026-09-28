@@ -1,7 +1,7 @@
 """Fail-closed, transactional replay of autonomous AI Referent operations.
 
-Only drafts, document checks and voice comments are accepted so far. Later operation
-kinds must be added before this protocol can be connected to the live bot or unfence Workspace.
+Only draft, preflight, voice and decision operations are accepted so far. Worker
+effects and final reconciliation must be added before connecting the live bot.
 """
 
 # ruff: noqa: RUF001
@@ -20,7 +20,8 @@ from sqlalchemy import func, insert, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .ai_referent_preflight import ensure_check
+from .ai_referent_audio import decision_audio
+from .ai_referent_preflight import ensure_check, require_passed
 from .ai_referent_schemas import (
     CreateAIReferentLetterRequest,
     OfflineReplayOperation,
@@ -33,10 +34,12 @@ from .tables import (
     ai_referent_authority,
     ai_referent_comment_audio,
     ai_referent_configuration,
+    ai_referent_delivery_commands,
     ai_referent_document_checks,
     ai_referent_events,
     ai_referent_letters,
     ai_referent_offline_blobs,
+    ai_referent_offline_number_reservations,
     ai_referent_offline_operation_receipts,
     ai_referent_offline_rights_snapshots,
     ai_referent_reviewers,
@@ -341,6 +344,207 @@ async def _replay_comment_audio(
     )
 
 
+async def _replay_action(
+    connection: AsyncConnection,
+    *,
+    agent_id: str,
+    epoch: UUID,
+    operation: OfflineReplayOperation,
+    actor: dict[str, object],
+    fingerprint: str,
+    occurred_at: datetime,
+    now: datetime,
+) -> OfflineReplayReceipt:
+    values = operation.payload
+    action = values.get("action")
+    comment = values.get("comment")
+    revision = values.get("expectedRevision")
+    if (
+        action not in {"submit", "approve", "return_for_revision", "cancel"}
+        or type(revision) is not int or revision < 1
+        or not isinstance(comment, str) or comment != comment.strip()
+        or len(comment) > 2000
+        or operation.blob_sha256 is not None
+    ):
+        raise HTTPException(422, "Поля автономного решения недействительны.")
+    audio_id_value = values.get("commentAudioId")
+    if audio_id_value is not None and not isinstance(audio_id_value, str):
+        raise HTTPException(422, "Голосовой комментарий имеет неверный ID.")
+    try:
+        audio_id = UUID(audio_id_value) if audio_id_value is not None else None
+    except (TypeError, ValueError) as error:
+        raise HTTPException(422, "Голосовой комментарий имеет неверный ID.") from error
+    if audio_id is not None and action != "return_for_revision":
+        raise HTTPException(422, "Голосовой комментарий допустим только при возврате.")
+    actor_user_id = UUID(str(actor["userId"]))
+    reviewer_keys = actor.get("reviewerKeys")
+    if not isinstance(reviewer_keys, list):
+        reviewer_keys = []
+    letter = (
+        await connection.execute(select(ai_referent_letters).where(
+            ai_referent_letters.c.id == operation.letter_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if letter is None:
+        raise HTTPException(404, "Письмо для решения не найдено.")
+    if letter["revision"] != revision or letter["status"] != values.get("fromStatus"):
+        raise HTTPException(409, "Версия или стадия письма изменилась после автономного решения.")
+    creator = letter["created_by_user_id"] == actor_user_id
+    reviewer = letter["reviewer_user_id"] == actor_user_id
+    next_status: str
+    next_reviewer_id: UUID | None = None
+    number: int | None = None
+    year_suffix: str | None = None
+    command_kind: str | None = None
+    if action == "submit":
+        if not creator or letter["status"] not in {"draft", "needs_revision"}:
+            raise HTTPException(403, "Отправить черновик на согласование может его автор.")
+        if letter["reviewer_user_id"] is None or letter["reviewer_key"] is None:
+            raise HTTPException(422, "Согласующий не назначен.")
+        if letter["workflow_kind"] == "delivery" and (
+            not letter["recipient_organization"] or not letter["recipient_address"]
+        ):
+            raise HTTPException(422, "Получатель письма не выбран.")
+        if (
+            letter["workflow_kind"] == "delivery"
+            and letter["reviewer_key"] == "bobur"
+            and letter["final_reviewer_user_id"] is None
+        ):
+            raise HTTPException(422, "Перед Бобуром нужен предварительный согласующий.")
+        primary = await connection.scalar(select(attachments.c.id).where(
+            attachments.c.owner_type == "ai_referent_letter",
+            attachments.c.owner_id == operation.letter_id,
+            attachments.c.document_role == "primary",
+            attachments.c.file_name.ilike("%.docx"),
+        ).limit(1))
+        if primary is None:
+            raise HTTPException(422, "Основной DOCX не найден.")
+        await require_passed(connection, letter)
+        next_status = "pending_review"
+    elif action == "cancel":
+        if not creator or letter["status"] not in {
+            "draft", "needs_revision", "pending_review"
+        }:
+            raise HTTPException(403, "Отменить письмо на этом этапе может только автор.")
+        next_status = "cancelled"
+    else:
+        if not reviewer or not reviewer_keys:
+            raise HTTPException(403, "Решение доступно назначенному согласующему.")
+        if letter["status"] != "pending_review":
+            raise HTTPException(409, "Письмо не ожидает решения согласующего.")
+        if letter["reviewer_key"] not in reviewer_keys:
+            raise HTTPException(403, "Нет подтверждённого права этого согласующего.")
+        if action == "return_for_revision":
+            if len(comment) < 3 and audio_id is None:
+                raise HTTPException(422, "Укажите причину возврата.")
+            if audio_id is not None:
+                await decision_audio(
+                    connection, audio_id, operation.letter_id, actor_user_id, revision
+                )
+            next_status = "needs_revision"
+            next_reviewer_id = letter["initial_reviewer_user_id"]
+        elif (
+            letter["final_reviewer_user_id"] is not None
+            and letter["reviewer_user_id"] != letter["final_reviewer_user_id"]
+        ):
+            next_status = "pending_review"
+            next_reviewer_id = letter["final_reviewer_user_id"]
+            if letter["final_reviewer_key"] is None:
+                raise HTTPException(409, "Итоговый согласующий больше не назначен.")
+        else:
+            next_status = "queued"
+            command_kind = "sign_only" if letter["workflow_kind"] == "sign_only" else "prepare"
+            if letter["workflow_kind"] == "delivery":
+                number_value = values.get("outgoingNumber")
+                year_value = values.get("yearSuffix")
+                if (
+                    not isinstance(number_value, int) or isinstance(number_value, bool)
+                    or not 1 <= number_value <= 99999999
+                    or not isinstance(year_value, str)
+                    or year_value != occurred_at.strftime("%y")
+                    or letter["outgoing_number"] is not None
+                ):
+                    raise HTTPException(409, "Номер письма не соответствует автономному резерву.")
+                number, year_suffix = number_value, year_value
+                reservation = await connection.scalar(select(
+                    ai_referent_offline_number_reservations.c.id
+                ).where(
+                    ai_referent_offline_number_reservations.c.agent_id == agent_id,
+                    ai_referent_offline_number_reservations.c.year_suffix == year_suffix,
+                    ai_referent_offline_number_reservations.c.first_number <= number,
+                    ai_referent_offline_number_reservations.c.last_number >= number,
+                    ai_referent_offline_number_reservations.c.created_at <= occurred_at,
+                    ai_referent_offline_number_reservations.c.valid_until > occurred_at,
+                ).limit(1))
+                used = await connection.scalar(select(ai_referent_letters.c.id).where(
+                    ai_referent_letters.c.year_suffix == year_suffix,
+                    ai_referent_letters.c.outgoing_number == number,
+                ).limit(1))
+                if reservation is None or used is not None:
+                    raise HTTPException(409, "Номер не зарезервирован или уже использован.")
+    expected_next_reviewer = str(next_reviewer_id) if next_reviewer_id else None
+    if (
+        values.get("toStatus") != next_status
+        or values.get("nextReviewerUserId") != expected_next_reviewer
+        or values.get("outgoingNumber") != number
+        or values.get("yearSuffix") != year_suffix
+    ):
+        raise HTTPException(409, "Итог автономного решения не совпал с правилами маршрута.")
+    update_values: dict[str, object] = {
+        "status": next_status, "revision": revision + 1, "updated_at": occurred_at,
+    }
+    if next_reviewer_id is not None:
+        update_values["reviewer_user_id"] = next_reviewer_id
+        update_values["reviewer_key"] = (
+            letter["initial_reviewer_key"] if next_status == "needs_revision"
+            else letter["final_reviewer_key"]
+        )
+    if next_status == "needs_revision":
+        update_values["final_pdf_file_id"] = None
+    if number is not None:
+        update_values["outgoing_number"] = number
+        update_values["year_suffix"] = year_suffix
+    await connection.execute(update(ai_referent_letters).where(
+        ai_referent_letters.c.id == operation.letter_id
+    ).values(**update_values))
+    if command_kind is not None:
+        await connection.execute(insert(ai_referent_delivery_commands).values(
+            id=uuid5(NAMESPACE_URL, "ai-offline-command:" + str(operation.operation_id)),
+            letter_id=operation.letter_id, route=letter["route"], status="pending",
+            idempotency_key=f"letter:{operation.letter_id}:revision:{revision + 1}",
+            kind=command_kind, claimed_by=None, lease_until=None,
+            attempt_count=0, last_error="", created_at=occurred_at,
+            updated_at=occurred_at, completed_at=None,
+        ))
+    await connection.execute(insert(ai_referent_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-event:" + str(operation.operation_id)),
+        letter_id=operation.letter_id, actor_user_id=actor_user_id,
+        event_type="letter." + action,
+        from_status=letter["status"], to_status=next_status,
+        comment=comment,
+        metadata={"audioId": str(audio_id)} if audio_id is not None else {},
+        created_at=occurred_at,
+    ))
+    await connection.execute(insert(audit_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-audit:" + str(operation.operation_id)),
+        actor_user_id=actor_user_id, action="ai_referent.offline_" + action,
+        target_type="ai_referent_letter", target_id=operation.letter_id,
+        details={"agentId": agent_id, "epoch": str(epoch),
+                 "fromStatus": letter["status"], "toStatus": next_status},
+        created_at=now,
+    ))
+    await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+        operation_id=operation.operation_id, agent_id=agent_id, epoch=epoch,
+        sequence=operation.sequence, letter_id=operation.letter_id,
+        kind=operation.kind, fingerprint=fingerprint, result_revision=revision + 1,
+        occurred_at=occurred_at, accepted_at=now,
+    ))
+    return OfflineReplayReceipt(
+        operation_id=operation.operation_id, sequence=operation.sequence,
+        letter_id=operation.letter_id, result_revision=revision + 1, accepted_at=now,
+    )
+
+
 async def replay_offline_operation(
     connection: AsyncConnection,
     *,
@@ -429,6 +633,7 @@ async def replay_offline_operation(
         ("letter.attachment", "edit"),
         ("letter.document_check", "edit"),
         ("letter.comment_audio", "approve"),
+        ("letter.action", "edit"), ("letter.action", "approve"),
     }:
         raise HTTPException(422, "Этот вид автономной операции пока не поддерживается.")
     if (
@@ -463,6 +668,17 @@ async def replay_offline_operation(
     if operation.kind == "letter.comment_audio":
         return await _replay_comment_audio(
             connection, storage, agent_id=agent_id, epoch=epoch,
+            operation=operation, actor=actor, fingerprint=fingerprint,
+            occurred_at=occurred_at, now=now,
+        )
+    if operation.kind == "letter.action":
+        if operation.required_action != (
+            "approve" if operation.payload.get("action") in {"approve", "return_for_revision"}
+            else "edit"
+        ):
+            raise HTTPException(403, "Право не соответствует решению по письму.")
+        return await _replay_action(
+            connection, agent_id=agent_id, epoch=epoch,
             operation=operation, actor=actor, fingerprint=fingerprint,
             occurred_at=occurred_at, now=now,
         )

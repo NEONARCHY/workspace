@@ -207,6 +207,9 @@ def test_replay_stages_attachment_before_operation(tmp_path):
     workflow.check_document(
         "123", letter["id"], str(uuid4()), lambda *_: ["askar"]
     )
+    workflow.act(
+        "123", letter["id"], str(uuid4()), action="submit", expected_revision=2
+    )
     epoch = journal.authority_state()["epoch"]
     journal.set_authority_phase("referent-pc", epoch, "replay")
 
@@ -240,9 +243,11 @@ def test_replay_stages_attachment_before_operation(tmp_path):
     assert replay_one_draft_operation(journal, client)
     assert replay_one_draft_operation(journal, client)
     assert replay_one_draft_operation(journal, client)
+    assert replay_one_draft_operation(journal, client)
     assert journal.pending_authorized() == []
-    assert len(client.operations) == 3
-    assert workflow.read("123", letter["id"])["revision"] == 2
+    assert len(client.operations) == 4
+    assert workflow.read("123", letter["id"])["revision"] == 3
+    assert workflow.read("123", letter["id"])["status"] == "pending_review"
     assert workflow.read("123", letter["id"])["documentCheck"]["status"] == "passed"
 
 
