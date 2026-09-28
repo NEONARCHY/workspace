@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, Maximize2, Mic, Minimize2, Paperclip, Reply, Square, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, Maximize2, Mic, Minimize2, Paperclip, Reply, Square, X } from "lucide-react";
 
-import type { AssistantMessage, AssistantModel } from "@yuksalish/contracts";
+import type { AssistantActionDraft, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
@@ -70,7 +70,11 @@ function GeneratedReply({ content, animate }: { readonly content: string; readon
   })}</div>;
 }
 
-export function YuksalishAssistant({ token }: { readonly token: string }) {
+export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: {
+  readonly token: string;
+  readonly onOpenReference?: (reference: AssistantReference) => void;
+  readonly onPrepareAction?: (draft: AssistantActionDraft) => void | Promise<void>;
+}) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -86,6 +90,8 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [replyMenu, setReplyMenu] = useState<{ message: AssistantMessage; x: number; y: number } | null>(null);
+  const [dismissedDraftId, setDismissedDraftId] = useState<string>();
+  const [preparingAction, setPreparingAction] = useState(false);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,6 +250,8 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
       return;
     }
     const file = selectedFile;
+    const latestAnswer = [...messages].reverse().find((item) => item.role === "assistant");
+    const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId);
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
@@ -261,9 +269,10 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
       const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
         name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
       } : undefined;
-      const response = await sendAssistantMessage(token, model, content, attachment);
+      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft);
       setMessages((current) => [...current, response]);
       setAnimatedReplyId(response.id);
+      setDismissedDraftId(undefined);
       setReplyingTo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
@@ -278,6 +287,19 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   };
 
   const chosen = modelOptions.find((option) => option.value === model)!;
+  const currentActionId = [...messages].reverse().find((item) => item.role === "assistant")?.id;
+  const openPreparedForm = async (action: AssistantActionDraft) => {
+    if (!onPrepareAction || preparingAction) return;
+    setPreparingAction(true);
+    setError("");
+    try {
+      await onPrepareAction(action);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Не удалось открыть форму.");
+    } finally {
+      setPreparingAction(false);
+    }
+  };
   const thinkingState = /юксалиш|yuksalish|источ|найди|поиск/i.test(messages.at(-1)?.content ?? "")
     ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
       ? "solving" : "composing";
@@ -338,6 +360,22 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                 <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
               {item.role === "assistant" ? <>
                 <GeneratedReply content={item.content} animate={item.id === animatedReplyId} />
+                {item.references?.length ? <div className="assistant-references" aria-label="Открыть записи в Workspace">
+                  {item.references.map((reference, index) => <button type="button"
+                    key={`${reference.section}:${reference.entityId ?? "list"}:${index}`}
+                    onClick={() => onOpenReference?.(reference)} disabled={!onOpenReference}
+                    title={`Открыть в Workspace: ${reference.label}`}>
+                    <span>{reference.label}</span><ArrowUpRight size={14} aria-hidden="true" />
+                  </button>)}
+                </div> : null}
+                {item.actionDraft && item.id === currentActionId && item.id !== dismissedDraftId ? <div className="assistant-action-draft">
+                  {item.actionDraft.ready ? <button type="button" disabled={!onPrepareAction || preparingAction}
+                    onClick={() => { if (item.actionDraft) void openPreparedForm(item.actionDraft); }}>
+                    {preparingAction ? "Открываю…" : "Открыть заполненную форму"}
+                  </button> : null}
+                  <button type="button" className="assistant-action-cancel"
+                    onClick={() => setDismissedDraftId(item.id)}>Отменить подготовку</button>
+                </div> : null}
                 <details className="assistant-answer-context">
                   <summary>Как подготовлен ответ</summary>
                   <p>Это перечень проверенных источников, а не скрытые рассуждения модели.</p>
@@ -431,7 +469,7 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                     {recording ? <Square size={16} /> : <Mic size={19} />}
                   </button>
                   <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
-                    disabled={busy || recording || (!draft.trim() && !selectedFile) || !loaded}>
+                    disabled={busy || recording || transcribing || (!draft.trim() && !selectedFile) || !loaded}>
                     <ArrowUp size={19} strokeWidth={2.4} />
                   </button>
                 </div>

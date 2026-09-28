@@ -80,6 +80,46 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("reviews an assistant message before creating a direct chat, then keeps it unsent", async () => {
+    const chatActions = actions();
+    const newChat: ChatSummary = {
+      ...initialChats[1]!, id: "dilshod-direct", title: people[2]!.name,
+      members: [people[0]!, people[2]!].map((person) => ({
+        userId: person.id, role: "member" as const,
+        permissions: initialChats[1]!.permissions,
+      })),
+    };
+    vi.mocked(chatActions.create).mockResolvedValue(newChat);
+    const onSendMessage = vi.fn();
+    renderMessenger({ chatActions, onSendMessage, assistantRecipientId: people[2]!.id,
+      assistantDraft: { kind: "message", ready: true, fields: {
+        recipient: people[2]!.name, body: "Пожалуйста, проверьте документ.",
+      } },
+    });
+    expect(screen.getByRole("region", { name: "Подготовка сообщения" }))
+      .toHaveTextContent("Пожалуйста, проверьте документ.");
+    expect(chatActions.create).not.toHaveBeenCalled();
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Открыть диалог с черновиком" }));
+    expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
+      .toHaveValue("Пожалуйста, проверьте документ.");
+    expect(chatActions.create).toHaveBeenCalledOnce();
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("puts the assistant text in an existing chat draft without sending it", async () => {
+    const onSendMessage = vi.fn();
+    renderMessenger({
+      focusChatId: initialChats[0]!.id,
+      onSendMessage,
+      assistantDraft: { kind: "message", ready: true, fields: {
+        recipient: people[1]!.name, body: "Проверьте письмо, пожалуйста.",
+      } },
+    });
+    expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
+      .toHaveValue("Проверьте письмо, пожалуйста.");
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     cleanup();
     vi.useRealTimers();

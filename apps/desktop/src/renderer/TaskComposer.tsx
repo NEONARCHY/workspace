@@ -43,6 +43,8 @@ interface TaskComposerProps {
   readonly currentUserId: string;
   readonly initialTitle?: string;
   readonly initialDescription?: string;
+  readonly initialAssigneeName?: string;
+  readonly initialDueAt?: string;
   readonly sourceLabel?: string;
   readonly calendarEventId?: string;
   readonly onClose: () => void;
@@ -81,6 +83,8 @@ export function TaskComposer({
   currentUserId,
   initialTitle = "",
   initialDescription = "",
+  initialAssigneeName,
+  initialDueAt = "",
   sourceLabel,
   calendarEventId,
   onClose,
@@ -89,9 +93,11 @@ export function TaskComposer({
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [project, setProject] = useState("");
-  const [assigneeId, setAssigneeId] = useState(currentUserId);
+  const [assigneeId, setAssigneeId] = useState(() => people.find((person) =>
+    person.name.toLocaleLowerCase("ru-RU") === initialAssigneeName?.toLocaleLowerCase("ru-RU"),
+  )?.id ?? currentUserId);
   const [priority, setPriority] = useState<WorkspaceTask["priority"]>("normal");
-  const [dueAt, setDueAt] = useState("");
+  const [dueAt, setDueAt] = useState(initialDueAt);
   const [participants, setParticipants] = useState<readonly DraftParticipant[]>([]);
   const [participantId, setParticipantId] = useState("");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");

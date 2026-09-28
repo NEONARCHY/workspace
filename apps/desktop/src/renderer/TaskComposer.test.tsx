@@ -10,6 +10,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("prefills a suggested task but never submits without the user", () => {
+  const onSubmit = vi.fn();
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} tasks={[]} currentUserId="aziza"
+      initialTitle="Проверить письмо" initialDescription="До пятницы"
+      onClose={vi.fn()} onSubmit={onSubmit} />
+  </FluentProvider>);
+  expect(screen.getByRole("textbox", { name: "Название задачи" })).toHaveValue("Проверить письмо");
+  expect(screen.getByRole("textbox", { name: "Описание новой задачи" })).toHaveValue("До пятницы");
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
 it("restores a task draft, then deletes the local copy", async () => {
   const loadDraft = vi.fn().mockResolvedValue(JSON.stringify({
     title: "Продолжить задачу", description: "Результат", project: "Команда",

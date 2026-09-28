@@ -32,6 +32,12 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     status: "available",
   },
   {
+    key: "assistant",
+    label: { ru: "ИИ-ассистент", uz_cyrl: "Сунъий интеллект ёрдамчиси", uz_latn: "Sunʼiy intellekt yordamchisi" },
+    route: "/assistant",
+    status: "available",
+  },
+  {
     key: "telegram_access",
     label: { ru: "Доступ к Telegram-ботам", uz_cyrl: "Telegram ботларига рухсат", uz_latn: "Telegram botlariga ruxsat" },
     route: "/telegram-access",

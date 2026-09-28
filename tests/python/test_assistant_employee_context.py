@@ -13,11 +13,19 @@ from zipfile import ZipFile
 import pytest
 
 from yuksalish_api.assistant_service import (
+    NotificationSnapshot,
     _mentioned_employees,
+    _parse_action_fields,
+    action_draft_answer,
     ask_assistant,
     employee_context,
+    infer_action_kind,
+    letter_attention_updates,
     message_history,
     parse_assistant_attachment,
+    prepare_action_draft,
+    recent_notification_updates,
+    recent_task_updates,
 )
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.project_hub_service import visible_employee_project_summaries
@@ -34,6 +42,136 @@ def test_employee_name_matching_uses_name_tokens_and_case_endings() -> None:
     assert _mentioned_employees("Temur Almazov va Asqar Mamatxanov", people) == [temur, asqar]
     assert _mentioned_employees("Кто такой Темур ака?", people) == [temur]
     assert _mentioned_employees("Asqar Mamatkhanov", [(asqar, "Аскар Маматханов")]) == [asqar]
+
+
+def test_action_intent_requires_explicit_request_and_json_is_allowlisted() -> None:
+    assert infer_action_kind("Создай задачу для команды") == "task"
+    assert infer_action_kind("Хочу отпроситься завтра") == "absence"
+    assert infer_action_kind("Напиши Темур ака о встрече") == "message"
+    assert infer_action_kind("Поставь задачу подготовить отчёт") == "task"
+    assert infer_action_kind("Мне нужен отгул завтра") == "absence"
+    assert infer_action_kind("Как создать задачу?") is None
+    assert _parse_action_fields(
+        '{"title":" Отчёт ","body":"Не применять", "secret":"ignored"}', "task"
+    ) == {"title": "Отчёт"}
+    assert _parse_action_fields(
+        '{"purpose":"Встреча","startDate":"2030-02-30",'
+        '"endDate":"2030-03-01"}', "trip"
+    )["startDate"] == ""
+    assert "Какой текст" in action_draft_answer({
+        "kind": "message", "fields": {"recipient": "Темур"}, "ready": False,
+    })
+
+
+def test_action_draft_merges_followup_without_creating_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    generate = AsyncMock(side_effect=[
+        '{"recipient":"Темур Алмазов"}',
+        '{"body":"Добрый день, проверьте письмо."}',
+    ])
+    monkeypatch.setattr("yuksalish_api.assistant_service.generate_text", generate)
+    first = asyncio.run(prepare_action_draft(
+        "key", "message", "Напиши Темур Алмазов", None
+    ))
+    assert first == {
+        "kind": "message", "fields": {"recipient": "Темур Алмазов"}, "ready": False,
+    }
+    second = asyncio.run(prepare_action_draft(
+        "key", "message", "Попроси проверить письмо", first
+    ))
+    assert second["fields"]["recipient"] == "Темур Алмазов"
+    assert second["fields"]["body"] == "Добрый день, проверьте письмо."
+    assert second["ready"] is True
+    assert "финальный шаг" in action_draft_answer(second)
+    assert all(call.args[1] == "flash-lite" for call in generate.await_args_list)
+
+
+def test_absence_kind_follows_explicit_leave_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.generate_text",
+        AsyncMock(return_value='{"reason":"Отпуск", "startDate":"2030-07-01", '
+                               '"endDate":"2030-07-05"}'),
+    )
+    draft = asyncio.run(prepare_action_draft(
+        "key", "absence", "Оформи отпуск с 1 по 5 июля", None
+    ))
+    assert draft["fields"]["absenceKind"] == "vacation"
+    assert draft["ready"] is True
+
+
+def test_action_draft_does_not_mark_reversed_dates_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.generate_text",
+        AsyncMock(return_value='{"purpose":"Встреча", "destination":"Навои", '
+                               '"startDate":"2030-07-05", "endDate":"2030-07-01"}'),
+    )
+    draft = asyncio.run(prepare_action_draft(
+        "key", "trip", "Оформи командировку в Навои", None
+    ))
+    assert draft["ready"] is False
+    assert "раньше даты начала" in action_draft_answer(draft)
+
+
+def test_action_request_only_persists_chat_draft_and_respects_module_rights(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = AuthenticatedUser(uuid4(), "reader", "Reader", None, None, "employee")
+    connection = SimpleNamespace(scalar=AsyncMock(return_value=0), execute=AsyncMock())
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.message_history", AsyncMock(return_value=[])
+    )
+    permissions = AsyncMock(return_value={"tasks": {"create": True}})
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.module_permissions_for_user", permissions
+    )
+    generate = AsyncMock(return_value='{"title":"Подготовить отчёт"}')
+    monkeypatch.setattr("yuksalish_api.assistant_service.generate_text", generate)
+    result = asyncio.run(ask_assistant(
+        connection, user, "key", "flash-lite", "Создай задачу: подготовить отчёт"
+    ))
+    assert result["actionDraft"]["fields"]["title"] == "Подготовить отчёт"
+    assert result["actionDraft"]["ready"] is True
+    assert connection.execute.await_count == 2
+    saved = connection.execute.await_args_list[-1].args[0].compile().params
+    assert saved["action_draft"] == result["actionDraft"]
+    permissions.return_value = {"tasks": {"create": False}}
+    denied = asyncio.run(ask_assistant(
+        connection, user, "key", "flash-lite", "Создай задачу: чужая"
+    ))
+    assert "нет права" in denied["content"]
+    assert "actionDraft" not in denied
+    generate.assert_awaited_once()
+
+
+def test_explicit_new_action_replaces_unfinished_draft(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = AuthenticatedUser(uuid4(), "reader", "Reader", None, None, "employee")
+    connection = SimpleNamespace(scalar=AsyncMock(return_value=0), execute=AsyncMock())
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.message_history",
+        AsyncMock(return_value=[{
+            "id": "old", "role": "assistant", "model": "flash-lite", "content": "Черновик",
+            "createdAt": "2026-09-28T09:00:00Z",
+            "actionDraft": {"kind": "task", "fields": {"title": "Старая задача"}, "ready": True},
+        }]),
+    )
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.module_permissions_for_user",
+        AsyncMock(return_value={"projects": {"view": False}, "project_hub": {"create": True}}),
+    )
+    generate = AsyncMock(return_value='{"title":"Новый проект","code":"NEW"}')
+    monkeypatch.setattr("yuksalish_api.assistant_service.generate_text", generate)
+    result = asyncio.run(ask_assistant(
+        connection, user, "key", "flash-lite", "Создай проект Новый проект", continue_draft=True
+    ))
+    assert result["actionDraft"]["kind"] == "project"
+    assert result["actionDraft"]["fields"] == {"title": "Новый проект", "code": "NEW"}
 
 
 def test_employee_name_resolution_requires_clarification_for_shared_first_name() -> None:
@@ -105,14 +243,76 @@ def test_message_history_distinguishes_old_and_new_source_metadata() -> None:
     now = datetime(2026, 9, 28, tzinfo=UTC)
     result_rows = Mock(mappings=lambda: Mock(all=lambda: [
         {"id": new_id, "role": "assistant", "model": "flash-lite", "content": "Новый",
-         "created_at": now, "source_labels": ["Профили сотрудников"]},
+         "created_at": now, "source_labels": ["Профили сотрудников"],
+         "references": [{"label": "Письмо", "section": "ai_referent", "entityId": str(uuid4())}],
+         "action_draft": None},
         {"id": old_id, "role": "assistant", "model": "flash-lite", "content": "Старый",
-         "created_at": now, "source_labels": None},
+         "created_at": now, "source_labels": None, "references": None,
+         "action_draft": None},
     ]))
     connection = SimpleNamespace(execute=AsyncMock(return_value=result_rows))
     history = asyncio.run(message_history(connection, uuid4()))
     assert "sourceLabels" not in history[0]
     assert history[1]["sourceLabels"] == ["Профили сотрудников"]
+    assert history[1]["references"][0]["label"] == "Письмо"
+
+
+def test_recent_updates_include_only_scoped_navigation_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = AuthenticatedUser(uuid4(), "reader", "Reader", None, None, "employee")
+    task_id, notice_id = uuid4(), uuid4()
+    now = datetime(2026, 9, 28, tzinfo=UTC)
+    connection = SimpleNamespace(execute=AsyncMock(return_value=Mock(all=lambda: [
+        SimpleNamespace(id=task_id, title="Подготовить отчёт", status="in_progress", updated_at=now)
+    ])))
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.module_permissions_for_user",
+        AsyncMock(return_value={"tasks": {"view": True}}),
+    )
+    lines, links = asyncio.run(recent_task_updates(connection, user))
+    assert "Подготовить отчёт" in lines[0]
+    assert links == [{"label": "Задача: Подготовить отчёт", "section": "tasks",
+                      "entityId": str(task_id)}]
+    notice = NotificationSnapshot(
+        id=notice_id, title="Новая задача", body="Проверьте результат",
+        requires_action=True, section="tasks", entity_id=task_id, occurred_at=now,
+    )
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service._visible_notification_rows",
+        AsyncMock(return_value=[notice]),
+    )
+    notice_lines, notice_links = asyncio.run(recent_notification_updates(connection, user))
+    assert "Новая задача" in notice_lines[0]
+    assert notice_links[0]["section"] == "tasks"
+    assert notice_links[0]["entityId"] == str(task_id)
+
+
+def test_letter_attention_reuses_access_filtered_registry_and_actions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = AuthenticatedUser(uuid4(), "reader", "Reader", None, None, "employee")
+    connection = SimpleNamespace()
+    letter_id = str(uuid4())
+    load = AsyncMock(return_value=SimpleNamespace(letters=[
+        SimpleNamespace(id=letter_id, subject="Письмо в министерство",
+                        recipient_organization="", status="pending_review",
+                        can_edit=False, available_actions=["approve"]),
+        SimpleNamespace(id=str(uuid4()), subject="Не требует решения",
+                        recipient_organization="", status="pending_review",
+                        can_edit=False, available_actions=["remind"]),
+    ]))
+    monkeypatch.setattr(
+        "yuksalish_api.assistant_service.module_permissions_for_user",
+        AsyncMock(return_value={"ai_referent": {"view": True}}),
+    )
+    monkeypatch.setattr("yuksalish_api.assistant_service.load_letters", load)
+    text, links = asyncio.run(letter_attention_updates(connection, user))
+    assert "Письмо в министерство" in text
+    assert "Не требует решения" not in text
+    assert links == [{"label": "Письмо в министерство", "section": "ai_referent",
+                      "entityId": letter_id}]
+    load.assert_awaited_once_with(connection, user, active_only=True, limit=100)
 
 
 def test_employee_context_denies_directory_without_permission(
@@ -148,7 +348,7 @@ def test_employee_context_reuses_profile_visibility_and_aggregate_only(
     monkeypatch.setattr(
         "yuksalish_api.assistant_service.load_profile",
         AsyncMock(return_value=SimpleNamespace(
-            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист"),
+            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист", role="employee"),
             department_name="Центральный аппарат", service_years=2, service_months=4,
             active_task_count=None, achievements=[
                 SimpleNamespace(title="Наставник", category="support", unlocked=True),
@@ -162,6 +362,7 @@ def test_employee_context_reuses_profile_visibility_and_aggregate_only(
     assert "90% (9/10)" in result
     assert "2026-09" in result
     assert "2 лет, 4 месяцев" in result
+    assert "роль: сотрудник" in result
     assert "Наставник" in result and "Благодарность" in result
     assert "Не получено" not in result
     assert "Финансы" not in result
@@ -187,7 +388,7 @@ def test_employee_context_does_not_query_efficiency_without_permission(
     monkeypatch.setattr(
         "yuksalish_api.assistant_service.load_profile",
         AsyncMock(return_value=SimpleNamespace(
-            person=SimpleNamespace(name="Темур Алмазов", job_title=None),
+            person=SimpleNamespace(name="Темур Алмазов", job_title=None, role="employee"),
             department_name=None, service_years=None, service_months=None,
             active_task_count=3, achievements=[], rewards=[],
         )),
@@ -215,7 +416,7 @@ def test_employee_projects_only_include_visible_manager_projects(
     monkeypatch.setattr(
         "yuksalish_api.assistant_service.load_profile",
         AsyncMock(return_value=SimpleNamespace(
-            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист"),
+            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист", role="employee"),
             department_name=None, service_years=None, service_months=None,
             active_task_count=None, achievements=[], rewards=[],
         )),
@@ -266,7 +467,7 @@ def test_employee_context_includes_only_project_hub_summaries_with_permission(
     monkeypatch.setattr(
         "yuksalish_api.assistant_service.load_profile",
         AsyncMock(return_value=SimpleNamespace(
-            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист"),
+            person=SimpleNamespace(name="Темур Алмазов", job_title="Специалист", role="employee"),
             department_name=None, service_years=None, service_months=None,
             active_task_count=None, achievements=[], rewards=[],
         )),

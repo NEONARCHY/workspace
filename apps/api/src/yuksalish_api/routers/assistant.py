@@ -34,6 +34,7 @@ class AskRequest(BaseModel):
     model: AssistantModel = "flash-lite"
     message: str = Field(min_length=1, max_length=4000)
     attachment: "AskAttachment | None" = None
+    continue_draft: bool = False
 
     @field_validator("message")
     @classmethod
@@ -128,7 +129,8 @@ async def post_message(
             raise HTTPException(422, str(error)) from error
     try:
         return await ask_assistant(
-            connection, user, key, payload.model, payload.message.strip(), attachment
+            connection, user, key, payload.model, payload.message.strip(), attachment,
+            payload.continue_draft,
         )
     except OverflowError as error:
         raise HTTPException(429, str(error)) from error

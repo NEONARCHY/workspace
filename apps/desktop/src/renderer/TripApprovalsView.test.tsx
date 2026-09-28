@@ -25,6 +25,20 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("opens an unsent prefilled trip when the assistant prepared it", () => {
+    const onCreate = vi.fn();
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[]} people={people} currentUser={people[0]!}
+      onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
+      assistantDraft={{ kind: "trip", ready: true, fields: {
+        purpose: "Встреча в регионе", destination: "Навои",
+        startDate: "2030-10-01", endDate: "2030-10-02",
+      } }}
+    /></FluentProvider>);
+    expect(screen.getByRole("textbox", { name: "Цель поездки" })).toHaveValue("Встреча в регионе");
+    expect(screen.getByRole("textbox", { name: "Куда едем" })).toHaveValue("Навои");
+    expect(onCreate).not.toHaveBeenCalled();
+  });
   it("keeps selected employees while searching and previews the trip without sending it", async () => {
     const { onCreate } = setup();
     fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));

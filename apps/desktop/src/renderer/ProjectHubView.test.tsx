@@ -72,6 +72,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("opens a prefilled new project without saving it", async () => {
+    render(<FluentProvider theme={workspaceTheme}><ProjectHubView mode="projects" token="test-token"
+      people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding
+      assistantDraft={{ kind: "project", ready: true, fields: {
+        title: "Региональный форум", code: "REG-FORUM", description: "Встреча команд",
+      } }}
+    /></FluentProvider>);
+    expect(await screen.findByRole("dialog", { name: /Новый проект/ })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Название проекта" })).toHaveValue("Региональный форум");
+    expect(screen.getByRole("textbox", { name: "Код проекта" })).toHaveValue("REG-FORUM");
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+  });
   it("shows the own project work and multiple requests without global task/payment data", async () => {
     setup();
     expect(await screen.findByRole("heading", { name: project.title })).toBeInTheDocument();

@@ -4,6 +4,7 @@ export const moduleKeys = [
   "payment_requests",
   "ai_referent",
   "ai_hisobot",
+  "assistant",
   "telegram_access",
   "feed",
   "projects",
@@ -20,7 +21,11 @@ export const moduleKeys = [
 ] as const;
 
 export type ModuleKey = (typeof moduleKeys)[number];
-export const navigationKeys = [...moduleKeys, "notifications", "settings"] as const;
+export const navigationKeys = [
+  ...moduleKeys.filter((key): key is Exclude<ModuleKey, "assistant"> => key !== "assistant"),
+  "notifications",
+  "settings",
+] as const;
 export type NavigationKey = (typeof navigationKeys)[number];
 export type PersonalChatAction = "pin" | "unpin" | "archive" | "unarchive";
 export const interfaceLocales = ["ru", "uz_cyrl", "uz_latn"] as const;
@@ -51,7 +56,7 @@ export interface ModuleCatalogResponse {
   readonly modules: readonly ModuleDescriptor[];
 }
 
-export type WorkspaceSection = ModuleKey;
+export type WorkspaceSection = Exclude<ModuleKey, "assistant">;
 
 export type WorkspaceRole = "superadmin" | "admin" | "manager" | "employee";
 export type ModuleAccessAction = "view" | "create" | "edit" | "approve" | "admin";
@@ -88,6 +93,7 @@ export interface WorkspaceDepartment {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  readonly scope?: "central" | "regional";
   readonly parentId?: string | null;
   readonly assignedUsersCount: number;
   readonly memberIds?: readonly string[];
@@ -461,6 +467,19 @@ export interface FeedPost {
 
 export type AssistantModel = "pro" | "flash" | "flash-lite";
 
+export interface AssistantReference {
+  readonly label: string;
+  readonly section: "tasks" | "notifications" | "messenger" | "ai_referent" | "payment_requests" | "trip_approvals";
+  readonly entityId: string | null;
+}
+
+export type AssistantActionKind = "task" | "project" | "trip" | "absence" | "feed" | "message";
+export interface AssistantActionDraft {
+  readonly kind: AssistantActionKind;
+  readonly fields: Readonly<Record<string, string>>;
+  readonly ready: boolean;
+}
+
 export interface AssistantMessage {
   readonly id: string;
   readonly role: "user" | "assistant";
@@ -468,6 +487,8 @@ export interface AssistantMessage {
   readonly content: string;
   readonly createdAt: string;
   readonly sourceLabels?: readonly string[];
+  readonly references?: readonly AssistantReference[];
+  readonly actionDraft?: AssistantActionDraft;
 }
 
 export interface BirthdayPreference {

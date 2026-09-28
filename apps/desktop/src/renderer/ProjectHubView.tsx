@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Avatar, Button, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowClockwise24Regular, Attach20Regular, CheckmarkCircle24Regular, Dismiss20Regular } from "@fluentui/react-icons";
 import type {
+  AssistantActionDraft,
   ProjectHubItem, ProjectHubItemInput, ProjectHubOverview, ProjectHubProject,
   ProjectHubProjectInput, ProjectHubRequest, ProjectHubWorkstream, WorkspacePerson,
 } from "@yuksalish/contracts";
@@ -22,6 +23,7 @@ type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
 
 interface Props {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly mode: ViewMode;
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
@@ -73,7 +75,8 @@ function emptyItem(workstreamId = ""): ProjectHubItemInput {
 }
 
 export function ProjectHubView({ mode, token, people, currentUserId, canCreateProject,
-  canCreateRequest, canViewFunding, focusId, onOpenCalendar }: Props) {
+  canCreateRequest, canViewFunding, focusId, onOpenCalendar,
+  assistantDraft }: Props) {
   const [hub, setHub] = useState<ProjectHubOverview>(emptyHub);
   const [requests, setRequests] = useState<readonly ProjectHubRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,12 +93,22 @@ export function ProjectHubView({ mode, token, people, currentUserId, canCreatePr
   const [statusTarget, setStatusTarget] = useState<"rejected" | "cancelled">("cancelled");
   const [statusComment, setStatusComment] = useState("");
   const [itemComment, setItemComment] = useState("");
-  const [formMode, setFormMode] = useState<FormMode>(null);
+  const [formMode, setFormMode] = useState<FormMode>(
+    mode === "projects" && canCreateProject && assistantDraft?.kind === "project" ? "project" : null,
+  );
   const [editingProjectId, setEditingProjectId] = useState<string>();
   const [editingItemId, setEditingItemId] = useState<string>();
   const [editingWorkstreamId, setEditingWorkstreamId] = useState<string>();
   const [workstreamForm, setWorkstreamForm] = useState({ title: "", description: "", startDate: "", endDate: "" });
-  const [projectForm, setProjectForm] = useState<ProjectHubProjectInput>(() => emptyProject(currentUserId));
+  const [projectForm, setProjectForm] = useState<ProjectHubProjectInput>(() =>
+    assistantDraft?.kind === "project" ? {
+      ...emptyProject(currentUserId),
+      title: assistantDraft.fields.title ?? "",
+      code: assistantDraft.fields.code ?? "",
+      description: assistantDraft.fields.description ?? "",
+      startDate: assistantDraft.fields.startDate || null,
+      endDate: assistantDraft.fields.endDate || null,
+    } : emptyProject(currentUserId));
   const [itemForm, setItemForm] = useState<ProjectHubItemInput>(emptyItem);
   const [requestForm, setRequestForm] = useState({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" });
   const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);

@@ -5,7 +5,7 @@ import { Button, Checkbox } from "@fluentui/react-components";
 import { LockClosed20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 
-import { deleteModuleAccessRule, setModuleAccessRule } from "./workspace-api";
+import { deleteModuleAccessRule, setModuleAccessRule, setRegionalAssistantAccess } from "./workspace-api";
 
 const actionLabels: { key: keyof ModulePermissionSet; label: string }[] = [
   { key: "view", label: "Просмотр" },
@@ -66,6 +66,10 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
       : directory.employees.filter((item) => item.role !== "superadmin").map((item) => ({ key: item.id, label: item.name })), [directory, subjectType]);
   const selectedKey = subjects.some((item) => item.key === subjectKey) ? subjectKey : subjects[0]?.key ?? "";
   const selectedEmployee = directory.employees.find((item) => item.id === selectedKey);
+  const regionalDepartments = directory.departments.filter((item) => item.scope === "regional");
+  const allRegionsEnabled = regionalDepartments.length > 0 && regionalDepartments.every((item) =>
+    departmentLineage(directory, item.id).every((id) =>
+      matchingRule(directory, "department", id, "assistant")?.permissions.view !== false));
 
   const selectType = (value: ModuleAccessSubject) => {
     setSubjectType(value);
@@ -128,12 +132,59 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     }
   };
 
+  const assistantDeniedByDepartment = subjectType === "user" && departmentLineage(
+    directory, selectedEmployee?.departmentId ?? undefined,
+  ).some((id) => matchingRule(directory, "department", id, "assistant")?.permissions.view === false);
+  const assistantAllowedForSelectedUser = subjectType === "user" && !assistantDeniedByDepartment
+    && (explicitRule("assistant")?.permissions ?? inherited("assistant")).view;
+  const toggleUserAssistant = () => {
+    if (!selectedKey || assistantDeniedByDepartment) return;
+    const next: ModulePermissionSet = {
+      view: !assistantAllowedForSelectedUser,
+      create: false, edit: false, approve: false, admin: false,
+    };
+    void save("assistant", next);
+  };
+
+  const toggleRegionalAssistant = async () => {
+    if (!regionalDepartments.length || busyKey) return;
+    setBusyKey("assistant-regions");
+    setFeedback("");
+    try {
+      const rules = await setRegionalAssistantAccess(token, !allRegionsEnabled);
+      for (const rule of rules) onRuleChanged(rule);
+      setFeedback(`${rules.length} региональных подразделений: доступ к ИИ-ассистенту ${allRegionsEnabled ? "отключён" : "включён"}.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось изменить доступ регионов");
+    } finally {
+      setBusyKey("");
+    }
+  };
+
   return <section className="module-access-management" aria-label="Модульные разрешения">
     <header className="directory-subheading"><LockClosed20Regular /><div><h2>Права модулей</h2><p>Приоритет: роль → подразделение → персональное исключение</p></div></header>
+    <div className="assistant-regional-access" role="group" aria-label="Доступ регионов к ИИ-ассистенту">
+      <span><strong>ИИ-ассистент для регионов</strong><small>{regionalDepartments.length
+        ? `${regionalDepartments.length} региональных подразделений · ${allRegionsEnabled ? "доступ включён" : "доступ отключён или различается"}`
+        : "Сначала проверьте типы подразделений: ЦА или регион."}</small></span>
+      <Button disabled={Boolean(busyKey) || !regionalDepartments.length}
+        aria-pressed={allRegionsEnabled} onClick={() => void toggleRegionalAssistant()}>
+        {allRegionsEnabled ? "Отключить всем регионам" : "Разрешить всем регионам"}
+      </Button>
+    </div>
     <div className="access-subject-controls">
       <label>Уровень<Select aria-label="Уровень правила доступа" value={subjectType} disabled={!!busyKey} onChange={(event) => selectType(event.target.value as ModuleAccessSubject)}><option value="role">Роль</option><option value="department">Подразделение</option><option value="position">Должность</option><option value="user">Сотрудник</option></Select></label>
       <label>Кому<Select aria-label="Получатель правила доступа" value={selectedKey} disabled={!!busyKey || !subjects.length} onChange={(event) => setSubjectKey(event.target.value)}>{subjects.map((item) => <option key={item.key} value={item.key}>{item.label}</option>)}</Select></label>
     </div>
+    {subjectType === "user" && selectedEmployee ? <div className="assistant-regional-access" role="group" aria-label="Доступ сотрудника к ИИ-ассистенту">
+      <span><strong>ИИ-ассистент · {selectedEmployee.name}</strong><small>{assistantDeniedByDepartment
+        ? "Отключён для подразделения. Сначала измените правило подразделения."
+        : assistantAllowedForSelectedUser ? "Ассистент доступен сотруднику" : "Ассистент скрыт и его запросы запрещены сервером"}</small></span>
+      <Button disabled={Boolean(busyKey) || assistantDeniedByDepartment}
+        aria-pressed={assistantAllowedForSelectedUser} onClick={toggleUserAssistant}>
+        {assistantAllowedForSelectedUser ? "Отключить сотруднику" : "Включить сотруднику"}
+      </Button>
+    </div> : null}
     {feedback ? <div className="directory-feedback" role="status">{feedback}</div> : null}
     {!subjects.length ? <div className="directory-empty">Для этого уровня пока нет записей.</div> : <div className="access-matrix" role="table" aria-label="Матрица разрешений">
       <div className="access-matrix-row access-matrix-head" role="row"><span>Модуль</span>{actionLabels.map((action) => <span key={action.key}>{action.label}</span>)}<span>Источник</span></div>
@@ -142,7 +193,11 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
         const permissions = rule?.permissions ?? inherited(module.key);
         return <div className="access-matrix-row" role="row" key={module.key}>
           <span><strong>{module.label}</strong><small>{module.status === "placeholder" ? "Пока не используется" : module.key}</small></span>
-          {actionLabels.map((action) => <Checkbox key={action.key} aria-label={`${module.label}: ${action.label}`} checked={permissions[action.key]} disabled={busyKey === module.key} onChange={(_, data) => void save(module.key, { ...permissions, [action.key]: data.checked === true })} />)}
+          {actionLabels.map((action) => <Checkbox key={action.key} aria-label={`${module.label}: ${action.label}`} checked={permissions[action.key]} disabled={busyKey === module.key} onChange={(_, data) => void save(module.key,
+            module.key === "assistant" && action.key === "view" && data.checked !== true
+              ? { view: false, create: false, edit: false, approve: false, admin: false }
+              : { ...permissions, [action.key]: data.checked === true },
+          )} />)}
           <span className="access-rule-source">{rule ? <Button size="small" appearance="subtle" disabled={busyKey === module.key} onClick={() => void reset(module.key)}>Своё · сбросить</Button> : <Button size="small" appearance="subtle" disabled={busyKey === module.key} onClick={() => void save(module.key, permissions)}>Наследуется</Button>}</span>
         </div>;
       })}

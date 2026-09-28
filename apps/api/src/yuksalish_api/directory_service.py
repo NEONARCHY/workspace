@@ -594,6 +594,33 @@ async def set_module_access_rule(
     return _module_access_rule(row)
 
 
+async def set_regional_assistant_access(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    enabled: bool,
+) -> list[ModuleAccessRuleResponse]:
+    """Update all verified regional departments in the request transaction."""
+    _require_admin(actor)
+    scope_column = departments.c.get("scope")
+    if scope_column is None:
+        raise DirectoryServiceError(409, "Department scope migration is not available")
+    regional_ids = (
+        await connection.execute(select(departments.c.id).where(scope_column == "regional"))
+    ).scalars().all()
+    if not regional_ids:
+        raise DirectoryServiceError(409, "No regional departments are configured")
+    permissions = ModulePermissionSet(
+        view=enabled, create=enabled, edit=enabled, approve=enabled, admin=False
+    )
+    payload = ModuleAccessRuleUpdateRequest(permissions=permissions)
+    return [
+        await set_module_access_rule(
+            connection, actor, "department", str(department_id), "assistant", payload
+        )
+        for department_id in regional_ids
+    ]
+
+
 async def delete_module_access_rule(
     connection: AsyncConnection,
     actor: AuthenticatedUser,

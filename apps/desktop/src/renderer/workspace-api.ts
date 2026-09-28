@@ -570,9 +570,10 @@ export interface AssistantAttachmentInput {
 
 export function sendAssistantMessage(
   token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
+  continueDraft = false,
 ): Promise<AssistantMessage> {
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message, attachment }),
+    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft }),
   }, token, 65_000);
 }
 
@@ -820,6 +821,17 @@ export function setModuleAccessRule(
   return apiRequest<ModuleAccessRule>(
     `/directory/access-rules/${subjectType}/${subjectKey}/${moduleKey}`,
     { method: "PUT", body: JSON.stringify({ permissions }) },
+    token,
+  );
+}
+
+export function setRegionalAssistantAccess(
+  token: string,
+  enabled: boolean,
+): Promise<readonly ModuleAccessRule[]> {
+  return apiRequest<readonly ModuleAccessRule[]>(
+    "/directory/assistant-regional-access",
+    { method: "POST", body: JSON.stringify({ enabled }) },
     token,
   );
 }
