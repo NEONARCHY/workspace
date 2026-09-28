@@ -134,6 +134,13 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 .assistant-message-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; margin-bottom: 5px; color: var(--ws-link); font-size: 11px; font-weight: 700; }
 .assistant-message-meta time { color: #718493; font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .assistant-message-quote { display: block; margin-bottom: 8px; padding: 7px 9px; border-left: 2px solid var(--ws-link); border-radius: 0 7px 7px 0; background: rgb(255 255 255 / 66%); color: #52697b; font-size: 12px; }
+.assistant-answer-context { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e4eeec; color: #52697b; font-size: 12px; line-height: 1.45; }
+.assistant-answer-context summary { width: fit-content; color: var(--ws-link); font-weight: 600; cursor: pointer; }
+.assistant-answer-context summary:hover { text-decoration: underline; }
+.assistant-answer-context summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; border-radius: 3px; }
+.assistant-answer-context p { margin: 7px 0 0; }
+.assistant-answer-context ul { margin: 7px 0 0; padding-left: 18px; }
+.assistant-answer-context li + li { margin-top: 3px; }
 .assistant-composer { gap: 8px; }
 .assistant-composer-toolbar { padding-top: 7px; border-top: 1px solid #edf3f2; }
 .assistant-model-description { font-size: 12px; }

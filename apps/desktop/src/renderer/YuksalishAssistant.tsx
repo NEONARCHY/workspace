@@ -336,8 +336,18 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
               onKeyDown={(event) => onMessageKeyDown(event, item)}>
               <div className="assistant-message-meta"><span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
                 <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
-              {item.role === "assistant" ? <GeneratedReply content={item.content}
-                animate={item.id === animatedReplyId} /> : item.content.startsWith("↳ Ответ на сообщение ассистента: ") && item.content.includes("\n\n")
+              {item.role === "assistant" ? <>
+                <GeneratedReply content={item.content} animate={item.id === animatedReplyId} />
+                <details className="assistant-answer-context">
+                  <summary>Как подготовлен ответ</summary>
+                  <p>Это перечень проверенных источников, а не скрытые рассуждения модели.</p>
+                  {item.sourceLabels === undefined
+                    ? <p>Для этого старого ответа сведения об источниках не сохранены.</p>
+                    : item.sourceLabels.length
+                      ? <ul>{item.sourceLabels.map((label, index) => <li key={`${label}-${index}`}>{label}</li>)}</ul>
+                      : <p>Ответ подготовлен без дополнительного рабочего контекста.</p>}
+                </details>
+              </> : item.content.startsWith("↳ Ответ на сообщение ассистента: ") && item.content.includes("\n\n")
                 ? <p><span className="assistant-message-quote">{item.content.split("\n\n", 1)[0]}</span>{item.content.slice(item.content.indexOf("\n\n") + 2)}</p>
                 : <p>{item.content}</p>}
             </article>)}

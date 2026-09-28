@@ -467,6 +467,7 @@ export interface AssistantMessage {
   readonly model: AssistantModel;
   readonly content: string;
   readonly createdAt: string;
+  readonly sourceLabels?: readonly string[];
 }
 
 export interface BirthdayPreference {

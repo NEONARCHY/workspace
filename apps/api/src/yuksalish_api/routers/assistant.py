@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.assistant_service import (
+    AssistantMessageRecord,
     AssistantModel,
     ask_assistant,
     generate_text,
@@ -103,7 +104,7 @@ class RewriteRequest(BaseModel):
 
 
 @router.get("/messages")
-async def get_messages(user: User, connection: Connection) -> list[dict[str, str]]:
+async def get_messages(user: User, connection: Connection) -> list[AssistantMessageRecord]:
     return await message_history(connection, user.id)
 
 
@@ -113,7 +114,7 @@ async def post_message(
     user: User,
     connection: Connection,
     request: Request,
-) -> dict[str, str]:
+) -> AssistantMessageRecord:
     key = request.app.state.settings.gemini_api_key.get_secret_value()
     attachment = None
     if payload.attachment is not None:

@@ -152,4 +152,19 @@ describe("YuksalishAssistant", () => {
     expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" }).value)
       .toContain("[имя]");
   });
+
+  it("shows stored answer sources without presenting hidden model reasoning", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "sourced", role: "assistant", model: "flash-lite", content: "Сведения о сотруднике.",
+      createdAt: "2026-09-28T09:00:00Z", sourceLabels: ["Проверены доступные профили сотрудников"],
+    }]);
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Сведения о сотруднике.");
+    const details = screen.getByText("Как подготовлен ответ").closest("details")!;
+    details.open = true;
+    expect(details).toHaveAttribute("open");
+    expect(screen.getByText("Проверены доступные профили сотрудников")).toBeInTheDocument();
+    expect(screen.getByText(/не скрытые рассуждения модели/)).toBeInTheDocument();
+  });
 });
