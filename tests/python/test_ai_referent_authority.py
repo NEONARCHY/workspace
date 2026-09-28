@@ -33,7 +33,6 @@ class _Connection:
 
     async def execute(self, statement):
         query = str(statement.compile(dialect=postgresql.dialect()))
-        assert "FOR SHARE" in query
         self.queries.append(query)
         return _Result(self.row)
 
@@ -122,7 +121,9 @@ async def test_legacy_mode_remains_writable_before_explicit_activation():
     with pytest.raises(StopAsyncIteration):
         await anext(guard)
     assert "ai_referent_configuration" in connection.queries[0]
+    assert "FOR UPDATE" in connection.queries[0]
     assert "ai_referent_authority" in connection.queries[1]
+    assert "FOR SHARE" in connection.queries[1]
 
 
 @pytest.mark.anyio

@@ -126,7 +126,7 @@ class SharedBot:
         except WorkspaceError as error:
             if (
                 method != "GET" or self.offline is None
-                or error.status not in {0, 502, 503, 504}
+                or error.status not in {0, 408, 500, 502, 503, 504}
             ):
                 raise
             cached = self.offline.snapshot(actor, path)
@@ -136,7 +136,8 @@ class SharedBot:
                     cached = {"payload": letter}
             if cached is None:
                 raise WorkspaceError(
-                    "Workspace недоступен, а это письмо ещё не сохранено в локальной копии."
+                    "Workspace недоступен, а это письмо ещё не сохранено в локальной копии.",
+                    retryable=error.retryable,
                 ) from error
             self.offline_read = True
             return cached["payload"]
@@ -252,6 +253,13 @@ class SharedBot:
             except WorkspaceError as error:
                 if error.status in {403, 404}:
                     self.clear_system(actor, scope)
+
+    def complete_update(self, update: dict[str, Any]) -> None:
+        key = f"pending-update:{update['update_id']}"
+        actor = self.state.get(key)
+        if actor is not None:
+            self.clear_system(str(actor), key)
+            self.state.remove(key)
 
     def show(self, actor: str, letter_id: str) -> None:
         letter = self.request(actor, f"/letters/{UUID(letter_id)}")
@@ -1069,6 +1077,16 @@ class SharedBot:
             else:
                 self.say(actor, "Откройте /history или начните письмо командой /new.")
         except (WorkspaceError, ValueError, KeyError, IndexError) as error:
+            if isinstance(error, WorkspaceError) and error.retryable:
+                pending = f"pending-update:{update['update_id']}"
+                self.state.claim(pending, actor)
+                if self.state.get(f"system:{actor}:{pending}") is None:
+                    self.system(
+                        actor, pending,
+                        "Связь с Workspace прервалась. Действие сохранено и будет "
+                        "продолжено автоматически после восстановления связи.",
+                    )
+                raise
             if isinstance(error, WorkspaceError) and error.status == 0:
                 # Validation errors have no status too: expose only our sanitized message.
                 self.say(actor, str(error))
@@ -1109,6 +1127,9 @@ def poll_durable_updates(
     handled = 0
     for update in pending:
         controller.handle(update)
+        complete_update = getattr(controller, "complete_update", None)
+        if callable(complete_update):
+            complete_update(update)
         journal.mark_telegram_update_handled(int(update["update_id"]))
         handled += 1
         if limit is not None and handled >= limit:

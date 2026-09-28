@@ -270,6 +270,68 @@ def test_poll_replays_saved_update_before_fetching_more(tmp_path):
     assert journal.pending_telegram_updates() == []
 
 
+def test_retryable_workspace_failure_keeps_telegram_action_until_recovery(tmp_path):
+    update = {
+        "update_id": 42,
+        "message": {
+            "from": {"id": 123},
+            "chat": {"id": 123, "type": "private"},
+            "text": "/pending",
+        },
+    }
+
+    class Telegram:
+        def __init__(self):
+            self.sent = []
+            self.deleted = []
+
+        def get_updates(self, *, offset):
+            assert offset == 0
+            return {"result": [update]}
+
+        def send_message(self, actor, message, *, reply_markup):
+            self.sent.append((actor, message, reply_markup))
+            return {"ok": True, "result": {"message_id": len(self.sent)}}
+
+        def delete_message(self, actor, message_id):
+            self.deleted.append((actor, message_id))
+            return {"ok": True}
+
+    class API:
+        online = False
+
+        def request(self, path, payload=None, *, method="GET", telegram_id=""):
+            if not self.online:
+                raise WorkspaceError("нет сети", retryable=True)
+            assert telegram_id == "123"
+            assert path in {
+                "/ai-referent/agent/letters?offset=0&limit=10&activeOnly=true",
+                "/ai-referent/agent/letters/progress?offset=0&limit=10",
+            }
+            return {"letters": []}
+
+    journal = OfflineJournal(tmp_path / "offline")
+    journal.initialize_telegram_offset(None)
+    telegram = Telegram()
+    api = API()
+    bot = SharedBot(telegram, api, State(tmp_path / "state.sqlite"), journal)
+
+    with pytest.raises(WorkspaceError, match="ещё не сохранено"):
+        poll_durable_updates(telegram, bot, journal)
+    assert journal.pending_telegram_updates() == [update]
+    assert len(telegram.sent) == 1
+
+    with pytest.raises(WorkspaceError, match="ещё не сохранено"):
+        poll_durable_updates(telegram, bot, journal)
+    assert journal.pending_telegram_updates() == [update]
+    assert len(telegram.sent) == 1
+
+    api.online = True
+    assert poll_durable_updates(telegram, bot, journal) == 1
+    assert journal.pending_telegram_updates() == []
+    assert telegram.deleted == [("123", 1)]
+
+
 def test_bot_reads_only_its_own_last_verified_server_snapshot(tmp_path):
     class API:
         def __init__(self):

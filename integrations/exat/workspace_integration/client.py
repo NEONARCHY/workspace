@@ -16,9 +16,10 @@ TOKEN_TARGET = "AIReferent.Workspace.Agent"
 
 
 class WorkspaceError(RuntimeError):
-    def __init__(self, message: str, status: int = 0):
+    def __init__(self, message: str, status: int = 0, *, retryable: bool = False):
         super().__init__(message)
         self.status = status
+        self.retryable = retryable
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -189,10 +190,12 @@ class WorkspaceClient:
                 if isinstance(detail, str)
                 else messages.get(exc.code, f"Ошибка API: HTTP {exc.code}"),
                 exc.code,
+                retryable=exc.code in {408, 500, 502, 503, 504},
             ) from None
         except (URLError, TimeoutError, OSError) as exc:
             raise WorkspaceError(
-                "Workspace недоступен. Проверьте сеть, адрес и сертификат."
+                "Workspace недоступен. Проверьте сеть, адрес и сертификат.",
+                retryable=True,
             ) from exc
 
     def configuration(self) -> dict[str, Any]:

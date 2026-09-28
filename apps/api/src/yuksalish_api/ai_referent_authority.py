@@ -125,16 +125,17 @@ async def _audit(
 
 
 async def workspace_write_guard(connection: AsyncConnection) -> AsyncIterator[None]:
-    """Hold a shared row lock through the write and reject an expired commit.
+    """Serialize Referent writes through the configuration row and fence commits.
 
     FastAPI closes this dependency before get_connection commits. Checking both
     sides of the route means an operation begun just before expiry cannot commit
     after the bot may be allowed to take autonomous authority.
     """
-    # The configuration row also serializes the first authority start. Otherwise
-    # a write that observed an absent authority row could commit after start.
+    # Most letter services later take FOR UPDATE on this row. Taking FOR SHARE
+    # here would let concurrent requests both acquire it and deadlock while
+    # upgrading to FOR UPDATE. This lock also serializes authority start.
     await connection.execute(
-        select(ai_referent_configuration.c.id).with_for_update(read=True)
+        select(ai_referent_configuration.c.id).with_for_update()
     )
     row = (
         await connection.execute(select(ai_referent_authority).with_for_update(read=True))
