@@ -26,6 +26,13 @@ class OfflineAuthorityGate:
         self.agent_id = agent_id
         self.clock = clock
         self._deadline: float | None = None
+        state = journal.authority_state()
+        if state is not None and state["agent_id"] == agent_id and state["phase"] == "online":
+            seconds = state["lease_seconds"]
+            if isinstance(seconds, int) and 1 <= seconds <= 600:
+                # On process restart, wait a whole lease from *this* boot. The
+                # old monotonic deadline cannot be reconstructed from wall time.
+                self._deadline = self.clock() + seconds + SAFETY_SECONDS
 
     def accept_lease(self, response: dict[str, Any]) -> None:
         """Accept a server-confirmed epoch but do not grant offline writes yet."""
@@ -52,7 +59,9 @@ class OfflineAuthorityGate:
             return
         if mode != "online" or remaining <= 0:
             raise ValueError("Сервер не подтвердил действующую аренду.")
-        self.journal.set_authority_phase(self.agent_id, epoch, "online")
+        self.journal.set_authority_phase(
+            self.agent_id, epoch, "online", lease_seconds=seconds
+        )
         # The response was generated before receipt, so waiting the *full*
         # lease from receipt plus slack is conservative even with clock skew.
         self._deadline = self.clock() + seconds + SAFETY_SECONDS

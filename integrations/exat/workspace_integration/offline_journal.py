@@ -119,6 +119,7 @@ class OfflineJournal:
                     agent_id TEXT NOT NULL,
                     epoch TEXT NOT NULL,
                     phase TEXT NOT NULL CHECK (phase IN ('online', 'offline', 'replay')),
+                    lease_seconds INTEGER CHECK (lease_seconds BETWEEN 1 AND 600),
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS rights_snapshot (
@@ -169,6 +170,14 @@ class OfflineJournal:
             ):
                 if name not in operation_columns:
                     connection.execute(f"ALTER TABLE operations ADD COLUMN {name} TEXT")
+            authority_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(authority_state)")
+            }
+            if "lease_seconds" not in authority_columns:
+                connection.execute(
+                    "ALTER TABLE authority_state ADD COLUMN lease_seconds INTEGER "
+                    "CHECK (lease_seconds BETWEEN 1 AND 600)"
+                )
 
     def initialize_telegram_offset(self, previous_offset: int | None) -> int:
         """Import the old post-handle cursor only once before using this inbox."""
@@ -263,18 +272,23 @@ class OfflineJournal:
             if cursor.rowcount != 1:
                 raise ValueError("Telegram-обновление не найдено в журнале.")
 
-    def authority_state(self) -> dict[str, str] | None:
+    def authority_state(self) -> dict[str, Any] | None:
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT agent_id, epoch, phase, updated_at FROM authority_state WHERE id = 1"
+                "SELECT agent_id, epoch, phase, lease_seconds, updated_at "
+                "FROM authority_state WHERE id = 1"
             ).fetchone()
         return dict(row) if row is not None else None
 
-    def set_authority_phase(self, agent_id: str, epoch: str, phase: str) -> None:
+    def set_authority_phase(
+        self, agent_id: str, epoch: str, phase: str, *, lease_seconds: int | None = None
+    ) -> None:
         """Durably fence a phase transition; a restarted bot cannot invent a lease."""
         epoch = str(UUID(epoch))
         if not agent_id or len(agent_id) > 128 or phase not in {"online", "offline", "replay"}:
             raise ValueError("Недействительное состояние аренды робота.")
+        if lease_seconds is not None and not 1 <= lease_seconds <= 600:
+            raise ValueError("Недействительный срок аренды робота.")
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
@@ -284,8 +298,10 @@ class OfflineJournal:
                 if phase != "online":
                     raise ValueError("Нельзя работать автономно без подтверждённой аренды.")
                 connection.execute(
-                    "INSERT INTO authority_state VALUES (1, ?, ?, ?, ?)",
-                    (agent_id, epoch, phase, _now()),
+                    "INSERT INTO authority_state "
+                    "(id, agent_id, epoch, phase, lease_seconds, updated_at) "
+                    "VALUES (1, ?, ?, ?, ?, ?)",
+                    (agent_id, epoch, phase, lease_seconds, _now()),
                 )
                 return
             if row["agent_id"] != agent_id or row["epoch"] != epoch:
@@ -296,8 +312,9 @@ class OfflineJournal:
             }:
                 raise ValueError("Нельзя возобновить запись до сверки журнала.")
             connection.execute(
-                "UPDATE authority_state SET phase = ?, updated_at = ? WHERE id = 1",
-                (phase, _now()),
+                "UPDATE authority_state SET phase = ?, "
+                "lease_seconds = COALESCE(?, lease_seconds), updated_at = ? WHERE id = 1",
+                (phase, lease_seconds, _now()),
             )
 
     def prepare_offline_rights(self, epoch: str) -> str:
@@ -559,6 +576,18 @@ class OfflineJournal:
                 (letter_id, row["reservation_id"], row["year_suffix"], number, now.isoformat()),
             )
             return number, str(row["year_suffix"])
+
+    def available_reserved_numbers(self, agent_id: str) -> int:
+        """Count only numbers still spendable in this year and time window."""
+        now = datetime.now(UTC)
+        with self.connect() as connection:
+            value = connection.execute(
+                "SELECT COALESCE(SUM(last_number - next_number + 1), 0) "
+                "FROM number_reservations WHERE agent_id = ? AND year_suffix = ? "
+                "AND valid_until > ? AND next_number <= last_number",
+                (agent_id, now.strftime("%y"), now.isoformat()),
+            ).fetchone()[0]
+        return int(value)
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

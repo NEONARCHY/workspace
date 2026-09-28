@@ -44,6 +44,41 @@ def test_offline_transition_waits_for_server_fence_and_survives_restart(tmp_path
         gate.accept_lease(lease(epoch))
 
 
+def test_restart_waits_a_full_lease_before_offline_write(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    first = OfflineAuthorityGate(journal, "referent-pc", clock=lambda: 100.0)
+    first.accept_lease(lease(epoch))
+    assert journal.authority_state()["lease_seconds"] == 45
+
+    ticks = [10_000.0]
+    restarted = OfflineAuthorityGate(
+        OfflineJournal(tmp_path), "referent-pc", clock=lambda: ticks[0]
+    )
+    ticks[0] = 10_049.9
+    assert not restarted.may_write_offline()
+    ticks[0] = 10_050.0
+    assert restarted.may_write_offline()
+    assert OfflineJournal(tmp_path).authority_state()["phase"] == "offline"
+
+
+def test_old_authority_row_without_lease_duration_stays_fenced_on_restart(tmp_path):
+    epoch = str(uuid4())
+    with sqlite3.connect(tmp_path / "offline-journal.sqlite") as connection:
+        connection.execute(
+            "CREATE TABLE authority_state (id INTEGER PRIMARY KEY, agent_id TEXT NOT NULL, "
+            "epoch TEXT NOT NULL, phase TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO authority_state VALUES (1, 'referent-pc', ?, 'online', 'old')",
+            (epoch,),
+        )
+    journal = OfflineJournal(tmp_path)
+    assert journal.authority_state()["lease_seconds"] is None
+    gate = OfflineAuthorityGate(journal, "referent-pc", clock=lambda: 1_000_000.0)
+    assert not gate.may_write_offline()
+
+
 def test_replay_required_stops_offline_writes(tmp_path):
     journal = OfflineJournal(tmp_path)
     ticks = [0.0]
