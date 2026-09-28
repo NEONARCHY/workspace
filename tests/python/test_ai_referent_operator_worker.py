@@ -259,6 +259,28 @@ def test_offline_send_calls_durable_fence_at_click_without_workspace(
     client.request.assert_not_called()
 
 
+def test_offline_send_does_not_reuse_prior_online_sent_receipt(modules, tmp_path):
+    worker_module = importlib.import_module("workspace_integration.worker")
+    letter_id = str(uuid4())
+    service = Mock(archive_root=tmp_path)
+    service.database.get_outgoing_letter.return_value = {
+        "id": 7, "status": "exat_sent", "destination_route": "exat",
+    }
+    client = Mock(agent_id="referent-pc")
+    state = modules.shared_bot.State(tmp_path / "worker-state.sqlite")
+    state.put("letter:" + letter_id, 7)
+    fence = Mock()
+    worker = worker_module.DeliveryWorker(service, client, state)
+    with pytest.raises(modules.client.WorkspaceError, match="Сверьте E-XAT/Webmail"):
+        worker.send(
+            {"id": str(uuid4()), "letterId": letter_id, "leaseToken": "offline-only"},
+            threading.Event(), offline_fence=fence,
+        )
+    fence.assert_called_once_with()
+    service.confirm_manual_send.assert_not_called()
+    client.request.assert_not_called()
+
+
 def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
     modules, tmp_path, monkeypatch
 ):

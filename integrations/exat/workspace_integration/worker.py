@@ -339,6 +339,15 @@ class DeliveryWorker:
         if row is None:
             raise WorkspaceError("Локальная запись письма отсутствует.")
         if row["status"] in {"exat_sent", "webmail_sent"}:
+            if offline_fence is not None:
+                # A prior online job may have clicked Send just as connectivity
+                # failed. Fence this new command, but never infer that the old
+                # local receipt belongs to this autonomous operation.
+                offline_fence()
+                raise WorkspaceError(
+                    "Локальный журнал уже считает письмо отправленным. "
+                    "Сверьте E-XAT/Webmail вручную; повторный клик заблокирован."
+                )
             return self.receipt(
                 job, "sent", f"Подтверждено журналом Exat: {row['status']}, запись {local_id}"
             )
