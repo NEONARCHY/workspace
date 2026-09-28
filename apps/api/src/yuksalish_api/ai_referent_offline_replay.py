@@ -1,7 +1,7 @@
 """Fail-closed, transactional replay of autonomous AI Referent operations.
 
-Only draft creation and editing are accepted so far. Later operation kinds must be added
-before this protocol can be connected to the live bot or unfence Workspace.
+Only drafts, document checks and voice comments are accepted so far. Later operation
+kinds must be added before this protocol can be connected to the live bot or unfence Workspace.
 """
 
 # ruff: noqa: RUF001
@@ -31,6 +31,7 @@ from .ai_referent_service import _normalize_review_route, _validate_reviewer
 from .object_storage import ObjectStorage
 from .tables import (
     ai_referent_authority,
+    ai_referent_comment_audio,
     ai_referent_configuration,
     ai_referent_document_checks,
     ai_referent_events,
@@ -262,6 +263,84 @@ async def _replay_document_check(
     )
 
 
+async def _replay_comment_audio(
+    connection: AsyncConnection,
+    storage: ObjectStorage | None,
+    *,
+    agent_id: str,
+    epoch: UUID,
+    operation: OfflineReplayOperation,
+    actor: dict[str, object],
+    fingerprint: str,
+    occurred_at: datetime,
+    now: datetime,
+) -> OfflineReplayReceipt:
+    values = operation.payload
+    revision, duration, size, mime = (
+        values.get("revision"), values.get("durationMs"),
+        values.get("byteSize"), values.get("contentType"),
+    )
+    if (
+        storage is None or operation.blob_sha256 is None
+        or type(revision) is not int or revision < 1
+        or type(duration) is not int or not 1 <= duration <= 300_000
+        or type(size) is not int or not 0 < size <= 10 * 1024 * 1024
+        or mime not in {"audio/ogg", "audio/webm"}
+    ):
+        raise HTTPException(422, "Поля автономного голосового комментария недействительны.")
+    staged = (
+        await connection.execute(select(ai_referent_offline_blobs).where(
+            ai_referent_offline_blobs.c.agent_id == agent_id,
+            ai_referent_offline_blobs.c.epoch == epoch,
+            ai_referent_offline_blobs.c.sha256 == operation.blob_sha256,
+        ))
+    ).mappings().one_or_none()
+    if staged is None or staged["byte_size"] != size:
+        raise HTTPException(409, "Голосовой файл автономного журнала отсутствует.")
+    content = await storage.get(staged["storage_key"])
+    if len(content) != size or hashlib.sha256(content).hexdigest() != operation.blob_sha256:
+        raise HTTPException(409, "Контрольная сумма голосового файла не совпала.")
+    ogg = content.startswith(b"OggS") and b"OpusHead" in content[:65536]
+    webm = content.startswith(b"\x1a\x45\xdf\xa3") and b"OpusHead" in content[:65536]
+    if not ((ogg and mime == "audio/ogg") or (webm and mime == "audio/webm")):
+        raise HTTPException(422, "Нужна голосовая запись Opus в OGG или WebM.")
+    letter = (
+        await connection.execute(select(ai_referent_letters).where(
+            ai_referent_letters.c.id == operation.letter_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if letter is None:
+        raise HTTPException(404, "Письмо для голосового комментария не найдено.")
+    if (
+        letter["revision"] != revision or letter["status"] != "pending_review"
+        or letter["reviewer_user_id"] != UUID(str(actor["userId"]))
+        or not actor.get("reviewerKeys")
+    ):
+        raise HTTPException(409, "Голосовой комментарий не относится к текущему решению.")
+    audio_id = uuid5(NAMESPACE_URL, "ai-offline-audio:" + str(operation.operation_id))
+    await connection.execute(insert(ai_referent_comment_audio).values(
+        id=audio_id, letter_id=operation.letter_id, user_id=UUID(str(actor["userId"])),
+        revision=revision, storage_key=staged["storage_key"], content_type=mime,
+        byte_size=size, duration_ms=duration, created_at=occurred_at,
+    ))
+    await connection.execute(insert(audit_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-audit:" + str(operation.operation_id)),
+        actor_user_id=UUID(str(actor["userId"])), action="ai_referent.offline_comment_audio",
+        target_type="ai_referent_letter", target_id=operation.letter_id,
+        details={"agentId": agent_id, "epoch": str(epoch)}, created_at=now,
+    ))
+    await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+        operation_id=operation.operation_id, agent_id=agent_id, epoch=epoch,
+        sequence=operation.sequence, letter_id=operation.letter_id,
+        kind=operation.kind, fingerprint=fingerprint, result_revision=revision,
+        occurred_at=occurred_at, accepted_at=now,
+    ))
+    return OfflineReplayReceipt(
+        operation_id=operation.operation_id, sequence=operation.sequence,
+        letter_id=operation.letter_id, result_revision=revision, accepted_at=now,
+    )
+
+
 async def replay_offline_operation(
     connection: AsyncConnection,
     *,
@@ -306,12 +385,21 @@ async def replay_offline_operation(
         return _receipt(existing)
     if authority["mode"] != "replay_required":
         raise HTTPException(409, "Воспроизведение доступно только после потери аренды.")
-    last_sequence = await connection.scalar(
+    last_epoch_sequence = await connection.scalar(
+        select(func.max(ai_referent_offline_operation_receipts.c.sequence)).where(
+            ai_referent_offline_operation_receipts.c.agent_id == agent_id,
+            ai_referent_offline_operation_receipts.c.epoch == epoch,
+        )
+    )
+    last_agent_sequence = await connection.scalar(
         select(func.max(ai_referent_offline_operation_receipts.c.sequence)).where(
             ai_referent_offline_operation_receipts.c.agent_id == agent_id,
         )
     )
-    if operation.sequence != (last_sequence or 0) + 1:
+    if (
+        (last_epoch_sequence is not None and operation.sequence != last_epoch_sequence + 1)
+        or (last_epoch_sequence is None and operation.sequence <= (last_agent_sequence or 0))
+    ):
         raise HTTPException(409, "Операции автономного журнала должны идти по порядку.")
     rights = (
         await connection.execute(
@@ -340,10 +428,11 @@ async def replay_offline_operation(
         ("letter.create", "create"), ("letter.update", "edit"),
         ("letter.attachment", "edit"),
         ("letter.document_check", "edit"),
+        ("letter.comment_audio", "approve"),
     }:
         raise HTTPException(422, "Этот вид автономной операции пока не поддерживается.")
     if (
-        operation.kind not in {"letter.attachment", "letter.document_check"}
+        operation.kind not in {"letter.attachment", "letter.document_check", "letter.comment_audio"}
         and operation.blob_sha256 is not None
     ):
         raise HTTPException(422, "Изменение черновика не содержит файл.")
@@ -368,6 +457,12 @@ async def replay_offline_operation(
     if operation.kind == "letter.document_check":
         return await _replay_document_check(
             connection, agent_id=agent_id, epoch=epoch,
+            operation=operation, actor=actor, fingerprint=fingerprint,
+            occurred_at=occurred_at, now=now,
+        )
+    if operation.kind == "letter.comment_audio":
+        return await _replay_comment_audio(
+            connection, storage, agent_id=agent_id, epoch=epoch,
             operation=operation, actor=actor, fingerprint=fingerprint,
             occurred_at=occurred_at, now=now,
         )

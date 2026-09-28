@@ -20,6 +20,7 @@ from yuksalish_api.ai_referent_schemas import OfflineReplayOperation
 from yuksalish_api.object_storage import InMemoryObjectStorage
 from yuksalish_api.tables import (
     ai_referent_authority,
+    ai_referent_comment_audio,
     ai_referent_configuration,
     ai_referent_document_checks,
     ai_referent_events,
@@ -82,6 +83,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
     agent_id = f"offline-replay-{uuid4().hex}"
     actor_id = "98765432101"
     storage = InMemoryObjectStorage()
+    reviewer_actor_id = "98765432102"
     actors = [{
         "telegramId": actor_id,
         "userId": str(user_id),
@@ -89,6 +91,13 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
         "role": "employee",
         "reviewerKeys": [],
         "moduleActions": ["view", "create", "edit"],
+    }, {
+        "telegramId": reviewer_actor_id,
+        "userId": str(reviewer_id),
+        "fullName": "Offline Test Reviewer",
+        "role": "superadmin",
+        "reviewerKeys": ["askar"],
+        "moduleActions": ["view", "approve"],
     }]
     rights_hash = hashlib.sha256(json.dumps(
         actors, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -127,6 +136,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 ))
                 operation = _operation(
                     epoch, snapshot_id, rights_hash, actor_id, user_id,
+                    sequence=37,
                     reviewer_user_id=reviewer_id,
                 )
                 receipt = await replay_offline_operation(
@@ -175,7 +185,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     )
                 assert changed.value.status_code == 409
                 skipped = _operation(
-                    epoch, snapshot_id, rights_hash, actor_id, user_id, sequence=3
+                    epoch, snapshot_id, rights_hash, actor_id, user_id, sequence=39
                 )
                 with pytest.raises(HTTPException) as order:
                     await replay_offline_operation(
@@ -184,7 +194,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     )
                 assert order.value.status_code == 409
                 unauthorized = _operation(
-                    epoch, snapshot_id, rights_hash, "12345678999", user_id, sequence=2
+                    epoch, snapshot_id, rights_hash, "12345678999", user_id, sequence=38
                 )
                 with pytest.raises(HTTPException) as denied:
                     await replay_offline_operation(
@@ -193,7 +203,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     )
                 assert denied.value.status_code == 403
                 unsupported = _operation(
-                    epoch, snapshot_id, rights_hash, actor_id, user_id, sequence=2
+                    epoch, snapshot_id, rights_hash, actor_id, user_id, sequence=38
                 ).model_copy(update={"kind": "letter.update", "required_action": "edit"})
                 with pytest.raises(HTTPException) as not_ready:
                     await replay_offline_operation(
@@ -206,7 +216,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 revised_payload["subject"] = "Edited during outage"
                 revised_payload["expectedRevision"] = 1
                 revision = OfflineReplayOperation(
-                    operation_id=uuid4(), sequence=2, actor_id=actor_id,
+                    operation_id=uuid4(), sequence=38, actor_id=actor_id,
                     letter_id=operation.letter_id, kind="letter.update",
                     payload=revised_payload, authority_epoch=epoch,
                     rights_snapshot_id=snapshot_id,
@@ -241,7 +251,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 )
                 assert staged.byte_size == len(content)
                 file_operation = OfflineReplayOperation(
-                    operation_id=uuid4(), sequence=3, actor_id=actor_id,
+                    operation_id=uuid4(), sequence=39, actor_id=actor_id,
                     letter_id=operation.letter_id, kind="letter.attachment",
                     payload={
                         "fileName": "letter.docx", "role": "primary",
@@ -276,7 +286,7 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     ai_referent_letters.c.id == operation.letter_id
                 )) == 3
                 check_operation = OfflineReplayOperation(
-                    operation_id=uuid4(), sequence=4, actor_id=actor_id,
+                    operation_id=uuid4(), sequence=40, actor_id=actor_id,
                     letter_id=operation.letter_id, kind="letter.document_check",
                     payload={
                         "status": "passed", "reviewerKeys": ["askar"], "detail": "",
@@ -305,6 +315,64 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 ).mappings().one()
                 assert check["status"] == "passed"
                 assert check["reviewer_keys"] == ["askar"]
+                await connection.execute(update(ai_referent_letters).where(
+                    ai_referent_letters.c.id == operation.letter_id
+                ).values(status="pending_review"))
+                voice = b"OggS" + b"\0" * 12 + b"OpusHead" + b"\0" * 20
+                voice_digest = hashlib.sha256(voice).hexdigest()
+                await stage_offline_blob(
+                    connection, storage, agent_id=agent_id, epoch=epoch,
+                    sha256=voice_digest, content=voice, enabled=True,
+                )
+                audio_operation = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=41, actor_id=reviewer_actor_id,
+                    letter_id=operation.letter_id, kind="letter.comment_audio",
+                    payload={
+                        "revision": 3, "durationMs": 1400,
+                        "byteSize": len(voice), "contentType": "audio/ogg",
+                        "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                    },
+                    blob_sha256=voice_digest, authority_epoch=epoch,
+                    rights_snapshot_id=snapshot_id, rights_content_sha256=rights_hash,
+                    required_action="approve",
+                    occurred_at=check_operation.occurred_at + timedelta(seconds=20),
+                )
+                voice_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=audio_operation, enabled=True, storage=storage,
+                )
+                assert voice_receipt.result_revision == 3
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=audio_operation, enabled=True, storage=storage,
+                ) == voice_receipt
+                voice_row = (
+                    await connection.execute(select(ai_referent_comment_audio).where(
+                        ai_referent_comment_audio.c.letter_id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert voice_row["id"] == uuid5(
+                    NAMESPACE_URL, "ai-offline-audio:" + str(audio_operation.operation_id)
+                )
+                assert voice_row["created_at"] == audio_operation.occurred_at
+                assert await storage.get(voice_row["storage_key"]) == voice
+                invalid_voice = audio_operation.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 42,
+                    "payload": {**audio_operation.payload, "contentType": "audio/webm"},
+                })
+                with pytest.raises(HTTPException) as bad_voice:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=invalid_voice, enabled=True, storage=storage,
+                    )
+                assert bad_voice.value.status_code == 422
+                assert await connection.scalar(select(ai_referent_comment_audio.c.id).where(
+                    ai_referent_comment_audio.c.id == uuid5(
+                        NAMESPACE_URL,
+                        "ai-offline-audio:" + str(invalid_voice.operation_id),
+                    )
+                )) is None
             finally:
                 await transaction.rollback()
     finally:

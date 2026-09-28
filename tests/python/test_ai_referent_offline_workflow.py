@@ -246,6 +246,51 @@ def test_replay_stages_attachment_before_operation(tmp_path):
     assert workflow.read("123", letter["id"])["documentCheck"]["status"] == "passed"
 
 
+def test_replay_voice_preserves_revision_and_stages_blob(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    letter_id = str(uuid4())
+    voice = b"OggS" + b"\0" * 8 + b"OpusHead" + b"\0" * 8
+    digest = journal.put_blob(voice)
+    operation_id = str(uuid4())
+    journal.append_with_rights_evidence(
+        operation_id=operation_id, actor_id="789", letter_id=letter_id,
+        kind="letter.comment_audio", required_action="approve",
+        blob_sha256=digest,
+        payload={
+            "revision": 7, "durationMs": 1000, "byteSize": len(voice),
+            "contentType": "audio/ogg", "actorUserId": reviewer,
+            "actorName": "Согласующий",
+        },
+    )
+    epoch = journal.authority_state()["epoch"]
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+
+    class Client:
+        def __init__(self):
+            self.staged = None
+
+        def upload_offline_blob(self, requested_epoch, requested_digest, body):
+            self.staged = (requested_epoch, requested_digest, body)
+            return {
+                "id": str(uuid4()), "epoch": requested_epoch,
+                "sha256": requested_digest, "byteSize": len(body),
+            }
+
+        def replay_offline_operation(self, requested_epoch, operation):
+            assert self.staged == (epoch, digest, voice)
+            assert requested_epoch == epoch
+            assert operation["kind"] == "letter.comment_audio"
+            return {
+                "operationId": operation_id, "sequence": operation["sequence"],
+                "letterId": letter_id, "resultRevision": 7,
+                "acceptedAt": "2026-09-28T12:00:00Z",
+            }
+
+    client = Client()
+    assert replay_one_draft_operation(journal, client)
+    assert journal.pending_authorized() == []
+
+
 def test_idempotency_cannot_change_draft_payload(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     workflow = OfflineWorkflow(journal)

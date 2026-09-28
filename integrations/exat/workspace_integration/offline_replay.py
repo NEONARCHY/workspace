@@ -1,6 +1,6 @@
 """Small, retry-safe steps toward replaying autonomous AI Referent activity.
 
-Only draft creation and editing can be acknowledged. Do not resume Workspace writes until
+Only draft changes and voice comments can be acknowledged. Do not resume Workspace writes until
 every operation kind and the final reconciliation protocol are implemented.
 """
 
@@ -50,19 +50,25 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     operation = pending[0]
     if operation["kind"] not in {
         "letter.create", "letter.update", "letter.attachment", "letter.document_check",
+        "letter.comment_audio",
     }:
         raise ValueError("Следующая автономная операция ещё не поддерживается сервером.")
     expected_revision = 1
     if operation["kind"] != "letter.create":
-        prior_revision = operation["payload"].get("expectedRevision")
+        revision_field = (
+            "revision" if operation["kind"] == "letter.comment_audio" else "expectedRevision"
+        )
+        prior_revision = operation["payload"].get(revision_field)
         if type(prior_revision) is not int or prior_revision < 1:
             raise ValueError("Автономная операция не содержит ожидаемую версию письма.")
-        expected_revision = prior_revision + (operation["kind"] != "letter.document_check")
+        expected_revision = prior_revision + (
+            operation["kind"] not in {"letter.document_check", "letter.comment_audio"}
+        )
     epoch = str(UUID(str(operation["authority_epoch"])))
     state = journal.authority_state()
     if state is None or state["epoch"] != epoch or state["phase"] != "replay":
         raise ValueError("Воспроизведение разрешено только после подтверждения эпохи.")
-    if operation["kind"] in {"letter.attachment", "letter.document_check"}:
+    if operation["kind"] in {"letter.attachment", "letter.document_check", "letter.comment_audio"}:
         digest = operation["blob_sha256"]
         if not isinstance(digest, str):
             raise ValueError("Автономное вложение не содержит файл.")
