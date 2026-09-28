@@ -28,6 +28,10 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
+    expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Фокус" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Режим"), { target: { value: "pro" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
       target: { value: "Какие у меня задачи?" },
@@ -52,6 +56,32 @@ describe("YuksalishAssistant", () => {
     await screen.findByRole("alert");
     await waitFor(() => expect(input.value).toBe("Проверь задачу"));
     expect(document.querySelector(".assistant-message")).not.toBeInTheDocument();
+  });
+
+  it("lets a user reply to an earlier assistant message from its context menu", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "older", role: "assistant", model: "flash-lite", content: "Первый совет.",
+      createdAt: "2026-09-28T09:00:00Z",
+    }]);
+    vi.mocked(sendAssistantMessage).mockResolvedValue({
+      id: "answer", role: "assistant", model: "flash-lite", content: "Уточнение.",
+      createdAt: "2026-09-28T09:01:00Z",
+    });
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    const earlier = (await screen.findByText("Первый совет.")).closest("article")!;
+    fireEvent.contextMenu(earlier, { clientX: 120, clientY: 120 });
+    expect(screen.getByRole("menuitem", { name: "Ответить" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ответить" }));
+    expect(screen.getByText("Ответ на сообщение Yuksalish")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
+      target: { value: "А второй шаг?" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
+      "test-token", "flash-lite", "↳ Ответ на сообщение ассистента: Первый совет.\n\nА второй шаг?",
+    ));
+    await waitFor(() => expect(screen.queryByText("Ответ на сообщение Yuksalish")).not.toBeInTheDocument());
   });
 
   it("moves the sent text into the stream before the answer arrives", async () => {

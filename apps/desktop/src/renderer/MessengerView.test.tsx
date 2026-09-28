@@ -675,6 +675,17 @@ describe("Private messenger", () => {
     localStorage.removeItem("yuksalish:chat-background:aziza");
   });
 
+  it("replaces legacy patterned backgrounds with gradient choices", () => {
+    localStorage.setItem("yuksalish:chat-background:aziza", "paper");
+    renderMessenger();
+    expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "lagoon");
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
+    expect(screen.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
+    localStorage.removeItem("yuksalish:chat-background:aziza");
+  });
+
   it("supports read-only members and does not render deleted text or its actions", () => {
     const chat: ChatSummary = {
       ...initialChats[0]!,
@@ -746,6 +757,8 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("button", { name: "Реакции · 3" }));
     expect(screen.getByRole("dialog", { name: "Реакции на сообщение" })).toHaveTextContent("Малика Нурова");
     fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Реакции на сообщение" })).not.toBeInTheDocument());
+    expect(screen.queryByText(/0 реакций · список сотрудников недоступен/)).not.toBeInTheDocument();
     openMessageMenu("Важное решение по бюджету");
     const unpin = screen.getByRole("button", { name: "Открепить" });
     await waitFor(() => expect(unpin).toBeEnabled());

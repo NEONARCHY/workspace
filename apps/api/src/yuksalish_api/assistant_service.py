@@ -32,8 +32,8 @@ from .tables import (
 
 AssistantModel = Literal["pro", "flash", "flash-lite"]
 MODELS: dict[AssistantModel, str] = {
-    "pro": "gemini-3.1-pro-preview",
-    "flash": "gemini-3.8-flash",
+    "pro": "gemini-3.8-flash",
+    "flash": "gemini-3.5-flash",
     "flash-lite": "gemini-3.5-flash-lite",
 }
 

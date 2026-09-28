@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, Maximize2, Mic, Minimize2, Square, X } from "lucide-react";
+import { ArrowUp, Maximize2, Mic, Minimize2, Reply, Square, X } from "lucide-react";
 
 import type { AssistantMessage, AssistantModel } from "@yuksalish/contracts";
-import { BorderBeam } from "@/components/ui/border-beam";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
-  { value: "flash", label: "Flash", description: "Быстрые ответы на повседневные вопросы" },
-  { value: "pro", label: "Pro", description: "Сложный анализ и многошаговые задачи" },
-  { value: "flash-lite", label: "Flash Lite", description: "Короткие и простые запросы" },
+  { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
+  { value: "flash", label: "Рабочий", description: "Задачи, тексты и документы" },
+  { value: "pro", label: "Фокус", description: "Более сложные вопросы" },
 ];
 
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
+const REPLY_EXCERPT_LENGTH = 280;
 const quickPrompts = [
   "Что нового у меня за последнее время?",
   "Какие мои задачи требуют внимания?",
@@ -51,17 +51,21 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState<readonly AssistantMessage[]>([]);
-  const [model, setModel] = useState<AssistantModel>("flash");
+  const [model, setModel] = useState<AssistantModel>("flash-lite");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
   const [animatedReplyId, setAnimatedReplyId] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<AssistantMessage | null>(null);
+  const [replyMenu, setReplyMenu] = useState<{ message: AssistantMessage; x: number; y: number } | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
   const reducedMotion = useReducedMotion();
@@ -74,6 +78,7 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
     }
     setRecording(false);
     setOpen(false);
+    setReplyMenu(null);
     setAnimatedReplyId(null);
   }, []);
   const resizeInput = useCallback(() => {
@@ -105,18 +110,52 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
     if (open) inputRef.current?.focus();
   }, [open]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
-  }, [messages, busy, open]);
+  }, [messages, busy, open, recording, transcribing]);
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") {
+        if (replyMenu) setReplyMenu(null);
+        else close();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, open]);
+  }, [close, open, replyMenu]);
+
+  useEffect(() => {
+    if (!replyMenu) return;
+    replyMenuButtonRef.current?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".assistant-context-menu")) setReplyMenu(null);
+    };
+    window.addEventListener("pointerdown", dismiss);
+    return () => window.removeEventListener("pointerdown", dismiss);
+  }, [replyMenu]);
+
+  const openReplyMenu = (item: AssistantMessage, clientX: number, clientY: number) => {
+    const bounds = panelRef.current?.getBoundingClientRect();
+    if (!bounds) return;
+    setReplyMenu({ message: item,
+      x: Math.max(8, Math.min(clientX - bounds.left, bounds.width - 130)),
+      y: Math.max(8, Math.min(clientY - bounds.top, bounds.height - 48)) });
+  };
+
+  const onMessageContextMenu = (event: ReactMouseEvent<HTMLElement>, item: AssistantMessage) => {
+    if (item.role !== "assistant") return;
+    event.preventDefault();
+    openReplyMenu(item, event.clientX, event.clientY);
+  };
+
+  const onMessageKeyDown = (event: ReactKeyboardEvent<HTMLElement>, item: AssistantMessage) => {
+    if (item.role !== "assistant" || !(event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    openReplyMenu(item, bounds.left + 24, bounds.bottom - 8);
+  };
 
   useEffect(() => () => {
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
@@ -170,18 +209,25 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
     event.preventDefault();
     const value = draft.trim();
     if (!value || busy) return;
+    const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
+    const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${value}` : value;
+    if (content.length > 4000) {
+      setError("Сократите ответ: вместе с цитатой он должен быть не длиннее 4000 символов.");
+      return;
+    }
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
-      id: temporaryId, role: "user", model, content: value,
+      id: temporaryId, role: "user", model, content,
       createdAt: new Date().toISOString(),
     }]);
     setDraft("");
     setBusy(true);
     setError("");
     try {
-      const response = await sendAssistantMessage(token, model, value);
+      const response = await sendAssistantMessage(token, model, content);
       setMessages((current) => [...current, response]);
       setAnimatedReplyId(response.id);
+      setReplyingTo(null);
     } catch (failure) {
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
       setDraft((current) => current ? `${value}\n${current}` : value);
@@ -207,13 +253,13 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
     </button>}
     <AnimatePresence onExitComplete={() => launcherRef.current?.focus()}>
       {open && <motion.section
-        initial={reducedMotion ? false : { width: 72, height: 72, right: 12, bottom: 14, borderRadius: 36, opacity: 0.9 }}
-        animate={{ width: panelWidth, height: panelHeight, right: edge, bottom: edge,
-          borderRadius: expanded ? 22 : 26, opacity: 1 }}
-        exit={reducedMotion ? { opacity: 0 } : { width: 72, height: 72, right: 12, bottom: 14,
-          borderRadius: 36, opacity: 0.9 }}
-        transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 330, damping: 34, mass: 1 }}
-        onAnimationComplete={resizeInput}
+        initial={reducedMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
+        style={{ width: panelWidth, height: panelHeight, right: edge, bottom: edge,
+          borderRadius: expanded ? 22 : 26 }}
+        ref={panelRef}
         className={`assistant-panel ${expanded ? "is-expanded" : ""}`}
         role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
         <motion.div className="assistant-panel-content"
@@ -232,7 +278,7 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
             onClick={close}><X size={19} /></button>
         </header>
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
-          ref={streamRef} aria-live="polite">
+        ref={streamRef} aria-live="polite">
           <div className="assistant-stream-inner">
             {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
               <GradientOrb />
@@ -245,21 +291,34 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
               <small>Рабочие данные — только в пределах ваших прав. Публичные материалы — с указанием источника.</small>
             </div>}
             {!loaded && !error && <div className="assistant-loading"><ThinkingOrb state="searching" /> Загружаю историю…</div>}
-            {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}>
-              <span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
+            {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}
+              tabIndex={item.role === "assistant" ? 0 : undefined}
+              onContextMenu={(event) => onMessageContextMenu(event, item)}
+              onKeyDown={(event) => onMessageKeyDown(event, item)}>
+              <div className="assistant-message-meta"><span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
+                <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
               {item.role === "assistant" ? <GeneratedReply content={item.content}
-                animate={item.id === animatedReplyId} /> : <p>{item.content}</p>}
+                animate={item.id === animatedReplyId} /> : item.content.startsWith("↳ Ответ на сообщение ассистента: ") && item.content.includes("\n\n")
+                ? <p><span className="assistant-message-quote">{item.content.split("\n\n", 1)[0]}</span>{item.content.slice(item.content.indexOf("\n\n") + 2)}</p>
+                : <p>{item.content}</p>}
             </article>)}
             {busy && <div className="assistant-working"><ThinkingOrb state={thinkingState} />
               <span>{thinkingState === "searching" ? "Ищу источники…"
                 : thinkingState === "solving" ? "Разбираюсь в деталях…" : "Готовлю ответ…"}</span>
+            </div>}
+            {(recording || transcribing) && <div className="assistant-working assistant-voice-status" role="status">
+              <ThinkingOrb state="listening" size={20} />
+              <span>{recording ? "Слушаю… нажмите квадрат, чтобы закончить" : "Перевожу речь в текст…"}</span>
             </div>}
           </div>
         </div>
         <div className="assistant-composer-area">
           <div className="assistant-composer-inner">
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
-              <BorderBeam active={Boolean(draft.trim()) && !busy} />
+              {replyingTo && <div className="assistant-reply-target"><Reply size={16} aria-hidden="true" />
+                <span><strong>Ответ на сообщение Yuksalish</strong><small>{replyingTo.content.replace(/\s+/g, " ").slice(0, REPLY_EXCERPT_LENGTH)}</small></span>
+                <button type="button" aria-label="Отменить ответ" onClick={() => setReplyingTo(null)}><X size={16} /></button>
+              </div>}
               <textarea ref={inputRef} aria-label="Сообщение ассистенту" placeholder="Спросите о работе или движении «Юксалиш»…"
                 value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -291,15 +350,16 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                 </div>
               </div>
             </form>
-            {(recording || transcribing) && <div className="assistant-voice-status" role="status">
-              <ThinkingOrb state="listening" size={20} />
-              {recording ? "Слушаю… нажмите квадрат, чтобы закончить" : "Перевожу речь в текст…"}
-            </div>}
             {error && <p className="assistant-error" role="alert">{error}</p>}
             <small className="assistant-privacy">Проверяйте важные сведения и даты публикаций.</small>
           </div>
         </div>
         </motion.div>
+        {replyMenu && <div className="assistant-context-menu" role="menu" style={{ left: replyMenu.x, top: replyMenu.y }}>
+          <button ref={replyMenuButtonRef} type="button" role="menuitem" onClick={() => {
+            setReplyingTo(replyMenu.message); setReplyMenu(null); inputRef.current?.focus();
+          }}><Reply size={16} aria-hidden="true" /> Ответить</button>
+        </div>}
       </motion.section>}
     </AnimatePresence>
   </div>;

@@ -29,7 +29,7 @@ Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 
 class AskRequest(BaseModel):
-    model: AssistantModel = "flash"
+    model: AssistantModel = "flash-lite"
     message: str = Field(min_length=1, max_length=4000)
 
     @field_validator("message")

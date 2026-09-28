@@ -820,12 +820,12 @@ function Conversation({
         <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
         <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
       </MessageContextMenu> : null}
-      <Dialog open={Boolean(reactionDialog)} onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
+      {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
         <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
           <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>
           <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
         </DialogContent></DialogBody>
-      </DialogSurface></Dialog>
+      </DialogSurface></Dialog>}
       {error && (
         <div className="messenger-error" role="alert">
           {error}
