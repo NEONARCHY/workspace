@@ -392,6 +392,8 @@ export function EmployeeProfileDialog({
   const profileContentRef = useRef<HTMLDivElement>(null);
   const profileScrollRef = useRef(0);
   const guideTriggerRef = useRef<HTMLButtonElement>(null);
+  const rewardTriggerRef = useRef<HTMLButtonElement>(null);
+  const rewardWasOpenRef = useRef(false);
   const returnRewardIconRef = useRef<string | null>(null);
   const returnFocusRef = useRef<"guide" | "history" | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -400,6 +402,19 @@ export function EmployeeProfileDialog({
   const [rewardContext, setRewardContext] = useState("");
   const [selectedRewardIcon, setSelectedRewardIcon] = useState<string>();
   const [rewardBusy, setRewardBusy] = useState(false);
+
+  useEffect(() => {
+    if (rewardOpen) {
+      rewardWasOpenRef.current = true;
+      return;
+    }
+    if (!rewardWasOpenRef.current || !open) return;
+    rewardWasOpenRef.current = false;
+    const timer = window.setTimeout(() => {
+      rewardTriggerRef.current?.focus({ preventScroll: true });
+    }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 260);
+    return () => clearTimeout(timer);
+  }, [open, rewardOpen]);
   const [efficiencyState, setEfficiencyState] = useState<{
     readonly userId: string;
     readonly token: string;
@@ -617,7 +632,7 @@ export function EmployeeProfileDialog({
               </section>
 
               <section ref={rewardsRef} id="employee-profile-rewards" className="employee-rewards-section">
-                <header><div><h3>Награды от коллег</h3><p>Личное признание важнее автоматического счётчика</p></div><div className="reward-heading-actions"><Button ref={guideTriggerRef} appearance="subtle" icon={<BookQuestionMark24Regular />} onClick={openGuide}>Как это работает</Button>{profile.canIssueReward ? <Button appearance="primary" icon={<Reward24Regular />} disabled={rewardBusy} onClick={() => { setErrorState(undefined); setRewardOpen(true); }}>Выдать награду</Button> : null}</div></header>
+                <header><div><h3>Награды от коллег</h3><p>Личное признание важнее автоматического счётчика</p></div><div className="reward-heading-actions"><Button ref={guideTriggerRef} appearance="subtle" icon={<BookQuestionMark24Regular />} onClick={openGuide}>Как это работает</Button>{profile.canIssueReward ? <Button ref={rewardTriggerRef} appearance="primary" icon={<Reward24Regular />} disabled={rewardBusy} onClick={() => { setErrorState(undefined); setRewardOpen(true); }}>Выдать награду</Button> : null}</div></header>
                 <div className="employee-reward-list">
                   {rewardGroups.length ? rewardGroups.map((group) => <RewardCard key={group.iconKey} group={group} people={people} token={token} onOpenIssuer={openIssuerProfile} onOpenHistory={() => openRewardHistory(group.iconKey)} />) : <p className="recognition-empty">Наград пока нет. Коллеги смогут отметить вклад сотрудника здесь.</p>}
                 </div>
