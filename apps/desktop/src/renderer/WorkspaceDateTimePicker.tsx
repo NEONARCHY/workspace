@@ -122,13 +122,17 @@ export function WorkspaceDateTimePicker({
   const handleWheelPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     wheelDrag.current = { pointerId: event.pointerId, startY: event.clientY, lastY: event.clientY, moved: false };
+    event.currentTarget.classList.add("is-dragging");
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const handleWheelPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const drag = wheelDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
-    if (drag.moved) event.currentTarget.scrollTop -= event.clientY - drag.lastY;
+    if (drag.moved) {
+      event.preventDefault();
+      event.currentTarget.scrollTop -= event.clientY - drag.lastY;
+    }
     drag.lastY = event.clientY;
   };
   const handleWheelPointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -136,6 +140,7 @@ export function WorkspaceDateTimePicker({
     const drag = wheelDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     wheelDrag.current = null;
+    event.currentTarget.classList.remove("is-dragging");
     if (!drag.moved) return;
     suppressWheelClick.current = true;
     window.setTimeout(() => { suppressWheelClick.current = false; }, 0);
@@ -149,7 +154,7 @@ export function WorkspaceDateTimePicker({
       updateTime(clockMode === 24 ? picked : (picked % 12) + (period === "PM" ? 12 : 0), minute);
     }
   };
-  const handleWheelPointerCancel = () => { wheelDrag.current = null; };
+  const handleWheelPointerCancel = (event: PointerEvent<HTMLDivElement>) => { wheelDrag.current = null; event.currentTarget.classList.remove("is-dragging"); };
   const handleWheelClickCapture = (event: MouseEvent<HTMLDivElement>) => {
     if (!suppressWheelClick.current) return;
     event.preventDefault();
