@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
-  CalendarLtr24Regular, Clock24Regular, DocumentBulletList24Regular,
-  DocumentPdf24Regular, History24Regular,
+  CalendarClock24Regular, CalendarLtr24Regular, Clock24Regular,
+  DataBarVertical24Regular, DocumentBulletList24Regular, DocumentPdf24Regular,
+  Globe24Regular, History24Regular, PeopleTeam24Regular,
 } from "@fluentui/react-icons";
 import type { HisobotProfile, HisobotReport } from "@yuksalish/contracts";
 
 import {
   loadHisobotHistory, loadHisobotProfile, loadHisobotReports, saveHisobotReport,
 } from "./workspace-api";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const dateLabel = (value: string) => value.split("-").reverse().join(".");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить AI Hisobot.";
@@ -112,16 +114,20 @@ export function AIHisobotView({ token }: { readonly token: string }) {
   };
 
   return <section className="workspace-view ai-hisobot-view" aria-label="AI Hisobot">
-    <header className="ai-hisobot-header">
-      <div className="ai-hisobot-header-copy">
+    <header className="ai-hisobot-header ws-illustrated-header">
+      <div className="ai-hisobot-header-copy ws-illustrated-header-copy">
         <span className="view-kicker">Единая отчётность</span>
         <h1>AI Hisobot</h1>
         <p>Ежедневные отчёты, история и региональная сводка — в одном месте.</p>
       </div>
-      <div className="ai-hisobot-header-art" aria-hidden="true">
+      <div className="ai-hisobot-header-art ws-illustrated-header-art" aria-hidden="true">
         <DocumentBulletList24Regular className="hisobot-art-main" />
         <DocumentPdf24Regular className="hisobot-art-pdf" />
         <History24Regular className="hisobot-art-history" />
+        <DataBarVertical24Regular className="hisobot-art-chart" />
+        <PeopleTeam24Regular className="hisobot-art-team" />
+        <Globe24Regular className="hisobot-art-region" />
+        <CalendarClock24Regular className="hisobot-art-calendar" />
       </div>
     </header>
 
@@ -163,8 +169,8 @@ export function AIHisobotView({ token }: { readonly token: string }) {
       {tab === "team" && profile.managementAccess ? <div className="hisobot-list-page">
         <div className="hisobot-list-heading"><h2>Отчёты сотрудников</h2><span>{visibleTeam.length} записей</span></div>
         <div className="hisobot-filters">
-          <label>С&nbsp;<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label>
-          <label>По&nbsp;<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label>
+          <label>С&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
+          <label>По&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
           <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></select>
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>

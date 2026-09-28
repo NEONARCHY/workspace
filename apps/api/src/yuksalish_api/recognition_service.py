@@ -2,8 +2,8 @@ from __future__ import annotations
 
 # ruff: noqa: RUF001 - Russian user-facing copy intentionally uses Cyrillic.
 import calendar
-from datetime import UTC, date, datetime, timedelta
-from typing import Any, Literal
+from datetime import UTC, date, datetime
+from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -13,15 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
 from .hr_service import service_parts
-from .position_policy import is_executive_leader, is_human_resources_position
 from .recognition_schemas import (
     EmployeeAchievementResponse,
     EmployeeRecognitionProfileResponse,
+    EmployeeRewardCatalogItem,
     EmployeeRewardCreate,
     EmployeeRewardResponse,
     PublicEmployeeResponse,
     RecognitionSettingsResponse,
     RecognitionSettingsWrite,
+    RewardIcon,
 )
 from .tables import (
     ai_referent_letters,
@@ -37,7 +38,6 @@ from .tables import (
     feed_posts,
     feed_reactions,
     hr_employee_profiles,
-    hr_settings,
     message_reactions,
     messages,
     recognition_settings,
@@ -52,9 +52,17 @@ from .tables import (
 )
 
 TZ = ZoneInfo("Asia/Tashkent")
-RewardIcon = Literal[
-    "appreciation", "leadership", "rescue", "mentorship", "innovation", "reliability"
-]
+REWARD_CATALOG: dict[RewardIcon, tuple[str, str]] = {
+    "appreciation": ("Благодарность", "За помощь и человеческую поддержку."),
+    "leadership": ("Лидерство", "За ясное направление и ответственность."),
+    "rescue": ("Спасение срока", "За решающий вклад в критический момент."),
+    "mentorship": ("Наставничество", "За развитие и поддержку коллег."),
+    "innovation": ("Новаторство", "За идею, улучшившую рабочий процесс."),
+    "reliability": ("Надёжность", "За устойчивый результат, на который можно опереться."),
+    "teamwork": ("Командная работа", "За объединение коллег ради общего результата."),
+    "initiative": ("Инициатива", "За полезное дело, начатое без отдельного поручения."),
+    "mastery": ("Мастерство", "За высокий профессионализм и качество работы."),
+}
 
 
 class RecognitionError(ValueError):
@@ -111,27 +119,6 @@ async def _settings(connection: AsyncConnection) -> RecognitionSettingsResponse:
         ),
         updated_at=row["updated_at"] if row is not None else None,
     )
-
-
-async def _can_issue_reward(
-    connection: AsyncConnection, actor: AuthenticatedUser
-) -> bool:
-    if actor.role in {"manager", "admin", "superadmin"}:
-        return True
-    if is_executive_leader(actor.job_title) or is_human_resources_position(actor.job_title):
-        return True
-    row = (
-        (
-            await connection.execute(
-                select(hr_settings.c.hr_user_id, hr_settings.c.chair_user_id).where(
-                    hr_settings.c.id == 1
-                )
-            )
-        )
-        .mappings()
-        .first()
-    )
-    return bool(row and actor.id in {row["hr_user_id"], row["chair_user_id"]})
 
 
 def _longest_month_streak(periods: list[str]) -> int:
@@ -396,7 +383,7 @@ def _achievements(
         ),
         (
             "meetings", "Организатор встреч",
-            "Созданные Zoom-встречи без технических ошибок", "meetings", "camera",
+            "Созданные Zoom-встречи", "meetings", "camera",
             process_levels,
         ),
         (
@@ -430,12 +417,12 @@ def _achievements(
         (
             "efficiency_months", "Стабильная эффективность",
             "Месяцы с результатом от 90% при выборке от пяти задач", "efficiency", "pulse",
-            ((1, "gold"), (3, "prism")),
+            ((1, "bronze"), (3, "silver"), (6, "gold"), (12, "prism")),
         ),
         (
             "efficiency_streak", "Серия эффективности",
             "Последовательные месяцы с результатом от 90%", "efficiency", "orbit",
-            ((2, "gold"), (4, "prism")),
+            ((2, "bronze"), (3, "silver"), (6, "gold"), (12, "prism")),
         ),
     )
     for metric, title, description, category, icon, levels in ladders:
@@ -562,6 +549,7 @@ async def load_profile(
                 icon_key=reward["icon_key"],
                 title=reward["title"],
                 description=reward["description"],
+                context_note=reward["context_note"],
                 recipient_user_id=str(reward["recipient_user_id"]),
                 issuer_user_id=str(reward["issuer_user_id"]),
                 issuer_name=reward["issuer_name"],
@@ -569,7 +557,11 @@ async def load_profile(
             )
             for reward in reward_rows
         ],
-        can_issue_reward=await _can_issue_reward(connection, actor) and actor.id != user_id,
+        reward_catalog=[
+            EmployeeRewardCatalogItem(icon_key=icon, title=title, description=description)
+            for icon, (title, description) in REWARD_CATALOG.items()
+        ],
+        can_issue_reward=actor.id != user_id and row["status"] == "active",
         can_manage_settings=may_manage,
     )
 
@@ -630,10 +622,6 @@ async def issue_reward(
     user_id: UUID,
     payload: EmployeeRewardCreate,
 ) -> EmployeeRewardResponse:
-    if not await _can_issue_reward(connection, actor):
-        raise RecognitionError(
-            403, "Выдавать награды могут руководители, кадровики и администраторы"
-        )
     if actor.id == user_id:
         raise RecognitionError(422, "Нельзя выдать награду самому себе")
     recipient = (
@@ -649,6 +637,7 @@ async def issue_reward(
     )
     if recipient is None:
         raise RecognitionError(404, "Активный сотрудник не найден")
+    await connection.execute(select(users.c.id).where(users.c.id == actor.id).with_for_update())
     now = datetime.now(UTC)
     month_start = now.astimezone(TZ).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     issued_this_month = int(
@@ -662,19 +651,7 @@ async def issue_reward(
     )
     if issued_this_month >= 12:
         raise RecognitionError(429, "Лимит — 12 наград от одного автора за календарный месяц")
-    duplicate = await connection.scalar(
-        select(employee_rewards.c.id).where(
-            employee_rewards.c.issuer_user_id == actor.id,
-            employee_rewards.c.recipient_user_id == user_id,
-            employee_rewards.c.icon_key == payload.icon_key,
-            func.lower(employee_rewards.c.title) == payload.title.casefold(),
-            employee_rewards.c.created_at >= now - timedelta(days=30),
-        ).limit(1)
-    )
-    if duplicate is not None:
-        raise RecognitionError(
-            409, "Такую же награду этому сотруднику можно повторить через 30 дней"
-        )
+    title, description = REWARD_CATALOG[payload.icon_key]
     reward_id = uuid4()
     await connection.execute(
         insert(employee_rewards).values(
@@ -682,8 +659,9 @@ async def issue_reward(
             recipient_user_id=user_id,
             issuer_user_id=actor.id,
             icon_key=payload.icon_key,
-            title=payload.title,
-            description=payload.description,
+            title=title,
+            description=description,
+            context_note=payload.context_note,
             created_at=now,
         )
     )
@@ -697,7 +675,8 @@ async def issue_reward(
             details={
                 "rewardId": str(reward_id),
                 "iconKey": payload.icon_key,
-                "title": payload.title,
+                "title": title,
+                "contextNote": payload.context_note,
             },
             created_at=now,
         )
@@ -705,8 +684,9 @@ async def issue_reward(
     return EmployeeRewardResponse(
         id=str(reward_id),
         icon_key=payload.icon_key,
-        title=payload.title,
-        description=payload.description,
+        title=title,
+        description=description,
+        context_note=payload.context_note,
         recipient_user_id=str(user_id),
         issuer_user_id=str(actor.id),
         issuer_name=actor.full_name,

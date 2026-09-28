@@ -30,8 +30,11 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "bandit==1.9.4",
+  "beautifulsoup4==4.14.3",
+  "fonttools==4.66.0",
   "mypy==2.3.1",
   "pip-audit==2.10.1",
+  "pypdf==6.19.0",
   "pytest==9.1.1",
   "pytest-cov==7.1.0",
   "ruff==0.16.5",
@@ -56,6 +59,7 @@ where = [
 
 [tool.setuptools.package-data]
 hisobot_import = ["spec/*.json"]
+yuksalish_api = ["organization_knowledge.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]

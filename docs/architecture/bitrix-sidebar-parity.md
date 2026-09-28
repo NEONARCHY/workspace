@@ -8,25 +8,24 @@
 ## Safety boundary
 
 - The webhook and `staff.json` stay only in the local ignored folder `ВРЕМЕННО/`.
-- The webhook value, employee names, aliases, message bodies, task text, CRM records and calendar events are not copied into Git or this document.
+- The webhook value, employee names, aliases, message bodies, task text, business records and calendar events are not copied into Git or this document.
 - Inspection used metadata, counts, field definitions, stage definitions and the job-title field only.
 - Bitrix is a behavioral reference. Workspace keeps its own name, security model and database; it is not a pixel-for-pixel copy of the Bitrix product.
 
 ## Confirmed left navigation
 
-The order is fixed from the supplied screenshot and is already represented in the Workspace shell.
+The original reference order came from the supplied screenshot. The unused first placeholder has since been removed from Workspace navigation by the product owner's decision.
 
 | Order | Tab | Confirmed Bitrix baseline | Workspace package |
 |---:|---|---|---|
-| 1 | CRM | Standard leads, deals, contacts and companies are all empty | No active package; navigation placeholder only |
-| 2 | Задачи | 181 tasks; task API is available | BP-5 |
-| 3 | Заявки на оплату | Smart process 1038, category 15; 71 items, 13 stages | BP-6 |
-| 4 | Лента | Exact structure is not readable with the current webhook scope | BP-8 |
-| 5 | Список проектов | Smart process 1042, category 21; 6 items, 5 stages | BP-7 |
-| 6 | Согласование поездок | Smart process 1038, category 17; 1 item, 5 stages | BP-7 |
-| 7 | Мессенджер | IM API and counters are available; message content was not read | BP-8 |
-| 8 | Календарь | One calendar section is available to the webhook owner | BP-8 |
-| 9 | Сотрудники | 41 active Bitrix users; 22 of 24 supplied IDs matched | BP-4 |
+| 1 | Задачи | 181 tasks; task API is available | BP-5 |
+| 2 | Заявки на оплату | Smart process 1038, category 15; 71 items, 13 stages | BP-6 |
+| 3 | Лента | Exact structure is not readable with the current webhook scope | BP-8 |
+| 4 | Список проектов | Smart process 1042, category 21; 6 items, 5 stages | BP-7 |
+| 5 | Согласование поездок | Smart process 1038, category 17; 1 item, 5 stages | BP-7 |
+| 6 | Мессенджер | IM API and counters are available; message content was not read | BP-8 |
+| 7 | Календарь | One calendar section is available to the webhook owner | BP-8 |
+| 8 | Сотрудники | 41 active Bitrix users; 22 of 24 supplied IDs matched | BP-4 |
 
 The shell may show a tab before its package is complete, but it must label the unfinished state honestly. A tab is only considered complete when its full acceptance scenario works against PostgreSQL and passes authorization tests.
 
@@ -152,7 +151,7 @@ The two unresolved IDs are not guessed. Before a production employee import, the
 | BP-6 | Payment request form, all 13 stages, decisions, correction loop, files, editable graph and workflow-driven Kanban delivered through alpha 0.10.0 | BP-4, then task link from BP-5 | Golden requests complete the same routes and permissions; a board drop uses the protected action API rather than changing stage directly |
 | BP-7 | Project list and trip approvals; functional slice delivered in alpha 0.8.0 | BP-4, BP-6 workflow rules | Project lifecycle and trip return/approval scenarios pass; exact trip position IDs remain to verify |
 | BP-8 | Functional Messenger, activity feed and calendar delivered in alpha 0.9.0; exact feed parity remains unclaimed | BP-4; expanded read-only Bitrix scope for exact feed characterisation | PostgreSQL CRUD, authorization, unread receipts, desktop interactions and two-client realtime |
-| BP-9 | Skipped by product-owner decision; CRM remains a navigation placeholder | None | Not part of the current roadmap or first release |
+| BP-9 | Skipped by product-owner decision; the unused navigation placeholder was removed | None | Not part of the current roadmap or first release |
 
 Hisobot and the other legacy bots remain separate migration packages and do not block this navigation program.
 

@@ -21,6 +21,7 @@ import type {
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 const stages: readonly ProjectStage[] = ["start", "preparation", "approval", "success", "failure"];
 const stageLabels: Readonly<Record<ProjectStage, string>> = {
@@ -419,8 +420,8 @@ export function ProjectsView({ projects, people, currentUser, onCreate, onUpdate
               </RecordSection>
               <RecordSection title="Сроки и ответственность"><div className="record-field-grid">
                 <label className="record-field-wide">Руководитель<WorkspaceSelect aria-label="Руководитель проекта" value={form.managerUserId} onChange={(event) => setForm({ ...form, managerUserId: event.target.value })}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></label>
-                <label>Начало<Input aria-label="Начало проекта" type="date" value={form.startDate} onChange={(_, data) => setForm({ ...form, startDate: data.value })} /></label>
-                <label>Окончание<Input aria-label="Окончание проекта" type="date" value={form.endDate} onChange={(_, data) => setForm({ ...form, endDate: data.value })} /></label>
+                <label>Начало<WorkspaceDateTimePicker mode="date" ariaLabel="Начало проекта" value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>
+                <label>Окончание<WorkspaceDateTimePicker mode="date" ariaLabel="Окончание проекта" value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>
               </div></RecordSection>
               <RecordSection title="Бюджет" description="Все суммы — в валюте проекта, целыми единицами."><div className="record-field-grid">
                 <label className="record-field-wide">Валюта проекта<WorkspaceSelect aria-label="Валюта проекта" value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value as ProjectFormState["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></WorkspaceSelect></label>

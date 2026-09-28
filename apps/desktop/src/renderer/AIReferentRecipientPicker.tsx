@@ -94,7 +94,6 @@ export function AIReferentRecipientPicker({
             ariaLabel="Поиск адресата"
             autoComplete="off"
             collapsedWidth={290}
-            expandedWidth={420}
           />
           <div className="ai-referent-picker-categories" aria-label="Категории организаций">
             {categories.map(([key, label]) => (

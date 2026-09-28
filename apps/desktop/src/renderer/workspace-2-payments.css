@@ -187,8 +187,8 @@
   box-shadow: 0 9px 24px -17px rgb(31 62 72 / 36%), 0 1px 2px rgb(31 62 72 / 4%);
   transition: border-color 170ms var(--ws-ease), box-shadow 190ms var(--ws-ease), transform 180ms var(--ws-ease), opacity 160ms var(--ws-ease);
 }
-.approvals-view .approval-board-card:hover,
-.approvals-view .approval-board-card:focus-within {
+.approvals-view .approval-board-card:not(.is-hover-suppressed):hover,
+.approvals-view .approval-board-card:not(.is-hover-suppressed):focus-within {
   border-color: rgb(121 174 175 / 54%);
   box-shadow: 0 15px 30px -19px rgb(31 62 72 / 42%), 0 2px 5px rgb(31 62 72 / 6%);
   transform: translateY(-2px);
@@ -241,8 +241,8 @@
   transform: translateY(2px);
   transition: opacity 150ms var(--ws-ease), transform 180ms var(--ws-ease);
 }
-.approvals-view .approval-board-card:hover .approval-card-quick-action,
-.approvals-view .approval-board-card:focus-within .approval-card-quick-action { opacity: 1; transform: translateY(0); }
+.approvals-view .approval-board-card:not(.is-hover-suppressed):hover .approval-card-quick-action,
+.approvals-view .approval-board-card:not(.is-hover-suppressed):focus-within .approval-card-quick-action { opacity: 1; transform: translateY(0); }
 .approvals-view .approval-card-statusline {
   display: flex;
   min-width: 0;
@@ -280,7 +280,7 @@
 .approvals-view .approval-card-context,
 .approvals-view .approval-card-meta { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 9px; }
 .approvals-view .approval-card-peopleline { margin-top: 12px; }
-.approvals-view .approval-card-owner { display: flex; min-width: 0; align-items: center; gap: 7px; color: #465f6f; font-size: 11px; }
+.approvals-view .approval-card-owner { display: flex; min-width: 0; align-items: center; gap: 10px; color: #465f6f; font-size: 11px; }
 .approvals-view .approval-card-owner > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .approvals-view .approval-card-deadline {
   display: inline-flex;
@@ -357,7 +357,7 @@
 .approvals-view .approval-timeline-event :is(span,time), .approvals-view .approval-version-list span { color: #536b78; font-size: 12px; }
 .approvals-view .approval-version-list { padding: 18px; }
 .approvals-view .approval-action-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border: 1px solid #efc6c8; border-radius: 12px; color: #84333e; background: #fff3f2; font-size: 12px; line-height: 1.4; }
-.approvals-view .approval-action-error > button { flex: none; width: 27px; height: 27px; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
+.approvals-view .approval-action-error > button { display: inline-grid; place-items: center; flex: none; width: 27px; height: 27px; padding: 0; line-height: 1; border: 0; border-radius: 8px; color: inherit; background: transparent; font-size: 19px; cursor: pointer; }
 .approvals-view .approval-detail-process > .approval-action-error { margin-bottom: 12px; }
 
 /* Payment request inspector: one contextual surface, one scroll container. */

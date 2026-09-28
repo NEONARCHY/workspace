@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-import { compareReleaseVersions } from "./src/renderer/release-versions.mts";
+import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
 
 const tabsterEsmPath = fileURLToPath(
   new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
@@ -16,36 +16,69 @@ const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", imp
   version: string;
   title: string;
 };
-type ReleaseNoteEntry = { id: string; items: string[] };
-type ReleaseHistoryEntry = { version: string; title: string; items: string[] };
+type ReleaseNoteEntry = { id: string; title?: string; items: string[]; fileName: string };
+type ReleaseHistoryEntry = { version: string; date: string; title: string; items: string[] };
+
+// Notes are retained after publication, so numbering from this fixed boundary
+// gives the web build and a future EXE the same retrospective update history.
+const lastGroupedVersion = "1.0.17";
+
+function noteDate(fileName: string): string {
+  return `${fileName.slice(0, 4)}-${fileName.slice(4, 6)}-${fileName.slice(6, 8)}`;
+}
 
 function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
   if (!existsSync(directory)) return [];
   return readdirSync(directory)
   .filter((name) => name.endsWith(".json"))
   .sort()
-    .map((name) => JSON.parse(readFileSync(new URL(name, directory), "utf8")) as ReleaseNoteEntry);
+    .map((name) => ({
+      ...JSON.parse(readFileSync(new URL(name, directory), "utf8")) as Omit<ReleaseNoteEntry, "fileName">,
+      fileName: name,
+    }));
 }
 
 const releasedRoot = new URL("./release-notes/released/", import.meta.url);
-const releaseHistory: ReleaseHistoryEntry[] = existsSync(releasedRoot)
+const releasedVersions = existsSync(releasedRoot)
   ? readdirSync(releasedRoot)
     .filter((name) => statSync(new URL(name, releasedRoot)).isDirectory())
-    .sort((left, right) => compareReleaseVersions(right, left))
-    .map((version) => ({
-      version,
-      title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,
-      items: readNoteEntries(new URL(`${version}/`, releasedRoot)).flatMap((entry) => entry.items),
-    })).filter((entry) => entry.items.length > 0)
+    .sort(compareReleaseVersions)
   : [];
-const pendingItems = readNoteEntries(new URL("./release-notes/pending/", import.meta.url))
-  .flatMap((entry) => entry.items);
+const releaseHistory: ReleaseHistoryEntry[] = releasedVersions
+    .filter((version) => compareReleaseVersions(version, lastGroupedVersion) <= 0)
+    .map((version) => {
+      const notes = readNoteEntries(new URL(`${version}/`, releasedRoot));
+      return {
+        version,
+        date: noteDate(notes.at(-1)?.fileName ?? ""),
+        title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,
+        items: notes.flatMap((entry) => entry.items),
+      };
+    }).filter((entry) => entry.items.length > 0);
+const pendingEntries = readNoteEntries(new URL("./release-notes/pending/", import.meta.url));
+const pendingItems = pendingEntries.flatMap((entry) => entry.items);
+const numberedNotes = [
+  ...releasedVersions.filter((version) => compareReleaseVersions(version, lastGroupedVersion) > 0)
+    .flatMap((version) => readNoteEntries(new URL(`${version}/`, releasedRoot))),
+  ...pendingEntries,
+];
+const versionedNotes = numberUpdateNotes(numberedNotes, lastGroupedVersion);
+const updateEntries = versionedNotes.map((entry) => ({
+  id: entry.id, date: noteDate(entry.fileName), version: entry.version, items: entry.items,
+}));
+const currentWebVersion = updateEntries[0]?.version ?? packageJson.version;
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
-const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
+// The upload endpoint accepts at most 50 summary lines. The complete history
+// stays in the versioned entries even when there are more pending changes.
+const summarySource = pendingItems.length > 0 ? pendingItems
+  : releasedCurrentItems.length > 0 ? releasedCurrentItems
+    : [...versionedNotes].reverse().flatMap((entry) => entry.items);
+const releaseNoteItems = summarySource.slice(-50);
+const webUpdateItems = updateEntries[0]?.items ?? releaseNoteItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
-  || releaseNoteItems.length === 0 || releaseNoteItems.length > 150
+  || releaseNoteItems.length === 0
   || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
-  throw new Error("pending release notes must match package version and contain 1–150 concise user-facing changes");
+  throw new Error("release notes must match package version and contain concise user-facing changes");
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
@@ -56,12 +89,14 @@ export default defineConfig(({ mode }) => ({
   base: mode === "web" ? "/" : "./",
   define: {
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
-    __YUKSALISH_APP_VERSION__: JSON.stringify(packageJson.version),
+    __YUKSALISH_APP_VERSION__: JSON.stringify(mode === "web" ? currentWebVersion : packageJson.version),
     __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
+    __YUKSALISH_UPDATE_ENTRIES__: JSON.stringify(updateEntries),
     __YUKSALISH_RELEASE_HISTORY__: JSON.stringify(releaseHistory),
   },
   resolve: {
     alias: {
+      "@": fileURLToPath(new URL("./src/renderer", import.meta.url)),
       tabster: tabsterEsmPath,
     },
   },
@@ -80,12 +115,20 @@ export default defineConfig(({ mode }) => ({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_DEV_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   ssr: {
     noExternal: [/@fluentui/, /tabster/, /keyborg/],
   },
   test: {
     environment: "jsdom",
+    maxWorkers: 4,
     // Multi-step Fluent UI scenarios can exceed 5s on Windows while packaging runs.
     testTimeout: 10000,
     setupFiles: "./src/renderer/test-setup.ts",
@@ -105,12 +148,14 @@ export default defineConfig(({ mode }) => ({
           fileName: "version.json",
           source: JSON.stringify({
             buildId,
-            version: packageJson.version,
+            version: currentWebVersion,
             builtAt,
             title: releaseNotes.title,
-            notes: releaseNoteItems,
-            history: releaseHistory,
-            releaseUrl: `https://github.com/NEONARCHY/yuksalish-workspace/releases/tag/v${packageJson.version}`,
+            notes: webUpdateItems,
+            history: [
+              ...updateEntries.map((entry) => ({ ...entry, title: `Обновление ${entry.version}` })),
+              ...releaseHistory,
+            ],
           }),
         });
       },

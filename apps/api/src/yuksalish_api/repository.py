@@ -802,18 +802,26 @@ def _feed_post(
     like_user_ids = grouped_reactions.get("👍", set())
     return FeedPostResponse(
         id=str(row["id"]),
-        author_user_id=str(row["author_user_id"]),
+        author_user_id=str(row["author_user_id"]) if row["author_user_id"] else None,
+        system_kind=row["system_kind"],
+        birthday_user_id=str(row["birthday_user_id"]) if row["birthday_user_id"] else None,
         title=row["title"],
         body=row["body"],
         is_pinned=row["is_pinned"],
         liked_by_current_user=current_user.id in like_user_ids,
         like_count=len(like_user_ids),
         reactions=_reaction_summaries(grouped_reactions, current_user),
-        can_edit=row["author_user_id"] == current_user.id or _is_privileged(current_user),
-        can_delete=row["author_user_id"] == current_user.id
-        or current_user.role in {"admin", "superadmin"},
-        can_pin=row["author_user_id"] == current_user.id
-        or current_user.role in {"admin", "superadmin"},
+        can_edit=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id or _is_privileged(current_user)
+        ),
+        can_delete=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id
+            or current_user.role in {"admin", "superadmin"}
+        ),
+        can_pin=not row["system_kind"] and (
+            row["author_user_id"] == current_user.id
+            or current_user.role in {"admin", "superadmin"}
+        ),
         comments=list(comments),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
@@ -1786,6 +1794,7 @@ async def _sync_notifications_for_user(
         and not item["event_key"].startswith("hr:")
         and not item["event_key"].startswith("ai-letter:")
         and not item["event_key"].startswith("hisobot:")
+        and not item["event_key"].startswith("support:")
     ]
     if stale_ids:
         await connection.execute(
@@ -1861,6 +1870,7 @@ async def _sync_notifications_for_user(
                         workspace_notifications.c.section == "project_hub",
                         workspace_notifications.c.section == "project_funding",
                         workspace_notifications.c.section == "ai_hisobot",
+                        workspace_notifications.c.section == "notifications",
                         and_(workspace_notifications.c.section == "ai_referent",
                              workspace_notifications.c.entity_id.in_(referent_letters)),
                     ),
@@ -2436,8 +2446,24 @@ async def load_workspace(
         (
             await connection.execute(
                 select(messages)
+                .outerjoin(
+                    chat_members,
+                    and_(
+                        chat_members.c.chat_id == messages.c.chat_id,
+                        chat_members.c.user_id == current_user.id,
+                    ),
+                )
                 .where(
                     messages.c.chat_id.in_(accessible_chat_ids),
+                    messages.c.deleted_at.is_(None),
+                    or_(
+                        chat_members.c.history_visible_from.is_(None),
+                        messages.c.created_at >= chat_members.c.history_visible_from,
+                    ),
+                    or_(
+                        messages.c.system_target_user_id.is_(None),
+                        messages.c.system_target_user_id == current_user.id,
+                    ),
                 )
                 .order_by(messages.c.created_at)
             )
@@ -2757,7 +2783,9 @@ async def load_workspace(
         if can("calendar")
         else [],
         notifications=[
-            notification for notification in notification_responses if can(notification.section)
+            notification
+            for notification in notification_responses
+            if notification.section == "notifications" or can(notification.section)
         ],
         notification_preferences=notification_preferences,
         personal_preferences=await get_personal_preferences(connection, current_user),
@@ -2841,6 +2869,14 @@ async def search_messages(
                 .where(
                     messages.c.deleted_at.is_(None),
                     messages.c.body.ilike(f"%{normalized}%"),
+                    or_(
+                        chat_members.c.history_visible_from.is_(None),
+                        messages.c.created_at >= chat_members.c.history_visible_from,
+                    ),
+                    or_(
+                        messages.c.system_target_user_id.is_(None),
+                        messages.c.system_target_user_id == current_user.id,
+                    ),
                 )
                 .order_by(messages.c.created_at.desc())
                 .limit(100)
@@ -3068,7 +3104,8 @@ async def pin_feed_post(
     post = (
         (
             await connection.execute(
-                select(feed_posts.c.author_user_id).where(feed_posts.c.id == post_id)
+                select(feed_posts.c.author_user_id, feed_posts.c.system_kind)
+                .where(feed_posts.c.id == post_id)
             )
         )
         .mappings()
@@ -3076,6 +3113,8 @@ async def pin_feed_post(
     )
     if post is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["system_kind"]:
+        raise WorkspaceRepositoryError(403, "System posts cannot be pinned")
     if post["author_user_id"] != current_user.id and current_user.role not in {
         "admin",
         "superadmin",
@@ -3110,6 +3149,8 @@ async def delete_feed_post(
     )
     if post is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
+    if post["system_kind"]:
+        raise WorkspaceRepositoryError(403, "System posts cannot be deleted")
     if post["author_user_id"] != current_user.id and current_user.role not in {
         "admin",
         "superadmin",
@@ -5626,7 +5667,16 @@ async def validate_attachment_owner(
                     .where(
                         messages.c.id == owner_id,
                         messages.c.deleted_at.is_(None),
+                        messages.c.system_kind.is_(None),
                         chat_members.c.user_id == current_user.id,
+                        or_(
+                            chat_members.c.history_visible_from.is_(None),
+                            messages.c.created_at >= chat_members.c.history_visible_from,
+                        ),
+                        or_(
+                            messages.c.system_target_user_id.is_(None),
+                            messages.c.system_target_user_id == current_user.id,
+                        ),
                     )
                 )
             )
@@ -5655,13 +5705,19 @@ async def validate_attachment_owner(
             ).mappings().first()
         )
         visible = row is not None and (
-            current_user.role in {"admin", "superadmin"}
-            or current_user.id in {row["manager_user_id"], row["requester_user_id"]}
-            or str(current_user.id) in row["approver_ids"]
+            (row["status"] == "draft" and row["requester_user_id"] == current_user.id)
+            or (
+                row["status"] != "draft"
+                and (
+                    current_user.role in {"admin", "superadmin"}
+                    or current_user.id in {row["manager_user_id"], row["requester_user_id"]}
+                    or str(current_user.id) in row["approver_ids"]
+                )
+            )
         )
         writable = (
             row is not None
-            and row["status"] == "pending"
+            and row["status"] in {"draft", "pending"}
             and row["requester_user_id"] == current_user.id
         )
         if not visible or (write and not writable):

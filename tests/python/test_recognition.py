@@ -5,7 +5,7 @@ from pydantic import ValidationError
 
 from yuksalish_api.main import create_app
 from yuksalish_api.recognition_schemas import EmployeeRewardCreate
-from yuksalish_api.recognition_service import _achievements, _longest_month_streak
+from yuksalish_api.recognition_service import REWARD_CATALOG, _achievements, _longest_month_streak
 
 
 def test_recognition_routes_are_present_in_openapi() -> None:
@@ -41,6 +41,7 @@ def test_achievement_catalog_backfills_levels_and_tenure() -> None:
     assert by_code["tasks_100"].unlocked is False
     assert by_code["messages_500"].unlocked is True
     assert by_code["meetings_15"].tier == "platinum"
+    assert by_code["meetings_15"].description == "Созданные Zoom-встречи"
     assert by_code["letters_50"].unlocked is True
     assert by_code["feed_posts_5"].unlocked is True
     assert by_code["payments_created_30"].tier == "amethyst"
@@ -50,9 +51,20 @@ def test_achievement_catalog_backfills_levels_and_tenure() -> None:
     assert by_code["trips_50"].tier == "prism"
     assert by_code["reactions_50"].unlocked is True
     assert by_code["efficiency_streak_2"].unlocked is True
+    assert by_code["efficiency_months_1"].tier == "bronze"
+    assert by_code["efficiency_months_3"].tier == "silver"
+    assert by_code["efficiency_months_6"].tier == "gold"
+    assert by_code["efficiency_months_12"].tier == "prism"
     assert by_code["tenure_12"].unlocked is True
     assert by_code["tenure_24"].unlocked is False
     assert by_code["tenure_12"].earned_at == date(2026, 3, 15)
+
+    by_category: dict[str, set[str]] = {}
+    for item in achievements:
+        by_category.setdefault(item.category, set()).add(item.tier)
+    for category, tiers in by_category.items():
+        if "bronze" in tiers:
+            assert {"silver", "gold", "prism"}.issubset(tiers), category
 
 
 def test_efficiency_streak_uses_consecutive_calendar_months() -> None:
@@ -61,17 +73,15 @@ def test_efficiency_streak_uses_consecutive_calendar_months() -> None:
     assert _longest_month_streak([]) == 0
 
 
-def test_reward_copy_is_free_form_but_meaningful() -> None:
+def test_reward_catalog_is_fixed_and_context_is_optional() -> None:
     reward = EmployeeRewardCreate(
         icon_key="mentorship",
-        title="Сильный наставник",
-        description="Помог команде освоить новый процесс без потери темпа.",
+        context_note="  После завершения проекта  ",
     )
-    assert reward.title == "Сильный наставник"
+    assert reward.context_note == "После завершения проекта"
+    assert len(REWARD_CATALOG) == 9
+    assert REWARD_CATALOG["mastery"][0] == "Мастерство"
+    assert EmployeeRewardCreate(icon_key="teamwork", context_note="   ").context_note is None
 
     with pytest.raises(ValidationError):
-        EmployeeRewardCreate(
-            icon_key="mentorship",
-            title="Ок",
-            description="Коротко",
-        )
+        EmployeeRewardCreate(icon_key="unknown")

@@ -107,6 +107,7 @@ class UpdateChatRequest(ApiModel):
 
 class AddChatMembersRequest(ApiModel):
     member_ids: list[UUID] = Field(min_length=1, max_length=200)
+    show_history: bool = False
 
 
 class SetChatMemberRequest(ApiModel):
@@ -146,6 +147,7 @@ class ChatMessageResponse(ApiModel):
     chat_id: str
     author_id: str
     body: str
+    system_kind: Literal["member_left", "ownership_transferred"] | None = None
     time: str
     created_at: datetime
     own: bool
@@ -1030,7 +1032,9 @@ class FeedCommentResponse(ApiModel):
 
 class FeedPostResponse(ApiModel):
     id: str
-    author_user_id: str
+    author_user_id: str | None
+    system_kind: str | None = None
+    birthday_user_id: str | None = None
     title: str
     body: str
     is_pinned: bool
@@ -1145,7 +1149,8 @@ class RespondCalendarEventRequest(ApiModel):
 
 
 NotificationKind = Literal[
-    "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot"
+    "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot",
+    "support",
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
@@ -1162,6 +1167,7 @@ NotificationSection = Literal[
     "hr",
     "project_hub",
     "project_funding",
+    "notifications",
 ]
 
 
@@ -1206,11 +1212,11 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
-    "crm",
     "tasks",
     "team_overview",
     "payment_requests",
     "ai_referent",
+    "ai_hisobot",
     "telegram_access",
     "feed",
     "projects",
@@ -1228,11 +1234,11 @@ NavigationKey = Literal[
     "settings",
 ]
 DEFAULT_NAVIGATION: list[NavigationKey] = [
-    "crm",
     "tasks",
     "team_overview",
     "payment_requests",
     "ai_referent",
+    "ai_hisobot",
     "telegram_access",
     "feed",
     "projects",

@@ -35,6 +35,7 @@ from yuksalish_api.project_hub_service import (
     save_project,
     save_workstream,
     set_item_status,
+    submit_funding_request,
 )
 from yuksalish_api.repository import WorkspaceRepositoryError
 
@@ -218,6 +219,37 @@ async def post_request(
     await ensure_module_action(connection, user, "project_funding", "create")
     try:
         return await create_funding_request(connection, user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.post(
+    "/projects/{project_id}/requests/drafts",
+    response_model=ProjectFundingResponse,
+    status_code=201,
+)
+async def post_request_draft(
+    project_id: UUID,
+    payload: ProjectFundingWrite,
+    user: User,
+    connection: Connection,
+) -> ProjectFundingResponse:
+    await ensure_module_action(connection, user, "project_funding", "create")
+    try:
+        return await create_funding_request(connection, user, project_id, payload, draft=True)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.post("/requests/{request_id}/submit", response_model=ProjectFundingResponse)
+async def post_request_submit(
+    request_id: UUID,
+    user: User,
+    connection: Connection,
+) -> ProjectFundingResponse:
+    await ensure_module_action(connection, user, "project_funding", "create")
+    try:
+        return await submit_funding_request(connection, user, request_id)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
 

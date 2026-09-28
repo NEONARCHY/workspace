@@ -83,7 +83,7 @@ const { _electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
       window.motionQA.observer.observe({ type: "longtask", buffered: false });
     });
     report.sections = [];
-    for (const name of ["CRM", "Задачи", "Заявки на оплату", "Список проектов", "Согласование поездок", "Календарь", "Сотрудники", "Мессенджер"]) {
+    for (const name of ["Задачи", "Заявки на оплату", "Список проектов", "Согласование поездок", "Календарь", "Сотрудники", "Мессенджер"]) {
       await page.locator(`.rail-action[aria-label="${name}"]`).click();
       const animation = await page.locator(".app-content > .workspace-view").evaluate(node => {
         const offenders = [...node.querySelectorAll("*")].filter(element =>

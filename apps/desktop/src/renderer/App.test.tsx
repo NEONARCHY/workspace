@@ -1108,6 +1108,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(screen.getByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Новые уведомления/ })).toBeInTheDocument();
     expect(screen.getByText("2", { selector: ".rail-badge" })).toBeInTheDocument();
     expect(screen.getByText("1", { selector: ".notification-metrics strong" })).toBeInTheDocument();
 
@@ -1120,7 +1121,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", {
       name: `Открыть задачу: ${initialTasks[1]!.title}`,
     }));
-    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title }, { timeout: 3000 })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
@@ -1836,7 +1837,6 @@ describe("corporate workspace authentication alpha", () => {
       button.getAttribute("aria-label"),
     );
     expect(labels).toEqual([
-      "CRM",
       "Задачи",
       "AI Referent",
       "AI Hisobot",

@@ -181,7 +181,7 @@ class ProjectFundingResponse(HubModel):
     purpose: str
     amount: int
     currency: str
-    status: Literal["pending", "approved", "rejected"]
+    status: Literal["draft", "pending", "approved", "rejected"]
     approver_user_ids: list[str]
     current_step: int
     approval_due_at: datetime | None

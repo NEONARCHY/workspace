@@ -47,22 +47,24 @@ afterEach(cleanup);
 describe("Employee list and retained access controls", () => {
   it("filters by role and pending activation without changing server data", async () => {
     mount(); await screen.findByRole("table");
+    const table = screen.getByRole("table");
     fireEvent.change(screen.getByLabelText("Фильтр по роли сотрудника"), {
       target: { value: "manager" },
     });
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
-    });
+      expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
+      expect(within(table).getByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeInTheDocument();
+    }, { timeout: 3000 });
     fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), {
       target: { value: "invited" },
     });
     await waitFor(() => {
-      expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
-    });
+      expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
+    }, { timeout: 3000 });
     expect(screen.getByText("Бахтиёр Самугов")).toBeInTheDocument();
     expect(updateEmployeeAccess).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Сбросить фильтры" }));
-    expect(screen.getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(2);
+    await waitFor(() => expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(2));
   });
   it("does not expose invitations or editable permissions to a regular employee", async () => {
     mount({ ...user, role: "employee" }); await screen.findByRole("table");

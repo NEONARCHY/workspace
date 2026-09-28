@@ -115,7 +115,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .chat-row { border-radius: 14px; padding-block: 14px; }
 .chat-row.selected { background: var(--ws-selected); }
 .chat-row-line strong { color: var(--ws-navy); font-size: 14px; font-weight: 600; }
-.chat-row-line time, .preview-line > span:first-child, .chat-group-label small { color: var(--ws-muted); font-size: 12px; }
+.chat-row-line time, .preview-line > span:first-child { color: var(--ws-muted); font-size: 12px; }
 .chat-list-item { margin-bottom: 4px; }
 .chat-list-item .chat-more { top: 12px; }
 .conversation-pane { background: var(--ws-muted-surface); }
@@ -295,6 +295,17 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .empty-state span, .notification-empty span { font-size: 14px; }
 .parity-preview-card { border-radius: 20px; border-color: var(--ws-line); box-shadow: var(--ws-shadow); }
 .parity-preview-card > div > span { color: var(--ws-muted); font-size: 12px; }
+
+/* Illustrated module headers may extend below their own box. Keep the entire
+   header behind every following section, not just behind its own title. */
+.workspace-view > .ws-illustrated-header {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+.ws-illustrated-header > .ws-illustrated-header-copy { position: relative; z-index: 1; }
+.ws-illustrated-header > .ws-illustrated-header-art { position: absolute; z-index: 0; pointer-events: none; }
+.workspace-view > .ws-illustrated-header ~ * { position: relative; z-index: 1; }
 
 /* Authentication: original white logo on the specified brand navy. */
 .auth-screen { background: var(--ws-canvas); }

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -49,5 +52,52 @@ describe("AI Referent gooey search", () => {
     );
 
     expect(container.querySelector(".ai-gooey-search")).toHaveAttribute("data-expanded", "true");
+  });
+
+  it("keeps one field width and moves the field and placeholder together", () => {
+    const { container } = render(
+      <AIReferentGooeySearch
+        ariaLabel="Поиск писем"
+        collapsedWidth={320}
+        expandedOffset={48}
+        onValueChange={() => undefined}
+        placeholder="Номер или тема"
+        value=""
+      />,
+    );
+
+    const root = container.querySelector<HTMLElement>(".ai-gooey-search");
+    expect(root?.style.getPropertyValue("--ai-gooey-collapsed")).toBe("320px");
+    expect(root?.style.getPropertyValue("--ai-gooey-offset")).toBe("48px");
+
+    const css = readFileSync(
+      resolve(process.cwd(), "src/renderer/ai-referent-workspace.css"),
+      "utf8",
+    ).replaceAll("\r\n", "\n");
+    expect(css).not.toContain("--ai-gooey-expanded");
+    expect(css).toContain(
+      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-placeholder {\n  width: max(0px, calc(min(var(--ai-gooey-collapsed), 100%) - var(--ai-gooey-active-text-inset) - 17px));\n  transform: translateX(calc(var(--ai-gooey-offset) - var(--ai-gooey-text-compensation)));',
+    );
+    expect(css).toContain("--ai-gooey-text-inset: 48px;");
+    expect(css).toContain("--ai-gooey-active-text-inset: 16px;");
+    expect(css).toContain(
+      '.app-provider .ai-gooey-search[data-expanded="true"] input.ai-gooey-search-input {\n  padding-left: var(--ai-gooey-active-text-inset);',
+    );
+    expect(css).toContain(
+      '.ai-gooey-search[data-expanded="true"] .ai-gooey-search-row {\n  transform: translateX(var(--ai-gooey-offset));',
+    );
+    expect(css).toContain(
+      '.ai-referent-view .ai-referent-toolbar > .ai-gooey-search[data-expanded="true"] + .ai-referent-toolbar-actions {\n  transform: translateX(var(--ai-toolbar-search-shift));',
+    );
+    expect(css).toContain(
+      ".ai-referent-view .ai-referent-toolbar {\n  --ai-toolbar-search-shift: 51px;",
+    );
+    expect(css).toContain("  justify-content: flex-start;\n  gap: 8px;");
+    expect(css).toContain("flex: 0 0 var(--ai-gooey-collapsed);");
+    expect(css).toContain("padding: 4px 0 0;");
+    expect(css).toContain(
+      '.ai-referent-view .ai-referent-summary button[aria-pressed="true"] { transform: translateY(-2px);',
+    );
+    expect(css).not.toContain("width 520ms");
   });
 });

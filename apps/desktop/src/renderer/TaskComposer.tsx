@@ -23,6 +23,7 @@ import {
   Delete20Regular,
   People20Regular,
 } from "@fluentui/react-icons";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { PersonPicker } from "./PersonPicker";
@@ -420,18 +421,14 @@ export function TaskComposer({
                 </label>
                 <label>
                   <span>Срок</span>
-                  <input
-                    aria-label="Срок новой задачи"
-                    type="datetime-local"
-                    value={dueAt}
-                    onChange={(event) => setDueAt(event.target.value)}
-                  />
+                  <WorkspaceDateTimePicker ariaLabel="Срок новой задачи" value={dueAt} onChange={setDueAt} />
                   <small>Для новой задачи можно выбрать только будущее время.</small>
                 </label>
                 <label>
                   <span>Приоритет</span>
                   <WorkspaceSelect
                     aria-label="Приоритет новой задачи"
+                    variant="priority"
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as WorkspaceTask["priority"])}
                   >
@@ -521,7 +518,7 @@ export function TaskComposer({
                 </label>}
                 <label className="record-field-wide">
                   <span>Ближайший запуск</span>
-                  <input aria-label="Ближайшее повторение новой задачи" type="datetime-local" value={cycleNextRun} onChange={(event) => setCycleNextRun(event.target.value)} />
+                  <WorkspaceDateTimePicker ariaLabel="Ближайшее повторение новой задачи" value={cycleNextRun} onChange={setCycleNextRun} />
                   <small>Если не указывать дату, система рассчитает её автоматически.</small>
                 </label>
                 {cycleKind === "calendar" && cycleCalendarRule === "weekdays" ? <fieldset className="record-field-wide cycle-calendar-rule">

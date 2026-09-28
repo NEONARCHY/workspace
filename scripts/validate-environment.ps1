@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("development", "staging", "production")]
+    [ValidateSet("development", "test", "staging", "production")]
     [string]$Environment,
 
     [Parameter(Mandatory = $true)]
@@ -118,29 +118,30 @@ if ($Environment -in @("staging", "production")) {
         }
     }
 
-    if ($NetworkMode -eq "lan" -and -not $AllowPlaceholders) {
-        $address = $null
-        if (-not [System.Net.IPAddress]::TryParse($values["YUKSALISH_LAN_IP"], [ref]$address) -or
-            $address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
-            throw "YUKSALISH_LAN_IP must be a private IPv4 address."
-        }
-        $octets = $address.GetAddressBytes()
-        $private = $octets[0] -eq 10 -or
-            ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -or
-            ($octets[0] -eq 192 -and $octets[1] -eq 168)
-        if (-not $private) {
-            throw "YUKSALISH_LAN_IP must be an RFC 1918 private IPv4 address."
-        }
-        try {
-            $origins = @($values["YUKSALISH_CORS_ORIGINS"] | ConvertFrom-Json)
-        }
-        catch {
-            throw "YUKSALISH_CORS_ORIGINS must be a JSON array."
-        }
-        $requiredWebOrigin = "https://$($values['YUKSALISH_LAN_IP']):8443"
-        if ($origins -notcontains "null" -or $origins -notcontains $requiredWebOrigin) {
-            throw "YUKSALISH_CORS_ORIGINS must contain 'null' and '$requiredWebOrigin'."
-        }
+}
+
+if ($NetworkMode -eq "lan" -and -not $AllowPlaceholders) {
+    $address = $null
+    if (-not [System.Net.IPAddress]::TryParse($values["YUKSALISH_LAN_IP"], [ref]$address) -or
+        $address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
+        throw "YUKSALISH_LAN_IP must be a private IPv4 address."
+    }
+    $octets = $address.GetAddressBytes()
+    $private = $octets[0] -eq 10 -or
+        ($octets[0] -eq 172 -and $octets[1] -ge 16 -and $octets[1] -le 31) -or
+        ($octets[0] -eq 192 -and $octets[1] -eq 168)
+    if (-not $private) {
+        throw "YUKSALISH_LAN_IP must be an RFC 1918 private IPv4 address."
+    }
+    try {
+        [string[]]$origins = ConvertFrom-Json -InputObject $values["YUKSALISH_CORS_ORIGINS"]
+    }
+    catch {
+        throw "YUKSALISH_CORS_ORIGINS must be a JSON array."
+    }
+    $requiredWebOrigin = "https://$($values['YUKSALISH_LAN_IP']):8443"
+    if ($origins -notcontains "null" -or $origins -notcontains $requiredWebOrigin) {
+        throw "YUKSALISH_CORS_ORIGINS must contain 'null' and '$requiredWebOrigin'."
     }
 }
 

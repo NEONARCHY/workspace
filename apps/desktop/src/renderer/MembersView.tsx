@@ -6,6 +6,7 @@ import { ArrowClockwise20Regular, Search20Regular } from "@fluentui/react-icons"
 
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 interface MembersViewProps {
   readonly registry?: MembersRegistry;
@@ -133,8 +134,8 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
       <label>Регион<Select aria-label="Фильтр по региону" value={regionId} onChange={(event) => setRegionId(event.target.value)}><option value="all">Все регионы</option>{registry.regions.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
       <label>Сфера<Select aria-label="Фильтр по сфере" value={sphereId} onChange={(event) => setSphereId(event.target.value)}><option value="all">Все сферы</option>{registry.spheres.map((item) => <option key={item.id} value={item.id}>{item.nameRu}</option>)}</Select></label>
       <label>Пол<Select aria-label="Фильтр по полу" value={gender} onChange={(event) => setGender(event.target.value)}><option value="all">Все</option><option value="male">Мужской</option><option value="female">Женский</option></Select></label>
-      <label>С даты<input aria-label="Дата регистрации с" type="date" value={createdFrom} onChange={(event) => setCreatedFrom(event.target.value)} /></label>
-      <label>По дату<input aria-label="Дата регистрации по" type="date" value={createdTo} onChange={(event) => setCreatedTo(event.target.value)} /></label>
+      <label>С даты<WorkspaceDateTimePicker mode="date" ariaLabel="Дата регистрации с" value={createdFrom} onChange={setCreatedFrom} /></label>
+      <label>По дату<WorkspaceDateTimePicker mode="date" ariaLabel="Дата регистрации по" value={createdTo} min={createdFrom} onChange={setCreatedTo} /></label>
       {filtersApplied ? <Button appearance="subtle" onClick={clearFilters}>Сбросить фильтры</Button> : null}
     </div>
     <div className="members-content"><MembersRecords members={visible} filterKey={`${query}:${regionId}:${sphereId}:${gender}:${createdFrom}:${createdTo}`} onOpen={setSelected} />

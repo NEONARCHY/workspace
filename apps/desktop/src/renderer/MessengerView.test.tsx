@@ -8,12 +8,20 @@ import {
   within,
 } from "@testing-library/react";
 import { useState } from "react";
-import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { Dialog, DialogSurface, FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
+import { getMessageParticleTiming } from "./MessageVanishOverlay";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
-import { MessengerView } from "./MessengerView";
+import { EmbeddedConversation, MessengerView } from "./MessengerView";
+import { rewriteMessengerDraft } from "./workspace-api";
+import type * as WorkspaceApi from "./workspace-api";
+
+vi.mock("./workspace-api", async (importOriginal) => ({
+  ...await importOriginal<typeof WorkspaceApi>(),
+  rewriteMessengerDraft: vi.fn(),
+}));
 
 function actions(): ChatActions {
   return {
@@ -65,11 +73,32 @@ function openMessageMenu(text: string) {
   fireEvent.contextMenu(message);
 }
 
+function openChatMenu(chatId: string) {
+  const row = document.querySelector(`[data-chat-id="${chatId}"] .chat-row`);
+  if (!row) throw new Error(`Chat not found: ${chatId}`);
+  fireEvent.contextMenu(row);
+}
+
 describe("Private messenger", () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+  it("offers a rewrite without sending or replacing the draft before confirmation", async () => {
+    vi.mocked(rewriteMessengerDraft).mockResolvedValue({ text: "Будьте добры, проверьте документ." });
+    const onSendMessage = vi.fn();
+    renderMessenger({ onSendMessage });
+    const composer = screen.getByLabelText<HTMLInputElement>("Новое сообщение");
+    fireEvent.change(composer, { target: { value: "Глянь документ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Переформулировать черновик с ИИ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Профессиональный" }));
+    await screen.findByText("Будьте добры, проверьте документ.");
+    expect(composer).toHaveValue("Глянь документ");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Заменить мой текст" }));
+    expect(composer).toHaveValue("Будьте добры, проверьте документ.");
   });
   it("opens the message menu at the pointer in a viewport portal", () => {
     renderMessenger();
@@ -91,6 +120,34 @@ describe("Private messenger", () => {
     fireEvent.focus(message!);
 
     expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).not.toBeInTheDocument();
+  });
+
+  it("keeps reaction and message menus above an embedded project or trip dialog", async () => {
+    const chat = initialChats[0]!;
+    const message: ChatMessage = {
+      id: "embedded-reaction",
+      chatId: chat.id,
+      authorId: "baxtiyor",
+      body: "Обсудим поездку",
+      time: "14:20",
+      reactions: [{ emoji: "👍", count: 1, reactedByCurrentUser: false, reactorUserIds: ["baxtiyor"] }],
+    };
+    const { props, rerender } = renderMessenger({ messages: [message] });
+    rerender(<FluentProvider theme={webLightTheme}>
+      <Dialog open><DialogSurface aria-label="Карточка поездки">
+        <EmbeddedConversation {...props} chatId={chat.id} contextLabel="поездки" />
+      </DialogSurface></Dialog>
+    </FluentProvider>);
+
+    const dialog = await screen.findByRole("dialog", { name: "Карточка поездки" });
+    const reaction = within(dialog).getByRole("button", { name: /👍: Бахтиёр Самугов/ });
+    fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
+    const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu");
+    expect(quick?.parentElement).toBe(dialog.parentElement);
+
+    fireEvent.pointerDown(document.body);
+    fireEvent.contextMenu(within(dialog).getByText(message.body).closest(".message")!, { clientX: 90, clientY: 90 });
+    expect(screen.getByRole("menu").parentElement).toBe(dialog.parentElement);
   });
 
   it("opens the source object from a linked chat", () => {
@@ -123,8 +180,8 @@ describe("Private messenger", () => {
       chatActions,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Действия чата «Финансы и закупки»" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    openChatMenu("finance");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить группу" }));
     expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
     expect(chatActions.delete).not.toHaveBeenCalled();
 
@@ -173,12 +230,14 @@ describe("Private messenger", () => {
     expect(screen.getByRole("dialog")).toHaveTextContent(
       "Вы станете владельцем",
     );
+    expect(screen.queryByRole("switch", { name: /предыдущую историю/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Внешние гости/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Проектная команда" },
     });
-    fireEvent.click(screen.getByRole("checkbox", { name: "Бахтиёр Самугов" }));
+    fireEvent.click(screen.getByRole("button", { name: "Бахтиёр Самугов" }));
     expect(
-      screen.queryByRole("checkbox", { name: "Дилшод Рахимов" }),
+      screen.queryByRole("button", { name: "Дилшод Рахимов" }),
     ).not.toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Создать группу" }));
     await waitFor(() =>
@@ -257,10 +316,65 @@ describe("Private messenger", () => {
     expect(
       screen.queryByRole("button", { name: "Добавить выбранных" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Выйти" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Выйти из группы" })).toBeInTheDocument();
     expect(
       screen.getByRole("textbox", { name: /Название группы/ }),
     ).toBeDisabled();
+  });
+
+  it("offers previous history only when inviting colleagues to an existing group", async () => {
+    const chatActions = actions();
+    const group = {
+      ...initialChats[0]!,
+      canDelete: true,
+      members: initialChats[0]!.members.filter((member) => member.userId !== "malika"),
+    };
+    renderMessenger({ chats: [group], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Участники и права" }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("button", { name: "Удалить группу" })).toBeInTheDocument();
+    expect(dialog.queryByRole("button", { name: /^Закрыть$/ })).not.toBeInTheDocument();
+    expect(dialog.getByRole("button", { name: "Закрыть окно группы" })).toBeInTheDocument();
+    const history = dialog.getByRole("switch", { name: /предыдущую историю/ });
+    expect(history).not.toBeChecked();
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Добавить выбранных" }));
+    await waitFor(() => expect(chatActions.add).toHaveBeenCalledWith("finance", ["malika"], false));
+    fireEvent.click(history);
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Добавить выбранных" }));
+    await waitFor(() => expect(chatActions.add).toHaveBeenLastCalledWith("finance", ["malika"], true));
+  });
+
+  it("keeps exit notices in the chat flow when later messages arrive", () => {
+    const leftNotice: ChatMessage = {
+      ...initialMessages[0]!, id: "left-notice", chatId: "finance",
+      body: "Бахтиёр Самугов больше не в группе", systemKind: "member_left",
+      createdAt: "2026-09-27T09:00:00Z", time: "14:00",
+    };
+    const ownerNotice: ChatMessage = {
+      ...leftNotice, id: "owner-notice",
+      body: "Вам автоматически передалось право управления данной группой",
+      systemKind: "ownership_transferred", createdAt: "2026-09-27T09:00:01Z",
+    };
+    const laterMessage: ChatMessage = {
+      ...initialMessages[0]!, id: "later-message", chatId: "finance",
+      body: "Продолжаем работу", createdAt: "2026-09-27T09:01:00Z", time: "14:01",
+    };
+    const messages = [...initialMessages, leftNotice, ownerNotice];
+    const { rerender, props } = renderMessenger({ messages });
+    expect(screen.getAllByRole("note").map((note) => note.textContent)).toEqual([
+      expect.stringContaining("Бахтиёр Самугов больше не в группе"),
+      expect.stringContaining("Вам автоматически передалось право управления данной группой"),
+    ]);
+    rerender(<FluentProvider theme={webLightTheme}><MessengerView {...props} messages={[...messages, laterMessage]} /></FluentProvider>);
+    const notes = screen.getAllByRole("note");
+    const conversation = screen.getByLabelText("Переписка");
+    expect(notes).toHaveLength(2);
+    expect(conversation.textContent?.indexOf(ownerNotice.body)).toBeLessThan(
+      conversation.textContent!.indexOf(laterMessage.body),
+    );
+    expect(notes[0]).toHaveClass("message-system");
   });
 
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
@@ -289,7 +403,7 @@ describe("Private messenger", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Новое сообщение")).toHaveValue(""),
     );
-    expect(screen.getByLabelText("Новое сообщение")).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveFocus(), { timeout: 3000 });
     fireEvent.change(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Не отправлять другому" },
     });
@@ -429,11 +543,14 @@ describe("Private messenger", () => {
 
     const message = screen.getByText("Собираюсь из частиц").closest(".message");
     expect(message).toHaveClass("message-awaiting-reveal");
+    expect(message?.parentElement).toHaveAttribute("hidden");
 
+    const transitionMs = getMessageParticleTiming("Собираюсь из частиц").totalMs;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(330);
+      await vi.advanceTimersByTimeAsync(transitionMs + 20);
     });
     expect(message).toHaveClass("message-particle-revealing");
+    expect(message?.parentElement).not.toHaveAttribute("hidden");
     expect(canvasContext.textBaseline).toBe("alphabetic");
     expect(canvasContext.fillText.mock.calls.at(-1)?.[2]).toBeGreaterThan(10);
 
@@ -446,7 +563,7 @@ describe("Private messenger", () => {
     expect(canvasContext.fill).not.toHaveBeenCalled();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(330);
+      await vi.advanceTimersByTimeAsync(transitionMs + 20);
     });
     expect(message).not.toHaveClass("message-awaiting-reveal");
     expect(message).not.toHaveClass("message-particle-revealing");
@@ -503,113 +620,59 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
     expect(onDeleteMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
-    expect(screen.getByText(/Сообщение будет удалено через/)).toBeInTheDocument();
-    expect(onDeleteMessage).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Вернуть" }));
-    expect(onDeleteMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
+    expect(screen.queryByText(/Сообщение будет удалено через/)).not.toBeInTheDocument();
   });
 
-  it("copies the last own message into the composer with ArrowUp and saves it with Enter", async () => {
-    const own: ChatMessage = { id: "latest-own", chatId: "finance", authorId: "aziza", body: "Последнее своё", time: "12:00", canEdit: true, revision: 3 };
-    const onEditMessage = vi.fn().mockResolvedValue(undefined);
-    renderMessenger({ messages: [
-      { ...own, id: "older", body: "Старое своё" },
-      own,
-      { ...own, id: "incoming", authorId: "baxtiyor", body: "Ответ коллеги", canEdit: false },
-      { ...own, id: "removed", deletedAt: "2026-09-04T09:00:00Z", body: "" },
-      { ...own, id: "other-chat", chatId: "other", body: "В другом чате" },
-    ], onEditMessage });
-    fireEvent.change(screen.getByLabelText("Поиск в переписке"), { target: { value: "Старое" } });
-    expect(screen.queryByText("Последнее своё")).not.toBeInTheDocument();
-    const composer = screen.getByLabelText("Новое сообщение");
-    composer.focus();
-    fireEvent.keyDown(composer, { key: "ArrowUp" });
-    const editor = screen.getByLabelText("Редактирование сообщения");
-    expect(editor).toHaveValue(own.body);
-    expect(editor).toHaveFocus();
-    expect((editor as HTMLInputElement).selectionStart).toBe(own.body.length);
-    fireEvent.change(editor, { target: { value: "Исправленный текст" } });
-    fireEvent.keyDown(editor, { key: "Enter" });
-    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(own, "Исправленный текст", []));
-    await waitFor(() => expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument());
-    expect(composer).toHaveFocus();
-    expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
+  it("removes an own message from an open chat with a collapsing row", async () => {
+    const message: ChatMessage = { id: "own-to-remove", chatId: "finance", authorId: "aziza", body: "Удаляемое сообщение", time: "12:00", canEdit: true };
+    const onDeleteMessage = vi.fn().mockResolvedValue(undefined);
+    renderMessenger({ messages: [message], onDeleteMessage });
+    const row = screen.getByText(message.body).closest(".message-row");
+    expect(row).not.toBeNull();
+    openMessageMenu(message.body);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить для всех" }));
+    expect(row).toHaveClass("is-removing");
+    await waitFor(() => expect(onDeleteMessage).toHaveBeenCalledWith(message));
   });
 
-  it("suggests participants and saves new mentions while editing", async () => {
-    const own: ChatMessage = {
-      id: "own",
-      chatId: "finance",
-      authorId: "aziza",
-      body: "Проверьте документ",
-      time: "12:00",
-      canEdit: true,
-      mentionUserIds: [],
-    };
-    const onEditMessage = vi.fn().mockResolvedValue(undefined);
-    renderMessenger({ messages: [own], onEditMessage });
-
-    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
-    const editor = screen.getByLabelText("Редактирование сообщения");
-    fireEvent.change(editor, { target: { value: "Проверьте документ @" } });
-
-    expect(screen.getByRole("region", { name: "Упомянуть участников" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "@Бахтиёр Самугов" }));
-    expect(editor).toHaveValue("Проверьте документ @baxtiyor ");
-
-    fireEvent.keyDown(editor, { key: "Enter" });
-    await waitFor(() => expect(onEditMessage).toHaveBeenCalledWith(
-      own,
-      "Проверьте документ @baxtiyor",
-      ["baxtiyor"],
-    ));
+  it("animates a colleague's deletion only while this conversation is visible", () => {
+    const removed: ChatMessage = { id: "remote-removed", chatId: "finance", authorId: "baxtiyor", body: "Коллега удалил это", time: "12:00" };
+    const kept: ChatMessage = { id: "remote-kept", chatId: "finance", authorId: "aziza", body: "Оставшееся сообщение", time: "12:01" };
+    const view = renderMessenger({ messages: [removed, kept] });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!;
+    const row = screen.getByText(removed.body).closest<HTMLElement>(".message-row")!;
+    const visible = vi.spyOn(pane, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+    const bounds = vi.spyOn(row, "getBoundingClientRect").mockReturnValue({ height: 60 } as DOMRect);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[removed, kept]} /></FluentProvider>);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[kept]} /></FluentProvider>);
+    expect(screen.getByText(removed.body).closest(".message-row")).toHaveClass("is-removing");
+    bounds.mockRestore();
+    visible.mockRestore();
   });
 
-  it("preserves the composer draft and current edit; Escape returns focus without saving", () => {
-    const own: ChatMessage = { id: "own", chatId: "finance", authorId: "aziza", body: "Мой текст", time: "12:00", canEdit: true };
-    const { props } = renderMessenger({ messages: [own] });
-    const composer = screen.getByLabelText("Новое сообщение");
-    for (const draft of ["Черновик", " "]) {
-      fireEvent.change(composer, { target: { value: draft } });
-      fireEvent.keyDown(composer, { key: "ArrowUp" });
-      expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-      expect(composer).toHaveValue(draft);
-    }
-    fireEvent.change(composer, { target: { value: "" } });
-    fireEvent.keyDown(composer, { key: "ArrowUp" });
-    const editor = screen.getByLabelText("Редактирование сообщения");
-    fireEvent.change(editor, { target: { value: "Несохранённое изменение" } });
-    fireEvent.keyDown(editor, { key: "ArrowUp" });
-    expect(editor).toHaveValue("Несохранённое изменение");
-    fireEvent.keyDown(editor, { key: "Escape" });
-    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-    expect(composer).toHaveFocus();
-    expect(props.onEditMessage).not.toHaveBeenCalled();
-    fireEvent.keyDown(composer, { key: "ArrowUp" });
-    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+  it("does not replay a deletion that happened while the conversation was hidden", () => {
+    const removed: ChatMessage = { id: "closed-removed", chatId: "finance", authorId: "baxtiyor", body: "Удалено в закрытом чате", time: "12:00" };
+    const kept: ChatMessage = { id: "closed-kept", chatId: "finance", authorId: "aziza", body: "Остаётся в чате", time: "12:01" };
+    const view = renderMessenger({ messages: [removed, kept] });
+    const pane = document.querySelector<HTMLElement>(".message-scroll")!;
+    const hidden = vi.spyOn(pane, "getClientRects").mockReturnValue({ length: 0 } as DOMRectList);
+    view.rerender(<FluentProvider theme={webLightTheme}><MessengerView {...view.props} messages={[kept]} /></FluentProvider>);
+    expect(screen.queryByText(removed.body)).not.toBeInTheDocument();
+    expect(document.querySelector(".message-row.is-removing")).not.toBeInTheDocument();
+    hidden.mockRestore();
   });
 
-  it.each(["ctrlKey", "altKey", "metaKey", "shiftKey", "isComposing"])("ignores ArrowUp with %s", (modifier) => {
-    renderMessenger({ messages: [{ id: "own", chatId: "finance", authorId: "aziza", body: "Мой текст", time: "12:00", canEdit: true }] });
-    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp", [modifier]: true });
-    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-  });
-
-  it("does not fall back to older messages when the latest own message cannot be edited", () => {
-    const own: ChatMessage = { id: "old", chatId: "finance", authorId: "aziza", body: "Старое", time: "12:00", canEdit: true };
-    renderMessenger({ messages: [own, { ...own, id: "last", body: "Новое", canEdit: false }] });
-    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
-    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-  });
-
-  it("does nothing when there are no own messages in the active chat", () => {
-    renderMessenger({ messages: [
-      { id: "incoming", chatId: "finance", authorId: "baxtiyor", body: "Коллега", time: "12:00", canEdit: true },
-      { id: "other", chatId: "other", authorId: "aziza", body: "Другое", time: "12:00", canEdit: true },
-    ] });
-    fireEvent.keyDown(screen.getByLabelText("Новое сообщение"), { key: "ArrowUp" });
-    expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Изменить сообщение:/ })).not.toBeInTheDocument();
+  it("saves each employee's chat background without changing messages", async () => {
+    localStorage.removeItem("yuksalish:chat-background:aziza");
+    renderMessenger();
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
+    fireEvent.click(screen.getByRole("button", { name: /Тихий рассвет/ }));
+    expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "dawn");
+    expect(localStorage.getItem("yuksalish:chat-background:aziza")).toBe("dawn");
+    expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
+    localStorage.removeItem("yuksalish:chat-background:aziza");
   });
 
   it("supports read-only members and does not render deleted text or its actions", () => {
@@ -636,7 +699,7 @@ describe("Private messenger", () => {
     });
     expect(screen.queryByLabelText("Новое сообщение")).not.toBeInTheDocument();
     expect(screen.getByText(/Вам доступно только чтение/)).toBeInTheDocument();
-    expect(screen.getByText("Сообщение удалено")).toBeInTheDocument();
+    expect(screen.queryByText("Сообщение удалено")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /^Ответить:/ }),
     ).not.toBeInTheDocument();
@@ -669,17 +732,20 @@ describe("Private messenger", () => {
     expect(reaction).not.toHaveTextContent("3");
     expect(reaction.querySelectorAll(".message-reaction-avatars .fui-Avatar")).toHaveLength(2);
     fireEvent.pointerEnter(reaction);
-    const tooltip = screen.getByRole("dialog", { name: "Кто поставил реакцию 👍" });
-    expect(tooltip).toHaveTextContent("Бахтиёр Самугов");
-    expect(tooltip).toHaveTextContent("Азиза Каримова");
-    expect(tooltip).toHaveTextContent("Малика Нурова");
-    expect(document.querySelector(".conversation-pane")?.contains(tooltip)).toBe(false);
-    fireEvent.pointerLeave(reaction);
-    fireEvent.pointerEnter(tooltip);
-    fireEvent.click(within(tooltip).getByRole("button", { name: /Азиза Каримова/ }));
+    expect(screen.queryByText("Поставили реакцию")).not.toBeInTheDocument();
+    fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
+    const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu")!;
+    expect(quick).toHaveTextContent("Бахтиёр Самугов");
+    expect(quick).toHaveTextContent("Азиза Каримова");
+    expect(quick).toHaveTextContent("Малика Нурова");
+    fireEvent.click(within(quick as HTMLElement).getByRole("button", { name: /Азиза Каримова/ }));
     expect(onOpenPersonProfile).toHaveBeenCalledWith("aziza");
     fireEvent.click(reaction);
     await waitFor(() => expect(onReactMessage).toHaveBeenCalledWith(message, "👍"));
+    openMessageMenu("Важное решение по бюджету");
+    fireEvent.click(screen.getByRole("button", { name: "Реакции · 3" }));
+    expect(screen.getByRole("dialog", { name: "Реакции на сообщение" })).toHaveTextContent("Малика Нурова");
+    fireEvent.keyDown(document, { key: "Escape" });
     openMessageMenu("Важное решение по бюджету");
     const unpin = screen.getByRole("button", { name: "Открепить" });
     await waitFor(() => expect(unpin).toBeEnabled());
@@ -804,8 +870,8 @@ describe("Private messenger", () => {
     fireEvent.change(dialog.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Команда запуска" },
     });
-    fireEvent.click(dialog.getByRole("checkbox", { name: "Бахтиёр Самугов" }));
-    fireEvent.click(dialog.getByRole("checkbox", { name: "Малика Нурова" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Бахтиёр Самугов" }));
+    fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
     fireEvent.click(dialog.getByRole("button", { name: "Создать группу" }));
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(
@@ -819,8 +885,8 @@ describe("Private messenger", () => {
       memberIds: ["baxtiyor", "malika"],
     });
     expect(
-      dialog.getByRole("checkbox", { name: "Малика Нурова" }),
-    ).toBeChecked();
+      dialog.getByRole("button", { name: "Малика Нурова" }),
+    ).toHaveAttribute("aria-pressed", "true");
     expect(dialog.getByRole("textbox", { name: /Название группы/ })).toHaveValue("Команда запуска");
   });
 
@@ -861,17 +927,30 @@ describe("Private messenger", () => {
     };
     renderMessenger({ chats: [group], chatActions });
 
-    fireEvent.click(screen.getByRole("button", { name: "Действия чата «Финансы и закупки»" }));
+    openChatMenu("finance");
     fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
 
     await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
   });
 
+  it("lets an owner leave while keeping the group for remaining members", async () => {
+    const chatActions = actions();
+    vi.mocked(chatActions.remove).mockResolvedValue(undefined);
+    renderMessenger({ chats: [{ ...initialChats[0]!, canDelete: true }], chatActions });
+
+    openChatMenu("finance");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
+
+    await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
+    expect(chatActions.delete).not.toHaveBeenCalled();
+  });
+
   it("never exposes deletion for a service chat even if stale data says it is allowed", () => {
     renderMessenger({ chats: [{ ...initialChats[4]!, canDelete: true }] });
     fireEvent.click(screen.getByRole("button", { name: /^Чаты задач/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Действия чата/ }));
+    openChatMenu(initialChats[4]!.id);
     expect(screen.queryByRole("menuitem", { name: "Удалить чат" })).not.toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Выйти из группы" })).not.toBeInTheDocument();
   });

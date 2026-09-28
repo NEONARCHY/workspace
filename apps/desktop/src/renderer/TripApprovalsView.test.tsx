@@ -86,7 +86,7 @@ describe("Trip approvals interaction", async () => {
     setup(request, onAction);
     await drop("launch");
     expect(onAction).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
+    expect(await screen.findByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
@@ -97,7 +97,7 @@ describe("Trip approvals interaction", async () => {
   it("requires a reason for rejection too", async () => {
     const { onAction } = setup();
     await drop("rejected");
-    expect(screen.getByRole("form", { name: "Причина отклонения" })).toBeInTheDocument();
+    expect(await screen.findByRole("form", { name: "Причина отклонения" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
     expect(onAction).not.toHaveBeenCalled();
   });

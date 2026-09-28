@@ -15,9 +15,10 @@ import {
   DialogTitle,
   Field,
   Input,
+  Switch,
   Textarea,
 } from "@fluentui/react-components";
-import { PeopleTeam24Regular, Sparkle24Regular } from "@fluentui/react-icons";
+import { Dismiss24Regular, PeopleTeam24Regular, Sparkle24Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -30,7 +31,7 @@ export interface ChatActions {
     title: string,
     description: string,
   ) => Promise<ChatSummary>;
-  readonly add: (id: string, ids: readonly string[]) => Promise<ChatSummary>;
+  readonly add: (id: string, ids: readonly string[], showHistory: boolean) => Promise<ChatSummary>;
   readonly setMember: (id: string, member: ChatMember) => Promise<ChatSummary>;
   readonly remove: (id: string, userId: string) => Promise<void>;
   readonly transfer: (id: string, userId: string) => Promise<ChatSummary>;
@@ -96,31 +97,27 @@ function PeoplePicker({
       />
       <div className="chat-people-options">
         {found.map((person) => (
-          <Checkbox
+          <button
+            type="button"
             key={person.id}
             className="chat-person-option"
             aria-label={person.name}
+            aria-pressed={selected.includes(person.id)}
             disabled={disabled}
-            checked={selected.includes(person.id)}
-            label={
-              <span className="chat-person-identity">
-                <ProfileAvatar person={person} token={token} size={36} />
-                <span>
-                  <strong>{person.name}</strong>
-                  <small>{person.jobTitle || "Сотрудник"}</small>
-                </span>
+            onClick={() => onChange(
+              selected.includes(person.id)
+                ? selected.filter((id) => id !== person.id)
+                : single ? [person.id] : [...selected, person.id],
+            )}
+          >
+            <span className="chat-person-identity">
+              <ProfileAvatar person={person} token={token} size={36} />
+              <span>
+                <strong>{person.name}</strong>
+                <small>{person.jobTitle || "Сотрудник"}</small>
               </span>
-            }
-            onChange={(_, data) =>
-              onChange(
-                data.checked
-                  ? single
-                    ? [person.id]
-                    : [...selected, person.id]
-                  : selected.filter((id) => id !== person.id),
-              )
-            }
-          />
+            </span>
+          </button>
         ))}
         {!found.length && <p className="muted">Сотрудники не найдены</p>}
       </div>
@@ -221,6 +218,7 @@ export function ChatManagement({
   onClose,
   onCreated,
   onRequestDelete,
+  onRequestLeave,
   allowDelete = false,
 }: {
   readonly token: string;
@@ -231,11 +229,13 @@ export function ChatManagement({
   readonly onClose: () => void;
   readonly onCreated: (chat: ChatSummary) => void;
   readonly onRequestDelete?: (chat: ChatSummary) => void;
+  readonly onRequestLeave?: (chat: ChatSummary) => void;
   readonly allowDelete?: boolean;
 }) {
   const [title, setTitle] = useState(chat?.title ?? "");
   const [description, setDescription] = useState(chat?.description ?? "");
   const [selected, setSelected] = useState<readonly string[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
   const [editing, setEditing] = useState<string>();
   const [confirmation, setConfirmation] = useState<{
     type: "remove" | "transfer";
@@ -244,7 +244,6 @@ export function ChatManagement({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isOwner = chat?.ownerId === currentUserId;
-  const isCreator = chat?.members.some((member) => member.userId === currentUserId && member.role === "owner");
   const isGroup = chat?.kind === "group";
   const isUserManagedChat = Boolean(chat && !chat.contextType && (chat.kind === "direct" || chat.kind === "group"));
   const personName = (id: string) =>
@@ -283,7 +282,7 @@ export function ChatManagement({
     >
       <DialogSurface className="chat-settings-dialog">
         <DialogBody>
-          <DialogTitle>
+          <DialogTitle action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть окно группы" disabled={busy} onClick={onClose} />}>
             {chat
               ? isGroup
                 ? "Управление группой"
@@ -381,9 +380,9 @@ export function ChatManagement({
                           )}
                         {isGroup &&
                           member.role !== "owner" &&
-                          (member.userId === currentUserId ||
-                            (chat.permissions.manageMembers &&
-                              (member.role === "member" || isOwner))) && (
+                          member.userId !== currentUserId &&
+                          chat.permissions.manageMembers &&
+                          (member.role === "member" || isOwner) && (
                             <Button
                               size="small"
                               disabled={busy}
@@ -394,9 +393,7 @@ export function ChatManagement({
                                 })
                               }
                             >
-                              {member.userId === currentUserId
-                                ? "Выйти"
-                                : "Исключить"}
+                              Исключить
                             </Button>
                           )}
                       </div>
@@ -432,12 +429,6 @@ export function ChatManagement({
                     )}
                   </div>
                 ))}
-                {isOwner && (
-                  <p className="muted">
-                    Для выхода сначала передайте владение другому участнику
-                    через «Права».
-                  </p>
-                )}
               </section>
             )}
             {(!chat || (isGroup && chat.permissions.inviteMembers)) && (
@@ -450,17 +441,17 @@ export function ChatManagement({
                   onChange={setSelected}
                   disabled={busy}
                 />
-                <p className="muted">
-                  Добавленные участники увидят всю историю группы. Внешние гости
-                  пока не поддерживаются.
-                </p>
+                {chat && <div className="chat-history-choice">
+                  <Switch checked={showHistory} disabled={busy} label="Показывать новым участникам предыдущую историю" onChange={(_, data) => setShowHistory(data.checked)} />
+                  <p className="muted">{showHistory ? "Они увидят и прежние сообщения и вложения." : "Они увидят только сообщения, отправленные после добавления."}</p>
+                </div>}
                 {chat && (
                   <Button
                     disabled={busy || !selected.length}
                     onClick={() =>
                       void run(
-                        () => actions.add(chat.id, selected),
-                        () => setSelected([]),
+                        () => actions.add(chat.id, selected, showHistory),
+                        () => { setSelected([]); setShowHistory(false); },
                       )
                     }
                   >
@@ -507,9 +498,14 @@ export function ChatManagement({
               </div>
             )}
             <div className="chat-dialog-actions">
-              {chat && isUserManagedChat && onRequestDelete && (allowDelete || isOwner || isCreator) ? (
+              {chat && isUserManagedChat && onRequestDelete && (isGroup ? chat.canDelete : allowDelete) ? (
                 <Button appearance="primary" disabled={busy} onClick={() => onRequestDelete(chat)}>
-                  Удалить чат
+                  {isGroup ? "Удалить группу" : "Удалить чат"}
+                </Button>
+              ) : null}
+              {chat && isGroup && onRequestLeave ? (
+                <Button disabled={busy || (isOwner && chat.members.length < 2)} onClick={() => onRequestLeave(chat)}>
+                  Выйти из группы
                 </Button>
               ) : null}
               {!chat && (
@@ -535,10 +531,8 @@ export function ChatManagement({
                   {busy ? "Создаём…" : "Создать группу"}
                 </Button>
               )}
-              <Button disabled={busy} onClick={onClose}>
-                Закрыть
-              </Button>
             </div>
+            {chat && isGroup && isOwner && chat.members.length < 2 ? <p className="chat-leave-hint muted">Чтобы выйти, сначала добавьте участника, которому можно передать владение.</p> : null}
           </DialogContent>
         </DialogBody>
       </DialogSurface>

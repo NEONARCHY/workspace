@@ -7,7 +7,8 @@ import { ProjectHubView } from "./ProjectHubView";
 import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
 import { people } from "./test-fixtures/demo-data";
 import {
-  createProjectHubRequest, decideProjectHubRequest, loadProjectHub,
+  createProjectHubRequest, createProjectHubRequestDraft, submitProjectHubRequestDraft,
+  decideProjectHubRequest, loadProjectHub,
   loadProjectHubRequestTargets,
   loadProjectHubRequests, saveProjectHubProject,
   saveProjectHubWorkstream, uploadWorkspaceAttachment, commentProjectHubItem,
@@ -18,7 +19,8 @@ vi.mock("./workspace-api", () => ({
   loadProjectHub: vi.fn(), loadProjectHubRequestTargets: vi.fn(), loadProjectHubRequests: vi.fn(), saveProjectHubProject: vi.fn(),
   saveProjectHubItem: vi.fn(), setProjectHubItemStatus: vi.fn(), publishProjectHubEvent: vi.fn(),
   saveProjectHubWorkstream: vi.fn(), uploadWorkspaceAttachment: vi.fn(), downloadWorkspaceAttachment: vi.fn(),
-  createProjectHubRequest: vi.fn(), decideProjectHubRequest: vi.fn(), commentProjectHubItem: vi.fn(),
+  createProjectHubRequest: vi.fn(), createProjectHubRequestDraft: vi.fn(),
+  submitProjectHubRequestDraft: vi.fn(), decideProjectHubRequest: vi.fn(), commentProjectHubItem: vi.fn(),
 }));
 
 const project: ProjectHubOverview["projects"][number] = {
@@ -45,6 +47,7 @@ const approved: ProjectHubRequest = {
 };
 const pending: ProjectHubRequest = { ...approved, id: "request-2", title: "Печать баннеров",
   amount: 100, status: "pending", currentStep: 0, canDecide: true };
+const draft: ProjectHubRequest = { ...pending, id: "draft-1", status: "draft", canDecide: false };
 
 function setup(mode: "projects" | "funding" = "projects") {
   render(<FluentProvider theme={workspaceTheme}><ProjectHubView mode={mode} token="test-token"
@@ -59,6 +62,9 @@ beforeEach(() => {
   vi.mocked(loadProjectHubRequests).mockResolvedValue([approved, pending]);
   vi.mocked(saveProjectHubProject).mockResolvedValue(project);
   vi.mocked(createProjectHubRequest).mockResolvedValue(pending);
+  vi.mocked(createProjectHubRequestDraft).mockResolvedValue(draft);
+  vi.mocked(submitProjectHubRequestDraft).mockResolvedValue({ ...draft, status: "pending" });
+  vi.mocked(uploadWorkspaceAttachment).mockResolvedValue({} as never);
   vi.mocked(decideProjectHubRequest).mockResolvedValue({ ...pending, status: "approved" });
   vi.mocked(commentProjectHubItem).mockResolvedValue(item);
   vi.mocked(setProjectHubItemStatus).mockResolvedValue({ ...item, status: "cancelled" });
@@ -69,6 +75,7 @@ describe("standalone project hub", () => {
   it("shows the own project work and multiple requests without global task/payment data", async () => {
     setup();
     expect(await screen.findByRole("heading", { name: project.title })).toBeInTheDocument();
+    expect(screen.getByLabelText("Всего проектов: 1")).toHaveTextContent("1");
     const work = screen.getByRole("region", { name: "Направления и работы проекта" });
     expect(within(work).getByText("Проведение форума")).toBeInTheDocument();
     expect(within(work).queryByText("Форум")).not.toBeInTheDocument();
@@ -97,6 +104,9 @@ describe("standalone project hub", () => {
     setup("funding");
     const card = await screen.findByRole("button", { name: /Печать баннеров/ });
     fireEvent.click(card);
+    expect(screen.getByLabelText("Всего проектных заявок: 2")).toHaveTextContent("2");
+    expect(screen.getByLabelText("Сводка проектных заявок")).toHaveTextContent("Ожидают решения");
+    expect(card).toHaveAttribute("aria-current", "true");
     const detail = screen.getByLabelText("Карточка проектной заявки");
     expect(within(detail).getByText("Печать баннеров")).toBeInTheDocument();
     fireEvent.click(within(detail).getByRole("button", { name: "Согласовать" }));
@@ -117,7 +127,7 @@ describe("standalone project hub", () => {
     ));
   });
 
-  it("groups requests into three approval lanes", async () => {
+  it("groups requests into four approval lanes", async () => {
     setup("funding");
     const board = await screen.findByRole("region", { name: "Канбан проектных заявок" });
     expect(within(board).getByRole("region", { name: "На согласовании" })).toHaveTextContent("Печать баннеров");
@@ -175,6 +185,56 @@ describe("standalone project hub", () => {
     await waitFor(() => expect(createProjectHubRequest).toHaveBeenCalledWith(
       "test-token", project.id, expect.objectContaining({ itemId: item.id, title: "Печать программы" }),
     ));
+  });
+
+  it("uploads optional files before sending a new project request", async () => {
+    setup("funding");
+    fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Направление"), { target: { value: "stream-1" } });
+    fireEvent.change(within(dialog).getByLabelText("Задача или мероприятие"), { target: { value: item.id } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Название" }), { target: { value: "Смета" } });
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: /Сумма/ }), { target: { value: "100" } });
+    fireEvent.change(within(dialog).getByLabelText("Крайний срок согласования"), { target: { value: "2030-09-30T17:00" } });
+    fireEvent.change(within(dialog).getByLabelText("Файлы заявки"), {
+      target: { files: [new File(["data"], "smeta.pdf", { type: "application/pdf" })] },
+    });
+    expect(within(dialog).getByText(/smeta.pdf/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
+    await waitFor(() => expect(submitProjectHubRequestDraft).toHaveBeenCalledWith("test-token", draft.id));
+    expect(createProjectHubRequestDraft).toHaveBeenCalledOnce();
+    expect(uploadWorkspaceAttachment).toHaveBeenCalledWith(
+      "test-token", "project_funding_request", draft.id, expect.objectContaining({ name: "smeta.pdf" }),
+    );
+    expect(createProjectHubRequest).not.toHaveBeenCalled();
+    const [uploadCall] = vi.mocked(uploadWorkspaceAttachment).mock.invocationCallOrder;
+    const [submitCall] = vi.mocked(submitProjectHubRequestDraft).mock.invocationCallOrder;
+    expect(uploadCall).toBeLessThan(submitCall!);
+  });
+
+  it("keeps an unsent draft and retries only the failed file", async () => {
+    vi.mocked(uploadWorkspaceAttachment)
+      .mockResolvedValueOnce({} as never)
+      .mockRejectedValueOnce(new Error("Хранилище недоступно"))
+      .mockResolvedValueOnce({} as never);
+    setup("funding");
+    fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Направление"), { target: { value: "stream-1" } });
+    fireEvent.change(within(dialog).getByLabelText("Задача или мероприятие"), { target: { value: item.id } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Название" }), { target: { value: "Смета" } });
+    fireEvent.change(within(dialog).getByRole("spinbutton", { name: /Сумма/ }), { target: { value: "100" } });
+    fireEvent.change(within(dialog).getByLabelText("Крайний срок согласования"), { target: { value: "2030-09-30T17:00" } });
+    fireEvent.change(within(dialog).getByLabelText("Файлы заявки"), {
+      target: { files: [new File(["a"], "a.pdf"), new File(["b"], "b.pdf")] },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Хранилище недоступно");
+    expect(submitProjectHubRequestDraft).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
+    await waitFor(() => expect(submitProjectHubRequestDraft).toHaveBeenCalledOnce());
+    expect(createProjectHubRequestDraft).toHaveBeenCalledOnce();
+    expect(uploadWorkspaceAttachment).toHaveBeenCalledTimes(3);
   });
 
   it("keeps comments and cancellation reasons in the project work card", async () => {

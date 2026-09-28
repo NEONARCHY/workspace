@@ -5,7 +5,7 @@ import type {
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import { Add20Regular } from "@fluentui/react-icons";
 
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -13,6 +13,7 @@ import { PersonPicker } from "./PersonPicker";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -159,11 +160,11 @@ export function CalendarEventComposer({
                 </label>
                 <label>
                   <span>Начало <b aria-hidden="true">*</b></span>
-                  <Input type="datetime-local" aria-label="Начало" value={draft.startsAt} min={minimumStart} onChange={(_event, data) => onDraftChange({ ...draft, startsAt: data.value })} />
+                  <WorkspaceDateTimePicker ariaLabel="Начало" value={draft.startsAt} min={minimumStart} onChange={(value) => onDraftChange({ ...draft, startsAt: value })} />
                 </label>
                 <label>
                   <span>Окончание <b aria-hidden="true">*</b></span>
-                  <Input type="datetime-local" aria-label="Окончание" value={draft.endsAt} onChange={(_event, data) => onDraftChange({ ...draft, endsAt: data.value })} />
+                  <WorkspaceDateTimePicker ariaLabel="Окончание" value={draft.endsAt} min={draft.startsAt} onChange={(value) => onDraftChange({ ...draft, endsAt: value })} />
                 </label>
                 <div className="record-field-wide">
                   <Checkbox checked={draft.allDay} label="Событие на весь день" onChange={(_event, data) => onDraftChange({ ...draft, allDay: data.checked === true })} />
@@ -181,10 +182,9 @@ export function CalendarEventComposer({
                 {visiblePeople.map((person) => (
                   <Checkbox
                     key={person.id}
-                    label={<EmployeeProfileLink userId={person.id} personName={person.name}>
-                      {person.name}
-                      {person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}
-                    </EmployeeProfileLink>}
+                    label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
+                      <span>{person.name}{person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}</span>
+                    </EmployeeProfileLink></span>}
                     checked={draft.attendeeIds.includes(person.id)}
                     disabled={person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
                     onChange={(_event, data) => onDraftChange({
@@ -218,11 +218,11 @@ export function CalendarEventComposer({
                     </label>
                     <label>
                       <span>Срок</span>
-                      <Input type="datetime-local" aria-label={`Срок внутренней задачи ${index + 1}`} value={task.dueAt} onChange={(_event, data) => onUpdateTask(task.key, { dueAt: data.value })} />
+                      <WorkspaceDateTimePicker ariaLabel={`Срок внутренней задачи ${index + 1}`} value={task.dueAt} onChange={(value) => onUpdateTask(task.key, { dueAt: value })} />
                     </label>
                     <label>
                       <span>Приоритет</span>
-                      <Select aria-label={`Приоритет внутренней задачи ${index + 1}`} value={task.priority} onChange={(event) => onUpdateTask(task.key, { priority: event.target.value as WorkspaceTask["priority"] })}>
+                      <Select aria-label={`Приоритет внутренней задачи ${index + 1}`} variant="priority" value={task.priority} onChange={(event) => onUpdateTask(task.key, { priority: event.target.value as WorkspaceTask["priority"] })}>
                         {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </Select>
                     </label>

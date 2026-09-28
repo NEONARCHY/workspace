@@ -40,3 +40,33 @@ export function compareReleaseVersions(left: string, right: string): number {
   }
   return comparePrerelease(parsedLeft.prerelease, parsedRight.prerelease);
 }
+
+/** Numbers successive test updates without changing the published app version. */
+export function nextUpdateVersion(version: string): string {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+  if (!match) throw new Error(`Invalid published version: ${version}`);
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (!Number.isSafeInteger(major) || !Number.isSafeInteger(minor) || !Number.isSafeInteger(patch) || patch > 999) {
+    throw new Error(`Invalid published version: ${version}`);
+  }
+  if (patch === 999) return `${major}.${minor + 1}.0`;
+  return `${major}.${minor}.${patch + 1}`;
+}
+
+/** A note keeps its number when it moves from pending to a released folder. */
+export function numberUpdateNotes<T extends { readonly id: string; readonly fileName: string }>(
+  notes: readonly T[], lastGroupedVersion: string,
+): (T & { version: string })[] {
+  const compareKeys = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
+  const sorted = [...notes].sort((left, right) => compareKeys(left.fileName, right.fileName) || compareKeys(left.id, right.id));
+  if (new Set(sorted.map((note) => note.id)).size !== sorted.length) {
+    throw new Error("Numbered release note IDs must be unique");
+  }
+  let version = lastGroupedVersion;
+  return sorted.map((note) => {
+    version = nextUpdateVersion(version);
+    return { ...note, version };
+  }).reverse();
+}

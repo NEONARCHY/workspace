@@ -17,11 +17,21 @@ const entryFiles = readdirSync(pendingPath).filter((name) => name.endsWith(".jso
 const entries = entryFiles.map((name) => JSON.parse(readFileSync(join(pendingPath, name), "utf8")));
 if (entries.length === 0) fail("at least one pending entry is required");
 const ids = new Set();
-for (const entry of entries) {
+for (const [index, entry] of entries.entries()) {
+  const fileName = entryFiles[index];
+  const dateMatch = /^(\d{4})(\d{2})(\d{2})-[a-z0-9-]+\.json$/u.exec(fileName);
+  if (!dateMatch) fail(`${fileName} must begin with a YYYYMMDD date`);
+  const date = new Date(`${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}T12:00:00Z`);
+  if (Number.isNaN(date.valueOf()) || date.toISOString().slice(0, 10) !== `${dateMatch[1]}-${dateMatch[2]}-${dateMatch[3]}`) {
+    fail(`${fileName} must contain a valid calendar date`);
+  }
   if (typeof entry.id !== "string" || !/^[a-z0-9-]{8,80}$/u.test(entry.id) || ids.has(entry.id)) {
     fail("every pending entry needs a unique lowercase id");
   }
   ids.add(entry.id);
+  if (entry.title !== undefined && (typeof entry.title !== "string" || entry.title.trim().length < 8 || entry.title.length > 50)) {
+    fail(`${entry.id} title must contain 8–50 characters when provided`);
+  }
   if (!Array.isArray(entry.items) || entry.items.length < 1 || entry.items.length > 12) {
     fail(`${entry.id} must contain 1–12 changes`);
   }
@@ -30,7 +40,6 @@ for (const entry of entries) {
   }
 }
 const itemCount = entries.reduce((total, entry) => total + entry.items.length, 0);
-if (itemCount > 150) fail("a pending release may contain at most 150 changes");
 
 const [base, head = "HEAD"] = process.argv.slice(2);
 if (base && !/^0+$/.test(base)) {
@@ -41,4 +50,4 @@ if (base && !/^0+$/.test(base)) {
   }
 }
 
-console.log(`Release notes ${notes.version}: ${notes.title} (${entries.length} entries, ${itemCount} items)`);
+console.log(`Release notes ${notes.version}: ${notes.title} (${entries.length} entries, ${itemCount} historical items; latest 50 form the installer summary)`);

@@ -755,7 +755,15 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert task.cycle is not None
             assert task.cycle.schedule_kind == "daily"
-            assert await materialize_due_task_cycles(connection) == 1
+            assert await materialize_due_task_cycles(connection) >= 1
+            assert await connection.scalar(
+                select(func.count())
+                .select_from(tasks)
+                .where(
+                    tasks.c.cycle_id == UUID(task.cycle.id),
+                    tasks.c.cycle_occurrence_key != "initial",
+                )
+            ) == 1
             assert await materialize_due_task_cycles(connection) == 0
             task = await set_task_cycle(
                 connection,
