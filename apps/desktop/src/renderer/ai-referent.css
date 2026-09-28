@@ -33,7 +33,7 @@
   color: color-mix(in srgb, var(--ai-navy) 66%, white);
 }
 
-.ai-referent-header-actions {
+.ai-referent-register-actions {
   display: flex;
   gap: 8px;
 }

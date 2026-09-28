@@ -13,37 +13,57 @@ import { WorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { compareReleaseVersions } from "./release-versions.mts";
 
+function formatUpdateDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatLongDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export function ReleaseHistoryDialog({ open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const releases = useMemo(() => [{
-    version: __YUKSALISH_APP_VERSION__,
-    title: __YUKSALISH_RELEASE_NOTES__.title,
-    items: __YUKSALISH_RELEASE_NOTES__.items,
-  }, ...__YUKSALISH_RELEASE_HISTORY__.filter((release) => release.version !== __YUKSALISH_APP_VERSION__)]
-    .sort((left, right) => compareReleaseVersions(right.version, left.version)), []);
-  const [selectedVersion, setSelectedVersion] = useState(releases[0]?.version ?? "");
-  const selectedRelease = releases.find((release) => release.version === selectedVersion) ?? releases[0];
+  const entries = useMemo(() => [
+    ...__YUKSALISH_UPDATE_ENTRIES__.map((update) => ({
+      key: `update:${update.id}`,
+      label: `${formatUpdateDate(update.date)} · ${update.version}`,
+      title: `Обновление ${update.version}`,
+      detail: formatLongDate(update.date),
+      items: update.items,
+    })),
+    ...[...__YUKSALISH_RELEASE_HISTORY__]
+      .sort((left, right) => compareReleaseVersions(right.version, left.version))
+      .map((release) => ({
+        key: `release:${release.version}`,
+        label: `${formatUpdateDate(release.date)} · ${release.version}`,
+        title: `Обновление ${release.version}`,
+        detail: formatLongDate(release.date),
+        items: release.items,
+      })),
+  ], []);
+  const [selectedKey, setSelectedKey] = useState(entries[0]?.key ?? "");
+  const selectedEntry = entries.find((entry) => entry.key === selectedKey) ?? entries[0];
 
   return <WorkspaceDialog open={open} onOpenChange={(_event, data) => onOpenChange(data.open)}>
     <DialogSurface className="release-history-dialog">
       <DialogBody>
         <DialogTitle>Ранние обновления</DialogTitle>
         <DialogContent className="release-history-content">
-          {selectedRelease ? <>
+          {selectedEntry ? <>
             <label className="release-version-picker">
-              <span>Версия обновления</span>
-              <WorkspaceSelect aria-label="Версия обновления" value={selectedVersion} onChange={(event) => setSelectedVersion(event.target.value)}>
-                {releases.map((release) => <option value={release.version} key={release.version}>Версия {release.version}</option>)}
+              <span>Обновление</span>
+              <WorkspaceSelect aria-label="Обновление" listboxClassName="release-history-options" value={selectedKey} onChange={(event) => setSelectedKey(event.target.value)}>
+                {entries.map((entry) => <option value={entry.key} key={entry.key}>{entry.label}</option>)}
               </WorkspaceSelect>
             </label>
-            <section key={selectedRelease.version}>
+            <section key={selectedEntry.key}>
             <div className="release-history-heading">
-              <h3>{selectedRelease.title}</h3>
-              <span>Версия {selectedRelease.version}</span>
+              <h3>{selectedEntry.title}</h3>
+              <span>{selectedEntry.detail}</span>
             </div>
-            <ul>{selectedRelease.items.map((item) => <li key={item}><CheckmarkCircle20Filled /><span>{item}</span></li>)}</ul>
+            <ul>{selectedEntry.items.map((item) => <li key={item}><CheckmarkCircle20Filled /><span>{item}</span></li>)}</ul>
             </section>
           </> : <p>История обновлений пока пуста.</p>}
         </DialogContent>

@@ -38,7 +38,7 @@ describe("Personal organization", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 4));
     await waitFor(() => expect(close).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(close).toHaveBeenCalledTimes(2);
   });
@@ -49,7 +49,7 @@ describe("Personal organization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Конфликт версий");
     expect(close).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "crm");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
   });
   it("hides legacy project and payment entries without deleting their saved positions", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
@@ -69,10 +69,11 @@ describe("Personal organization", () => {
     }
     render(<Harness />);
     expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", second.id);
+    expect(screen.queryByText("Перетащите для перестановки")).not.toBeInTheDocument();
     expect(screen.queryByText(first.title)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Архив/ }));
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: `Действия чата «${first.title}»` }));
+    fireEvent.contextMenu(document.querySelector(`[data-chat-id="${first.id}"] .chat-row`)!);
     // jsdom has no popover layout. Real visibility/accessible roles are covered by Edge/Electron.
     fireEvent.click(screen.getByText("Вернуть из архива"));
     await waitFor(() => expect(screen.getByText("Архив пуст")).toBeInTheDocument());
@@ -86,15 +87,44 @@ describe("Personal organization", () => {
     const first = initialChats[0]!, second = initialChats[1]!, reorder = vi.fn().mockResolvedValue(undefined);
     render(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={initialChats} messages={[]} onSelect={vi.fn()}
       preferences={{ ...defaultPersonalPreferences, pinnedChatIds: [first.id, second.id] }} onReorder={reorder} onChange={vi.fn().mockRejectedValue(new Error("Сервер недоступен"))} /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: `Действия чата «${first.title}»` }));
+    expect(screen.queryByRole("button", { name: `Переставить: ${first.title}` })).not.toBeInTheDocument();
+    fireEvent.contextMenu(document.querySelector(`[data-chat-id="${first.id}"] .chat-row`)!);
     expect(screen.getByText("Переместить выше").closest('[role="menuitem"]')).toHaveAttribute("aria-disabled", "true");
     fireEvent.click(screen.getByText("Переместить ниже"));
     await waitFor(() => expect(reorder).toHaveBeenCalledWith([second.id, first.id]));
-    await waitFor(() => expect(screen.getByRole("button", { name: `Действия чата «${first.title}»` })).toBeEnabled());
-    fireEvent.click(screen.getByRole("button", { name: `Действия чата «${first.title}»` }));
+    await waitFor(() => expect(document.querySelector(`[data-chat-id="${first.id}"] .chat-row`)).toBeEnabled());
+    fireEvent.contextMenu(document.querySelector(`[data-chat-id="${first.id}"] .chat-row`)!);
     fireEvent.click(screen.getByText("В архив"));
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
-    expect(within(screen.getByRole("list")).getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", first.id);
+    expect(within(screen.getByRole("list")).getAllByRole("listitem")[0]).toHaveAttribute("data-chat-id", second.id);
+  });
+  it("keeps a dropped pinned chat in place while saving and rolls back on rejection", async () => {
+    const first = initialChats[0]!, second = initialChats[1]!;
+    let finishSave: ((error?: Error) => void) | undefined;
+    const reorder = vi.fn(() => new Promise<void>((resolve, reject) => {
+      finishSave = (error) => error ? reject(error) : resolve();
+    }));
+    const preferences = { ...defaultPersonalPreferences, pinnedChatIds: [first.id, second.id] };
+    const view = render(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={initialChats} messages={[]} onSelect={vi.fn()}
+      preferences={preferences} onReorder={reorder} /></FluentProvider>);
+    const rowIds = () => within(screen.getByRole("list")).getAllByRole("listitem").slice(0, 2).map((row) => row.getAttribute("data-chat-id"));
+    fireEvent.contextMenu(document.querySelector(`[data-chat-id="${first.id}"] .chat-row`)!);
+    fireEvent.click(screen.getByText("Переместить ниже"));
+    expect(rowIds()).toEqual([second.id, first.id]);
+    expect(reorder).toHaveBeenCalledWith([second.id, first.id]);
+    expect(screen.getAllByText("Закреплённые")).toHaveLength(1);
+    finishSave?.();
+    await waitFor(() => expect(document.querySelector(".organization-live")).toHaveTextContent("Порядок закреплённых чатов сохранён"));
+    expect(rowIds()).toEqual([second.id, first.id]);
+    view.rerender(<FluentProvider theme={webLightTheme}><OrganizedChatList chats={initialChats} messages={[]} onSelect={vi.fn()}
+      preferences={{ ...preferences, pinnedChatIds: [second.id, first.id], revision: 1 }} onReorder={reorder} /></FluentProvider>);
+    expect(rowIds()).toEqual([second.id, first.id]);
+    fireEvent.contextMenu(document.querySelector(`[data-chat-id="${second.id}"] .chat-row`)!);
+    fireEvent.click(screen.getByText("Переместить ниже"));
+    expect(rowIds()).toEqual([first.id, second.id]);
+    finishSave?.(new Error("Не удалось сохранить"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось сохранить"));
+    expect(rowIds()).toEqual([second.id, first.id]);
   });
   it("keeps pinned order and raises the chat with the newest message above other chats", () => {
     const [first, second] = initialChats;

@@ -71,6 +71,18 @@ users = sa.Table(
     sa.Column("avatar_storage_key", sa.String(500)),
     sa.Column("avatar_content_type", sa.String(80)),
     sa.Column("avatar_updated_at", sa.DateTime(timezone=True)),
+    sa.Column("birthday_month", sa.SmallInteger()),
+    sa.Column("birthday_day", sa.SmallInteger()),
+)
+
+assistant_messages = sa.Table(
+    "assistant_messages", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("role", sa.String(16)),
+    sa.Column("model", sa.String(64)),
+    sa.Column("content", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
 workday_schedules = sa.Table(
@@ -220,6 +232,7 @@ chat_members = sa.Table(
     sa.Column("member_role", sa.String(16)),
     sa.Column("permissions", postgresql.JSONB()),
     sa.Column("joined_at", sa.DateTime(timezone=True)),
+    sa.Column("history_visible_from", sa.DateTime(timezone=True)),
     sa.Column("muted_until", sa.DateTime(timezone=True)),
 )
 
@@ -236,6 +249,8 @@ messages = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("edited_at", sa.DateTime(timezone=True)),
     sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("system_kind", sa.String(32)),
+    sa.Column("system_target_user_id", uuid_type),
 )
 
 message_receipts = sa.Table(
@@ -744,6 +759,9 @@ feed_posts = sa.Table(
     sa.Column("is_pinned", sa.Boolean()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("system_kind", sa.String(32)),
+    sa.Column("birthday_user_id", uuid_type),
+    sa.Column("birthday_year", sa.SmallInteger()),
 )
 
 feed_comments = sa.Table(
@@ -837,6 +855,34 @@ workspace_notification_preferences = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+support_requests = sa.Table(
+    "workspace_support_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("category", sa.String(24)),
+    sa.Column("subject", sa.String(160)),
+    sa.Column("body", sa.Text()),
+    sa.Column("status", sa.String(24)),
+    sa.Column("resolution_code", sa.String(40)),
+    sa.Column("response_unread", sa.Boolean()),
+    sa.Column("latest_response_tone", sa.String(16)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+    sa.Column("resolved_at", sa.DateTime(timezone=True)),
+)
+
+support_request_messages = sa.Table(
+    "workspace_support_request_messages",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("request_id", uuid_type),
+    sa.Column("author_user_id", uuid_type),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("body", sa.Text()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 # HR service-tenure records deliberately live outside ``core_users``: an employee's
 # account can be archived without losing statutory personnel history.
 hr_settings = sa.Table(
@@ -900,6 +946,7 @@ employee_rewards = sa.Table(
     sa.Column("icon_key", sa.String(32)),
     sa.Column("title", sa.String(100)),
     sa.Column("description", sa.Text()),
+    sa.Column("context_note", sa.String(240)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 

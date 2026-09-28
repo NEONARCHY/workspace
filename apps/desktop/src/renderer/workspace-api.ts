@@ -1,4 +1,8 @@
 import type {
+  AssistantMessage,
+  AssistantModel,
+  BirthdayPreference,
+  GreetingLanguage,
   AIReferentCommentAudio,
   AIReferentDocumentCheck,
   AIReferentArchiveLetter,
@@ -65,6 +69,10 @@ import type {
   ProjectHubRequest,
   ProjectStage,
   SessionSummary,
+  SupportAdminActionInput,
+  SupportRegistry,
+  SupportRequest,
+  SupportRequestInput,
   TaskParticipantRole,
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
@@ -536,6 +544,7 @@ async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
   token?: string,
+  timeout?: number,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
@@ -545,7 +554,54 @@ async function apiRequest<T>(
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
   return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
-    response.status === 204 ? undefined as T : await response.json() as T);
+    response.status === 204 ? undefined as T : await response.json() as T, timeout);
+}
+
+export function loadAssistantMessages(token: string): Promise<readonly AssistantMessage[]> {
+  return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
+}
+
+export function sendAssistantMessage(token: string, model: AssistantModel, message: string): Promise<AssistantMessage> {
+  return apiRequest<AssistantMessage>("/assistant/messages", {
+    method: "POST", body: JSON.stringify({ model, message }),
+  }, token, 65_000);
+}
+
+export type AssistantRewriteStyle = "conversational" | "friendly" | "professional" | "corporate" | "caveman";
+
+export function rewriteMessengerDraft(
+  token: string, text: string, style: AssistantRewriteStyle,
+): Promise<{ readonly text: string }> {
+  return apiRequest<{ readonly text: string }>("/assistant/rewrite", {
+    method: "POST", body: JSON.stringify({ text, style }),
+  }, token, 65_000);
+}
+
+export function transcribeAssistantVoice(token: string, audio: Blob): Promise<{ readonly text: string }> {
+  const headers = new Headers({ "Accept": "application/json", "Content-Type": "audio/webm",
+    "Authorization": `Bearer ${token}` });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${apiBaseUrl}/api/v1/assistant/transcribe`, {
+    method: "POST", headers, body: audio,
+  }, (response) => response.json() as Promise<{ readonly text: string }>, 75_000);
+}
+
+export function loadBirthdayPreference(token: string): Promise<BirthdayPreference> {
+  return apiRequest<BirthdayPreference>("/assistant/birthday", {}, token);
+}
+
+export function saveBirthdayPreference(token: string, value: BirthdayPreference): Promise<BirthdayPreference> {
+  return apiRequest<BirthdayPreference>("/assistant/birthday", {
+    method: "PUT", body: JSON.stringify(value),
+  }, token);
+}
+
+export function generateBirthdayGreeting(
+  token: string, postId: string, language: GreetingLanguage,
+): Promise<{ readonly text: string }> {
+  return apiRequest<{ readonly text: string }>("/assistant/birthday-greeting", {
+    method: "POST", body: JSON.stringify({ post_id: postId, language }),
+  }, token, 65_000);
 }
 
 export function login(
@@ -891,6 +947,37 @@ export function updateWorkspaceNotificationPreferences(
   );
 }
 
+export function loadSupportRegistry(token: string): Promise<SupportRegistry> {
+  return apiRequest<SupportRegistry>("/support-requests", {}, token);
+}
+
+export function createSupportRequest(
+  token: string,
+  payload: SupportRequestInput,
+): Promise<SupportRequest> {
+  return apiRequest<SupportRequest>(
+    "/support-requests",
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function actOnSupportRequest(
+  token: string,
+  requestId: string,
+  payload: SupportAdminActionInput,
+): Promise<SupportRequest> {
+  return apiRequest<SupportRequest>(
+    `/support-requests/${encodeURIComponent(requestId)}/actions`,
+    { method: "POST", body: JSON.stringify(payload) },
+    token,
+  );
+}
+
+export function markSupportResponsesRead(token: string): Promise<void> {
+  return apiRequest<void>("/support-requests/responses/read", { method: "POST" }, token);
+}
+
 export function sendWorkspaceMessage(
   token: string,
   chatId: string,
@@ -916,8 +1003,8 @@ export function deleteWorkspaceChat(token: string, id: string): Promise<void> {
   return apiRequest(`/chats/${id}`, { method: "DELETE" }, token);
 }
 
-export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[]): Promise<ChatSummary> {
-  return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds }) }, token);
+export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[], showHistory: boolean): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/members`, { method: "POST", body: JSON.stringify({ memberIds, showHistory }) }, token);
 }
 
 export function setWorkspaceChatMember(token: string, id: string, member: ChatMember): Promise<ChatSummary> {

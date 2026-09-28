@@ -14,11 +14,11 @@ export function SpatialSort({ ids, children, onMove }: { ids: string[]; children
   </DndContext>;
 }
 
-export function SpatialSortItem({ id, label, disabled, children, className = "", ...props }: HTMLAttributes<HTMLDivElement> & { id: string; label: string; disabled: boolean }) {
+export function SpatialSortItem({ id, label, disabled, activation = "grip", children, className = "", ...props }: HTMLAttributes<HTMLDivElement> & { id: string; label: string; disabled: boolean; activation?: "grip" | "item" }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
   const verticalTransform = transform ? { ...transform, x: 0 } : null;
-  return <div {...props} ref={setNodeRef} className={`${className} spatial-sort-item ${isDragging ? "is-lifted" : ""}`} style={{ transform: CSS.Transform.toString(verticalTransform), transition, zIndex: isDragging ? 2 : undefined }}>
+  return <div {...(activation === "item" && !disabled ? { ...attributes, ...listeners, tabIndex: 0, "aria-label": `Переставить: ${label}` } : {})} {...props} ref={setNodeRef} className={`${className} spatial-sort-item ${isDragging ? "is-lifted" : ""}`} style={{ transform: CSS.Transform.toString(verticalTransform), transition, zIndex: isDragging ? 2 : undefined }}>
     {children}
-    {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-sort-grip" aria-label={`Переставить: ${label}`}><ReOrderDotsVertical16Regular /></button> : null}
+    {!disabled && activation === "grip" ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-sort-grip" aria-label={`Переставить: ${label}`}><ReOrderDotsVertical16Regular /></button> : null}
   </div>;
 }

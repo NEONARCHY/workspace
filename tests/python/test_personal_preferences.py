@@ -27,7 +27,7 @@ def test_personal_payloads_reject_unknown_fields_duplicates_and_missing_modules(
     for payload in ({"chatIds": [same, same], "revision": 0}, {"chatIds": [], "revision": -1}):
         with pytest.raises(ValidationError):
             PinnedChatOrder.model_validate(payload)
-    for order in (DEFAULT_NAVIGATION[:-1], ["crm"] * 11, [*DEFAULT_NAVIGATION[:-1], "other"]):
+    for order in (DEFAULT_NAVIGATION[:-1], ["retired"] * 11, [*DEFAULT_NAVIGATION[:-1], "other"]):
         with pytest.raises(ValidationError):
             NavigationOrder.model_validate({"order": order, "revision": 0})
     with pytest.raises(ValidationError):
@@ -43,6 +43,7 @@ async def exercise_personal_preferences(url: str) -> None:
         environment="test",
         database_url=url,
         seed_demo_data=True,
+        demo_password=SecretStr("Yuksalish-Local-2026!"),
         auth_signing_key=SecretStr("personal-preferences-test-signing-key"),
     )
     app = create_app(settings)

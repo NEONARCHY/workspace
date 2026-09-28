@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type WheelEvent } from "react";
 
 import type {
   DirectoryEmployee,
@@ -11,7 +11,19 @@ import type {
   InterfaceLocale,
 } from "@yuksalish/contracts";
 import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
-import { Camera24Regular, Dismiss24Regular } from "@fluentui/react-icons";
+import {
+  ArrowSync24Regular,
+  CalendarLtr24Regular,
+  Camera24Regular,
+  Desktop24Regular,
+  Dismiss24Regular,
+  Key24Regular,
+  LocalLanguage24Regular,
+  PersonAdd24Regular,
+  PersonKey24Regular,
+  ShieldLock24Regular,
+  Speaker224Regular,
+} from "@fluentui/react-icons";
 import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
@@ -27,14 +39,15 @@ import {
   createPasswordReset,
   getTotpStatus,
   loadDirectory,
+  loadBirthdayPreference,
   loadSessions,
   revokeSession,
   setupTotp,
+  saveBirthdayPreference,
   uploadProfileAvatar,
 } from "./workspace-api";
 
 interface AccountPanelProps {
-  readonly anchor?: { readonly offsetRight: number; readonly originRight: number; readonly top: number };
   readonly initialSection?: "invite";
   readonly token: string;
   readonly user: WorkspacePerson;
@@ -45,7 +58,26 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange, anchor }: AccountPanelProps) {
+type AccountSectionKey = "language" | "birthday" | "audio" | "security" | "password" | "sessions" | "invite" | "managed-password" | "updates";
+
+interface AccountNavigationItem {
+  readonly key: AccountSectionKey;
+  readonly label: string;
+  readonly selector: string;
+  readonly icon: ReactNode;
+}
+
+export function scrollAccountNavigation(event: WheelEvent<HTMLElement>) {
+  const navigation = event.currentTarget;
+  if (navigation.scrollWidth <= navigation.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  const maximum = navigation.scrollWidth - navigation.clientWidth;
+  const next = Math.max(0, Math.min(maximum, navigation.scrollLeft + event.deltaY));
+  if (next === navigation.scrollLeft) return;
+  event.preventDefault();
+  navigation.scrollLeft = next;
+}
+
+export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   useModalFocus(panelRef, true, onClose);
   const inviteRef = useRef<HTMLElement>(null);
@@ -78,7 +110,12 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [feedback, setFeedback] = useState("");
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [localeBusy, setLocaleBusy] = useState(false);
-  const jumpToSection = (selector: string) => {
+  const [birthdayMonth, setBirthdayMonth] = useState("");
+  const [birthdayDay, setBirthdayDay] = useState("");
+  const [birthdayBusy, setBirthdayBusy] = useState(false);
+  const [activeSection, setActiveSection] = useState<AccountSectionKey>("language");
+  const jumpToSection = (sectionKey: AccountSectionKey, selector: string) => {
+    setActiveSection(sectionKey);
     const section = panelRef.current?.querySelector<HTMLElement>(selector);
     section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     const heading = section?.querySelector<HTMLElement>("h3");
@@ -113,6 +150,35 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
       active = false;
     };
   }, [token]);
+
+  useEffect(() => {
+    if (initialSection === "invite") return;
+    let active = true;
+    void loadBirthdayPreference(token)
+      .then((value) => {
+        if (active) {
+          setBirthdayMonth(value.month ? String(value.month) : "");
+          setBirthdayDay(value.day ? String(value.day) : "");
+        }
+      })
+      .catch(() => { if (active) setFeedback("Не удалось загрузить дату рождения. Попробуйте открыть настройки снова."); });
+    return () => { active = false; };
+  }, [initialSection, token]);
+
+  const saveBirthday = async (clear = false) => {
+    const month = clear ? null : Number(birthdayMonth);
+    const day = clear ? null : Number(birthdayDay);
+    if (!clear && (!month || !day)) { setFeedback("Выберите день и месяц рождения."); return; }
+    setBirthdayBusy(true);
+    try {
+      const saved = await saveBirthdayPreference(token, { month, day });
+      setBirthdayMonth(saved.month ? String(saved.month) : "");
+      setBirthdayDay(saved.day ? String(saved.day) : "");
+      setFeedback(clear ? "Дата рождения удалена." : "Дата рождения сохранена. Коллеги увидят поздравление в этот день.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось сохранить дату рождения.");
+    } finally { setBirthdayBusy(false); }
+  };
 
   const startTotp = async () => {
     try {
@@ -206,14 +272,22 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
     (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
   );
 
-  const anchorStyle = anchor ? {
-    "--account-anchor-top": `${anchor.top}px`,
-    "--account-anchor-right": `${anchor.offsetRight}px`,
-    "--account-origin-right": `${anchor.originRight}px`,
-  } as CSSProperties : undefined;
+  const navigationItems: readonly AccountNavigationItem[] = [
+    { key: "language", label: "Общее", selector: "[data-account-section=language]", icon: <LocalLanguage24Regular /> },
+    { key: "birthday", label: "День рождения", selector: "[data-account-section=birthday]", icon: <CalendarLtr24Regular /> },
+    { key: "audio", label: "Звук", selector: ".audio-device-settings", icon: <Speaker224Regular /> },
+    { key: "security", label: "Защита", selector: "[data-account-section=security]", icon: <ShieldLock24Regular /> },
+    { key: "password", label: "Пароль", selector: "[data-account-section=password]", icon: <Key24Regular /> },
+    { key: "sessions", label: "Устройства", selector: "[data-account-section=sessions]", icon: <Desktop24Regular /> },
+    ...(["admin", "superadmin"].includes(user.role) ? [
+      { key: "invite" as const, label: "Доступ", selector: "[data-account-section=invite]", icon: <PersonAdd24Regular /> },
+      { key: "managed-password" as const, label: "Пароли", selector: "[data-account-section=managed-password]", icon: <PersonKey24Regular /> },
+      { key: "updates" as const, label: "Обновления", selector: "[data-account-section=updates]", icon: <ArrowSync24Regular /> },
+    ] : []),
+  ];
 
   return (
-    <div className="account-scrim account-profile-anchor" style={anchorStyle} role="presentation" onMouseDown={onClose}>
+    <div className="account-scrim account-profile-anchor" role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
         ref={panelRef}
@@ -223,6 +297,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Настройки профиля"}
         onMouseDown={(event) => event.stopPropagation()}
       >
+        <div className="account-panel-scroll">
         <header>
           <div>
             <span>Настройки</span>
@@ -231,45 +306,53 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
         </header>
 
-        {initialSection !== "invite" && <nav className="account-section-nav" aria-label="Разделы настроек">
-          <button type="button" onClick={() => jumpToSection(".audio-device-settings")}>Звук</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=language]")}>Язык</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=security]")}>Защита</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=password]")}>Пароль</button>
-          <button type="button" onClick={() => jumpToSection("[data-account-section=sessions]")}>Устройства</button>
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=invite]")}>Доступ сотрудников</button>}
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=managed-password]")}>Пароли сотрудников</button>}
-          {["admin", "superadmin"].includes(user.role) && <button type="button" onClick={() => jumpToSection("[data-account-section=updates]")}>Обновления</button>}
-        </nav>}
-
-        {initialSection !== "invite" && <><section className="account-profile">
-          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
-            <ProfileAvatar person={user} token={token} size={48} />
-          </EmployeeProfileLink>
-          <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
-            <div>
-              <strong>{user.name}</strong>
-              <span>{user.jobTitle ?? user.role}</span>
-              <small>@{user.username}</small>
+        {initialSection !== "invite" && <div className="account-settings-sticky">
+          <section className="account-profile">
+            <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+              <ProfileAvatar person={user} token={token} size={72} />
+            </EmployeeProfileLink>
+            <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
+              <div className="account-profile-copy">
+                <span>Личное пространство</span>
+                <strong>{user.name}</strong>
+                <p>{user.jobTitle ?? user.role}</p>
+                <small>@{user.username}</small>
+              </div>
+            </EmployeeProfileLink>
+            <div className="account-profile-status" aria-label="Состояние аккаунта">
+              <span className={totpActive ? "is-secure" : "needs-attention"}><ShieldLock24Regular />{totpActive ? "Защита включена" : "Защита не включена"}</span>
+              <span><Desktop24Regular />Устройств: {sessions.length}</span>
             </div>
-          </EmployeeProfileLink>
-          <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
-            <Camera24Regular />
-            <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
-            <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = "";
-                if (!file) return;
-                setAvatarBusy(true);
-                void uploadProfileAvatar(token, file).then((result) => {
-                  onAvatarChanged?.(result.avatarVersion);
-                  setFeedback("Аватар обновлён и сохранён на сервере.");
-                }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
-                  .finally(() => setAvatarBusy(false));
-              }} />
-          </label>
-        </section>
+            <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
+              <Camera24Regular />
+              <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
+              <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setAvatarBusy(true);
+                  void uploadProfileAvatar(token, file).then((result) => {
+                    onAvatarChanged?.(result.avatarVersion);
+                    setFeedback("Аватар обновлён и сохранён на сервере.");
+                  }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
+                    .finally(() => setAvatarBusy(false));
+                }} />
+            </label>
+          </section>
+          <nav className="account-section-nav" aria-label="Разделы настроек" onWheel={scrollAccountNavigation}>
+            {navigationItems.map((item) => <button
+              key={item.key}
+              type="button"
+              className={activeSection === item.key ? "is-active" : ""}
+              aria-pressed={activeSection === item.key}
+              onClick={() => jumpToSection(item.key, item.selector)}
+            ><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
+          </nav>
+        </div>}
+
+        <div className={`account-settings-grid${initialSection === "invite" ? " is-invite" : ""}`}>
+        {initialSection !== "invite" && <>
 
         <section className="account-section" data-account-section="language">
           <div className="account-section-title"><div>
@@ -289,6 +372,34 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <option value="uz_latn">O‘zbekcha</option>
             </Select>
           </Field>
+        </section>
+
+        <section className="account-section" data-account-section="birthday">
+          <div className="account-section-title"><div>
+            <h3>День рождения</h3>
+            <p>Сохраняем только день и месяц. В этот день организация поздравит вас в ленте, а коллеги получат уведомление.</p>
+          </div></div>
+          <div className="account-birthday-fields">
+            <Field label="День">
+              <Input type="number" min={1} max={31} placeholder="День" value={birthdayDay}
+                onChange={(_, data) => setBirthdayDay(data.value)} />
+            </Field>
+            <Field label="Месяц">
+              <Select value={birthdayMonth} onChange={(event) => setBirthdayMonth(event.target.value)}>
+                <option value="">Выберите месяц</option>
+                {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>
+                  {new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(new Date(2000, index, 1))}
+                </option>)}
+              </Select>
+            </Field>
+          </div>
+          <div className="account-birthday-actions">
+            <Button appearance="primary" disabled={birthdayBusy || !birthdayDay || !birthdayMonth}
+              onClick={() => void saveBirthday()}>Сохранить дату</Button>
+            <Button appearance="subtle" disabled={birthdayBusy || (!birthdayDay && !birthdayMonth)}
+              onClick={() => void saveBirthday(true)}>Убрать дату</Button>
+          </div>
+          <p className="account-birthday-note">29 февраля в невисокосный год отмечается 28 февраля.</p>
         </section>
 
         <AudioDeviceSettings />
@@ -480,7 +591,9 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </>
         ) : null}
 
+        </div>
         {feedback ? <div className="account-feedback" role="status">{feedback}</div> : null}
+        </div>
       </aside>
     </div>
   );

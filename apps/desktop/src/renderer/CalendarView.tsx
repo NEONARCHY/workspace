@@ -11,7 +11,7 @@ import type {
   WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
@@ -21,6 +21,7 @@ import {
 } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { TaskComposer } from "./TaskComposer";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import {
   CalendarEventComposer,
   type PreparedEventPayment,
@@ -582,6 +583,7 @@ export function CalendarView({
           </div>
           <div
             className="calendar-grid"
+            key={`${month.getFullYear()}-${month.getMonth()}`}
             role="grid"
             aria-label={monthLabel}
             style={{ gridTemplateRows: `repeat(${days.length / 7}, minmax(0, 1fr))` }}
@@ -684,11 +686,11 @@ export function CalendarView({
             <div className="calendar-form-dates">
               <label>
                 Начало
-                <Input type="datetime-local" value={draft.startsAt} min={selected ? undefined : localInput(startOfDay(new Date()))} onChange={(_event, data) => setDraft({ ...draft, startsAt: data.value })} />
+                <WorkspaceDateTimePicker ariaLabel="Начало события" value={draft.startsAt} min={selected ? undefined : localInput(startOfDay(new Date()))} onChange={(value) => setDraft({ ...draft, startsAt: value })} />
               </label>
               <label>
                 Окончание
-                <Input type="datetime-local" value={draft.endsAt} onChange={(_event, data) => setDraft({ ...draft, endsAt: data.value })} />
+                <WorkspaceDateTimePicker ariaLabel="Окончание события" value={draft.endsAt} min={draft.startsAt} onChange={(value) => setDraft({ ...draft, endsAt: value })} />
               </label>
             </div>
             <Checkbox checked={draft.allDay} label="Событие на весь день" onChange={(_event, data) => setDraft({ ...draft, allDay: data.checked === true })} />
@@ -699,9 +701,9 @@ export function CalendarView({
               {people.map((person) => (
                 <Checkbox
                   key={person.id}
-                  label={<EmployeeProfileLink userId={person.id} personName={person.name}>
+                  label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
                     {person.name}{busyAttendeeIds.has(person.id) ? " · занят" : ""}
-                  </EmployeeProfileLink>}
+                  </EmployeeProfileLink></span>}
                   checked={draft.attendeeIds.includes(person.id)}
                   disabled={
                     person.id !== currentUserId

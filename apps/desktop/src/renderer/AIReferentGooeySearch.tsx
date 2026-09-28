@@ -11,14 +11,12 @@ interface AIReferentGooeySearchProps {
   readonly autoComplete?: string;
   readonly className?: string;
   readonly collapsedWidth?: number;
-  readonly expandedWidth?: number;
   readonly expandedOffset?: number;
   readonly gooeyBlur?: number;
 }
 
 type SearchStyle = CSSProperties & {
   "--ai-gooey-collapsed"?: string;
-  "--ai-gooey-expanded"?: string;
   "--ai-gooey-offset"?: string;
 };
 
@@ -30,7 +28,6 @@ export function AIReferentGooeySearch({
   autoComplete = "off",
   className = "",
   collapsedWidth = 340,
-  expandedWidth = 480,
   expandedOffset = 51,
   gooeyBlur = 5,
 }: AIReferentGooeySearchProps) {
@@ -39,7 +36,6 @@ export function AIReferentGooeySearch({
   const filterId = `ai-gooey-${useId().replaceAll(":", "")}`;
   const style: SearchStyle = {
     "--ai-gooey-collapsed": `${collapsedWidth}px`,
-    "--ai-gooey-expanded": `${expandedWidth}px`,
     "--ai-gooey-offset": `${expandedOffset}px`,
   };
 

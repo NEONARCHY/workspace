@@ -1,7 +1,7 @@
 import type { ApprovalRequestSummary } from "@yuksalish/contracts";
 import { workflowStageColor } from "./workflow-stage-colors";
 
-// Read-only Bitrix crm.status.list, DYNAMIC_1038_STAGE_15, 2026-09-04.
+// Read-only Bitrix stage metadata, DYNAMIC_1038_STAGE_15, 2026-09-04.
 // Stable node keys keep their colour when a workflow is reordered or renamed.
 export const paymentStageColors: Readonly<Record<string, string>> = {
   start: "#f26b47",

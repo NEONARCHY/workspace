@@ -27,6 +27,7 @@ from yuksalish_api.settings import Settings
 from yuksalish_api.tables import (
     chats,
     message_reactions,
+    message_receipts,
     message_versions,
     messages,
     pinned_messages,
@@ -187,8 +188,6 @@ async def exercise_permissions(url: str) -> None:
                 with pytest.raises(WorkspaceRepositoryError):
                     await service.remove_chat_member(connection, peer, group_id, other.id)
                 with pytest.raises(WorkspaceRepositoryError):
-                    await service.remove_chat_member(connection, owner, group_id, owner.id)
-                with pytest.raises(WorkspaceRepositoryError):
                     await service.set_chat_member(
                         connection,
                         owner,
@@ -240,8 +239,28 @@ async def exercise_permissions(url: str) -> None:
                 assert not any(item.entity_id == group.id for item in snapshot.notifications)
                 with pytest.raises(WorkspaceRepositoryError):
                     await get_attachment(connection, peer, UUID(attachment.id))
+                restricted = await service.add_chat_members(
+                    connection, owner, group_id,
+                    AddChatMembersRequest(member_ids=[peer.id], show_history=False),
+                )
+                assert restricted.preview.endswith("больше не в группе")
+                assert (await service.chat_summary(connection, peer, group_id)).preview == (
+                    "Сообщений пока нет"
+                )
+                assert message.id not in {
+                    item.id for item in (await load_workspace(connection, peer)).messages
+                }
+                assert not await search_messages(connection, peer, text)
+                with pytest.raises(WorkspaceRepositoryError):
+                    await get_attachment(connection, peer, UUID(attachment.id))
+                with pytest.raises(WorkspaceRepositoryError):
+                    await service.toggle_message_reaction(
+                        connection, peer, message_id, MessageReactionRequest(emoji="👍")
+                    )
+                await service.remove_chat_member(connection, owner, group_id, peer.id)
                 await service.add_chat_members(
-                    connection, owner, group_id, AddChatMembersRequest(member_ids=[peer.id])
+                    connection, owner, group_id,
+                    AddChatMembersRequest(member_ids=[peer.id], show_history=True),
                 )
                 assert message.id in {
                     item.id for item in (await load_workspace(connection, peer)).messages
@@ -291,7 +310,51 @@ async def exercise_permissions(url: str) -> None:
                     connection, owner, group_id, TransferChatOwnerRequest(user_id=other.id)
                 )
                 assert transferred.owner_id == str(other.id)
+                assert (await service.chat_summary(connection, other, group_id)).can_delete is False
+                with pytest.raises(WorkspaceRepositoryError) as only_creator:
+                    await service.delete_chat(connection, other, group_id)
+                assert only_creator.value.status_code == 403
                 await service.remove_chat_member(connection, owner, group_id, owner.id)
+                await service.add_chat_members(
+                    connection, other, group_id, AddChatMembersRequest(member_ids=[admin.id])
+                )
+                await service.remove_chat_member(connection, other, group_id, other.id)
+                remaining = await load_workspace(connection, peer)
+                observer = await load_workspace(connection, admin)
+                peer_group = await service.chat_summary(connection, peer, group_id)
+                assert peer_group.owner_id == str(peer.id)
+                system_rows = [
+                    item for item in remaining.messages
+                    if item.chat_id == group.id and item.system_kind is not None
+                ]
+                assert [item.system_kind for item in system_rows[-2:]] == [
+                    "member_left", "ownership_transferred",
+                ]
+                assert system_rows[-1].body == (
+                    "Вам автоматически передалось право управления данной группой"
+                )
+                assert system_rows[-1].id not in {item.id for item in observer.messages}
+                assert not await search_messages(connection, admin, "автоматически передалось")
+                private_receipts = (await connection.execute(
+                    select(message_receipts.c.user_id).where(
+                        message_receipts.c.message_id == UUID(system_rows[-1].id)
+                    )
+                )).scalars().all()
+                assert private_receipts == [peer.id]
+                with pytest.raises(WorkspaceRepositoryError):
+                    await service.change_message(
+                        connection, peer, UUID(system_rows[-1].id),
+                        DeleteMessageRequest(expected_revision=1),
+                    )
+                after_event = await service.send_chat_message(
+                    connection, peer, group_id, SendMessageRequest(body="После выхода")
+                )
+                ordered = [item.id for item in (await load_workspace(connection, peer)).messages]
+                assert ordered.index(system_rows[-1].id) < ordered.index(after_event.id)
+                await service.remove_chat_member(connection, peer, group_id, admin.id)
+                with pytest.raises(WorkspaceRepositoryError) as last_owner:
+                    await service.remove_chat_member(connection, peer, group_id, peer.id)
+                assert last_owner.value.status_code == 409
                 direct = await service.create_chat(
                     connection,
                     other,
@@ -316,6 +379,21 @@ async def exercise_permissions(url: str) -> None:
                         UUID(direct.id),
                         AddChatMembersRequest(member_ids=[admin.id]),
                     )
+                await service.delete_chat(connection, other, UUID(direct.id))
+                reopened = await service.create_chat(
+                    connection,
+                    peer,
+                    CreateChatRequest(kind="direct", member_ids=[other.id]),
+                )
+                assert reopened.id != direct.id
+                assert reopened.preview == "Сообщений пока нет"
+                assert (
+                    await service.create_chat(
+                        connection,
+                        other,
+                        CreateChatRequest(kind="direct", member_ids=[peer.id]),
+                    )
+                ).id == reopened.id
             finally:
                 await transaction.rollback()
     finally:
@@ -516,7 +594,10 @@ async def exercise_messages(url: str) -> None:
                     )
                 await nested.rollback()
                 snapshot = await load_workspace(connection, peer)
-                assert next(item for item in snapshot.messages if item.id == parent.id).body == ""
+                assert all(item.id != parent.id for item in snapshot.messages)
+                assert all(item.id != reply.id for item in snapshot.messages)
+                summary = await service.chat_summary(connection, peer, group_id)
+                assert summary.preview == "Сообщений пока нет"
                 assert not await search_messages(connection, peer, "Changed private text")
                 assert not any("private text" in item.body for item in snapshot.notifications)
                 with pytest.raises(WorkspaceRepositoryError):

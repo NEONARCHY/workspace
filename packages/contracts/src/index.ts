@@ -1,5 +1,4 @@
 export const moduleKeys = [
-  "crm",
   "tasks",
   "team_overview",
   "payment_requests",
@@ -290,10 +289,28 @@ export interface EmployeeReward {
   readonly iconKey: string;
   readonly title: string;
   readonly description: string;
+  readonly contextNote?: string | null;
   readonly recipientUserId: string;
   readonly issuerUserId: string;
   readonly issuerName: string;
   readonly createdAt: string;
+}
+
+export type EmployeeRewardIcon =
+  | "appreciation"
+  | "leadership"
+  | "rescue"
+  | "mentorship"
+  | "innovation"
+  | "reliability"
+  | "teamwork"
+  | "initiative"
+  | "mastery";
+
+export interface EmployeeRewardCatalogItem {
+  readonly iconKey: EmployeeRewardIcon;
+  readonly title: string;
+  readonly description: string;
 }
 
 export interface EmployeeRecognitionProfile {
@@ -307,6 +324,7 @@ export interface EmployeeRecognitionProfile {
   readonly activeTaskCountVisible: boolean;
   readonly achievements: readonly EmployeeAchievement[];
   readonly rewards: readonly EmployeeReward[];
+  readonly rewardCatalog: readonly EmployeeRewardCatalogItem[];
   readonly canIssueReward: boolean;
   readonly canManageSettings: boolean;
 }
@@ -317,9 +335,8 @@ export interface RecognitionSettings {
 }
 
 export interface EmployeeRewardInput {
-  readonly iconKey: string;
-  readonly title: string;
-  readonly description: string;
+  readonly iconKey: EmployeeRewardIcon;
+  readonly contextNote?: string | null;
 }
 
 export interface WorkflowPosition {
@@ -375,6 +392,7 @@ export interface ChatMessage {
   readonly chatId: string;
   readonly authorId: string;
   readonly body: string;
+  readonly systemKind?: "member_left" | "ownership_transferred" | null;
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;
@@ -424,7 +442,9 @@ export interface FeedComment {
 
 export interface FeedPost {
   readonly id: string;
-  readonly authorUserId: string;
+  readonly authorUserId: string | null;
+  readonly systemKind?: "birthday" | null;
+  readonly birthdayUserId?: string | null;
   readonly title: string;
   readonly body: string;
   readonly isPinned: boolean;
@@ -438,6 +458,23 @@ export interface FeedPost {
   readonly createdAt: string;
   readonly updatedAt: string;
 }
+
+export type AssistantModel = "pro" | "flash" | "flash-lite";
+
+export interface AssistantMessage {
+  readonly id: string;
+  readonly role: "user" | "assistant";
+  readonly model: AssistantModel;
+  readonly content: string;
+  readonly createdAt: string;
+}
+
+export interface BirthdayPreference {
+  readonly month: number | null;
+  readonly day: number | null;
+}
+
+export type GreetingLanguage = "ru" | "uz_latn" | "uz_cyrl";
 
 export type CalendarEventType = "meeting" | "deadline" | "trip" | "task" | "general";
 export type CalendarAttendanceStatus = "accepted" | "pending" | "declined";
@@ -615,7 +652,9 @@ export type NotificationKind =
   | "calendar"
   | "absence"
   | "zoom"
-  | "hisobot";
+  | "hisobot"
+  | "support"
+  | "birthday";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -631,7 +670,8 @@ export type NotificationSection = Extract<
   | "hr"
   | "ai_referent"
   | "ai_hisobot"
->;
+  | "feed"
+> | "notifications";
 
 export interface WorkspaceNotification {
   readonly id: string;
@@ -659,6 +699,62 @@ export interface NotificationPreferences {
   readonly absencesEnabled: boolean;
   readonly zoomEnabled: boolean;
   readonly remindersEnabled: boolean;
+}
+
+export type SupportRequestCategory = "comment" | "bug" | "improvement";
+export type SupportRequestStatus = "open" | "implemented" | "rejected";
+export type SupportResponseTone = "positive" | "negative";
+export type SupportRejectionReason =
+  | "insufficient_information"
+  | "not_needed"
+  | "already_implemented";
+export type SupportMessageKind = "submission" | "comment" | "implemented" | "rejected";
+
+export interface SupportRequestMessage {
+  readonly id: string;
+  readonly requestId: string;
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly kind: SupportMessageKind;
+  readonly body: string;
+  readonly createdAt: string;
+}
+
+export interface SupportRequest {
+  readonly id: string;
+  readonly authorId: string;
+  readonly authorName: string;
+  readonly authorUsername: string;
+  readonly category: SupportRequestCategory;
+  readonly subject: string;
+  readonly body: string;
+  readonly status: SupportRequestStatus;
+  readonly resolutionCode?: SupportRejectionReason | "implemented" | null;
+  readonly responseUnread: boolean;
+  readonly latestResponseTone?: SupportResponseTone | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly resolvedAt?: string | null;
+  readonly messages: readonly SupportRequestMessage[];
+}
+
+export interface SupportRegistry {
+  readonly mode: "support" | "inbox";
+  readonly indicator?: SupportResponseTone | null;
+  readonly unreadResponseCount: number;
+  readonly requests: readonly SupportRequest[];
+}
+
+export interface SupportRequestInput {
+  readonly category: SupportRequestCategory;
+  readonly subject: string;
+  readonly body: string;
+}
+
+export interface SupportAdminActionInput {
+  readonly action: "comment" | "implement" | "reject";
+  readonly body?: string;
+  readonly rejectionReason?: SupportRejectionReason;
 }
 
 export type ZoomMeetingStatus =

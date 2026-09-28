@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type SyntheticEvent } from "react";
 import { Button } from "@fluentui/react-components";
 import { Dismiss20Regular } from "@fluentui/react-icons";
 
@@ -37,7 +37,23 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
 
 export function RecordSection({ title, description, children, collapsible = false, summary }: { readonly title: string; readonly description?: string; readonly children: ReactNode; readonly collapsible?: boolean; readonly summary?: string }) {
   const titleId = useId();
-  if (collapsible) return <details className="record-section record-disclosure">
+  const revealExpandedContent = (event: SyntheticEvent<HTMLDetailsElement>) => {
+    const section = event.currentTarget;
+    if (!section.open) return;
+    requestAnimationFrame(() => {
+      const scroller = section.closest<HTMLElement>(".record-composer-body");
+      const content = section.querySelector<HTMLElement>(".record-disclosure-body");
+      if (!scroller || !content) return;
+      const viewport = scroller.getBoundingClientRect();
+      const expanded = content.getBoundingClientRect();
+      if (expanded.bottom <= viewport.bottom - 16) return;
+      const sectionTop = section.getBoundingClientRect().top;
+      const availableShift = Math.max(0, sectionTop - viewport.top - 16);
+      const neededShift = expanded.bottom - viewport.bottom + 24;
+      scroller.scrollBy({ top: Math.min(neededShift, availableShift), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    });
+  };
+  if (collapsible) return <details className="record-section record-disclosure" onToggle={revealExpandedContent} onChangeCapture={revealExpandedContent}>
     <summary><span><strong>{title}</strong><small>{summary || description}</small></span><span className="disclosure-plus" aria-hidden="true">+</span></summary>
     <div className="record-disclosure-body">{children}</div>
   </details>;

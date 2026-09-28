@@ -53,7 +53,6 @@ export const productMessages: Readonly<Record<string, Translation>> = {
   "Выберите язык интерфейса. Настройка сохранится для всех ваших устройств.": { uz_cyrl: "Интерфейс тилини танланг. Созлама барча қурилмаларингизда сақланади.", uz_latn: "Interfeys tilini tanlang. Sozlama barcha qurilmalaringizda saqlanadi." },
   "Язык": { uz_cyrl: "Тил", uz_latn: "Til" },
   "Меню": { uz_cyrl: "Меню", uz_latn: "Menyu" },
-  "CRM": { uz_cyrl: "CRM", uz_latn: "CRM" },
   "Задачи": { uz_cyrl: "Вазифалар", uz_latn: "Vazifalar" },
   "Заявки на оплату": { uz_cyrl: "Тўлов аризалари", uz_latn: "To‘lov arizalari" },
   "Лента": { uz_cyrl: "Лента", uz_latn: "Lenta" },

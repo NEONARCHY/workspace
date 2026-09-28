@@ -162,6 +162,10 @@ describe("AIReferentView", () => {
     const attachment = new File(["PDF"], "Appendix.pdf");
     fireEvent.drop(screen.getByLabelText("Выбрать дополнительные вложения").closest("label")!, { dataTransfer: { files: [attachment] } });
     expect(screen.getByText("Appendix.pdf")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Заменить вложение Appendix.pdf"), { target: { files: [new File(["PDF"], "Revised.pdf")] } });
+    expect(screen.getByText("Revised.pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить вложение Revised.pdf" }));
+    expect(screen.queryByText("Revised.pdf")).not.toBeInTheDocument();
   });
 
   it("shows failed checks, retries them and removes the checking message on success", async () => {
@@ -265,7 +269,13 @@ describe("AIReferentView", () => {
     await waitFor(() => expect(screen.getByText("Ответ партнёру")).toBeInTheDocument());
     expect(screen.getByText("Организация-получатель")).toBeInTheDocument();
     expect(screen.getAllByText("На согласовании")).not.toHaveLength(0);
-    expect(screen.getByRole("button", { name: /Новое письмо/ })).toBeEnabled();
+    const registerBar = screen.getByRole("tablist", { name: "Реестры корреспонденции" }).parentElement;
+    const newLetter = screen.getByRole("button", { name: /Новое письмо/ });
+    const signOnly = screen.getByRole("button", { name: "На подпись" });
+    expect(newLetter).toBeEnabled();
+    expect(newLetter.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
+    expect(signOnly.closest(".ai-referent-register-actions")?.parentElement).toBe(registerBar);
+    expect(document.querySelector(".ai-referent-header-actions")).toBeNull();
     const outgoingRefresh = screen.getByRole("button", { name: "Обновить" });
     expect(outgoingRefresh.closest(".ai-referent-toolbar-actions")).not.toBeNull();
     expect(outgoingRefresh.closest(".ai-referent-header-actions")).toBeNull();

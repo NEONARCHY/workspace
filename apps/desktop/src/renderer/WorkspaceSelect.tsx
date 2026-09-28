@@ -1,7 +1,9 @@
 import {
   Children,
+  createContext,
   isValidElement,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -9,7 +11,14 @@ import {
   type ReactNode,
 } from "react";
 
-import { Dropdown, Option } from "@fluentui/react-components";
+import { Avatar, Dropdown, Option } from "@fluentui/react-components";
+import type { WorkspacePerson } from "@yuksalish/contracts";
+
+const WorkspacePeopleContext = createContext<readonly WorkspacePerson[]>([]);
+
+export function WorkspacePeopleProvider({ people, children }: { readonly people: readonly WorkspacePerson[]; readonly children: ReactNode }) {
+  return <WorkspacePeopleContext.Provider value={people}>{children}</WorkspacePeopleContext.Provider>;
+}
 
 interface WorkspaceSelectChangeEvent {
   readonly target: { readonly value: string };
@@ -30,11 +39,13 @@ interface WorkspaceSelectProps {
   readonly id?: string;
   readonly name?: string;
   readonly multiple?: boolean;
+  readonly listboxClassName?: string;
   readonly onBlur?: () => void;
   readonly onChange?: (event: WorkspaceSelectChangeEvent) => void;
   readonly onFocus?: () => void;
   readonly required?: boolean;
   readonly title?: string;
+  readonly variant?: "priority";
   readonly value?: string | number | readonly string[];
 }
 
@@ -74,17 +85,26 @@ export function WorkspaceSelect({
   children,
   className,
   defaultValue,
+  listboxClassName,
   multiple,
   onChange,
   value,
+  variant,
   ...props
 }: WorkspaceSelectProps) {
   const controlRef = useRef<HTMLButtonElement>(null);
+  const people = useContext(WorkspacePeopleContext);
   const options = useMemo(() => optionsFromChildren(children), [children]);
   const selectedValues = useMemo(() => (Array.isArray(value)
     ? value.map(String)
     : [String(value ?? defaultValue ?? options[0]?.value ?? "")]), [defaultValue, options, value]);
   const selected = options.filter((option) => selectedValues.includes(option.value));
+  const peopleByKey = useMemo(() => new Map(people.flatMap((person) => [
+    [person.id, person] as const,
+    ...(person.username ? [[person.username, person] as const] : []),
+  ])), [people]);
+  const selectedPerson = peopleByKey.get(selectedValues[0] ?? "");
+  const isPersonSelect = options.some((option) => peopleByKey.has(option.value));
   const emitChange = useCallback((nextValue: string, nextSelectedValues: readonly string[]) => {
     const selectedOptions = nextSelectedValues.map((selectedOption) => ({ value: selectedOption }));
     onChange?.({
@@ -118,11 +138,12 @@ export function WorkspaceSelect({
     return () => control.removeEventListener("change", handleNativeChange);
   }, [emitChange, onChange]);
 
-  return (
+  const dropdown = (
     <Dropdown
       {...props}
       ref={controlRef}
-      className={["workspace-select", className].filter(Boolean).join(" ")}
+      className={["workspace-select", isPersonSelect ? "workspace-select-person" : "", variant === "priority" ? `workspace-priority-select priority-${selectedValues[0]}` : "", className].filter(Boolean).join(" ")}
+      listbox={listboxClassName || variant === "priority" ? { className: [listboxClassName, variant === "priority" ? "workspace-priority-list" : ""].filter(Boolean).join(" ") } : undefined}
       multiselect={multiple}
       selectedOptions={selectedValues}
       value={selected.map((option) => option.text).join(", ")}
@@ -132,10 +153,16 @@ export function WorkspaceSelect({
       }}
     >
       {options.map((option) => (
-        <Option disabled={option.disabled} key={option.value} text={option.text} value={option.value}>
-          {option.label}
+        <Option className={variant === "priority" ? `workspace-priority-option priority-${option.value}` : undefined} disabled={option.disabled} key={option.value} text={option.text} value={option.value}>
+          {peopleByKey.has(option.value)
+            ? <span className="workspace-select-person-option"><Avatar name={peopleByKey.get(option.value)!.name} size={24} color="colorful" aria-hidden="true" /><span>{option.label}</span></span>
+            : listboxClassName ? <span className="release-history-option-text">{option.label}</span> : option.label}
         </Option>
       ))}
     </Dropdown>
   );
+  return isPersonSelect ? <span className="workspace-select-person-wrap">
+    {selectedPerson ? <Avatar className="workspace-select-person-avatar" name={selectedPerson.name} size={24} color="colorful" aria-hidden="true" /> : null}
+    {dropdown}
+  </span> : dropdown;
 }

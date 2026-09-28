@@ -37,6 +37,9 @@ localhost origins or development-only values.
 For a LAN handoff, use `scripts/lan/new-server-environment.ps1` and validate with
 `-Environment production -NetworkMode lan -EnvFile .env.lan`. Follow
 `docs/operations/lan-server-transfer.md`; do not use Cloudflare credentials for LAN mode.
+The separate local demo site may use `YUKSALISH_ENVIRONMENT=test`. `scripts/lan/deploy-web.ps1`
+reads the mode from `.env.lan`, validates the LAN origin, and deploys that same environment;
+it does not convert a test site into production.
 
 ## Start Compose with an explicit environment
 
@@ -49,6 +52,8 @@ For production, use `.env.production` in both places. Do not rely on an implicit
 `.env` file during staging or production operations.
 
 ## Secret handling
+
+The optional assistant key is `YUKSALISH_GEMINI_API_KEY` in the server's local environment file (for the test LAN site, `.env.lan`). Never put it in desktop/Vite variables or commit it. Without a key the assistant and generated greetings show a configuration message; scheduled birthday posts and notifications still work.
 
 - Generate unique random values of at least 32 characters for PostgreSQL and MinIO.
 - Generate separate random values for `YUKSALISH_AUTH_SIGNING_KEY` and

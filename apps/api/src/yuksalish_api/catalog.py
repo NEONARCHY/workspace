@@ -5,12 +5,6 @@ from .schemas import LocalizedLabel, ModuleDescriptor
 
 MODULE_CATALOG = (
     ModuleDescriptor(
-        key="crm",
-        label=LocalizedLabel(ru="CRM", uz_cyrl="CRM", uz_latn="CRM"),
-        route="/crm",
-        status="placeholder",
-    ),
-    ModuleDescriptor(
         key="tasks",
         label=LocalizedLabel(ru="Задачи", uz_cyrl="Вазифалар", uz_latn="Vazifalar"),
         route="/tasks",

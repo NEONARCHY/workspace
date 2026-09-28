@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import type { FeedComment, FeedPost, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
+import type { FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
 import {
   Comment24Regular,
@@ -16,6 +16,7 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { generateBirthdayGreeting } from "./workspace-api";
 
 interface FeedViewProps {
   readonly posts: readonly FeedPost[];
@@ -69,8 +70,36 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const [composerOpen, setComposerOpen] = useState(false);
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
   const [pendingDelete, setPendingDelete] = useState<{ post: FeedPost; commentId?: string }>();
+  const [greetingPostId, setGreetingPostId] = useState<string>();
+  const [greetingLanguage, setGreetingLanguage] = useState<GreetingLanguage>("ru");
+  const [greetingText, setGreetingText] = useState("");
+  const [greetingError, setGreetingError] = useState("");
+  const [greetingBusy, setGreetingBusy] = useState(false);
   const commentInputs = useRef<Record<string, HTMLInputElement | null>>({});
-  const person = (id: string) => people.find((item) => item.id === id);
+  const person = (id: string | null) => id ? people.find((item) => item.id === id) : undefined;
+
+  const createGreeting = async (postId: string) => {
+    setGreetingBusy(true);
+    setGreetingError("");
+    try {
+      const result = await generateBirthdayGreeting(token, postId, greetingLanguage);
+      setGreetingText(result.text);
+    } catch (error) {
+      setGreetingError(error instanceof Error ? error.message : "Не удалось создать поздравление.");
+    } finally { setGreetingBusy(false); }
+  };
+
+  const publishGreeting = async (post: FeedPost) => {
+    if (!greetingText.trim()) return;
+    setGreetingBusy(true);
+    try {
+      if (await onComment(post, greetingText.trim())) {
+        setGreetingPostId(undefined);
+        setGreetingText("");
+        setGreetingError("");
+      }
+    } finally { setGreetingBusy(false); }
+  };
 
   const beginReply = (postId: string, commentItem: FeedComment) => {
     setReplying((current) => ({ ...current, [postId]: commentItem }));
@@ -137,11 +166,12 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
           {posts.map((post) => {
             const author = person(post.authorUserId);
             return (
-              <article className={`feed-card ${post.isPinned ? "pinned" : ""}`} key={post.id}>
+              <article className={`feed-card ${post.isPinned ? "pinned" : ""} ${post.systemKind === "birthday" ? "is-birthday" : ""}`} key={post.id}>
                 <header>
+                  {post.systemKind === "birthday" ? <span className="feed-system-avatar" aria-hidden="true">Y</span> : null}
                   {author ? <EmployeeProfileLink userId={author.id} personName={author.name}><ProfileAvatar person={author} token={token} size={40} /></EmployeeProfileLink> : null}
                   <span>
-                    {author ? <EmployeeProfileLink userId={author.id} personName={author.name}><strong>{author.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
+                    {post.systemKind === "birthday" ? <strong>Команда Yuksalish</strong> : author ? <EmployeeProfileLink userId={author.id} personName={author.name}><strong>{author.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
                     <small>{dateLabel(post.createdAt)}</small>
                   </span>
                   {post.isPinned ? <span className="feed-pin">Закреплено</span> : null}
@@ -171,6 +201,28 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   <FeedReactions reactions={post.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
+                {post.systemKind === "birthday" && post.birthdayUserId !== currentUserId && <div className="feed-birthday-greeting">
+                  {greetingPostId !== post.id ? <Button appearance="primary" onClick={() => {
+                    setGreetingPostId(post.id); setGreetingText(""); setGreetingError("");
+                  }}>Сгенерировать поздравление для коллеги</Button> : <div className="feed-greeting-panel">
+                    <label htmlFor={`greeting-language-${post.id}`}>Язык поздравления</label>
+                    <select id={`greeting-language-${post.id}`} value={greetingLanguage}
+                      disabled={greetingBusy} onChange={(event) => setGreetingLanguage(event.target.value as GreetingLanguage)}>
+                      <option value="ru">Русский</option><option value="uz_latn">O‘zbekcha</option><option value="uz_cyrl">Ўзбекча</option>
+                    </select>
+                    <Button disabled={greetingBusy} onClick={() => void createGreeting(post.id)}>
+                      {greetingBusy ? "Создаю…" : greetingText ? "Создать другой вариант" : "Создать текст"}
+                    </Button>
+                    {greetingText && <>
+                      <textarea aria-label="Текст поздравления" value={greetingText}
+                        onChange={(event) => setGreetingText(event.target.value)} maxLength={2000} />
+                      <Button appearance="primary" disabled={greetingBusy || !greetingText.trim()}
+                        onClick={() => void publishGreeting(post)}>Опубликовать поздравление</Button>
+                    </>}
+                    {greetingError && <p role="alert">{greetingError}</p>}
+                    <Button appearance="subtle" onClick={() => setGreetingPostId(undefined)}>Отмена</Button>
+                  </div>}
+                </div>}
                 {post.comments.length > 0 ? (
                   <div className="feed-comments">
                     {post.comments.map((item, index) => {

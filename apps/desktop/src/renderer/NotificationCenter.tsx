@@ -16,6 +16,7 @@ import {
   CalendarLtr24Regular,
   PersonAvailable24Regular,
   Chat24Regular,
+  ChatHelp24Regular,
   CheckmarkCircle24Regular,
   Search24Regular,
   TaskListSquareLtr24Regular,
@@ -47,6 +48,8 @@ const kindLabels: Record<NotificationKind, string> = {
   absence: "Отсутствия",
   zoom: "Zoom-конференции",
   hisobot: "AI Hisobot",
+  support: "Поддержка",
+  birthday: "Дни рождения",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
@@ -57,6 +60,8 @@ function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
   if (kind === "absence") return <PersonAvailable24Regular />;
   if (kind === "zoom") return <Video24Regular />;
   if (kind === "hisobot") return <TaskListSquareLtr24Regular />;
+  if (kind === "support") return <ChatHelp24Regular />;
+  if (kind === "birthday") return <CalendarLtr24Regular />;
   return <CalendarLtr24Regular />;
 }
 
@@ -192,7 +197,7 @@ export function NotificationCenter({
           onClick={() => setFilter("unread")}
         >
           <strong>{unreadCount}</strong>
-          <span><b>Новые сигналы</b><small>Ещё не просмотрены</small></span>
+          <span><b>Новые уведомления</b><small>Ещё не просмотрены</small></span>
         </button>
         <button
           className={filter === "all" ? "active" : ""}

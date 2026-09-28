@@ -2,12 +2,6 @@ import type { ModuleCatalogResponse, ModuleDescriptor } from "@yuksalish/contrac
 
 export const fallbackModules: readonly ModuleDescriptor[] = [
   {
-    key: "crm",
-    label: { ru: "CRM", uz_cyrl: "CRM", uz_latn: "CRM" },
-    route: "/crm",
-    status: "placeholder",
-  },
-  {
     key: "tasks",
     label: { ru: "Задачи", uz_cyrl: "Вазифалар", uz_latn: "Vazifalar" },
     route: "/tasks",

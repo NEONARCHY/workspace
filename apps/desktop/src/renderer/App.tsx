@@ -22,6 +22,7 @@ import type {
   PersonalPreferences,
   ProjectInput,
   ProjectStage,
+  SupportRegistry,
   TaskStatus,
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
@@ -52,7 +53,6 @@ import {
   Alert24Regular,
   ApprovalsApp24Regular,
   Board24Regular,
-  Building24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
   Chat24Regular,
@@ -73,13 +73,14 @@ import {
 } from "@fluentui/react-icons";
 
 import { AccountPanel } from "./AccountPanel";
+import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspacePlatform } from "./platform-adapter";
 import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
-import { ConnectionIndicator, WorkspaceIdentity, type ProfilePanelAnchor } from "./WorkspaceIdentity";
+import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { ApprovalsView } from "./ApprovalsView";
 import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
@@ -92,6 +93,7 @@ import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
+import { SupportDialog } from "./SupportDialog";
 import { ProjectsView } from "./ProjectsView";
 import { ProjectHubView } from "./ProjectHubView";
 import { TasksView } from "./TasksView";
@@ -109,6 +111,7 @@ import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
+import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
@@ -140,6 +143,7 @@ import {
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
   loadWorkspace,
+  loadSupportRegistry,
   loadWorkspaceEfficiency,
   loadMembersRegistry,
   loadZoomMeetings,
@@ -290,7 +294,6 @@ const initialWorkspace: WorkspaceState = {
 };
 
 const navItems: readonly NavItem[] = [
-  { key: "crm", label: "CRM", icon: <Building24Regular /> },
   {
     key: "tasks",
     label: "Задачи",
@@ -331,30 +334,6 @@ const navItems: readonly NavItem[] = [
 
 const navigationLabels = Object.fromEntries(navItems.map((item) => [item.key, item.label])) as Record<NavigationKey, string>;
 
-interface ModulePreviewProps {
-  readonly icon: ReactNode;
-  readonly title: string;
-  readonly evidence: string;
-  readonly packageLabel: string;
-}
-
-function ModulePreview({ icon, title, evidence, packageLabel }: ModulePreviewProps) {
-  return (
-    <section className="workspace-view parity-preview" aria-label={title}>
-      <div className="parity-preview-card">
-        <span className="parity-preview-icon">{icon}</span>
-        <span className="parity-kicker">Вкладка закреплена в общей навигации</span>
-        <h1>{title}</h1>
-        <p>{evidence}</p>
-        <div>
-          <strong>{packageLabel}</strong>
-          <span>Назначение CRM определим отдельно, когда она понадобится команде.</span>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function readableAuthError(error: unknown): string {
   const message = error instanceof Error ? error.message : "Не удалось войти";
   const messages: Record<string, string> = {
@@ -367,6 +346,20 @@ function readableAuthError(error: unknown): string {
     "Invitation has expired": "Срок действия приглашения истёк.",
   };
   return messages[message] ?? message;
+}
+
+const supportOwnerUsernames = new Set(["almazovtemur", "temuralmazov", "baxtiyorsamugov"]);
+
+function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
+  const isOperator = person.role === "admin"
+    || person.role === "superadmin"
+    || supportOwnerUsernames.has(person.username?.toLowerCase() ?? "");
+  return {
+    mode: isOperator ? "inbox" : "support",
+    indicator: null,
+    unreadResponseCount: 0,
+    requests: [],
+  };
 }
 
 export function App() {
@@ -387,9 +380,8 @@ export function App() {
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountAnchor, setAccountAnchor] = useState<ProfilePanelAnchor>();
   const [accountInvite, setAccountInvite] = useState(false);
-  const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); setAccountAnchor(undefined); };
+  const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); };
   const [navigationEditing, setNavigationEditing] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
@@ -399,6 +391,9 @@ export function App() {
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
   const [webUpdateAvailable, setWebUpdateAvailable] = useState(false);
   const [profileUserId, setProfileUserId] = useState<string>();
+  const [supportRegistry, setSupportRegistry] = useState<SupportRegistry>();
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
@@ -425,12 +420,16 @@ export function App() {
   }, []);
 
   const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
-    const loaded = await loadWorkspace(authenticated.accessToken);
+    const [loaded, loadedSupport] = await Promise.all([
+      loadWorkspace(authenticated.accessToken),
+      loadSupportRegistry(authenticated.accessToken).catch(() => undefined),
+    ]);
     setUpdatePolicy(undefined);
     activeToken.current = authenticated.accessToken;
     knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
     setFocusTarget(undefined);
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
+    setSupportRegistry(loadedSupport ?? emptySupportRegistry(loaded.currentUser));
     setEfficiency(undefined);
     setEfficiencyError(undefined);
     setMembersRegistry(undefined);
@@ -500,6 +499,9 @@ export function App() {
     setSession(undefined);
     setUpdatePolicy(undefined);
     setMembersRegistry(undefined);
+    setSupportRegistry(undefined);
+    setSupportOpen(false);
+    setSupportFocusRequestId(undefined);
     setMembersError(undefined);
     setAuthError(undefined);
     knownNotificationIds.current = null;
@@ -670,6 +672,8 @@ export function App() {
       absence: preferences.absencesEnabled,
       zoom: preferences.zoomEnabled,
       hisobot: true,
+      support: preferences.desktopEnabled,
+      birthday: preferences.calendarEnabled,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -712,6 +716,7 @@ export function App() {
     if (session === undefined) return;
     return subscribeToWorkspaceEvents(session.accessToken, () => {
       void refreshWorkspace(session.accessToken).catch(reportError);
+      void loadSupportRegistry(session.accessToken).then(setSupportRegistry).catch(reportError);
       if (workspacePlatform.kind === "electron") {
         void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
       }
@@ -890,7 +895,7 @@ export function App() {
       return chat;
     },
     update: (id, title, description) => messengerMutation((token) => updateWorkspaceChat(token, id, title, description)),
-    add: (id, ids) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids)),
+    add: (id, ids, showHistory) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids, showHistory)),
     setMember: (id, member) => messengerMutation((token) => setWorkspaceChatMember(token, id, member)),
     remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId)),
     transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
@@ -1577,12 +1582,22 @@ export function App() {
 
   const openNotification = (notification: WorkspaceNotification) => {
     void handleMarkNotificationRead(notification);
+    if (notification.kind === "support") {
+      setSupportFocusRequestId(notification.entityId ?? undefined);
+      setSupportOpen(true);
+      return;
+    }
+    const section = notification.section;
+    if (section === "notifications") {
+      setActiveSection("notifications");
+      return;
+    }
     setFocusTarget((current) => ({
-      section: notification.section,
+      section,
       entityId: notification.entityId ?? undefined,
       revision: (current?.revision ?? 0) + 1,
     }));
-    setActiveSection(notification.section);
+    setActiveSection(section);
   };
 
   useEffect(() => {
@@ -1594,12 +1609,22 @@ export function App() {
           .then(mergeNotification)
           .catch(reportError);
       }
+      if (notification.kind === "support") {
+        setSupportFocusRequestId(notification.entityId ?? undefined);
+        setSupportOpen(true);
+        return;
+      }
+      const section = notification.section;
+      if (section === "notifications") {
+        setActiveSection("notifications");
+        return;
+      }
       setFocusTarget((current) => ({
-        section: notification.section,
+        section,
         entityId: notification.entityId ?? undefined,
         revision: (current?.revision ?? 0) + 1,
       }));
-      setActiveSection(notification.section);
+      setActiveSection(section);
     });
   }, [reportError, session, workspace.notifications]);
 
@@ -1692,6 +1717,7 @@ export function App() {
 
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
+      <WorkspacePeopleProvider people={workspace.people}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
@@ -1766,7 +1792,7 @@ export function App() {
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSettings={(anchor) => { setAccountAnchor(anchor); setAccountOpen(true); }} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -1789,14 +1815,6 @@ export function App() {
                 onAbsenceAction={async (absenceRequest, action) => {
                   await handleAbsenceAction(absenceRequest, action);
                 }}
-              />
-            ) : null}
-            {displayedSection === "crm" ? (
-              <ModulePreview
-                icon={<Building24Regular />}
-                title="CRM"
-                evidence="CRM пока не используется. Этот раздел сохранён в меню; рабочие задачи, проекты и согласования доступны в своих разделах."
-                packageLabel="Раздел отложен"
               />
             ) : null}
             {displayedSection === "zoom_meetings" ? (
@@ -2104,7 +2122,6 @@ export function App() {
       {accountOpen ? (
         <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
-          anchor={accountAnchor}
           token={session.accessToken}
           user={workspace.currentUser}
           locale={workspace.personalPreferences.locale}
@@ -2124,10 +2141,27 @@ export function App() {
         token={session.accessToken}
         userId={profileUserId}
         open={profileUserId !== undefined}
+        people={workspace.people}
+        onOpenPersonProfile={setProfileUserId}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
       />
+      {supportOpen ? (
+        <SupportDialog
+          token={session.accessToken}
+          open
+          registry={supportRegistry}
+          focusRequestId={supportFocusRequestId}
+          onOpenChange={(open) => {
+            setSupportOpen(open);
+            if (!open) setSupportFocusRequestId(undefined);
+          }}
+          onRegistryChange={setSupportRegistry}
+        />
+      ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
+      <YuksalishAssistant token={session.accessToken} />
       </EmployeeProfileProvider>
+      </WorkspacePeopleProvider>
     </FluentProvider>
   );
 }

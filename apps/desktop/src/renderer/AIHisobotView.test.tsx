@@ -38,6 +38,11 @@ describe("AI Hisobot", () => {
   });
   afterEach(cleanup);
 
+  it("shows a varied report illustration in the header", () => {
+    const { container } = render(<AIHisobotView token="token" />);
+    expect(container.querySelectorAll(".ai-hisobot-header-art svg")).toHaveLength(7);
+  });
+
   it("allows a voluntary report during confirmed sick leave", async () => {
     vi.mocked(loadHisobotProfile).mockResolvedValue({ ...profile, absenceKind: "sick_leave" });
     render(<AIHisobotView token="token" />);
