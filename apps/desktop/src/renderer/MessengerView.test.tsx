@@ -8,13 +8,13 @@ import {
   within,
 } from "@testing-library/react";
 import { useState } from "react";
-import { FluentProvider, webLightTheme } from "@fluentui/react-components";
+import { Dialog, DialogSurface, FluentProvider, webLightTheme } from "@fluentui/react-components";
 import type { ChatMessage, ChatSummary } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { getMessageParticleTiming } from "./MessageVanishOverlay";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
-import { MessengerView } from "./MessengerView";
+import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { rewriteMessengerDraft } from "./workspace-api";
 import type * as WorkspaceApi from "./workspace-api";
 
@@ -120,6 +120,34 @@ describe("Private messenger", () => {
     fireEvent.focus(message!);
 
     expect(message!.querySelector('[title="Другие действия — правая кнопка мыши"]')).not.toBeInTheDocument();
+  });
+
+  it("keeps reaction and message menus above an embedded project or trip dialog", async () => {
+    const chat = initialChats[0]!;
+    const message: ChatMessage = {
+      id: "embedded-reaction",
+      chatId: chat.id,
+      authorId: "baxtiyor",
+      body: "Обсудим поездку",
+      time: "14:20",
+      reactions: [{ emoji: "👍", count: 1, reactedByCurrentUser: false, reactorUserIds: ["baxtiyor"] }],
+    };
+    const { props, rerender } = renderMessenger({ messages: [message] });
+    rerender(<FluentProvider theme={webLightTheme}>
+      <Dialog open><DialogSurface aria-label="Карточка поездки">
+        <EmbeddedConversation {...props} chatId={chat.id} contextLabel="поездки" />
+      </DialogSurface></Dialog>
+    </FluentProvider>);
+
+    const dialog = await screen.findByRole("dialog", { name: "Карточка поездки" });
+    const reaction = within(dialog).getByRole("button", { name: /👍: Бахтиёр Самугов/ });
+    fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
+    const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu");
+    expect(quick?.parentElement).toBe(dialog.parentElement);
+
+    fireEvent.pointerDown(document.body);
+    fireEvent.contextMenu(within(dialog).getByText(message.body).closest(".message")!, { clientX: 90, clientY: 90 });
+    expect(screen.getByRole("menu").parentElement).toBe(dialog.parentElement);
   });
 
   it("opens the source object from a linked chat", () => {

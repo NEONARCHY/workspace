@@ -121,11 +121,13 @@ function MessageContextMenu({
   y,
   children,
   onPointerDown,
+  portalContainer,
 }: {
   readonly x: number;
   readonly y: number;
   readonly children: React.ReactNode;
   readonly onPointerDown: React.PointerEventHandler<HTMLDivElement>;
+  readonly portalContainer: HTMLElement;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
@@ -151,8 +153,14 @@ function MessageContextMenu({
     >
       {children}
     </div>,
-    document.body,
+    portalContainer,
   );
+}
+
+function menuPortalContainerFor(target: Element): HTMLElement {
+  // A dialog's Fluent portal sits above the page, so its menus must be siblings
+  // of that dialog rather than children of document.body.
+  return target.closest<HTMLElement>(".fui-DialogSurface")?.parentElement ?? document.body;
 }
 
 function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenDetails }: {
@@ -262,8 +270,8 @@ function Conversation({
   const removalTimer = useRef<number | undefined>(undefined);
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
-  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number }>();
-  const [reactionQuick, setReactionQuick] = useState<{ message: ChatMessage; emoji: MessageReactionEmoji; x: number; y: number }>();
+  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement }>();
+  const [reactionQuick, setReactionQuick] = useState<{ message: ChatMessage; emoji: MessageReactionEmoji; x: number; y: number; portalContainer: HTMLElement }>();
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
@@ -691,13 +699,13 @@ function Conversation({
                 aria-hidden={revealPhase ? true : undefined}
                 onContextMenu={(event) => {
                   event.preventDefault();
-                  setContextMenu({ message, x: event.clientX, y: event.clientY });
+                  setContextMenu({ message, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) });
                 }}
                 onKeyDown={(event) => {
                   if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
                     event.preventDefault();
                     const rect = event.currentTarget.getBoundingClientRect();
-                    setContextMenu({ message, x: rect.left + 28, y: rect.top + 28 });
+                    setContextMenu({ message, x: rect.left + 28, y: rect.top + 28, portalContainer: menuPortalContainerFor(event.currentTarget) });
                   }
                 }}
                 tabIndex={revealPhase ? -1 : 0}
@@ -769,7 +777,7 @@ function Conversation({
                           people={people}
                           token={token}
                           disabled={!canSend || busy}
-                          onOpenDetails={(event) => { setContextMenu(undefined); setReactionQuick({ message, emoji: reaction.emoji, x: event.clientX, y: event.clientY }); }}
+                          onOpenDetails={(event) => { setContextMenu(undefined); setReactionQuick({ message, emoji: reaction.emoji, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) }); }}
                           onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
                         />
                       ))}
@@ -793,7 +801,7 @@ function Conversation({
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
-        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} onPointerDown={(event) => event.stopPropagation()}>
+        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
           <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
           <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>
           {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
@@ -808,7 +816,7 @@ function Conversation({
           </div> : null}
         </MessageContextMenu>;
       })() : null}
-      {reactionQuick ? <MessageContextMenu x={reactionQuick.x} y={reactionQuick.y} onPointerDown={(event) => event.stopPropagation()}>
+      {reactionQuick ? <MessageContextMenu x={reactionQuick.x} y={reactionQuick.y} portalContainer={reactionQuick.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
         <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
         <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
       </MessageContextMenu> : null}
