@@ -21,6 +21,7 @@ from ..access_control import ensure_module_action
 from ..ai_referent_agent_service import claim_job, complete_job, heartbeat_job
 from ..ai_referent_audio import save_audio
 from ..ai_referent_authority import (
+    complete_authority_replay,
     heartbeat_authority,
     require_workspace_write,
     start_authority,
@@ -70,6 +71,7 @@ from ..ai_referent_schemas import (
     OfflineBlobReceipt,
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
+    OfflineReplayCompleteRequest,
     OfflineReplayOperation,
     OfflineReplayReceipt,
     OfflineRightsSnapshot,
@@ -968,6 +970,23 @@ async def replay_agent_offline_operation(
         connection, agent_id=agent_id, epoch=epoch, operation=payload,
         enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
         storage=_storage(request),
+    )
+
+
+@router.post(
+    "/agent/offline/authority:complete",
+    response_model=OfflineAuthorityLease,
+    dependencies=[Depends(require_agent_token)],
+)
+async def complete_agent_offline_replay(
+    payload: OfflineReplayCompleteRequest,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+) -> OfflineAuthorityLease:
+    return await complete_authority_replay(
+        connection, agent_id=agent_id, payload=payload,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
 
 

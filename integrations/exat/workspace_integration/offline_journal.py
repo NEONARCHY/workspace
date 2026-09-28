@@ -824,6 +824,72 @@ class OfflineJournal:
                 raise ValueError("Автономная операция без подтверждённых прав требует сверки.")
         return operations
 
+    def replay_manifest(self) -> dict[str, Any]:
+        """Prove every local operation was acknowledged before releasing the server fence."""
+        with self.connect() as connection:
+            return self._replay_manifest(connection)
+
+    def _replay_manifest(self, connection: sqlite3.Connection) -> dict[str, Any]:
+        state = connection.execute(
+            "SELECT epoch, phase FROM authority_state WHERE id = 1"
+        ).fetchone()
+        if state is None or state["phase"] != "replay":
+            raise ValueError("Сверка доступна только после восстановления связи.")
+        unfinished = connection.execute(
+            "SELECT 1 FROM operations WHERE status != 'acknowledged' LIMIT 1"
+        ).fetchone()
+        if unfinished is not None:
+            raise ValueError("Остались операции без подтверждения сервера.")
+        external_count = int(connection.execute(
+            "SELECT COUNT(*) FROM external_effects"
+        ).fetchone()[0])
+        if external_count:
+            raise ValueError("Внешние отправки требуют отдельной сверки референтом.")
+        rows = connection.execute(
+            "SELECT sequence, operation_id, result FROM operations "
+            "WHERE authority_epoch = ? ORDER BY sequence", (state["epoch"],)
+        ).fetchall()
+        entries: list[list[int | str]] = []
+        for row in rows:
+            result = json.loads(row["result"] or "null")
+            if (
+                not isinstance(result, dict)
+                or result.get("operationId") != row["operation_id"]
+                or result.get("sequence") != row["sequence"]
+            ):
+                raise ValueError("Квитанция автономной операции повреждена.")
+            entries.append([int(row["sequence"]), str(row["operation_id"])])
+        digest = hashlib.sha256(json.dumps(entries, separators=(",", ":")).encode()).hexdigest()
+        return {
+            "epoch": str(state["epoch"]),
+            "operationCount": len(entries),
+            "lastSequence": entries[-1][0] if entries else None,
+            "operationsSha256": digest,
+            "externalEffectCount": 0,
+        }
+
+    def finish_replay(
+        self, old_epoch: str, new_epoch: str, lease_seconds: int,
+        manifest: dict[str, Any],
+        *, next_phase: str = "online",
+    ) -> None:
+        """Advance only from a fully receipted journal to a server-proven new epoch."""
+        old_epoch, new_epoch = str(UUID(old_epoch)), str(UUID(new_epoch))
+        if (
+            old_epoch == new_epoch or not 1 <= lease_seconds <= 600
+            or next_phase not in {"online", "replay"}
+        ):
+            raise ValueError("Сервер не выдал новую действующую эпоху.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if self._replay_manifest(connection) != manifest or manifest["epoch"] != old_epoch:
+                raise ValueError("Журнал изменился после запроса завершения сверки.")
+            connection.execute(
+                "UPDATE authority_state SET epoch = ?, phase = ?, "
+                "lease_seconds = ?, updated_at = ? WHERE id = 1",
+                (new_epoch, next_phase, lease_seconds, _now()),
+            )
+
     def pending_blob_hashes(self, limit: int = 100) -> list[str]:
         """List only files still referenced by unacknowledged operations."""
         if not 1 <= limit <= 1000:

@@ -211,6 +211,61 @@ def test_external_send_is_never_replayed_after_crash(tmp_path):
         reopened.begin_external_effect(effect_id, str(uuid4()), "exat_send")
 
 
+def test_replay_manifest_requires_all_receipts_and_new_epoch(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    old_epoch, new_epoch = str(uuid4()), str(uuid4())
+    journal.set_authority_phase("referent-pc", old_epoch, "online")
+    operation_id = str(uuid4())
+    sequence = journal.append(
+        operation_id=operation_id, actor_id="123", kind="letter.create", payload={}
+    )
+    with journal.connect() as connection:
+        connection.execute(
+            "UPDATE operations SET authority_epoch = ? WHERE sequence = ?",
+            (old_epoch, sequence),
+        )
+    journal.set_authority_phase("referent-pc", old_epoch, "replay")
+    with pytest.raises(ValueError, match="без подтверждения"):
+        journal.replay_manifest()
+    receipt = {"operationId": operation_id, "sequence": sequence}
+    journal.finish(sequence, accepted=True, result=receipt)
+    manifest = journal.replay_manifest()
+    assert manifest == {
+        "epoch": old_epoch, "operationCount": 1,
+        "lastSequence": sequence,
+        "operationsSha256": hashlib.sha256(
+            json.dumps([[sequence, operation_id]], separators=(",", ":")).encode()
+        ).hexdigest(),
+        "externalEffectCount": 0,
+    }
+    with pytest.raises(ValueError, match="Журнал изменился"):
+        journal.finish_replay(old_epoch, new_epoch, 45, {**manifest, "operationCount": 0})
+    journal.finish_replay(old_epoch, new_epoch, 45, manifest)
+    assert OfflineJournal(tmp_path).authority_state()["epoch"] == new_epoch
+    assert journal.authority_state()["phase"] == "online"
+
+
+def test_replay_cannot_finish_with_unknown_external_effect(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    journal.begin_external_effect(str(uuid4()), str(uuid4()), "exat_send")
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+    with pytest.raises(ValueError, match="Внешние отправки"):
+        journal.replay_manifest()
+
+
+def test_expired_replay_receipt_advances_epoch_without_enabling_writes(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    old_epoch, new_epoch = str(uuid4()), str(uuid4())
+    journal.set_authority_phase("referent-pc", old_epoch, "online")
+    journal.set_authority_phase("referent-pc", old_epoch, "replay")
+    manifest = journal.replay_manifest()
+    journal.finish_replay(old_epoch, new_epoch, 45, manifest, next_phase="replay")
+    assert journal.authority_state()["phase"] == "replay"
+    assert journal.replay_manifest()["epoch"] == new_epoch
+
+
 def test_telegram_update_is_durable_before_offset_advances(tmp_path):
     journal = OfflineJournal(tmp_path)
     assert journal.initialize_telegram_offset(15) == 15

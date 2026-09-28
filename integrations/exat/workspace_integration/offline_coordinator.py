@@ -13,6 +13,7 @@ from typing import Literal
 from .client import WorkspaceClient, WorkspaceError
 from .offline_authority import OfflineAuthorityGate
 from .offline_journal import OfflineJournal
+from .offline_replay import replay_one_draft_operation
 
 AuthorityMode = Literal["legacy", "online", "waiting", "offline", "replay", "blocked"]
 
@@ -111,4 +112,20 @@ class OfflineCoordinator:
                 return "blocked"
         except ValueError:
             return "blocked"
+        return "online"
+
+    def replay_tick(self) -> AuthorityMode:
+        """Advance one durable replay step; never release the fence over missing effects."""
+        state = self.journal.authority_state()
+        if state is None or state["phase"] != "replay":
+            raise ValueError("Воспроизведение возможно только в режиме сверки.")
+        if replay_one_draft_operation(self.journal, self.client):
+            return "replay"
+        manifest = self.journal.replay_manifest()
+        lease = self.client.complete_offline_replay(manifest)
+        self.gate.accept_replay_completion(lease, manifest)
+        updated = self.journal.authority_state()
+        if updated is None or updated["phase"] != "online":
+            return "replay"
+        self._next_refresh = 0.0
         return "online"

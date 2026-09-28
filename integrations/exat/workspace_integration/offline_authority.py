@@ -36,6 +36,33 @@ class OfflineAuthorityGate:
 
     def accept_lease(self, response: dict[str, Any]) -> None:
         """Accept a server-confirmed epoch but do not grant offline writes yet."""
+        epoch, mode, seconds, remaining = self._parse_lease(response)
+        if mode == "replay_required":
+            self.journal.set_authority_phase(self.agent_id, epoch, "replay")
+            self._deadline = None
+            return
+        if mode != "online" or remaining <= 0:
+            raise ValueError("Сервер не подтвердил действующую аренду.")
+        self.journal.set_authority_phase(
+            self.agent_id, epoch, "online", lease_seconds=seconds
+        )
+        self._deadline = self.clock() + seconds + SAFETY_SECONDS
+
+    def accept_replay_completion(
+        self, response: dict[str, Any], manifest: dict[str, Any]
+    ) -> None:
+        """Move to the newly issued epoch only after checking the full local manifest."""
+        epoch, mode, seconds, remaining = self._parse_lease(response)
+        if mode not in {"online", "replay_required"} or (mode == "online" and remaining <= 0):
+            raise ValueError("Сервер не подтвердил завершение сверки.")
+        next_phase = "online" if mode == "online" else "replay"
+        self.journal.finish_replay(
+            str(manifest["epoch"]), epoch, seconds, manifest, next_phase=next_phase
+        )
+        self._deadline = self.clock() + seconds + SAFETY_SECONDS if mode == "online" else None
+
+    @staticmethod
+    def _parse_lease(response: dict[str, Any]) -> tuple[str, str, int, float]:
         epoch = str(UUID(str(response["epoch"])))
         mode = response["mode"]
         seconds = int(response["leaseSeconds"])
@@ -53,18 +80,7 @@ class OfflineAuthorityGate:
         remaining = (lease_until - server_time).total_seconds()
         if remaining > seconds + 1:
             raise ValueError("Сервер вернул недействительную аренду робота.")
-        if mode == "replay_required":
-            self.journal.set_authority_phase(self.agent_id, epoch, "replay")
-            self._deadline = None
-            return
-        if mode != "online" or remaining <= 0:
-            raise ValueError("Сервер не подтвердил действующую аренду.")
-        self.journal.set_authority_phase(
-            self.agent_id, epoch, "online", lease_seconds=seconds
-        )
-        # The response was generated before receipt, so waiting the *full*
-        # lease from receipt plus slack is conservative even with clock skew.
-        self._deadline = self.clock() + seconds + SAFETY_SECONDS
+        return epoch, str(mode), seconds, remaining
 
     def may_write_offline(self) -> bool:
         state = self.journal.authority_state()

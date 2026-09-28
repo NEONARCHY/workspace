@@ -5,6 +5,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_coordinator import OfflineCoordinator
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
@@ -73,6 +74,15 @@ class Client:
             "validUntil": datetime(now.year + 1, 1, 1, tzinfo=UTC).isoformat(),
         }
 
+    def complete_offline_replay(self, manifest):
+        self._check()
+        assert manifest["epoch"] == self.epoch
+        assert manifest["operationCount"] == 0
+        assert manifest["operationsSha256"] == hashlib.sha256(b"[]").hexdigest()
+        self.epoch = str(uuid4())
+        self.mode = "online"
+        return _lease(self.epoch)
+
 
 def test_coordinator_failover_and_replay_are_fenced(tmp_path):
     journal = OfflineJournal(tmp_path)
@@ -140,3 +150,54 @@ def test_recovered_server_conflict_moves_to_replay(tmp_path):
     client.mode = "replay_required"
     assert coordinator.tick() == "replay"
     assert journal.authority_state()["phase"] == "replay"
+
+
+def test_empty_replay_issues_new_epoch_and_restores_online(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: 100.0)
+    assert coordinator.tick() == "online"
+    old_epoch = client.epoch
+    client.mode = "replay_required"
+    client.heartbeat_conflict = True
+    assert coordinator.tick() == "replay"
+    assert coordinator.replay_tick() == "online"
+    assert journal.authority_state()["epoch"] == client.epoch
+    assert client.epoch != old_epoch
+
+
+def test_lost_completion_reply_and_expired_lease_remain_recoverable(tmp_path):
+    class LostReplyClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.first_epoch = self.epoch
+            self.completion_calls = 0
+
+        def complete_offline_replay(self, manifest):
+            self.completion_calls += 1
+            if self.completion_calls == 1:
+                assert manifest["epoch"] == self.first_epoch
+                self.epoch = str(uuid4())
+                raise WorkspaceError("ответ потерян", retryable=True)
+            if self.completion_calls == 2:
+                assert manifest["epoch"] == self.first_epoch
+                return _lease(self.epoch, "replay_required")
+            assert manifest["epoch"] == self.epoch
+            self.epoch = str(uuid4())
+            return _lease(self.epoch)
+
+    journal = OfflineJournal(tmp_path)
+    client = LostReplyClient()
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: 100.0)
+    assert coordinator.tick() == "online"
+    client.mode = "replay_required"
+    client.heartbeat_conflict = True
+    assert coordinator.tick() == "replay"
+    with pytest.raises(WorkspaceError, match="ответ потерян"):
+        coordinator.replay_tick()
+    assert journal.authority_state()["epoch"] == client.first_epoch
+    assert coordinator.replay_tick() == "replay"
+    assert journal.authority_state()["epoch"] == client.epoch
+    assert journal.authority_state()["phase"] == "replay"
+    assert coordinator.replay_tick() == "online"
+    assert journal.authority_state()["phase"] == "online"

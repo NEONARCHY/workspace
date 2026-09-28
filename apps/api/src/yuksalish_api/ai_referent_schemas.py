@@ -171,6 +171,14 @@ class OfflineReplayReceipt(ApiModel):
     accepted_at: datetime
 
 
+class OfflineReplayCompleteRequest(ApiModel):
+    epoch: UUID
+    operation_count: int = Field(ge=0)
+    last_sequence: int | None = Field(default=None, ge=1)
+    operations_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    external_effect_count: int = Field(ge=0)
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]

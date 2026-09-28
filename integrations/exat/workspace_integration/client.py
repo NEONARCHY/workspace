@@ -267,6 +267,15 @@ class WorkspaceClient:
             operation, method="POST",
         )
 
+    def complete_offline_replay(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/authority:complete?"
+            + urlencode({"agentId": self.agent_id}),
+            manifest, method="POST",
+        )
+
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(
             "/auth/login",
