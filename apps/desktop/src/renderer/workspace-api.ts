@@ -23,6 +23,8 @@ import type {
   HisobotProfile,
   HisobotReport,
   AIReferentRecipientRegistry,
+  AIReferentRecipient,
+  AIReferentManualRecipientInput,
   NavigationKey,
   AdministrativeChat,
   AbsenceAction,
@@ -200,6 +202,24 @@ export function loadAIReferentRecipients(
   if (filters.offset) search.set("offset", String(filters.offset));
   search.set("limit", "8");
   return apiRequest<AIReferentRecipientRegistry>(`/ai-referent/recipients?${search}`, {}, token);
+}
+
+export function loadAIReferentManualRecipients(token: string): Promise<readonly AIReferentRecipient[]> {
+  return apiRequest<readonly AIReferentRecipient[]>("/ai-referent/recipients/manual", {}, token);
+}
+
+export function addAIReferentManualRecipient(
+  token: string, recipient: AIReferentManualRecipientInput,
+): Promise<AIReferentRecipient> {
+  return apiRequest<AIReferentRecipient>("/ai-referent/recipients/manual", {
+    method: "POST", body: JSON.stringify(recipient),
+  }, token);
+}
+
+export function removeAIReferentManualRecipient(token: string, id: string): Promise<void> {
+  return apiRequest<void>(`/ai-referent/recipients/manual/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  }, token);
 }
 
 export function loadAIReferentConfiguration(token: string) {

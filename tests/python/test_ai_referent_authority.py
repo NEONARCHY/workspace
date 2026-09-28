@@ -57,6 +57,8 @@ def test_all_online_referent_writes_have_server_guard():
         ("POST", "/ai-referent/agent/document-checks/{check_id}/heartbeat"),
         ("POST", "/ai-referent/agent/document-checks/{check_id}/result"),
         ("PUT", "/ai-referent/agent/recipients"),
+        ("POST", "/ai-referent/recipients/manual"),
+        ("DELETE", "/ai-referent/recipients/manual/{recipient_id}"),
         ("POST", "/ai-referent/agent/telegram-link"),
         ("POST", "/ai-referent/agent/letters"),
         ("PATCH", "/ai-referent/agent/letters/{letter_id}"),

@@ -1253,6 +1253,23 @@ ai_referent_recipient_catalog = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+ai_referent_manual_recipients = sa.Table(
+    "ai_referent_manual_recipients", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("name", sa.String(300), nullable=False),
+    sa.Column("address", sa.String(500), nullable=False, unique=True),
+    sa.Column("route", sa.String(16), nullable=False),
+    sa.Column("category_key", sa.String(30), nullable=False),
+    sa.Column("created_by_user_id", uuid_type, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_manual_recipient_state = sa.Table(
+    "ai_referent_manual_recipient_state", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 ai_referent_reviewers = sa.Table(
     "ai_referent_reviewers", metadata,
     sa.Column("key", sa.String(32), primary_key=True),

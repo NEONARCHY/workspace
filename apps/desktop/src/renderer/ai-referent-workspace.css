@@ -499,6 +499,24 @@
 .ai-referent-view .ai-referent-runtime-status { padding: 16px 18px; border: 1px solid #e0eaeb; border-radius: 16px; background: #f7faf9; }
 .ai-referent-runtime-status h3 { margin: 0 0 8px; }
 
+.ai-referent-view .ai-referent-address-book { overflow-y: auto; scrollbar-width: thin; padding: 0 2px 18px; background: transparent; }
+.ai-referent-address-layout { display: grid; grid-template-columns: minmax(285px, .7fr) minmax(360px, 1.3fr); gap: 16px; align-items: start; min-width: 0; }
+.ai-referent-address-form, .ai-referent-address-list { min-width: 0; padding: 20px; border: 1px solid #e0eaeb; border-radius: 20px; background: #fff; box-shadow: var(--ws-shadow-card); }
+.ai-referent-address-form { display: grid; gap: 15px; }
+.ai-referent-address-form h3, .ai-referent-address-list h3 { margin: 0; font-size: 17px; }
+.ai-referent-address-form p, .ai-referent-address-empty { margin: 0; color: var(--ai-soft); font-size: 13px; line-height: 1.5; }
+.ai-referent-address-form label { display: grid; gap: 7px; min-width: 0; font-size: 13px; font-weight: 600; }
+.ai-referent-address-form-footer, .ai-referent-address-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ai-referent-address-form-footer span { color: var(--ws-link); font-size: 13px; font-weight: 600; }
+.ai-referent-address-list { display: grid; gap: 8px; }
+.ai-referent-address-list-heading { margin-bottom: 4px; }
+.ai-referent-address-row { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 11px 12px; border: 1px solid #e4eded; border-radius: 14px; background: #f9fcfb; }
+.ai-referent-address-mark { display: grid; width: 35px; height: 35px; flex: none; place-items: center; border-radius: 11px; background: #e4f4f3; color: var(--ws-link); font-weight: 700; }
+.ai-referent-address-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.ai-referent-address-copy strong, .ai-referent-address-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-referent-address-copy small { color: var(--ai-soft); }
+@media (max-width: 1000px) { .ai-referent-address-layout { grid-template-columns: 1fr; } }
+
 .ai-referent-telegram-card { display: grid; grid-template-columns: minmax(190px, .7fr) minmax(280px, 1.3fr); max-width: 950px; min-height: 310px; overflow: hidden; border: 1px solid #e0eaeb; border-radius: 22px; background: #fff; box-shadow: var(--ws-shadow-card); }
 .ai-referent-telegram-illustration { position: relative; display: flex; align-items: center; justify-content: center; gap: 26px; background: radial-gradient(circle at 43% 50%, #d5f1ee, #ecf7f5 54%, #f7fafb); color: #006779; }
 .ai-referent-telegram-illustration::before,

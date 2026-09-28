@@ -124,7 +124,7 @@ class OfflineSnapshotSeeder:
             if (
                 not isinstance(entries, list)
                 or any(not isinstance(entry, dict) for entry in entries)
-                or type(total) is not int or not 0 <= total <= 2000
+                or type(total) is not int or not 0 <= total <= 2500
                 or len(entries) > 30 or offset + len(entries) > total
                 or (offset < total and not entries)
             ):

@@ -6,7 +6,7 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, uploadWorkspaceAttachment } from "./workspace-api";
+import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
@@ -26,6 +26,7 @@ vi.mock("./workspace-api", () => ({
   downloadAIReferentPacket: vi.fn(),
   loadAIReferentReviewers: vi.fn(),
   loadAIReferentRecipients: vi.fn(),
+  loadAIReferentManualRecipients: vi.fn(),
   loadAIReferentIncomingRegistry: vi.fn(),
   updateAIReferentLetter: vi.fn(),
   uploadWorkspaceAttachment: vi.fn(),
@@ -119,6 +120,16 @@ describe("AIReferentView", () => {
         addresses: ["FIN-001"], route: "exat", addressBookOrganization: "Минфин" }],
       totalCount: 1, updatedAt: "2026-09-22T10:00:00Z",
     });
+    vi.mocked(loadAIReferentManualRecipients).mockResolvedValue([]);
+  });
+
+  it("shows the address-book manager only to administrators", async () => {
+    const view = render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    expect(screen.queryByRole("tab", { name: "Адресная книга" })).not.toBeInTheDocument();
+    view.unmount();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
+    fireEvent.click(screen.getByRole("tab", { name: "Адресная книга" }));
+    expect(await screen.findByText("Пока нет добавленных адресов. Справочник робота продолжает работать как прежде.")).toBeInTheDocument();
   });
 
   it("searches the shared address book and fills the selected destination", async () => {
@@ -195,7 +206,8 @@ describe("AIReferentView", () => {
     expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
     await waitFor(() => expect(checkAIReferentDocument).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled());
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled(), { timeout: 5000 });
     expect(screen.queryByText(/Подождите: робот проверяет/)).not.toBeInTheDocument();
   });
 

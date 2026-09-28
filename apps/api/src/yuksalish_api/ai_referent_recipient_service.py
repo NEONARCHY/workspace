@@ -1,19 +1,27 @@
 # ruff: noqa: RUF001
-"""Read-only Workspace projection of the Exat outgoing address book."""
+"""Exat address-book projection with administrator-managed shared additions."""
 
 import hashlib
 import json
 import re
 from datetime import UTC, datetime
 from typing import Annotated, Literal
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from pydantic import Field
-from sqlalchemy import select
+from pydantic import Field, field_validator
+from sqlalchemy import delete, func, insert, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .tables import ai_referent_configuration, ai_referent_recipient_catalog
+from .tables import (
+    ai_referent_configuration,
+    ai_referent_manual_recipient_state,
+    ai_referent_manual_recipients,
+    ai_referent_recipient_catalog,
+    audit_events,
+)
 from .workspace_schemas import ApiModel
 
 
@@ -37,6 +45,131 @@ class RecipientRegistry(ApiModel):
     entries: list[RecipientEntry]
     total_count: int
     updated_at: datetime | None
+
+
+class ManualRecipientInput(ApiModel):
+    name: str = Field(min_length=2, max_length=300)
+    address: str = Field(min_length=5, max_length=500)
+    category_key: Literal[
+        "ministries", "agencies", "committees", "other", "international"
+    ] = "other"
+
+    @field_validator("name", "address")
+    @classmethod
+    def trim_nonempty(cls, value: str) -> str:
+        result = value.strip()
+        if len(result) < 2:
+            raise ValueError("Укажите название организации и адрес.")
+        return result
+
+    @field_validator("address")
+    @classmethod
+    def validate_address(cls, value: str) -> str:
+        if not re.fullmatch(
+            r"[A-Za-z0-9_][A-Za-z0-9._%+\-]*@[A-Za-z0-9][A-Za-z0-9.\-]*\.[A-Za-z]{2,}",
+            value,
+        ):
+            raise ValueError("Укажите корректный E-XAT-адрес или email.")
+        return value.casefold()
+
+
+def _manual_entry(item: RowMapping) -> RecipientEntry:
+    return RecipientEntry(
+        id="manual-" + str(item["id"]),
+        name=item["name"],
+        category_key=item["category_key"],
+        addresses=[item["address"]],
+        route=item["route"],
+        address_book_organization=item["name"],
+    )
+
+
+async def _touch_manual_state(connection: AsyncConnection) -> None:
+    stamp = datetime.now(UTC)
+    statement = pg_insert(ai_referent_manual_recipient_state).values(id=1, updated_at=stamp)
+    await connection.execute(statement.on_conflict_do_update(
+        index_elements=[ai_referent_manual_recipient_state.c.id],
+        set_={"updated_at": stamp},
+    ))
+
+
+async def list_manual_recipients(connection: AsyncConnection) -> list[RecipientEntry]:
+    rows = (await connection.execute(
+        select(ai_referent_manual_recipients).order_by(
+            ai_referent_manual_recipients.c.created_at.desc()
+        )
+    )).mappings().all()
+    return [_manual_entry(row) for row in rows]
+
+
+async def add_manual_recipient(
+    connection: AsyncConnection, user_id: UUID, payload: ManualRecipientInput
+) -> RecipientEntry:
+    count = await connection.scalar(select(func.count()).select_from(ai_referent_manual_recipients))
+    if count is not None and count >= 500:
+        raise HTTPException(409, "Лимит дополнительных адресатов достигнут.")
+    active_agent = await connection.scalar(select(ai_referent_configuration.c.execution_agent_id))
+    snapshot_query = select(ai_referent_recipient_catalog.c.entries)
+    if active_agent:
+        snapshot_query = snapshot_query.where(
+            ai_referent_recipient_catalog.c.agent_id == active_agent
+        )
+    else:
+        snapshot_query = snapshot_query.order_by(
+            ai_referent_recipient_catalog.c.updated_at.desc()
+        ).limit(1)
+    snapshot = await connection.scalar(snapshot_query)
+    if any(payload.address == str(address).casefold()
+           for item in (snapshot or []) for address in item.get("addresses", [])):
+        raise HTTPException(409, "Этот адрес уже есть в справочнике робота.")
+    route: Literal["exat", "webmail"] = (
+        "exat" if payload.address.endswith("@exat.uz") else "webmail"
+    )
+    recipient_id = uuid4()
+    statement = pg_insert(ai_referent_manual_recipients).values(
+        id=recipient_id, name=payload.name, address=payload.address,
+        route=route, category_key=payload.category_key,
+        created_by_user_id=user_id, created_at=datetime.now(UTC),
+    ).on_conflict_do_nothing(index_elements=[ai_referent_manual_recipients.c.address])
+    inserted = await connection.execute(statement.returning(ai_referent_manual_recipients.c.id))
+    if inserted.scalar() is None:
+        raise HTTPException(409, "Этот адрес уже добавлен администратором.")
+    now = datetime.now(UTC)
+    await _touch_manual_state(connection)
+    await connection.execute(insert(audit_events).values(
+        id=uuid4(), actor_user_id=user_id, action="ai_referent.recipient_added",
+        target_type="ai_referent_recipient", target_id=recipient_id,
+        details={"name": payload.name, "address": payload.address, "route": route},
+        created_at=now,
+    ))
+    return RecipientEntry(
+        id="manual-" + str(recipient_id), name=payload.name,
+        category_key=payload.category_key, addresses=[payload.address], route=route,
+        address_book_organization=payload.name,
+    )
+
+
+async def remove_manual_recipient(
+    connection: AsyncConnection, user_id: UUID, recipient_id: UUID
+) -> None:
+    result = await connection.execute(
+        delete(ai_referent_manual_recipients).where(
+            ai_referent_manual_recipients.c.id == recipient_id
+        ).returning(
+            ai_referent_manual_recipients.c.name,
+            ai_referent_manual_recipients.c.address,
+        )
+    )
+    removed = result.mappings().first()
+    if removed is None:
+        raise HTTPException(404, "Адресат не найден среди записей администратора.")
+    await _touch_manual_state(connection)
+    await connection.execute(insert(audit_events).values(
+        id=uuid4(), actor_user_id=user_id, action="ai_referent.recipient_removed",
+        target_type="ai_referent_recipient", target_id=recipient_id,
+        details={"name": removed["name"], "address": removed["address"]},
+        created_at=datetime.now(UTC),
+    ))
 
 
 _CYRILLIC = str.maketrans({
@@ -111,8 +244,30 @@ async def load_recipients(
     else:
         statement = statement.order_by(ai_referent_recipient_catalog.c.updated_at.desc()).limit(1)
     row = (await connection.execute(statement)).mappings().first()
-    if row is None:
-        return RecipientRegistry(entries=[], total_count=0, updated_at=None)
-    entries = [RecipientEntry.model_validate(item) for item in row["entries"]]
+    manual_rows = (await connection.execute(
+        select(ai_referent_manual_recipients).order_by(
+            ai_referent_manual_recipients.c.created_at.desc()
+        )
+    )).mappings().all()
+    manual = [_manual_entry(item) for item in manual_rows]
+    manual_addresses = {item.addresses[0].casefold() for item in manual}
+    imported = [RecipientEntry.model_validate(item) for item in row["entries"]] if row else []
+    entries = list(manual)
+    for item in imported:
+        remaining = [address for address in item.addresses
+                     if address.casefold() not in manual_addresses]
+        if not item.addresses:
+            entries.append(item)
+        elif remaining:
+            entries.append(item.model_copy(update={"addresses": remaining}))
     page, count = search_recipients(entries, query, category, offset, limit)
-    return RecipientRegistry(entries=page, total_count=count, updated_at=row["updated_at"])
+    manual_updated_at = await connection.scalar(
+        select(ai_referent_manual_recipient_state.c.updated_at)
+    )
+    updated_at = max(
+        (stamp for stamp in (
+            row["updated_at"] if row else None,
+            manual_updated_at,
+        ) if stamp is not None), default=None,
+    ) if row or manual else None
+    return RecipientRegistry(entries=page, total_count=count, updated_at=updated_at)

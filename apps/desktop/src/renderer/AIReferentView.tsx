@@ -46,6 +46,7 @@ import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentFiles, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
 import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
+import { AIReferentAddressBook } from "./AIReferentAddressBook";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -171,7 +172,7 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusRevision }: AIReferentViewProps) {
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "archive" | "telegram">("incoming");
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "addresses" | "archive" | "telegram">("incoming");
   const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
@@ -232,10 +233,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   }, [token]);
 
   useEffect(() => {
-    if (readOnly) {
+    if (!readOnly) return;
+    queueMicrotask(() => {
       setConfirmAction(undefined);
       setDeleteConfirmation("");
-    }
+    });
   }, [readOnly]);
 
   useEffect(() => {
@@ -493,6 +495,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
             className={registerKind === "settings" ? "active" : ""}
             onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
+          {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "addresses"}
+            className={registerKind === "addresses" ? "active" : ""}
+            onClick={() => setRegisterKind("addresses")}>Адресная книга</button> : null}
           <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
           <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
         </div>
@@ -507,6 +512,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       </div>
 
       {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} readOnly={readOnly} /> :
+        registerKind === "addresses" && canAdmin ? <AIReferentAddressBook token={token} readOnly={readOnly} /> :
         registerKind === "archive" ? <AIReferentArchive token={token} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (

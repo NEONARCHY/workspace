@@ -963,6 +963,12 @@ export interface AIReferentRecipientRegistry {
   readonly updatedAt: string | null;
 }
 
+export interface AIReferentManualRecipientInput {
+  readonly name: string;
+  readonly address: string;
+  readonly categoryKey: AIReferentRecipient["categoryKey"];
+}
+
 export interface AIReferentLetterInput {
   readonly workflowKind?: AIReferentWorkflowKind;
   readonly finalReviewerUserId?: string | null;

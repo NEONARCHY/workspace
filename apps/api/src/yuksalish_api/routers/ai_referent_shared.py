@@ -27,7 +27,7 @@ from ..ai_referent_authority import (
     start_authority,
 )
 from ..ai_referent_configuration_schemas import ReviewerConfigurationResponse
-from ..ai_referent_configuration_service import read_configuration
+from ..ai_referent_configuration_service import read_configuration, require_configuration_admin
 from ..ai_referent_deletion import request_deletion
 from ..ai_referent_files_service import (
     file_metadata,
@@ -52,9 +52,14 @@ from ..ai_referent_preflight import (
 )
 from ..ai_referent_progress import list_other_letter_progress, load_letter_progress
 from ..ai_referent_recipient_service import (
+    ManualRecipientInput,
+    RecipientEntry,
     RecipientRegistry,
     RecipientSnapshot,
+    add_manual_recipient,
+    list_manual_recipients,
     load_recipients,
+    remove_manual_recipient,
     sync_recipients,
 )
 from ..ai_referent_schemas import (
@@ -493,6 +498,38 @@ async def get_recipients(
 ) -> RecipientRegistry:
     await ensure_module_action(connection, user, "ai_referent", "view")
     return await load_recipients(connection, query, category, offset, limit)
+
+
+@router.get("/recipients/manual", response_model=list[RecipientEntry])
+async def get_manual_recipients(connection: Connection, user: User) -> list[RecipientEntry]:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    return await list_manual_recipients(connection)
+
+
+@router.post(
+    "/recipients/manual", response_model=RecipientEntry, status_code=201,
+    dependencies=[Depends(require_workspace_write)],
+)
+async def post_manual_recipient(
+    payload: ManualRecipientInput, connection: Connection, user: User
+) -> RecipientEntry:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    return await add_manual_recipient(connection, user.id, payload)
+
+
+@router.delete(
+    "/recipients/manual/{recipient_id}", status_code=204,
+    dependencies=[Depends(require_workspace_write)],
+)
+async def delete_manual_recipient(
+    recipient_id: UUID, connection: Connection, user: User
+) -> Response:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    await remove_manual_recipient(connection, user.id, recipient_id)
+    return Response(status_code=204)
 
 
 @router.get("/agent/recipients", response_model=RecipientRegistry)
