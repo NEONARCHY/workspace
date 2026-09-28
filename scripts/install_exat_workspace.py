@@ -270,6 +270,119 @@ def patch_signature_identity(source: str) -> str:
     return source
 
 
+def patch_portable_facsimile(source: str) -> str:
+    marker = "# workspace-portable-signatures-v1"
+    if marker in source:
+        return source
+    old = (
+        "def _runtime_root() -> Path:\n"
+        "    return Path(getattr(sys, \"_MEIPASS\", Path(__file__).resolve().parents[2]))\n"
+    )
+    new = (
+        "def _runtime_root() -> Path:\n"
+        f"    {marker}\n"
+        "    from src.app.config import project_root_from_here\n"
+        "    return project_root_from_here()\n"
+    )
+    patched = replace_once(source, old, new)
+    compile(patched, "src/outgoing/facsimile.py", "exec")
+    return patched
+
+
+def patch_portable_config(source: str) -> str:
+    """Frozen Exat must use the destination PC's configuration, never build-PC secrets."""
+    marker = "# workspace-portable-config-v1"
+    if marker in source:
+        return source
+    old = (
+        "    if getattr(sys, \"frozen\", False):\n"
+        "        bundle_root = getattr(sys, \"_MEIPASS\", None)\n"
+        "        if bundle_root:\n"
+        "            return Path(str(bundle_root))\n"
+        "        return Path(sys.executable).resolve().parent\n"
+    )
+    new = (
+        f"    {marker}\n"
+        "    if getattr(sys, \"frozen\", False):\n"
+        "        executable_dir = Path(sys.executable).resolve().parent\n"
+        "        required = (\"settings.yaml\", \"employees.yaml\", \"rules.yaml\",\n"
+        "                    \"exat_selectors.yaml\", \"platform_selectors.yaml\")\n"
+        "        for root in (executable_dir, executable_dir.parent):\n"
+        "            if all((root / \"config\" / name).is_file() for name in required):\n"
+        "                return root\n"
+        "        raise FileNotFoundError(\n"
+        "            \"Не найдена внешняя папка config рядом с EXE или в его родительской \"\n"
+        "            \"папке. Сохраните настройки с ПК референта перед обновлением.\"\n"
+        "        )\n"
+    )
+    patched = replace_once(source, old, new)
+    compile(patched, "src/app/config.py", "exec")
+    return patched
+
+
+def patch_portable_spec(source: str) -> str:
+    """Keep confidential runtime assets outside the one-file executable."""
+    marker = "# workspace-external-assets-v1"
+    if marker in source:
+        return source
+    old = (
+        "    datas=[\n"
+        "        ('config', 'config'),\n"
+        "        ('organizations_unified.md', '.'),\n"
+        "        ('actual list of organizations.md', '.'),\n"
+        "        ('assets\\\\signatures', 'assets\\\\signatures'),\n"
+        "    ] + tzdata_files,\n"
+    )
+    patched = replace_once(source, old, f"    {marker}\n    datas=tzdata_files,\n")
+    compile(patched, "YuksalishAIReferent.spec", "exec")
+    return patched
+
+
+def patch_portable_worker(source: str) -> str:
+    """Incoming worker must load its .env and catalog from the destination tree."""
+    marker = "# workspace-portable-worker-v1"
+    if marker in source:
+        return source
+    source = replace_once(
+        source,
+        "from src.app.config import load_project_config\n",
+        "from src.app.config import load_project_config, project_root_from_here\n",
+    )
+    source = replace_once(
+        source,
+        "        self.project_root = Path(project_root) if project_root "
+        "else Path(__file__).resolve().parents[2]\n",
+        f"        {marker}\n"
+        "        self.project_root = Path(project_root) if project_root "
+        "else project_root_from_here()\n",
+    )
+    compile(source, "src/app/worker.py", "exec")
+    return source
+
+
+def patch_portable_installer(source: str) -> str:
+    """New installs receive external files; upgrades keep local config and signatures."""
+    marker = "; workspace-external-assets-v1"
+    if marker in source:
+        return source
+    anchor = (
+        '[Files]\n'
+        'Source: "..\\dist\\YuksalishAIReferent.exe"; DestDir: "{app}"; Flags: ignoreversion\n'
+    )
+    replacement = anchor + (
+        f"{marker}\n"
+        'Source: "..\\config\\*.yaml"; DestDir: "{app}\\config"; '
+        'Flags: ignoreversion onlyifdoesntexist\n'
+        'Source: "..\\organizations_unified.md"; DestDir: "{app}"; '
+        'Flags: ignoreversion onlyifdoesntexist\n'
+        'Source: "..\\actual list of organizations.md"; DestDir: "{app}"; '
+        'Flags: ignoreversion onlyifdoesntexist\n'
+        'Source: "..\\assets\\signatures\\*"; DestDir: "{app}\\assets\\signatures"; '
+        'Flags: ignoreversion onlyifdoesntexist\n'
+    )
+    return replace_once(source, anchor, replacement)
+
+
 def install(root: Path, *, apply: bool = False) -> dict[str, object]:
     root = root.resolve(strict=True)
     if not root.is_dir() or root == Path(root.anchor):
@@ -292,9 +405,33 @@ def install(root: Path, *, apply: bool = False) -> dict[str, object]:
             raise ValueError("Путь исходников выходит за пределы Exat.")
         original = facsimile.read_bytes()
         source = original.decode("utf-8-sig").replace("\r\n", "\n")
-        patched = patch_signature_identity(patch_number_backing(source))
+        patched = patch_portable_facsimile(
+            patch_signature_identity(patch_number_backing(source))
+        )
         if patched != source:
             planned[facsimile] = patched.replace(
+                "\n", "\r\n" if b"\r\n" in original else "\n"
+            ).encode("utf-8")
+    portable_paths = {
+        "src/app/config.py": patch_portable_config,
+        "src/app/worker.py": patch_portable_worker,
+        "YuksalishAIReferent.spec": patch_portable_spec,
+        "installer/YuksalishAIReferent.iss": patch_portable_installer,
+    }
+    present = [relative for relative in portable_paths if (root / relative).exists()]
+    if present and len(present) != len(portable_paths):
+        raise ValueError(
+            "Для переносимой сборки нужны config.py, worker.py, spec и installer Exat."
+        )
+    for relative in present:
+        path = (root / relative).resolve(strict=True)
+        if not path.is_relative_to(root):
+            raise ValueError("Путь сборки выходит за пределы Exat.")
+        original = path.read_bytes()
+        source = original.decode("utf-8-sig").replace("\r\n", "\n")
+        patched = portable_paths[relative](source)
+        if patched != source:
+            planned[path] = patched.replace(
                 "\n", "\r\n" if b"\r\n" in original else "\n"
             ).encode("utf-8")
     destination = root / "src/workspace_integration"

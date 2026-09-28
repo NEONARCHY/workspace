@@ -173,6 +173,14 @@ class SharedBot:
                 return workflow.read(actor, letter_id)
             if len(parts) == 2 and method == "PATCH" and payload is not None:
                 return workflow.update(actor, letter_id, payload.get("operationId", ""), payload)
+            if len(parts) == 2 and method == "DELETE":
+                query = parse_qs(parsed.query, strict_parsing=True)
+                try:
+                    revision = int(query["expectedRevision"][0])
+                    operation_id = query["operationId"][0]
+                except (KeyError, IndexError, ValueError) as error:
+                    raise WorkspaceError("Неверные параметры удаления письма.", 422) from error
+                return workflow.delete(actor, letter_id, operation_id, revision)
             if len(parts) == 3 and parts[2] == "actions" and method == "POST":
                 if payload is None:
                     raise WorkspaceError("Данные решения отсутствуют.", 422)
@@ -1101,7 +1109,8 @@ class SharedBot:
                     letter_id = str(UUID(data[2]))
                     result = self.request(
                         actor,
-                        f"/letters/{letter_id}?expectedRevision={int(data[3])}",
+                        f"/letters/{letter_id}?"
+                        + urlencode({"expectedRevision": int(data[3]), "operationId": operation}),
                         method="DELETE",
                     )
                     self.state.remove("wizard:" + actor)

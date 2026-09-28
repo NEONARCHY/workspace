@@ -49,7 +49,8 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
         return False
     operation = pending[0]
     if operation["kind"] not in {
-        "letter.create", "letter.update", "letter.attachment", "letter.document_check",
+        "letter.create", "letter.update", "letter.delete", "letter.attachment",
+        "letter.document_check",
         "letter.comment_audio", "letter.action",
         "letter.prepared", "letter.signed", "letter.dispatched",
         "letter.external_result",

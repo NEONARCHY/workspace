@@ -98,6 +98,64 @@ def test_draft_survives_restart_and_repeated_create(tmp_path):
     assert len(journal.pending_authorized()) == 1
 
 
+def test_offline_delete_tombstones_only_unnumbered_author_draft(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    delete_id = str(uuid4())
+    with pytest.raises(WorkspaceError) as forbidden:
+        workflow.delete("456", letter["id"], str(uuid4()), letter["revision"])
+    assert forbidden.value.status == 403
+    with pytest.raises(WorkspaceError) as stale:
+        workflow.delete("123", letter["id"], delete_id, letter["revision"] + 1)
+    assert stale.value.status == 409
+    assert workflow.delete("123", letter["id"], delete_id, letter["revision"]) == {
+        "queued": False
+    }
+    assert workflow.delete("123", letter["id"], delete_id, letter["revision"]) == {
+        "queued": False
+    }
+    with pytest.raises(WorkspaceError) as gone:
+        workflow.read("123", letter["id"])
+    assert gone.value.status == 404
+    assert workflow.list_letters("123", offset=0, limit=10)["letters"] == []
+    assert [item["kind"] for item in journal.pending_authorized()] == [
+        "letter.create", "letter.delete"
+    ]
+
+
+def test_bot_routes_offline_delete_without_contacting_workspace(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    api = Mock()
+    bot = SharedBot(None, api, State(tmp_path / "delete-bot.sqlite"), journal)
+    letter = bot.request("123", "/letters", {
+        **_draft(reviewer), "operationId": str(uuid4()),
+    }, "POST")
+    operation_id = str(uuid4())
+    assert bot.request(
+        "123",
+        f"/letters/{letter['id']}?expectedRevision=1&operationId={operation_id}",
+        method="DELETE",
+    ) == {"queued": False}
+    api.request.assert_not_called()
+
+
+def test_offline_delete_fences_numbered_letter(tmp_path):
+    journal, creator, reviewer = _offline_journal(tmp_path)
+    letter_id = str(uuid4())
+    journal.cache("123", "/letters/" + letter_id, {
+        **_draft(reviewer), "id": letter_id, "status": "needs_revision",
+        "createdByUserId": creator, "initialReviewerUserId": reviewer,
+        "outgoingNumber": 439, "revision": 3,
+        "updatedAt": "2026-09-25T12:00:00Z", "attachments": [], "events": [],
+    })
+    workflow = OfflineWorkflow(journal)
+    with pytest.raises(WorkspaceError) as blocked:
+        workflow.delete("123", letter_id, str(uuid4()), 3)
+    assert blocked.value.status == 409
+    assert journal.pending_authorized() == []
+
+
 def test_offline_list_includes_local_drafts_without_disclosing_them_to_strangers(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     workflow = OfflineWorkflow(journal)

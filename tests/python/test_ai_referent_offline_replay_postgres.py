@@ -1038,6 +1038,51 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time(
                 assert await connection.scalar(select(
                     ai_referent_delivery_commands.c.status
                 ).where(ai_referent_delivery_commands.c.id == send_command_id)) == "completed"
+                disposable = _operation(
+                    epoch, snapshot_id, rights_hash, actor_id, user_id,
+                    sequence=external_result.sequence + 1,
+                )
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=disposable, enabled=True,
+                )).result_revision == 1
+                deletion = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=disposable.sequence + 1,
+                    actor_id=actor_id, letter_id=disposable.letter_id,
+                    kind="letter.delete",
+                    payload={
+                        "expectedRevision": 1, "actorUserId": str(user_id),
+                        "actorName": "Offline Test Employee",
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="edit",
+                    occurred_at=disposable.occurred_at + timedelta(seconds=20),
+                )
+                stranger_delete = deletion.model_copy(update={
+                    "operation_id": uuid4(), "actor_id": reviewer_actor_id,
+                    "required_action": "approve",
+                })
+                with pytest.raises(HTTPException) as denied_delete:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=stranger_delete, enabled=True,
+                    )
+                assert denied_delete.value.status_code in {403, 422}
+                deleted_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=deletion, enabled=True,
+                )
+                assert deleted_receipt.result_revision == 2
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=deletion, enabled=True,
+                ) == deleted_receipt
+                assert await connection.scalar(select(ai_referent_letters.c.id).where(
+                    ai_referent_letters.c.id == disposable.letter_id
+                )) is None
+                assert await connection.scalar(select(ai_referent_events.c.id).where(
+                    ai_referent_events.c.letter_id == disposable.letter_id
+                )) is None
             finally:
                 await transaction.rollback()
     finally:

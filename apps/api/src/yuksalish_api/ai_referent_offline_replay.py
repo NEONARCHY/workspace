@@ -21,6 +21,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .ai_referent_audio import decision_audio
+from .ai_referent_deletion import purge_letter
 from .ai_referent_preflight import ensure_check, require_passed
 from .ai_referent_schemas import (
     CreateAIReferentLetterRequest,
@@ -354,6 +355,57 @@ async def _replay_comment_audio(
     return OfflineReplayReceipt(
         operation_id=operation.operation_id, sequence=operation.sequence,
         letter_id=operation.letter_id, result_revision=revision, accepted_at=now,
+    )
+
+
+async def _replay_delete(
+    connection: AsyncConnection,
+    *,
+    agent_id: str,
+    epoch: UUID,
+    operation: OfflineReplayOperation,
+    actor: dict[str, object],
+    fingerprint: str,
+    occurred_at: datetime,
+    now: datetime,
+) -> OfflineReplayReceipt:
+    """Delete only an unnumbered author draft; never infer robot-side cleanup."""
+    values = operation.payload
+    revision = values.get("expectedRevision")
+    if type(revision) is not int or revision < 1 or operation.blob_sha256 is not None:
+        raise HTTPException(422, "Поля автономного удаления недействительны.")
+    letter = (
+        await connection.execute(select(ai_referent_letters).where(
+            ai_referent_letters.c.id == operation.letter_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if letter is None:
+        raise HTTPException(404, "Удаляемый черновик не найден.")
+    if letter["created_by_user_id"] != UUID(str(actor["userId"])):
+        raise HTTPException(403, "Удалить письмо может только автор.")
+    if letter["revision"] != revision or letter["status"] not in {"draft", "needs_revision"}:
+        raise HTTPException(409, "Письмо изменилось после автономного удаления.")
+    if letter["outgoing_number"] is not None:
+        raise HTTPException(409, "Письмо с номером требует сверки локального реестра робота.")
+    await purge_letter(connection, operation.letter_id)
+    await connection.execute(insert(audit_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-audit:" + str(operation.operation_id)),
+        actor_user_id=UUID(str(actor["userId"])),
+        action="ai_referent.offline_delete",
+        target_type="ai_referent_letter", target_id=operation.letter_id,
+        details={"agentId": agent_id, "epoch": str(epoch), "fromStatus": letter["status"]},
+        created_at=now,
+    ))
+    result_revision = revision + 1
+    await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+        operation_id=operation.operation_id, agent_id=agent_id, epoch=epoch,
+        sequence=operation.sequence, letter_id=operation.letter_id,
+        kind=operation.kind, fingerprint=fingerprint, result_revision=result_revision,
+        occurred_at=occurred_at, accepted_at=now,
+    ))
+    return OfflineReplayReceipt(
+        operation_id=operation.operation_id, sequence=operation.sequence,
+        letter_id=operation.letter_id, result_revision=result_revision, accepted_at=now,
     )
 
 
@@ -1186,6 +1238,7 @@ async def replay_offline_operation(
         raise HTTPException(403, "У автора не было проверенного права на это действие.")
     if (operation.kind, operation.required_action) not in {
         ("letter.create", "create"), ("letter.update", "edit"),
+        ("letter.delete", "edit"),
         ("letter.attachment", "edit"),
         ("letter.document_check", "edit"),
         ("letter.comment_audio", "approve"), ("letter.comment_audio", "admin"),
@@ -1260,6 +1313,12 @@ async def replay_offline_operation(
         )
     if operation.kind == "letter.action":
         return await _replay_action(
+            connection, agent_id=agent_id, epoch=epoch,
+            operation=operation, actor=actor, fingerprint=fingerprint,
+            occurred_at=occurred_at, now=now,
+        )
+    if operation.kind == "letter.delete":
+        return await _replay_delete(
             connection, agent_id=agent_id, epoch=epoch,
             operation=operation, actor=actor, fingerprint=fingerprint,
             occurred_at=occurred_at, now=now,

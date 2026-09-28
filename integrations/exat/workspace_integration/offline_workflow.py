@@ -803,6 +803,52 @@ class OfflineWorkflow:
             )
             return self.read(telegram_id, letter_id)
 
+    def delete(
+        self, telegram_id: str, letter_id: str, operation_id: str, expected_revision: int
+    ) -> dict[str, bool]:
+        """Tombstone an unnumbered draft; numbered letters need robot-side cleanup."""
+        actor = self._actor(telegram_id, "edit")
+        try:
+            letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма или действия.", 422) from error
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise WorkspaceError("Неверная версия письма.", 422)
+        content = {
+            "expectedRevision": expected_revision,
+            "actorUserId": actor["userId"],
+            "actorName": actor["fullName"],
+        }
+        with self._lock:
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (old["actor_id"], old["letter_id"], old["kind"], old["payload"]) != (
+                    telegram_id, letter_id, "letter.delete", content,
+                ):
+                    raise WorkspaceError("Повтор удаления содержит другие данные.", 409)
+                return {"queued": False}
+            letter = self.read(telegram_id, letter_id)
+            if letter["createdByUserId"] != actor["userId"]:
+                raise WorkspaceError("Удалить письмо может только автор.", 403)
+            if letter["revision"] != expected_revision:
+                raise WorkspaceError("Письмо изменилось. Откройте актуальную версию.", 409)
+            if letter["status"] not in _EDITABLE or letter.get("outgoingNumber") is not None:
+                raise WorkspaceError(
+                    "Автономно можно удалить только черновик без номера. "
+                    "Для этого письма дождитесь связи с Workspace.", 409,
+                )
+            if self.journal.external_effect_for_letter(letter_id) is not None:
+                raise WorkspaceError("Результат отправки требует сверки референта.", 409)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id,
+                actor_id=telegram_id,
+                letter_id=letter_id,
+                kind="letter.delete",
+                payload=content,
+                required_action="edit",
+            )
+            return {"queued": False}
+
     def update(
         self, telegram_id: str, letter_id: str, operation_id: str, payload: dict[str, Any]
     ) -> dict[str, Any]:
@@ -1418,7 +1464,10 @@ class OfflineWorkflow:
         )
         letter = deepcopy(baseline) if baseline is not None else None
         audio_by_id: dict[str, dict[str, Any]] = {}
+        deleted = False
         for operation in self.journal.letter_operations(letter_id):
+            if deleted:
+                raise ValueError("После удаления письма записаны новые действия.")
             payload = operation["payload"]
             if operation["kind"] == "letter.create":
                 if letter is not None:
@@ -1455,6 +1504,16 @@ class OfflineWorkflow:
                     "documentCheck": None,
                     "finalPdfFileId": None,
                 }
+            elif operation["kind"] == "letter.delete":
+                if (
+                    letter is None or letter["revision"] != payload["expectedRevision"]
+                    or letter["createdByUserId"] != payload["actorUserId"]
+                    or letter["status"] not in _EDITABLE
+                    or letter.get("outgoingNumber") is not None
+                ):
+                    raise ValueError("Автономное удаление потеряло версию письма.")
+                deleted = True
+                continue
             elif operation["kind"] == "letter.update":
                 if letter is None or letter["revision"] != payload["expectedRevision"]:
                     raise ValueError("Локальные изменения письма потеряли порядок.")
@@ -1693,7 +1752,7 @@ class OfflineWorkflow:
                     "createdAt": operation["occurred_at"],
                 }
             )
-        if letter is None:
+        if deleted or letter is None:
             raise WorkspaceError("Письмо не сохранено в локальной копии.", 404)
         effect = self.journal.external_effect_for_letter(letter_id)
         if (
@@ -1742,7 +1801,10 @@ class OfflineWorkflow:
         letter["canEdit"] = (
             creator and "edit" in actor["moduleActions"] and (letter["status"] in _EDITABLE)
         )
-        letter["canDelete"] = creator and "edit" in actor["moduleActions"]
+        letter["canDelete"] = (
+            creator and "edit" in actor["moduleActions"]
+            and letter["status"] in _EDITABLE and letter.get("outgoingNumber") is None
+        )
         letter["canReplaceDocument"] = False
         actions: list[str] = []
         if creator and "edit" in actor["moduleActions"]:
