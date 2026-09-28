@@ -884,6 +884,14 @@ class OfflineJournal:
             connection.execute("BEGIN IMMEDIATE")
             if self._replay_manifest(connection) != manifest or manifest["epoch"] != old_epoch:
                 raise ValueError("Журнал изменился после запроса завершения сверки.")
+            # The old snapshots predate replay. Applying acknowledged operations to a
+            # fresh server response would double-apply them; retaining the snapshots
+            # without the overlay would silently show stale letters and history.
+            connection.execute(
+                "DELETE FROM snapshots WHERE resource = '/letters' "
+                "OR resource LIKE '/letters?%' OR resource LIKE '/letters/%' "
+                "OR resource LIKE '/packets/%'"
+            )
             connection.execute(
                 "UPDATE authority_state SET epoch = ?, phase = ?, "
                 "lease_seconds = ?, updated_at = ? WHERE id = 1",

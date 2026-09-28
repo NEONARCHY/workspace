@@ -259,11 +259,15 @@ def test_expired_replay_receipt_advances_epoch_without_enabling_writes(tmp_path)
     journal = OfflineJournal(tmp_path)
     old_epoch, new_epoch = str(uuid4()), str(uuid4())
     journal.set_authority_phase("referent-pc", old_epoch, "online")
+    journal.cache("123", "/letters?sentOnly=true", {"letters": [{"id": str(uuid4())}]})
+    journal.cache("123", "/reviewers", {"reviewers": []})
     journal.set_authority_phase("referent-pc", old_epoch, "replay")
     manifest = journal.replay_manifest()
     journal.finish_replay(old_epoch, new_epoch, 45, manifest, next_phase="replay")
     assert journal.authority_state()["phase"] == "replay"
     assert journal.replay_manifest()["epoch"] == new_epoch
+    assert journal.snapshot("123", "/letters?sentOnly=true") is None
+    assert journal.snapshot("123", "/reviewers") is not None
 
 
 def test_telegram_update_is_durable_before_offset_advances(tmp_path):
