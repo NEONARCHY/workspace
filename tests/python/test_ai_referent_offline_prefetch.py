@@ -255,7 +255,11 @@ def test_prefetch_hydrates_old_letter_history_and_private_voice(tmp_path):
     client.request.side_effect = request
     client.transfer.side_effect = transfer
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert all(seeder.tick() for _ in range(8))
+    assert all(seeder.tick() for _ in range(6))
+    assert client.transfer.call_count == 0
+    assert seeder.tick()  # Prioritize the voice immediately after its letter detail.
+    assert client.transfer.call_count == 1
+    assert seeder.tick()
     assert seeder.tick() is False
     journal.set_authority_phase("referent-pc", epoch, "offline")
     workflow = OfflineWorkflow(journal)

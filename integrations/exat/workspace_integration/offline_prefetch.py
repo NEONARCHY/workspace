@@ -29,6 +29,7 @@ class OfflineSnapshotSeeder:
         self._queued_packets: set[tuple[str, str]] = set()
         self._queued_files: set[tuple[str, str, str, str]] = set()
         self._queued_audio: set[tuple[str, str]] = set()
+        self._take_audio_next = True
         self._rights_hash: str | None = None
         self._next_cycle = 0.0
 
@@ -63,7 +64,8 @@ class OfflineSnapshotSeeder:
             return False
         rights_hash = evidence["content_sha256"]
         if rights_hash != self._rights_hash or (
-            not self._jobs and not self._file_jobs and self.clock() >= self._next_cycle
+            not self._jobs and not self._file_jobs and not self._audio_jobs
+            and self.clock() >= self._next_cycle
         ):
             self._jobs = self._initial_jobs(self.journal.verified_actors())
             self._file_jobs.clear()
@@ -72,10 +74,13 @@ class OfflineSnapshotSeeder:
             self._queued_packets.clear()
             self._queued_files.clear()
             self._queued_audio.clear()
+            self._take_audio_next = True
             self._rights_hash = rights_hash
             self._next_cycle = self.clock() + 300
-        if not self._jobs and self._audio_jobs:
+        if self._audio_jobs and (not self._jobs or self._take_audio_next):
+            self._take_audio_next = False
             return self._fetch_audio(state["epoch"], rights_hash)
+        self._take_audio_next = True
         if not self._jobs and self._file_jobs:
             return self._fetch_file(state["epoch"], rights_hash)
         if not self._jobs:
