@@ -14,7 +14,7 @@
 .ai-hisobot-header .view-kicker { color: #006779; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .ai-hisobot-header h1 { margin: 1px 0 4px; font-size: clamp(26px, 2.2vw, 34px); line-height: 1.1; letter-spacing: -.035em; }
 .ai-hisobot-header p { margin: 0; font-size: 13px; color: var(--ws-muted, #566b7c); }
-.ai-hisobot-header-art { top: -19px; right: -3px; width: clamp(470px, 44vw, 720px); height: 154px; color: #168da0; opacity: .88; mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%); }
+.ai-hisobot-header-art { position: absolute; z-index: 1; top: -19px; right: -3px; width: clamp(470px, 44vw, 720px); height: 154px; color: #168da0; pointer-events: none; opacity: .88; mask-image: linear-gradient(to bottom, #000 0%, #000 70%, transparent 100%); }
 .ai-hisobot-header-art::before { position: absolute; inset: -48px -35px -7px 2%; border-radius: 50%; background: radial-gradient(circle at 64% 34%, rgb(99 205 201 / 28%), rgb(224 246 242 / 31%) 42%, transparent 76%); content: ""; }
 .ai-hisobot-header-art svg { position: absolute; box-sizing: content-box; padding: 13px; border: 1px solid rgb(125 193 198 / 34%); border-radius: 20px; background: rgb(255 255 255 / 88%); box-shadow: 0 18px 32px -25px rgb(20 72 87 / 44%); }
 .hisobot-art-main { top: -26px; right: 72px; width: 110px; height: 110px; rotate: 8deg; color: #006f82; }
