@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import httpx
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.sql.elements import ColumnElement
 
 from .access_control import module_permissions_for_user
 from .auth import AuthenticatedUser
@@ -190,9 +191,11 @@ async def personal_activity_context(connection: AsyncConnection, user: Authentic
     chat_ids = select(chat_members.c.chat_id).join(
         chats, chats.c.id == chat_members.c.chat_id
     ).where(chat_members.c.user_id == user.id, chats.c.deleted_at.is_(None))
-    visible_events = [
-        workspace_notifications.c.entity_id.is_(None),
-        workspace_notifications.c.section == "notifications",
+    visible_events: list[ColumnElement[bool]] = [
+        and_(
+            workspace_notifications.c.entity_id.is_(None),
+            workspace_notifications.c.section == "notifications",
+        ),
     ]
     if permissions.get("tasks", {}).get("view", False):
         visible_events.append(and_(workspace_notifications.c.section == "tasks",
@@ -372,6 +375,16 @@ async def ask_assistant(
             "движени",
             "акци",
             "публикаци",
+            "мероприят",
+            "инициатив",
+            "мисси",
+            "команд",
+            "партнер",
+            "партнёр",
+            "отчет",
+            "отчёт",
+            "книг",
+            "организаци",
             "общественн",
             "ташаббус",
             "harakati",

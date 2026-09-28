@@ -80,7 +80,10 @@ def test_voice_transcription_stays_server_side(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_public_knowledge_has_attributed_archive_and_year_range() -> None:
-    assert len(documents()) >= 700
+    assert len(documents()) >= 1000
+    pdf_pages = [page for page in documents() if ".pdf#page=" in page["url"]]
+    assert len(pdf_pages) >= 300
+    assert any("методическое пособие" in page["title"].lower() for page in pdf_pages)
     result = relevant_knowledge("Какие акции проводил Юксалиш с 2023 по 2026 года?")
     for year in ("2023", "2024", "2025", "2026"):
         assert year in result
