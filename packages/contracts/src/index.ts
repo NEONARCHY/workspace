@@ -88,6 +88,7 @@ export interface WorkspaceDepartment {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  readonly scope?: "central" | "regional";
   readonly parentId?: string | null;
   readonly assignedUsersCount: number;
   readonly memberIds?: readonly string[];
@@ -1098,6 +1099,7 @@ export interface TelegramAccessPerson {
   readonly username: string;
   readonly fullName: string;
   readonly jobTitle: string | null;
+  readonly departmentId?: string | null;
   readonly telegramId: string | null;
   readonly verified: boolean;
   readonly verificationSource: string | null;

@@ -7,6 +7,7 @@ import type {
   CalendarEventType,
   ApprovalRequestSummary,
   WorkspacePerson,
+  WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
   ZoomMeeting,
@@ -30,6 +31,8 @@ import {
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import type { PaymentRequestInput } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 interface CalendarViewProps {
   readonly focusEventId?: string;
@@ -47,6 +50,7 @@ interface CalendarViewProps {
   readonly zoomMeetings?: readonly ZoomMeeting[];
   readonly onOpenZoomMeeting?: (meetingId: string) => void;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly onCreate: (payload: CalendarEventInput) => Promise<CalendarEvent | undefined>;
   readonly onUpdate: (
@@ -165,6 +169,7 @@ export function CalendarView({
   zoomMeetings,
   onOpenZoomMeeting,
   people,
+  departments,
   currentUserId,
   onCreate,
   onUpdate,
@@ -181,6 +186,7 @@ export function CalendarView({
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(initialDate));
   const [selectedState, setSelected] = useState<CalendarEvent | undefined>(focusedEvent);
   const [draft, setDraft] = useState<CalendarEventInput>();
+  const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [taskComposerEvent, setTaskComposerEvent] = useState<CalendarEvent>();
@@ -698,7 +704,8 @@ export function CalendarView({
             <Textarea aria-label="Описание события" placeholder="Описание и детали" value={draft.description} onChange={(_event, data) => setDraft({ ...draft, description: data.value })} />
             <fieldset>
               <legend>Участники</legend>
-              {people.map((person) => (
+              {departments ? <EmployeeScopeSwitch value={editAttendeeScope} onChange={setEditAttendeeScope} label="Группа участников события" /> : null}
+              {people.filter((person) => !departments || employeeScope(person.departmentId, departments) === editAttendeeScope).map((person) => (
                 <Checkbox
                   key={person.id}
                   label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
@@ -850,6 +857,7 @@ export function CalendarView({
       {draft && !selected ? <CalendarEventComposer
         draft={draft}
         people={people}
+        departments={departments}
         currentUserId={currentUserId}
         busyAttendeeIds={busyAttendeeIds}
         minimumStart={localInput(startOfDay(new Date()))}
@@ -870,6 +878,7 @@ export function CalendarView({
       {taskComposerEvent && onCreateTask ? <TaskComposer
         open
         people={people}
+        departments={departments}
         tasks={tasks ?? []}
         currentUserId={currentUserId}
         initialTitle={`Подготовка: ${taskComposerEvent.title}`}

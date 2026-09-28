@@ -2701,7 +2701,7 @@ async def load_workspace(
         ),
         people=people,
         departments=[WorkspaceDepartmentResponse(
-            id=str(row["id"]), code=row["code"], name=row["name"],
+            id=str(row["id"]), code=row["code"], name=row["name"], scope=row["scope"],
             parent_id=str(row["parent_id"]) if row["parent_id"] else None,
             assigned_users_count=len(department_members.get(row["id"], [])),
             member_ids=department_members.get(row["id"], []),

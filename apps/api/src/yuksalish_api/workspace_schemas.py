@@ -1336,6 +1336,7 @@ class WorkspaceDepartmentResponse(ApiModel):
     id: str
     code: str
     name: str
+    scope: Literal["central", "regional"]
     parent_id: str | None = None
     assigned_users_count: int
     member_ids: list[str] = Field(default_factory=list)

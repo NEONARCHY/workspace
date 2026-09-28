@@ -73,4 +73,23 @@ describe("Telegram bot access hub", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Доступ уже изменён");
     expect(input).toHaveValue("123456789");
   });
+
+  it("separates central and regional employees in the admin list", async () => {
+    vi.mocked(loadTelegramAccess).mockResolvedValue({
+      ...registry,
+      people: [
+        { ...employee, departmentId: "central" },
+        { ...employee, userId: "person-2", username: "region", fullName: "Региональный сотрудник", departmentId: "regional" },
+      ],
+    });
+    render(<TelegramAccessView token="token" departments={[
+      { id: "central", code: "central", name: "ЦА", scope: "central", assignedUsersCount: 1 },
+      { id: "regional", code: "regional", name: "Регион", scope: "regional", assignedUsersCount: 1 },
+    ]} />);
+    expect(await screen.findByText("Пример Сотрудник")).toBeInTheDocument();
+    expect(screen.queryByText("Региональный сотрудник")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(screen.queryByText("Пример Сотрудник")).toBeNull();
+    expect(screen.getByText("Региональный сотрудник")).toBeInTheDocument();
+  });
 });

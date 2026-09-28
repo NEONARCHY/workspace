@@ -166,6 +166,7 @@ async def _department_response(
         id=str(row["id"]),
         code=row["code"],
         name=row["name"],
+        scope=row["scope"],
         parent_id=str(row["parent_id"]) if row["parent_id"] else None,
         assigned_users_count=row["assigned_users_count"],
         member_ids=[str(value) for value in member_ids],
@@ -320,6 +321,7 @@ async def create_department(
             id=department_id,
             code=payload.code,
             name=payload.name,
+            scope=payload.scope,
             parent_id=payload.parent_id,
             created_at=datetime.now(UTC),
         )
@@ -342,6 +344,7 @@ async def create_department(
         {
             "code": payload.code,
             "name": payload.name,
+            "scope": payload.scope,
             "parentId": str(payload.parent_id) if payload.parent_id else None,
         },
     )
@@ -379,6 +382,8 @@ async def update_department(
         values["code"] = payload.code
     if payload.name is not None:
         values["name"] = payload.name
+    if payload.scope is not None:
+        values["scope"] = payload.scope
     if "parent_id" in payload.model_fields_set:
         parent_id = payload.parent_id
         current = parent_id
@@ -421,11 +426,13 @@ async def update_department(
             "before": {
                 "code": existing["code"],
                 "name": existing["name"],
+                "scope": existing["scope"],
                 "parentId": (str(existing["parent_id"]) if existing["parent_id"] else None),
             },
             "after": {
                 "code": values.get("code", existing["code"]),
                 "name": values.get("name", existing["name"]),
+                "scope": values.get("scope", existing["scope"]),
                 "parentId": (
                     str(values.get("parent_id", existing["parent_id"]))
                     if values.get("parent_id", existing["parent_id"])
