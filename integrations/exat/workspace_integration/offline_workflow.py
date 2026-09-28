@@ -94,6 +94,45 @@ class OfflineWorkflow:
             raise WorkspaceError("Эта часть справочника не сохранена на ПК референта.", 503)
         return snapshot["payload"]
 
+    def packet(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
+        """Expose only locally durable files from a letter this actor can open."""
+        letter = self.read(telegram_id, letter_id)
+        local_ids = {
+            str(uuid5(NAMESPACE_URL, "ai-offline-attachment:" + item["operation_id"]))
+            for item in self.journal.letter_operations(letter["id"])
+            if item["kind"] == "letter.attachment"
+        }
+        return {
+            "files": [
+                {
+                    "id": item["id"],
+                    "name": f"original/{item['id']}/{item['fileName']}",
+                    "byteSize": item["byteSize"],
+                    "sha256": item["sha256"],
+                    "source": "attachment",
+                    "createdAt": item["createdAt"],
+                }
+                for item in letter["attachments"] if item["id"] in local_ids
+            ],
+            "offlinePartial": True,
+        }
+
+    def packet_file(self, telegram_id: str, letter_id: str, file_id: str) -> bytes:
+        try:
+            file_id = str(UUID(file_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор файла.", 422) from error
+        item = next(
+            (entry for entry in self.packet(telegram_id, letter_id)["files"]
+             if entry["id"] == file_id), None,
+        )
+        if item is None:
+            raise WorkspaceError("Файл недоступен в локальной копии.", 404)
+        try:
+            return self.journal.read_blob(item["sha256"])
+        except (FileNotFoundError, ValueError) as error:
+            raise WorkspaceError("Локальный файл повреждён или отсутствует.", 503) from error
+
     @staticmethod
     def _fields(payload: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(payload, dict):

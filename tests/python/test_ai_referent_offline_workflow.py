@@ -162,6 +162,17 @@ def test_shared_bot_checks_uploaded_docx_before_reviewer_selection(tmp_path, mon
         "123", letter["id"], str(uuid4()), file_name="letter.docx",
         content=b"safe test docx", role="primary", expected_revision=1,
     )
+    packet = bot.request("123", "/packets/outgoing/" + letter["id"])
+    assert len(packet["files"]) == 1
+    attachment = packet["files"][0]
+    assert bot.download_packet_file(
+        "123", "outgoing", letter["id"], attachment["id"], "attachment"
+    ) == b"safe test docx"
+    with pytest.raises(WorkspaceError) as denied:
+        bot.download_packet_file(
+            "456", "outgoing", letter["id"], attachment["id"], "attachment"
+        )
+    assert denied.value.status == 403
     from integrations.exat.workspace_integration import preflight
 
     checks = []
@@ -178,6 +189,7 @@ def test_shared_bot_checks_uploaded_docx_before_reviewer_selection(tmp_path, mon
     assert checks[0][0] == b"safe test docx"
     assert bot.check_offline_documents(Mock()) is False
     api.request.assert_not_called()
+    api.transfer.assert_not_called()
 
 
 def test_shared_bot_never_uses_offline_writes_during_replay(tmp_path):

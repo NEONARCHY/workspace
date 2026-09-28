@@ -148,6 +148,8 @@ class SharedBot:
                 )
             except ValueError as error:
                 raise WorkspaceError("Неверные параметры списка писем.", 422) from error
+        if method == "GET" and resource.startswith("/packets/outgoing/"):
+            return workflow.packet(actor, resource.removeprefix("/packets/outgoing/"))
         if method == "POST" and resource == "/letters" and payload is not None:
             return workflow.create(actor, payload.get("operationId", ""), payload)
         parts = resource.strip("/").split("/")
@@ -168,6 +170,18 @@ class SharedBot:
                     comment_audio_id=payload.get("commentAudioId"),
                 )
         raise WorkspaceError("Это действие пока недоступно без связи с Workspace.", 503)
+
+    def download_packet_file(
+        self, actor: str, kind: str, owner: str, file_id: str, source: str
+    ) -> bytes:
+        if self.offline_active():
+            if self.offline_workflow is None or kind != "outgoing" or source != "attachment":
+                raise WorkspaceError("Файл недоступен в локальной копии.", 503)
+            return self.offline_workflow.packet_file(actor, owner, file_id)
+        return self.api.transfer(
+            f"/ai-referent/agent/packets/{kind}/{owner}/files/{file_id}?source={source}",
+            telegram_id=actor,
+        )
 
     def upload_attachment(
         self, actor: str, letter_id: str, operation_id: str, *,
@@ -410,8 +424,7 @@ class SharedBot:
             for key, (action, label) in ACTIONS.items()
             if action in letter["availableActions"]
         ]
-        if not self.offline_active():
-            rows.append([button("Пакет документов", f"f:o:{compact}:0")])
+        rows.append([button("Пакет документов", f"f:o:{compact}:0")])
         if letter.get("canDelete") and not self.offline_active():
             rows.append([button("Удалить письмо из базы", f"z:{compact}:{letter['revision']}")])
         if letter.get("canReplaceDocument"):
@@ -724,7 +737,16 @@ class SharedBot:
             rows.append([button(item["name"].split("/")[-1][:45], f"g:{reference}")])
         if offset + 12 < len(packet["files"]):
             rows.append([button("Далее", f"f:{kind[0]}:{UUID(owner).hex}:{offset + 12}")])
-        self.say(actor, "Пакет документов" if rows else "Файлы пока не синхронизированы.", rows)
+        self.say(
+            actor,
+            ("Пакет документов · только локально сохранённые файлы"
+             if self.offline_active() else "Пакет документов")
+            if rows else (
+                "Файлы пока не сохранены на ПК референта."
+                if self.offline_active() else "Файлы пока не синхронизированы."
+            ),
+            rows,
+        )
 
     def recipients(self, actor: str, context: dict[str, Any]) -> None:
         params = urlencode({
@@ -989,9 +1011,9 @@ class SharedBot:
                     if not reference:
                         raise WorkspaceError("Откройте пакет документов заново.")
                     item = reference["file"]
-                    base = f"/ai-referent/agent/packets/{reference['kind']}/{reference['owner']}"
-                    content = self.api.transfer(
-                        f"{base}/files/{item['id']}?source={item['source']}", telegram_id=actor
+                    content = self.download_packet_file(
+                        actor, reference["kind"], reference["owner"],
+                        item["id"], item["source"],
                     )
                     with tempfile.TemporaryDirectory(prefix="workspace-letter-") as directory:
                         path = Path(directory) / Path(item["name"]).name
