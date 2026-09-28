@@ -450,8 +450,8 @@ class OfflineJournal:
             return None  # Older unregistered copies cannot authorize replay.
         return dict(row)
 
-    def offline_actor(self, telegram_id: str) -> dict[str, Any] | None:
-        """Missing or revoked IDs have no access; old cache cannot grant it."""
+    def verified_actors(self) -> list[dict[str, Any]]:
+        """Return the last intact rights snapshot only for the current authority epoch."""
         with self.connect() as connection:
             row = connection.execute(
                 "SELECT snapshot_id, epoch, payload, content_sha256 "
@@ -464,7 +464,7 @@ class OfflineJournal:
             row is None or row["snapshot_id"] is None or state is None
             or row["epoch"] != state["epoch"]
         ):
-            return None
+            return []
         if hashlib.sha256(row["payload"].encode("utf-8")).hexdigest() != row["content_sha256"]:
             raise ValueError("Локальная копия Telegram-доступов повреждена.")
         actors = json.loads(row["payload"])
@@ -473,10 +473,16 @@ class OfflineJournal:
         for actor in actors:
             if not isinstance(actor, dict) or any(not isinstance(key, str) for key in actor):
                 raise ValueError("Локальная копия Telegram-доступов повреждена.")
+        return [{str(key): value for key, value in actor.items()} for actor in actors]
+
+    def offline_actor(self, telegram_id: str) -> dict[str, Any] | None:
+        """Missing or revoked IDs have no access; old cache cannot grant it."""
+        actors = self.verified_actors()
+        for actor in actors:
             if actor.get("telegramId") == telegram_id:
                 if "view" not in actor.get("moduleActions", []):
                     return None
-                return {key: value for key, value in actor.items()}
+                return actor
         return None
 
     def prepare_number_reservation(self, agent_id: str, count: int) -> str:
@@ -936,25 +942,42 @@ class OfflineJournal:
                 (status, encoded, sequence),
             )
 
-    def cache(self, actor_id: str, resource: str, payload: dict[str, Any]) -> None:
+    def cache(
+        self, actor_id: str, resource: str, payload: dict[str, Any], *,
+        expected_epoch: str | None = None, expected_rights_hash: str | None = None,
+    ) -> bool:
         if not actor_id.isdecimal() or not resource.startswith("/"):
             raise ValueError("Неверный ключ локальной копии.")
         with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             state = connection.execute(
-                "SELECT phase FROM authority_state WHERE id = 1"
+                "SELECT epoch, phase FROM authority_state WHERE id = 1"
             ).fetchone()
+            if expected_epoch is not None or expected_rights_hash is not None:
+                rights = connection.execute(
+                    "SELECT epoch, content_sha256 FROM rights_snapshot WHERE id = 1"
+                ).fetchone()
+                if (
+                    expected_epoch is None or expected_rights_hash is None
+                    or state is None or state["epoch"] != expected_epoch
+                    or state["phase"] != "online" or rights is None
+                    or rights["epoch"] != expected_epoch
+                    or rights["content_sha256"] != expected_rights_hash
+                ):
+                    return False
             if (
                 state is not None and state["phase"] == "replay"
                 and (resource.startswith("/letters/") or resource.startswith("/letters?"))
             ):
                 # A partially replayed server response is not a new reducer base.
-                return
+                return False
             connection.execute(
                 "INSERT INTO snapshots VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(actor_id, resource) DO UPDATE SET "
                 "payload=excluded.payload, verified_at=excluded.verified_at",
                 (actor_id, resource, _json(payload), _now()),
             )
+            return True
 
     def snapshot(self, actor_id: str, resource: str) -> dict[str, Any] | None:
         with self.connect() as connection:
@@ -1005,6 +1028,44 @@ class OfflineJournal:
                     except (KeyError, TypeError, ValueError):
                         continue
         return sorted(result)
+
+    def cached_progress_items(self, actor_id: str) -> list[dict[str, Any]]:
+        """Status-only snapshots previously returned to this exact Telegram actor."""
+        if not actor_id.isdecimal():
+            raise ValueError("Неверный Telegram ID.")
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT resource, payload FROM snapshots WHERE actor_id = ? "
+                "AND resource LIKE '/letters/progress?%'",
+                (actor_id,),
+            ).fetchall()
+        from urllib.parse import parse_qs, urlsplit
+
+        pages = []
+        for row in rows:
+            query = parse_qs(urlsplit(row["resource"]).query)
+            try:
+                offset = int(query.get("offset", ["0"])[0])
+            except ValueError:
+                continue
+            pages.append((offset, json.loads(row["payload"])))
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for _, payload in sorted(pages, key=lambda page: page[0]):
+            items = payload.get("letters", []) if isinstance(payload, dict) else []
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    letter_id = str(UUID(str(item["id"])))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if letter_id not in seen:
+                    seen.add(letter_id)
+                    result.append({str(key): value for key, value in item.items()})
+        return result
 
     def begin_external_effect(self, effect_id: str, letter_id: str, kind: str) -> bool:
         """False after a crash or retry: physical send must never auto-repeat."""

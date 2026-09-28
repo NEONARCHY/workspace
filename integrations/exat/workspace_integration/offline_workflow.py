@@ -92,7 +92,10 @@ class OfflineWorkflow:
         snapshot = self.journal.snapshot(telegram_id, path)
         if snapshot is None:
             raise WorkspaceError("Эта часть справочника не сохранена на ПК референта.", 503)
-        return snapshot["payload"]
+        payload = snapshot["payload"]
+        if not isinstance(payload, dict):
+            raise WorkspaceError("Сохранённый справочник повреждён.", 503)
+        return payload
 
     def packet(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         """Expose only locally durable files from a letter this actor can open."""
@@ -132,6 +135,34 @@ class OfflineWorkflow:
             return self.journal.read_blob(item["sha256"])
         except (FileNotFoundError, ValueError) as error:
             raise WorkspaceError("Локальный файл повреждён или отсутствует.", 503) from error
+
+    def progress_list(self, telegram_id: str, *, offset: int, limit: int) -> dict[str, Any]:
+        actor = self._actor(telegram_id, "view")
+        if "admin" not in actor["moduleActions"]:
+            return {"letters": [], "offlinePartial": True}
+        if offset < 0 or not 1 <= limit <= 100:
+            raise WorkspaceError("Неверные параметры списка этапов.", 422)
+        items = self.journal.cached_progress_items(telegram_id)
+        return {"letters": items[offset:offset + limit], "offlinePartial": True}
+
+    def progress_item(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
+        actor = self._actor(telegram_id, "view")
+        if "admin" not in actor["moduleActions"]:
+            raise WorkspaceError("Этап письма не найден.", 404)
+        try:
+            letter_id = str(UUID(letter_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма.", 422) from error
+        exact = self.journal.snapshot(telegram_id, "/letters/progress/" + letter_id)
+        if exact is not None:
+            payload = exact["payload"]
+            if not isinstance(payload, dict):
+                raise WorkspaceError("Сохранённый этап письма повреждён.", 503)
+            return payload
+        for item in self.journal.cached_progress_items(telegram_id):
+            if item["id"] == letter_id:
+                return item
+        raise WorkspaceError("Этап письма не сохранён в локальной копии.", 404)
 
     @staticmethod
     def _fields(payload: dict[str, Any]) -> dict[str, Any]:

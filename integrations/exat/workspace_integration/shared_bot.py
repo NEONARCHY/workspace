@@ -18,6 +18,7 @@ from .button_labels import button_label
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
 from .offline_coordinator import OfflineCoordinator
 from .offline_journal import OfflineJournal
+from .offline_prefetch import OfflineSnapshotSeeder
 from .offline_workflow import OfflineWorkflow
 from .state import State, single_instance
 from .wizard import LetterWizard
@@ -148,6 +149,18 @@ class SharedBot:
                 )
             except ValueError as error:
                 raise WorkspaceError("Неверные параметры списка писем.", 422) from error
+        if method == "GET" and resource == "/letters/progress":
+            query = parse_qs(parsed.query, strict_parsing=True)
+            try:
+                return workflow.progress_list(
+                    actor,
+                    offset=int(query.get("offset", ["0"])[0]),
+                    limit=int(query.get("limit", ["10"])[0]),
+                )
+            except ValueError as error:
+                raise WorkspaceError("Неверные параметры списка этапов.", 422) from error
+        if method == "GET" and resource.startswith("/letters/progress/"):
+            return workflow.progress_item(actor, resource.removeprefix("/letters/progress/"))
         if method == "GET" and resource.startswith("/packets/outgoing/"):
             return workflow.packet(actor, resource.removeprefix("/packets/outgoing/"))
         if method == "POST" and resource == "/letters" and payload is not None:
@@ -162,10 +175,13 @@ class SharedBot:
             if len(parts) == 3 and parts[2] == "actions" and method == "POST":
                 if payload is None:
                     raise WorkspaceError("Данные решения отсутствуют.", 422)
+                revision = payload.get("expectedRevision")
+                if not isinstance(revision, int) or isinstance(revision, bool):
+                    raise WorkspaceError("Неверная версия письма.", 422)
                 return workflow.act(
                     actor, letter_id, payload.get("operationId", ""),
                     action=payload.get("action", ""),
-                    expected_revision=payload.get("expectedRevision"),
+                    expected_revision=revision,
                     comment=payload.get("comment", ""),
                     comment_audio_id=payload.get("commentAudioId"),
                 )
@@ -475,7 +491,7 @@ class SharedBot:
         list_offline = self.offline_read
         progress = (
             self.request(actor, f"/letters/progress?offset={page * 10}&limit=10")["letters"]
-            if kind == "pending" and not self.offline_active()
+            if kind == "pending"
             else []
         )
         offline_read = list_offline or self.offline_read
@@ -522,6 +538,7 @@ class SharedBot:
 
     def show_progress(self, actor: str, letter_id: str) -> None:
         item = self.request(actor, f"/letters/progress/{UUID(letter_id)}")
+        offline_read = self.offline_read or self.offline_active()
         date = item["createdAt"][:16].replace("T", " ")
         number = item.get("displayNumber") or "Письмо без номера"
         self.system(
@@ -530,9 +547,11 @@ class SharedBot:
             f"{number} · {item['createdByName']} · {date}\n"
             f"Этап: {STATUSES[item['status']]}\n"
             "Для чужого письма здесь доступен только этап. Решения принимают назначенные "
-            "согласующие.",
+            "согласующие."
+            + ("\n📴 Последний сохранённый этап. Обновится после связи с Workspace."
+               if offline_read else ""),
             [
-                [button("Обновить этап", "g:" + UUID(item["id"]).hex)],
+                *([] if offline_read else [[button("Обновить этап", "g:" + UUID(item["id"]).hex)]]),
                 [button("← Согласование", "list:pending:0")],
             ],
         )
@@ -1298,6 +1317,7 @@ def _run_shared(
     controller = SharedBot(bot.client, client, state, offline)
     worker = DeliveryWorker(bot.service, client, state)
     coordinator = OfflineCoordinator(client, offline)
+    prefetch = OfflineSnapshotSeeder(client, offline)
     try:
         bot.client.set_my_commands(
             [
@@ -1345,6 +1365,24 @@ def _run_shared(
             if worker_ready[0] or offline.authority_state() is not None:
                 advance_authority()
             done.wait(_AUTHORITY_REFRESH_SECONDS)
+
+    def seed_offline_views() -> None:
+        last_error: tuple[str, str] | None = None
+        next_log = 0.0
+        while not done.is_set():
+            try:
+                worked = prefetch.tick()
+                last_error = None
+            except Exception as error:
+                worked = False
+                reason = (type(error).__name__, safe_error_text(error))
+                if reason != last_error or time.monotonic() >= next_log:
+                    bot._status_log(
+                        "workspace_offline_prefetch_failed", error=reason[0], detail=reason[1]
+                    )
+                    next_log = time.monotonic() + 60
+                last_error = reason
+            done.wait(2 if worked else 10)
 
     def check_documents() -> None:
         last_error: tuple[str, str] | None = None
@@ -1431,9 +1469,13 @@ def _run_shared(
     authority_thread = threading.Thread(
         target=maintain_authority, name="workspace-authority", daemon=True
     )
+    prefetch_thread = threading.Thread(
+        target=seed_offline_views, name="workspace-offline-prefetch", daemon=True
+    )
     thread = threading.Thread(target=execute, name="workspace-executor", daemon=True)
     check_thread.start()
     authority_thread.start()
+    prefetch_thread.start()
     thread.start()
     seen, handled = 0, 0
     idle = time.monotonic()
@@ -1466,5 +1508,6 @@ def _run_shared(
         done.set()
         thread.join(timeout=45)
         authority_thread.join(timeout=45)
+        prefetch_thread.join(timeout=45)
         check_thread.join(timeout=5)
     return PollingResult("stopped", seen, handled, [])
