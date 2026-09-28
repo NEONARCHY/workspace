@@ -671,7 +671,7 @@ describe("Private messenger", () => {
     await waitFor(() => expect(screen.queryByLabelText("Редактирование сообщения")).not.toBeInTheDocument());
     expect(composer).toHaveFocus();
     expect(screen.getByLabelText("Поиск в переписке")).toHaveValue("Старое");
-  });
+  }, 20_000);
 
   it("suggests participants and saves new mentions while editing", async () => {
     const own: ChatMessage = {

@@ -76,9 +76,12 @@ describe("WorkspaceIdentity", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
     const versionPicker = screen.getByRole("combobox", { name: "Обновление" });
-    expect(versionPicker).toHaveValue("update:20260928-release-version-server-card");
+    const latestUpdate = __YUKSALISH_UPDATE_ENTRIES__[0]!;
+    expect(versionPicker).toHaveValue(`update:${latestUpdate.id}`);
     fireEvent.click(versionPicker);
-    expect(screen.getAllByRole("option")[0]).toHaveTextContent("28.09.2026 · 1.0.66");
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent(
+      new RegExp(`^\\d{2}\\.\\d{2}\\.\\d{4} · ${latestUpdate.version.replaceAll(".", "\\.")}$`),
+    );
     expect(screen.getByRole("option", { name: /1\.0\.17/ })).toHaveTextContent(/^\d{2}\.\d{2}\.2026 · 1\.0\.17$/);
     expect(screen.queryByRole("option", { name: /Добавлен HR-раздел/ })).not.toBeInTheDocument();
     fireEvent.change(versionPicker, { target: { value: "release:1.0.0" } });

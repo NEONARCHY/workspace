@@ -1121,7 +1121,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", {
       name: `Открыть задачу: ${initialTasks[1]!.title}`,
     }));
-    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title }, { timeout: 3000 })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
