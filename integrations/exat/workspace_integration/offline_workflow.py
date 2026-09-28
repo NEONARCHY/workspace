@@ -17,6 +17,7 @@ from .offline_journal import OfflineJournal
 
 _EDITABLE = {"draft", "needs_revision"}
 _MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
+_MAX_COMMENT_AUDIO_BYTES = 10 * 1024 * 1024
 _FIELDS = {
     "subject": 300,
     "recipientOrganization": 300,
@@ -277,8 +278,8 @@ class OfflineWorkflow:
                 ),
                 None,
             )
-            if existing_attachment is not None:
-                return existing_attachment
+            if isinstance(existing_attachment, dict):
+                return {str(key): value for key, value in existing_attachment.items()}
             self.journal.put_blob(content)
             self.journal.append_with_rights_evidence(
                 operation_id=operation_id,
@@ -346,7 +347,10 @@ class OfflineWorkflow:
                     or old["actor_id"] != telegram_id
                 ):
                     raise WorkspaceError("Проверяемый документ изменился.", 409)
-                return self.read(telegram_id, letter_id)["documentCheck"]
+                previous_check = self.read(telegram_id, letter_id).get("documentCheck")
+                if not isinstance(previous_check, dict):
+                    raise WorkspaceError("Результат прежней проверки недоступен.", 409)
+                return {str(key): value for key, value in previous_check.items()}
             content = self.journal.read_blob(digest)
             revision = letter["revision"]
             workflow_kind = letter["workflowKind"]
@@ -406,7 +410,10 @@ class OfflineWorkflow:
                 blob_sha256=digest,
                 required_action="edit",
             )
-            return self.read(telegram_id, letter_id)["documentCheck"]
+            saved_check = self.read(telegram_id, letter_id).get("documentCheck")
+            if not isinstance(saved_check, dict):
+                raise ValueError("Результат проверки не сохранился в локальном журнале.")
+            return {str(key): value for key, value in saved_check.items()}
 
     def act(
         self,
@@ -417,6 +424,7 @@ class OfflineWorkflow:
         action: str,
         expected_revision: int,
         comment: str = "",
+        comment_audio_id: str | None = None,
     ) -> dict[str, Any]:
         """Handle only decisions whose complete local effects are implemented."""
         if action not in {"submit", "approve", "return_for_revision", "cancel"}:
@@ -436,7 +444,16 @@ class OfflineWorkflow:
         ):
             raise WorkspaceError("Неверная версия письма или комментарий.", 422)
         comment = comment.strip()
-        if action == "return_for_revision" and len(comment) < 3:
+        if comment_audio_id is not None:
+            try:
+                comment_audio_id = str(UUID(comment_audio_id))
+            except (TypeError, ValueError) as error:
+                raise WorkspaceError(
+                    "Неверный идентификатор голосового комментария.", 422
+                ) from error
+            if action != "return_for_revision":
+                raise WorkspaceError("Голосовой комментарий доступен только при возврате.", 422)
+        if action == "return_for_revision" and len(comment) < 3 and comment_audio_id is None:
             raise WorkspaceError("Укажите причину возврата.", 422)
         with self._lock:
             old = self.journal.operation(operation_id)
@@ -449,6 +466,7 @@ class OfflineWorkflow:
                     payload.get("action"),
                     payload.get("expectedRevision"),
                     payload.get("comment"),
+                    payload.get("commentAudioId"),
                 ) != (
                     telegram_id,
                     letter_id,
@@ -456,12 +474,30 @@ class OfflineWorkflow:
                     action,
                     expected_revision,
                     comment,
+                    comment_audio_id,
                 ):
                     raise WorkspaceError("Повтор решения содержит другие данные.", 409)
                 return self.read(telegram_id, letter_id)
             letter = self.read(telegram_id, letter_id)
             if letter["revision"] != expected_revision:
                 raise WorkspaceError("Письмо уже изменилось. Откройте актуальную версию.", 409)
+            if comment_audio_id is not None:
+                audio = next(
+                    (
+                        item
+                        for item in self.journal.letter_operations(letter_id)
+                        if item["kind"] == "letter.comment_audio"
+                        and str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + item["operation_id"]))
+                        == comment_audio_id
+                    ),
+                    None,
+                )
+                if (
+                    audio is None
+                    or audio["actor_id"] != telegram_id
+                    or audio["payload"]["revision"] != expected_revision
+                ):
+                    raise WorkspaceError("Аудио не относится к текущему решению.", 422)
             creator = letter["createdByUserId"] == actor["userId"]
             reviewer = letter["reviewerUserId"] == actor["userId"]
             next_reviewer = None
@@ -539,6 +575,7 @@ class OfflineWorkflow:
             payload = {
                 "action": action,
                 "comment": comment,
+                "commentAudioId": comment_audio_id,
                 "expectedRevision": expected_revision,
                 "fromStatus": letter["status"],
                 "toStatus": next_status,
@@ -558,6 +595,94 @@ class OfflineWorkflow:
             )
             return self.read(telegram_id, letter_id)
 
+    def save_comment_audio(
+        self,
+        telegram_id: str,
+        letter_id: str,
+        operation_id: str,
+        *,
+        expected_revision: int,
+        duration_ms: int,
+        content: bytes,
+        content_type: str,
+    ) -> dict[str, Any]:
+        """Bind a private Opus blob to the reviewer and exact decision revision."""
+        actor = self._actor(telegram_id, "approve")
+        try:
+            letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма или действия.", 422) from error
+        if (
+            not isinstance(content, bytes)
+            or not 0 < len(content) <= _MAX_COMMENT_AUDIO_BYTES
+            or not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+            or not isinstance(duration_ms, int)
+            or isinstance(duration_ms, bool)
+            or not 1 <= duration_ms <= 300_000
+        ):
+            raise WorkspaceError("Голосовой комментарий: не более 5 минут и 10 МБ.", 422)
+        ogg = content.startswith(b"OggS") and b"OpusHead" in content[:65536]
+        webm = content.startswith(b"\x1a\x45\xdf\xa3") and b"OpusHead" in content[:65536]
+        if not (
+            (ogg and content_type in {"audio/ogg", "audio/opus"})
+            or (webm and content_type in {"audio/webm", "video/webm"})
+        ):
+            raise WorkspaceError("Нужна голосовая запись Opus в OGG или WebM.", 422)
+        mime = "audio/ogg" if ogg else "audio/webm"
+        digest = hashlib.sha256(content).hexdigest()
+        with self._lock:
+            payload = {
+                "revision": expected_revision,
+                "durationMs": duration_ms,
+                "contentType": mime,
+                "byteSize": len(content),
+                "actorUserId": actor["userId"],
+                "actorName": actor["fullName"],
+            }
+            old = self.journal.operation(operation_id)
+            if old is not None and (
+                old["actor_id"],
+                old["letter_id"],
+                old["kind"],
+                old["payload"],
+                old["blob_sha256"],
+            ) != (telegram_id, letter_id, "letter.comment_audio", payload, digest):
+                raise WorkspaceError("Повтор загрузки содержит другое аудио.", 409)
+            if old is not None:
+                self.journal.put_blob(content)
+                return {
+                    "id": str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + operation_id)),
+                    "contentType": mime,
+                    "durationMs": duration_ms,
+                    "byteSize": len(content),
+                }
+            letter = self.read(telegram_id, letter_id)
+            if (
+                letter["revision"] != expected_revision
+                or letter["status"] != "pending_review"
+                or letter["reviewerUserId"] != actor["userId"]
+                or not actor.get("reviewerKeys")
+            ):
+                raise WorkspaceError("Сейчас вы не можете вернуть это письмо.", 403)
+            self.journal.put_blob(content)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id,
+                actor_id=telegram_id,
+                letter_id=letter_id,
+                kind="letter.comment_audio",
+                payload=payload,
+                blob_sha256=digest,
+                required_action="approve",
+            )
+            return {
+                "id": str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + operation_id)),
+                "contentType": mime,
+                "durationMs": duration_ms,
+                "byteSize": len(content),
+            }
+
     def read(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         actor = self._actor(telegram_id, "view")
         try:
@@ -571,6 +696,7 @@ class OfflineWorkflow:
             else self.journal.cached_letter(telegram_id, letter_id)
         )
         letter = deepcopy(baseline) if baseline is not None else None
+        audio_by_id: dict[str, dict[str, Any]] = {}
         for operation in self.journal.letter_operations(letter_id):
             payload = operation["payload"]
             if operation["kind"] == "letter.create":
@@ -678,6 +804,19 @@ class OfflineWorkflow:
                     "detail": payload["detail"],
                 }
                 continue
+            elif operation["kind"] == "letter.comment_audio":
+                if letter is None or letter["revision"] != payload["revision"]:
+                    raise ValueError("Аудио относится к другой версии письма.")
+                audio_id = str(
+                    uuid5(NAMESPACE_URL, "ai-offline-audio:" + operation["operation_id"])
+                )
+                audio_by_id[audio_id] = {
+                    "id": audio_id,
+                    "contentType": payload["contentType"],
+                    "durationMs": payload["durationMs"],
+                    "byteSize": payload["byteSize"],
+                }
+                continue
             elif operation["kind"] == "letter.action":
                 if (
                     letter is None
@@ -701,6 +840,9 @@ class OfflineWorkflow:
                     )
                 if letter["status"] == "needs_revision":
                     letter["finalPdfFileId"] = None
+                audio_id = payload.get("commentAudioId")
+                if audio_id is not None and audio_id not in audio_by_id:
+                    raise ValueError("Голосовой комментарий не сохранён до решения.")
                 letter["events"].append(
                     {
                         "id": str(
@@ -712,7 +854,7 @@ class OfflineWorkflow:
                         "fromStatus": payload["fromStatus"],
                         "toStatus": payload["toStatus"],
                         "comment": payload["comment"],
-                        "audio": None,
+                        "audio": audio_by_id.get(audio_id),
                         "createdAt": operation["occurred_at"],
                     }
                 )

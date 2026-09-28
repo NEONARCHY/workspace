@@ -468,3 +468,78 @@ def test_bobur_route_keeps_preliminary_reviewer_first(tmp_path):
     assert first["revision"] == 3
     assert "approve" not in workflow.read("789", letter["id"])["availableActions"]
     assert "approve" in workflow.read("999", letter["id"])["availableActions"]
+
+
+def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="letter.docx",
+        content=b"docx",
+        role="primary",
+        expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
+    audio_bytes = b"OggS" + b"\0" * 8 + b"OpusHead" + b"\0" * 8
+    audio_operation = str(uuid4())
+    with pytest.raises(WorkspaceError) as invalid:
+        workflow.save_comment_audio(
+            "789",
+            letter["id"],
+            str(uuid4()),
+            expected_revision=2,
+            duration_ms=1000,
+            content=b"not opus",
+            content_type="audio/ogg",
+        )
+    assert invalid.value.status == 422
+    audio = workflow.save_comment_audio(
+        "789",
+        letter["id"],
+        audio_operation,
+        expected_revision=2,
+        duration_ms=1000,
+        content=audio_bytes,
+        content_type="audio/ogg",
+    )
+    with pytest.raises(WorkspaceError) as foreign:
+        workflow.act(
+            "999",
+            letter["id"],
+            str(uuid4()),
+            action="return_for_revision",
+            expected_revision=2,
+            comment_audio_id=audio["id"],
+        )
+    assert foreign.value.status in {403, 422}
+    returned = workflow.act(
+        "789",
+        letter["id"],
+        str(uuid4()),
+        action="return_for_revision",
+        expected_revision=2,
+        comment_audio_id=audio["id"],
+    )
+    assert returned["status"] == "needs_revision"
+    assert returned["events"][-1]["audio"] == audio
+    assert (
+        OfflineWorkflow(OfflineJournal(tmp_path)).read("123", letter["id"])["events"][-1]["audio"]
+        == audio
+    )
+    assert (
+        workflow.save_comment_audio(
+            "789",
+            letter["id"],
+            audio_operation,
+            expected_revision=2,
+            duration_ms=1000,
+            content=audio_bytes,
+            content_type="audio/ogg",
+        )
+        == audio
+    )
