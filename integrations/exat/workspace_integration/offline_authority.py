@@ -1,8 +1,8 @@
-"""Conservative local gate for a future autonomous bot workflow.
+"""Conservative local gate for autonomous bot writes.
 
-The live bot does not instantiate this class yet. The gate never grants offline
-writes from a wall-clock timestamp after a restart: only a durable offline
-transition made after a monotonic wait survives process loss.
+The gate never grants offline writes from a wall-clock timestamp after a
+restart: only a durable offline transition made after a monotonic wait survives
+process loss. A persisted retirement intent also permanently denies failover.
 """
 
 from __future__ import annotations

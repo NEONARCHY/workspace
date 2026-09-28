@@ -169,7 +169,20 @@ class WorkspaceClient:
             headers["X-AI-Referent-Telegram-Id"] = telegram_id
         request = Request(self.api_url + path, data=body, method=method, headers=headers)
         try:
-            with self.opener.open(request, timeout=40) as response:
+            if path.startswith((
+                "/ai-referent/agent/offline/authority:start",
+                "/ai-referent/agent/offline/authority:heartbeat",
+            )):
+                timeout = 5
+            elif content_type == "application/json" and not path.startswith((
+                "/ai-referent/agent/offline/operations",
+                "/ai-referent/agent/offline/authority:complete",
+                "/ai-referent/agent/offline/authority:retire",
+            )):
+                timeout = 12
+            else:
+                timeout = 40
+            with self.opener.open(request, timeout=timeout) as response:
                 content = response.read(max_bytes + 1)
                 if len(content) > max_bytes:
                     raise WorkspaceError("Файл превышает допустимый размер.")
@@ -272,6 +285,15 @@ class WorkspaceClient:
 
         return self.request(
             "/ai-referent/agent/offline/authority:complete?"
+            + urlencode({"agentId": self.agent_id}),
+            manifest, method="POST",
+        )
+
+    def retire_offline_authority(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/authority:retire?"
             + urlencode({"agentId": self.agent_id}),
             manifest, method="POST",
         )

@@ -101,14 +101,13 @@ async def test_identical_retry_repairs_failed_database_write_without_duplicate()
 
 
 @pytest.mark.anyio
-async def test_stage_rejects_bad_digest_epoch_and_disabled_protocol():
+async def test_stage_rejects_bad_digest_epoch_and_new_staging_after_disable():
     epoch = uuid4()
     connection = Connection(epoch)
     storage = InMemoryObjectStorage()
     content = b"important document"
     digest = hashlib.sha256(content).hexdigest()
     for requested_epoch, requested_digest, enabled, status in (
-        (epoch, digest, False, 409),
         (epoch, "0" * 64, True, 422),
         (uuid4(), digest, True, 409),
     ):
@@ -119,6 +118,18 @@ async def test_stage_rejects_bad_digest_epoch_and_disabled_protocol():
             )
         assert error.value.status_code == status
     assert connection.row is None
+    connection.mode = "online"
+    with pytest.raises(HTTPException) as disabled:
+        await stage_offline_blob(
+            connection, storage, agent_id="referent-pc", epoch=epoch,
+            sha256=digest, content=content, enabled=False,
+        )
+    assert disabled.value.status_code == 409
+    connection.mode = "replay_required"
+    assert (await stage_offline_blob(
+        connection, storage, agent_id="referent-pc", epoch=epoch,
+        sha256=digest, content=content, enabled=False,
+    )).sha256 == digest
 
 
 @pytest.mark.anyio

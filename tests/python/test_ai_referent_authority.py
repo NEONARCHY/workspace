@@ -94,6 +94,7 @@ def test_all_online_referent_writes_have_server_guard():
     offline_protocol = {
         ("POST", "/ai-referent/agent/offline/authority:start"),
         ("POST", "/ai-referent/agent/offline/authority:heartbeat"),
+        ("POST", "/ai-referent/agent/offline/authority:retire"),
         ("POST", "/ai-referent/agent/offline/rights"),
         ("PUT", "/ai-referent/agent/offline/blobs/{sha256}"),
         ("POST", "/ai-referent/agent/offline/number-reservations"),

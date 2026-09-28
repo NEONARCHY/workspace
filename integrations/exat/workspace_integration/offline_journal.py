@@ -1,7 +1,7 @@
-"""Durable, actor-scoped journal for a future offline AI Referent authority.
+"""Durable, actor-scoped journal for AI Referent offline authority.
 
-This module does not switch the live bot into offline mode. An operation is
-acknowledged only after the server has accepted it with its idempotency key.
+An operation is acknowledged only after the server has accepted it with its
+idempotency key. Retirement intent is durable before the server fence is lifted.
 """
 
 from __future__ import annotations
@@ -119,6 +119,7 @@ class OfflineJournal:
                     epoch TEXT NOT NULL,
                     phase TEXT NOT NULL CHECK (phase IN ('online', 'offline', 'replay')),
                     lease_seconds INTEGER CHECK (lease_seconds BETWEEN 1 AND 600),
+                    retiring INTEGER NOT NULL DEFAULT 0 CHECK (retiring IN (0, 1)),
                     updated_at TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS rights_snapshot (
@@ -188,6 +189,11 @@ class OfflineJournal:
                 connection.execute(
                     "ALTER TABLE authority_state ADD COLUMN lease_seconds INTEGER "
                     "CHECK (lease_seconds BETWEEN 1 AND 600)"
+                )
+            if "retiring" not in authority_columns:
+                connection.execute(
+                    "ALTER TABLE authority_state ADD COLUMN retiring INTEGER NOT NULL "
+                    "DEFAULT 0 CHECK (retiring IN (0, 1))"
                 )
 
     def initialize_telegram_offset(self, previous_offset: int | None) -> int:
@@ -286,10 +292,15 @@ class OfflineJournal:
     def authority_state(self) -> dict[str, Any] | None:
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT agent_id, epoch, phase, lease_seconds, updated_at "
+                "SELECT agent_id, epoch, phase, lease_seconds, retiring, updated_at "
                 "FROM authority_state WHERE id = 1"
             ).fetchone()
-        return dict(row) if row is not None else None
+        if row is None:
+            return None
+        state = dict(row)
+        if state.pop("retiring"):
+            state["phase"] = "retiring"
+        return state
 
     def set_authority_phase(
         self, agent_id: str, epoch: str, phase: str, *, lease_seconds: int | None = None
@@ -303,7 +314,7 @@ class OfflineJournal:
         with self.connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute(
-                "SELECT agent_id, epoch, phase FROM authority_state WHERE id = 1"
+                "SELECT agent_id, epoch, phase, retiring FROM authority_state WHERE id = 1"
             ).fetchone()
             if row is None:
                 if phase != "online":
@@ -317,6 +328,8 @@ class OfflineJournal:
                 return
             if row["agent_id"] != agent_id or row["epoch"] != epoch:
                 raise ValueError("Аренда относится к другому роботу или эпохе.")
+            if row["retiring"]:
+                raise ValueError("Робот уже завершает автономный режим.")
             if (row["phase"], phase) not in {
                 ("online", "online"), ("online", "offline"), ("online", "replay"),
                 ("offline", "offline"), ("offline", "replay"), ("replay", "replay"),
@@ -865,11 +878,51 @@ class OfflineJournal:
         with self.connect() as connection:
             return self._replay_manifest(connection)
 
-    def _replay_manifest(self, connection: sqlite3.Connection) -> dict[str, Any]:
+    def begin_retirement(self, agent_id: str, epoch: str) -> dict[str, Any]:
+        """Persist loss of offline authority before requesting the server to unfence."""
+        epoch = str(UUID(epoch))
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            state = connection.execute(
+                "SELECT agent_id, epoch, phase FROM authority_state WHERE id = 1"
+            ).fetchone()
+            if (
+                state is None or state["agent_id"] != agent_id
+                or state["epoch"] != epoch or state["phase"] != "online"
+            ):
+                raise ValueError("Завершение возможно только из подтверждённого онлайн-режима.")
+            connection.execute(
+                "UPDATE authority_state SET retiring = 1, updated_at = ? WHERE id = 1",
+                (_now(),),
+            )
+            return self._replay_manifest(connection, retiring=True)
+
+    def retirement_manifest(self) -> dict[str, Any]:
+        with self.connect() as connection:
+            return self._replay_manifest(connection, retiring=True)
+
+    def finish_retirement(self, epoch: str, manifest: dict[str, Any]) -> None:
+        """Drop the local lease only after an idempotent server retirement receipt."""
+        epoch = str(UUID(epoch))
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if manifest["epoch"] != epoch or self._replay_manifest(
+                connection, retiring=True
+            ) != manifest:
+                raise ValueError("Журнал изменился после запроса завершения автономного режима.")
+            connection.execute("DELETE FROM authority_state WHERE id = 1 AND epoch = ?", (epoch,))
+
+    def _replay_manifest(
+        self, connection: sqlite3.Connection, *, retiring: bool = False
+    ) -> dict[str, Any]:
         state = connection.execute(
-            "SELECT epoch, phase FROM authority_state WHERE id = 1"
+            "SELECT epoch, phase, retiring FROM authority_state WHERE id = 1"
         ).fetchone()
-        if state is None or state["phase"] != "replay":
+        expected_phase = "online" if retiring else "replay"
+        if (
+            state is None or state["phase"] != expected_phase
+            or bool(state["retiring"]) != retiring
+        ):
             raise ValueError("Сверка доступна только после восстановления связи.")
         unfinished = connection.execute(
             "SELECT 1 FROM operations WHERE status != 'acknowledged' LIMIT 1"

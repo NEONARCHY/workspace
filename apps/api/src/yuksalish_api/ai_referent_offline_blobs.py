@@ -21,7 +21,8 @@ from .tables import ai_referent_authority, ai_referent_configuration, ai_referen
 
 
 async def _require_staging_authority(
-    connection: AsyncConnection, agent_id: str, epoch: UUID, *, lock: bool
+    connection: AsyncConnection, agent_id: str, epoch: UUID, *, lock: bool,
+    replay_only: bool = False,
 ) -> None:
     config_query = select(ai_referent_configuration.c.execution_agent_id)
     authority_query = select(ai_referent_authority)
@@ -36,6 +37,7 @@ async def _require_staging_authority(
         authority is None or authority["agent_id"] != agent_id
         or authority["epoch"] != epoch
         or authority["mode"] not in {"online", "replay_required"}
+        or (replay_only and authority["mode"] != "replay_required")
         or (authority["mode"] == "online" and authority["lease_until"] <= datetime.now(UTC))
     ):
         raise HTTPException(409, "Эпоха робота не подтверждена для передачи файлов.")
@@ -51,17 +53,19 @@ async def stage_offline_blob(
     content: bytes,
     enabled: bool,
 ) -> OfflineBlobReceipt:
-    if not enabled:
-        raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
     if not content or hashlib.sha256(content).hexdigest() != sha256:
         raise HTTPException(422, "Контрольная сумма автономного файла не совпала.")
-    await _require_staging_authority(connection, agent_id, epoch, lock=False)
+    await _require_staging_authority(
+        connection, agent_id, epoch, lock=False, replay_only=not enabled
+    )
     blob_id = uuid5(NAMESPACE_URL, f"ai-offline-blob:{agent_id}:{epoch}:{sha256}")
     key = f"ai-referent/offline/{agent_id}/{epoch}/{sha256}"
     # Same key can only receive identical bytes because its digest is checked.
     # Re-uploading repairs an object written before a failed DB transaction.
     await storage.put(key, content, "application/octet-stream")
-    await _require_staging_authority(connection, agent_id, epoch, lock=True)
+    await _require_staging_authority(
+        connection, agent_id, epoch, lock=True, replay_only=not enabled
+    )
     await connection.execute(
         pg_insert(ai_referent_offline_blobs)
         .values(

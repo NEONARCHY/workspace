@@ -1,7 +1,7 @@
 """Conservative agent-side authority maintenance for the offline workflow.
 
-This control plane does not execute letters. The data plane must use ``mode``
-and the durable rights journal before it is wired into the running bot.
+The control plane does not execute letters. The running bot uses its mode and
+the durable rights journal to choose between server and local execution.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ class OfflineCoordinator:
         self.gate = OfflineAuthorityGate(journal, client.agent_id, clock=clock)
         self._next_refresh = 0.0
         self._legacy_retry_at = 0.0
+        self._connection_failed = False
 
     def _verified_rights(self, epoch: str) -> bool:
         evidence = self.journal.offline_rights_evidence()
@@ -51,6 +52,18 @@ class OfflineCoordinator:
             )
         self._next_refresh = self.clock() + 30
 
+    def _retire(self) -> AuthorityMode:
+        try:
+            manifest = self.journal.retirement_manifest()
+            receipt = self.client.retire_offline_authority(manifest)
+            if receipt.get("mode") != "legacy" or receipt.get("epoch") != manifest["epoch"]:
+                return "blocked"
+            self.journal.finish_retirement(manifest["epoch"], manifest)
+        except (WorkspaceError, ValueError):
+            return "blocked"
+        self._legacy_retry_at = self.clock() + 60
+        return "legacy"
+
     def tick(self) -> AuthorityMode:
         """Heartbeat while connected; fail over only after the server's fence expires."""
         state = self.journal.authority_state()
@@ -65,14 +78,21 @@ class OfflineCoordinator:
                     return "legacy"
                 return "blocked"
             self.gate.accept_lease(lease)
+            self._connection_failed = False
+            if lease.get("retireRequested") and lease.get("mode") == "online":
+                self.journal.begin_retirement(self.client.agent_id, lease["epoch"])
+                return self._retire()
             state = self.journal.authority_state()
         elif state["agent_id"] != self.client.agent_id:
             return "blocked"
+        elif state["phase"] == "retiring":
+            return self._retire()
         elif state["phase"] == "replay":
             return "replay"
         elif state["phase"] == "offline":
             try:
                 self.gate.accept_lease(self.client.start_offline_authority())
+                self._connection_failed = False
             except WorkspaceError as error:
                 if error.retryable and self._verified_rights(state["epoch"]):
                     return "offline"
@@ -81,12 +101,24 @@ class OfflineCoordinator:
                 return "blocked"
             return "replay"
         else:
+            # Once the confirmed lease plus safety margin has elapsed, the
+            # server already fences writes. Do not spend another network timeout
+            # before letting the queued Telegram update continue locally.
+            if (
+                self._connection_failed and self._verified_rights(state["epoch"])
+                and self.gate.may_write_offline()
+            ):
+                return "offline"
             try:
-                self.gate.accept_lease(
-                    self.client.heartbeat_offline_authority(state["epoch"])
-                )
+                lease = self.client.heartbeat_offline_authority(state["epoch"])
+                self.gate.accept_lease(lease)
+                self._connection_failed = False
+                if lease.get("retireRequested") and lease.get("mode") == "online":
+                    self.journal.begin_retirement(self.client.agent_id, state["epoch"])
+                    return self._retire()
             except WorkspaceError as error:
                 if error.retryable:
+                    self._connection_failed = True
                     if self._verified_rights(state["epoch"]) and self.gate.may_write_offline():
                         return "offline"
                     return "waiting"
@@ -128,8 +160,12 @@ class OfflineCoordinator:
         manifest = self.journal.replay_manifest()
         lease = self.client.complete_offline_replay(manifest)
         self.gate.accept_replay_completion(lease, manifest)
+        self._connection_failed = False
         updated = self.journal.authority_state()
         if updated is None or updated["phase"] != "online":
             return "replay"
+        if lease.get("retireRequested"):
+            self.journal.begin_retirement(self.client.agent_id, updated["epoch"])
+            return self._retire()
         self._next_refresh = 0.0
         return "online"

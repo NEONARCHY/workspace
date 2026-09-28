@@ -25,7 +25,7 @@ from .state import State, single_instance
 from .wizard import LetterWizard
 from .worker import DeliveryWorker
 
-_AUTHORITY_REFRESH_SECONDS = 10
+_AUTHORITY_REFRESH_SECONDS = 3
 
 ACTIONS = {
     "s": ("submit", "На согласование"),
@@ -1443,8 +1443,7 @@ class SharedBot:
                 if self.state.get(f"system:{actor}:{pending}") is None:
                     self.system(
                         actor, pending,
-                        "Связь с Workspace прервалась. Действие сохранено и будет "
-                        "продолжено автоматически после восстановления связи.",
+                        "⏳ Обрабатываю действие. Можно оставить чат — результат появится здесь.",
                     )
                 raise
             if isinstance(error, WorkspaceError) and error.status == 0:
@@ -1694,18 +1693,24 @@ def _run_shared(
     try:
         while max_updates is None or seen < max_updates:
             authority_state = offline.authority_state()
-            if authority_state is None or authority_state["phase"] == "online":
+            if (
+                last_authority_mode != "waiting"
+                and (authority_state is None or authority_state["phase"] == "online")
+            ):
                 try:
                     controller.notifications()
                 except Exception as error:
                     bot._status_log("workspace_notifications_failed", error=type(error).__name__)
-            elif authority_state["phase"] == "offline":
+            elif authority_state is not None and authority_state["phase"] == "offline":
                 try:
                     controller.offline_notifications()
                 except Exception as error:
                     bot._status_log(
                         "workspace_offline_notifications_failed", error=type(error).__name__
                     )
+            if last_authority_mode == "waiting":
+                done.wait(1)
+                continue
             try:
                 completed = poll_durable_updates(
                     bot.client, controller, offline,
@@ -1715,6 +1720,11 @@ def _run_shared(
                     seen += completed
                     handled += completed
                     idle = time.monotonic()
+            except WorkspaceError as error:
+                if error.retryable:
+                    advance_authority()
+                bot._status_log("workspace_poll_error", error=type(error).__name__)
+                done.wait(1 if error.retryable else 5)
             except Exception as error:
                 bot._status_log("workspace_poll_error", error=type(error).__name__)
                 done.wait(5)

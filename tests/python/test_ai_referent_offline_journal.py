@@ -436,6 +436,8 @@ def test_retryable_workspace_failure_keeps_telegram_action_until_recovery(tmp_pa
         poll_durable_updates(telegram, bot, journal)
     assert journal.pending_telegram_updates() == [update]
     assert len(telegram.sent) == 1
+    assert telegram.sent[0][1].startswith("⏳ Обрабатываю действие")
+    assert "Workspace" not in telegram.sent[0][1]
 
     with pytest.raises(WorkspaceError, match="ещё не сохранено"):
         poll_durable_updates(telegram, bot, journal)

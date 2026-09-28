@@ -62,6 +62,45 @@ def test_restart_waits_a_full_lease_before_offline_write(tmp_path):
     assert OfflineJournal(tmp_path).authority_state()["phase"] == "offline"
 
 
+def test_retirement_intent_survives_restart_and_permanently_disables_offline(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    ticks = [100.0]
+    gate = OfflineAuthorityGate(journal, "referent-pc", clock=lambda: ticks[0])
+    gate.accept_lease(lease(epoch))
+    manifest = journal.begin_retirement("referent-pc", epoch)
+    assert manifest["operationCount"] == 0
+    assert journal.authority_state()["phase"] == "retiring"
+    ticks[0] = 10_000.0
+    assert not gate.may_write_offline()
+    restarted = OfflineJournal(tmp_path)
+    assert restarted.authority_state()["phase"] == "retiring"
+    restarted_gate = OfflineAuthorityGate(restarted, "referent-pc", clock=lambda: ticks[0])
+    assert not restarted_gate.may_write_offline()
+    with pytest.raises(ValueError):
+        restarted.set_authority_phase("referent-pc", epoch, "offline")
+    assert restarted.retirement_manifest() == manifest
+    with pytest.raises(ValueError):
+        restarted.finish_retirement(epoch, {**manifest, "operationsSha256": "0" * 64})
+    restarted.finish_retirement(epoch, manifest)
+    assert journal.authority_state() is None
+
+
+def test_retirement_rejects_unacknowledged_journal_and_keeps_lease(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online", lease_seconds=45)
+    with journal.connect() as connection:
+        connection.execute(
+            "INSERT INTO operations (operation_id, actor_id, kind, payload, occurred_at) "
+            "VALUES (?, '123', 'letter.create', '{}', ?)",
+            (str(uuid4()), datetime.now(UTC).isoformat()),
+        )
+    with pytest.raises(ValueError):
+        journal.begin_retirement("referent-pc", epoch)
+    assert journal.authority_state()["phase"] == "online"
+
+
 def test_old_authority_row_without_lease_duration_stays_fenced_on_restart(tmp_path):
     epoch = str(uuid4())
     with sqlite3.connect(tmp_path / "offline-journal.sqlite") as connection:
@@ -119,15 +158,50 @@ def test_client_uses_agent_token_routes_for_lease(monkeypatch):
     epoch = str(uuid4())
     assert client.start_offline_authority() == {"ok": True}
     assert client.heartbeat_offline_authority(epoch) == {"ok": True}
+    manifest = {"epoch": epoch, "operationCount": 0}
+    assert client.retire_offline_authority(manifest) == {"ok": True}
     snapshot_id = str(uuid4())
     assert client.offline_rights(epoch, snapshot_id) == {"ok": True}
     assert calls == [
         ("/ai-referent/agent/offline/authority:start?agentId=referent-pc", {}, "POST"),
         ("/ai-referent/agent/offline/authority:heartbeat",
          {"agentId": "referent-pc", "epoch": epoch}, "POST"),
+        ("/ai-referent/agent/offline/authority:retire?agentId=referent-pc",
+         manifest, "POST"),
         (f"/ai-referent/agent/offline/rights?agentId=referent-pc&epoch={epoch}",
          {"snapshotId": snapshot_id}, "POST"),
     ]
+
+
+def test_client_uses_short_control_timeout_but_keeps_file_transfer_budget():
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self, _size):
+            return b"{}"
+
+    class Opener:
+        def __init__(self):
+            self.timeouts = []
+
+        def open(self, _request, *, timeout):
+            self.timeouts.append(timeout)
+            return Response()
+
+    client = WorkspaceClient.__new__(WorkspaceClient)
+    client.api_url = "https://workspace.example/api/v1"
+    client.token = "test-token"
+    client.opener = Opener()
+    client.transfer("/ai-referent/agent/offline/authority:heartbeat", b"{}",
+                    method="POST", content_type="application/json")
+    client.transfer("/ai-referent/agent/letters", b"{}",
+                    method="POST", content_type="application/json")
+    client.transfer("/ai-referent/agent/offline/blobs/digest", b"file", method="PUT")
+    assert client.opener.timeouts == [5, 12, 40]
 
 
 def test_client_uploads_only_verified_local_blob(monkeypatch):

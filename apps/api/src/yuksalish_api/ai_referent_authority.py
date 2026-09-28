@@ -15,13 +15,14 @@ from typing import Annotated
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import Depends, HTTPException
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .ai_referent_agent_service import expire_jobs
 from .ai_referent_schemas import (
     OfflineAuthorityLease,
+    OfflineAuthorityRetirement,
     OfflineAuthorityStatus,
     OfflineReplayCompleteRequest,
 )
@@ -35,17 +36,20 @@ from .tables import (
     audit_events,
 )
 
-LEASE_SECONDS = 45
+LEASE_SECONDS = 20
 _READ_ONLY = "AI Referent временно доступен только для просмотра: связь с роботом потеряна."
 
 
-def _lease(value: RowMapping, now: datetime) -> OfflineAuthorityLease:
+def _lease(
+    value: RowMapping, now: datetime, *, retire_requested: bool = False
+) -> OfflineAuthorityLease:
     return OfflineAuthorityLease(
         epoch=value["epoch"],
         mode=value["mode"],
         lease_until=value["lease_until"],
         server_time=now,
         lease_seconds=LEASE_SECONDS,
+        retire_requested=retire_requested,
     )
 
 
@@ -53,8 +57,6 @@ async def start_authority(
     connection: AsyncConnection, *, agent_id: str, enabled: bool
 ) -> OfflineAuthorityLease:
     """Idempotently establish the initial lease; never clear an expired fence."""
-    if not enabled:
-        raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
     assigned = await connection.scalar(
         select(ai_referent_configuration.c.execution_agent_id).with_for_update()
     )
@@ -65,6 +67,8 @@ async def start_authority(
         await connection.execute(select(ai_referent_authority).with_for_update())
     ).mappings().first()
     if row is None:
+        if not enabled:
+            raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
         epoch = uuid4()
         lease_until = now + timedelta(seconds=LEASE_SECONDS)
         await connection.execute(insert(ai_referent_authority).values(
@@ -75,6 +79,7 @@ async def start_authority(
         return OfflineAuthorityLease(
             epoch=epoch, mode="online", lease_until=lease_until,
             server_time=now, lease_seconds=LEASE_SECONDS,
+            retire_requested=False,
         )
     if row["agent_id"] != agent_id:
         raise HTTPException(409, "Автономный режим уже закреплён за другим роботом.")
@@ -83,12 +88,13 @@ async def start_authority(
         return OfflineAuthorityLease(
             epoch=row["epoch"], mode="replay_required", lease_until=row["lease_until"],
             server_time=now, lease_seconds=LEASE_SECONDS,
+            retire_requested=not enabled,
         )
-    return _lease(row, now)
+    return _lease(row, now, retire_requested=not enabled)
 
 
 async def heartbeat_authority(
-    connection: AsyncConnection, *, agent_id: str, epoch: UUID
+    connection: AsyncConnection, *, agent_id: str, epoch: UUID, enabled: bool = True
 ) -> OfflineAuthorityLease:
     """Renew only a still-live epoch; expiry always requires journal replay."""
     now = datetime.now(UTC)
@@ -98,12 +104,13 @@ async def heartbeat_authority(
     if row is None or row["agent_id"] != agent_id or row["epoch"] != epoch:
         raise HTTPException(409, "Аренда робота не найдена или устарела.")
     if row["mode"] == "replay_required":
-        return _lease(row, now)
+        return _lease(row, now, retire_requested=not enabled)
     if row["lease_until"] <= now:
         await _require_replay(connection, epoch, agent_id, now)
         return OfflineAuthorityLease(
             epoch=epoch, mode="replay_required", lease_until=row["lease_until"],
             server_time=now, lease_seconds=LEASE_SECONDS,
+            retire_requested=not enabled,
         )
     lease_until = now + timedelta(seconds=LEASE_SECONDS)
     await connection.execute(
@@ -114,6 +121,7 @@ async def heartbeat_authority(
     return OfflineAuthorityLease(
         epoch=epoch, mode="online", lease_until=lease_until,
         server_time=now, lease_seconds=LEASE_SECONDS,
+        retire_requested=not enabled,
     )
 
 
@@ -125,8 +133,6 @@ async def complete_authority_replay(
     enabled: bool,
 ) -> OfflineAuthorityLease:
     """Unfence after full replay; queued server jobs then resume under the new lease."""
-    if not enabled:
-        raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
     await connection.execute(select(ai_referent_configuration.c.id).with_for_update())
     assigned = await connection.scalar(select(ai_referent_configuration.c.execution_agent_id))
     if assigned != agent_id:
@@ -166,8 +172,9 @@ async def complete_authority_replay(
                 epoch=authority["epoch"], mode="replay_required",
                 lease_until=authority["lease_until"], server_time=now,
                 lease_seconds=LEASE_SECONDS,
+                retire_requested=not enabled,
             )
-        return _lease(authority, now)
+        return _lease(authority, now, retire_requested=not enabled)
     if (
         authority["epoch"] != payload.epoch
         or authority["mode"] != "replay_required"
@@ -239,7 +246,77 @@ async def complete_authority_replay(
     return OfflineAuthorityLease(
         epoch=new_epoch, mode="online", lease_until=lease_until,
         server_time=now, lease_seconds=LEASE_SECONDS,
+        retire_requested=not enabled,
     )
+
+
+async def retire_authority(
+    connection: AsyncConnection, *, agent_id: str, payload: OfflineReplayCompleteRequest,
+    enabled: bool,
+) -> OfflineAuthorityRetirement:
+    """Release the fence only after the bot has durably surrendered offline writes.
+
+    The bot sends the same complete journal manifest as replay. A lost HTTP
+    response can be retried against the deterministic audit receipt; neither
+    a missing journal nor an active physical send can silently unlock writes.
+    """
+    await connection.execute(select(ai_referent_configuration.c.id).with_for_update())
+    assigned = await connection.scalar(select(ai_referent_configuration.c.execution_agent_id))
+    if assigned != agent_id:
+        raise HTTPException(403, "Этот компьютер не назначен агентом отправки.")
+    receipt_id = uuid5(NAMESPACE_URL, "ai-offline-authority-retired:" + str(payload.epoch))
+    previous = (
+        await connection.execute(select(audit_events).where(audit_events.c.id == receipt_id))
+    ).mappings().one_or_none()
+    details = {
+        "agentId": agent_id,
+        "operationCount": payload.operation_count,
+        "lastSequence": payload.last_sequence,
+        "operationsSha256": payload.operations_sha256,
+        "externalEffectCount": payload.external_effect_count,
+    }
+    authority = (
+        await connection.execute(select(ai_referent_authority).with_for_update())
+    ).mappings().one_or_none()
+    if previous is not None:
+        if (
+            previous["action"] != "ai_referent.authority_retired"
+            or not isinstance(previous["details"], dict)
+            or any(previous["details"].get(key) != value for key, value in details.items())
+            or (authority is not None and authority["epoch"] == payload.epoch)
+        ):
+            raise HTTPException(409, "Повторное завершение аренды содержит другие данные.")
+        return OfflineAuthorityRetirement(epoch=payload.epoch)
+    if enabled:
+        raise HTTPException(409, "Отключите автономный режим перед завершением аренды робота.")
+    if (
+        authority is None or authority["agent_id"] != agent_id
+        or authority["epoch"] != payload.epoch
+        or authority["mode"] not in {"online", "replay_required"}
+    ):
+        raise HTTPException(409, "Аренда робота не найдена или уже изменилась.")
+    if authority["mode"] == "online":
+        await _require_replay(connection, payload.epoch, agent_id, datetime.now(UTC))
+    # Reuse the exact replay verification: operation receipts, external
+    # effects and in-flight delivery commands must all reconcile first.
+    lease = await complete_authority_replay(
+        connection, agent_id=agent_id, payload=payload, enabled=False
+    )
+    if lease.mode != "online":
+        raise HTTPException(409, "Сверка ещё не завершена; блокировка записи сохранена.")
+    await connection.execute(
+        delete(ai_referent_authority).where(
+            ai_referent_authority.c.id == 1,
+            ai_referent_authority.c.epoch == lease.epoch,
+        )
+    )
+    await connection.execute(insert(audit_events).values(
+        id=receipt_id, actor_user_id=None, action="ai_referent.authority_retired",
+        target_type="ai_referent_authority", target_id=payload.epoch,
+        details={**details, "completedEpoch": str(lease.epoch)},
+        created_at=datetime.now(UTC),
+    ))
+    return OfflineAuthorityRetirement(epoch=payload.epoch)
 
 
 async def _require_replay(

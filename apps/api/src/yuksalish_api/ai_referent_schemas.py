@@ -103,6 +103,12 @@ class OfflineAuthorityLease(ApiModel):
     lease_until: datetime
     server_time: datetime
     lease_seconds: int
+    retire_requested: bool = False
+
+
+class OfflineAuthorityRetirement(ApiModel):
+    epoch: UUID
+    mode: Literal["legacy"] = "legacy"
 
 
 class OfflineAuthorityHeartbeat(ApiModel):

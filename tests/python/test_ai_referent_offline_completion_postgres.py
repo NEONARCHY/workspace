@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.ai_referent_authority import (
     complete_authority_replay,
+    heartbeat_authority,
     read_authority_status,
+    retire_authority,
     start_authority,
 )
 from yuksalish_api.ai_referent_schemas import OfflineReplayCompleteRequest
@@ -41,6 +43,108 @@ def _manifest(epoch, entries, *, external_count=0):
         ).hexdigest(),
         external_effect_count=external_count,
     )
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_disabling_active_authority_requires_manifest_then_restores_legacy():
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(url)
+    agent_id = f"offline-retire-{uuid4().hex}"
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await connection.execute(delete(ai_referent_authority))
+                await connection.execute(update(ai_referent_configuration).values(
+                    execution_agent_id=agent_id
+                ))
+                epoch = (await start_authority(
+                    connection, agent_id=agent_id, enabled=True
+                )).epoch
+                draining = await heartbeat_authority(
+                    connection, agent_id=agent_id, epoch=epoch, enabled=False
+                )
+                assert draining.mode == "online" and draining.retire_requested
+                assert (await read_authority_status(connection)).writable
+                payload = _manifest(epoch, [])
+                bad = payload.model_copy(update={"operations_sha256": "0" * 64})
+                with pytest.raises(HTTPException) as still_enabled:
+                    await retire_authority(
+                        connection, agent_id=agent_id, payload=payload, enabled=True
+                    )
+                assert still_enabled.value.status_code == 409
+                savepoint = await connection.begin_nested()
+                with pytest.raises(HTTPException) as mismatch:
+                    await retire_authority(
+                        connection, agent_id=agent_id, payload=bad, enabled=False
+                    )
+                assert mismatch.value.status_code == 409
+                await savepoint.rollback()
+                assert (await read_authority_status(connection)).writable
+                retired = await retire_authority(
+                    connection, agent_id=agent_id, payload=payload, enabled=False
+                )
+                assert retired.epoch == epoch and retired.mode == "legacy"
+                assert (await read_authority_status(connection)).writable
+                assert (await read_authority_status(connection)).mode == "legacy"
+                assert (await retire_authority(
+                    connection, agent_id=agent_id, payload=payload, enabled=False
+                )) == retired
+                with pytest.raises(HTTPException) as changed:
+                    await retire_authority(
+                        connection, agent_id=agent_id, payload=bad, enabled=False
+                    )
+                assert changed.value.status_code == 409
+                with pytest.raises(HTTPException) as disabled:
+                    await start_authority(connection, agent_id=agent_id, enabled=False)
+                assert disabled.value.status_code == 409
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_flag_off_does_not_prevent_replay_of_previously_issued_epoch():
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(url)
+    agent_id = f"offline-drain-{uuid4().hex}"
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await connection.execute(delete(ai_referent_authority))
+                await connection.execute(update(ai_referent_configuration).values(
+                    execution_agent_id=agent_id
+                ))
+                epoch = (await start_authority(
+                    connection, agent_id=agent_id, enabled=True
+                )).epoch
+                await connection.execute(update(ai_referent_authority).values(
+                    mode="replay_required"
+                ))
+                draining = await start_authority(
+                    connection, agent_id=agent_id, enabled=False
+                )
+                assert draining.mode == "replay_required" and draining.retire_requested
+                lease = await complete_authority_replay(
+                    connection, agent_id=agent_id, payload=_manifest(epoch, []), enabled=False
+                )
+                assert lease.mode == "online" and lease.retire_requested
+                assert (await retire_authority(
+                    connection, agent_id=agent_id, payload=_manifest(lease.epoch, []),
+                    enabled=False,
+                )).mode == "legacy"
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
 
 
 @pytest.mark.anyio
