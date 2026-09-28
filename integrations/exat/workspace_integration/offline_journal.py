@@ -767,6 +767,32 @@ class OfflineJournal:
             {**dict(row), "payload": json.loads(row["payload"])} for row in rows
         ]
 
+    def operation(self, operation_id: str) -> dict[str, Any] | None:
+        operation_id = str(UUID(operation_id))
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM operations WHERE operation_id = ?", (operation_id,)
+            ).fetchone()
+        return {**dict(row), "payload": json.loads(row["payload"])} if row else None
+
+    def letter_operations(self, letter_id: str) -> list[dict[str, Any]]:
+        """Reduce only unacknowledged writes over the last server snapshot."""
+        letter_id = str(UUID(letter_id))
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations WHERE letter_id = ? AND status = 'pending' "
+                "ORDER BY sequence", (letter_id,)
+            ).fetchall()
+        return [{**dict(row), "payload": json.loads(row["payload"])} for row in rows]
+
+    def offline_created_letter_ids(self) -> list[str]:
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT letter_id FROM operations WHERE kind = 'letter.create' "
+                "AND status = 'pending' ORDER BY sequence"
+            ).fetchall()
+        return [str(row["letter_id"]) for row in rows]
+
     def pending_authorized(self, limit: int = 100) -> list[dict[str, Any]]:
         """Fail closed if an old local write lacks server-verifiable evidence."""
         operations = self.pending(limit)
