@@ -659,14 +659,14 @@ class SharedBot:
                     recipient_ids = [payload.get("creatorUserId")]
                 else:
                     continue
-            elif kind == "letter.prepared":
+            elif kind in {"letter.prepared", "letter.signed"}:
                 letter = self.offline_workflow.read(
                     operation["actor_id"], operation["letter_id"]
                 )
                 recipient_ids = [letter["createdByUserId"]]
-                if letter["status"] == "awaiting_final_send":
+                if kind == "letter.prepared" and letter["status"] == "awaiting_final_send":
                     recipient_ids.append(letter["reviewerUserId"])
-                elif letter["status"] == "referent_review_pending":
+                elif kind == "letter.prepared" and letter["status"] == "referent_review_pending":
                     recipient_ids.extend(
                         item["userId"] for item in actors
                         if "admin" in item["moduleActions"]
@@ -716,6 +716,44 @@ class SharedBot:
                             if response.get("ok") is False:
                                 raise WorkspaceError("Telegram не подтвердил доставку PDF.")
                         self.state.put(file_key, True)
+                if kind == "letter.signed":
+                    if current["status"] != "signed":
+                        self.state.put(key, True)
+                        continue
+                    packet = self.offline_workflow.packet(recipient, current["id"])
+                    pages = sorted(
+                        (item for item in packet["files"]
+                         if item["source"] == "packet"
+                         and item["name"].startswith(
+                             "signed/" + payload["commandId"] + "/"
+                         )), key=lambda item: item["name"],
+                    )
+                    if len(pages) != len(payload["pages"]):
+                        raise WorkspaceError("Не все подписанные страницы сохранены.", 503)
+                    for index, page in enumerate(pages, 1):
+                        file_key = f"{key}:page:{page['id']}"
+                        if self.state.get(file_key):
+                            continue
+                        if page["byteSize"] > 20 * 1024 * 1024:
+                            raise WorkspaceError(
+                                "Подписанная страница больше лимита Telegram.", 503
+                            )
+                        content = self.offline_workflow.packet_file(
+                            recipient, current["id"], page["id"], "packet"
+                        )
+                        with tempfile.TemporaryDirectory(prefix="offline-signed-page-") as folder:
+                            path = Path(folder) / Path(page["name"]).name
+                            path.write_bytes(content)
+                            response = self.telegram.send_document(
+                                recipient, path,
+                                caption=f"Подписанная страница {index}/{len(pages)}",
+                            )
+                            if response.get("ok") is False:
+                                raise WorkspaceError("Telegram не подтвердил доставку страницы.")
+                        self.state.put(file_key, True)
+                        delivered += 1
+                        if delivered >= 30:
+                            return
                 if kind == "letter.action" and payload.get("action") == "return_for_revision":
                     event_id = str(uuid5(
                         NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"]

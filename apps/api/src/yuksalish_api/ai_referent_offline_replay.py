@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import PurePath
 from uuid import NAMESPACE_URL, UUID, uuid5
-from zipfile import BadZipFile, ZipFile
+from zipfile import ZIP_STORED, BadZipFile, ZipFile
 
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -147,10 +147,14 @@ async def _replay_attachment(
     attachment_id = uuid5(
         NAMESPACE_URL, "ai-offline-attachment:" + str(operation.operation_id)
     )
+    # Staging is content-addressed and can be shared by several letters. The
+    # attachment table requires a distinct storage key for every attachment.
+    attachment_key = f"ai-referent/offline-attachments/{operation.letter_id}/{attachment_id}"
+    await storage.put(attachment_key, content, "application/octet-stream")
     await connection.execute(insert(attachments).values(
         id=attachment_id, owner_type="ai_referent_letter", owner_id=operation.letter_id,
         file_name=name, content_type="application/octet-stream", byte_size=size,
-        sha256=operation.blob_sha256, storage_key=staged["storage_key"],
+        sha256=operation.blob_sha256, storage_key=attachment_key,
         uploaded_by_user_id=UUID(str(actor["userId"])), document_role=role,
         media_kind="file", media_duration_ms=None, media_codec=None,
         created_at=occurred_at,
@@ -697,6 +701,151 @@ async def _replay_prepared(
     )
 
 
+async def _replay_signed_pages(
+    connection: AsyncConnection,
+    storage: ObjectStorage | None,
+    *,
+    agent_id: str,
+    epoch: UUID,
+    operation: OfflineReplayOperation,
+    actor: dict[str, object],
+    fingerprint: str,
+    occurred_at: datetime,
+    now: datetime,
+) -> OfflineReplayReceipt:
+    values = operation.payload
+    try:
+        approval_id = UUID(str(values["approvalOperationId"]))
+        command_id = UUID(str(values["commandId"]))
+    except (KeyError, TypeError, ValueError) as error:
+        raise HTTPException(422, "Подписанные страницы не связаны с согласованием.") from error
+    revision, size, manifest = (
+        values.get("expectedRevision"), values.get("byteSize"), values.get("pages")
+    )
+    if (
+        operation.operation_id != uuid5(NAMESPACE_URL, "ai-offline-sign:" + str(approval_id))
+        or command_id != uuid5(NAMESPACE_URL, "ai-offline-command:" + str(approval_id))
+        or type(revision) is not int or revision < 2
+        or type(size) is not int or not 0 < size <= 50 * 1024 * 1024
+        or not isinstance(manifest, list) or not 1 <= len(manifest) <= 100
+        or values.get("fromStatus") != "queued" or values.get("toStatus") != "signed"
+        or storage is None or operation.blob_sha256 is None
+    ):
+        raise HTTPException(422, "Поля автономного подписания недействительны.")
+    letter = (
+        await connection.execute(select(ai_referent_letters).where(
+            ai_referent_letters.c.id == operation.letter_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    reviewer_keys = actor.get("reviewerKeys")
+    if not isinstance(reviewer_keys, list):
+        reviewer_keys = []
+    if (
+        letter is None or letter["status"] != "queued" or letter["revision"] != revision
+        or letter["workflow_kind"] != "sign_only"
+        or letter["reviewer_user_id"] != UUID(str(actor["userId"]))
+        or letter["reviewer_key"] not in reviewer_keys
+    ):
+        raise HTTPException(409, "Письмо не ожидает это автономное подписание.")
+    command = (
+        await connection.execute(select(ai_referent_delivery_commands).where(
+            ai_referent_delivery_commands.c.id == command_id
+        ).with_for_update())
+    ).mappings().one_or_none()
+    if (
+        command is None or command["letter_id"] != operation.letter_id
+        or command["kind"] != "sign_only" or command["status"] != "pending"
+        or command["created_at"] > occurred_at
+    ):
+        raise HTTPException(409, "Задание подписания отсутствует или уже выполнялось.")
+    staged = (
+        await connection.execute(select(ai_referent_offline_blobs).where(
+            ai_referent_offline_blobs.c.agent_id == agent_id,
+            ai_referent_offline_blobs.c.epoch == epoch,
+            ai_referent_offline_blobs.c.sha256 == operation.blob_sha256,
+        ))
+    ).mappings().one_or_none()
+    if staged is None or staged["byte_size"] != size:
+        raise HTTPException(409, "Пакет подписанных страниц не передан для сверки.")
+    content = await storage.get(staged["storage_key"])
+    if len(content) != size or hashlib.sha256(content).hexdigest() != operation.blob_sha256:
+        raise HTTPException(409, "Пакет подписанных страниц повреждён.")
+    pages: list[tuple[str, bytes, str]] = []
+    try:
+        with ZipFile(BytesIO(content)) as archive:
+            entries = archive.infolist()
+            if len(entries) != len(manifest):
+                raise HTTPException(422, "Число страниц в пакете не совпало.")
+            for index, (entry, item) in enumerate(zip(entries, manifest, strict=True), 1):
+                name = f"{index:03d}.pdf"
+                if (
+                    not isinstance(item, dict) or item.get("name") != name
+                    or entry.filename != name or entry.compress_type != ZIP_STORED
+                    or bool(entry.flag_bits & 1)
+                    or type(item.get("byteSize")) is not int
+                    or not 0 < item["byteSize"] <= 20 * 1024 * 1024
+                    or entry.file_size != item["byteSize"]
+                    or not isinstance(item.get("sha256"), str)
+                ):
+                    raise HTTPException(422, "Недопустимая подписанная страница.")
+                page = archive.read(entry)
+                digest = hashlib.sha256(page).hexdigest()
+                if not page.startswith(b"%PDF-") or digest != item["sha256"]:
+                    raise HTTPException(422, "Подписанная страница повреждена.")
+                pages.append((name, page, digest))
+    except (BadZipFile, RuntimeError, ValueError) as error:
+        raise HTTPException(422, "Пакет подписанных страниц повреждён.") from error
+    for name, page, digest in pages:
+        # Deterministic keys make retry safe if object storage succeeded but SQL rolled back.
+        key = f"ai-referent/offline-signed/{operation.letter_id}/{command_id}/{name}"
+        await storage.put(key, page, "application/pdf")
+        await connection.execute(insert(ai_referent_files).values(
+            id=uuid5(NAMESPACE_URL, f"ai-offline-signed-page:{operation.operation_id}:{name}"),
+            kind="outgoing", owner_id=operation.letter_id,
+            relative_path=f"signed/{command_id}/{name}", storage_key=key,
+            sha256=digest, byte_size=len(page), content_type="application/pdf",
+            created_at=occurred_at,
+        ))
+    await connection.execute(update(ai_referent_delivery_commands).where(
+        ai_referent_delivery_commands.c.id == command_id
+    ).values(
+        status="completed", result={
+            "outcome": "prepared", "signedPages": len(pages),
+            "detail": "Автономное подписание без отправки",
+        }, completed_at=occurred_at, updated_at=occurred_at, last_error="",
+    ))
+    await connection.execute(update(ai_referent_letters).where(
+        ai_referent_letters.c.id == operation.letter_id
+    ).values(
+        status="signed", revision=revision + 1, updated_at=occurred_at,
+        final_pdf_file_id=None, delivery_error="",
+    ))
+    await connection.execute(insert(ai_referent_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-event:" + str(operation.operation_id)),
+        letter_id=operation.letter_id, actor_user_id=None, event_type="agent.prepared",
+        from_status="queued", to_status="signed", comment="",
+        metadata={"offlineOperationId": str(operation.operation_id), "signedPages": len(pages)},
+        created_at=occurred_at,
+    ))
+    await connection.execute(insert(audit_events).values(
+        id=uuid5(NAMESPACE_URL, "ai-offline-audit:" + str(operation.operation_id)),
+        actor_user_id=None, action="ai_referent.offline_signed",
+        target_type="ai_referent_letter", target_id=operation.letter_id,
+        details={"agentId": agent_id, "epoch": str(epoch), "commandId": str(command_id)},
+        created_at=now,
+    ))
+    await connection.execute(insert(ai_referent_offline_operation_receipts).values(
+        operation_id=operation.operation_id, agent_id=agent_id, epoch=epoch,
+        sequence=operation.sequence, letter_id=operation.letter_id,
+        kind=operation.kind, fingerprint=fingerprint, result_revision=revision + 1,
+        occurred_at=occurred_at, accepted_at=now,
+    ))
+    return OfflineReplayReceipt(
+        operation_id=operation.operation_id, sequence=operation.sequence,
+        letter_id=operation.letter_id, result_revision=revision + 1, accepted_at=now,
+    )
+
+
 async def replay_offline_operation(
     connection: AsyncConnection,
     *,
@@ -785,14 +934,15 @@ async def replay_offline_operation(
         ("letter.attachment", "edit"),
         ("letter.document_check", "edit"),
         ("letter.comment_audio", "approve"), ("letter.comment_audio", "admin"),
-        ("letter.prepared", "approve"),
+        ("letter.prepared", "approve"), ("letter.signed", "approve"),
         ("letter.action", "edit"), ("letter.action", "approve"),
         ("letter.action", "admin"),
     }:
         raise HTTPException(422, "Этот вид автономной операции пока не поддерживается.")
     if (
         operation.kind not in {
-            "letter.attachment", "letter.document_check", "letter.comment_audio", "letter.prepared"
+            "letter.attachment", "letter.document_check", "letter.comment_audio",
+            "letter.prepared", "letter.signed",
         }
         and operation.blob_sha256 is not None
     ):
@@ -829,6 +979,12 @@ async def replay_offline_operation(
         )
     if operation.kind == "letter.prepared":
         return await _replay_prepared(
+            connection, storage, agent_id=agent_id, epoch=epoch,
+            operation=operation, actor=actor, fingerprint=fingerprint,
+            occurred_at=occurred_at, now=now,
+        )
+    if operation.kind == "letter.signed":
+        return await _replay_signed_pages(
             connection, storage, agent_id=agent_id, epoch=epoch,
             operation=operation, actor=actor, fingerprint=fingerprint,
             occurred_at=occurred_at, now=now,

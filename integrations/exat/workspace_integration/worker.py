@@ -292,7 +292,11 @@ class DeliveryWorker:
             ),
         }
 
-    def sign_only(self, job: dict[str, Any]) -> dict[str, Any]:
+    def sign_only(
+        self, job: dict[str, Any], *,
+        file_loader: Callable[[dict[str, Any], dict[str, Any], Path], Path] | None = None,
+        record_signed_pages: Callable[[list[Path]], None] | None = None,
+    ) -> dict[str, Any]:
         from .sign_only import sign_document_pages
 
         folder = self.root / "sign-only" / str(UUID(job["letterId"])) / str(UUID(job["id"]))
@@ -301,16 +305,19 @@ class DeliveryWorker:
         )
         if primary is None or Path(primary["name"]).suffix.lower() != ".docx":
             raise WorkspaceError("Для подписи нужен основной DOCX.")
-        draft = self.download(job, primary, folder)
+        draft = (file_loader or self.download)(job, primary, folder)
         pages = sign_document_pages(
             self.service.facsimile, draft, folder / "signed", str(job["reviewerName"])
         )
-        for page in pages:
-            self.sync.upload(
-                "outgoing", job["letterId"], page,
-                f"signed/{job['id']}/{page.name}",
-                jobId=job["id"], leaseToken=job["leaseToken"],
-            )
+        if record_signed_pages is None:
+            for page in pages:
+                self.sync.upload(
+                    "outgoing", job["letterId"], page,
+                    f"signed/{job['id']}/{page.name}",
+                    jobId=job["id"], leaseToken=job["leaseToken"],
+                )
+        else:
+            record_signed_pages(pages)
         return {
             **self.receipt(
                 job, "prepared",

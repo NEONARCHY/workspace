@@ -6,11 +6,13 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from copy import deepcopy
+from io import BytesIO
 from pathlib import Path, PurePath
 from tempfile import TemporaryDirectory
 from threading import RLock
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from .client import WorkspaceError
 from .offline_journal import OfflineJournal
@@ -145,6 +147,27 @@ class OfflineWorkflow:
                 "source": "packet",
                 "createdAt": prepared["occurred_at"],
             })
+        signed_pages = next(
+            (item for item in reversed(self.journal.letter_operations(letter["id"]))
+             if item["kind"] == "letter.signed"), None,
+        ) if letter["status"] == "signed" else None
+        if signed_pages is not None:
+            cached_files = [
+                item for item in cached_files if not (
+                    isinstance(item, dict) and item.get("source") == "packet"
+                    and str(item.get("name", "")).startswith("signed/")
+                )
+            ]
+            for page in signed_pages["payload"]["pages"]:
+                local_files.append({
+                    "id": str(uuid5(
+                        NAMESPACE_URL,
+                        f"ai-offline-signed-page:{signed_pages['operation_id']}:{page['name']}",
+                    )),
+                    "name": f"signed/{signed_pages['payload']['commandId']}/{page['name']}",
+                    "byteSize": page["byteSize"], "sha256": page["sha256"],
+                    "source": "packet", "createdAt": signed_pages["occurred_at"],
+                })
         files = [
             item for item in cached_files
             if isinstance(item, dict)
@@ -174,6 +197,29 @@ class OfflineWorkflow:
         )
         if item is None:
             raise WorkspaceError("Файл недоступен в локальной копии.", 404)
+        if source == "packet" and self.read(telegram_id, letter_id)["status"] == "signed":
+            signed = next(
+                (entry for entry in reversed(self.journal.letter_operations(letter_id))
+                 if entry["kind"] == "letter.signed"), None,
+            )
+            if signed is not None and any(
+                str(uuid5(
+                    NAMESPACE_URL,
+                    f"ai-offline-signed-page:{signed['operation_id']}:{page['name']}",
+                )) == file_id for page in signed["payload"]["pages"]
+            ):
+                try:
+                    archive = self.journal.read_blob(signed["blob_sha256"])
+                    with ZipFile(BytesIO(archive)) as bundle:
+                        page = bundle.read(Path(item["name"]).name)
+                except (FileNotFoundError, ValueError, BadZipFile, KeyError) as error:
+                    raise WorkspaceError("Подписанная страница повреждена.", 503) from error
+                if (
+                    len(page) != item["byteSize"]
+                    or hashlib.sha256(page).hexdigest() != item["sha256"]
+                ):
+                    raise WorkspaceError("Контрольная сумма страницы не совпала.", 503)
+                return page
         try:
             return self.journal.read_blob(item["sha256"])
         except (FileNotFoundError, ValueError) as error:
@@ -296,6 +342,79 @@ class OfflineWorkflow:
                     "actorName": actor["fullName"],
                 },
                 blob_sha256=digest, required_action="approve",
+            )
+            return self.read(telegram_id, letter_id)
+
+    def record_signed_pages(
+        self, telegram_id: str, letter_id: str, approval_operation_id: str,
+        pages: list[Path],
+    ) -> dict[str, Any]:
+        """Persist every signed page in one replayable, bounded ZIP operation."""
+        actor = self._actor(telegram_id, "approve")
+        try:
+            letter_id = str(UUID(letter_id))
+            approval_operation_id = str(UUID(approval_operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный ID письма или согласования.", 422) from error
+        if not 1 <= len(pages) <= 100:
+            raise WorkspaceError("Нужно от 1 до 100 подписанных страниц.", 422)
+        manifest: list[dict[str, Any]] = []
+        buffer = BytesIO()
+        with ZipFile(buffer, "w") as bundle:
+            for number, path in enumerate(pages, 1):
+                content = path.read_bytes()
+                if not content.startswith(b"%PDF-") or len(content) > 20 * 1024 * 1024:
+                    raise WorkspaceError(
+                        "Одна из подписанных страниц повреждена или слишком велика.", 422
+                    )
+                name = f"{number:03d}.pdf"
+                bundle.writestr(ZipInfo(name, (1980, 1, 1, 0, 0, 0)), content)
+                manifest.append({
+                    "name": name, "byteSize": len(content),
+                    "sha256": hashlib.sha256(content).hexdigest(),
+                })
+                if buffer.tell() > 50 * 1024 * 1024:
+                    raise WorkspaceError("Пакет подписанных страниц превышает 50 МБ.", 422)
+        archive = buffer.getvalue()
+        if len(archive) > 50 * 1024 * 1024:
+            raise WorkspaceError("Пакет подписанных страниц превышает 50 МБ.", 422)
+        digest = hashlib.sha256(archive).hexdigest()
+        operation_id = str(uuid5(NAMESPACE_URL, "ai-offline-sign:" + approval_operation_id))
+        command_id = str(uuid5(NAMESPACE_URL, "ai-offline-command:" + approval_operation_id))
+        with self._lock:
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (
+                    old["actor_id"] != telegram_id or old["letter_id"] != letter_id
+                    or old["kind"] != "letter.signed" or old["blob_sha256"] != digest
+                ):
+                    raise WorkspaceError("Повтор подписания содержит другие страницы.", 409)
+                return self.read(telegram_id, letter_id)
+            approval = self.journal.operation(approval_operation_id)
+            if (
+                approval is None or approval["kind"] != "letter.action"
+                or approval["letter_id"] != letter_id or approval["actor_id"] != telegram_id
+                or approval["payload"].get("action") != "approve"
+                or approval["payload"].get("toStatus") != "queued"
+            ):
+                raise WorkspaceError("Итоговое согласование для подписания не найдено.", 409)
+            letter = self.read(telegram_id, letter_id)
+            if (
+                letter["status"] != "queued" or letter["workflowKind"] != "sign_only"
+                or letter["reviewerUserId"] != actor["userId"]
+                or letter["revision"] != approval["payload"]["expectedRevision"] + 1
+            ):
+                raise WorkspaceError("Письмо не ожидает автономного подписания.", 409)
+            self.journal.put_blob(archive)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id, actor_id=telegram_id, letter_id=letter_id,
+                kind="letter.signed", payload={
+                    "approvalOperationId": approval_operation_id,
+                    "commandId": command_id, "expectedRevision": letter["revision"],
+                    "fromStatus": "queued", "toStatus": "signed",
+                    "byteSize": len(archive), "pages": manifest,
+                    "actorUserId": actor["userId"], "actorName": actor["fullName"],
+                }, blob_sha256=digest, required_action="approve",
             )
             return self.read(telegram_id, letter_id)
 
@@ -1176,6 +1295,27 @@ class OfflineWorkflow:
                     "eventType": "agent.prepared", "actorUserId": None,
                     "actorName": "Робот", "fromStatus": payload["fromStatus"],
                     "toStatus": payload["toStatus"], "comment": "", "audio": None,
+                    "createdAt": operation["occurred_at"],
+                })
+                continue
+            elif operation["kind"] == "letter.signed":
+                if (
+                    letter is None or letter["status"] != "queued"
+                    or payload["fromStatus"] != "queued"
+                    or payload["toStatus"] != "signed"
+                    or letter["revision"] != payload["expectedRevision"]
+                ):
+                    raise ValueError("Локальное подписание потеряло порядок стадий.")
+                letter["status"] = "signed"
+                letter["revision"] += 1
+                letter["updatedAt"] = operation["occurred_at"]
+                letter["events"].append({
+                    "id": str(uuid5(
+                        NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"]
+                    )),
+                    "eventType": "agent.prepared", "actorUserId": None,
+                    "actorName": "Робот", "fromStatus": "queued",
+                    "toStatus": "signed", "comment": "", "audio": None,
                     "createdAt": operation["occurred_at"],
                 })
                 continue

@@ -981,3 +981,56 @@ def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path
     assert after_return.value.status == 403
     action = journal.letter_operations(letter["id"])[-1]
     assert action["required_action"] == "admin"
+
+
+def test_sign_only_pages_are_durable_downloadable_and_notified_offline(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), {
+        **_draft(reviewer), "workflowKind": "sign_only",
+        "recipientOrganization": "Подписание без отправки", "recipientAddress": "",
+    })
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"source docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    approval_id = str(uuid4())
+    workflow.act("789", letter["id"], approval_id, action="approve", expected_revision=3)
+    worker = Mock()
+
+    def sign_only(job, *, file_loader, record_signed_pages):
+        assert job["kind"] == "sign_only"
+        assert file_loader(job, job["files"][0], tmp_path / "source").read_bytes() == b"source docx"
+        pages = []
+        for index in (1, 2):
+            path = tmp_path / f"{index:03d}.pdf"
+            path.write_bytes(f"%PDF-1.7 page {index}".encode())
+            pages.append(path)
+        record_signed_pages(pages)
+
+    worker.sign_only.side_effect = sign_only
+    assert OfflinePreparationWorker(worker, journal).run_once()
+    assert not OfflinePreparationWorker(worker, journal).run_once()
+    signed = OfflineWorkflow(OfflineJournal(tmp_path)).read("123", letter["id"])
+    assert signed["status"] == "signed"
+    packet = workflow.packet("123", letter["id"])["files"]
+    pages = [item for item in packet if item["source"] == "packet"]
+    assert [item["name"].rsplit("/", 1)[1] for item in pages] == ["001.pdf", "002.pdf"]
+    for index, page in enumerate(pages, 1):
+        assert workflow.packet_file("123", letter["id"], page["id"], "packet") == (
+            f"%PDF-1.7 page {index}".encode()
+        )
+    with pytest.raises(WorkspaceError):
+        workflow.packet_file("456", letter["id"], pages[0]["id"], "packet")
+    api, telegram = Mock(), Mock()
+    api.request.side_effect = AssertionError("offline signed pages contacted Workspace")
+    telegram.send_document.return_value = {"ok": True}
+    bot = SharedBot(telegram, api, State(tmp_path / "signed-bot.sqlite"), journal)
+    bot.show = Mock()
+    bot.offline_notifications()
+    assert telegram.send_document.call_count == 2
+    bot.offline_notifications()
+    assert telegram.send_document.call_count == 2
+    api.request.assert_not_called()

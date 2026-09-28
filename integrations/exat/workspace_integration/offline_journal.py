@@ -1102,7 +1102,10 @@ class OfflineJournal:
                 prepared_id = str(uuid5(
                     NAMESPACE_URL, "ai-offline-prepare:" + operation["operation_id"]
                 ))
-                if self.operation(prepared_id) is None:
+                signed_id = str(uuid5(
+                    NAMESPACE_URL, "ai-offline-sign:" + operation["operation_id"]
+                ))
+                if self.operation(prepared_id) is None and self.operation(signed_id) is None:
                     return operation
         return None
 

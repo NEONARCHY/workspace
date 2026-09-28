@@ -51,7 +51,7 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     if operation["kind"] not in {
         "letter.create", "letter.update", "letter.attachment", "letter.document_check",
         "letter.comment_audio", "letter.action",
-        "letter.prepared",
+        "letter.prepared", "letter.signed",
     }:
         raise ValueError("Следующая автономная операция ещё не поддерживается сервером.")
     expected_revision = 1
@@ -70,7 +70,8 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     if state is None or state["epoch"] != epoch or state["phase"] != "replay":
         raise ValueError("Воспроизведение разрешено только после подтверждения эпохи.")
     if operation["kind"] in {
-        "letter.attachment", "letter.document_check", "letter.comment_audio", "letter.prepared"
+        "letter.attachment", "letter.document_check", "letter.comment_audio",
+        "letter.prepared", "letter.signed",
     }:
         digest = operation["blob_sha256"]
         if not isinstance(digest, str):

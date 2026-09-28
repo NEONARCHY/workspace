@@ -644,6 +644,139 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 assert await connection.scalar(select(ai_referent_letters.c.outgoing_number).where(
                     ai_referent_letters.c.id == operation.letter_id
                 )) == number_reservation.first_number
+                sign_create = _operation(
+                    epoch, snapshot_id, rights_hash, actor_id, user_id,
+                    sequence=50, reviewer_user_id=reviewer_id,
+                )
+                sign_create.payload.update({
+                    "workflowKind": "sign_only", "route": "exat",
+                    "recipientOrganization": "Подписание без отправки",
+                    "recipientAddress": "",
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=sign_create, enabled=True,
+                )).result_revision == 1
+                sign_attachment = file_operation.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 51,
+                    "letter_id": sign_create.letter_id,
+                    "payload": {**file_operation.payload, "expectedRevision": 1},
+                    "occurred_at": sign_create.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=sign_attachment, enabled=True, storage=storage,
+                )).result_revision == 2
+                sign_check = check_operation.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 52,
+                    "letter_id": sign_create.letter_id,
+                    "payload": {**check_operation.payload, "expectedRevision": 2},
+                    "occurred_at": sign_attachment.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=sign_check, enabled=True,
+                )).result_revision == 2
+                sign_submit = submit.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 53,
+                    "letter_id": sign_create.letter_id,
+                    "payload": {
+                        **submit.payload, "expectedRevision": 2,
+                        "fromStatus": "draft",
+                    },
+                    "occurred_at": sign_check.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=sign_submit, enabled=True,
+                )).result_revision == 3
+                sign_approval = approved.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 54,
+                    "letter_id": sign_create.letter_id,
+                    "payload": {
+                        **approved.payload, "expectedRevision": 3,
+                        "outgoingNumber": None, "yearSuffix": None,
+                    },
+                    "occurred_at": sign_submit.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=sign_approval, enabled=True,
+                )).result_revision == 4
+                sign_command = (
+                    await connection.execute(select(ai_referent_delivery_commands).where(
+                        ai_referent_delivery_commands.c.letter_id == sign_create.letter_id
+                    ))
+                ).mappings().one()
+                assert sign_command["kind"] == "sign_only"
+                page_bytes = [b"%PDF-1.7 first", b"%PDF-1.7 second"]
+                bundle = BytesIO()
+                with ZipFile(bundle, "w") as archive:
+                    for index, page in enumerate(page_bytes, 1):
+                        archive.writestr(f"{index:03d}.pdf", page)
+                signed_bundle = bundle.getvalue()
+                bundle_hash = hashlib.sha256(signed_bundle).hexdigest()
+                await stage_offline_blob(
+                    connection, storage, agent_id=agent_id, epoch=epoch,
+                    sha256=bundle_hash, content=signed_bundle, enabled=True,
+                )
+                signed_pages_id = uuid5(
+                    NAMESPACE_URL, "ai-offline-sign:" + str(sign_approval.operation_id)
+                )
+                signed_pages = OfflineReplayOperation(
+                    operation_id=signed_pages_id, sequence=55,
+                    actor_id=reviewer_actor_id, letter_id=sign_create.letter_id,
+                    kind="letter.signed", payload={
+                        "approvalOperationId": str(sign_approval.operation_id),
+                        "commandId": str(sign_command["id"]),
+                        "expectedRevision": 4, "fromStatus": "queued", "toStatus": "signed",
+                        "byteSize": len(signed_bundle),
+                        "pages": [
+                            {"name": f"{index:03d}.pdf", "byteSize": len(page),
+                             "sha256": hashlib.sha256(page).hexdigest()}
+                            for index, page in enumerate(page_bytes, 1)
+                        ],
+                        "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                    },
+                    blob_sha256=bundle_hash, authority_epoch=epoch,
+                    rights_snapshot_id=snapshot_id, rights_content_sha256=rights_hash,
+                    required_action="approve",
+                    occurred_at=sign_approval.occurred_at + timedelta(seconds=10),
+                )
+                wrong_hash = signed_pages.model_copy(deep=True)
+                wrong_hash.payload["pages"][0]["sha256"] = "0" * 64
+                with pytest.raises(HTTPException) as bad_signed:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=wrong_hash, enabled=True, storage=storage,
+                    )
+                assert bad_signed.value.status_code == 422
+                signed_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=signed_pages, enabled=True, storage=storage,
+                )
+                assert signed_receipt.result_revision == 5
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=signed_pages, enabled=True, storage=storage,
+                ) == signed_receipt
+                signed_letter = (
+                    await connection.execute(select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == sign_create.letter_id
+                    ))
+                ).mappings().one()
+                assert signed_letter["status"] == "signed"
+                stored_pages = (
+                    await connection.execute(select(ai_referent_files).where(
+                        ai_referent_files.c.owner_id == sign_create.letter_id
+                    ).order_by(ai_referent_files.c.relative_path))
+                ).mappings().all()
+                assert [row["relative_path"] for row in stored_pages] == [
+                    f"signed/{sign_command['id']}/001.pdf",
+                    f"signed/{sign_command['id']}/002.pdf",
+                ]
+                assert [await storage.get(row["storage_key"]) for row in stored_pages] == page_bytes
             finally:
                 await transaction.rollback()
     finally:

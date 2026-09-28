@@ -26,7 +26,7 @@ class OfflinePreparationWorker:
             return False
         actor_id, letter_id = approval["actor_id"], approval["letter_id"]
         letter = self.workflow.read(actor_id, letter_id)
-        if letter["status"] != "queued" or letter["workflowKind"] != "delivery":
+        if letter["status"] != "queued":
             raise WorkspaceError("Письмо не ожидает автономной подготовки.", 409)
         actors = self.journal.verified_actors()
         sender_id = next(
@@ -39,7 +39,7 @@ class OfflinePreparationWorker:
         job: dict[str, Any] = {
             "id": command_id,
             "leaseToken": "offline-only",
-            "kind": "prepare",
+            "kind": "sign_only" if letter["workflowKind"] == "sign_only" else "prepare",
             "requiresFinalCheck": True,  # Do not open a delivery window before a human decision.
             "letterId": letter_id,
             "outgoingNumber": letter["outgoingNumber"],
@@ -88,5 +88,13 @@ class OfflinePreparationWorker:
                 actor_id, letter_id, approval["operation_id"], signed.read_bytes()
             )
 
-        self.worker.prepare(job, file_loader=load, record_signed=record)
+        if letter["workflowKind"] == "sign_only":
+            self.worker.sign_only(
+                job, file_loader=load,
+                record_signed_pages=lambda pages: self.workflow.record_signed_pages(
+                    actor_id, letter_id, approval["operation_id"], pages
+                ),
+            )
+        else:
+            self.worker.prepare(job, file_loader=load, record_signed=record)
         return True
