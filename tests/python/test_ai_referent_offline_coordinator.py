@@ -11,11 +11,12 @@ from integrations.exat.workspace_integration.offline_coordinator import OfflineC
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
 
 
-def _lease(epoch, mode="online"):
+def _lease(epoch, mode="online", *, retire_requested=False):
     now = datetime.now(UTC)
     return {
         "epoch": epoch, "mode": mode, "serverTime": now.isoformat(),
-        "leaseUntil": (now + timedelta(seconds=45)).isoformat(), "leaseSeconds": 45,
+        "leaseUntil": (now + timedelta(seconds=20)).isoformat(), "leaseSeconds": 20,
+        "retireRequested": retire_requested,
     }
 
 
@@ -30,6 +31,10 @@ class Client:
         self.rights_calls = 0
         self.reservation_calls = 0
         self.heartbeat_conflict = False
+        self.heartbeat_calls = 0
+        self.retire_requested = False
+        self.retire_calls = 0
+        self.lose_retire_reply = False
 
     def _check(self):
         if not self.online:
@@ -37,14 +42,15 @@ class Client:
 
     def start_offline_authority(self):
         self._check()
-        return _lease(self.epoch, self.mode)
+        return _lease(self.epoch, self.mode, retire_requested=self.retire_requested)
 
     def heartbeat_offline_authority(self, epoch):
+        self.heartbeat_calls += 1
         self._check()
         assert epoch == self.epoch
         if self.heartbeat_conflict:
             raise WorkspaceError("аренда истекла", 409)
-        return _lease(self.epoch, self.mode)
+        return _lease(self.epoch, self.mode, retire_requested=self.retire_requested)
 
     def offline_rights(self, epoch, snapshot_id):
         self._check()
@@ -81,7 +87,17 @@ class Client:
         assert manifest["operationsSha256"] == hashlib.sha256(b"[]").hexdigest()
         self.epoch = str(uuid4())
         self.mode = "online"
-        return _lease(self.epoch)
+        return _lease(self.epoch, retire_requested=self.retire_requested)
+
+    def retire_offline_authority(self, manifest):
+        self._check()
+        assert manifest["epoch"] == self.epoch
+        assert manifest["operationCount"] == 0
+        self.retire_calls += 1
+        if self.lose_retire_reply:
+            self.lose_retire_reply = False
+            raise WorkspaceError("retirement reply lost", retryable=True)
+        return {"epoch": manifest["epoch"], "mode": "legacy"}
 
 
 def test_coordinator_failover_and_replay_are_fenced(tmp_path):
@@ -95,12 +111,13 @@ def test_coordinator_failover_and_replay_are_fenced(tmp_path):
     assert (client.rights_calls, client.reservation_calls) == (1, 1)
 
     client.online = False
-    ticks[0] = 149.9
+    ticks[0] = 124.9
     assert coordinator.tick() == "waiting"
     assert journal.authority_state()["phase"] == "online"
-    ticks[0] = 150.0
+    ticks[0] = 125.0
     assert coordinator.tick() == "offline"
     assert journal.authority_state()["phase"] == "offline"
+    assert client.heartbeat_calls == 1
     assert coordinator.tick() == "offline"
 
     client.online = True
@@ -164,6 +181,80 @@ def test_empty_replay_issues_new_epoch_and_restores_online(tmp_path):
     assert coordinator.replay_tick() == "online"
     assert journal.authority_state()["epoch"] == client.epoch
     assert client.epoch != old_epoch
+
+
+def test_disable_retires_online_authority_and_returns_to_legacy(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    ticks = [100.0]
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: ticks[0])
+    assert coordinator.tick() == "online"
+    client.retire_requested = True
+    assert coordinator.tick() == "legacy"
+    assert journal.authority_state() is None
+    assert client.retire_calls == 1
+    ticks[0] = 120.0
+    assert coordinator.tick() == "legacy"
+
+
+def test_lost_retirement_reply_never_regrants_offline_authority(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    ticks = [100.0]
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: ticks[0])
+    assert coordinator.tick() == "online"
+    client.retire_requested = True
+    client.lose_retire_reply = True
+    assert coordinator.tick() == "blocked"
+    assert journal.authority_state()["phase"] == "retiring"
+    ticks[0] = 10_000.0
+    assert not coordinator.gate.may_write_offline()
+    restarted = OfflineCoordinator(client, OfflineJournal(tmp_path), clock=lambda: ticks[0])
+    assert restarted.tick() == "legacy"
+    assert journal.authority_state() is None
+    assert client.retire_calls == 2
+
+
+def test_disable_during_offline_replays_before_retirement(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    ticks = [100.0]
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: ticks[0])
+    assert coordinator.tick() == "online"
+    client.online = False
+    ticks[0] = 150.0
+    assert coordinator.tick() == "offline"
+    client.online = True
+    client.mode = "replay_required"
+    client.retire_requested = True
+    assert coordinator.tick() == "replay"
+    assert coordinator.replay_tick() == "legacy"
+    assert journal.authority_state() is None
+
+
+def test_disable_signal_during_replay_does_not_skip_manifest(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: 100.0)
+    assert coordinator.tick() == "online"
+    client.mode = "replay_required"
+    client.retire_requested = True
+    assert coordinator.tick() == "replay"
+    assert journal.authority_state()["phase"] == "replay"
+    assert coordinator.replay_tick() == "legacy"
+    assert journal.authority_state() is None
+
+
+def test_expired_local_deadline_does_not_offline_a_healthy_server(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    ticks = [100.0]
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: ticks[0])
+    assert coordinator.tick() == "online"
+    ticks[0] = 130.0
+    assert coordinator.tick() == "online"
+    assert journal.authority_state()["phase"] == "online"
+    assert client.heartbeat_calls == 1
 
 
 def test_lost_completion_reply_and_expired_lease_remain_recoverable(tmp_path):

@@ -1168,8 +1168,8 @@ async def replay_offline_operation(
     normal letter writes and other replay requests. The receipt is inserted in
     the same transaction as the letter and its event.
     """
-    if not enabled:
-        raise HTTPException(409, "Автономный режим AI Referent пока не включён на сервере.")
+    # Disabling new offline sessions must not strand a previously issued epoch.
+    # The assigned agent, epoch and replay-required fence are verified below.
     if operation.authority_epoch != epoch:
         raise HTTPException(409, "Операция относится к другой эпохе робота.")
     await connection.execute(select(ai_referent_configuration.c.id).with_for_update())

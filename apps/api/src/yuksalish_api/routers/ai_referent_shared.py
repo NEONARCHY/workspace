@@ -24,6 +24,7 @@ from ..ai_referent_authority import (
     complete_authority_replay,
     heartbeat_authority,
     require_workspace_write,
+    retire_authority,
     start_authority,
 )
 from ..ai_referent_configuration_schemas import ReviewerConfigurationResponse
@@ -73,6 +74,7 @@ from ..ai_referent_schemas import (
     CreateAIReferentLetterRequest,
     OfflineAuthorityHeartbeat,
     OfflineAuthorityLease,
+    OfflineAuthorityRetirement,
     OfflineBlobReceipt,
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
@@ -921,10 +923,12 @@ async def start_agent_authority(
 )
 async def heartbeat_agent_authority(
     payload: OfflineAuthorityHeartbeat,
+    request: Request,
     connection: Connection,
 ) -> OfflineAuthorityLease:
     return await heartbeat_authority(
-        connection, agent_id=payload.agent_id, epoch=payload.epoch
+        connection, agent_id=payload.agent_id, epoch=payload.epoch,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
 
 
@@ -1022,6 +1026,23 @@ async def complete_agent_offline_replay(
     agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
 ) -> OfflineAuthorityLease:
     return await complete_authority_replay(
+        connection, agent_id=agent_id, payload=payload,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/offline/authority:retire",
+    response_model=OfflineAuthorityRetirement,
+    dependencies=[Depends(require_agent_token)],
+)
+async def retire_agent_authority(
+    payload: OfflineReplayCompleteRequest,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+) -> OfflineAuthorityRetirement:
+    return await retire_authority(
         connection, agent_id=agent_id, payload=payload,
         enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
     )
