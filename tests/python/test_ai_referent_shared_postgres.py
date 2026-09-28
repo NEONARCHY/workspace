@@ -22,6 +22,7 @@ from yuksalish_api.tables import (
     ai_referent_configuration,
     ai_referent_delivery_commands,
     ai_referent_letters,
+    ai_referent_manual_recipients,
     ai_referent_telegram_links,
     ai_referent_telegram_outbox,
     telegram_bot_grants,
@@ -49,6 +50,7 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         await connection.execute(delete(telegram_bot_grants))
         await connection.execute(delete(ai_referent_telegram_links))
         await connection.execute(delete(ai_referent_telegram_outbox))
+        await connection.execute(delete(ai_referent_manual_recipients))
         await connection.execute(update(ai_referent_configuration).values(execution_agent_id=None))
     app = create_app(settings)
     base = "/api/v1/ai-referent"
@@ -94,6 +96,44 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         recipients = await call("GET", "/recipients?query=finans", author)
         assert recipients["totalCount"] == 1
         assert recipients["entries"][0]["addresses"] == ["FIN-01"]
+        await call("GET", "/recipients/manual", author, expected=403)
+        await call("POST", "/recipients/manual", author, expected=403, json={
+            "name": "Новый адресат", "address": "office@exat.uz",
+        })
+        added = await call("POST", "/recipients/manual", admin, expected=201, json={
+            "name": "Новый адресат", "address": "office@exat.uz", "categoryKey": "other",
+        })
+        assert added["route"] == "exat"
+        assert added["addresses"] == ["office@exat.uz"]
+        await call("POST", "/recipients/manual", admin, expected=409, json={
+            "name": "Повтор", "address": "OFFICE@EXAT.UZ",
+        })
+        await call("POST", "/recipients/manual", admin, expected=422, json={
+            "name": "Ошибка", "address": "bad address",
+        })
+        assert (await call("GET", "/recipients?query=адресат", author))["totalCount"] == 1
+        assert len(await call("GET", "/recipients/manual", admin)) == 1
+        webmail = await call("POST", "/recipients/manual", admin, expected=201, json={
+            "name": "Партнёр по почте", "address": "partner@example.org",
+        })
+        assert webmail["route"] == "webmail"
+        found_webmail = await call("GET", "/recipients?query=partner", author)
+        assert found_webmail["entries"][0]["id"] == webmail["id"]
+        await call("PUT", "/agent/recipients", json={
+            "agentId": "referent-test", "entries": [{
+                "id": "ministry-1", "name": "Министерство финансов",
+                "categoryKey": "ministries", "addresses": ["FIN-01"],
+                "route": "exat", "addressBookOrganization": "Минфин",
+            }, {
+                "id": "partner-1", "name": "Партнёр Exat",
+                "categoryKey": "other",
+                "addresses": ["office@exat.uz", "alternate@exat.uz"],
+                "route": "exat", "addressBookOrganization": "Партнёр Exat",
+            }],
+        })
+        assert (await call("GET", "/recipients?query=адресат", author))["totalCount"] == 1
+        alternate = await call("GET", "/recipients?query=alternate", author)
+        assert alternate["entries"][0]["addresses"] == ["alternate@exat.uz"]
         config = await call("GET", "/configuration", admin)
         bindings = [
             {"key": key, "username": name, "telegramId": identity, "enabled": bool(name)}
@@ -137,6 +177,13 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
             "GET", "/agent/recipients?query=finans", telegram("910003")
         )
         assert bot_recipients["entries"][0]["addresses"] == ["FIN-01"]
+        bot_added = await call("GET", "/agent/recipients?query=адресат", telegram("910003"))
+        assert bot_added["entries"][0]["id"] == added["id"]
+        await call("DELETE", "/recipients/manual/" + added["id"].removeprefix("manual-"),
+                   admin, expected=204)
+        assert (await call("GET", "/recipients?query=адресат", author))["totalCount"] == 0
+        await call("DELETE", "/recipients/manual/" + webmail["id"].removeprefix("manual-"),
+                   admin, expected=204)
         for headers, identity in [(author, "910003"), (admin, "910004")]:
             assert (await call("GET", "/telegram-link", headers))["telegramId"] == identity
         await call("GET", "/agent/letters", telegram("910099"), expected=403)

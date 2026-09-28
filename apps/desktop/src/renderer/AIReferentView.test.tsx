@@ -6,7 +6,7 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, uploadWorkspaceAttachment } from "./workspace-api";
+import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
@@ -20,11 +20,13 @@ vi.mock("./workspace-api", () => ({
   downloadAIReferentJournal: vi.fn(),
   downloadWorkspaceAttachment: vi.fn(),
   loadAIReferentRegistry: vi.fn(),
+  loadAIReferentAuthority: vi.fn(),
   loadAIReferentLetter: vi.fn(),
   loadAIReferentPacket: vi.fn(),
   downloadAIReferentPacket: vi.fn(),
   loadAIReferentReviewers: vi.fn(),
   loadAIReferentRecipients: vi.fn(),
+  loadAIReferentManualRecipients: vi.fn(),
   loadAIReferentIncomingRegistry: vi.fn(),
   updateAIReferentLetter: vi.fn(),
   uploadWorkspaceAttachment: vi.fn(),
@@ -104,6 +106,8 @@ describe("AIReferentView", () => {
   afterEach(cleanup);
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(checkAIReferentDocument).mockReset();
+    vi.mocked(loadAIReferentAuthority).mockResolvedValue({ writable: true, mode: "legacy", leaseUntil: null, detail: "" });
     vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
     vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue(incomingRegistry);
     const firstLetter = registry.letters[0];
@@ -116,6 +120,16 @@ describe("AIReferentView", () => {
         addresses: ["FIN-001"], route: "exat", addressBookOrganization: "Минфин" }],
       totalCount: 1, updatedAt: "2026-09-22T10:00:00Z",
     });
+    vi.mocked(loadAIReferentManualRecipients).mockResolvedValue([]);
+  });
+
+  it("shows the address-book manager only to administrators", async () => {
+    const view = render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    expect(screen.queryByRole("tab", { name: "Адресная книга" })).not.toBeInTheDocument();
+    view.unmount();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
+    fireEvent.click(screen.getByRole("tab", { name: "Адресная книга" }));
+    expect(await screen.findByText("Пока нет добавленных адресов. Справочник робота продолжает работать как прежде.")).toBeInTheDocument();
   });
 
   it("searches the shared address book and fills the selected destination", async () => {
@@ -148,10 +162,24 @@ describe("AIReferentView", () => {
       .toBe("0439-26-AI — Материалы Навои.zip");
   });
 
+  it("keeps AI Referent view-only after the bot lease expires", async () => {
+    vi.mocked(loadAIReferentAuthority).mockResolvedValue({
+      writable: false, mode: "replay_required", leaseUntil: "2026-09-25T10:00:00Z",
+      detail: "Связь с роботом потеряна. Доступен только просмотр.",
+    });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView
+      token="token" people={[]} canCreate focusRequestId="letter-1"
+    /></FluentProvider>);
+    expect(await screen.findByRole("status")).toHaveTextContent("Доступен только просмотр");
+    expect(screen.queryByRole("button", { name: "Новое письмо" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Согласовать" })).not.toBeInTheDocument();
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+  });
+
   it("accepts dropped DOCX and blocks saving until the robot finishes", async () => {
     vi.mocked(checkAIReferentDocument).mockResolvedValue({ id: "check", status: "pending", reviewerKeys: [], detail: "" });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
     const input = screen.getByLabelText("Выбрать основной документ DOCX");
     const zone = input.closest("label")!;
     const file = new File(["PK"], "Letter.docx");
@@ -172,12 +200,14 @@ describe("AIReferentView", () => {
     vi.mocked(checkAIReferentDocument).mockResolvedValueOnce({ id: "check", status: "failed", reviewerKeys: [], detail: "Обратитесь к IT-специалисту." })
       .mockResolvedValueOnce({ id: "check", status: "passed", reviewerKeys: ["askar"], detail: "" });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
     fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [new File(["PK"], "letter.docx")] } });
     expect(await screen.findByText("Обратитесь к IT-специалисту.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled());
+    await waitFor(() => expect(checkAIReferentDocument).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled(), { timeout: 5000 });
     expect(screen.queryByText(/Подождите: робот проверяет/)).not.toBeInTheDocument();
   });
 
@@ -189,7 +219,7 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
     await waitFor(() => expect(loadAIReferentReviewers).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Новое письмо" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
     const reviewer = screen.getByRole("combobox", { name: "Согласующий" });
     fireEvent.change(reviewer, { target: { value: "bobur" } });
     expect(screen.getByRole("combobox", { name: /Предварительный согласующий/ })).toHaveTextContent("Выберите предварительного согласующего");
@@ -325,7 +355,7 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}>
       <AIReferentView token="token" people={[]} canCreate />
     </FluentProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "На подпись" }));
+    fireEvent.click(await screen.findByRole("button", { name: "На подпись" }));
     const dialog = await screen.findByRole("dialog", { name: "Подписать без отправки" });
     expect(within(dialog).getByText(/каждый лист отдельным подписанным PDF/)).toBeInTheDocument();
     expect(within(dialog).queryByText("Канал отправки")).toBeNull();

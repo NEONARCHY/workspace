@@ -11,6 +11,7 @@ import type {
   AIReferentPacketKind,
   AIReferentAction,
   AIReferentConfiguration,
+  AIReferentAuthorityStatus,
   AIReferentConfigurationUpdate,
   AIReferentIncomingRegistry,
   AIReferentLetter,
@@ -23,6 +24,8 @@ import type {
   HisobotReport,
   HisobotUnitReport,
   AIReferentRecipientRegistry,
+  AIReferentRecipient,
+  AIReferentManualRecipientInput,
   NavigationKey,
   AdministrativeChat,
   AbsenceAction,
@@ -202,10 +205,32 @@ export function loadAIReferentRecipients(
   return apiRequest<AIReferentRecipientRegistry>(`/ai-referent/recipients?${search}`, {}, token);
 }
 
+export function loadAIReferentManualRecipients(token: string): Promise<readonly AIReferentRecipient[]> {
+  return apiRequest<readonly AIReferentRecipient[]>("/ai-referent/recipients/manual", {}, token);
+}
+
+export function addAIReferentManualRecipient(
+  token: string, recipient: AIReferentManualRecipientInput,
+): Promise<AIReferentRecipient> {
+  return apiRequest<AIReferentRecipient>("/ai-referent/recipients/manual", {
+    method: "POST", body: JSON.stringify(recipient),
+  }, token);
+}
+
+export function removeAIReferentManualRecipient(token: string, id: string): Promise<void> {
+  return apiRequest<void>(`/ai-referent/recipients/manual/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  }, token);
+}
+
 export function loadAIReferentConfiguration(token: string) {
   return apiRequest<AIReferentConfiguration>(
     "/ai-referent/configuration", {}, token,
   );
+}
+
+export function loadAIReferentAuthority(token: string): Promise<AIReferentAuthorityStatus> {
+  return apiRequest<AIReferentAuthorityStatus>("/ai-referent/authority", {}, token);
 }
 
 export function loadAIReferentReviewers(token: string) {

@@ -1086,6 +1086,73 @@ ai_referent_number_counters = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+ai_referent_offline_number_reservations = sa.Table(
+    "ai_referent_offline_number_reservations",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("year_suffix", sa.String(2), nullable=False),
+    sa.Column("first_number", sa.Integer(), nullable=False),
+    sa.Column("last_number", sa.Integer(), nullable=False),
+    sa.Column("valid_until", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_authority = sa.Table(
+    "ai_referent_authority",
+    metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("mode", sa.String(24), nullable=False),
+    sa.Column("lease_until", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_offline_rights_snapshots = sa.Table(
+    "ai_referent_offline_rights_snapshots",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("reviewer_revision", sa.Integer(), nullable=False),
+    sa.Column("actors", postgresql.JSONB(), nullable=False),
+    sa.Column("content_sha256", sa.String(64), nullable=False),
+    sa.Column("verified_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_offline_blobs = sa.Table(
+    "ai_referent_offline_blobs",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("sha256", sa.String(64), nullable=False),
+    sa.Column("byte_size", sa.BigInteger(), nullable=False),
+    sa.Column("storage_key", sa.String(300), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint("agent_id", "epoch", "sha256", name="uq_ai_offline_blob_identity"),
+    sa.CheckConstraint("byte_size > 0", name="ck_ai_offline_blob_nonempty"),
+)
+
+ai_referent_offline_operation_receipts = sa.Table(
+    "ai_referent_offline_operation_receipts",
+    metadata,
+    sa.Column("operation_id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("sequence", sa.BigInteger(), nullable=False),
+    sa.Column("letter_id", uuid_type, nullable=False),
+    sa.Column("kind", sa.String(80), nullable=False),
+    sa.Column("fingerprint", sa.String(64), nullable=False),
+    sa.Column("result_revision", sa.Integer(), nullable=False),
+    sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint("agent_id", "sequence", name="uq_ai_offline_replay_sequence"),
+    sa.CheckConstraint("sequence > 0", name="ck_ai_offline_replay_sequence"),
+    sa.CheckConstraint("result_revision > 0", name="ck_ai_offline_replay_revision"),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,
@@ -1188,6 +1255,23 @@ ai_referent_recipient_catalog = sa.Table(
     sa.Column("agent_id", sa.String(128), primary_key=True),
     sa.Column("revision", sa.String(64), nullable=False),
     sa.Column("entries", postgresql.JSONB(), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_manual_recipients = sa.Table(
+    "ai_referent_manual_recipients", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("name", sa.String(300), nullable=False),
+    sa.Column("address", sa.String(500), nullable=False, unique=True),
+    sa.Column("route", sa.String(16), nullable=False),
+    sa.Column("category_key", sa.String(30), nullable=False),
+    sa.Column("created_by_user_id", uuid_type, nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+ai_referent_manual_recipient_state = sa.Table(
+    "ai_referent_manual_recipient_state", metadata,
+    sa.Column("id", sa.Integer(), primary_key=True),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 

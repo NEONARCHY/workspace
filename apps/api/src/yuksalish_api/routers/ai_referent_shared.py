@@ -20,8 +20,14 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from ..access_control import ensure_module_action
 from ..ai_referent_agent_service import claim_job, complete_job, heartbeat_job
 from ..ai_referent_audio import save_audio
+from ..ai_referent_authority import (
+    complete_authority_replay,
+    heartbeat_authority,
+    require_workspace_write,
+    start_authority,
+)
 from ..ai_referent_configuration_schemas import ReviewerConfigurationResponse
-from ..ai_referent_configuration_service import read_configuration
+from ..ai_referent_configuration_service import read_configuration, require_configuration_admin
 from ..ai_referent_deletion import request_deletion
 from ..ai_referent_files_service import (
     file_metadata,
@@ -32,6 +38,10 @@ from ..ai_referent_files_service import (
     require_packet_access,
     store_packet_file,
 )
+from ..ai_referent_offline_blobs import stage_offline_blob
+from ..ai_referent_offline_numbers import reserve_offline_numbers
+from ..ai_referent_offline_replay import replay_offline_operation
+from ..ai_referent_offline_rights import export_offline_rights
 from ..ai_referent_preflight import (
     check_response,
     checked_lease,
@@ -42,9 +52,14 @@ from ..ai_referent_preflight import (
 )
 from ..ai_referent_progress import list_other_letter_progress, load_letter_progress
 from ..ai_referent_recipient_service import (
+    ManualRecipientInput,
+    RecipientEntry,
     RecipientRegistry,
     RecipientSnapshot,
+    add_manual_recipient,
+    list_manual_recipients,
     load_recipients,
+    remove_manual_recipient,
     sync_recipients,
 )
 from ..ai_referent_schemas import (
@@ -56,6 +71,16 @@ from ..ai_referent_schemas import (
     AIReferentProgressResponse,
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
+    OfflineAuthorityHeartbeat,
+    OfflineAuthorityLease,
+    OfflineBlobReceipt,
+    OfflineNumberReservationRequest,
+    OfflineNumberReservationResponse,
+    OfflineReplayCompleteRequest,
+    OfflineReplayOperation,
+    OfflineReplayReceipt,
+    OfflineRightsSnapshot,
+    OfflineRightsSnapshotRequest,
     UpdateAIReferentLetterRequest,
 )
 from ..ai_referent_service import (
@@ -175,7 +200,7 @@ async def agent_actor(
 Actor = Annotated[AuthenticatedUser, Depends(agent_actor)]
 
 
-@router.delete("/letters/{letter_id}")
+@router.delete("/letters/{letter_id}", dependencies=[Depends(require_workspace_write)])
 async def delete_letter(
     letter_id: UUID,
     connection: Connection,
@@ -185,7 +210,7 @@ async def delete_letter(
     return await request_deletion(connection, user, letter_id, expected_revision)
 
 
-@router.delete("/agent/letters/{letter_id}")
+@router.delete("/agent/letters/{letter_id}", dependencies=[Depends(require_workspace_write)])
 async def delete_agent_letter(
     letter_id: UUID,
     connection: Connection,
@@ -216,7 +241,10 @@ async def upload_comment_audio(
     )
 
 
-@router.put("/letters/{letter_id}/comment-audio", response_model=AIReferentCommentAudio)
+@router.put(
+    "/letters/{letter_id}/comment-audio", response_model=AIReferentCommentAudio,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def put_comment_audio(
     letter_id: UUID,
     request: Request,
@@ -230,7 +258,11 @@ async def put_comment_audio(
     )
 
 
-@router.put("/agent/letters/{letter_id}/comment-audio", response_model=AIReferentCommentAudio)
+@router.put(
+    "/agent/letters/{letter_id}/comment-audio",
+    response_model=AIReferentCommentAudio,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def put_agent_comment_audio(
     letter_id: UUID,
     request: Request,
@@ -286,7 +318,10 @@ async def get_agent_comment_audio(
     return await download_comment_audio(audio_id, request, connection, actor)
 
 
-@router.put("/document-checks", response_model=AIReferentDocumentCheck)
+@router.put(
+    "/document-checks", response_model=AIReferentDocumentCheck,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def upload_document_check(
     request: Request,
     connection: Connection,
@@ -369,7 +404,10 @@ async def get_document_check(
     return check_response(row)
 
 
-@router.post("/agent/document-checks/claim", dependencies=[Depends(require_agent_token)])
+@router.post(
+    "/agent/document-checks/claim",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def claim_document_check(
     connection: Connection,
     agent_id: Annotated[str, Query(alias="agentId", max_length=128)],
@@ -403,7 +441,8 @@ async def check_file(
 
 
 @router.post(
-    "/agent/document-checks/{check_id}/heartbeat", dependencies=[Depends(require_agent_token)]
+    "/agent/document-checks/{check_id}/heartbeat",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def check_heartbeat(
     check_id: UUID, payload: AgentLease, connection: Connection
@@ -424,7 +463,8 @@ class CheckResult(AgentLease):
 
 
 @router.post(
-    "/agent/document-checks/{check_id}/result", dependencies=[Depends(require_agent_token)]
+    "/agent/document-checks/{check_id}/result",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def check_result(
     check_id: UUID, payload: CheckResult, connection: Connection
@@ -435,7 +475,10 @@ async def check_result(
     return {"ok": True}
 
 
-@router.put("/agent/recipients", dependencies=[Depends(require_agent_token)])
+@router.put(
+    "/agent/recipients",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def put_agent_recipients(
     payload: RecipientSnapshot, connection: Connection
 ) -> dict[str, str]:
@@ -455,6 +498,38 @@ async def get_recipients(
 ) -> RecipientRegistry:
     await ensure_module_action(connection, user, "ai_referent", "view")
     return await load_recipients(connection, query, category, offset, limit)
+
+
+@router.get("/recipients/manual", response_model=list[RecipientEntry])
+async def get_manual_recipients(connection: Connection, user: User) -> list[RecipientEntry]:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    return await list_manual_recipients(connection)
+
+
+@router.post(
+    "/recipients/manual", response_model=RecipientEntry, status_code=201,
+    dependencies=[Depends(require_workspace_write)],
+)
+async def post_manual_recipient(
+    payload: ManualRecipientInput, connection: Connection, user: User
+) -> RecipientEntry:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    return await add_manual_recipient(connection, user.id, payload)
+
+
+@router.delete(
+    "/recipients/manual/{recipient_id}", status_code=204,
+    dependencies=[Depends(require_workspace_write)],
+)
+async def delete_manual_recipient(
+    recipient_id: UUID, connection: Connection, user: User
+) -> Response:
+    require_configuration_admin(user)
+    await ensure_module_action(connection, user, "ai_referent", "view")
+    await remove_manual_recipient(connection, user.id, recipient_id)
+    return Response(status_code=204)
 
 
 @router.get("/agent/recipients", response_model=RecipientRegistry)
@@ -484,12 +559,14 @@ async def get_link(connection: Connection, user: User) -> dict[str, object]:
     return {"telegramId": await verified_telegram_id_for(connection, user.id)}
 
 
-@router.post("/telegram-link")
+@router.post("/telegram-link", dependencies=[Depends(require_workspace_write)])
 async def post_link(connection: Connection, user: User) -> dict[str, object]:
     return await issue_link_code(connection, user)
 
 
-@router.delete("/telegram-link", status_code=204)
+@router.delete(
+    "/telegram-link", status_code=204, dependencies=[Depends(require_workspace_write)]
+)
 async def delete_link(connection: Connection, user: User) -> Response:
     await connection.execute(
         select(ai_referent_configuration.c.id)
@@ -520,7 +597,10 @@ async def delete_link(connection: Connection, user: User) -> Response:
     return Response(status_code=204)
 
 
-@router.post("/agent/telegram-link", status_code=204, dependencies=[Depends(require_agent_token)])
+@router.post(
+    "/agent/telegram-link", status_code=204,
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def bind_link(payload: LinkRequest, connection: Connection) -> Response:
     await consume_link_code(connection, payload.telegram_id, payload.code)
     return Response(status_code=204)
@@ -565,7 +645,10 @@ async def get_agent_letter(
     return await load_letter(connection, actor, letter_id)
 
 
-@router.post("/agent/letters", response_model=AIReferentLetterResponse)
+@router.post(
+    "/agent/letters", response_model=AIReferentLetterResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def create_agent_letter(
     payload: CreateAIReferentLetterRequest, request: Request, connection: Connection, actor: Actor
 ) -> AIReferentLetterResponse:
@@ -583,7 +666,10 @@ async def create_agent_letter(
     return result
 
 
-@router.patch("/agent/letters/{letter_id}", response_model=AIReferentLetterResponse)
+@router.patch(
+    "/agent/letters/{letter_id}", response_model=AIReferentLetterResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def patch_agent_letter(
     letter_id: UUID,
     payload: UpdateAIReferentLetterRequest,
@@ -598,7 +684,10 @@ async def patch_agent_letter(
     return result
 
 
-@router.post("/agent/letters/{letter_id}/actions", response_model=AIReferentLetterResponse)
+@router.post(
+    "/agent/letters/{letter_id}/actions", response_model=AIReferentLetterResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def agent_letter_action(
     letter_id: UUID,
     payload: AIReferentActionRequest,
@@ -613,7 +702,10 @@ async def agent_letter_action(
     return result
 
 
-@router.put("/agent/letters/{letter_id}/attachment", response_model=AttachmentResponse)
+@router.put(
+    "/agent/letters/{letter_id}/attachment", response_model=AttachmentResponse,
+    dependencies=[Depends(require_workspace_write)],
+)
 async def agent_attachment(
     letter_id: UUID,
     request: Request,
@@ -716,7 +808,10 @@ async def agent_download_file(
     return await download_packet_file(kind, owner_id, file_id, request, connection, actor, source)
 
 
-@router.put("/agent/files/{kind}/{owner_id}", dependencies=[Depends(require_agent_token)])
+@router.put(
+    "/agent/files/{kind}/{owner_id}",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def upload_packet_file(
     kind: Kind,
     owner_id: UUID,
@@ -769,7 +864,10 @@ async def upload_packet_file(
     )
 
 
-@router.post("/agent/jobs/claim", dependencies=[Depends(require_agent_token)])
+@router.post(
+    "/agent/jobs/claim",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def post_claim(
     connection: Connection,
     agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
@@ -777,7 +875,10 @@ async def post_claim(
     return {"job": await claim_job(connection, agent_id)}
 
 
-@router.post("/agent/ready", status_code=204, dependencies=[Depends(require_agent_token)])
+@router.post(
+    "/agent/ready", status_code=204,
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def agent_ready(
     connection: Connection,
     agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
@@ -798,7 +899,137 @@ async def agent_ready(
 
 
 @router.post(
-    "/agent/jobs/{job_id}/heartbeat", status_code=204, dependencies=[Depends(require_agent_token)]
+    "/agent/offline/authority:start",
+    response_model=OfflineAuthorityLease,
+    dependencies=[Depends(require_agent_token)],
+)
+async def start_agent_authority(
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+) -> OfflineAuthorityLease:
+    return await start_authority(
+        connection, agent_id=agent_id,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/offline/authority:heartbeat",
+    response_model=OfflineAuthorityLease,
+    dependencies=[Depends(require_agent_token)],
+)
+async def heartbeat_agent_authority(
+    payload: OfflineAuthorityHeartbeat,
+    connection: Connection,
+) -> OfflineAuthorityLease:
+    return await heartbeat_authority(
+        connection, agent_id=payload.agent_id, epoch=payload.epoch
+    )
+
+
+@router.post(
+    "/agent/offline/rights",
+    response_model=OfflineRightsSnapshot,
+    dependencies=[Depends(require_agent_token)],
+)
+async def get_agent_offline_rights(
+    payload: OfflineRightsSnapshotRequest,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineRightsSnapshot:
+    return await export_offline_rights(
+        connection, agent_id=agent_id, epoch=epoch,
+        snapshot_id=payload.snapshot_id,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.put(
+    "/agent/offline/blobs/{sha256}",
+    response_model=OfflineBlobReceipt,
+    dependencies=[Depends(require_agent_token)],
+)
+async def upload_agent_offline_blob(
+    sha256: str,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineBlobReceipt:
+    content = await read_limited_packet(
+        request.stream(), request.app.state.settings.ai_referent_packet_max_bytes
+    )
+    return await stage_offline_blob(
+        connection, _storage(request), agent_id=agent_id, epoch=epoch,
+        sha256=sha256, content=content,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/offline/number-reservations",
+    response_model=OfflineNumberReservationResponse,
+    dependencies=[Depends(require_agent_token)],
+)
+async def reserve_agent_offline_numbers(
+    payload: OfflineNumberReservationRequest,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineNumberReservationResponse:
+    return await reserve_offline_numbers(
+        connection,
+        agent_id=agent_id,
+        epoch=epoch,
+        reservation_id=payload.reservation_id,
+        count=payload.count,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/offline/operations",
+    response_model=OfflineReplayReceipt,
+    dependencies=[Depends(require_agent_token)],
+)
+async def replay_agent_offline_operation(
+    payload: OfflineReplayOperation,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineReplayReceipt:
+    return await replay_offline_operation(
+        connection, agent_id=agent_id, epoch=epoch, operation=payload,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+        storage=_storage(request),
+    )
+
+
+@router.post(
+    "/agent/offline/authority:complete",
+    response_model=OfflineAuthorityLease,
+    dependencies=[Depends(require_agent_token)],
+)
+async def complete_agent_offline_replay(
+    payload: OfflineReplayCompleteRequest,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+) -> OfflineAuthorityLease:
+    return await complete_authority_replay(
+        connection, agent_id=agent_id, payload=payload,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/jobs/{job_id}/heartbeat", status_code=204,
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def job_heartbeat(job_id: UUID, payload: AgentLease, connection: Connection) -> Response:
     await heartbeat_job(connection, job_id, payload.lease_token, payload.agent_id)
@@ -806,7 +1037,8 @@ async def job_heartbeat(job_id: UUID, payload: AgentLease, connection: Connectio
 
 
 @router.post(
-    "/agent/jobs/{job_id}/result", status_code=204, dependencies=[Depends(require_agent_token)]
+    "/agent/jobs/{job_id}/result", status_code=204,
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def job_result(
     job_id: UUID, payload: AgentResult, request: Request, connection: Connection
@@ -827,7 +1059,10 @@ async def job_result(
     return Response(status_code=204)
 
 
-@router.get("/agent/jobs/{job_id}/files/{file_id}", dependencies=[Depends(require_agent_token)])
+@router.get(
+    "/agent/jobs/{job_id}/files/{file_id}",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def job_file(
     job_id: UUID,
     file_id: UUID,
@@ -856,7 +1091,10 @@ async def job_file(
     return Response(await _storage(request).get(row["storage_key"]), media_type=row["content_type"])
 
 
-@router.post("/agent/notifications/claim", dependencies=[Depends(require_agent_token)])
+@router.post(
+    "/agent/notifications/claim",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def notification_claim(connection: Connection) -> dict[str, object]:
     return {"notifications": await claim_notifications(connection)}
 
@@ -864,7 +1102,7 @@ async def notification_claim(connection: Connection) -> dict[str, object]:
 @router.post(
     "/agent/notifications/{notification_id}/ack",
     status_code=204,
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def notification_ack(
     notification_id: UUID, payload: NotificationAck, connection: Connection
@@ -924,7 +1162,9 @@ async def agent_archive(
     raise HTTPException(403, "Архив доступен только в Workspace.")
 
 
-@router.put("/agent/archive", dependencies=[Depends(require_agent_token)])
+@router.put(
+    "/agent/archive", dependencies=[Depends(require_agent_token), Depends(require_workspace_write)]
+)
 async def sync_archive(
     payload: ArchiveItem,
     connection: Connection,

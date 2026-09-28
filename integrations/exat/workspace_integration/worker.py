@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -160,7 +161,11 @@ class DeliveryWorker:
         target.write_bytes(content)
         return target
 
-    def prepare(self, job: dict[str, Any]) -> dict[str, Any]:
+    def prepare(
+        self, job: dict[str, Any], *,
+        file_loader: Callable[[dict[str, Any], dict[str, Any], Path], Path] | None = None,
+        record_signed: Callable[[Path], None] | None = None,
+    ) -> dict[str, Any]:
         from src.outgoing.service import OutgoingReviewDecision
 
         folder = self.root / str(UUID(job["letterId"])) / str(UUID(job["id"]))
@@ -169,9 +174,10 @@ class DeliveryWorker:
         accepted = {".docx", ".pdf"} if job["kind"] == "reprepare" else {".docx"}
         if primary is None or Path(primary["name"]).suffix.lower() not in accepted:
             raise WorkspaceError("Для подготовки подписанного PDF требуется основной DOCX.")
-        draft = self.download(job, primary, folder)
+        load = file_loader or self.download
+        draft = load(job, primary, folder)
         extra = [
-            str(self.download(job, item, folder)) for item in files if item["role"] == "additional"
+            str(load(job, item, folder)) for item in files if item["role"] == "additional"
         ]
         entry = self.service._resolve_destination_entry(
             job["recipientAddress"] or job["recipientOrganization"]
@@ -243,14 +249,14 @@ class DeliveryWorker:
                 OutgoingReviewDecision(local_id, "approve"), defer_send=True
             )
         signed = Path(result["signed_file_path"])
-        self.sync.upload(
-            "outgoing",
-            job["letterId"],
-            signed,
-            f"signed/{job['id']}.pdf",
-            jobId=job["id"],
-            leaseToken=job["leaseToken"],
-        )
+        if record_signed is None:
+            self.sync.upload(
+                "outgoing",
+                job["letterId"], signed, f"signed/{job['id']}.pdf",
+                jobId=job["id"], leaseToken=job["leaseToken"],
+            )
+        else:
+            record_signed(signed)
         if not job.get("requiresFinalCheck"):
             self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         receipt = self.receipt(
@@ -286,7 +292,11 @@ class DeliveryWorker:
             ),
         }
 
-    def sign_only(self, job: dict[str, Any]) -> dict[str, Any]:
+    def sign_only(
+        self, job: dict[str, Any], *,
+        file_loader: Callable[[dict[str, Any], dict[str, Any], Path], Path] | None = None,
+        record_signed_pages: Callable[[list[Path]], None] | None = None,
+    ) -> dict[str, Any]:
         from .sign_only import sign_document_pages
 
         folder = self.root / "sign-only" / str(UUID(job["letterId"])) / str(UUID(job["id"]))
@@ -295,16 +305,19 @@ class DeliveryWorker:
         )
         if primary is None or Path(primary["name"]).suffix.lower() != ".docx":
             raise WorkspaceError("Для подписи нужен основной DOCX.")
-        draft = self.download(job, primary, folder)
+        draft = (file_loader or self.download)(job, primary, folder)
         pages = sign_document_pages(
             self.service.facsimile, draft, folder / "signed", str(job["reviewerName"])
         )
-        for page in pages:
-            self.sync.upload(
-                "outgoing", job["letterId"], page,
-                f"signed/{job['id']}/{page.name}",
-                jobId=job["id"], leaseToken=job["leaseToken"],
-            )
+        if record_signed_pages is None:
+            for page in pages:
+                self.sync.upload(
+                    "outgoing", job["letterId"], page,
+                    f"signed/{job['id']}/{page.name}",
+                    jobId=job["id"], leaseToken=job["leaseToken"],
+                )
+        else:
+            record_signed_pages(pages)
         return {
             **self.receipt(
                 job, "prepared",
@@ -313,7 +326,10 @@ class DeliveryWorker:
             "signedPages": len(pages),
         }
 
-    def send(self, job: dict[str, Any], lost: threading.Event) -> dict[str, Any]:
+    def send(
+        self, job: dict[str, Any], lost: threading.Event, *,
+        offline_fence: Callable[[], None] | None = None,
+    ) -> dict[str, Any]:
         local_id = self.state.get("letter:" + job["letterId"])
         if local_id is None:
             raise WorkspaceError(
@@ -323,6 +339,15 @@ class DeliveryWorker:
         if row is None:
             raise WorkspaceError("Локальная запись письма отсутствует.")
         if row["status"] in {"exat_sent", "webmail_sent"}:
+            if offline_fence is not None:
+                # A prior online job may have clicked Send just as connectivity
+                # failed. Fence this new command, but never infer that the old
+                # local receipt belongs to this autonomous operation.
+                offline_fence()
+                raise WorkspaceError(
+                    "Локальный журнал уже считает письмо отправленным. "
+                    "Сверьте E-XAT/Webmail вручную; повторный клик заблокирован."
+                )
             return self.receipt(
                 job, "sent", f"Подтверждено журналом Exat: {row['status']}, запись {local_id}"
             )
@@ -339,20 +364,7 @@ class DeliveryWorker:
         if lost.is_set():
             raise WorkspaceError("Потеряна связь перед отправкой.")
         # Check ownership immediately before the irreversible external operation.
-        self.client.request(
-            f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
-            {
-                "agentId": self.client.agent_id,
-                "leaseToken": job["leaseToken"],
-            },
-            method="POST",
-        )
-        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
-            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
-        current = self.service.database.get_outgoing_letter(local_id)
-        if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
-            if lost.is_set():
-                raise WorkspaceError("Связь потеряна перед подтверждением отправки.")
+        if offline_fence is None:
             self.client.request(
                 f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
                 {
@@ -361,6 +373,21 @@ class DeliveryWorker:
                 },
                 method="POST",
             )
+        if not prepared_open(self.service, row, self.prepared_handles.get(local_id)):
+            self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
+        current = self.service.database.get_outgoing_letter(local_id)
+        if current["status"] in {"exat_compose_prepared", "webmail_dry_run_prepared"}:
+            if lost.is_set():
+                raise WorkspaceError("Связь потеряна перед подтверждением отправки.")
+            if offline_fence is None:
+                self.client.request(
+                    f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
+                    {
+                        "agentId": self.client.agent_id,
+                        "leaseToken": job["leaseToken"],
+                    },
+                    method="POST",
+                )
 
             def fence() -> None:
                 if (
@@ -369,11 +396,14 @@ class DeliveryWorker:
                     != job["signedFile"]["sha256"]
                 ):
                     raise WorkspaceError("Связь или подписанный файл изменились перед отправкой.")
-                self.client.request(
-                    f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
-                    {"agentId": self.client.agent_id, "leaseToken": job["leaseToken"]},
-                    method="POST",
-                )
+                if offline_fence is None:
+                    self.client.request(
+                        f"/ai-referent/agent/jobs/{job['id']}/heartbeat",
+                        {"agentId": self.client.agent_id, "leaseToken": job["leaseToken"]},
+                        method="POST",
+                    )
+                else:
+                    offline_fence()
 
             with guarded_send(self.service, row, self.prepared_handles.get(local_id), fence):
                 self.service.confirm_manual_send(local_id)

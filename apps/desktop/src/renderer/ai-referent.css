@@ -239,6 +239,17 @@
   background: #fff0f2;
 }
 
+.ai-referent-readonly {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--ws-line, #d8e4e8);
+  border-radius: 12px;
+  color: var(--ws-text, #293a55);
+  background: #edf7f7;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .ai-referent-form-dialog { width: min(720px, calc(100vw - 32px)); }
 .ai-referent-form { display: grid; gap: 14px; padding-top: 8px; }
 .ai-referent-form label,
