@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections.abc import Callable
 from copy import deepcopy
 from io import BytesIO
@@ -11,6 +12,7 @@ from pathlib import Path, PurePath
 from tempfile import TemporaryDirectory
 from threading import RLock
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
@@ -26,13 +28,58 @@ _FIELDS = {
     "recipientAddress": 500,
     "note": 5000,
 }
+_RECIPIENT_CATEGORIES = {"", "ministries", "agencies", "committees", "other", "international"}
+_CYRILLIC_RECIPIENTS = str.maketrans({
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
+    "ж": "j", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+    "ф": "f", "х": "x", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sh", "ъ": "",
+    "ь": "", "э": "e", "ю": "yu", "я": "ya", "қ": "q", "ғ": "g", "ҳ": "h",
+    "ў": "o", "ү": "u", "ң": "ng",
+})
+
+
+def _recipient_tokens(value: str) -> list[str]:
+    text = value.casefold().translate(_CYRILLIC_RECIPIENTS)
+    for mark in ("'", "`", "ʻ", "ʼ", "‘", "’"):
+        text = text.replace(mark, "")
+    text = re.sub(r"[^a-z0-9@._%+]+", " ", text.replace("q", "k"))
+    return [token for token in text.split() if len(token) > 1]
+
+
+def _search_recipients(
+    entries: list[dict[str, Any]], query: str, category: str, offset: int, limit: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Mirror the server's token ranking over a complete, actor-scoped local catalogue."""
+    needles = _recipient_tokens(query)
+    ranked: list[tuple[int, int, dict[str, Any]]] = []
+    for index, entry in enumerate(entries):
+        if category and entry.get("categoryKey") != category:
+            continue
+        if needles:
+            haystack = _recipient_tokens(" ".join((
+                str(entry.get("name", "")),
+                str(entry.get("addressBookOrganization", "")),
+                *(str(address) for address in entry.get("addresses", [])),
+            )))
+            hits = sum(any(
+                word == needle or (len(needle) >= 3 and word.startswith(needle))
+                for word in haystack
+            ) for needle in needles)
+            if not hits:
+                continue
+        else:
+            hits = 0
+        ranked.append((-hits, index, entry))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    return [entry for _, _, entry in ranked[offset:offset + limit]], len(ranked)
 
 
 class OfflineWorkflow:
     """Reduce immutable operations over the last verified per-actor server copy.
 
-    Physical preparation and external delivery still need a local executor
-    before the failover switch may be enabled in production.
+    Physical preparation and external delivery are fenced by the local executor;
+    the failover switch remains off until the complete scenario is validated.
     """
 
     def __init__(self, journal: OfflineJournal):
@@ -87,17 +134,46 @@ class OfflineWorkflow:
         return actor
 
     def cached_resource(self, telegram_id: str, path: str) -> dict[str, Any]:
-        """Expose only an exact snapshot previously returned to this actor."""
+        """Expose an actor-scoped reviewer copy or search the complete recipient copy."""
         self._actor(telegram_id, "view")
-        if not path.startswith(("/reviewers", "/recipients?")):
+        parsed = urlsplit(path)
+        if path == "/reviewers":
+            snapshot = self.journal.snapshot(telegram_id, path)
+            if snapshot is None:
+                raise WorkspaceError("Эта часть справочника не сохранена на ПК референта.", 503)
+            payload = snapshot["payload"]
+            if not isinstance(payload, dict):
+                raise WorkspaceError("Сохранённый справочник повреждён.", 503)
+            return payload
+        if parsed.path != "/recipients":
             raise WorkspaceError("Этот справочник недоступен без связи с сервером.", 503)
-        snapshot = self.journal.snapshot(telegram_id, path)
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        if any(key not in {"query", "category", "offset", "limit"} or len(values) != 1
+               for key, values in params.items()):
+            raise WorkspaceError("Неверные параметры поиска адресатов.", 422)
+        query = params.get("query", [""])[0]
+        category = params.get("category", [""])[0]
+        offset_text = params.get("offset", ["0"])[0]
+        limit_text = params.get("limit", ["8"])[0]
+        if (
+            len(query) > 160 or category not in _RECIPIENT_CATEGORIES
+            or not offset_text.isdecimal() or not limit_text.isdecimal()
+            or not 1 <= int(limit_text) <= 30
+        ):
+            raise WorkspaceError("Неверные параметры поиска адресатов.", 422)
+        snapshot = self.journal.snapshot(telegram_id, "/recipient-catalog")
         if snapshot is None:
-            raise WorkspaceError("Эта часть справочника не сохранена на ПК референта.", 503)
+            raise WorkspaceError("Адресная книга ещё не сохранена целиком на ПК референта.", 503)
         payload = snapshot["payload"]
-        if not isinstance(payload, dict):
+        if (
+            not isinstance(payload, dict) or not isinstance(payload.get("entries"), list)
+            or payload.get("totalCount") != len(payload["entries"])
+        ):
             raise WorkspaceError("Сохранённый справочник повреждён.", 503)
-        return payload
+        page, count = _search_recipients(
+            payload["entries"], query, category, int(offset_text), int(limit_text)
+        )
+        return {"entries": page, "totalCount": count, "updatedAt": payload.get("updatedAt")}
 
     def packet(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         """Expose only locally durable files from a letter this actor can open."""

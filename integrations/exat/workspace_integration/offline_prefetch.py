@@ -30,6 +30,8 @@ class OfflineSnapshotSeeder:
         self._queued_files: set[tuple[str, str, str, str]] = set()
         self._queued_audio: set[tuple[str, str]] = set()
         self._take_audio_next = True
+        self._recipient_pages: dict[str, dict[int, list[dict[str, Any]]]] = {}
+        self._recipient_revision: dict[str, str | None] = {}
         self._rights_hash: str | None = None
         self._next_cycle = 0.0
 
@@ -41,10 +43,9 @@ class OfflineSnapshotSeeder:
             if not isinstance(telegram_id, str) or "view" not in actor.get("moduleActions", []):
                 continue
             jobs.append((telegram_id, "/reviewers"))
-            for limit in (6, 8):
-                jobs.append((telegram_id, "/recipients?" + urlencode({
-                    "query": "", "category": "", "offset": 0, "limit": limit,
-                })))
+            jobs.append((telegram_id, "/recipients?" + urlencode({
+                "query": "", "category": "", "offset": 0, "limit": 30,
+            })))
             for filter_name in ("activeOnly", "sentOnly"):
                 jobs.append((telegram_id, "/letters?" + urlencode({
                     "offset": 0, "limit": 100, filter_name: "true",
@@ -75,6 +76,8 @@ class OfflineSnapshotSeeder:
             self._queued_files.clear()
             self._queued_audio.clear()
             self._take_audio_next = True
+            self._recipient_pages.clear()
+            self._recipient_revision.clear()
             self._rights_hash = rights_hash
             self._next_cycle = self.clock() + 300
         if self._audio_jobs and (not self._jobs or self._take_audio_next):
@@ -114,6 +117,43 @@ class OfflineSnapshotSeeder:
             expected_epoch=state["epoch"], expected_rights_hash=rights_hash,
         ):
             return False
+        if path.startswith("/recipients?"):
+            query = parse_qs(urlsplit(path).query, keep_blank_values=True)
+            offset = int(query["offset"][0])
+            entries, total = result.get("entries"), result.get("totalCount")
+            if (
+                not isinstance(entries, list)
+                or any(not isinstance(entry, dict) for entry in entries)
+                or type(total) is not int or not 0 <= total <= 2000
+                or len(entries) > 30 or offset + len(entries) > total
+                or (offset < total and not entries)
+            ):
+                raise WorkspaceError("Сервер вернул неполную адресную книгу.", 502)
+            revision = result.get("updatedAt")
+            if revision != self._recipient_revision.get(actor) and actor in self._recipient_pages:
+                self._recipient_pages.pop(actor, None)
+                self._recipient_revision.pop(actor, None)
+                self._jobs.appendleft((actor, "/recipients?" + urlencode({
+                    "query": "", "category": "", "offset": 0, "limit": 30,
+                })))
+                return True
+            self._recipient_revision[actor] = revision
+            pages = self._recipient_pages.setdefault(actor, {})
+            pages[offset] = entries
+            if offset + len(entries) < total:
+                self._jobs.appendleft((actor, "/recipients?" + urlencode({
+                    "query": "", "category": "", "offset": offset + len(entries),
+                    "limit": 30,
+                })))
+                return True
+            combined = [entry for page_offset in sorted(pages) for entry in pages[page_offset]]
+            if len(combined) != total or len({entry.get("id") for entry in combined}) != total:
+                raise WorkspaceError("Страницы адресной книги не составляют справочник.", 502)
+            return self.journal.cache(
+                actor, "/recipient-catalog", {
+                    "entries": combined, "totalCount": total, "updatedAt": revision,
+                }, expected_epoch=state["epoch"], expected_rights_hash=rights_hash,
+            )
         if path.startswith("/letters/") and not path.startswith("/letters/progress"):
             letter_id = path.removeprefix("/letters/")
             for event in result.get("events", []):

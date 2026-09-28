@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from unittest.mock import Mock
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import uuid4
 
 import pytest
@@ -57,11 +58,66 @@ def test_prefetch_seeds_actor_scoped_pages_without_blocking_heartbeat(tmp_path):
 
     client.request.side_effect = request
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert [seeder.tick() for _ in range(10)] == [True] * 10
+    assert [seeder.tick() for _ in range(9)] == [True] * 9
     assert journal.snapshot("123", "/reviewers")["payload"]["reviewers"][0]["key"] == "askar"
     assert journal.cached_letter_ids("123") == sorted(ids)
     assert all(call.kwargs["telegram_id"] == "123" for call in client.request.call_args_list)
     assert seeder.tick() is False
+
+
+def test_complete_recipient_catalog_supports_offline_search_and_pagination(tmp_path):
+    journal, epoch = _journal(tmp_path)
+    entries = [{
+        "id": f"org-{index}", "name": f"Организация {index}",
+        "categoryKey": "ministries", "addresses": [f"org{index}@exat.uz"],
+        "route": "exat", "addressBookOrganization": "",
+    } for index in range(94)]
+    entries.append({
+        "id": "toshkent", "name": "Тошкент шаҳар ҳокимлиги",
+        "categoryKey": "other", "addresses": ["toshkent@exat.uz"],
+        "route": "exat", "addressBookOrganization": "",
+    })
+    client = Mock()
+
+    def request(path, *, telegram_id):
+        assert telegram_id == "123"
+        if path.endswith("/reviewers"):
+            return {"reviewers": []}
+        if "/recipients?" in path:
+            query = parse_qs(urlsplit(path).query, keep_blank_values=True)
+            offset = int(query["offset"][0])
+            page = entries[offset:offset + 30]
+            return {"entries": page, "totalCount": len(entries),
+                    "updatedAt": "2026-09-28T10:00:00Z"}
+        return {"letters": [], "totalCount": 0}
+
+    client.request.side_effect = request
+    seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
+    assert seeder.tick()  # Reviewers.
+    assert seeder.tick()  # First 30 addresses, not a complete catalogue yet.
+    with pytest.raises(WorkspaceError, match="ещё не сохранена целиком"):
+        OfflineWorkflow(journal).cached_resource(
+            "123", "/recipients?" + urlencode({"query": "Тошкент", "limit": 8})
+        )
+    assert all(seeder.tick() for _ in range(5))
+    assert seeder.tick() is False
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    workflow = OfflineWorkflow(journal)
+    found = workflow.cached_resource(
+        "123", "/recipients?" + urlencode({
+            "query": "toshkent", "category": "other", "offset": 0, "limit": 8,
+        })
+    )
+    assert [item["id"] for item in found["entries"]] == ["toshkent"]
+    assert found["totalCount"] == 1
+    page = workflow.cached_resource("123", "/recipients?offset=80&limit=8")
+    assert [item["id"] for item in page["entries"]] == [
+        f"org-{index}" for index in range(80, 88)
+    ]
+    assert page["totalCount"] == 95
+    with pytest.raises(WorkspaceError) as forbidden:
+        workflow.cached_resource("456", "/recipients?query=toshkent")
+    assert forbidden.value.status == 403
 
 
 def test_prefetch_discards_response_when_authority_turns_offline(tmp_path):
@@ -114,7 +170,7 @@ def test_offline_admin_sees_only_cached_foreign_stage(tmp_path):
 
     client.request.side_effect = request
     seeder = OfflineSnapshotSeeder(client, journal)
-    assert all(seeder.tick() for _ in range(6))
+    assert all(seeder.tick() for _ in range(5))
     journal.set_authority_phase("referent-pc", epoch, "offline")
     workflow = OfflineWorkflow(journal)
     assert workflow.progress_list("123", offset=0, limit=10)["letters"] == [stage]
@@ -197,7 +253,7 @@ def test_prefetch_hydrates_old_letter_files_for_offline_download(tmp_path):
     client.request.side_effect = request
     client.transfer.side_effect = transfer
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert [seeder.tick() for _ in range(9)] == [True] * 9
+    assert [seeder.tick() for _ in range(8)] == [True] * 8
     assert seeder.tick() is False
     journal.set_authority_phase("referent-pc", epoch, "offline")
     bot = SharedBot(None, client, State(tmp_path / "state.sqlite"), journal)
@@ -255,7 +311,7 @@ def test_prefetch_hydrates_old_letter_history_and_private_voice(tmp_path):
     client.request.side_effect = request
     client.transfer.side_effect = transfer
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert all(seeder.tick() for _ in range(6))
+    assert all(seeder.tick() for _ in range(5))
     assert client.transfer.call_count == 0
     assert seeder.tick()  # Prioritize the voice immediately after its letter detail.
     assert client.transfer.call_count == 1
