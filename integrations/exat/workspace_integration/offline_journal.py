@@ -648,6 +648,25 @@ class OfflineJournal:
             raise ValueError("Контрольная сумма локального файла не совпала.")
         return content
 
+    def blob_available(self, digest: str, byte_size: int) -> bool:
+        """Cheap availability check; read_blob verifies the bytes before use."""
+        if (
+            not isinstance(digest, str) or len(digest) != 64
+            or any(char not in "0123456789abcdef" for char in digest)
+            or not isinstance(byte_size, int) or isinstance(byte_size, bool)
+            or byte_size < 0
+        ):
+            return False
+        with self.connect() as connection:
+            row = connection.execute(
+                "SELECT byte_size FROM blobs WHERE sha256 = ?", (digest,)
+            ).fetchone()
+        target = self.blobs / digest
+        return bool(
+            row is not None and row["byte_size"] == byte_size
+            and target.is_file() and target.stat().st_size == byte_size
+        )
+
     def append(
         self,
         *,

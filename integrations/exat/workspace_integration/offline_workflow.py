@@ -100,13 +100,16 @@ class OfflineWorkflow:
     def packet(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         """Expose only locally durable files from a letter this actor can open."""
         letter = self.read(telegram_id, letter_id)
+        snapshot = self.journal.snapshot(telegram_id, "/packets/outgoing/" + letter["id"])
+        cached_files = snapshot["payload"].get("files", []) if snapshot is not None else []
+        if not isinstance(cached_files, list):
+            cached_files = []
         local_ids = {
             str(uuid5(NAMESPACE_URL, "ai-offline-attachment:" + item["operation_id"]))
             for item in self.journal.letter_operations(letter["id"])
             if item["kind"] == "letter.attachment"
         }
-        return {
-            "files": [
+        local_files = [
                 {
                     "id": item["id"],
                     "name": f"original/{item['id']}/{item['fileName']}",
@@ -116,18 +119,33 @@ class OfflineWorkflow:
                     "createdAt": item["createdAt"],
                 }
                 for item in letter["attachments"] if item["id"] in local_ids
-            ],
-            "offlinePartial": True,
-        }
+            ]
+        files = [
+            item for item in cached_files
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and isinstance(item.get("name"), str)
+            and item.get("source") in {"attachment", "packet"}
+            and self.journal.blob_available(item.get("sha256"), item.get("byteSize"))
+        ]
+        seen = {(item["id"], item["source"]) for item in files}
+        files.extend(
+            item for item in local_files
+            if (item["id"], item["source"]) not in seen
+        )
+        return {"files": files, "offlinePartial": True}
 
-    def packet_file(self, telegram_id: str, letter_id: str, file_id: str) -> bytes:
+    def packet_file(
+        self, telegram_id: str, letter_id: str, file_id: str,
+        source: str = "attachment",
+    ) -> bytes:
         try:
             file_id = str(UUID(file_id))
         except (TypeError, ValueError) as error:
             raise WorkspaceError("Неверный идентификатор файла.", 422) from error
         item = next(
             (entry for entry in self.packet(telegram_id, letter_id)["files"]
-             if entry["id"] == file_id), None,
+             if entry["id"] == file_id and entry["source"] == source), None,
         )
         if item is None:
             raise WorkspaceError("Файл недоступен в локальной копии.", 404)

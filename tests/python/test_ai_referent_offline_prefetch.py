@@ -55,7 +55,7 @@ def test_prefetch_seeds_actor_scoped_pages_without_blocking_heartbeat(tmp_path):
 
     client.request.side_effect = request
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert [seeder.tick() for _ in range(6)] == [True] * 6
+    assert [seeder.tick() for _ in range(8)] == [True] * 8
     assert journal.snapshot("123", "/reviewers")["payload"]["reviewers"][0]["key"] == "askar"
     assert journal.cached_letter_ids("123") == sorted(ids)
     assert all(call.kwargs["telegram_id"] == "123" for call in client.request.call_args_list)
@@ -148,3 +148,70 @@ def test_offline_non_admin_cannot_read_foreign_progress(tmp_path):
     with pytest.raises(WorkspaceError) as error:
         workflow.progress_item("123", letter_id)
     assert error.value.status == 404
+
+
+def test_prefetch_hydrates_old_letter_files_for_offline_download(tmp_path):
+    journal, epoch = _journal(tmp_path)
+    actor = journal.offline_actor("123")
+    letter_id, file_id, signed_id = str(uuid4()), str(uuid4()), str(uuid4())
+    draft, signed = b"saved DOCX from Workspace", b"%PDF-saved signed copy"
+    draft_hash, signed_hash = hashlib.sha256(draft).hexdigest(), hashlib.sha256(signed).hexdigest()
+    letter = {
+        "id": letter_id, "status": "pending_review", "revision": 3,
+        "updatedAt": "2026-09-28T10:00:00Z", "createdAt": "2026-09-28T09:00:00Z",
+        "createdByUserId": actor["userId"], "createdByName": "Сотрудник",
+        "reviewerUserId": str(uuid4()), "reviewerName": "Руководитель",
+        "finalReviewerUserId": None, "initialReviewerUserId": None,
+        "subject": "Письмо", "recipientOrganization": "Организация",
+        "recipientAddress": "office@example.uz", "route": "webmail", "note": "",
+        "workflowKind": "delivery", "attachments": [], "events": [],
+    }
+    files = [
+        {"id": file_id, "name": f"original/{file_id}/letter.docx", "source": "attachment",
+         "sha256": draft_hash, "byteSize": len(draft), "createdAt": letter["createdAt"]},
+        {"id": signed_id, "name": "signed/result.pdf", "source": "packet",
+         "sha256": signed_hash, "byteSize": len(signed), "createdAt": letter["createdAt"]},
+    ]
+    client = Mock()
+
+    def request(path, *, telegram_id):
+        assert telegram_id == "123"
+        if path.endswith("/reviewers"):
+            return {"reviewers": []}
+        if "/recipients?" in path:
+            return {"entries": [], "totalCount": 0}
+        if "/packets/outgoing/" in path:
+            return {"files": files}
+        if "activeOnly" in path:
+            return {"letters": [letter], "totalCount": 1}
+        return {"letters": [], "totalCount": 0}
+
+    def transfer(path, *, telegram_id):
+        assert telegram_id == "123"
+        return draft if file_id in path else signed
+
+    client.request.side_effect = request
+    client.transfer.side_effect = transfer
+    seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
+    assert [seeder.tick() for _ in range(8)] == [True] * 8
+    assert seeder.tick() is False
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    bot = SharedBot(None, client, State(tmp_path / "state.sqlite"), journal)
+    assert bot.download_packet_file("123", "outgoing", letter_id, file_id, "attachment") == draft
+    assert bot.download_packet_file("123", "outgoing", letter_id, signed_id, "packet") == signed
+    with pytest.raises(WorkspaceError) as error:
+        bot.download_packet_file("456", "outgoing", letter_id, file_id, "attachment")
+    assert error.value.status == 403
+    assert client.transfer.call_count == 2
+
+
+def test_prefetch_rejects_file_with_wrong_hash(tmp_path):
+    journal, epoch = _journal(tmp_path)
+    expected = hashlib.sha256(b"correct").hexdigest()
+    client = Mock()
+    client.transfer.return_value = b"wrongee"
+    seeder = OfflineSnapshotSeeder(client, journal)
+    seeder._file_jobs.append(("123", str(uuid4()), str(uuid4()), expected, 7, "attachment"))
+    with pytest.raises(WorkspaceError, match="Контрольная сумма"):
+        seeder._fetch_file(epoch, journal.offline_rights_evidence()["content_sha256"])
+    assert not journal.blob_available(expected, 7)

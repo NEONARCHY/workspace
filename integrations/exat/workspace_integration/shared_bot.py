@@ -191,9 +191,12 @@ class SharedBot:
         self, actor: str, kind: str, owner: str, file_id: str, source: str
     ) -> bytes:
         if self.offline_active():
-            if self.offline_workflow is None or kind != "outgoing" or source != "attachment":
+            if (
+                self.offline_workflow is None or kind != "outgoing"
+                or source not in {"attachment", "packet"}
+            ):
                 raise WorkspaceError("Файл недоступен в локальной копии.", 503)
-            return self.offline_workflow.packet_file(actor, owner, file_id)
+            return self.offline_workflow.packet_file(actor, owner, file_id, source)
         return self.api.transfer(
             f"/ai-referent/agent/packets/{kind}/{owner}/files/{file_id}?source={source}",
             telegram_id=actor,
