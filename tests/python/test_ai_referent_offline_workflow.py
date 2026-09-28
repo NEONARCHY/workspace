@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime, timedelta
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -12,6 +13,8 @@ from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
 from integrations.exat.workspace_integration.offline_replay import replay_one_draft_operation
 from integrations.exat.workspace_integration.offline_workflow import OfflineWorkflow
+from integrations.exat.workspace_integration.shared_bot import SharedBot
+from integrations.exat.workspace_integration.state import State
 
 
 def _offline_journal(tmp_path):
@@ -90,6 +93,85 @@ def test_draft_survives_restart_and_repeated_create(tmp_path):
     assert first["events"][0]["eventType"] == "letter.created"
     assert journal.offline_created_letter_ids() == [first["id"]]
     assert len(journal.pending_authorized()) == 1
+
+
+def test_offline_list_includes_local_drafts_without_disclosing_them_to_strangers(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    draft = workflow.create("123", str(uuid4()), _draft(reviewer))
+    own = workflow.list_letters("123", offset=0, limit=10, active_only=True)
+    assert [letter["id"] for letter in own["letters"]] == [draft["id"]]
+    assert own["totalCount"] == 1
+    assert own["offlinePartial"] is True
+    assert workflow.list_letters("456", offset=0, limit=10)["letters"] == []
+    assert workflow.list_letters("789", offset=0, limit=10)["letters"][0]["id"] == draft["id"]
+    assert workflow.list_letters("123", offset=0, limit=10, sent_only=True)["letters"] == []
+
+
+def test_shared_bot_routes_offline_letter_actions_without_contacting_server(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    api = Mock()
+    api.request.side_effect = AssertionError("offline action contacted Workspace")
+    bot = SharedBot(None, api, State(tmp_path / "bot.sqlite"), journal)
+    letter = bot.request(
+        "123", "/letters", {**_draft(reviewer), "operationId": str(uuid4())}, "POST"
+    )
+    assert bot.request("123", f"/letters/{letter['id']}")["id"] == letter["id"]
+    assert bot.request("123", "/letters?offset=0&limit=10&activeOnly=true")[
+        "letters"
+    ][0]["id"] == letter["id"]
+    assert bot.request("123", "/reviewers")["reviewers"][0]["key"] == "askar"
+    with pytest.raises(WorkspaceError) as denied:
+        bot.request("456", f"/letters/{letter['id']}")
+    assert denied.value.status == 403
+    with pytest.raises(WorkspaceError) as unsupported:
+        bot.request("123", f"/letters/{letter['id']}/delete", {"operationId": str(uuid4())},
+                    "POST")
+    assert unsupported.value.status == 503
+    api.request.assert_not_called()
+
+
+def test_shared_bot_checks_uploaded_docx_before_reviewer_selection(tmp_path, monkeypatch):
+    journal, _, _ = _offline_journal(tmp_path)
+    api = Mock()
+    api.request.side_effect = AssertionError("offline action contacted Workspace")
+    bot = SharedBot(None, api, State(tmp_path / "bot.sqlite"), journal)
+    letter = bot.request("123", "/letters", {
+        **_draft(None), "operationId": str(uuid4()),
+    }, "POST")
+    bot.upload_attachment(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"safe test docx", role="primary", expected_revision=1,
+    )
+    from integrations.exat.workspace_integration import preflight
+
+    checks = []
+
+    def fake_check(_facsimile, draft, reviewers, kind):
+        checks.append((draft.read_bytes(), reviewers, kind))
+        return ["askar"]
+
+    monkeypatch.setattr(preflight, "check_document", fake_check)
+    assert bot.check_offline_documents(Mock()) is True
+    checked = bot.request("123", "/letters/" + letter["id"])
+    assert checked["documentCheck"]["status"] == "passed"
+    assert checked["documentCheck"]["reviewerKeys"] == ["askar"]
+    assert checks[0][0] == b"safe test docx"
+    assert bot.check_offline_documents(Mock()) is False
+    api.request.assert_not_called()
+
+
+def test_shared_bot_never_uses_offline_writes_during_replay(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    api = Mock()
+    api.request.return_value = {"from": "server"}
+    bot = SharedBot(None, api, State(tmp_path / "bot.sqlite"), journal)
+    epoch = journal.authority_state()["epoch"]
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+    assert bot.request("123", "/letters", {**_draft(reviewer), "operationId": str(uuid4())},
+                       "POST") == {"from": "server"}
+    api.request.assert_called_once()
+    assert journal.pending_authorized() == []
 
 
 def test_update_rejects_stale_revision_and_foreign_actor(tmp_path):

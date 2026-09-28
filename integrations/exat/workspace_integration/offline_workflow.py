@@ -29,19 +29,70 @@ _FIELDS = {
 class OfflineWorkflow:
     """Reduce immutable operations over the last verified per-actor server copy.
 
-    This module currently handles drafts only. Approval, files and external
-    effects must be implemented and tested before callers may enable it live.
+    Physical preparation and external delivery still need a local executor
+    before the failover switch may be enabled in production.
     """
 
     def __init__(self, journal: OfflineJournal):
         self.journal = journal
         self._lock = RLock()
 
+    def list_letters(
+        self, telegram_id: str, *, offset: int, limit: int,
+        active_only: bool = False, sent_only: bool = False,
+    ) -> dict[str, Any]:
+        """List only previously visible or locally created letters; never claim completeness."""
+        self._actor(telegram_id, "view")
+        if offset < 0 or not 1 <= limit <= 100 or (active_only and sent_only):
+            raise WorkspaceError("Неверные параметры списка писем.", 422)
+        ids = set(self.journal.cached_letter_ids(telegram_id))
+        ids.update(self.journal.offline_created_letter_ids())
+        letters: list[dict[str, Any]] = []
+        for letter_id in ids:
+            try:
+                letter = self.read(telegram_id, letter_id)
+            except WorkspaceError as error:
+                if error.status in {403, 404}:
+                    continue
+                raise
+            if sent_only and letter["status"] != "sent":
+                continue
+            if active_only and letter["status"] in {"sent", "signed", "cancelled"}:
+                continue
+            letters.append(letter)
+        letters.sort(key=lambda letter: (letter["updatedAt"], letter["id"]), reverse=True)
+        selected = letters[offset:offset + limit]
+        counts: dict[str, int] = {}
+        for letter in letters:
+            counts[letter["status"]] = counts.get(letter["status"], 0) + 1
+        return {
+            "letters": selected,
+            "totalCount": len(letters),
+            "pendingReviewCount": counts.get("pending_review", 0)
+            + counts.get("awaiting_final_send", 0),
+            "readyCount": sum(counts.get(status, 0) for status in (
+                "approved", "queued", "sending", "referent_review_pending"
+            )),
+            "sentCount": counts.get("sent", 0),
+            "signedCount": counts.get("signed", 0),
+            "offlinePartial": True,
+        }
+
     def _actor(self, telegram_id: str, action: str) -> dict[str, Any]:
         actor = self.journal.offline_actor(telegram_id)
         if actor is None or action not in actor["moduleActions"]:
             raise WorkspaceError("Автономный доступ к AI Referent не подтверждён.", 403)
         return actor
+
+    def cached_resource(self, telegram_id: str, path: str) -> dict[str, Any]:
+        """Expose only an exact snapshot previously returned to this actor."""
+        self._actor(telegram_id, "view")
+        if not path.startswith(("/reviewers", "/recipients?")):
+            raise WorkspaceError("Этот справочник недоступен без связи с сервером.", 503)
+        snapshot = self.journal.snapshot(telegram_id, path)
+        if snapshot is None:
+            raise WorkspaceError("Эта часть справочника не сохранена на ПК референта.", 503)
+        return snapshot["payload"]
 
     @staticmethod
     def _fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -375,7 +426,9 @@ class OfflineWorkflow:
             ),
             None,
         )
-        passed = bool(selected_key and selected_key in keys)
+        # Telegram uploads the DOCX before asking for a reviewer. Validate all
+        # available signatures now; the eventual selection is checked at submit.
+        passed = bool(keys and (selected_key is None or selected_key in keys))
         result = {
             "status": "passed" if passed else "failed",
             "reviewerKeys": keys,

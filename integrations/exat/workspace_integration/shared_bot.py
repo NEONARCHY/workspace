@@ -9,16 +9,21 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from threading import RLock
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from .button_labels import button_label
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
+from .offline_coordinator import OfflineCoordinator
 from .offline_journal import OfflineJournal
+from .offline_workflow import OfflineWorkflow
 from .state import State, single_instance
 from .wizard import LetterWizard
 from .worker import DeliveryWorker
+
+_AUTHORITY_REFRESH_SECONDS = 10
 
 ACTIONS = {
     "s": ("submit", "На согласование"),
@@ -113,12 +118,148 @@ class SharedBot:
     ):
         self.telegram, self.api, self.state = telegram, api, state
         self.offline = offline
+        self.offline_workflow = OfflineWorkflow(offline) if offline is not None else None
         self.offline_read = False
         self.wizard = LetterWizard(self)
+
+    def offline_active(self) -> bool:
+        state = self.offline.authority_state() if self.offline is not None else None
+        return state is not None and state["phase"] == "offline"
+
+    def _offline_request(
+        self, actor: str, path: str, payload: dict[str, Any] | None, method: str
+    ) -> dict[str, Any]:
+        workflow = self.offline_workflow
+        if workflow is None:
+            raise WorkspaceError("Автономный журнал недоступен.", 503)
+        parsed = urlsplit(path)
+        resource = parsed.path
+        if method == "GET" and resource in {"/reviewers", "/recipients"}:
+            return workflow.cached_resource(actor, path)
+        if method == "GET" and resource == "/letters":
+            query = parse_qs(parsed.query, strict_parsing=True)
+            try:
+                return workflow.list_letters(
+                    actor,
+                    offset=int(query.get("offset", ["0"])[0]),
+                    limit=int(query.get("limit", ["10"])[0]),
+                    active_only=query.get("activeOnly") == ["true"],
+                    sent_only=query.get("sentOnly") == ["true"],
+                )
+            except ValueError as error:
+                raise WorkspaceError("Неверные параметры списка писем.", 422) from error
+        if method == "POST" and resource == "/letters" and payload is not None:
+            return workflow.create(actor, payload.get("operationId", ""), payload)
+        parts = resource.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "letters":
+            letter_id = parts[1]
+            if len(parts) == 2 and method == "GET":
+                return workflow.read(actor, letter_id)
+            if len(parts) == 2 and method == "PATCH" and payload is not None:
+                return workflow.update(actor, letter_id, payload.get("operationId", ""), payload)
+            if len(parts) == 3 and parts[2] == "actions" and method == "POST":
+                if payload is None:
+                    raise WorkspaceError("Данные решения отсутствуют.", 422)
+                return workflow.act(
+                    actor, letter_id, payload.get("operationId", ""),
+                    action=payload.get("action", ""),
+                    expected_revision=payload.get("expectedRevision"),
+                    comment=payload.get("comment", ""),
+                    comment_audio_id=payload.get("commentAudioId"),
+                )
+        raise WorkspaceError("Это действие пока недоступно без связи с Workspace.", 503)
+
+    def upload_attachment(
+        self, actor: str, letter_id: str, operation_id: str, *,
+        file_name: str, content: bytes, role: str, expected_revision: int,
+    ) -> None:
+        if self.offline_active():
+            if self.offline_workflow is None:
+                raise WorkspaceError("Автономный журнал недоступен.", 503)
+            self.offline_workflow.attach(
+                actor, letter_id, operation_id, file_name=file_name,
+                content=content, role=role, expected_revision=expected_revision,
+            )
+            return
+        query = urlencode({
+            "fileName": file_name, "role": role, "operationId": operation_id,
+            "expectedRevision": expected_revision,
+        })
+        self.api.transfer(
+            f"/ai-referent/agent/letters/{letter_id}/attachment?{query}", content,
+            method="PUT", telegram_id=actor,
+            content_type=mimetypes.guess_type(file_name)[0] or "application/octet-stream",
+        )
+
+    def upload_comment_audio(
+        self, actor: str, letter_id: str, operation_id: str, *,
+        expected_revision: int, duration_ms: int, content: bytes,
+    ) -> str:
+        if self.offline_active():
+            if self.offline_workflow is None:
+                raise WorkspaceError("Автономный журнал недоступен.", 503)
+            result = self.offline_workflow.save_comment_audio(
+                actor, letter_id,
+                str(uuid5(NAMESPACE_URL, "ai-offline-voice:" + operation_id)),
+                expected_revision=expected_revision,
+                duration_ms=duration_ms, content=content, content_type="audio/ogg",
+            )
+            return str(result["id"])
+        response = self.api.transfer(
+            f"/ai-referent/agent/letters/{letter_id}/comment-audio?"
+            + urlencode({"expectedRevision": expected_revision, "durationMs": duration_ms}),
+            content, method="PUT", telegram_id=actor, content_type="audio/ogg",
+        )
+        import json
+
+        return str(json.loads(response)["id"])
+
+    def check_offline_documents(self, facsimile: Any) -> bool:
+        """Check one durable primary DOCX using the same Office checker as online mode."""
+        if not self.offline_active() or self.offline is None or self.offline_workflow is None:
+            return False
+        from .preflight import check_document
+
+        for operation in self.offline.pending_authorized():
+            if (
+                operation["kind"] != "letter.attachment"
+                or operation["payload"]["role"] != "primary"
+            ):
+                continue
+            actor, letter_id = operation["actor_id"], operation["letter_id"]
+            try:
+                letter = self.offline_workflow.read(actor, letter_id)
+            except WorkspaceError as error:
+                if error.status in {403, 404}:
+                    continue
+                raise
+            primary = next(
+                (item for item in reversed(letter["attachments"])
+                 if item["documentRole"] == "primary"), None,
+            )
+            if (
+                primary is None or primary["sha256"] != operation["blob_sha256"]
+                or letter.get("documentCheck") is not None
+            ):
+                continue
+            check_id = str(
+                uuid5(NAMESPACE_URL, "ai-offline-check-for:" + operation["operation_id"])
+            )
+            self.offline_workflow.check_document(
+                actor, letter_id, check_id,
+                lambda draft, reviewers, kind: check_document(
+                    facsimile, draft, reviewers, kind
+                ),
+            )
+            return True
+        return False
 
     def request(
         self, actor: str, path: str, payload: dict[str, Any] | None = None, method: str = "GET"
     ) -> dict[str, Any]:
+        if self.offline_active():
+            self.offline_read = False
+            return self._offline_request(actor, path, payload, method)
         try:
             result = self.api.request(
                 "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
@@ -269,8 +410,9 @@ class SharedBot:
             for key, (action, label) in ACTIONS.items()
             if action in letter["availableActions"]
         ]
-        rows.append([button("Пакет документов", f"f:o:{compact}:0")])
-        if letter.get("canDelete"):
+        if not self.offline_active():
+            rows.append([button("Пакет документов", f"f:o:{compact}:0")])
+        if letter.get("canDelete") and not self.offline_active():
             rows.append([button("Удалить письмо из базы", f"z:{compact}:{letter['revision']}")])
         if letter.get("canReplaceDocument"):
             rows.append([button("Загрузить новый DOCX или PDF", f"e:{compact}")])
@@ -296,6 +438,8 @@ class SharedBot:
             "letter-" + letter["id"],
             ("⚠️ Офлайн-копия: сведения могли измениться. Действия недоступны.\n"
              if self.offline_read else "")
+            + ("📴 Автономный режим: действия сохраняются на ПК референта.\n"
+               if self.offline_active() else "")
             + f"{number} · {STATUSES[letter['status']]}\n"
             f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
             f"{destination}"
@@ -318,7 +462,7 @@ class SharedBot:
         list_offline = self.offline_read
         progress = (
             self.request(actor, f"/letters/progress?offset={page * 10}&limit=10")["letters"]
-            if kind == "pending"
+            if kind == "pending" and not self.offline_active()
             else []
         )
         offline_read = list_offline or self.offline_read
@@ -356,6 +500,8 @@ class SharedBot:
             f"страница {page + 1}"
             + ("\n⚠️ Офлайн-копия. Новые действия появятся после связи."
                if offline_read else "")
+            + ("\n📴 Автономный режим. Показаны только сохранённые на ПК письма."
+               if self.offline_active() else "")
             + ("\nЧужие письма: только текущий этап." if progress else "")
             + ("\nПисем пока нет." if not result["letters"] and not progress else ""),
             rows,
@@ -985,22 +1131,11 @@ class SharedBot:
                         self.telegram.download_file(metadata["result"]["file_path"], path)
                         if path.stat().st_size > 10 * 1024 * 1024:
                             raise WorkspaceError("Голосовой комментарий слишком большой.")
-                        response = self.api.transfer(
-                            f"/ai-referent/agent/letters/{context['letterId']}/comment-audio?"
-                            + urlencode(
-                                {
-                                    "expectedRevision": context["payload"]["expectedRevision"],
-                                    "durationMs": duration,
-                                }
-                            ),
-                            path.read_bytes(),
-                            method="PUT",
-                            telegram_id=actor,
-                            content_type="audio/ogg",
+                        audio_id = self.upload_comment_audio(
+                            actor, context["letterId"], operation,
+                            expected_revision=context["payload"]["expectedRevision"],
+                            duration_ms=duration, content=path.read_bytes(),
                         )
-                        import json
-
-                        audio_id = json.loads(response)["id"]
                 if len(text) < 3 and audio_id is None:
                     raise WorkspaceError("Комментарий должен содержать не менее 3 символов.")
                 payload = {
@@ -1032,23 +1167,15 @@ class SharedBot:
                     self.telegram.download_file(metadata["result"]["file_path"], path)
                     if path.stat().st_size > 20 * 1024 * 1024:
                         raise WorkspaceError("Файл превышает лимит Telegram.")
-                    query = urlencode(
-                        {
-                            "fileName": name,
-                            "role": context["role"],
-                            **(
-                                {"expectedRevision": context["revision"]}
-                                if "revision" in context
-                                else {}
-                            ),
-                        }
-                    )
-                    self.api.transfer(
-                        f"/ai-referent/agent/letters/{context['letterId']}/attachment?{query}",
-                        path.read_bytes(),
-                        method="PUT",
-                        telegram_id=actor,
-                        content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                    revision = context.get("revision")
+                    if revision is None:
+                        revision = self.request(actor, "/letters/" + context["letterId"])[
+                            "revision"
+                        ]
+                    self.upload_attachment(
+                        actor, context["letterId"], operation, file_name=name,
+                        content=path.read_bytes(), role=context["role"],
+                        expected_revision=revision,
                     )
                 self.state.remove(key)
                 self.show(actor, context["letterId"])
@@ -1148,6 +1275,7 @@ def _run_shared(
     offline.initialize_telegram_offset(state.get("telegram-offset"))
     controller = SharedBot(bot.client, client, state, offline)
     worker = DeliveryWorker(bot.service, client, state)
+    coordinator = OfflineCoordinator(client, offline)
     try:
         bot.client.set_my_commands(
             [
@@ -1162,11 +1290,61 @@ def _run_shared(
     except Exception as error:
         bot._status_log("workspace_commands_failed", error=type(error).__name__)
     done = threading.Event()
+    authority_lock = RLock()
+    worker_ready = [False]
+    last_authority_mode: str | None = None
+    last_authority_error: tuple[str, str] | None = None
+    next_authority_log = 0.0
+
+    def advance_authority() -> str:
+        nonlocal last_authority_mode, last_authority_error, next_authority_log
+        with authority_lock:
+            try:
+                mode = coordinator.tick()
+                if mode == "replay":
+                    mode = coordinator.replay_tick()
+                if mode != last_authority_mode:
+                    bot._status_log("workspace_authority_mode", mode=mode)
+                    last_authority_mode = mode
+                last_authority_error = None
+                return mode
+            except Exception as error:
+                reason = (type(error).__name__, safe_error_text(error))
+                if reason != last_authority_error or time.monotonic() >= next_authority_log:
+                    bot._status_log(
+                        "workspace_authority_failed", error=reason[0], detail=reason[1]
+                    )
+                    next_authority_log = time.monotonic() + 60
+                last_authority_error = reason
+                return "blocked"
+
+    def maintain_authority() -> None:
+        while not done.is_set():
+            if worker_ready[0] or offline.authority_state() is not None:
+                advance_authority()
+            done.wait(_AUTHORITY_REFRESH_SECONDS)
 
     def check_documents() -> None:
         last_error: tuple[str, str] | None = None
         next_log = 0.0
         while not done.is_set():
+            authority_state = offline.authority_state()
+            if authority_state is not None and authority_state["phase"] == "offline":
+                try:
+                    controller.check_offline_documents(bot.service.facsimile)
+                except Exception as error:
+                    reason = (type(error).__name__, safe_error_text(error))
+                    if reason != last_error or time.monotonic() >= next_log:
+                        bot._status_log(
+                            "workspace_offline_preflight_failed", error=reason[0], detail=reason[1]
+                        )
+                        next_log = time.monotonic() + 60
+                    last_error = reason
+                done.wait(5)
+                continue
+            if authority_state is not None and authority_state["phase"] != "online":
+                done.wait(5)
+                continue
             try:
                 worker.check_documents()
                 last_error = None
@@ -1181,11 +1359,19 @@ def _run_shared(
             done.wait(5)
 
     def execute() -> None:
-        ready = False
         attempts = 0
         next_sync = 0.0
         while not done.is_set():
-            if not ready:
+            if not worker_ready[0]:
+                authority_state = offline.authority_state()
+                if authority_state is not None and authority_state["phase"] != "online":
+                    if advance_authority() not in {"legacy", "online"}:
+                        done.wait(5)
+                        continue
+                    authority_state = offline.authority_state()
+                    if authority_state is not None and authority_state["phase"] != "online":
+                        done.wait(5)
+                        continue
                 if time.monotonic() < next_sync:
                     done.wait(1)
                     continue
@@ -1201,9 +1387,12 @@ def _run_shared(
                         attempts=attempts,
                     )
                     continue
-                ready = True
+                worker_ready[0] = True
                 next_sync = time.monotonic() + 60
                 bot._status_log("workspace_bootstrap_completed", attempts=attempts)
+            if advance_authority() not in {"legacy", "online"}:
+                done.wait(5)
+                continue
             try:
                 worker.tick()
                 if time.monotonic() >= next_sync:
@@ -1217,17 +1406,23 @@ def _run_shared(
     check_thread = threading.Thread(
         target=check_documents, name="workspace-document-checks", daemon=True
     )
+    authority_thread = threading.Thread(
+        target=maintain_authority, name="workspace-authority", daemon=True
+    )
     thread = threading.Thread(target=execute, name="workspace-executor", daemon=True)
     check_thread.start()
+    authority_thread.start()
     thread.start()
     seen, handled = 0, 0
     idle = time.monotonic()
     try:
         while max_updates is None or seen < max_updates:
-            try:
-                controller.notifications()
-            except Exception as error:
-                bot._status_log("workspace_notifications_failed", error=type(error).__name__)
+            authority_state = offline.authority_state()
+            if authority_state is None or authority_state["phase"] == "online":
+                try:
+                    controller.notifications()
+                except Exception as error:
+                    bot._status_log("workspace_notifications_failed", error=type(error).__name__)
             try:
                 completed = poll_durable_updates(
                     bot.client, controller, offline,
@@ -1248,5 +1443,6 @@ def _run_shared(
     finally:
         done.set()
         thread.join(timeout=45)
+        authority_thread.join(timeout=45)
         check_thread.join(timeout=5)
     return PollingResult("stopped", seen, handled, [])

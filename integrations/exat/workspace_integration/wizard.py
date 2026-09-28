@@ -3,7 +3,6 @@
 # ruff: noqa: RUF001
 from __future__ import annotations
 
-import mimetypes
 import re
 import tempfile
 from pathlib import Path
@@ -482,20 +481,10 @@ class LetterWizard:
                 self.bot.telegram.download_file(metadata["result"]["file_path"], path)
                 if path.stat().st_size > 20 * 1024 * 1024:
                     raise WorkspaceError("Файл больше лимита Telegram.")
-                query = urlencode(
-                    {
-                        "fileName": name,
-                        "role": role,
-                        "operationId": operation,
-                        "expectedRevision": letter["revision"],
-                    }
-                )
-                self.bot.api.transfer(
-                    f"/ai-referent/agent/letters/{letter['id']}/attachment?{query}",
-                    path.read_bytes(),
-                    method="PUT",
-                    telegram_id=actor,
-                    content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                self.bot.upload_attachment(
+                    actor, letter["id"], operation, file_name=name,
+                    content=path.read_bytes(), role=role,
+                    expected_revision=letter["revision"],
                 )
             updated = self.bot.request(actor, "/letters/" + letter["id"])
             context["revision"] = updated["revision"]

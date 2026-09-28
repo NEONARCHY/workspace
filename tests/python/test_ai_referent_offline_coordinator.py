@@ -201,3 +201,25 @@ def test_lost_completion_reply_and_expired_lease_remain_recoverable(tmp_path):
     assert journal.authority_state()["phase"] == "replay"
     assert coordinator.replay_tick() == "online"
     assert journal.authority_state()["phase"] == "online"
+
+
+def test_disabled_server_authority_is_retried_without_polling_every_tick(tmp_path):
+    class DisabledClient(Client):
+        def __init__(self):
+            super().__init__()
+            self.start_calls = 0
+
+        def start_offline_authority(self):
+            self.start_calls += 1
+            raise WorkspaceError("Автономный режим AI Referent пока не включён на сервере.", 409)
+
+    client = DisabledClient()
+    now = [100.0]
+    coordinator = OfflineCoordinator(client, OfflineJournal(tmp_path), clock=lambda: now[0])
+    assert coordinator.tick() == "legacy"
+    now[0] = 130.0
+    assert coordinator.tick() == "legacy"
+    assert client.start_calls == 1
+    now[0] = 160.0
+    assert coordinator.tick() == "legacy"
+    assert client.start_calls == 2

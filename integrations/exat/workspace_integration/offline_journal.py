@@ -980,6 +980,32 @@ class OfflineJournal:
                     return {str(key): value for key, value in letter.items()}
         return None
 
+    def cached_letter_ids(self, actor_id: str) -> list[str]:
+        """Return only IDs previously disclosed to this Telegram actor by Workspace."""
+        if not actor_id.isdecimal():
+            raise ValueError("Неверный Telegram ID.")
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT payload FROM snapshots WHERE actor_id = ? "
+                "AND (resource LIKE '/letters?%' OR resource LIKE '/letters/%')",
+                (actor_id,),
+            ).fetchall()
+        result: set[str] = set()
+        for row in rows:
+            payload = json.loads(row["payload"])
+            candidates = payload.get("letters", []) if isinstance(payload, dict) else []
+            if not isinstance(candidates, list):
+                candidates = []
+            if isinstance(payload, dict) and "id" in payload:
+                candidates.append(payload)
+            for item in candidates:
+                if isinstance(item, dict):
+                    try:
+                        result.add(str(UUID(str(item["id"]))))
+                    except (KeyError, TypeError, ValueError):
+                        continue
+        return sorted(result)
+
     def begin_external_effect(self, effect_id: str, letter_id: str, kind: str) -> bool:
         """False after a crash or retry: physical send must never auto-repeat."""
         effect_id, letter_id = str(UUID(effect_id)), str(UUID(letter_id))

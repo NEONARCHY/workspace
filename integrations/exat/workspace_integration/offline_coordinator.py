@@ -31,6 +31,7 @@ class OfflineCoordinator:
         self.clock = clock
         self.gate = OfflineAuthorityGate(journal, client.agent_id, clock=clock)
         self._next_refresh = 0.0
+        self._legacy_retry_at = 0.0
 
     def _verified_rights(self, epoch: str) -> bool:
         evidence = self.journal.offline_rights_evidence()
@@ -54,10 +55,13 @@ class OfflineCoordinator:
         """Heartbeat while connected; fail over only after the server's fence expires."""
         state = self.journal.authority_state()
         if state is None:
+            if self.clock() < self._legacy_retry_at:
+                return "legacy"
             try:
                 lease = self.client.start_offline_authority()
             except WorkspaceError as error:
                 if error.status == 409 and "пока не включён" in str(error):
+                    self._legacy_retry_at = self.clock() + 60
                     return "legacy"
                 return "blocked"
             self.gate.accept_lease(lease)

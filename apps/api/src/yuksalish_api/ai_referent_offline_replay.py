@@ -228,7 +228,9 @@ async def _replay_document_check(
     if not set(keys).issubset(allowed_keys):
         raise HTTPException(409, "Список согласующих изменился; повторите проверку DOCX.")
     selected_key = letter["final_reviewer_key"] or letter["reviewer_key"]
-    if status == "passed" and (selected_key is None or selected_key not in keys):
+    # The DOCX is checked before Telegram asks the sender to choose a reviewer.
+    # Once selected, require_passed() rechecks that exact reviewer's key at submit.
+    if status == "passed" and (not keys or (selected_key is not None and selected_key not in keys)):
         raise HTTPException(409, "Подпись выбранного руководителя не подтверждена.")
     check = await ensure_check(
         connection, UUID(str(actor["userId"])), operation.blob_sha256,
