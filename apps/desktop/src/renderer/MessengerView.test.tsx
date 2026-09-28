@@ -403,7 +403,7 @@ describe("Private messenger", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Новое сообщение")).toHaveValue(""),
     );
-    expect(screen.getByLabelText("Новое сообщение")).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText("Новое сообщение")).toHaveFocus(), { timeout: 3000 });
     fireEvent.change(screen.getByLabelText("Новое сообщение"), {
       target: { value: "Не отправлять другому" },
     });

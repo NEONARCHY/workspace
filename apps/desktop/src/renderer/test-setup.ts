@@ -9,6 +9,14 @@ class TestResizeObserver implements ResizeObserver {
 }
 
 globalThis.ResizeObserver = TestResizeObserver;
+if (typeof HTMLElement.prototype.scrollBy !== "function") {
+  Object.defineProperty(HTMLElement.prototype, "scrollBy", {
+    configurable: true,
+    value(this: HTMLElement, options: ScrollToOptions | number, y?: number) {
+      this.scrollTop += typeof options === "number" ? y ?? 0 : options.top ?? 0;
+    },
+  });
+}
 const testNodeFilter = {
   FILTER_ACCEPT: 1,
   FILTER_REJECT: 2,
