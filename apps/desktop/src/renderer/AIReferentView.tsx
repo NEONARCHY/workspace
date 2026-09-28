@@ -633,21 +633,25 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 {form.file && (checkingFile || activeCheck?.error || activeCheck?.result?.status === "failed") ? <div className="ai-referent-preflight" role="status" aria-live="polite">
                   {activeCheck?.error || activeCheck?.result?.status === "failed" ? <><p>{activeCheck.error || activeCheck.result?.detail}</p><Button onClick={() => { setDocumentCheck(undefined); setCheckAttempt((attempt) => attempt + 1); }}>Повторить проверку</Button></> : <><Spinner size="tiny" /><span>Подождите: робот проверяет форматирование и место для подписи.<small>Проверка выполняется на ПК референта. Если он выключен, письмо останется в ожидании.</small></span></>}
                 </div> : null}
-                {form.workflowKind === "delivery" ? <WorkspaceFileDropzone
+                {form.workflowKind === "delivery" ? <><WorkspaceFileDropzone
                   label="Дополнительные вложения"
                   hint="Приложения, таблицы и сопроводительные файлы"
                   actionLabel={selectedAdditionalFiles.length ? "Добавить ещё" : "Добавить файлы"}
-                  files={selectedAdditionalFiles}
+                  files={[]}
                   multiple
                   disabled={busy}
                   icon={<Attach20Regular aria-hidden="true" />}
                   ariaLabel="Выбрать дополнительные вложения"
                   onFiles={(files) => setForm((current) => ({ ...current, additionalFiles: [...(current.additionalFiles ?? []), ...files] }))}
-                /> : null}
-                {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
+                />{selectedAdditionalFiles.length ? <ul className="ai-referent-attachments" aria-label="Добавленные вложения">{selectedAdditionalFiles.map((file, index) => <li key={`${file.name}-${file.lastModified}-${index}`}>
+                  <span title={file.name}>{file.name}</span>
+                  <label className="ai-referent-attachment-action">Заменить<input type="file" disabled={busy} aria-label={`Заменить вложение ${file.name}`} onChange={(event) => { const replacement = event.currentTarget.files?.[0]; if (replacement) setForm((current) => ({ ...current, additionalFiles: (current.additionalFiles ?? []).map((item, position) => position === index ? replacement : item) })); event.currentTarget.value = ""; }} /></label>
+                  <button type="button" disabled={busy} onClick={() => setForm((current) => ({ ...current, additionalFiles: (current.additionalFiles ?? []).filter((_, position) => position !== index) }))} aria-label={`Удалить вложение ${file.name}`}>Удалить</button>
+                </li>)}</ul> : null}</> : null}
               </div>
             </DialogContent>
             <DialogActions className="ai-referent-form-actions">
+              {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
               <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
               <Button appearance="primary" disabled={busy || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
             </DialogActions>

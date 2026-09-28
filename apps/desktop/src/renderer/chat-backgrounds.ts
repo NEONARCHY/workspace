@@ -4,6 +4,11 @@ export const chatBackgrounds = [
   { id: "sky", label: "Ясное небо", description: "Нежный голубой" },
   { id: "sage", label: "Шалфей", description: "Спокойный зелёный" },
   { id: "paper", label: "Узор", description: "Лёгкий рисунок на светлом фоне" },
+  { id: "suzani", label: "Сюзане", description: "Тёплый узбекский орнамент" },
+  { id: "tiles", label: "Мозаика", description: "Геометрия в бирюзовых тонах" },
+  { id: "clouds", label: "Облака", description: "Воздушный голубой фон" },
+  { id: "contrast", label: "Контраст", description: "Насыщенный песочный фон" },
+  { id: "night", label: "Ночная бирюза", description: "Тёмный спокойный фон" },
 ] as const;
 
 export type ChatBackground = (typeof chatBackgrounds)[number]["id"];

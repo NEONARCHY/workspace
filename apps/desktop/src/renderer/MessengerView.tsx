@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
@@ -19,6 +19,11 @@ import type {
 import {
   Avatar,
   Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Input,
   Popover,
   PopoverSurface,
@@ -150,20 +155,14 @@ function MessageContextMenu({
   );
 }
 
-function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenPersonProfile }: {
+function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenDetails }: {
   readonly reaction: MessageReaction;
   readonly people: readonly WorkspacePerson[];
   readonly token: string;
   readonly disabled: boolean;
   readonly onToggle: () => void;
-  readonly onOpenPersonProfile?: (userId: string) => void;
+  readonly onOpenDetails: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
-  const tooltipId = useId();
-  const anchorRef = useRef<HTMLButtonElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const closeTimer = useRef<number | undefined>(undefined);
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ left: 8, top: 8, below: false });
   const reactors = (reaction.reactorUserIds ?? [])
     .map((userId) => people.find((person) => person.id === userId))
     .filter((person): person is WorkspacePerson => person !== undefined);
@@ -172,49 +171,16 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
     ? reactors.map((person) => person.name)
     : [`${reaction.count} ${reaction.count === 1 ? "реакция" : "реакции"}`];
 
-  const cancelClose = () => {
-    if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
-    closeTimer.current = undefined;
-  };
-  const show = () => {
-    cancelClose();
-    setOpen(true);
-  };
-  const hideSoon = () => {
-    cancelClose();
-    closeTimer.current = window.setTimeout(() => setOpen(false), 180);
-  };
-  useEffect(() => () => cancelClose(), []);
-  useLayoutEffect(() => {
-    if (!open || !anchorRef.current || !tooltipRef.current) return;
-    const anchor = anchorRef.current.getBoundingClientRect();
-    const tooltip = tooltipRef.current.getBoundingClientRect();
-    const margin = 10;
-    const gap = 8;
-    const below = anchor.top < tooltip.height + gap + margin;
-    const desiredLeft = anchor.left + anchor.width / 2 - tooltip.width / 2;
-    setPosition({
-      left: Math.max(margin, Math.min(desiredLeft, window.innerWidth - tooltip.width - margin)),
-      top: below ? anchor.bottom + gap : anchor.top - tooltip.height - gap,
-      below,
-    });
-  }, [open, reactors.length]);
-
   return <span
     className="message-reaction-chip"
-    onPointerEnter={show}
-    onPointerLeave={hideSoon}
-    onFocus={show}
-    onBlur={hideSoon}
   >
     <Button
-      ref={anchorRef}
       size="small"
       appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"}
       disabled={disabled}
       aria-label={`${reaction.emoji}: ${names.join(", ")}`}
-      aria-controls={tooltipId}
-      aria-expanded={open}
+      aria-haspopup="dialog"
+      onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onOpenDetails(event); }}
       onClick={onToggle}
     >
       <span className="message-reaction-emoji" aria-hidden="true">{reaction.emoji}</span>
@@ -222,32 +188,25 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
         {additionalReactors.map((person) => <ProfileAvatar key={person.id} person={person} token={token} size={20} />)}
       </span> : null}
     </Button>
-    {open ? createPortal(<div
-      ref={tooltipRef}
-      className={`message-reaction-tooltip is-open${position.below ? " is-below" : ""}`}
-      id={tooltipId}
-      role="dialog"
-      aria-label={`Кто поставил реакцию ${reaction.emoji}`}
-      style={{ left: position.left, top: position.top }}
-      onPointerEnter={show}
-      onPointerLeave={hideSoon}
-    >
-      <strong><span aria-hidden="true">{reaction.emoji}</span> Поставили реакцию</strong>
-      <div className="message-reaction-tooltip-people">
-        {reactors.length ? reactors.map((person) => <button
-          type="button"
-          key={person.id}
-          onClick={() => {
-            setOpen(false);
-            onOpenPersonProfile?.(person.id);
-          }}
-        >
-          <ProfileAvatar person={person} token={token} size={20} />
-          <span>{person.name}</span>
-        </button>) : <span>{names[0]}</span>}
-      </div>
-    </div>, document.body) : null}
   </span>;
+}
+
+function ReactionPeople({ reactions, people, token, onOpenPersonProfile }: {
+  readonly reactions: readonly MessageReaction[];
+  readonly people: readonly WorkspacePerson[];
+  readonly token: string;
+  readonly onOpenPersonProfile?: (userId: string) => void;
+}) {
+  const entries = reactions.flatMap((reaction) => (reaction.reactorUserIds ?? []).map((userId) => ({ userId, emoji: reaction.emoji })));
+  return <div className="message-reaction-people">
+    {entries.length ? entries.map(({ userId, emoji }) => {
+      const person = people.find((item) => item.id === userId);
+      return <button key={`${userId}-${emoji}`} type="button" disabled={!person || !onOpenPersonProfile} onClick={() => person && onOpenPersonProfile?.(person.id)}>
+        {person ? <ProfileAvatar person={person} token={token} size={28} /> : <span className="message-reaction-person-fallback" aria-hidden="true">?</span>}
+        <span>{person?.name ?? "Сотрудник"}</span><span aria-label={`Реакция ${emoji}`}>{emoji}</span>
+      </button>;
+    }) : <p>{reactions.reduce((total, reaction) => total + reaction.count, 0)} реакций · список сотрудников недоступен</p>}
+  </div>;
 }
 
 function Conversation({
@@ -304,6 +263,9 @@ function Conversation({
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number }>();
+  const [reactionQuick, setReactionQuick] = useState<{ message: ChatMessage; emoji: MessageReactionEmoji; x: number; y: number }>();
+  const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
+  const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
   const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
   const [query, setQuery] = useState("");
@@ -474,11 +436,19 @@ function Conversation({
   }, [busy, draft]);
   useEffect(() => {
     if (!contextMenu) return;
-    const close = () => setContextMenu(undefined);
+    const close = () => { setContextMenu(undefined); setReactionPreview(false); };
     window.addEventListener("pointerdown", close);
     window.addEventListener("blur", close);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
   }, [contextMenu]);
+  useEffect(() => {
+    if (!reactionQuick) return;
+    const close = () => setReactionQuick(undefined);
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("keydown", close);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); window.removeEventListener("keydown", close); };
+  }, [reactionQuick]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     vanishSequence.current += 1;
@@ -799,7 +769,7 @@ function Conversation({
                           people={people}
                           token={token}
                           disabled={!canSend || busy}
-                          onOpenPersonProfile={onOpenPersonProfile}
+                          onOpenDetails={(event) => { setContextMenu(undefined); setReactionQuick({ message, emoji: reaction.emoji, x: event.clientX, y: event.clientY }); }}
                           onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
                         />
                       ))}
@@ -830,8 +800,24 @@ function Conversation({
           <Button appearance="subtle" icon={<TaskListSquareLtr24Regular />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
           {mayDelete ? <Button appearance="subtle" onClick={() => { setDeleting(message); setContextMenu(undefined); }}>Удалить</Button> : null}
+          {message.reactions?.length ? <div className="message-context-reactions" onPointerEnter={() => setReactionPreview(true)} onPointerLeave={() => setReactionPreview(false)}>
+            <Button appearance="subtle" aria-haspopup="dialog" aria-expanded={reactionPreview} onFocus={() => setReactionPreview(true)} onClick={() => { setReactionDialog(message); setContextMenu(undefined); setReactionPreview(false); }}>Реакции · {message.reactions.reduce((total, reaction) => total + reaction.count, 0)}</Button>
+            {reactionPreview ? <div className={`message-reaction-submenu ${contextMenu.x + 540 < window.innerWidth ? "is-right" : "is-left"}`} role="region" aria-label="Кто поставил реакции">
+              <ReactionPeople reactions={message.reactions} people={people} token={token} onOpenPersonProfile={(id) => { setContextMenu(undefined); onOpenPersonProfile?.(id); }} />
+            </div> : null}
+          </div> : null}
         </MessageContextMenu>;
       })() : null}
+      {reactionQuick ? <MessageContextMenu x={reactionQuick.x} y={reactionQuick.y} onPointerDown={(event) => event.stopPropagation()}>
+        <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
+        <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
+      </MessageContextMenu> : null}
+      <Dialog open={Boolean(reactionDialog)} onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
+        <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
+          <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>
+          <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
+        </DialogContent></DialogBody>
+      </DialogSurface></Dialog>
       {error && (
         <div className="messenger-error" role="alert">
           {error}

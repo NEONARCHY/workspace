@@ -164,6 +164,8 @@ describe("EmployeeProfileDialog", () => {
     await screen.findByRole("heading", { name: "Бахтиёр Самугов" });
     fireEvent.click(screen.getByRole("button", { name: "Награды" }));
     fireEvent.click(screen.getAllByRole("button", { name: "Выдать награду" }).at(-1)!);
+    const issueDialog = screen.getByRole("dialog", { name: "Выдать награду" });
+    expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника", hidden: true })).not.toContainElement(issueDialog);
     expect(screen.getByRole("group", { name: "Вид награды" }).querySelectorAll("button")).toHaveLength(9);
     expect(screen.queryByLabelText("Название награды")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("За что выдаётся")).not.toBeInTheDocument();

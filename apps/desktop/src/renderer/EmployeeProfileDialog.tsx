@@ -247,13 +247,21 @@ function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
   const [previewOpen, setPreviewOpen] = useState(false);
   const historyRequested = useRef(false);
   const previewCloseTimer = useRef<number | undefined>(undefined);
-  useEffect(() => () => { if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current); }, []);
+  const previewOpenTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => { if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current); if (previewOpenTimer.current) window.clearTimeout(previewOpenTimer.current); }, []);
   const keepPreviewOpen = () => {
     historyRequested.current = false;
     if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current);
+    if (previewOpenTimer.current) window.clearTimeout(previewOpenTimer.current);
     setPreviewOpen(true);
   };
+  const schedulePreview = () => {
+    if (previewCloseTimer.current) window.clearTimeout(previewCloseTimer.current);
+    if (previewOpenTimer.current) window.clearTimeout(previewOpenTimer.current);
+    previewOpenTimer.current = window.setTimeout(() => setPreviewOpen(true), 1000);
+  };
   const closePreviewSoon = () => {
+    if (previewOpenTimer.current) window.clearTimeout(previewOpenTimer.current);
     previewCloseTimer.current = window.setTimeout(() => setPreviewOpen(false), 140);
   };
   const preview = <div className="reward-history-tooltip">
@@ -281,9 +289,11 @@ function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
       data-reward-icon={group.iconKey}
       style={holographicStyle}
       onPointerMove={onPointerMove}
-      onPointerEnter={keepPreviewOpen}
+      onPointerEnter={schedulePreview}
+      onFocus={schedulePreview}
+      onBlur={closePreviewSoon}
       onPointerLeave={() => { onPointerLeave(); closePreviewSoon(); }}
-      onClick={() => { historyRequested.current = true; setPreviewOpen(false); onOpenHistory(); }}
+      onClick={() => { historyRequested.current = true; if (previewOpenTimer.current) window.clearTimeout(previewOpenTimer.current); setPreviewOpen(false); onOpenHistory(); }}
       aria-label={`${group.title}: ${countLabel(group.issuances.length, ["награда", "награды", "наград"])}. Открыть историю выдач`}
     >
       <span className="recognition-card-surface" aria-hidden="true">
@@ -607,16 +617,7 @@ export function EmployeeProfileDialog({
               </section>
 
               <section ref={rewardsRef} id="employee-profile-rewards" className="employee-rewards-section">
-                <header><div><h3>Награды от коллег</h3><p>Личное признание важнее автоматического счётчика</p></div><div className="reward-heading-actions"><Button ref={guideTriggerRef} appearance="subtle" icon={<BookQuestionMark24Regular />} onClick={openGuide}>Как это работает</Button>{profile.canIssueReward ? <Button appearance="primary" icon={<Reward24Regular />} disabled={rewardBusy} onClick={() => { setErrorState(undefined); setRewardOpen((value) => !value); }}>Выдать награду</Button> : null}</div></header>
-                {rewardOpen ? <div className="reward-composer">
-                  <div className="reward-composer-heading"><strong>Выберите готовую награду</strong><span>Название и смысл награды одинаковы для всех сотрудников.</span></div>
-                  <div className="reward-icon-picker" role="group" aria-label="Вид награды">
-                    {profile.rewardCatalog.map((option) => <RewardCatalogOption key={option.iconKey} option={option} selected={rewardIcon === option.iconKey} onSelect={() => setRewardIcon(option.iconKey)} />)}
-                  </div>
-                  <Field label="Повод · необязательно" hint="Например, после завершения проекта или конкретной задачи"><Input maxLength={240} value={rewardContext} onChange={(_, data) => setRewardContext(data.value)} placeholder="Что хочется отметить именно сейчас?" /></Field>
-                  {error ? <p className="reward-composer-error" role="alert">{error}</p> : null}
-                  <div className="reward-composer-actions"><Button disabled={rewardBusy} onClick={() => { setRewardOpen(false); setErrorState(undefined); }}>Отмена</Button><Button appearance="primary" disabled={rewardBusy || !profile.rewardCatalog.some((item) => item.iconKey === rewardIcon)} onClick={() => void submitReward()}>{rewardBusy ? "Сохраняем…" : "Выдать награду"}</Button></div>
-                </div> : null}
+                <header><div><h3>Награды от коллег</h3><p>Личное признание важнее автоматического счётчика</p></div><div className="reward-heading-actions"><Button ref={guideTriggerRef} appearance="subtle" icon={<BookQuestionMark24Regular />} onClick={openGuide}>Как это работает</Button>{profile.canIssueReward ? <Button appearance="primary" icon={<Reward24Regular />} disabled={rewardBusy} onClick={() => { setErrorState(undefined); setRewardOpen(true); }}>Выдать награду</Button> : null}</div></header>
                 <div className="employee-reward-list">
                   {rewardGroups.length ? rewardGroups.map((group) => <RewardCard key={group.iconKey} group={group} people={people} token={token} onOpenIssuer={openIssuerProfile} onOpenHistory={() => openRewardHistory(group.iconKey)} />) : <p className="recognition-empty">Наград пока нет. Коллеги смогут отметить вклад сотрудника здесь.</p>}
                 </div>
@@ -634,6 +635,19 @@ export function EmployeeProfileDialog({
           </DialogContent>
         </DialogBody>
       </DialogSurface>
+    </Dialog>
+    <Dialog open={open && rewardOpen} onOpenChange={(_, data) => { if (!data.open && !rewardBusy) { setRewardOpen(false); setErrorState(undefined); } }}><DialogSurface className="reward-issue-dialog" aria-label="Выдать награду">
+      <DialogBody><DialogTitle>Выдать награду</DialogTitle><DialogContent>
+        {profile ? <div className="reward-composer">
+                  <div className="reward-composer-heading"><strong>Выберите готовую награду</strong><span>Название и смысл награды одинаковы для всех сотрудников.</span></div>
+                  <div className="reward-icon-picker" role="group" aria-label="Вид награды">
+                    {profile.rewardCatalog.map((option) => <RewardCatalogOption key={option.iconKey} option={option} selected={rewardIcon === option.iconKey} onSelect={() => setRewardIcon(option.iconKey)} />)}
+                  </div>
+                  <Field label="Повод · необязательно" hint="Например, после завершения проекта или конкретной задачи"><Input maxLength={240} value={rewardContext} onChange={(_, data) => setRewardContext(data.value)} placeholder="Что хочется отметить именно сейчас?" /></Field>
+                  {error ? <p className="reward-composer-error" role="alert">{error}</p> : null}
+                  <div className="reward-composer-actions"><Button disabled={rewardBusy} onClick={() => { setRewardOpen(false); setErrorState(undefined); }}>Отмена</Button><Button appearance="primary" disabled={rewardBusy || !profile.rewardCatalog.some((item) => item.iconKey === rewardIcon)} onClick={() => void submitReward()}>{rewardBusy ? "Сохраняем…" : "Выдать награду"}</Button></div>
+        </div> : null}
+      </DialogContent></DialogBody></DialogSurface>
     </Dialog>
     <Dialog open={open && guideOpen} onOpenChange={(_, data) => { if (!data.open) returnFromGuide(); }}><DialogSurface className="recognition-guide-dialog" aria-label="Как работают награды и достижения"><RecognitionGuide onBack={returnFromGuide} achievements={profile?.achievements ?? []} rewardCatalog={profile?.rewardCatalog ?? []} /></DialogSurface></Dialog>
     <Dialog open={open && Boolean(selectedRewardGroup)} onOpenChange={(_, data) => { if (!data.open) returnFromHistory(); }}><DialogSurface className="reward-history-dialog" aria-label="История награды">{selectedRewardGroup ? <RewardHistoryContent group={selectedRewardGroup} onBack={returnFromHistory} people={people} token={token} onOpenIssuer={openIssuerProfile} /> : null}</DialogSurface></Dialog>

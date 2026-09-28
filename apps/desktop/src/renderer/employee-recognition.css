@@ -133,6 +133,9 @@
 .reward-history-tooltip > span { display: grid; gap: 2px; padding-top: 6px; border-top: 1px solid rgb(255 255 255 / 20%); }
 .reward-history-tooltip small, .reward-history-tooltip em { opacity: .83; font-size: 11px; font-style: normal; }
 .reward-composer { display: grid; gap: 12px; padding: 16px; border: 1px solid rgb(0 145 168 / 14%); border-radius: 20px; background: rgb(255 255 255 / 72%); }
+.fui-DialogSurface.reward-issue-dialog { width: min(860px, calc(100vw - 32px)); max-width: calc(100vw - 32px); max-height: min(780px, calc(100dvh - 32px)); overflow: hidden; border-radius: 24px; background: #f6fbfc; }
+.reward-issue-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; }
+.reward-issue-dialog .reward-composer { border: 0; padding: 4px; background: transparent; }
 .reward-composer-heading { display: grid; gap: 3px; color: var(--ws-navy); }
 .reward-composer-heading > span { color: var(--ws-muted); font-size: 12px; }
 .reward-icon-picker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -147,6 +150,8 @@
 .reward-composer input:focus, .reward-composer textarea:focus { border-color: var(--ws-turquoise); outline: 2px solid rgb(0 145 168 / 12%); }
 .reward-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .reward-composer-error { margin: 0; color: #9a3340; font-size: 12px; }
+@media (max-width: 700px) { .reward-issue-dialog .reward-icon-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .reward-issue-dialog .reward-icon-picker { grid-template-columns: minmax(0, 1fr); } }
 .recognition-empty { grid-column: 1 / -1; margin: 0; padding: 28px; border: 1px dashed rgb(41 58 85 / 15%); border-radius: 16px; color: var(--ws-muted); background: rgb(255 255 255 / 42%); text-align: center; }
 .fui-DialogSurface.reward-history-dialog, .fui-DialogSurface.recognition-guide-dialog { max-width: none; max-height: min(760px, calc(100vh - 32px)); overflow: hidden; border: 1px solid rgb(255 255 255 / 75%); border-radius: 24px; background: #f6fbfc; }
 .fui-DialogSurface.reward-history-dialog { width: min(620px, calc(100vw - 24px)); }
