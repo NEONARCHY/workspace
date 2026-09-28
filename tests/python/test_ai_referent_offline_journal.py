@@ -314,6 +314,8 @@ def test_expired_replay_receipt_advances_epoch_without_enabling_writes(tmp_path)
     old_epoch, new_epoch = str(uuid4()), str(uuid4())
     journal.set_authority_phase("referent-pc", old_epoch, "online")
     journal.cache("123", "/letters?sentOnly=true", {"letters": [{"id": str(uuid4())}]})
+    audio_path = "/comment-audio/" + str(uuid4())
+    journal.cache("123", audio_path, {"letterId": str(uuid4()), "sha256": "0" * 64})
     journal.cache("123", "/reviewers", {"reviewers": []})
     journal.set_authority_phase("referent-pc", old_epoch, "replay")
     manifest = journal.replay_manifest()
@@ -321,6 +323,7 @@ def test_expired_replay_receipt_advances_epoch_without_enabling_writes(tmp_path)
     assert journal.authority_state()["phase"] == "replay"
     assert journal.replay_manifest()["epoch"] == new_epoch
     assert journal.snapshot("123", "/letters?sentOnly=true") is None
+    assert journal.snapshot("123", audio_path) is None
     assert journal.snapshot("123", "/reviewers") is not None
 
 

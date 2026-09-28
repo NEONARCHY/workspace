@@ -249,10 +249,17 @@ class OfflineWorkflow:
              and str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + item["operation_id"]))
              == audio_id), None,
         )
-        if operation is None or operation["blob_sha256"] is None:
-            raise WorkspaceError("Аудио пока недоступно без связи с Workspace.", 503)
+        digest = operation["blob_sha256"] if operation is not None else None
+        if digest is None:
+            snapshot = self.journal.snapshot(telegram_id, "/comment-audio/" + audio_id)
+            payload = snapshot["payload"] if snapshot is not None else None
+            if not isinstance(payload, dict) or payload.get("letterId") != letter["id"]:
+                raise WorkspaceError("Аудио пока недоступно без связи с Workspace.", 503)
+            digest = payload.get("sha256")
+            if not isinstance(digest, str):
+                raise WorkspaceError("Сохранённая копия аудио повреждена.", 503)
         try:
-            return self.journal.read_blob(operation["blob_sha256"])
+            return self.journal.read_blob(digest)
         except (FileNotFoundError, ValueError) as error:
             raise WorkspaceError("Локальное аудио повреждено или отсутствует.", 503) from error
 

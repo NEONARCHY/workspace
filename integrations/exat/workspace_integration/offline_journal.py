@@ -944,7 +944,7 @@ class OfflineJournal:
             connection.execute(
                 "DELETE FROM snapshots WHERE resource = '/letters' "
                 "OR resource LIKE '/letters?%' OR resource LIKE '/letters/%' "
-                "OR resource LIKE '/packets/%'"
+                "OR resource LIKE '/packets/%' OR resource LIKE '/comment-audio/%'"
             )
             connection.execute(
                 "UPDATE authority_state SET epoch = ?, phase = ?, "

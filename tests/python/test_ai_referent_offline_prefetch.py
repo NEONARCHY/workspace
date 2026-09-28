@@ -47,6 +47,8 @@ def test_prefetch_seeds_actor_scoped_pages_without_blocking_heartbeat(tmp_path):
             return {"reviewers": [{"key": "askar"}]}
         if "/recipients?" in path:
             return {"entries": [], "totalCount": 0}
+        if "/letters/" in path and "/letters/progress" not in path:
+            return {"id": path.rsplit("/", 1)[-1], "events": []}
         if "activeOnly" in path and "offset=0" in path:
             return {"letters": [{"id": ids[0]}], "totalCount": 101}
         if "activeOnly" in path:
@@ -55,7 +57,7 @@ def test_prefetch_seeds_actor_scoped_pages_without_blocking_heartbeat(tmp_path):
 
     client.request.side_effect = request
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert [seeder.tick() for _ in range(8)] == [True] * 8
+    assert [seeder.tick() for _ in range(10)] == [True] * 10
     assert journal.snapshot("123", "/reviewers")["payload"]["reviewers"][0]["key"] == "askar"
     assert journal.cached_letter_ids("123") == sorted(ids)
     assert all(call.kwargs["telegram_id"] == "123" for call in client.request.call_args_list)
@@ -182,6 +184,8 @@ def test_prefetch_hydrates_old_letter_files_for_offline_download(tmp_path):
             return {"entries": [], "totalCount": 0}
         if "/packets/outgoing/" in path:
             return {"files": files}
+        if "/letters/" in path:
+            return letter
         if "activeOnly" in path:
             return {"letters": [letter], "totalCount": 1}
         return {"letters": [], "totalCount": 0}
@@ -193,7 +197,7 @@ def test_prefetch_hydrates_old_letter_files_for_offline_download(tmp_path):
     client.request.side_effect = request
     client.transfer.side_effect = transfer
     seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
-    assert [seeder.tick() for _ in range(8)] == [True] * 8
+    assert [seeder.tick() for _ in range(9)] == [True] * 9
     assert seeder.tick() is False
     journal.set_authority_phase("referent-pc", epoch, "offline")
     bot = SharedBot(None, client, State(tmp_path / "state.sqlite"), journal)
@@ -203,6 +207,64 @@ def test_prefetch_hydrates_old_letter_files_for_offline_download(tmp_path):
         bot.download_packet_file("456", "outgoing", letter_id, file_id, "attachment")
     assert error.value.status == 403
     assert client.transfer.call_count == 2
+
+
+def test_prefetch_hydrates_old_letter_history_and_private_voice(tmp_path):
+    journal, epoch = _journal(tmp_path)
+    actor = journal.offline_actor("123")
+    letter_id, audio_id = str(uuid4()), str(uuid4())
+    voice = b"OggS saved voice note"
+    letter = {
+        "id": letter_id, "status": "needs_revision", "revision": 3,
+        "updatedAt": "2026-09-28T10:00:00Z", "createdAt": "2026-09-28T09:00:00Z",
+        "createdByUserId": actor["userId"], "createdByName": "Сотрудник",
+        "reviewerUserId": str(uuid4()), "reviewerName": "Руководитель",
+        "finalReviewerUserId": None, "initialReviewerUserId": None,
+        "subject": "Письмо", "recipientOrganization": "Организация",
+        "recipientAddress": "office@example.uz", "route": "webmail", "note": "",
+        "workflowKind": "delivery", "attachments": [], "events": [{
+            "id": str(uuid4()), "eventType": "letter.return_for_revision",
+            "actorUserId": str(uuid4()), "actorName": "Руководитель",
+            "fromStatus": "pending_review", "toStatus": "needs_revision",
+            "comment": "Голосовое замечание", "createdAt": "2026-09-28T10:00:00Z",
+            "audio": {"id": audio_id, "contentType": "audio/ogg",
+                      "byteSize": len(voice), "durationMs": 1500},
+        }],
+    }
+    client = Mock()
+
+    def request(path, *, telegram_id):
+        assert telegram_id == "123"
+        if path.endswith("/reviewers"):
+            return {"reviewers": []}
+        if "/recipients?" in path:
+            return {"entries": [], "totalCount": 0}
+        if path == "/ai-referent/agent/letters/" + letter_id:
+            return letter
+        if "/packets/outgoing/" in path:
+            return {"files": []}
+        if "activeOnly" in path:
+            return {"letters": [letter], "totalCount": 1}
+        return {"letters": [], "totalCount": 0}
+
+    def transfer(path, *, telegram_id):
+        assert path.endswith("/comment-audio/" + audio_id)
+        assert telegram_id == "123"
+        return voice
+
+    client.request.side_effect = request
+    client.transfer.side_effect = transfer
+    seeder = OfflineSnapshotSeeder(client, journal, clock=lambda: 100.0)
+    assert all(seeder.tick() for _ in range(8))
+    assert seeder.tick() is False
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    workflow = OfflineWorkflow(journal)
+    assert workflow.read("123", letter_id)["events"][0]["audio"]["id"] == audio_id
+    assert workflow.comment_audio_file("123", letter_id, audio_id) == voice
+    with pytest.raises(WorkspaceError) as forbidden:
+        workflow.comment_audio_file("456", letter_id, audio_id)
+    assert forbidden.value.status == 403
+    assert client.transfer.call_count == 1
 
 
 def test_prefetch_rejects_file_with_wrong_hash(tmp_path):

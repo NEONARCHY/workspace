@@ -24,8 +24,11 @@ class OfflineSnapshotSeeder:
         self.client, self.journal, self.clock = client, journal, clock
         self._jobs: deque[tuple[str, str]] = deque()
         self._file_jobs: deque[tuple[str, str, str, str, int, str]] = deque()
+        self._audio_jobs: deque[tuple[str, str, str, int]] = deque()
+        self._queued_details: set[tuple[str, str]] = set()
         self._queued_packets: set[tuple[str, str]] = set()
         self._queued_files: set[tuple[str, str, str, str]] = set()
+        self._queued_audio: set[tuple[str, str]] = set()
         self._rights_hash: str | None = None
         self._next_cycle = 0.0
 
@@ -64,10 +67,15 @@ class OfflineSnapshotSeeder:
         ):
             self._jobs = self._initial_jobs(self.journal.verified_actors())
             self._file_jobs.clear()
+            self._audio_jobs.clear()
+            self._queued_details.clear()
             self._queued_packets.clear()
             self._queued_files.clear()
+            self._queued_audio.clear()
             self._rights_hash = rights_hash
             self._next_cycle = self.clock() + 300
+        if not self._jobs and self._audio_jobs:
+            return self._fetch_audio(state["epoch"], rights_hash)
         if not self._jobs and self._file_jobs:
             return self._fetch_file(state["epoch"], rights_hash)
         if not self._jobs:
@@ -91,11 +99,42 @@ class OfflineSnapshotSeeder:
             or current_evidence["content_sha256"] != rights_hash
         ):
             return False
+        if (
+            path.startswith("/letters/") and not path.startswith("/letters/progress")
+            and result.get("id") != path.removeprefix("/letters/")
+        ):
+            raise WorkspaceError("Сервер вернул другую карточку письма.", 502)
         if not self.journal.cache(
             actor, path, result,
             expected_epoch=state["epoch"], expected_rights_hash=rights_hash,
         ):
             return False
+        if path.startswith("/letters/") and not path.startswith("/letters/progress"):
+            letter_id = path.removeprefix("/letters/")
+            for event in result.get("events", []):
+                if (
+                    not isinstance(event, dict)
+                    or event.get("eventType") != "letter.return_for_revision"
+                ):
+                    continue
+                audio = event.get("audio")
+                if not isinstance(audio, dict):
+                    continue
+                try:
+                    audio_id = str(UUID(str(audio["id"])))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                size = audio.get("byteSize")
+                if (
+                    audio.get("contentType") != "audio/ogg"
+                    or not isinstance(size, int) or isinstance(size, bool)
+                    or not 0 < size <= 50 * 1024 * 1024
+                ):
+                    continue
+                key = (actor, audio_id)
+                if key not in self._queued_audio:
+                    self._queued_audio.add(key)
+                    self._audio_jobs.append((actor, letter_id, audio_id, size))
         if path.startswith("/packets/outgoing/"):
             letter_id = path.removeprefix("/packets/outgoing/")
             for item in result.get("files", []):
@@ -136,6 +175,9 @@ class OfflineSnapshotSeeder:
                     except (KeyError, TypeError, ValueError):
                         continue
                     key = (actor, letter_id)
+                    if key not in self._queued_details:
+                        self._queued_details.add(key)
+                        self._jobs.append((actor, "/letters/" + letter_id))
                     if key not in self._queued_packets:
                         self._queued_packets.add(key)
                         self._jobs.append((actor, "/packets/outgoing/" + letter_id))
@@ -147,6 +189,39 @@ class OfflineSnapshotSeeder:
                 next_query["offset"] = str(offset + limit)
                 self._jobs.append((actor, urlsplit(path).path + "?" + urlencode(next_query)))
         return True
+
+    def _fetch_audio(self, epoch: str, rights_hash: str) -> bool:
+        actor, letter_id, audio_id, size = self._audio_jobs.popleft()
+        path = "/comment-audio/" + audio_id
+        old = self.journal.snapshot(actor, path)
+        if old is not None and old["payload"].get("letterId") == letter_id:
+            digest = old["payload"].get("sha256")
+            if isinstance(digest, str) and self.journal.blob_available(digest, size):
+                return True
+        try:
+            content = self.client.transfer(
+                "/ai-referent/agent/comment-audio/" + audio_id, telegram_id=actor
+            )
+        except WorkspaceError as error:
+            if error.retryable:
+                self._audio_jobs.appendleft((actor, letter_id, audio_id, size))
+            elif error.status not in {403, 404}:
+                raise
+            return False
+        if len(content) != size:
+            raise WorkspaceError("Размер автономного аудио не совпал.", 502)
+        current = self.journal.authority_state()
+        evidence = self.journal.offline_rights_evidence()
+        if (
+            current is None or current["phase"] != "online" or current["epoch"] != epoch
+            or evidence is None or evidence["content_sha256"] != rights_hash
+        ):
+            return False
+        digest = self.journal.put_blob(content)
+        return self.journal.cache(
+            actor, path, {"letterId": letter_id, "sha256": digest, "byteSize": size},
+            expected_epoch=epoch, expected_rights_hash=rights_hash,
+        )
 
     def _fetch_file(self, epoch: str, rights_hash: str) -> bool:
         actor, letter_id, file_id, digest, size, source = self._file_jobs.popleft()
