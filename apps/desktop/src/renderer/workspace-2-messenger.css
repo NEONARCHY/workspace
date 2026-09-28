@@ -97,6 +97,10 @@
   transition: width 240ms var(--ws-ease-physical), transform 240ms var(--ws-ease-physical);
 }
 
+.messenger-view .chat-buckets.is-more .chat-bucket-slider {
+  transition-duration: 180ms;
+}
+
 .messenger-view .chat-buckets.is-task-chats .chat-bucket-slider {
   width: calc((100% - 6px) * .307692);
   transform: translateX(75%);

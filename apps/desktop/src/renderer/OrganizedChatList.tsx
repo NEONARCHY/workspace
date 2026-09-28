@@ -134,7 +134,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], current
       return;
     }
     moreOpenPending.current = true;
-    moreOpenFallback.current = window.setTimeout(finishMoreOpen, 280);
+    moreOpenFallback.current = window.setTimeout(finishMoreOpen, 220);
   };
   const selectBucket = (nextBucket: ChatBucket) => {
     closeMoreMenu();
