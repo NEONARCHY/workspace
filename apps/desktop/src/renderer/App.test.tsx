@@ -1755,9 +1755,10 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByLabelText("Эскалировать после просрочки, ч."), {
       target: { value: "3" },
     });
-    fireEvent.change(screen.getByLabelText("Получатель эскалации"), {
-      target: { value: people[1]!.id },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Получатель эскалации" }));
+    fireEvent.click(within(screen.getByLabelText("Доступные сотрудники")).getByRole("button", {
+      name: /Бахтиёр Самугов/,
+    }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(

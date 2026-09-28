@@ -47,6 +47,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="assistant",
+        label=LocalizedLabel(
+            ru="ИИ-ассистент",
+            uz_cyrl="Сунъий интеллект ёрдамчиси",
+            uz_latn="Sunʼiy intellekt yordamchisi",
+        ),
+        route="/assistant",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="telegram_access",
         label=LocalizedLabel(
             ru="Доступ к Telegram-ботам",

@@ -166,7 +166,9 @@ async def _department_response(
         id=str(row["id"]),
         code=row["code"],
         name=row["name"],
+        scope=row["scope"],
         parent_id=str(row["parent_id"]) if row["parent_id"] else None,
+        lead_user_id=str(row["lead_user_id"]) if row["lead_user_id"] else None,
         assigned_users_count=row["assigned_users_count"],
         member_ids=[str(value) for value in member_ids],
         chat_id=str(chat_id) if chat_id else None,
@@ -320,6 +322,7 @@ async def create_department(
             id=department_id,
             code=payload.code,
             name=payload.name,
+            scope=payload.scope,
             parent_id=payload.parent_id,
             created_at=datetime.now(UTC),
         )
@@ -342,6 +345,7 @@ async def create_department(
         {
             "code": payload.code,
             "name": payload.name,
+            "scope": payload.scope,
             "parentId": str(payload.parent_id) if payload.parent_id else None,
         },
     )
@@ -379,6 +383,8 @@ async def update_department(
         values["code"] = payload.code
     if payload.name is not None:
         values["name"] = payload.name
+    if payload.scope is not None:
+        values["scope"] = payload.scope
     if "parent_id" in payload.model_fields_set:
         parent_id = payload.parent_id
         current = parent_id
@@ -402,6 +408,18 @@ async def update_department(
                     raise DirectoryServiceError(422, "Parent department does not exist")
             current = parent
         values["parent_id"] = parent_id
+    if "lead_user_id" in payload.model_fields_set:
+        if payload.lead_user_id is not None:
+            valid_lead = await connection.scalar(select(users.c.id).where(
+                users.c.id == payload.lead_user_id,
+                users.c.department_id == department_id,
+                users.c.status == "active",
+            ))
+            if valid_lead is None:
+                raise DirectoryServiceError(
+                    422, "Главное лицо должно быть активным сотрудником этого отдела"
+                )
+        values["lead_user_id"] = payload.lead_user_id
     if values:
         await connection.execute(
             update(departments).where(departments.c.id == department_id).values(**values)
@@ -421,15 +439,22 @@ async def update_department(
             "before": {
                 "code": existing["code"],
                 "name": existing["name"],
+                "scope": existing["scope"],
                 "parentId": (str(existing["parent_id"]) if existing["parent_id"] else None),
+                "leadUserId": (str(existing["lead_user_id"]) if existing["lead_user_id"] else None),
             },
             "after": {
                 "code": values.get("code", existing["code"]),
                 "name": values.get("name", existing["name"]),
+                "scope": values.get("scope", existing["scope"]),
                 "parentId": (
                     str(values.get("parent_id", existing["parent_id"]))
                     if values.get("parent_id", existing["parent_id"])
                     else None
+                ),
+                "leadUserId": (
+                    str(values.get("lead_user_id", existing["lead_user_id"]))
+                    if values.get("lead_user_id", existing["lead_user_id"]) else None
                 ),
             },
         },
@@ -460,11 +485,19 @@ async def update_department_members(
         select(users.c.id).where(users.c.department_id == department_id)
     )).scalars().all())
     removed = previous - requested
+    if department["lead_user_id"] in removed:
+        await connection.execute(update(departments).where(
+            departments.c.id == department_id
+        ).values(lead_user_id=None))
     if removed:
         await connection.execute(update(users).where(users.c.id.in_(removed)).values(
             department_id=None, updated_at=datetime.now(UTC)
         ))
     if requested:
+        await connection.execute(update(departments).where(
+            departments.c.id != department_id,
+            departments.c.lead_user_id.in_(requested),
+        ).values(lead_user_id=None))
         await connection.execute(update(users).where(users.c.id.in_(requested)).values(
             department_id=department_id, updated_at=datetime.now(UTC)
         ))
@@ -592,6 +625,33 @@ async def set_module_access_rule(
         },
     )
     return _module_access_rule(row)
+
+
+async def set_regional_assistant_access(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    enabled: bool,
+) -> list[ModuleAccessRuleResponse]:
+    """Update all verified regional departments in the request transaction."""
+    _require_admin(actor)
+    scope_column = departments.c.get("scope")
+    if scope_column is None:
+        raise DirectoryServiceError(409, "Department scope migration is not available")
+    regional_ids = (
+        await connection.execute(select(departments.c.id).where(scope_column == "regional"))
+    ).scalars().all()
+    if not regional_ids:
+        raise DirectoryServiceError(409, "No regional departments are configured")
+    permissions = ModulePermissionSet(
+        view=enabled, create=enabled, edit=enabled, approve=enabled, admin=False
+    )
+    payload = ModuleAccessRuleUpdateRequest(permissions=permissions)
+    return [
+        await set_module_access_rule(
+            connection, actor, "department", str(department_id), "assistant", payload
+        )
+        for department_id in regional_ids
+    ]
 
 
 async def delete_module_access_rule(
@@ -827,6 +887,10 @@ async def update_employee_access(
         if department_exists is None:
             raise DirectoryServiceError(422, "Department does not exist")
     now = datetime.now(UTC)
+    if employee["department_id"] != payload.department_id:
+        await connection.execute(update(departments).where(
+            departments.c.lead_user_id == employee_id
+        ).values(lead_user_id=None))
     await connection.execute(
         update(users)
         .where(users.c.id == employee_id)
@@ -930,6 +994,9 @@ async def update_employee_status(
         )
     )
     if payload.status != "active":
+        await connection.execute(update(departments).where(
+            departments.c.lead_user_id == employee_id
+        ).values(lead_user_id=None))
         await connection.execute(
             update(auth_sessions)
             .where(

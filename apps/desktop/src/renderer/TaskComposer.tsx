@@ -43,6 +43,8 @@ interface TaskComposerProps {
   readonly currentUserId: string;
   readonly initialTitle?: string;
   readonly initialDescription?: string;
+  readonly initialAssigneeName?: string;
+  readonly initialDueAt?: string;
   readonly sourceLabel?: string;
   readonly calendarEventId?: string;
   readonly onClose: () => void;
@@ -81,6 +83,8 @@ export function TaskComposer({
   currentUserId,
   initialTitle = "",
   initialDescription = "",
+  initialAssigneeName,
+  initialDueAt = "",
   sourceLabel,
   calendarEventId,
   onClose,
@@ -89,9 +93,11 @@ export function TaskComposer({
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [project, setProject] = useState("");
-  const [assigneeId, setAssigneeId] = useState(currentUserId);
+  const [assigneeId, setAssigneeId] = useState(() => people.find((person) =>
+    person.name.toLocaleLowerCase("ru-RU") === initialAssigneeName?.toLocaleLowerCase("ru-RU"),
+  )?.id ?? currentUserId);
   const [priority, setPriority] = useState<WorkspaceTask["priority"]>("normal");
-  const [dueAt, setDueAt] = useState("");
+  const [dueAt, setDueAt] = useState(initialDueAt);
   const [participants, setParticipants] = useState<readonly DraftParticipant[]>([]);
   const [participantId, setParticipantId] = useState("");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");
@@ -411,6 +417,7 @@ export function TaskComposer({
                   <PersonPicker
                     label="Ответственный новой задачи"
                     people={activePeople}
+                    departments={departments}
                     disabled={busy}
                     value={assigneeId}
                     onChange={(next) => {
@@ -441,7 +448,7 @@ export function TaskComposer({
             <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
               {departments.length ? <div className="task-composer-department-row"><WorkspaceSelect aria-label="Отдел или подразделение" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Выберите отдел</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.assignedUsersCount}</option>)}</WorkspaceSelect><Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить отдел как {participantRole === "observer" ? "наблюдателей" : "соисполнителей"}</Button><Button type="button" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить ответственным</Button><small>У ответственного отдела первый сотрудник становится координатором, остальные — соисполнителями.</small></div> : null}
               <div className="task-composer-add-row participant-add-row">
-                <PersonPicker label="Участник новой задачи" people={availableParticipants} value={participantId} onChange={setParticipantId} disabled={busy} />
+                <PersonPicker label="Участник новой задачи" people={availableParticipants} departments={departments} value={participantId} onChange={setParticipantId} disabled={busy} />
                 <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
                   <option value="co_assignee">Соисполнитель</option>
                   <option value="observer">Наблюдатель</option>

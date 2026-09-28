@@ -39,6 +39,31 @@ class HisobotReportInput(ApiModel):
         return value
 
 
+class HisobotUnitReport(ApiModel):
+    id: UUID
+    department_id: UUID
+    department_name: str
+    reporter_telegram_id: str
+    reporter_employee_key: str
+    reporter_name: str
+    reporter_position: str
+    report_scope: ReportScope
+    region_name: str | None
+    covered_telegram_ids: list[str]
+    report_date: date
+    content: str
+    submitted_at: datetime
+    is_late: bool
+    source: Literal["telegram", "workspace"]
+
+
+class HisobotUnit(ApiModel):
+    id: UUID
+    name: str
+    is_lead: bool
+    member_count: int
+
+
 class HisobotProfile(ApiModel):
     telegram_id: str
     full_name: str
@@ -50,9 +75,13 @@ class HisobotProfile(ApiModel):
     absence_kind: Literal["vacation", "sick_leave", "personal_time"] | None
     today: date
     can_submit: bool
+    can_submit_unit: bool = False
     window_opens_at: str = "12:00"
     window_closes_at: str = "18:30"
     today_report: HisobotReport | None
+    unit: HisobotUnit | None = None
+    today_unit_report: HisobotUnitReport | None = None
+    covered_by_report: bool = False
 
 
 class BridgeReport(ApiModel):
@@ -70,6 +99,26 @@ class BridgeReport(ApiModel):
 
 class BridgeReportBatch(ApiModel):
     reports: list[BridgeReport] = Field(max_length=200)
+
+
+class BridgeUnitReport(ApiModel):
+    department_id: UUID
+    department_name: str = Field(min_length=1, max_length=200)
+    reporter_telegram_id: str = Field(pattern=r"^[1-9][0-9]{0,15}$")
+    reporter_employee_key: str = Field(min_length=1, max_length=100)
+    reporter_name: str = Field(min_length=1, max_length=200)
+    reporter_position: str = Field(max_length=500)
+    report_scope: ReportScope
+    region_name: str | None = None
+    covered_telegram_ids: list[str] = Field(min_length=1, max_length=500)
+    report_date: date
+    content: str = Field(min_length=3, max_length=20000)
+    submitted_at: datetime
+    is_late: bool
+
+
+class BridgeUnitReportBatch(ApiModel):
+    reports: list[BridgeUnitReport] = Field(max_length=200)
 
 
 class BridgeVacation(ApiModel):
@@ -98,3 +147,6 @@ class BridgeRosterMember(ApiModel):
     region_name: str | None
     report_required: bool
     management_access: bool
+    department_id: UUID | None = None
+    department_name: str | None = None
+    department_lead: bool = False

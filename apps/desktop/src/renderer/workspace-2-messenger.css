@@ -273,10 +273,10 @@
 .messenger-view .message-scroll[data-chat-background="dawn"] { background: radial-gradient(circle at 12% 9%, rgb(255 218 196 / 48%), transparent 36%), radial-gradient(circle at 86% 78%, rgb(221 214 251 / 58%), transparent 46%), linear-gradient(145deg, #fffaf5, #f5f2fb); }
 .messenger-view .message-scroll[data-chat-background="sky"] { background: radial-gradient(circle at 82% 12%, rgb(190 226 248 / 55%), transparent 42%), radial-gradient(circle at 16% 82%, rgb(219 244 249 / 58%), transparent 38%), linear-gradient(160deg, #f8fcff, #eaf3fa); }
 .messenger-view .message-scroll[data-chat-background="sage"] { background: radial-gradient(circle at 18% 18%, rgb(210 236 216 / 58%), transparent 40%), radial-gradient(circle at 84% 85%, rgb(230 240 212 / 55%), transparent 42%), linear-gradient(145deg, #f9fcf7, #ecf4ec); }
-.messenger-view .message-scroll[data-chat-background="paper"] { background-color: #f5faf9; background-image: radial-gradient(circle at 18px 20px, rgb(91 157 162 / 11%) 1px, transparent 2px), radial-gradient(circle at 58px 64px, rgb(109 169 174 / 9%) 2px, transparent 3px), linear-gradient(135deg, rgb(206 232 231 / 28%), transparent 55%, rgb(216 228 243 / 28%)); background-size: 96px 96px, 96px 96px, 100% 100%; }
-.messenger-view .message-scroll[data-chat-background="suzani"] { background-color: #fbf3e8; background-image: radial-gradient(circle at 50% 50%, transparent 13px, rgb(177 98 79 / 20%) 14px 15px, transparent 16px), radial-gradient(circle at 0 0, rgb(0 145 168 / 16%) 4px, transparent 5px), radial-gradient(circle at 100% 100%, rgb(0 145 168 / 16%) 4px, transparent 5px); background-size: 92px 92px; }
-.messenger-view .message-scroll[data-chat-background="tiles"] { background-color: #e5f2f1; background-image: linear-gradient(45deg, transparent 45%, rgb(0 103 121 / 15%) 46% 54%, transparent 55%), linear-gradient(-45deg, transparent 45%, rgb(0 103 121 / 15%) 46% 54%, transparent 55%), radial-gradient(circle, #fff 0 3px, transparent 4px); background-size: 72px 72px; }
-.messenger-view .message-scroll[data-chat-background="clouds"] { background-color: #dcebf6; background-image: radial-gradient(ellipse at 22% 38%, rgb(255 255 255 / 90%) 0 11%, transparent 26%), radial-gradient(ellipse at 78% 68%, rgb(255 255 255 / 85%) 0 13%, transparent 29%), linear-gradient(170deg, #c8e4f6, #edf5fb); background-size: 360px 260px, 440px 300px, 100% 100%; }
+.messenger-view .message-scroll[data-chat-background="lagoon"] { background: radial-gradient(circle at 14% 10%, rgb(226 255 250 / 56%), transparent 36%), radial-gradient(circle at 89% 86%, rgb(17 120 139 / 36%), transparent 45%), linear-gradient(145deg, #c2e9e5, #88c7d0 58%, #66aabb); }
+.messenger-view .message-scroll[data-chat-background="sunset"] { background: radial-gradient(circle at 85% 15%, rgb(255 245 207 / 75%), transparent 34%), radial-gradient(circle at 14% 82%, rgb(184 94 103 / 18%), transparent 44%), linear-gradient(150deg, #f7dcc0, #e9af9f 56%, #d9a6b4); }
+.messenger-view .message-scroll[data-chat-background="ocean"] { background: radial-gradient(circle at 20% 16%, rgb(197 244 246 / 45%), transparent 38%), radial-gradient(circle at 82% 84%, rgb(25 78 117 / 24%), transparent 42%), linear-gradient(145deg, #b4dbe6, #80b6cc 55%, #608cae); }
+.messenger-view .message-scroll[data-chat-background="iris"] { background: radial-gradient(circle at 78% 12%, rgb(247 228 255 / 65%), transparent 38%), radial-gradient(circle at 14% 82%, rgb(109 137 202 / 25%), transparent 46%), linear-gradient(145deg, #e3d6ee, #b9b9df 56%, #a4c8df); }
 .messenger-view .message-scroll[data-chat-background="contrast"] { background: radial-gradient(circle at 18% 20%, rgb(255 227 166 / 70%), transparent 35%), linear-gradient(155deg, #eac796, #dcb087); }
 .messenger-view .message-scroll[data-chat-background="night"] { background: radial-gradient(circle at 85% 8%, rgb(0 145 168 / 22%), transparent 40%), linear-gradient(145deg, #18324a, #102637); }
 .messenger-view .message-row.is-removing { overflow: hidden; opacity: 1; transition: height 220ms var(--ws-ease), opacity 180ms var(--ws-ease); }
@@ -297,10 +297,10 @@
 .chat-background-preview.is-dawn { background: radial-gradient(circle at 16% 22%, #f9d8c7, transparent 60%), linear-gradient(145deg, #fff7ee, #e9e2f8); }
 .chat-background-preview.is-sky { background: radial-gradient(circle at 80% 15%, #c5e3f7, transparent 60%), linear-gradient(145deg, #f8fcff, #e5f2f9); }
 .chat-background-preview.is-sage { background: radial-gradient(circle at 15% 15%, #d5ecd9, transparent 60%), linear-gradient(145deg, #f9fcf7, #e6f0e4); }
-.chat-background-preview.is-paper { background: radial-gradient(circle at 12px 12px, #c3dddd 1px, transparent 2px) 0 0 / 24px 24px, #f4faf9; }
-.chat-background-preview.is-suzani { background: radial-gradient(circle, transparent 7px, #bd8d75 8px 9px, transparent 10px) 0 0 / 26px 26px, #fbf3e8; }
-.chat-background-preview.is-tiles { background: linear-gradient(45deg, transparent 43%, #91c5c9 46% 54%, transparent 57%) 0 0 / 26px 26px, #e5f2f1; }
-.chat-background-preview.is-clouds { background: radial-gradient(ellipse at 25% 36%, #fff 0 14%, transparent 40%), linear-gradient(#b9dff3, #eaf4fa); }
+.chat-background-preview.is-lagoon { background: radial-gradient(circle at 14% 10%, #e2fffa, transparent 60%), linear-gradient(145deg, #c2e9e5, #66aabb); }
+.chat-background-preview.is-sunset { background: radial-gradient(circle at 85% 15%, #fff5cf, transparent 60%), linear-gradient(150deg, #f7dcc0, #d9a6b4); }
+.chat-background-preview.is-ocean { background: radial-gradient(circle at 20% 16%, #c5f4f6, transparent 60%), linear-gradient(145deg, #b4dbe6, #608cae); }
+.chat-background-preview.is-iris { background: radial-gradient(circle at 78% 12%, #f7e4ff, transparent 60%), linear-gradient(145deg, #e3d6ee, #a4c8df); }
 .chat-background-preview.is-contrast { background: linear-gradient(155deg, #f9dfa7, #dcb087); }
 .chat-background-preview.is-night { background: radial-gradient(circle at 80% 18%, #246a79, transparent 55%), #163349; }
 .message-context-reactions { position: relative; }
@@ -313,6 +313,7 @@
 .message-reaction-people > button:hover { background: var(--ws-accent-wash); }
 .message-reaction-people > button:focus-visible { outline: 2px solid var(--ws-link); }
 .message-reaction-people > button > span:nth-child(2) { flex: 1; min-width: 0; }
+.message-reaction-people .fui-Avatar, .message-reaction-people .fui-Avatar__image { flex: none; border-radius: 50%; overflow: hidden; }
 .message-reaction-people > p { margin: 6px; color: var(--ws-muted); }
 .message-reaction-person-fallback { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 50%; background: var(--ws-accent-wash); }
 .message-reaction-quick-title { display: block; padding: 6px 8px; color: var(--ws-text); }

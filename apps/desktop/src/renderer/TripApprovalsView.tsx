@@ -5,13 +5,15 @@ import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { tripColumns, tripDropAction } from "./trip-board";
-import type { TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspacePerson } from "@yuksalish/contracts";
+import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { workflowStageColor } from "./workflow-stage-colors";
 import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -25,9 +27,11 @@ const dateLabel = (value: string) => new Date(`${value}T00:00:00`).toLocaleDateS
 const isFinished = (request: TripRequest) => request.stage === "approved" || request.stage === "rejected";
 
 interface TripApprovalsViewProps {
+  readonly assistantDraft?: AssistantActionDraft;
   readonly focusRequestId?: string;
   readonly requests: readonly TripRequest[];
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUser: WorkspacePerson;
   readonly onCreate: (payload: TripRequestInput) => Promise<TripRequest | undefined>;
   readonly onUpdate: (request: TripRequest, payload: TripRequestInput) => Promise<TripRequest | undefined>;
@@ -48,15 +52,25 @@ function emptyForm(currentUserId: string): TripFormState {
   return { purpose: "", destination: "", startDate: today, endDate: today, employeeIds: [currentUserId] };
 }
 
-export function TripApprovalsView({ focusRequestId, requests, people, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow }: TripApprovalsViewProps) {
+export function TripApprovalsView({ focusRequestId, requests, people, departments, currentUser, onCreate, onUpdate, onAction, onOpenChat, renderTripChat, workflow, positions = [], canManageWorkflow = false, onSaveWorkflow, onPublishWorkflow, assistantDraft }: TripApprovalsViewProps) {
   const boardPan = useMiddleMousePan<HTMLDivElement>();
   const restoreFocusTarget = useRestoreFocusTarget();
   const [selectedId, setSelectedId] = useState(focusRequestId ?? "");
   const [detailOpen, setDetailOpen] = useState(Boolean(focusRequestId));
   const [pendingDecision, setPendingDecision] = useState<{ id: string; action: "return" | "reject" }>();
-  const [formMode, setFormMode] = useState<"create" | "edit" | null>(null);
-  const [formOpen, setFormOpen] = useState(false);
-  const [form, setForm] = useState<TripFormState>(() => emptyForm(currentUser.id));
+  const [formMode, setFormMode] = useState<"create" | "edit" | null>(
+    assistantDraft?.kind === "trip" ? "create" : null,
+  );
+  const [formOpen, setFormOpen] = useState(assistantDraft?.kind === "trip");
+  const [form, setForm] = useState<TripFormState>(() =>
+    assistantDraft?.kind === "trip" ? {
+      purpose: assistantDraft.fields.purpose ?? "",
+      destination: assistantDraft.fields.destination ?? "",
+      startDate: (assistantDraft.fields.startDate ?? "").slice(0, 10),
+      endDate: (assistantDraft.fields.endDate ?? "").slice(0, 10),
+      employeeIds: [currentUser.id],
+    } : emptyForm(currentUser.id));
+  const [employeeListScope, setEmployeeListScope] = useState<EmployeeScope>("central");
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [section, setSection] = useState<"requests" | "designer">("requests");
   const [filter, setFilter] = useState<"running" | "all" | "finished">("running");
@@ -144,7 +158,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
 
-      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
+      {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">
         <button type="button" className="ws2-process-focus" onClick={() => setFilter("running")}>
           <strong>{actionableCount}</strong>
@@ -250,9 +264,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, currentUse
                 <label>Дата окончания<WorkspaceDateTimePicker mode="date" ariaLabel="Дата окончания" required value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>
               </div></RecordSection>
               <RecordSection title="Участники поездки" description={canChooseOthers ? "Отметьте сотрудников, которые отправятся в поездку. Поиск не сбрасывает выбор." : "Вы можете создать поездку для себя."}>
+                {canChooseOthers && departments ? <EmployeeScopeSwitch value={employeeListScope} onChange={setEmployeeListScope} label="Группа участников поездки" /> : null}
                 {canChooseOthers ? <Input aria-label="Найти участника поездки" placeholder="Имя или должность" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} /> : null}
-                <fieldset className="employee-picker"><legend className="sr-only">Выбор участников</legend>{people.filter((person) => (canChooseOthers || person.id === currentUser.id) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><span>{person.name}{person.jobTitle ? ` · ${person.jobTitle}` : ""}</span></span>} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
-                {canChooseOthers && !people.some((person) => `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))) ? <p role="status">Сотрудники не найдены. Измените поиск.</p> : null}
+                <fieldset className="employee-picker"><legend className="sr-only">Выбор участников</legend>{people.filter((person) => (canChooseOthers || person.id === currentUser.id) && (!canChooseOthers || !departments || employeeScope(person.departmentId, departments) === employeeListScope) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))).map((person) => <Checkbox checked={form.employeeIds.includes(person.id)} key={person.id} label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><span>{person.name}{person.jobTitle ? ` · ${person.jobTitle}` : ""}</span></span>} onChange={(_, data) => setForm({ ...form, employeeIds: data.checked ? [...form.employeeIds, person.id] : form.employeeIds.filter((id) => id !== person.id) })} />)}</fieldset>
+                {canChooseOthers && !people.some((person) => (!departments || employeeScope(person.departmentId, departments) === employeeListScope) && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru-RU").includes(employeeQuery.trim().toLocaleLowerCase("ru-RU"))) ? <p role="status">Сотрудники не найдены. Измените поиск или группу.</p> : null}
               </RecordSection>
             </RecordComposer>
           </form>) : null}

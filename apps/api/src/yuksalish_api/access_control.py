@@ -76,7 +76,7 @@ async def module_permissions_for_user(
     connection: AsyncConnection,
     user: AccessUser,
 ) -> dict[str, dict[ModuleAction, bool]]:
-    if user.role in {"admin", "superadmin"}:
+    if user.role == "superadmin":
         return {module_key: default_permissions(user.role) for module_key in MODULE_KEYS}
     department_keys = await _department_ancestry(connection, user.department_id)
     position_subjects = (
@@ -128,9 +128,19 @@ async def module_permissions_for_user(
     ]
     for subject_type, subject_key in ordered_subjects:
         for module_key in MODULE_KEYS:
+            if user.role == "admin" and module_key != "assistant":
+                continue
             rule = by_subject.get((subject_type, subject_key, module_key))
             if isinstance(rule, Mapping):
                 result[module_key] = normalize_permissions(rule)
+    # An explicit department-level assistant denial cannot be bypassed by a
+    # position or personal grant: the launcher and every assistant API agree.
+    if any(
+        isinstance(rule := by_subject.get(("department", key, "assistant")), Mapping)
+        and not normalize_permissions(rule)["view"]
+        for key in department_keys
+    ):
+        result["assistant"] = {action: False for action in MODULE_ACTIONS}
     if user.role not in {"admin", "superadmin"}:
         result["telegram_access"] = {action: False for action in MODULE_ACTIONS}
         result["ai_hisobot"]["approve"] = False
@@ -155,6 +165,11 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return "messenger", "admin"
     if normalized.startswith("/telegram-access"):
         return "telegram_access", "admin"
+    if normalized in {
+        "/assistant/messages", "/assistant/transcribe", "/assistant/rewrite",
+        "/assistant/birthday-greeting",
+    }:
+        return "assistant", "view"
     if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
         return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
     prefixes = (

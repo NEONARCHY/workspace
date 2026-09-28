@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  WorkspaceDepartment,
   WorkspacePerson,
   ZoomAvailability,
   ZoomMeeting,
@@ -20,6 +21,8 @@ import {
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 import {
   cancelZoomMeeting,
   createZoomMeeting,
@@ -30,6 +33,7 @@ import {
 interface ZoomViewProps {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   /** Owned by App so the calendar shows the same schedule. */
   readonly registry?: ZoomMeetingsRegistry;
@@ -233,7 +237,7 @@ function BusyStrip({ availability, day, timeZone }: {
 }
 
 export function ZoomView({
-  token, people, currentUserId, registry, loading, error, onRefresh, focusMeetingId,
+  token, people, departments, currentUserId, registry, loading, error, onRefresh, focusMeetingId,
 }: ZoomViewProps) {
   const [actionError, setActionError] = useState("");
   const [selectedId, setSelectedId] = useState<string | undefined>(focusMeetingId);
@@ -242,6 +246,7 @@ export function ZoomView({
   const [openedAt] = useState(Date.now);
   const [bucket, setBucket] = useState<"upcoming" | "past">("upcoming");
   const [draft, setDraft] = useState<Draft>();
+  const [participantScope, setParticipantScope] = useState<EmployeeScope>("central");
   const [availability, setAvailability] = useState<ZoomAvailability>();
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -519,10 +524,11 @@ export function ZoomView({
                 />
               </label>
               <fieldset className="zoom-participants">
-                <legend>Кого пригласить</legend>
+                <legend>Кого пригласить · выбрано {draft.participantIds.length}</legend>
+                {departments ? <EmployeeScopeSwitch value={participantScope} onChange={setParticipantScope} label="Группа участников Zoom" /> : null}
                 <div className="zoom-participant-list">
                   {people
-                    .filter((person) => person.id !== currentUserId)
+                    .filter((person) => person.id !== currentUserId && (!departments || employeeScope(person.departmentId, departments) === participantScope))
                     .map((person) => (
                       <Checkbox
                         key={person.id}

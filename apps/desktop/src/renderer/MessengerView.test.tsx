@@ -80,6 +80,47 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("reviews an assistant message before creating a direct chat, then keeps it unsent", async () => {
+    const chatActions = actions();
+    const newChat: ChatSummary = {
+      ...initialChats[1]!, id: "dilshod-direct", title: people[2]!.name,
+      members: [people[0]!, people[2]!].map((person) => ({
+        userId: person.id, role: "member" as const,
+        permissions: initialChats[1]!.permissions,
+      })),
+    };
+    vi.mocked(chatActions.create).mockResolvedValue(newChat);
+    const onSendMessage = vi.fn();
+    renderMessenger({ chatActions, onSendMessage, assistantRecipientId: people[2]!.id,
+      assistantDraft: { kind: "message", ready: true, fields: {
+        recipient: people[2]!.name, body: "Пожалуйста, проверьте документ.",
+      } },
+    });
+    expect(screen.getByRole("region", { name: "Подготовка сообщения" }))
+      .toHaveTextContent("Пожалуйста, проверьте документ.");
+    expect(chatActions.create).not.toHaveBeenCalled();
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Открыть диалог с черновиком" }));
+    expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
+      .toHaveValue("Пожалуйста, проверьте документ.");
+    expect(chatActions.create).toHaveBeenCalledOnce();
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("puts the assistant text in an existing chat draft without sending it", async () => {
+    const onSendMessage = vi.fn();
+    renderMessenger({
+      focusChatId: initialChats[1]!.id,
+      onSendMessage,
+      assistantRecipientId: people[1]!.id,
+      assistantDraft: { kind: "message", ready: true, fields: {
+        recipient: people[1]!.name, body: "Проверьте письмо, пожалуйста.",
+      } },
+    });
+    expect(await screen.findByRole("textbox", { name: "Новое сообщение" }))
+      .toHaveValue("Проверьте письмо, пожалуйста.");
+    expect(onSendMessage).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
@@ -675,6 +716,17 @@ describe("Private messenger", () => {
     localStorage.removeItem("yuksalish:chat-background:aziza");
   });
 
+  it("replaces legacy patterned backgrounds with gradient choices", () => {
+    localStorage.setItem("yuksalish:chat-background:aziza", "paper");
+    renderMessenger();
+    expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "lagoon");
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
+    expect(screen.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
+    localStorage.removeItem("yuksalish:chat-background:aziza");
+  });
+
   it("supports read-only members and does not render deleted text or its actions", () => {
     const chat: ChatSummary = {
       ...initialChats[0]!,
@@ -746,6 +798,8 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("button", { name: "Реакции · 3" }));
     expect(screen.getByRole("dialog", { name: "Реакции на сообщение" })).toHaveTextContent("Малика Нурова");
     fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Реакции на сообщение" })).not.toBeInTheDocument());
+    expect(screen.queryByText(/0 реакций · список сотрудников недоступен/)).not.toBeInTheDocument();
     openMessageMenu("Важное решение по бюджету");
     const unpin = screen.getByRole("button", { name: "Открепить" });
     await waitFor(() => expect(unpin).toBeEnabled());
