@@ -11,11 +11,12 @@ from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from typing import Literal, NotRequired, cast
 from uuid import UUID, uuid4
-from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 from zoneinfo import ZoneInfo
 
 import httpx
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 from sqlalchemy.sql.elements import ColumnElement
@@ -174,8 +175,15 @@ def parse_assistant_attachment(
                 document = archive.getinfo("word/document.xml")
                 if document.file_size > 1_000_000:
                     raise ValueError("Текст DOCX слишком велик для ассистента.")
-                root = ElementTree.fromstring(archive.read(document))
-        except (BadZipFile, KeyError, ElementTree.ParseError, RuntimeError, EOFError) as error:
+                with archive.open(document) as xml_file:
+                    xml_bytes = xml_file.read(1_000_001)
+                if len(xml_bytes) > 1_000_000:
+                    raise ValueError("Текст DOCX слишком велик для ассистента.")
+                root = ElementTree.fromstring(xml_bytes)
+        except (
+            BadZipFile, KeyError, ElementTree.ParseError, DefusedXmlException,
+            RuntimeError, EOFError,
+        ) as error:
             raise ValueError("DOCX повреждён или не содержит читаемого текста.") from error
         text = " ".join(
             element.text or "" for element in root.iter()

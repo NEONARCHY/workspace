@@ -522,6 +522,23 @@ def test_docx_attachment_extracts_text_without_other_package_files() -> None:
     assert attachment.content == "Рабочее письмо".encode()
 
 
+def test_docx_attachment_rejects_xml_entities() -> None:
+    package = BytesIO()
+    with ZipFile(package, "w") as archive:
+        archive.writestr(
+            "word/document.xml",
+            '<!DOCTYPE w:document [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+            'wordprocessingml/2006/main"><w:t>&xxe;</w:t></w:document>',
+        )
+    with pytest.raises(ValueError, match="DOCX повреждён"):
+        parse_assistant_attachment(
+            "unsafe.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            base64.b64encode(package.getvalue()).decode("ascii"),
+        )
+
+
 def test_assistant_sends_file_only_in_current_model_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
