@@ -69,6 +69,7 @@ def test_all_online_referent_writes_have_server_guard():
         ("POST", "/ai-referent/agent/jobs/claim"),
         ("POST", "/ai-referent/agent/jobs/{job_id}/heartbeat"),
         ("POST", "/ai-referent/agent/jobs/{job_id}/result"),
+        ("GET", "/ai-referent/agent/jobs/{job_id}/files/{file_id}"),
         ("POST", "/ai-referent/agent/ready"),
         ("POST", "/ai-referent/agent/notifications/claim"),
         ("POST", "/ai-referent/agent/notifications/{notification_id}/ack"),

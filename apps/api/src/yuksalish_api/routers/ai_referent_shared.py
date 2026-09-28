@@ -981,7 +981,10 @@ async def job_result(
     return Response(status_code=204)
 
 
-@router.get("/agent/jobs/{job_id}/files/{file_id}", dependencies=[Depends(require_agent_token)])
+@router.get(
+    "/agent/jobs/{job_id}/files/{file_id}",
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
+)
 async def job_file(
     job_id: UUID,
     file_id: UUID,
