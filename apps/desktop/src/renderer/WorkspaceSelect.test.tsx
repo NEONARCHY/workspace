@@ -41,4 +41,16 @@ describe("WorkspaceSelect", () => {
     fireEvent.click(screen.getByRole("combobox", { name: "Ответственный" }));
     expect(document.querySelector(".workspace-select-person-option .fui-Avatar")).not.toBeNull();
   });
+
+  it("marks every priority option with its tone, including inactive choices", () => {
+    render(<WorkspaceSelect aria-label="Приоритет задачи" variant="priority" value="normal">
+      <option value="low">Низкий</option><option value="normal">Обычный</option>
+      <option value="high">Высокий</option><option value="urgent">Срочный</option>
+    </WorkspaceSelect>);
+    expect(document.querySelector(".workspace-priority-select.priority-normal")).not.toBeNull();
+    fireEvent.click(screen.getByRole("combobox", { name: "Приоритет задачи" }));
+    for (const tone of ["low", "normal", "high", "urgent"]) {
+      expect(document.querySelector(`.workspace-priority-option.priority-${tone}`)).not.toBeNull();
+    }
+  });
 });

@@ -28,6 +28,37 @@ describe("workspace date and file inputs", () => {
     expect(screen.getByRole("group", { name: "Половина дня" })).toBeVisible();
   });
 
+  it("returns the visible calendar to today before selecting the date", () => {
+    const change = vi.fn();
+    render(<WorkspaceDateTimePicker ariaLabel="Срок" value="2024-01-15T09:00" onChange={change} />);
+    fireEvent.click(screen.getByRole("button", { name: "Срок: открыть выбор" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сегодня" }));
+    const today = new Date();
+    expect(screen.getByText(`${["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"][today.getMonth()]} ${today.getFullYear()}`)).toBeVisible();
+    expect(change).toHaveBeenCalledWith(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}T09:00`);
+  });
+
+  it("selects time by dragging the minute wheel", () => {
+    const change = vi.fn();
+    class TestPointerEvent extends MouseEvent {
+      pointerId: number;
+      constructor(type: string, init: MouseEventInit & { pointerId?: number }) {
+        super(type, init);
+        this.pointerId = init.pointerId ?? 1;
+      }
+    }
+    vi.stubGlobal("PointerEvent", TestPointerEvent);
+    Element.prototype.setPointerCapture = vi.fn();
+    render(<WorkspaceDateTimePicker ariaLabel="Время" mode="time" value="09:00" onChange={change} />);
+    fireEvent.click(screen.getByRole("button", { name: "Время: открыть выбор" }));
+    const wheel = screen.getByRole("listbox", { name: "Минуты" });
+    fireEvent.pointerDown(wheel, { button: 0, pointerId: 1, clientY: 100 });
+    fireEvent.pointerMove(wheel, { pointerId: 1, clientY: 32 });
+    fireEvent.pointerUp(wheel, { pointerId: 1, clientY: 32 });
+    expect(change).toHaveBeenCalledWith("09:02");
+    vi.unstubAllGlobals();
+  });
+
   it("accepts dropped files through the shared upload surface", () => {
     const onFiles = vi.fn();
     const file = new File(["document"], "proposal.docx");

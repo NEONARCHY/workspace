@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import {
@@ -86,6 +86,7 @@ export function WorkspaceDateTimePicker({
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() => initialMonth(value, min));
   const [clockMode, setClockMode] = useState<12 | 24>(24);
+  const [calendarReturning, setCalendarReturning] = useState(false);
   const selectedDate = datePart(value);
   const selectedTime = timePart(value) || "09:00";
   const [hourText, minuteText] = selectedTime.split(":");
@@ -93,6 +94,8 @@ export function WorkspaceDateTimePicker({
   const minute = Number(minuteText || 0);
   const hourWheel = useRef<HTMLDivElement>(null);
   const minuteWheel = useRef<HTMLDivElement>(null);
+  const wheelDrag = useRef<{ pointerId: number; startY: number; lastY: number; moved: boolean } | null>(null);
+  const suppressWheelClick = useRef(false);
   const days = useMemo(() => calendarDays(month), [month]);
   const minimumDate = datePart(min ?? "");
 
@@ -115,6 +118,54 @@ export function WorkspaceDateTimePicker({
   const updateTime = (nextHour: number, nextMinute: number) => {
     const next = `${two(nextHour)}:${two(nextMinute)}`;
     onChange(mode === "time" ? next : `${selectedDate || dateKey(new Date())}T${next}`);
+  };
+  const handleWheelPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    wheelDrag.current = { pointerId: event.pointerId, startY: event.clientY, lastY: event.clientY, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleWheelPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const drag = wheelDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientY - drag.startY) > 4) drag.moved = true;
+    if (drag.moved) event.currentTarget.scrollTop -= event.clientY - drag.lastY;
+    drag.lastY = event.clientY;
+  };
+  const handleWheelPointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    const kind = event.currentTarget.dataset.wheel === "hour" ? "hour" : "minute";
+    const drag = wheelDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    wheelDrag.current = null;
+    if (!drag.moved) return;
+    suppressWheelClick.current = true;
+    window.setTimeout(() => { suppressWheelClick.current = false; }, 0);
+    const index = Math.max(0, Math.min(kind === "hour" ? visibleHours.length - 1 : 59, Math.round(event.currentTarget.scrollTop / 34)));
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    if (typeof event.currentTarget.scrollTo === "function") event.currentTarget.scrollTo({ top: index * 34, behavior: reducedMotion ? "instant" : "smooth" });
+    else event.currentTarget.scrollTop = index * 34;
+    if (kind === "minute") updateTime(hour, index);
+    else {
+      const picked = visibleHours[index] ?? 0;
+      updateTime(clockMode === 24 ? picked : (picked % 12) + (period === "PM" ? 12 : 0), minute);
+    }
+  };
+  const handleWheelPointerCancel = () => { wheelDrag.current = null; };
+  const handleWheelClickCapture = (event: MouseEvent<HTMLDivElement>) => {
+    if (!suppressWheelClick.current) return;
+    event.preventDefault();
+    event.stopPropagation();
+    suppressWheelClick.current = false;
+  };
+  const returnToToday = () => {
+    const today = new Date();
+    const key = dateKey(today);
+    if (minimumDate && key < minimumDate) return;
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setCalendarReturning(true);
+    window.setTimeout(() => setCalendarReturning(false), 320);
+    if (mode === "date" && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      window.setTimeout(() => updateDate(key), 280);
+    } else updateDate(key);
   };
   const twelveHour = hour % 12 || 12;
   const period = hour >= 12 ? "PM" : "AM";
@@ -153,7 +204,7 @@ export function WorkspaceDateTimePicker({
           <button type="button" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} aria-label="Следующий месяц"><ChevronRight20Regular /></button>
         </header>
         <div className="ws-calendar-weekdays" aria-hidden="true">{weekdays.map((day) => <span key={day}>{day}</span>)}</div>
-        <div className="ws-calendar-days" role="grid">
+        <div className={`ws-calendar-days${calendarReturning ? " is-returning" : ""}`} role="grid">
           {days.map((date) => {
             const key = `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
             const outside = date.getMonth() !== month.getMonth();
@@ -169,18 +220,18 @@ export function WorkspaceDateTimePicker({
             >{date.getDate()}</button>;
           })}
         </div>
-        <button type="button" className="ws-calendar-today" onClick={() => updateDate(dateKey(new Date()))}>Сегодня</button>
+        <button type="button" className="ws-calendar-today" disabled={Boolean(minimumDate && dateKey(new Date()) < minimumDate)} onClick={returnToToday}>Сегодня</button>
       </div> : null}
       {mode !== "date" ? <div className="ws-time-panel">
         <header><span><Clock20Regular aria-hidden="true" /> Время</span><span className="ws-clock-mode" role="group" aria-label="Формат времени"><button type="button" aria-pressed={clockMode === 24} onClick={() => setClockMode(24)}>24</button><button type="button" aria-pressed={clockMode === 12} onClick={() => setClockMode(12)}>12</button></span></header>
         <div className="ws-time-wheels">
-          <div className="ws-time-wheel" ref={hourWheel} role="listbox" aria-label="Часы">{visibleHours.map((item) => {
+          <div className="ws-time-wheel" ref={hourWheel} role="listbox" aria-label="Часы" data-wheel="hour" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{visibleHours.map((item) => {
             const selected = clockMode === 24 ? item === hour : item === twelveHour;
             const nextHour = clockMode === 24 ? item : (item % 12) + (period === "PM" ? 12 : 0);
             return <button type="button" role="option" aria-selected={selected} key={item} onClick={() => updateTime(nextHour, minute)}>{two(item)}</button>;
           })}</div>
           <span className="ws-time-separator">:</span>
-          <div className="ws-time-wheel" ref={minuteWheel} role="listbox" aria-label="Минуты">{Array.from({ length: 60 }, (_, item) => <button type="button" role="option" aria-selected={item === minute} key={item} onClick={() => updateTime(hour, item)}>{two(item)}</button>)}</div>
+          <div className="ws-time-wheel" ref={minuteWheel} role="listbox" aria-label="Минуты" data-wheel="minute" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{Array.from({ length: 60 }, (_, item) => <button type="button" role="option" aria-selected={item === minute} key={item} onClick={() => updateTime(hour, item)}>{two(item)}</button>)}</div>
           {clockMode === 12 ? <div className="ws-time-period" role="group" aria-label="Половина дня"><button type="button" aria-pressed={period === "AM"} onClick={() => updateTime(hour % 12, minute)}>AM</button><button type="button" aria-pressed={period === "PM"} onClick={() => updateTime((hour % 12) + 12, minute)}>PM</button></div> : null}
         </div>
       </div> : null}

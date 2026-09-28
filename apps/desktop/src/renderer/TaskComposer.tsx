@@ -428,6 +428,7 @@ export function TaskComposer({
                   <span>Приоритет</span>
                   <WorkspaceSelect
                     aria-label="Приоритет новой задачи"
+                    variant="priority"
                     value={priority}
                     onChange={(event) => setPriority(event.target.value as WorkspaceTask["priority"])}
                   >

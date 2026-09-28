@@ -733,6 +733,7 @@ function PaymentFields({ form, people, onChange, revision = false }: PaymentFiel
             Приоритет
             <WorkspaceSelect
               aria-label={`${prefix}приоритет заявки`}
+              variant="priority"
               value={form.requestPriority}
               onChange={(event) => update("requestPriority", event.target.value as PaymentFormState["requestPriority"])}
             >

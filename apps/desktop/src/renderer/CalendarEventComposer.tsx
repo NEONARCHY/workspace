@@ -222,7 +222,7 @@ export function CalendarEventComposer({
                     </label>
                     <label>
                       <span>Приоритет</span>
-                      <Select aria-label={`Приоритет внутренней задачи ${index + 1}`} value={task.priority} onChange={(event) => onUpdateTask(task.key, { priority: event.target.value as WorkspaceTask["priority"] })}>
+                      <Select aria-label={`Приоритет внутренней задачи ${index + 1}`} variant="priority" value={task.priority} onChange={(event) => onUpdateTask(task.key, { priority: event.target.value as WorkspaceTask["priority"] })}>
                         {Object.entries(priorityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                       </Select>
                     </label>

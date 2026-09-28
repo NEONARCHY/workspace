@@ -297,6 +297,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Настройки профиля"}
         onMouseDown={(event) => event.stopPropagation()}
       >
+        <div className="account-panel-scroll">
         <header>
           <div>
             <span>Настройки</span>
@@ -350,7 +351,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </nav>
         </div>}
 
-        <div className="account-settings-grid">
+        <div className={`account-settings-grid${initialSection === "invite" ? " is-invite" : ""}`}>
         {initialSection !== "invite" && <>
 
         <section className="account-section" data-account-section="language">
@@ -592,6 +593,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         </div>
         {feedback ? <div className="account-feedback" role="status">{feedback}</div> : null}
+        </div>
       </aside>
     </div>
   );
