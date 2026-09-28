@@ -27,6 +27,17 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _valid_actor_actions(actor: dict[str, Any]) -> bool:
+    actions = actor.get("moduleActions")
+    valid = {"view", "create", "edit", "approve", "admin"}
+    return (
+        isinstance(actions, list)
+        and "view" in actions
+        and all(isinstance(action, str) and action in valid for action in actions)
+        and len(actions) == len(set(actions))
+    )
+
+
 class OfflineJournal:
     """Keep local operations and their blobs until explicitly acknowledged.
 
@@ -51,6 +62,10 @@ class OfflineJournal:
                     kind TEXT NOT NULL,
                     payload TEXT NOT NULL,
                     blob_sha256 TEXT,
+                    authority_epoch TEXT,
+                    rights_snapshot_id TEXT,
+                    rights_content_sha256 TEXT,
+                    required_action TEXT,
                     occurred_at TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'acknowledged', 'blocked')),
@@ -118,7 +133,9 @@ class OfflineJournal:
                     snapshot_id TEXT PRIMARY KEY,
                     epoch TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    completed_at TEXT
+                    completed_at TEXT,
+                    rejected_at TEXT,
+                    rejection_reason TEXT
                 );
                 CREATE TABLE IF NOT EXISTS telegram_cursor (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -137,6 +154,21 @@ class OfflineJournal:
             }
             if "snapshot_id" not in columns:
                 connection.execute("ALTER TABLE rights_snapshot ADD COLUMN snapshot_id TEXT")
+            request_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(rights_requests)")
+            }
+            for name in ("rejected_at", "rejection_reason"):
+                if name not in request_columns:
+                    connection.execute(f"ALTER TABLE rights_requests ADD COLUMN {name} TEXT")
+            operation_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(operations)")
+            }
+            for name in (
+                "authority_epoch", "rights_snapshot_id", "rights_content_sha256",
+                "required_action",
+            ):
+                if name not in operation_columns:
+                    connection.execute(f"ALTER TABLE operations ADD COLUMN {name} TEXT")
 
     def initialize_telegram_offset(self, previous_offset: int | None) -> int:
         """Import the old post-handle cursor only once before using this inbox."""
@@ -280,7 +312,8 @@ class OfflineJournal:
                 raise ValueError("Нет действующей аренды для запроса прав.")
             pending = connection.execute(
                 "SELECT snapshot_id FROM rights_requests "
-                "WHERE epoch = ? AND completed_at IS NULL ORDER BY created_at LIMIT 1",
+                "WHERE epoch = ? AND completed_at IS NULL AND rejected_at IS NULL "
+                "ORDER BY created_at LIMIT 1",
                 (epoch,),
             ).fetchone()
             if pending is not None:
@@ -291,6 +324,30 @@ class OfflineJournal:
                 (snapshot_id, epoch, _now()),
             )
             return snapshot_id
+
+    def reject_offline_rights_request(
+        self, snapshot_id: str, epoch: str, reason: str
+    ) -> None:
+        """Discard an incompatible response without ever authorizing its actors."""
+        snapshot_id, epoch = str(UUID(snapshot_id)), str(UUID(epoch))
+        if not reason or len(reason) > 500:
+            raise ValueError("Укажите короткую причину отказа от копии прав.")
+        with self.connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            request = connection.execute(
+                "SELECT epoch, completed_at, rejected_at, rejection_reason "
+                "FROM rights_requests WHERE snapshot_id = ?", (snapshot_id,)
+            ).fetchone()
+            if request is None or request["epoch"] != epoch or request["completed_at"]:
+                raise ValueError("Нельзя отклонить неизвестную или принятую копию прав.")
+            if request["rejected_at"] is not None:
+                if request["rejection_reason"] != reason:
+                    raise ValueError("Причина отказа от копии прав уже зафиксирована.")
+                return
+            connection.execute(
+                "UPDATE rights_requests SET rejected_at = ?, rejection_reason = ? "
+                "WHERE snapshot_id = ?", (_now(), reason, snapshot_id),
+            )
 
     def save_offline_rights(self, response: dict[str, Any]) -> None:
         """Atomically replace the last server-verified actor set, including revocations."""
@@ -304,8 +361,9 @@ class OfflineJournal:
             len(ids) != len(actors)
             or any(not isinstance(value, str) or not value.isdecimal() for value in ids)
             or len(ids) != len(set(ids))
+            or any(not _valid_actor_actions(actor) for actor in actors)
         ):
-            raise ValueError("Telegram-доступы содержат дубли или неверные ID.")
+            raise ValueError("Telegram-доступы содержат дубли, неверные ID или права.")
         canonical = _json(actors)
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         if digest != response.get("contentSha256"):
@@ -323,10 +381,11 @@ class OfflineJournal:
             if state is None or state["epoch"] != epoch or state["phase"] != "online":
                 raise ValueError("Нет действующей аренды для сохранения прав.")
             request = connection.execute(
-                "SELECT epoch, completed_at FROM rights_requests WHERE snapshot_id = ?",
+                "SELECT epoch, completed_at, rejected_at FROM rights_requests "
+                "WHERE snapshot_id = ?",
                 (snapshot_id,),
             ).fetchone()
-            if request is None or request["epoch"] != epoch:
+            if request is None or request["epoch"] != epoch or request["rejected_at"]:
                 raise ValueError("Копия прав не соответствует сохранённому запросу.")
             previous = connection.execute(
                 "SELECT snapshot_id, verified_at, content_sha256 "
@@ -398,6 +457,8 @@ class OfflineJournal:
             if not isinstance(actor, dict) or any(not isinstance(key, str) for key in actor):
                 raise ValueError("Локальная копия Telegram-доступов повреждена.")
             if actor.get("telegramId") == telegram_id:
+                if "view" not in actor.get("moduleActions", []):
+                    return None
                 return {key: value for key, value in actor.items()}
         return None
 
@@ -562,6 +623,7 @@ class OfflineJournal:
         letter_id: str | None = None,
         blob_sha256: str | None = None,
         occurred_at: str | None = None,
+        _required_action: str | None = None,
     ) -> int:
         operation_id = str(UUID(operation_id))
         if letter_id is not None:
@@ -577,24 +639,90 @@ class OfflineJournal:
                 "SELECT * FROM operations WHERE operation_id = ?", (operation_id,)
             ).fetchone()
             if existing is not None:
-                if (existing["actor_id"], existing["letter_id"], existing["kind"],
-                    existing["payload"], existing["blob_sha256"]) != (
-                    actor_id, letter_id, kind, data, blob_sha256
-                ):
+                if (
+                    existing["actor_id"], existing["letter_id"], existing["kind"],
+                    existing["payload"], existing["blob_sha256"],
+                    existing["required_action"],
+                ) != (
+                    actor_id, letter_id, kind, data, blob_sha256, _required_action,
+                ) or (_required_action is not None and (
+                    existing["authority_epoch"] is None
+                    or existing["rights_snapshot_id"] is None
+                    or existing["rights_content_sha256"] is None
+                )):
                     raise ValueError("Повторный operation_id содержит другие данные.")
                 return int(existing["sequence"])
+            evidence: tuple[str | None, str | None, str | None, str | None] = (
+                None, None, None, None
+            )
+            if _required_action is not None:
+                if _required_action not in {"create", "edit", "approve", "admin"}:
+                    raise ValueError("Недопустимое право для автономной операции.")
+                state = connection.execute(
+                    "SELECT epoch, phase FROM authority_state WHERE id = 1"
+                ).fetchone()
+                rights = connection.execute(
+                    "SELECT snapshot_id, epoch, payload, content_sha256 "
+                    "FROM rights_snapshot WHERE id = 1"
+                ).fetchone()
+                if (
+                    state is None or state["phase"] != "offline"
+                    or rights is None or rights["snapshot_id"] is None
+                    or state["epoch"] != rights["epoch"]
+                ):
+                    raise ValueError("Нет подтверждённой автономной эпохи и прав.")
+                rights_payload = str(rights["payload"])
+                rights_hash = hashlib.sha256(rights_payload.encode("utf-8")).hexdigest()
+                if rights_hash != rights["content_sha256"]:
+                    raise ValueError("Локальная копия Telegram-доступов повреждена.")
+                actors = json.loads(rights_payload)
+                actor = next(
+                    (item for item in actors if isinstance(item, dict)
+                     and item.get("telegramId") == actor_id), None,
+                ) if isinstance(actors, list) else None
+                if (
+                    actor is None or not _valid_actor_actions(actor)
+                    or _required_action not in actor["moduleActions"]
+                    or (_required_action == "approve" and not actor.get("reviewerKeys"))
+                ):
+                    raise ValueError("Нет подтверждённого права на это действие.")
+                evidence = (
+                    str(state["epoch"]), str(rights["snapshot_id"]),
+                    str(rights["content_sha256"]), _required_action,
+                )
             if blob_sha256 is not None and connection.execute(
                 "SELECT 1 FROM blobs WHERE sha256 = ?", (blob_sha256,)
             ).fetchone() is None:
                 raise FileNotFoundError("Сначала сохраните файл в автономный журнал.")
             cursor = connection.execute(
                 "INSERT INTO operations (operation_id, actor_id, letter_id, kind, payload, "
-                "blob_sha256, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (operation_id, actor_id, letter_id, kind, data, blob_sha256, timestamp),
+                "blob_sha256, authority_epoch, rights_snapshot_id, rights_content_sha256, "
+                "required_action, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (operation_id, actor_id, letter_id, kind, data, blob_sha256, *evidence,
+                 timestamp),
             )
             if cursor.lastrowid is None:
                 raise RuntimeError("SQLite не подтвердил запись операции.")
             return cursor.lastrowid
+
+    def append_with_rights_evidence(
+        self,
+        *,
+        operation_id: str,
+        actor_id: str,
+        kind: str,
+        payload: dict[str, Any],
+        required_action: str,
+        letter_id: str | None = None,
+        blob_sha256: str | None = None,
+        occurred_at: str | None = None,
+    ) -> int:
+        """Record coarse actor rights; replay must recheck letter and stage rules."""
+        return self.append(
+            operation_id=operation_id, actor_id=actor_id, kind=kind, payload=payload,
+            letter_id=letter_id, blob_sha256=blob_sha256, occurred_at=occurred_at,
+            _required_action=required_action,
+        )
 
     def pending(self, limit: int = 100) -> list[dict[str, Any]]:
         if not 1 <= limit <= 1000:
@@ -609,6 +737,17 @@ class OfflineJournal:
         return [
             {**dict(row), "payload": json.loads(row["payload"])} for row in rows
         ]
+
+    def pending_authorized(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Fail closed if an old local write lacks server-verifiable evidence."""
+        operations = self.pending(limit)
+        for operation in operations:
+            if any(operation[field] is None for field in (
+                "authority_epoch", "rights_snapshot_id", "rights_content_sha256",
+                "required_action",
+            )):
+                raise ValueError("Автономная операция без подтверждённых прав требует сверки.")
+        return operations
 
     def pending_blob_hashes(self, limit: int = 100) -> list[str]:
         """List only files still referenced by unacknowledged operations."""

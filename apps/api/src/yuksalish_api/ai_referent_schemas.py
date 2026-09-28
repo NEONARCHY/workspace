@@ -123,6 +123,9 @@ class OfflineTelegramActor(ApiModel):
     full_name: str
     role: str
     reviewer_keys: list[str]
+    module_actions: list[Literal["view", "create", "edit", "approve", "admin"]] = Field(
+        default_factory=list
+    )
 
 
 class OfflineRightsSnapshotRequest(ApiModel):

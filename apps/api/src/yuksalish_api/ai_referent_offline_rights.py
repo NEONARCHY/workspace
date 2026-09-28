@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .access_control import MODULE_ACTIONS, module_permissions_for_user
 from .ai_referent_configuration_service import read_configuration
 from .ai_referent_schemas import OfflineRightsSnapshot, OfflineTelegramActor
 from .ai_referent_shared_service import telegram_actor
@@ -100,12 +101,14 @@ async def export_offline_rights(
             str(reviewer.key) for reviewer in configuration.reviewers
             if reviewer.can_approve and reviewer.user_id == str(actor.id)
         )
+        allowed = (await module_permissions_for_user(connection, actor))["ai_referent"]
         actors.append(OfflineTelegramActor(
             telegram_id=telegram_id,
             user_id=actor.id,
             full_name=actor.full_name,
             role=actor.role,
             reviewer_keys=reviewer_keys,
+            module_actions=[action for action in MODULE_ACTIONS if allowed[action]],
         ))
     canonical = json.dumps(
         [actor.model_dump(mode="json", by_alias=True) for actor in actors],

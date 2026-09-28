@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import sqlite3
 from uuid import uuid4
 
 import pytest
@@ -36,6 +39,67 @@ def test_operation_and_blob_survive_reopen(tmp_path):
         payload={"fileName": "letter.docx"},
         blob_sha256=digest,
     ) == sequence
+    with pytest.raises(ValueError, match="без подтверждённых прав"):
+        reopened.pending_authorized()
+
+
+def test_authorized_operation_carries_immutable_rights_evidence(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    epoch = str(uuid4())
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    snapshot_id = journal.prepare_offline_rights(epoch)
+    actors = [{
+        "telegramId": "123", "userId": str(uuid4()), "fullName": "Отправитель",
+        "role": "employee", "reviewerKeys": [],
+        "moduleActions": ["view", "create", "edit"],
+    }]
+    payload = json.dumps(actors, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha256(payload.encode()).hexdigest()
+    journal.save_offline_rights({
+        "snapshotId": snapshot_id, "epoch": epoch, "actors": actors,
+        "verifiedAt": "2026-09-28T12:00:00Z", "contentSha256": digest,
+    })
+    operation_id = str(uuid4())
+    args = {
+        "operation_id": operation_id, "actor_id": "123", "kind": "letter.create",
+        "payload": {"subject": "Письмо"}, "required_action": "create",
+    }
+    with pytest.raises(ValueError, match="автономной эпохи"):
+        journal.append_with_rights_evidence(**args)
+    journal.set_authority_phase("referent-pc", epoch, "offline")
+    sequence = journal.append_with_rights_evidence(**args)
+    saved = OfflineJournal(tmp_path).pending_authorized()[0]
+    assert saved["sequence"] == sequence
+    assert saved["authority_epoch"] == epoch
+    assert saved["rights_snapshot_id"] == snapshot_id
+    assert saved["rights_content_sha256"] == digest
+    assert saved["required_action"] == "create"
+    with pytest.raises(ValueError, match="подтверждённого права"):
+        journal.append_with_rights_evidence(**{**args, "operation_id": str(uuid4()),
+                                    "required_action": "approve"})
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+    assert journal.append_with_rights_evidence(**args) == sequence
+    with pytest.raises(ValueError, match="автономной эпохи"):
+        journal.append_with_rights_evidence(**{**args, "operation_id": str(uuid4())})
+
+
+def test_old_local_operations_are_migrated_without_inventing_rights(tmp_path):
+    with sqlite3.connect(tmp_path / "offline-journal.sqlite") as connection:
+        connection.execute(
+            "CREATE TABLE operations (sequence INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "operation_id TEXT NOT NULL UNIQUE, actor_id TEXT NOT NULL, letter_id TEXT, "
+            "kind TEXT NOT NULL, payload TEXT NOT NULL, blob_sha256 TEXT, "
+            "occurred_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', result TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO operations (operation_id, actor_id, kind, payload, occurred_at) "
+            "VALUES (?, '123', 'create', '{}', '2026-09-28T12:00:00+00:00')",
+            (str(uuid4()),),
+        )
+    journal = OfflineJournal(tmp_path)
+    assert journal.pending()[0]["rights_snapshot_id"] is None
+    with pytest.raises(ValueError, match="без подтверждённых прав"):
+        journal.pending_authorized()
 
 
 def test_staging_only_pending_referenced_blobs_is_retry_safe(tmp_path):

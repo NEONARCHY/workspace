@@ -124,7 +124,8 @@ def test_last_verified_rights_replace_revoked_ids_atomically(tmp_path):
 
     def response(actor_ids, stamp, snapshot_id):
         actors = [{"telegramId": value, "userId": str(uuid4()),
-                   "fullName": "Сотрудник", "role": "employee", "reviewerKeys": []}
+                   "fullName": "Сотрудник", "role": "employee", "reviewerKeys": [],
+                   "moduleActions": ["view", "create", "edit"]}
                   for value in actor_ids]
         canonical = json.dumps(actors, ensure_ascii=False, sort_keys=True,
                                separators=(",", ":"))
@@ -172,3 +173,39 @@ def test_older_local_rights_table_is_upgraded_without_claiming_replay_evidence(t
         )
     journal = OfflineJournal(tmp_path)
     assert journal.offline_rights_evidence() is None
+
+
+def test_incompatible_rights_request_can_be_rejected_and_replaced(tmp_path):
+    epoch = str(uuid4())
+    with sqlite3.connect(tmp_path / "offline-journal.sqlite") as connection:
+        connection.execute(
+            "CREATE TABLE rights_requests (snapshot_id TEXT PRIMARY KEY, epoch TEXT NOT NULL, "
+            "created_at TEXT NOT NULL, completed_at TEXT)"
+        )
+    journal = OfflineJournal(tmp_path)
+    journal.set_authority_phase("referent-pc", epoch, "online")
+    old_id = journal.prepare_offline_rights(epoch)
+    old_actors = [{"telegramId": "123", "userId": str(uuid4()),
+                   "fullName": "Сотрудник", "role": "employee", "reviewerKeys": []}]
+    old_payload = json.dumps(old_actors, ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":"))
+    with pytest.raises(ValueError, match="неверные ID или права"):
+        journal.save_offline_rights({
+            "snapshotId": old_id, "epoch": epoch, "actors": old_actors,
+            "verifiedAt": "2026-09-28T12:00:00Z",
+            "contentSha256": hashlib.sha256(old_payload.encode()).hexdigest(),
+        })
+    assert journal.offline_rights_evidence() is None
+    journal.reject_offline_rights_request(old_id, epoch, "Старый формат без действий")
+    journal.reject_offline_rights_request(old_id, epoch, "Старый формат без действий")
+    new_id = OfflineJournal(tmp_path).prepare_offline_rights(epoch)
+    assert new_id != old_id
+    assert journal.offline_rights_evidence() is None
+    with pytest.raises(ValueError, match="сохранённому запросу"):
+        journal.save_offline_rights({
+            "snapshotId": old_id, "epoch": epoch, "actors": [],
+            "verifiedAt": "2026-09-28T12:00:00Z",
+            "contentSha256": hashlib.sha256(b"[]").hexdigest(),
+        })
+    with pytest.raises(ValueError, match="Причина отказа"):
+        journal.reject_offline_rights_request(old_id, epoch, "Другая причина")

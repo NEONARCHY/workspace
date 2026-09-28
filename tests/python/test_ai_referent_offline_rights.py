@@ -100,6 +100,14 @@ async def test_export_excludes_revoked_actor_and_hashes_verified_copy(monkeypatc
 
     monkeypatch.setattr(rights, "read_configuration", configuration)
     monkeypatch.setattr(rights, "telegram_actor", actor)
+
+    async def permissions(_connection, _actor):
+        return {"ai_referent": {
+            "view": True, "create": True, "edit": True,
+            "approve": True, "admin": False,
+        }}
+
+    monkeypatch.setattr(rights, "module_permissions_for_user", permissions)
     connection = Connection(epoch)
     journal = OfflineJournal(tmp_path)
     journal.set_authority_phase("referent-pc", str(epoch), "online")
@@ -114,6 +122,7 @@ async def test_export_excludes_revoked_actor_and_hashes_verified_copy(monkeypatc
     assert snapshot.reviewer_revision == 7
     assert [item.telegram_id for item in snapshot.actors] == ["123"]
     assert snapshot.actors[0].reviewer_keys == ["askar"]
+    assert snapshot.actors[0].module_actions == ["view", "create", "edit", "approve"]
     encoded = json.dumps(
         [item.model_dump(mode="json", by_alias=True) for item in snapshot.actors],
         ensure_ascii=False, sort_keys=True, separators=(",", ":"),
