@@ -276,3 +276,48 @@ def test_attachment_rejects_stale_or_foreign_write(tmp_path):
         )
     assert stale.value.status == 409
     assert journal.pending_blob_hashes() == []
+
+
+def test_local_preflight_is_durable_and_never_guesses_success(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="letter.docx",
+        content=b"docx",
+        role="primary",
+        expected_revision=1,
+    )
+    calls = []
+
+    def checker(path, reviewers, kind):
+        calls.append((path.read_bytes(), reviewers, kind))
+        return ["askar"]
+
+    operation_id = str(uuid4())
+    result = workflow.check_document("123", letter["id"], operation_id, checker)
+    assert result["status"] == "passed"
+    assert calls == [(b"docx", [{"key": "askar", "name": "Согласующий"}], "delivery")]
+    reopened = OfflineWorkflow(OfflineJournal(tmp_path))
+    assert reopened.check_document("123", letter["id"], operation_id, checker) == result
+    assert len(calls) == 1
+    reopened.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="new.docx",
+        content=b"new docx",
+        role="primary",
+        expected_revision=1,
+    )
+    assert reopened.read("123", letter["id"])["documentCheck"] is None
+
+    def crashed(path, reviewers, kind):
+        raise RuntimeError("Word failed")
+
+    failed = reopened.check_document("123", letter["id"], str(uuid4()), crashed)
+    assert failed["status"] == "failed"
+    assert "IT-специалисту" in failed["detail"]

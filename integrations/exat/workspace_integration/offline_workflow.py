@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from copy import deepcopy
-from pathlib import PurePath
+from pathlib import Path, PurePath
+from tempfile import TemporaryDirectory
 from threading import RLock
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -294,6 +296,118 @@ class OfflineWorkflow:
                 if item["id"] == attachment_id
             )
 
+    def check_document(
+        self,
+        telegram_id: str,
+        letter_id: str,
+        operation_id: str,
+        checker: Callable[[Path, list[dict[str, str]], str], list[str]],
+    ) -> dict[str, Any]:
+        """Run the real facsimile checker against the durable primary DOCX."""
+        actor = self._actor(telegram_id, "edit")
+        try:
+            letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма или действия.", 422) from error
+        with self._lock:
+            letter = self.read(telegram_id, letter_id)
+            if letter["createdByUserId"] != actor["userId"] or letter["status"] not in _EDITABLE:
+                raise WorkspaceError("Проверить документ может только автор черновика.", 403)
+            primary = next(
+                (
+                    item
+                    for item in reversed(letter["attachments"])
+                    if item["documentRole"] == "primary"
+                ),
+                None,
+            )
+            if primary is None or not primary["fileName"].lower().endswith(".docx"):
+                raise WorkspaceError("Сначала загрузите основной DOCX.", 422)
+            catalog = self.journal.snapshot(telegram_id, "/reviewers")
+            if catalog is None:
+                raise WorkspaceError("Нет проверенного списка согласующих.", 503)
+            reviewers = [
+                {"key": item["key"], "name": item["fullName"]}
+                for item in catalog["payload"].get("reviewers", [])
+                if isinstance(item, dict)
+                and item.get("canApprove")
+                and isinstance(item.get("key"), str)
+                and isinstance(item.get("fullName"), str)
+            ]
+            if not reviewers:
+                raise WorkspaceError("Нет доступных согласующих для проверки подписи.", 503)
+            digest = primary["sha256"]
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (
+                    old["kind"] != "letter.document_check"
+                    or old["letter_id"] != letter_id
+                    or old["blob_sha256"] != digest
+                    or old["actor_id"] != telegram_id
+                ):
+                    raise WorkspaceError("Проверяемый документ изменился.", 409)
+                return self.read(telegram_id, letter_id)["documentCheck"]
+            content = self.journal.read_blob(digest)
+            revision = letter["revision"]
+            workflow_kind = letter["workflowKind"]
+        with TemporaryDirectory(prefix="referent-offline-preflight-") as temporary:
+            draft = Path(temporary) / "letter.docx"
+            draft.write_bytes(content)
+            try:
+                passed_keys = checker(draft, reviewers, workflow_kind)
+            except Exception:
+                # Office/COM may fail; never turn an unknown outcome into a pass.
+                passed_keys = []
+        allowed = {item["key"] for item in reviewers}
+        if not isinstance(passed_keys, list) or any(key not in allowed for key in passed_keys):
+            passed_keys = []
+        keys = sorted(set(passed_keys))
+        selected = letter["finalReviewerUserId"] or letter["reviewerUserId"]
+        selected_key = next(
+            (
+                item["key"]
+                for item in catalog["payload"]["reviewers"]
+                if item.get("userId") == selected
+            ),
+            None,
+        )
+        passed = bool(selected_key and selected_key in keys)
+        result = {
+            "status": "passed" if passed else "failed",
+            "reviewerKeys": keys,
+            "detail": ""
+            if passed
+            else (
+                "Проверка безопасного размещения подписи не пройдена. "
+                "Обратитесь к IT-специалисту и загрузите исправленный DOCX."
+            ),
+            "expectedRevision": revision,
+            "actorUserId": actor["userId"],
+            "actorName": actor["fullName"],
+        }
+        with self._lock:
+            latest = self.read(telegram_id, letter_id)
+            current = next(
+                (
+                    item
+                    for item in reversed(latest["attachments"])
+                    if item["documentRole"] == "primary"
+                ),
+                None,
+            )
+            if latest["revision"] != revision or current is None or current["sha256"] != digest:
+                raise WorkspaceError("Документ изменился во время проверки. Повторите её.", 409)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id,
+                actor_id=telegram_id,
+                letter_id=letter_id,
+                kind="letter.document_check",
+                payload=result,
+                blob_sha256=digest,
+                required_action="edit",
+            )
+            return self.read(telegram_id, letter_id)["documentCheck"]
+
     def read(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         actor = self._actor(telegram_id, "view")
         try:
@@ -392,8 +506,30 @@ class OfflineWorkflow:
                     }
                 )
                 continue
+            elif operation["kind"] == "letter.document_check":
+                if letter is None or letter["revision"] != payload["expectedRevision"]:
+                    raise ValueError("Локальная проверка потеряла версию письма.")
+                primary = next(
+                    (
+                        item
+                        for item in reversed(letter["attachments"])
+                        if item["documentRole"] == "primary"
+                    ),
+                    None,
+                )
+                if primary is None or primary["sha256"] != operation["blob_sha256"]:
+                    raise ValueError("Локальная проверка относится к другому документу.")
+                letter["documentCheck"] = {
+                    "id": str(
+                        uuid5(NAMESPACE_URL, "ai-offline-check:" + operation["operation_id"])
+                    ),
+                    "status": payload["status"],
+                    "reviewerKeys": payload["reviewerKeys"],
+                    "detail": payload["detail"],
+                }
+                continue
             else:
-                continue  # Later reducers own attachments, decisions and worker receipts.
+                continue  # Later reducers own decisions and worker receipts.
             letter["events"].append(
                 {
                     "id": str(
