@@ -62,9 +62,61 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 .thinking-orbs span:nth-child(2) { animation-delay: .16s; }
 .thinking-orbs span:nth-child(3) { animation-delay: .32s; }
 @keyframes thinking-dot { to { transform: translateY(-4px); opacity: .5; } }
+/* One restrained identity at launcher, header and empty state. Soft alpha edges
+   keep it legible over any workspace page without a dark ring or WebGL noise. */
+.assistant-launcher { right: 18px; bottom: 18px; width: 62px; height: 62px; filter: none; }
+.gradient-orb { position: relative; display: block; width: 100%; height: 100%; border-radius: 50%; isolation: isolate;
+  background: radial-gradient(circle at 37% 32%, #d8f9f3 0%, #9cddd9 23%, #61bac0 47%, #298b9a 68%, transparent 83%);
+  mask-image: radial-gradient(circle, #000 53%, rgb(0 0 0 / 90%) 65%, transparent 83%);
+  filter: drop-shadow(0 7px 12px rgb(10 102 113 / 15%));
+  animation: assistant-orb-float 5.2s ease-in-out infinite;
+}
+.gradient-orb-core { position: absolute; inset: 18%; border-radius: 50%;
+  background: radial-gradient(circle at 40% 36%, rgb(245 255 250 / 76%), rgb(39 160 167 / 16%) 50%, transparent 70%);
+  animation: assistant-orb-breathe 4.3s ease-in-out infinite alternate;
+}
+.gradient-orb-light { position: absolute; inset: 20% 47% 56% 25%; border-radius: 50%;
+  background: rgb(255 255 255 / 62%); filter: blur(5px); }
+@keyframes assistant-orb-float { 50% { transform: translateY(-3px) rotate(5deg); } }
+@keyframes assistant-orb-breathe { to { transform: scale(1.13) translate(4%, -3%); opacity: .78; } }
+.assistant-header-icon { width: 34px; height: 34px; }
+.assistant-panel { background: #f7faf9; border-color: #d7e8e8; box-shadow: 0 24px 70px rgb(25 65 77 / 19%); }
+.assistant-header { min-height: 60px; padding-inline: 17px; background: rgb(255 255 255 / 96%); }
+.assistant-stream { background: radial-gradient(ellipse at 45% 8%, #eaf7f4 0%, #f8fbfa 45%, #f7faf9 100%); }
+.assistant-empty { gap: 12px; }
+.assistant-empty .gradient-orb { width: 100px; height: 100px; margin-bottom: 3px; }
+.assistant-empty h2 { font-size: 23px; }
+.assistant-empty p { color: #42586b; }
+.assistant-quick-prompts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 570px; margin: 7px 0 3px; }
+.assistant-quick-prompts button { border: 1px solid #cfe2e1; border-radius: 999px; padding: 9px 12px;
+  color: #24566a; background: rgb(255 255 255 / 87%); font: inherit; font-size: 12px; cursor: pointer;
+  transition: background-color 180ms ease, transform 180ms ease; }
+.assistant-quick-prompts button:hover { background: #e9f6f3; transform: translateY(-2px); }
+.assistant-quick-prompts button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.assistant-working { padding: 9px 13px 9px 7px; border-color: #d9e9e8; }
+.assistant-working canvas, .assistant-loading canvas, .assistant-voice-status canvas { flex: 0 0 auto; }
+.assistant-composer-area { padding: 14px 18px 11px; background: linear-gradient(180deg, rgb(247 250 249 / 80%), #fff 38%); }
+.assistant-composer-inner { gap: 7px; }
+.assistant-composer { gap: 9px; padding: 14px 15px 11px; border-color: #d0e2e1;
+  border-radius: 20px; box-shadow: 0 7px 22px rgb(35 77 90 / 7%); }
+.assistant-composer:focus-within { border-color: #79b5b7; box-shadow: 0 8px 24px rgb(35 77 90 / 9%), 0 0 0 3px rgb(14 110 119 / 7%); }
+.assistant-composer-toolbar { gap: 9px; }
+.assistant-model-control { flex: 0 0 auto; gap: 6px; }
+.assistant-model-label { color: #556d7c; font-weight: 600; }
+.assistant-model-control select { background: #f4f8f7; padding: 6px 9px; }
+.assistant-model-description { margin-right: auto; }
+.assistant-composer-actions { display: flex; align-items: center; gap: 5px; }
+.assistant-composer .assistant-voice-button { width: 37px; height: 37px; border-radius: 11px; background: transparent; color: #567789; }
+.assistant-composer .assistant-voice-button:not(:disabled):hover { background: #e8f4f2; color: #0e6e77; }
+.assistant-composer .assistant-voice-button.is-recording { color: #ad4b45; background: #fff0ec; }
+.assistant-composer .assistant-send-button { width: 37px; height: 37px; border-radius: 11px; }
+.assistant-voice-status { display: flex; align-items: center; gap: 5px; padding: 1px 5px; color: #315d69; font-size: 12px; }
+.assistant-privacy { color: #718493; }
 @media (max-width: 800px) { .app-content { padding-right: 70px; } .assistant-launcher { right: 6px; bottom: 8px; width: 58px; height: 58px; } }
 @media (max-width: 600px) { .assistant-stream { padding-inline: 12px; } .assistant-composer-area { padding-inline: 12px; } .assistant-model-description { display: none; } .assistant-empty .gradient-orb, .assistant-empty .gradient-orb-fallback { width: 108px; height: 108px; } }
+@media (max-width: 600px) { .assistant-empty .gradient-orb { width: 82px; height: 82px; } .assistant-quick-prompts { max-width: 390px; } }
 @media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span, .border-beam.is-active { transition: none; animation: none; } .assistant-launcher:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .gradient-orb, .gradient-orb-core { animation: none; } .assistant-quick-prompts button { transition: none; } }
 @media (forced-colors: active) { .assistant-panel, .assistant-message, .assistant-composer { border: 1px solid CanvasText; } .assistant-launcher:focus-visible { outline-color: Highlight; } }
 
 .account-birthday-fields { display: grid; grid-template-columns: minmax(120px, 180px) minmax(160px, 240px); gap: 12px; max-width: 460px; }

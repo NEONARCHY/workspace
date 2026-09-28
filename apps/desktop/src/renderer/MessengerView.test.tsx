@@ -15,6 +15,13 @@ import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { getMessageParticleTiming } from "./MessageVanishOverlay";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
 import { MessengerView } from "./MessengerView";
+import { rewriteMessengerDraft } from "./workspace-api";
+import type * as WorkspaceApi from "./workspace-api";
+
+vi.mock("./workspace-api", async (importOriginal) => ({
+  ...await importOriginal<typeof WorkspaceApi>(),
+  rewriteMessengerDraft: vi.fn(),
+}));
 
 function actions(): ChatActions {
   return {
@@ -77,6 +84,20 @@ describe("Private messenger", () => {
     cleanup();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+  it("offers a rewrite without sending or replacing the draft before confirmation", async () => {
+    vi.mocked(rewriteMessengerDraft).mockResolvedValue({ text: "Будьте добры, проверьте документ." });
+    const onSendMessage = vi.fn();
+    renderMessenger({ onSendMessage });
+    const composer = screen.getByLabelText<HTMLInputElement>("Новое сообщение");
+    fireEvent.change(composer, { target: { value: "Глянь документ" } });
+    fireEvent.click(screen.getByRole("button", { name: "Переформулировать черновик с ИИ" }));
+    fireEvent.click(screen.getByRole("button", { name: "Профессиональный" }));
+    await screen.findByText("Будьте добры, проверьте документ.");
+    expect(composer).toHaveValue("Глянь документ");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Заменить мой текст" }));
+    expect(composer).toHaveValue("Будьте добры, проверьте документ.");
   });
   it("opens the message menu at the pointer in a viewport portal", () => {
     renderMessenger();

@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { YuksalishAssistant } from "./YuksalishAssistant";
 import { loadAssistantMessages, sendAssistantMessage } from "./workspace-api";
 
+vi.mock("thinking-orbs", () => ({
+  ThinkingOrb: ({ state }: { state: string }) => <span data-testid={`thinking-${state}`} />,
+}));
+
 vi.mock("./workspace-api", () => ({
   loadAssistantMessages: vi.fn(),
   sendAssistantMessage: vi.fn(),
@@ -24,7 +28,7 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
-    fireEvent.change(screen.getByLabelText("Модель"), { target: { value: "pro" } });
+    fireEvent.change(screen.getByLabelText("Режим"), { target: { value: "pro" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
       target: { value: "Какие у меня задачи?" },
     });
@@ -48,6 +52,26 @@ describe("YuksalishAssistant", () => {
     await screen.findByRole("alert");
     await waitFor(() => expect(input.value).toBe("Проверь задачу"));
     expect(document.querySelector(".assistant-message")).not.toBeInTheDocument();
+  });
+
+  it("moves the sent text into the stream before the answer arrives", async () => {
+    let resolveAnswer!: (value: Awaited<ReturnType<typeof sendAssistantMessage>>) => void;
+    vi.mocked(sendAssistantMessage).mockImplementation(() => new Promise((resolve) => {
+      resolveAnswer = resolve;
+    }));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const input = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" });
+    fireEvent.change(input, { target: { value: "Что нового?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    expect(input.value).toBe("");
+    expect(screen.getByText("Что нового?")).toBeInTheDocument();
+    expect(screen.getByTestId("thinking-composing")).toBeInTheDocument();
+    resolveAnswer({ id: "reply-2", role: "assistant", model: "flash",
+      content: "Есть обновления.", createdAt: "2026-09-28T10:00:00Z" });
+    await waitFor(() => expect(document.querySelector(".assistant-message.is-assistant"))
+      .toHaveTextContent("Есть обновления."));
   });
 
   it("grows the draft field up to a fixed limit and restores focus after closing", async () => {

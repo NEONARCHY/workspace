@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
 import type {
   ChatMessage,
@@ -47,6 +48,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
+import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
@@ -311,9 +313,16 @@ function Conversation({
   const [outgoingReveal, setOutgoingReveal] = useState<OutgoingMessageReveal>();
   const vanishSequence = useRef(0);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [rewriteOpen, setRewriteOpen] = useState(false);
+  const [rewriteBusy, setRewriteBusy] = useState(false);
+  const [rewriteError, setRewriteError] = useState("");
+  const [rewriteSuggestion, setRewriteSuggestion] = useState<{
+    source: string; style: AssistantRewriteStyle; text: string;
+  }>();
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const composerInputRef = useRef<HTMLInputElement>(null);
+  const rewriteRef = useRef<HTMLDivElement>(null);
   const wasEditing = useRef(false);
   const focusAfterSend = useRef(false);
   const restoreFocusTarget = useRestoreFocusTarget();
@@ -389,6 +398,34 @@ function Conversation({
   useEffect(() => () => { if (removalTimer.current) window.clearTimeout(removalTimer.current); }, []);
   const activeMemberIds = new Set(chat.members.map((member) => member.userId));
   const activeComposerBody = editing ? editBody : draft;
+  useEffect(() => {
+    if (!rewriteOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!rewriteRef.current?.contains(event.target as Node)) setRewriteOpen(false);
+    };
+    window.addEventListener("pointerdown", closeOutside);
+    return () => window.removeEventListener("pointerdown", closeOutside);
+  }, [rewriteOpen]);
+  const rewriteStyles: readonly { id: AssistantRewriteStyle; label: string }[] = [
+    { id: "conversational", label: "Разговорный" },
+    { id: "friendly", label: "Дружелюбный" },
+    { id: "professional", label: "Профессиональный" },
+    { id: "corporate", label: "Корпоративный" },
+    { id: "caveman", label: "Пещерный мем" },
+  ];
+  const requestRewrite = async (style: AssistantRewriteStyle, source = activeComposerBody) => {
+    if (!source.trim() || rewriteBusy) return;
+    setRewriteBusy(true);
+    setRewriteError("");
+    try {
+      const suggestion = await rewriteMessengerDraft(token, source.trim(), style);
+      setRewriteSuggestion({ source, style, text: suggestion.text });
+    } catch (cause) {
+      setRewriteError(cause instanceof Error ? cause.message : "Не удалось предложить вариант.");
+    } finally {
+      setRewriteBusy(false);
+    }
+  };
   const activeMentions = editing ? editMentions : mentions;
   const mentionMatch = activeComposerBody.match(/(?:^|\s)@([^\s@]*)$/u);
   const mentionQuery = (mentionMatch?.[1] ?? "").toLocaleLowerCase("ru");
@@ -1026,6 +1063,42 @@ function Conversation({
                 onClick={() => setVoiceOpen(true)}
               />
             </Tooltip>
+            <div className="composer-rewrite-anchor" ref={rewriteRef}>
+              <Tooltip content="Переформулировать черновик с ИИ" relationship="label">
+                <Button appearance="subtle" icon={<WandSparkles size={19} />}
+                  aria-label="Переформулировать черновик с ИИ" aria-expanded={rewriteOpen}
+                  disabled={busy || !canSend || !activeComposerBody.trim()}
+                  onClick={() => { setRewriteOpen((value) => !value); setRewriteSuggestion(undefined); setRewriteError(""); }} />
+              </Tooltip>
+              {rewriteOpen && <div className="composer-rewrite-panel" role="dialog" aria-label="Стиль сообщения">
+                <div className="composer-rewrite-heading">В каком стиле написать?</div>
+                <div className="composer-rewrite-styles">
+                  {rewriteStyles.map((style) => <button type="button" key={style.id}
+                    disabled={rewriteBusy} onClick={() => void requestRewrite(style.id)}>
+                    {style.label}
+                  </button>)}
+                </div>
+                {rewriteBusy && <p role="status">Готовлю вариант…</p>}
+                {rewriteSuggestion && <div className="composer-rewrite-result">
+                  <p>{rewriteSuggestion.text}</p>
+                  <div>
+                    <button type="button" disabled={rewriteBusy || activeComposerBody !== rewriteSuggestion.source}
+                      onClick={() => {
+                        if (editing) setEditBody(rewriteSuggestion.text);
+                        else { draftEdited.current = true; setDraft(rewriteSuggestion.text); }
+                        setRewriteOpen(false);
+                        composerInputRef.current?.focus();
+                      }}>Заменить мой текст</button>
+                    <button type="button" disabled={rewriteBusy}
+                      onClick={() => void requestRewrite(rewriteSuggestion.style, rewriteSuggestion.source)}>
+                      Перегенерировать
+                    </button>
+                  </div>
+                  {activeComposerBody !== rewriteSuggestion.source && <small>Черновик изменился. Выберите стиль ещё раз.</small>}
+                </div>}
+                {rewriteError && <p role="alert">{rewriteError}</p>}
+              </div>}
+            </div>
             <div className="composer-input">
               {!!pendingFiles.length && (
                 <div className="pending-files">

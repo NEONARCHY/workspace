@@ -1,3 +1,5 @@
+import { ThinkingOrb as LibraryThinkingOrb } from "thinking-orbs";
+
 export type ThinkingOrbState = "searching" | "listening" | "composing" | "working" | "solving";
 
 const labels: Record<ThinkingOrbState, string> = {
@@ -8,8 +10,10 @@ const labels: Record<ThinkingOrbState, string> = {
   solving: "Решаю задачу",
 };
 
-export function ThinkingOrb({ state = "working" }: { readonly state?: ThinkingOrbState }) {
-  return <span className={`thinking-orbs thinking-orbs-${state}`} role="status" aria-label={labels[state]}>
-    <span /><span /><span />
-  </span>;
+export function ThinkingOrb({ state = "working", size = 32 }: {
+  readonly state?: ThinkingOrbState;
+  readonly size?: 20 | 32 | 64;
+}) {
+  return <LibraryThinkingOrb state={state} size={size} speed={1.15} color="#0e6e77"
+    theme="light" aria-label={labels[state]} />;
 }

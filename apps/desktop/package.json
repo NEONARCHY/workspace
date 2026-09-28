@@ -33,6 +33,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.7.0",
+    "thinking-orbs": "0.3.2",
     "three": "^0.186.1"
   },
   "devDependencies": {

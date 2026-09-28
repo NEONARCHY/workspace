@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, Maximize2, Minimize2, X } from "lucide-react";
+import { ArrowUp, Maximize2, Mic, Minimize2, Square, X } from "lucide-react";
 
 import type { AssistantMessage, AssistantModel } from "@yuksalish/contracts";
 import { BorderBeam } from "@/components/ui/border-beam";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { loadAssistantMessages, sendAssistantMessage } from "./workspace-api";
+import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash", label: "Flash", description: "Быстрые ответы на повседневные вопросы" },
@@ -15,6 +15,12 @@ const modelOptions: readonly { value: AssistantModel; label: string; description
 ];
 
 const MAX_COMPOSER_HEIGHT = 180;
+const VOICE_LIMIT_MS = 60_000;
+const quickPrompts = [
+  "Что нового у меня за последнее время?",
+  "Какие мои задачи требуют внимания?",
+  "Расскажи о проектах движения «Юксалиш»",
+] as const;
 
 function GeneratedReply({ content, animate }: { readonly content: string; readonly animate: boolean }) {
   const reducedMotion = useReducedMotion();
@@ -35,14 +41,25 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   const [model, setModel] = useState<AssistantModel>("flash");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
   const [error, setError] = useState("");
   const [animatedReplyId, setAnimatedReplyId] = useState<string | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const voiceTimerRef = useRef<number | null>(null);
   const reducedMotion = useReducedMotion();
   const close = useCallback(() => {
+    if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") {
+      recorder.onstop = () => recorder.stream.getTracks().forEach((track) => track.stop());
+      recorder.stop();
+    }
+    setRecording(false);
     setOpen(false);
     setAnimatedReplyId(null);
   }, []);
@@ -88,21 +105,73 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [close, open]);
 
+  useEffect(() => () => {
+    if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
+    const recorder = recorderRef.current;
+    if (recorder?.state === "recording") recorder.stop();
+    recorder?.stream.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const stopRecording = () => {
+    if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
+    voiceTimerRef.current = null;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    setRecording(false);
+  };
+
+  const startRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined"
+      || !MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+      setError("Голосовой ввод недоступен в этом браузере.");
+      return;
+    }
+    setError("");
+    let stream: MediaStream | null = null;
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = audioStream;
+      const recorder = new MediaRecorder(audioStream, { mimeType: "audio/webm;codecs=opus" });
+      const chunks: Blob[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        audioStream.getTracks().forEach((track) => track.stop());
+        recorderRef.current = null;
+        if (!chunks.length) return;
+        setTranscribing(true);
+        void transcribeAssistantVoice(token, new Blob(chunks, { type: "audio/webm" }))
+          .then(({ text }) => setDraft((current) => current ? `${current.trimEnd()} ${text}` : text))
+          .catch((failure) => setError(failure instanceof Error ? failure.message : "Не удалось распознать речь."))
+          .finally(() => { setTranscribing(false); inputRef.current?.focus(); });
+      };
+      recorderRef.current = recorder;
+      recorder.start(250);
+      setRecording(true);
+      voiceTimerRef.current = window.setTimeout(stopRecording, VOICE_LIMIT_MS);
+    } catch {
+      stream?.getTracks().forEach((track) => track.stop());
+      setError("Не удалось получить доступ к микрофону. Проверьте разрешение в системе.");
+    }
+  };
+
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
     if (!value || busy) return;
+    const temporaryId = `pending-${Date.now()}`;
+    setMessages((current) => [...current, {
+      id: temporaryId, role: "user", model, content: value,
+      createdAt: new Date().toISOString(),
+    }]);
+    setDraft("");
     setBusy(true);
     setError("");
     try {
       const response = await sendAssistantMessage(token, model, value);
-      setMessages((current) => [...current, {
-        id: `user-${response.id}`, role: "user", model, content: value,
-        createdAt: response.createdAt,
-      }, response]);
+      setMessages((current) => [...current, response]);
       setAnimatedReplyId(response.id);
-      setDraft("");
     } catch (failure) {
+      setMessages((current) => current.filter((item) => item.id !== temporaryId));
+      setDraft((current) => current ? `${value}\n${current}` : value);
       setError(failure instanceof Error ? failure.message : "Не удалось получить ответ. Попробуйте ещё раз.");
     } finally {
       setBusy(false);
@@ -111,6 +180,9 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   };
 
   const chosen = modelOptions.find((option) => option.value === model)!;
+  const thinkingState = /юксалиш|yuksalish|источ|найди|поиск/i.test(messages.at(-1)?.content ?? "")
+    ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
+      ? "solving" : "composing";
   const compact = viewport.width <= 600;
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
@@ -118,7 +190,7 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   return <div className="yuksalish-assistant-root">
     {!open && <button type="button" className="assistant-launcher" ref={launcherRef}
       aria-label="Открыть ассистента Yuksalish" onClick={() => setOpen(true)}>
-      <GradientOrb config={{ rotationSpeed: 0.75, noiseScale: 0.8 }} />
+      <GradientOrb />
     </button>}
     <AnimatePresence onExitComplete={() => launcherRef.current?.focus()}>
       {open && <motion.section
@@ -136,8 +208,8 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
           exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.18,
             delay: reducedMotion ? 0 : 0.15 }}>
         <header className="assistant-header">
-          <span className="assistant-header-icon"><GradientOrb config={{ rotationSpeed: 0.75 }} /></span>
-          <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Ваш рабочий помощник</small></span>
+          <span className="assistant-header-icon"><GradientOrb /></span>
+          <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Рабочие вопросы и тексты</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
             onClick={() => setExpanded((current) => !current)}>
@@ -149,11 +221,15 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
           ref={streamRef} aria-live="polite">
           <div className="assistant-stream-inner">
-            {messages.length === 0 && loaded && <div className="assistant-empty">
-              <GradientOrb config={{ rotationSpeed: 0.75, noiseScale: 0.8 }} />
+            {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
+              <GradientOrb />
               <h2>С чего начнём?</h2>
-              <p>Спросите о своих задачах или попросите помочь с текстом и идеями.</p>
-              <small>Для ответов о работе используются только доступные вам сведения.</small>
+              <p>Помогу разобраться в рабочих делах, найти сведения о движении или улучшить текст.</p>
+              <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
+                <button key={prompt} type="button" onClick={() => { setDraft(prompt); inputRef.current?.focus(); }}>
+                  {prompt}
+                </button>)}</div>
+              <small>Рабочие данные — только в пределах ваших прав. Публичные материалы — с указанием источника.</small>
             </div>}
             {!loaded && !error && <div className="assistant-loading"><ThinkingOrb state="searching" /> Загружаю историю…</div>}
             {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}>
@@ -161,14 +237,17 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
               {item.role === "assistant" ? <GeneratedReply content={item.content}
                 animate={item.id === animatedReplyId} /> : <p>{item.content}</p>}
             </article>)}
-            {busy && <div className="assistant-working"><ThinkingOrb state="working" /> Думаю над ответом…</div>}
+            {busy && <div className="assistant-working"><ThinkingOrb state={thinkingState} />
+              <span>{thinkingState === "searching" ? "Ищу источники…"
+                : thinkingState === "solving" ? "Разбираюсь в деталях…" : "Готовлю ответ…"}</span>
+            </div>}
           </div>
         </div>
         <div className="assistant-composer-area">
           <div className="assistant-composer-inner">
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
               <BorderBeam active={Boolean(draft.trim()) && !busy} />
-              <textarea ref={inputRef} aria-label="Сообщение ассистенту" placeholder="Напишите сообщение…"
+              <textarea ref={inputRef} aria-label="Сообщение ассистенту" placeholder="Спросите о работе или движении «Юксалиш»…"
                 value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -177,21 +256,34 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                 }} />
               <div className="assistant-composer-toolbar">
                 <div className="assistant-model-control">
-                  <label className="assistant-model-label" htmlFor="assistant-model">Модель</label>
+                  <label className="assistant-model-label" htmlFor="assistant-model">Режим</label>
                   <select id="assistant-model" value={model} disabled={busy}
                     title={chosen.description}
                     onChange={(event) => setModel(event.target.value as AssistantModel)}>
                     {modelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
-                  <span className="assistant-model-description">{chosen.description}</span>
                 </div>
-                <button type="submit" aria-label="Отправить сообщение" disabled={busy || !draft.trim() || !loaded}>
-                  <ArrowUp size={19} strokeWidth={2.4} />
-                </button>
+                <span className="assistant-model-description">{chosen.description}</span>
+                <div className="assistant-composer-actions">
+                  <button type="button" className={`assistant-voice-button${recording ? " is-recording" : ""}`}
+                    aria-label={recording ? "Остановить запись" : "Голосовой ввод"}
+                    title={recording ? "Остановить запись" : "Голосовой ввод · до 1 минуты; аудио передаётся ИИ для расшифровки"}
+                    disabled={transcribing || busy} onClick={() => void (recording ? stopRecording() : startRecording())}>
+                    {recording ? <Square size={16} /> : <Mic size={19} />}
+                  </button>
+                  <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
+                    disabled={busy || recording || !draft.trim() || !loaded}>
+                    <ArrowUp size={19} strokeWidth={2.4} />
+                  </button>
+                </div>
               </div>
             </form>
+            {(recording || transcribing) && <div className="assistant-voice-status" role="status">
+              <ThinkingOrb state="listening" size={20} />
+              {recording ? "Слушаю… нажмите квадрат, чтобы закончить" : "Перевожу речь в текст…"}
+            </div>}
             {error && <p className="assistant-error" role="alert">{error}</p>}
-            <small className="assistant-privacy">Ответы ИИ могут ошибаться — проверяйте важные сведения.</small>
+            <small className="assistant-privacy">Проверяйте важные сведения и даты публикаций.</small>
           </div>
         </div>
         </motion.div>

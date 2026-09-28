@@ -567,6 +567,25 @@ export function sendAssistantMessage(token: string, model: AssistantModel, messa
   }, token, 65_000);
 }
 
+export type AssistantRewriteStyle = "conversational" | "friendly" | "professional" | "corporate" | "caveman";
+
+export function rewriteMessengerDraft(
+  token: string, text: string, style: AssistantRewriteStyle,
+): Promise<{ readonly text: string }> {
+  return apiRequest<{ readonly text: string }>("/assistant/rewrite", {
+    method: "POST", body: JSON.stringify({ text, style }),
+  }, token, 65_000);
+}
+
+export function transcribeAssistantVoice(token: string, audio: Blob): Promise<{ readonly text: string }> {
+  const headers = new Headers({ "Accept": "application/json", "Content-Type": "audio/webm",
+    "Authorization": `Bearer ${token}` });
+  if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
+  return boundedRequest(`${apiBaseUrl}/api/v1/assistant/transcribe`, {
+    method: "POST", headers, body: audio,
+  }, (response) => response.json() as Promise<{ readonly text: string }>, 75_000);
+}
+
 export function loadBirthdayPreference(token: string): Promise<BirthdayPreference> {
   return apiRequest<BirthdayPreference>("/assistant/birthday", {}, token);
 }
