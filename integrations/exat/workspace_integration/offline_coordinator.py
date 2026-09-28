@@ -85,6 +85,19 @@ class OfflineCoordinator:
                     if self._verified_rights(state["epoch"]) and self.gate.may_write_offline():
                         return "offline"
                     return "waiting"
+                if error.status == 409:
+                    # A recovered server may have fenced the old lease before
+                    # this process durably entered offline mode. Discover its
+                    # replay-required phase instead of remaining blocked forever.
+                    try:
+                        self.gate.accept_lease(self.client.start_offline_authority())
+                    except (WorkspaceError, ValueError):
+                        return "blocked"
+                    refreshed = self.journal.authority_state()
+                    if refreshed is not None and refreshed["phase"] == "replay":
+                        return "replay"
+                    if refreshed is not None and refreshed["phase"] == "online":
+                        return "online"
                 return "blocked"
             except ValueError:
                 return "blocked"

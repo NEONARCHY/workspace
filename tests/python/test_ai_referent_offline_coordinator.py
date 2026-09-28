@@ -28,6 +28,7 @@ class Client:
         self.rights_available = True
         self.rights_calls = 0
         self.reservation_calls = 0
+        self.heartbeat_conflict = False
 
     def _check(self):
         if not self.online:
@@ -40,6 +41,8 @@ class Client:
     def heartbeat_offline_authority(self, epoch):
         self._check()
         assert epoch == self.epoch
+        if self.heartbeat_conflict:
+            raise WorkspaceError("аренда истекла", 409)
         return _lease(self.epoch, self.mode)
 
     def offline_rights(self, epoch, snapshot_id):
@@ -126,3 +129,14 @@ def test_only_spendable_current_year_numbers_count(tmp_path):
     journal.take_reserved_number(str(uuid4()), client.agent_id)
     assert journal.available_reserved_numbers(client.agent_id) == 19
     assert journal.available_reserved_numbers("other-pc") == 0
+
+
+def test_recovered_server_conflict_moves_to_replay(tmp_path):
+    journal = OfflineJournal(tmp_path)
+    client = Client()
+    coordinator = OfflineCoordinator(client, journal, clock=lambda: 100.0)
+    assert coordinator.tick() == "online"
+    client.heartbeat_conflict = True
+    client.mode = "replay_required"
+    assert coordinator.tick() == "replay"
+    assert journal.authority_state()["phase"] == "replay"
