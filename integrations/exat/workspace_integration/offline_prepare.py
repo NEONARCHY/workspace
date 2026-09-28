@@ -98,3 +98,38 @@ class OfflinePreparationWorker:
         else:
             self.worker.prepare(job, file_loader=load, record_signed=record)
         return True
+
+    def run_dispatch_once(self) -> bool:
+        """Prepare the confirmed PDF for an operator without clicking Send."""
+        state = self.journal.authority_state()
+        if state is None or state["phase"] != "offline":
+            return False
+        release = self.journal.next_undispatched_release()
+        if release is None:
+            return False
+        actor_id, letter_id = release["actor_id"], release["letter_id"]
+        letter = self.workflow.read(actor_id, letter_id)
+        prepared = next(
+            (item for item in reversed(self.journal.letter_operations(letter_id))
+             if item["kind"] == "letter.prepared"), None,
+        )
+        if (
+            letter["status"] != "queued" or prepared is None
+            or prepared["blob_sha256"] is None
+        ):
+            raise WorkspaceError("Подписанный PDF для отправки не найден.", 409)
+        job: dict[str, Any] = {
+            "id": str(uuid5(
+                NAMESPACE_URL, "ai-offline-command:" + release["operation_id"]
+            )),
+            "kind": "dispatch", "letterId": letter_id, "leaseToken": "offline-only",
+            "signedFile": {"sha256": prepared["blob_sha256"]},
+        }
+        result = self.worker.dispatch(job)
+        if result.get("outcome") != "ready":
+            raise WorkspaceError("Окно отправки не подготовлено.", 503)
+        self.workflow.record_dispatched(
+            actor_id, letter_id, release["operation_id"],
+            auto_send=bool(result.get("autoSend", False)),
+        )
+        return True

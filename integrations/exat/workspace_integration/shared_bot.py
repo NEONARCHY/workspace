@@ -659,14 +659,23 @@ class SharedBot:
                     recipient_ids = [payload.get("creatorUserId")]
                 else:
                     continue
-            elif kind in {"letter.prepared", "letter.signed"}:
+            elif kind in {"letter.prepared", "letter.signed", "letter.dispatched"}:
+                reader = operation["actor_id"]
+                if kind == "letter.dispatched":
+                    reader = next(
+                        (item["telegramId"] for item in actors
+                         if item["userId"] == payload["creatorUserId"]), reader,
+                    )
                 letter = self.offline_workflow.read(
-                    operation["actor_id"], operation["letter_id"]
+                    reader, operation["letter_id"]
                 )
                 recipient_ids = [letter["createdByUserId"]]
                 if kind == "letter.prepared" and letter["status"] == "awaiting_final_send":
                     recipient_ids.append(letter["reviewerUserId"])
-                elif kind == "letter.prepared" and letter["status"] == "referent_review_pending":
+                elif (
+                    kind in {"letter.prepared", "letter.dispatched"}
+                    and letter["status"] == "referent_review_pending"
+                ):
                     recipient_ids.extend(
                         item["userId"] for item in actors
                         if "admin" in item["moduleActions"]
@@ -1584,6 +1593,7 @@ def _run_shared(
             if authority_state is not None and authority_state["phase"] == "offline":
                 try:
                     offline_preparer.run_once()
+                    offline_preparer.run_dispatch_once()
                     last_prepare_error = None
                 except Exception as error:
                     reason = (type(error).__name__, safe_error_text(error))

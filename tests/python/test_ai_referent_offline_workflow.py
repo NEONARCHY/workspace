@@ -898,7 +898,7 @@ def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
     prepared = workflow.record_prepared("999", letter["id"], approval_id, b"%PDF-1.7 test")
     assert prepared["status"] == "awaiting_final_send"
     assert "return_for_revision" in prepared["availableActions"]
-    assert "release_delivery" not in prepared["availableActions"]
+    assert "release_delivery" in prepared["availableActions"]
     api, telegram = Mock(), Mock()
     api.request.side_effect = AssertionError("offline notice contacted Workspace")
     telegram.send_document.return_value = {"ok": True}
@@ -940,6 +940,56 @@ def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
         "999", letter["id"], str(uuid4()), action="approve", expected_revision=10
     )
     assert again["outgoingNumber"] == 441  # Reuse the assigned number, not another reserve.
+
+
+@pytest.mark.parametrize("auto_send", [False, True])
+def test_offline_bobur_release_prepares_compose_without_physical_send(tmp_path, auto_send):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    bobur = journal.offline_actor("999")["userId"]
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), {
+        **_draft(reviewer), "finalReviewerUserId": bobur,
+    })
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar", "bobur"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=3)
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation({
+        "reservationId": reservation_id, "agentId": "referent-pc",
+        "yearSuffix": now.strftime("%y"), "firstNumber": 442, "lastNumber": 442,
+        "validUntil": (now + timedelta(days=1)).isoformat(),
+    })
+    approval_id = str(uuid4())
+    workflow.act("999", letter["id"], approval_id, action="approve", expected_revision=4)
+    workflow.record_prepared("999", letter["id"], approval_id, b"%PDF-1.7 final")
+    release_id = str(uuid4())
+    released = workflow.act(
+        "999", letter["id"], release_id,
+        action="release_delivery", expected_revision=6,
+    )
+    assert released["status"] == "queued"
+    assert journal.next_undispatched_release()["operation_id"] == release_id
+    worker = Mock()
+    worker.dispatch.return_value = {"outcome": "ready", "autoSend": auto_send}
+    executor = OfflinePreparationWorker(worker, journal)
+    assert executor.run_dispatch_once()
+    worker.dispatch.assert_called_once()
+    assert not executor.run_dispatch_once()
+    assert journal.next_undispatched_release() is None
+    current = workflow.read("123", letter["id"])
+    assert current["status"] == ("queued" if auto_send else "referent_review_pending")
+    assert current["revision"] == 8
+    if not auto_send:
+        assert "return_for_revision" in workflow.read("321", letter["id"])["availableActions"]
+        assert workflow.read("999", letter["id"])["availableActions"] == []
+    assert workflow.record_dispatched(
+        "999", letter["id"], release_id, auto_send=auto_send,
+    )["status"] == current["status"]
 
 
 def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path):

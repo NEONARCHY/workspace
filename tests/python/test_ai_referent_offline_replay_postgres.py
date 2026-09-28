@@ -78,17 +78,20 @@ def _operation(
 
 @pytest.mark.anyio
 @pytest.mark.postgres
-async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
+@pytest.mark.parametrize("auto_send", [False, True])
+async def test_draft_replay_retries_same_receipt_and_preserves_original_time(auto_send):
     url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
     if not url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     engine = create_async_engine(url)
     user_id, reviewer_id, operator_id, snapshot_id = uuid4(), uuid4(), uuid4(), uuid4()
+    bobur_id = uuid4()
     agent_id = f"offline-replay-{uuid4().hex}"
     actor_id = "98765432101"
     storage = InMemoryObjectStorage()
     reviewer_actor_id = "98765432102"
     operator_actor_id = "98765432103"
+    bobur_actor_id = "98765432104"
     actors = [{
         "telegramId": actor_id,
         "userId": str(user_id),
@@ -102,6 +105,13 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
         "fullName": "Offline Test Reviewer",
         "role": "superadmin",
         "reviewerKeys": ["askar"],
+        "moduleActions": ["view", "approve"],
+    }, {
+        "telegramId": bobur_actor_id,
+        "userId": str(bobur_id),
+        "fullName": "Offline Test Bobur",
+        "role": "manager",
+        "reviewerKeys": ["bobur"],
         "moduleActions": ["view", "approve"],
     }, {
         "telegramId": operator_actor_id,
@@ -129,6 +139,11 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
                 ))
                 await connection.execute(insert(users).values(
+                    id=bobur_id, username=f"bobur-{bobur_id.hex[:12]}",
+                    full_name="Offline Test Bobur", role="manager", status="active",
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                ))
+                await connection.execute(insert(users).values(
                     id=operator_id, username=f"operator-{operator_id.hex[:12]}",
                     full_name="Offline Test Operator", role="admin", status="active",
                     created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
@@ -136,6 +151,9 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 await connection.execute(update(ai_referent_reviewers).where(
                     ai_referent_reviewers.c.key == "askar"
                 ).values(user_id=reviewer_id, enabled=True))
+                await connection.execute(update(ai_referent_reviewers).where(
+                    ai_referent_reviewers.c.key == "bobur"
+                ).values(user_id=bobur_id, enabled=True))
                 await connection.execute(delete(ai_referent_authority))
                 await connection.execute(
                     update(ai_referent_configuration).values(execution_agent_id=agent_id)
@@ -777,6 +795,167 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     f"signed/{sign_command['id']}/002.pdf",
                 ]
                 assert [await storage.get(row["storage_key"]) for row in stored_pages] == page_bytes
+                bobur_create = _operation(
+                    epoch, snapshot_id, rights_hash, actor_id, user_id,
+                    sequence=56, reviewer_user_id=reviewer_id,
+                )
+                bobur_create.payload["finalReviewerUserId"] = str(bobur_id)
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_create, enabled=True,
+                )).result_revision == 1
+                bobur_docx = content + b"-bobur-variant"
+                bobur_digest = hashlib.sha256(bobur_docx).hexdigest()
+                await stage_offline_blob(
+                    connection, storage, agent_id=agent_id, epoch=epoch,
+                    sha256=bobur_digest, content=bobur_docx, enabled=True,
+                )
+                bobur_attachment = file_operation.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 57,
+                    "letter_id": bobur_create.letter_id,
+                    "payload": {**file_operation.payload, "expectedRevision": 1,
+                                "byteSize": len(bobur_docx)},
+                    "blob_sha256": bobur_digest,
+                    "occurred_at": bobur_create.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_attachment, enabled=True, storage=storage,
+                )).result_revision == 2
+                bobur_check = check_operation.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 58,
+                    "letter_id": bobur_create.letter_id,
+                    "payload": {**check_operation.payload, "expectedRevision": 2,
+                                "reviewerKeys": ["askar", "bobur"]},
+                    "blob_sha256": bobur_digest,
+                    "occurred_at": bobur_attachment.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_check, enabled=True,
+                )).result_revision == 2
+                bobur_submit = submit.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 59,
+                    "letter_id": bobur_create.letter_id,
+                    "payload": {**submit.payload, "expectedRevision": 2},
+                    "occurred_at": bobur_check.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_submit, enabled=True,
+                )).result_revision == 3
+                preliminary = approved.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 60,
+                    "letter_id": bobur_create.letter_id,
+                    "payload": {**approved.payload, "expectedRevision": 3,
+                                "nextReviewerUserId": str(bobur_id),
+                                "toStatus": "pending_review",
+                                "outgoingNumber": None, "yearSuffix": None},
+                    "occurred_at": bobur_submit.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=preliminary, enabled=True,
+                )).result_revision == 4
+                bobur_approval = approved.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 61,
+                    "actor_id": bobur_actor_id, "letter_id": bobur_create.letter_id,
+                    "payload": {**approved.payload, "expectedRevision": 4,
+                                "outgoingNumber": number_reservation.last_number,
+                                "actorUserId": str(bobur_id),
+                                "actorName": "Offline Test Bobur"},
+                    "occurred_at": preliminary.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_approval, enabled=True,
+                )).result_revision == 5
+                bobur_command_id = uuid5(
+                    NAMESPACE_URL, "ai-offline-command:" + str(bobur_approval.operation_id)
+                )
+                bobur_pdf = b"%PDF-1.7 Bobur final document"
+                bobur_pdf_hash = hashlib.sha256(bobur_pdf).hexdigest()
+                await stage_offline_blob(
+                    connection, storage, agent_id=agent_id, epoch=epoch,
+                    sha256=bobur_pdf_hash, content=bobur_pdf, enabled=True,
+                )
+                bobur_prepared = prepared.model_copy(update={
+                    "operation_id": uuid5(
+                        NAMESPACE_URL, "ai-offline-prepare:" + str(bobur_approval.operation_id)
+                    ),
+                    "sequence": 62, "actor_id": bobur_actor_id,
+                    "letter_id": bobur_create.letter_id,
+                    "payload": {**prepared.payload, "expectedRevision": 5,
+                                "approvalOperationId": str(bobur_approval.operation_id),
+                                "commandId": str(bobur_command_id),
+                                "toStatus": "awaiting_final_send",
+                                "byteSize": len(bobur_pdf),
+                                "actorUserId": str(bobur_id),
+                                "actorName": "Offline Test Bobur"},
+                    "blob_sha256": bobur_pdf_hash,
+                    "occurred_at": bobur_approval.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=bobur_prepared, enabled=True, storage=storage,
+                )).result_revision == 6
+                release = approved.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 63,
+                    "actor_id": bobur_actor_id, "letter_id": bobur_create.letter_id,
+                    "payload": {**approved.payload, "action": "release_delivery",
+                                "expectedRevision": 6, "fromStatus": "awaiting_final_send",
+                                "nextReviewerUserId": None, "outgoingNumber": None,
+                                "yearSuffix": None, "actorUserId": str(bobur_id),
+                                "actorName": "Offline Test Bobur"},
+                    "occurred_at": bobur_prepared.occurred_at + timedelta(seconds=10),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=release, enabled=True,
+                )).result_revision == 7
+                dispatch_command_id = uuid5(
+                    NAMESPACE_URL, "ai-offline-command:" + str(release.operation_id)
+                )
+                dispatched = OfflineReplayOperation(
+                    operation_id=uuid5(
+                        NAMESPACE_URL, "ai-offline-dispatch:" + str(release.operation_id)
+                    ),
+                    sequence=64, actor_id=bobur_actor_id,
+                    letter_id=bobur_create.letter_id, kind="letter.dispatched",
+                    payload={
+                        "releaseOperationId": str(release.operation_id),
+                        "commandId": str(dispatch_command_id),
+                        "expectedRevision": 7, "fromStatus": "queued",
+                        "toStatus": "queued" if auto_send else "referent_review_pending",
+                        "autoSend": auto_send,
+                        "actorUserId": str(bobur_id),
+                        "actorName": "Offline Test Bobur",
+                        "creatorUserId": str(user_id),
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="approve",
+                    occurred_at=release.occurred_at + timedelta(seconds=10),
+                )
+                dispatch_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=dispatched, enabled=True,
+                )
+                assert dispatch_receipt.result_revision == 8
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=dispatched, enabled=True,
+                )) == dispatch_receipt
+                assert await connection.scalar(select(ai_referent_letters.c.status).where(
+                    ai_referent_letters.c.id == bobur_create.letter_id
+                )) == ("queued" if auto_send else "referent_review_pending")
+                command_kinds = (await connection.execute(select(
+                    ai_referent_delivery_commands.c.kind
+                ).where(
+                    ai_referent_delivery_commands.c.letter_id == bobur_create.letter_id
+                ))).scalars().all()
+                assert set(command_kinds) == (
+                    {"prepare", "dispatch", "send"} if auto_send else {"prepare", "dispatch"}
+                )
             finally:
                 await transaction.rollback()
     finally:

@@ -1109,6 +1109,24 @@ class OfflineJournal:
                     return operation
         return None
 
+    def next_undispatched_release(self) -> dict[str, Any] | None:
+        """Find a durable final-PDF decision not yet reflected in the compose result."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations WHERE kind = 'letter.action' "
+                "AND status = 'pending' ORDER BY sequence"
+            ).fetchall()
+        for row in rows:
+            operation = {**dict(row), "payload": json.loads(row["payload"])}
+            if operation["payload"].get("action") != "release_delivery":
+                continue
+            dispatch_id = str(uuid5(
+                NAMESPACE_URL, "ai-offline-dispatch:" + operation["operation_id"]
+            ))
+            if self.operation(dispatch_id) is None:
+                return operation
+        return None
+
     def begin_external_effect(self, effect_id: str, letter_id: str, kind: str) -> bool:
         """False after a crash or retry: physical send must never auto-repeat."""
         effect_id, letter_id = str(UUID(effect_id)), str(UUID(letter_id))
