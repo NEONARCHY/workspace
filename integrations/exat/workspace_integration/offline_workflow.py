@@ -408,6 +408,156 @@ class OfflineWorkflow:
             )
             return self.read(telegram_id, letter_id)["documentCheck"]
 
+    def act(
+        self,
+        telegram_id: str,
+        letter_id: str,
+        operation_id: str,
+        *,
+        action: str,
+        expected_revision: int,
+        comment: str = "",
+    ) -> dict[str, Any]:
+        """Handle only decisions whose complete local effects are implemented."""
+        if action not in {"submit", "approve", "return_for_revision", "cancel"}:
+            raise WorkspaceError("Это решение пока недоступно без связи с сервером.", 503)
+        required = "approve" if action in {"approve", "return_for_revision"} else "edit"
+        actor = self._actor(telegram_id, required)
+        try:
+            letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма или действия.", 422) from error
+        if (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+            or not isinstance(comment, str)
+            or len(comment.strip()) > 2000
+        ):
+            raise WorkspaceError("Неверная версия письма или комментарий.", 422)
+        comment = comment.strip()
+        if action == "return_for_revision" and len(comment) < 3:
+            raise WorkspaceError("Укажите причину возврата.", 422)
+        with self._lock:
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                payload = old["payload"]
+                if (
+                    old["actor_id"],
+                    old["letter_id"],
+                    old["kind"],
+                    payload.get("action"),
+                    payload.get("expectedRevision"),
+                    payload.get("comment"),
+                ) != (
+                    telegram_id,
+                    letter_id,
+                    "letter.action",
+                    action,
+                    expected_revision,
+                    comment,
+                ):
+                    raise WorkspaceError("Повтор решения содержит другие данные.", 409)
+                return self.read(telegram_id, letter_id)
+            letter = self.read(telegram_id, letter_id)
+            if letter["revision"] != expected_revision:
+                raise WorkspaceError("Письмо уже изменилось. Откройте актуальную версию.", 409)
+            creator = letter["createdByUserId"] == actor["userId"]
+            reviewer = letter["reviewerUserId"] == actor["userId"]
+            next_reviewer = None
+            outgoing_number = None
+            year_suffix = None
+            if action == "submit":
+                if not creator or letter["status"] not in _EDITABLE:
+                    raise WorkspaceError("Отправить на согласование может автор черновика.", 403)
+                selected = letter["finalReviewerUserId"] or letter["reviewerUserId"]
+                catalog = self.journal.snapshot(telegram_id, "/reviewers")
+                if catalog is None:
+                    raise WorkspaceError("Нет проверенного списка согласующих.", 503)
+                selected_key = next(
+                    (
+                        item.get("key")
+                        for item in catalog["payload"].get("reviewers", [])
+                        if isinstance(item, dict) and item.get("userId") == selected
+                    ),
+                    None,
+                )
+                if letter["reviewerUserId"] is None or not selected_key:
+                    raise WorkspaceError("Сначала выберите согласующего.", 422)
+                if letter["workflowKind"] == "delivery" and (
+                    not letter["recipientOrganization"] or not letter["recipientAddress"]
+                ):
+                    raise WorkspaceError("Выберите организацию и адрес получателя.", 422)
+                if (
+                    letter["workflowKind"] == "delivery"
+                    and selected_key == "bobur"
+                    and not letter["finalReviewerUserId"]
+                ):
+                    raise WorkspaceError("Перед Бобуром нужен предварительный согласующий.", 422)
+                if not any(
+                    item["documentRole"] == "primary" and item["fileName"].lower().endswith(".docx")
+                    for item in letter["attachments"]
+                ):
+                    raise WorkspaceError("Перед согласованием загрузите основной DOCX.", 422)
+                check = letter.get("documentCheck")
+                if (
+                    not check
+                    or check["status"] != "passed"
+                    or selected_key not in check["reviewerKeys"]
+                ):
+                    raise WorkspaceError("Проверка подписи ещё не пройдена.", 409)
+                next_status = "pending_review"
+            elif action == "cancel":
+                if not creator or letter["status"] not in _EDITABLE | {"pending_review"}:
+                    raise WorkspaceError("Отменить письмо на этом этапе нельзя.", 403)
+                next_status = "cancelled"
+            else:
+                if not reviewer or not actor.get("reviewerKeys"):
+                    raise WorkspaceError("Решение доступно назначенному согласующему.", 403)
+                if letter["status"] != "pending_review":
+                    raise WorkspaceError("Письмо не ожидает решения согласующего.", 409)
+                if action == "return_for_revision":
+                    next_status = "needs_revision"
+                    next_reviewer = letter["initialReviewerUserId"]
+                elif letter["finalReviewerUserId"] and (
+                    letter["reviewerUserId"] != letter["finalReviewerUserId"]
+                ):
+                    next_status = "pending_review"
+                    next_reviewer = letter["finalReviewerUserId"]
+                else:
+                    next_status = "queued"
+                    if letter["workflowKind"] == "delivery":
+                        authority = self.journal.authority_state()
+                        if authority is None:
+                            raise WorkspaceError("Нет автономной аренды робота.", 503)
+                        try:
+                            outgoing_number, year_suffix = self.journal.take_reserved_number(
+                                letter_id, authority["agent_id"]
+                            )
+                        except ValueError as error:
+                            raise WorkspaceError(str(error), 409) from error
+            payload = {
+                "action": action,
+                "comment": comment,
+                "expectedRevision": expected_revision,
+                "fromStatus": letter["status"],
+                "toStatus": next_status,
+                "nextReviewerUserId": next_reviewer,
+                "outgoingNumber": outgoing_number,
+                "yearSuffix": year_suffix,
+                "actorUserId": actor["userId"],
+                "actorName": actor["fullName"],
+            }
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id,
+                actor_id=telegram_id,
+                letter_id=letter_id,
+                kind="letter.action",
+                payload=payload,
+                required_action=required,
+            )
+            return self.read(telegram_id, letter_id)
+
     def read(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         actor = self._actor(telegram_id, "view")
         try:
@@ -528,8 +678,47 @@ class OfflineWorkflow:
                     "detail": payload["detail"],
                 }
                 continue
+            elif operation["kind"] == "letter.action":
+                if (
+                    letter is None
+                    or letter["revision"] != payload["expectedRevision"]
+                    or letter["status"] != payload["fromStatus"]
+                ):
+                    raise ValueError("Локальное решение потеряло порядок стадий.")
+                letter["status"] = payload["toStatus"]
+                letter["revision"] += 1
+                letter["updatedAt"] = operation["occurred_at"]
+                if payload["nextReviewerUserId"]:
+                    letter["reviewerUserId"] = payload["nextReviewerUserId"]
+                    letter["reviewerName"] = self._reviewer_name(
+                        telegram_id, payload["nextReviewerUserId"]
+                    )
+                if payload["outgoingNumber"] is not None:
+                    letter["outgoingNumber"] = payload["outgoingNumber"]
+                    letter["yearSuffix"] = payload["yearSuffix"]
+                    letter["displayNumber"] = (
+                        f"{payload['outgoingNumber']:04d}/{payload['yearSuffix']}-AI"
+                    )
+                if letter["status"] == "needs_revision":
+                    letter["finalPdfFileId"] = None
+                letter["events"].append(
+                    {
+                        "id": str(
+                            uuid5(NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"])
+                        ),
+                        "eventType": "letter." + payload["action"],
+                        "actorUserId": payload["actorUserId"],
+                        "actorName": payload["actorName"],
+                        "fromStatus": payload["fromStatus"],
+                        "toStatus": payload["toStatus"],
+                        "comment": payload["comment"],
+                        "audio": None,
+                        "createdAt": operation["occurred_at"],
+                    }
+                )
+                continue
             else:
-                continue  # Later reducers own decisions and worker receipts.
+                continue  # Later reducers own worker receipts.
             letter["events"].append(
                 {
                     "id": str(
@@ -575,5 +764,53 @@ class OfflineWorkflow:
         )
         letter["canDelete"] = creator and "edit" in actor["moduleActions"]
         letter["canReplaceDocument"] = False
-        letter["availableActions"] = ["cancel"] if creator and letter["status"] == "draft" else []
+        actions: list[str] = []
+        if creator and "edit" in actor["moduleActions"]:
+            if letter["status"] in _EDITABLE:
+                catalog = self.journal.snapshot(telegram_id, "/reviewers")
+                selected = letter["finalReviewerUserId"] or letter["reviewerUserId"]
+                selected_key = (
+                    next(
+                        (
+                            item.get("key")
+                            for item in catalog["payload"].get("reviewers", [])
+                            if isinstance(item, dict) and item.get("userId") == selected
+                        ),
+                        None,
+                    )
+                    if catalog is not None
+                    else None
+                )
+                check = letter.get("documentCheck")
+                primary_ready = any(
+                    item["documentRole"] == "primary" and item["fileName"].lower().endswith(".docx")
+                    for item in letter["attachments"]
+                )
+                recipient_ready = letter["workflowKind"] == "sign_only" or bool(
+                    letter["recipientOrganization"] and letter["recipientAddress"]
+                )
+                if (
+                    selected_key
+                    and primary_ready
+                    and recipient_ready
+                    and check
+                    and check["status"] == "passed"
+                    and selected_key in check["reviewerKeys"]
+                    and not (
+                        letter["workflowKind"] == "delivery"
+                        and selected_key == "bobur"
+                        and not letter["finalReviewerUserId"]
+                    )
+                ):
+                    actions.append("submit")
+            if letter["status"] in _EDITABLE | {"pending_review"}:
+                actions.append("cancel")
+        if (
+            actor["userId"] == letter["reviewerUserId"]
+            and "approve" in actor["moduleActions"]
+            and actor.get("reviewerKeys")
+            and letter["status"] == "pending_review"
+        ):
+            actions.extend(("approve", "return_for_revision"))
+        letter["availableActions"] = actions
         return letter

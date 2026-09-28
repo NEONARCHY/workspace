@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -18,6 +19,7 @@ def _offline_journal(tmp_path):
     creator = str(uuid4())
     stranger = str(uuid4())
     reviewer = str(uuid4())
+    bobur = str(uuid4())
     journal.set_authority_phase("referent-pc", epoch, "online", lease_seconds=30)
     snapshot_id = journal.prepare_offline_rights(epoch)
     actors = [
@@ -26,13 +28,16 @@ def _offline_journal(tmp_path):
             "userId": user_id,
             "fullName": name,
             "moduleActions": actions,
-            "reviewerKeys": ["askar"] if telegram_id == "789" else [],
+            "reviewerKeys": (
+                ["askar"] if telegram_id == "789" else ["bobur"] if telegram_id == "999" else []
+            ),
             "role": "employee",
         }
         for telegram_id, user_id, name, actions in (
             ("123", creator, "Автор", ["view", "create", "edit"]),
             ("456", stranger, "Другой", ["view", "create", "edit"]),
             ("789", reviewer, "Согласующий", ["view", "approve"]),
+            ("999", bobur, "Бобур", ["view", "approve"]),
         )
     ]
     encoded = json.dumps(actors, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -50,7 +55,8 @@ def _offline_journal(tmp_path):
         "/reviewers",
         {
             "reviewers": [
-                {"userId": reviewer, "fullName": "Согласующий", "key": "askar", "canApprove": True}
+                {"userId": reviewer, "fullName": "Согласующий", "key": "askar", "canApprove": True},
+                {"userId": bobur, "fullName": "Бобур", "key": "bobur", "canApprove": True},
             ]
         },
     )
@@ -300,7 +306,16 @@ def test_local_preflight_is_durable_and_never_guesses_success(tmp_path):
     operation_id = str(uuid4())
     result = workflow.check_document("123", letter["id"], operation_id, checker)
     assert result["status"] == "passed"
-    assert calls == [(b"docx", [{"key": "askar", "name": "Согласующий"}], "delivery")]
+    assert calls == [
+        (
+            b"docx",
+            [
+                {"key": "askar", "name": "Согласующий"},
+                {"key": "bobur", "name": "Бобур"},
+            ],
+            "delivery",
+        )
+    ]
     reopened = OfflineWorkflow(OfflineJournal(tmp_path))
     assert reopened.check_document("123", letter["id"], operation_id, checker) == result
     assert len(calls) == 1
@@ -321,3 +336,135 @@ def test_local_preflight_is_durable_and_never_guesses_success(tmp_path):
     failed = reopened.check_document("123", letter["id"], str(uuid4()), crashed)
     assert failed["status"] == "failed"
     assert "IT-специалисту" in failed["detail"]
+
+
+def test_offline_submission_and_final_review_require_number_reserve(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    assert workflow.read("123", letter["id"])["availableActions"] == ["cancel"]
+    workflow.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="letter.docx",
+        content=b"docx",
+        role="primary",
+        expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    assert "submit" in workflow.read("123", letter["id"])["availableActions"]
+    submitted = workflow.act(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        action="submit",
+        expected_revision=1,
+    )
+    assert submitted["status"] == "pending_review"
+    assert submitted["revision"] == 2
+    assert "approve" in workflow.read("789", letter["id"])["availableActions"]
+    decision_id = str(uuid4())
+    with pytest.raises(WorkspaceError, match="резерва"):
+        workflow.act(
+            "789",
+            letter["id"],
+            decision_id,
+            action="approve",
+            expected_revision=2,
+        )
+    assert workflow.read("789", letter["id"])["status"] == "pending_review"
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation(
+        {
+            "reservationId": reservation_id,
+            "agentId": "referent-pc",
+            "yearSuffix": now.strftime("%y"),
+            "firstNumber": 439,
+            "lastNumber": 439,
+            "validUntil": (now + timedelta(days=1)).isoformat(),
+        }
+    )
+    approved = workflow.act(
+        "789",
+        letter["id"],
+        decision_id,
+        action="approve",
+        expected_revision=2,
+    )
+    assert approved["status"] == "queued"
+    assert approved["outgoingNumber"] == 439
+    assert approved["displayNumber"].startswith("0439/")
+    assert journal.available_reserved_numbers("referent-pc") == 0
+    assert OfflineWorkflow(OfflineJournal(tmp_path)).read("123", letter["id"])["status"] == "queued"
+
+
+def test_reviewer_return_requires_comment_and_preserves_author_access(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="letter.docx",
+        content=b"docx",
+        role="primary",
+        expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
+    with pytest.raises(WorkspaceError) as missing_comment:
+        workflow.act(
+            "789",
+            letter["id"],
+            str(uuid4()),
+            action="return_for_revision",
+            expected_revision=2,
+        )
+    assert missing_comment.value.status == 422
+    returned = workflow.act(
+        "789",
+        letter["id"],
+        str(uuid4()),
+        action="return_for_revision",
+        expected_revision=2,
+        comment="Исправьте дату",
+    )
+    assert returned["status"] == "needs_revision"
+    assert returned["events"][-1]["comment"] == "Исправьте дату"
+    assert OfflineWorkflow(OfflineJournal(tmp_path)).read("123", letter["id"])["canEdit"]
+
+
+def test_bobur_route_keeps_preliminary_reviewer_first(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    bobur = journal.offline_actor("999")["userId"]
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create(
+        "123",
+        str(uuid4()),
+        {
+            **_draft(bobur),
+            "finalReviewerUserId": reviewer,
+        },
+    )
+    assert letter["reviewerUserId"] == reviewer
+    assert letter["finalReviewerUserId"] == bobur
+    workflow.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="letter.docx",
+        content=b"docx",
+        role="primary",
+        expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["bobur"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
+    first = workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=2)
+    assert first["status"] == "pending_review"
+    assert first["reviewerUserId"] == bobur
+    assert first["revision"] == 3
+    assert "approve" not in workflow.read("789", letter["id"])["availableActions"]
+    assert "approve" in workflow.read("999", letter["id"])["availableActions"]
