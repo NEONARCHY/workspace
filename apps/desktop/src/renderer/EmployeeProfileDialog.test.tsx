@@ -181,6 +181,8 @@ describe("EmployeeProfileDialog", () => {
         contextNote: "После запуска проекта",
       },
     ));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Выдать награду", hidden: true })).not.toBeInTheDocument(), { timeout: 10_000 });
+    await waitFor(() => expect(screen.getByRole("dialog", { name: "Публичный профиль сотрудника" })).toBeVisible(), { timeout: 10_000 });
     expect(await screen.findByRole("button", { name: /Командная работа: 1 награда/ })).toBeVisible();
   });
 
