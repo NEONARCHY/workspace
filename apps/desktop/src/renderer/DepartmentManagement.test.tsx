@@ -1,21 +1,51 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createDepartment } = vi.hoisted(() => ({ createDepartment: vi.fn() }));
+const { createDepartment, updateDepartment } = vi.hoisted(() => ({ createDepartment: vi.fn(), updateDepartment: vi.fn() }));
 vi.mock("./workspace-api", () => ({
   createDepartment,
-  updateDepartment: vi.fn(),
+  updateDepartment,
   updateDepartmentMembers: vi.fn(),
 }));
 
 import { DepartmentManagement } from "./DepartmentManagement";
 
+beforeEach(() => vi.resetAllMocks());
+afterEach(cleanup);
+
 describe("DepartmentManagement", () => {
+  it("opens the central department even if a regional one is first, and switches without mixing", () => {
+    render(<DepartmentManagement token="token" departments={[
+      { id: "regional", code: "regional", name: "Регион", scope: "regional", assignedUsersCount: 0 },
+      { id: "central", code: "central", name: "ЦА", scope: "central", assignedUsersCount: 0 },
+    ]} employees={[]} onChanged={vi.fn()} />);
+    const tree = screen.getByLabelText("Список подразделений");
+    expect(within(tree).getByText("ЦА", { exact: true }).closest("button")).toHaveAttribute("aria-current", "true");
+    expect(within(tree).queryByText("Регион", { exact: true })).toBeNull();
+    fireEvent.click(within(screen.getByRole("group", { name: "Тип подразделений" })).getByRole("button", { name: "Регионы" }));
+    expect(within(tree).getByText("Регион", { exact: true }).closest("button")).toHaveAttribute("aria-current", "true");
+    expect(within(tree).queryByText("ЦА", { exact: true })).toBeNull();
+  });
+
+  it("lets an administrator correct a regional department and reports a save error", async () => {
+    updateDepartment.mockRejectedValueOnce(new Error("Сервер недоступен"));
+    render(<DepartmentManagement token="token" departments={[
+      { id: "regional", code: "regional", name: "Регион", scope: "regional", assignedUsersCount: 0 },
+    ]} employees={[]} onChanged={vi.fn()} />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Тип подразделений" })).getByRole("button", { name: "Регионы" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Тип выбранного подразделения" })).getByRole("button", { name: "Центральный аппарат" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить сведения" }));
+    await waitFor(() => expect(updateDepartment).toHaveBeenCalledWith("token", "regional", {
+      name: "Регион", code: "regional", parentId: null, scope: "central",
+    }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
+  });
   it("normalizes a human-readable short code before creating a department", async () => {
     const created = {
       id: "department-2",
       code: "test-otdel",
       name: "Тест отдел",
+      scope: "central",
       assignedUsersCount: 0,
       memberIds: [],
       chatId: "department-chat-2",
@@ -29,17 +59,19 @@ describe("DepartmentManagement", () => {
       onChanged={onChanged}
     />);
 
+    fireEvent.click(screen.getByRole("button", { name: "Новое подразделение" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название нового отдела" }), { target: { value: "Тест отдел" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Код нового отдела" }), { target: { value: "test otdel" } });
     expect(screen.getByRole("textbox", { name: "Код нового отдела" })).toHaveValue("test-otdel");
-    fireEvent.click(screen.getByRole("button", { name: "Создать отдел" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Создать$/u }));
 
     await waitFor(() => expect(createDepartment).toHaveBeenCalledWith("token", {
       name: "Тест отдел",
       code: "test-otdel",
+      scope: "central",
       parentId: undefined,
     }));
     expect(onChanged).toHaveBeenCalledWith(created);
-    expect(await screen.findByText("Отдел создан. Служебная группа уже готова.")).toBeInTheDocument();
+    expect(await screen.findByText("Подразделение создано. Служебная группа готова.")).toBeInTheDocument();
   });
 });

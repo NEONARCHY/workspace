@@ -38,4 +38,22 @@ describe("Contextual person selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Снять выбор сотрудника" }));
     expect(onChange).toHaveBeenCalledWith("");
   });
+  it("never mixes central and regional employees in one picker view", () => {
+    const scopedPeople = [
+      { ...people[0]!, departmentId: "central" },
+      { ...people[1]!, departmentId: "regional" },
+    ];
+    const departments = [
+      { id: "central", code: "central", name: "ЦА", scope: "central" as const, assignedUsersCount: 1 },
+      { id: "regional", code: "regional", name: "Регион", scope: "regional" as const, assignedUsersCount: 1 },
+    ];
+    render(<FluentProvider theme={workspaceTheme}><PersonPicker people={scopedPeople} departments={departments} value="" label="Ответственный" onChange={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Ответственный" }));
+    const list = screen.getByLabelText("Доступные сотрудники");
+    expect(within(list).getByText("Азиза Каримова")).toBeInTheDocument();
+    expect(within(list).queryByText("Дилшод Рахимов")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(within(list).queryByText("Азиза Каримова")).toBeNull();
+    expect(within(list).getByText("Дилшод Рахимов")).toBeInTheDocument();
+  });
 });

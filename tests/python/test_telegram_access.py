@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.telegram_access_schemas import TelegramAccessUpdate
-from yuksalish_api.telegram_access_service import BOT_CATALOG, require_telegram_admin
+from yuksalish_api.telegram_access_service import BOT_CATALOG, _person, require_telegram_admin
 
 
 @pytest.mark.parametrize("role", ["employee", "manager", "admin", "superadmin"])
@@ -48,6 +48,17 @@ def test_connected_bot_catalog() -> None:
     assert {bot.key for bot in BOT_CATALOG} == {
         "ai_referent", "hisobot", "takliflar", "hudud_rating", "ai_news_reader"
     }
+
+
+def test_registry_person_includes_department_for_scope_filter() -> None:
+    department_id = uuid4()
+    person = _person(
+        {"id": uuid4(), "username": "staff", "full_name": "Staff", "job_title": None,
+         "department_id": department_id},
+        None,
+        {},
+    )
+    assert person.model_dump(by_alias=True)["departmentId"] == department_id
 
 
 def test_hisobot_hudud_grant_accepts_only_known_regions() -> None:

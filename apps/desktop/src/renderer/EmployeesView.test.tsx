@@ -45,6 +45,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
+  it("shows central and regional employees separately", async () => {
+    vi.mocked(loadDirectory).mockResolvedValue({
+      ...data,
+      departments: [
+        { ...data.departments[0]!, scope: "central" },
+        { id: "d2", code: "regional", name: "Navoiy hududiy bo‘linma", scope: "regional", assignedUsersCount: 1 },
+      ],
+      employees: [data.employees[0]!, { ...data.employees[1]!, departmentId: "d2" }],
+    });
+    mount();
+    const table = await screen.findByRole("table");
+    expect(within(table).getByRole("button", { name: "Открыть профиль: Азиза Каримова" })).toBeInTheDocument();
+    expect(within(table).queryByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(within(table).queryByRole("button", { name: "Открыть профиль: Азиза Каримова" })).toBeNull();
+    expect(within(table).getByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeInTheDocument();
+  });
   it("filters by role and pending activation without changing server data", async () => {
     mount(); await screen.findByRole("table");
     const table = screen.getByRole("table");

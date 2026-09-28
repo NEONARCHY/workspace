@@ -56,6 +56,8 @@ import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import {
   MessageRevealOverlay,
@@ -259,6 +261,7 @@ function Conversation({
   const [reply, setReply] = useState<ChatMessage>();
   const [mentions, setMentions] = useState<readonly string[]>([]);
   const [mentionPicker, setMentionPicker] = useState(false);
+  const [mentionScope, setMentionScope] = useState<EmployeeScope>("central");
   const [pendingFiles, setPendingFiles] = useState<readonly File[]>([]);
   const [taskSource, setTaskSource] = useState<ChatMessage>();
   const [forwarding, setForwarding] = useState<ChatMessage>();
@@ -402,7 +405,8 @@ function Conversation({
   const mentionCandidates = chat.members.filter((member) => {
     if (member.userId === currentUserId) return false;
     const person = people.find((item) => item.id === member.userId);
-    return !mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery);
+    return (!departments || employeeScope(person?.departmentId, departments) === mentionScope)
+      && (!mentionQuery || `${person?.name ?? ""} ${person?.username ?? ""}`.toLocaleLowerCase("ru").includes(mentionQuery));
   });
   const latestMessage = activeMessages.at(-1);
   const pinnedMessages = activeMessages.filter((message) => message.isPinned && !message.deletedAt);
@@ -947,6 +951,7 @@ function Conversation({
               aria-label="Упомянуть участников"
             >
               <small>Кому отправить уведомление об упоминании</small>
+              {departments ? <EmployeeScopeSwitch value={mentionScope} onChange={setMentionScope} label="Группа участников для упоминания" /> : null}
               {mentionCandidates.map((member) => {
                 const person = people.find((item) => item.id === member.userId);
                 if (!person) return null;
@@ -1320,7 +1325,7 @@ export function MessengerView(props: MessengerViewProps) {
             />
           </Tooltip>
         </div>
-          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
+          <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}
           onSelect={(id) => { setActiveChatId(id); setConversationOpen(true); setPanel(undefined); }} />
@@ -1346,6 +1351,7 @@ export function MessengerView(props: MessengerViewProps) {
           chat={panel === "manage" ? activeChat : undefined}
           currentUserId={props.currentUserId}
           people={props.people}
+          departments={props.departments}
           actions={props.chatActions}
           onClose={() => setPanel(undefined)}
           onCreated={(chat) => {

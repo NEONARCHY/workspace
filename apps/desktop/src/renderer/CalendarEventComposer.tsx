@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import type {
   CalendarEventInput,
+  WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceTask,
 } from "@yuksalish/contracts";
@@ -14,6 +15,8 @@ import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -32,6 +35,7 @@ export interface PreparedEventPayment {
 interface CalendarEventComposerProps {
   readonly draft: CalendarEventInput;
   readonly people: readonly WorkspacePerson[];
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly busyAttendeeIds: ReadonlySet<string>;
   readonly minimumStart: string;
@@ -67,6 +71,7 @@ function dateTimeLabel(value: string): string {
 export function CalendarEventComposer({
   draft,
   people,
+  departments,
   currentUserId,
   busyAttendeeIds,
   minimumStart,
@@ -85,10 +90,12 @@ export function CalendarEventComposer({
   onSubmit,
 }: CalendarEventComposerProps) {
   const [attendeeQuery, setAttendeeQuery] = useState("");
+  const [attendeeScope, setAttendeeScope] = useState<EmployeeScope>("central");
   const activePeople = people.filter((person) => !person.status || person.status === "active");
   const normalizedQuery = attendeeQuery.trim().toLocaleLowerCase("ru");
   const visiblePeople = activePeople.filter((person) =>
-    `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(normalizedQuery),
+    (!departments || employeeScope(person.departmentId, departments) === attendeeScope)
+    && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(normalizedQuery),
   );
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -177,6 +184,7 @@ export function CalendarEventComposer({
             </RecordSection>
 
             <RecordSection title="Участники" description="Занятого в это время коллегу пригласить нельзя.">
+              {departments ? <EmployeeScopeSwitch value={attendeeScope} onChange={setAttendeeScope} label="Группа участников мероприятия" /> : null}
               <Input aria-label="Поиск участника" placeholder="Найти коллегу" value={attendeeQuery} onChange={(_event, data) => setAttendeeQuery(data.value)} />
               <div className="calendar-composer-attendees">
                 {visiblePeople.map((person) => (
@@ -214,7 +222,7 @@ export function CalendarEventComposer({
                     </label>
                     <label>
                       <span>Ответственный</span>
-                      <PersonPicker label={`Ответственный за задачу ${index + 1}`} people={activePeople} value={task.assigneeId} onChange={(id) => onUpdateTask(task.key, { assigneeId: id })} disabled={busy} />
+                      <PersonPicker label={`Ответственный за задачу ${index + 1}`} people={activePeople} departments={departments} value={task.assigneeId} onChange={(id) => onUpdateTask(task.key, { assigneeId: id })} disabled={busy} />
                     </label>
                     <label>
                       <span>Срок</span>

@@ -43,7 +43,8 @@ async def _active_user(connection: AsyncConnection, user_id: UUID) -> RowMapping
     row = (
         (
             await connection.execute(
-                select(users.c.id, users.c.username, users.c.full_name, users.c.job_title)
+                select(users.c.id, users.c.username, users.c.full_name, users.c.job_title,
+                       users.c.department_id)
                 .where(users.c.id == user_id, users.c.status == "active")
             )
         )
@@ -66,6 +67,7 @@ def _person(
         username=str(account["username"]),
         full_name=str(account["full_name"]),
         job_title=str(account["job_title"]) if account["job_title"] else None,
+        department_id=account["department_id"],
         telegram_id=(identity["telegram_id"] or identity["pending_telegram_id"])
         if identity else None,
         verified=verified,
@@ -87,7 +89,8 @@ async def list_telegram_access(connection: AsyncConnection) -> TelegramAccessReg
     accounts = (
         (
             await connection.execute(
-                select(users.c.id, users.c.username, users.c.full_name, users.c.job_title)
+                select(users.c.id, users.c.username, users.c.full_name, users.c.job_title,
+                       users.c.department_id)
                 .where(users.c.status == "active")
                 .order_by(users.c.full_name, users.c.username)
             )

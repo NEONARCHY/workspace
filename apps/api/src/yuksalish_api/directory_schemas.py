@@ -50,6 +50,7 @@ class DepartmentResponse(ApiModel):
     id: str
     code: str
     name: str
+    scope: Literal["central", "regional"]
     parent_id: str | None
     assigned_users_count: int
     member_ids: list[str] = Field(default_factory=list)
@@ -63,6 +64,7 @@ class DepartmentMembersUpdateRequest(ApiModel):
 class DepartmentCreateRequest(ApiModel):
     code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
     name: str = Field(min_length=1, max_length=200)
+    scope: Literal["central", "regional"] = "central"
     parent_id: UUID | None = None
 
     @field_validator("code", "name")
@@ -82,6 +84,7 @@ class DepartmentUpdateRequest(ApiModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$",
     )
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    scope: Literal["central", "regional"] | None = None
     parent_id: UUID | None = None
 
     @field_validator("code", "name")

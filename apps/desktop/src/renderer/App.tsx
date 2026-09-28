@@ -1822,6 +1822,7 @@ export function App() {
                 key={focusTarget?.revision}
                 token={session.accessToken}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 registry={zoomRegistry}
                 loading={zoomLoading}
@@ -1919,6 +1920,7 @@ export function App() {
                   token={session.accessToken}
                   tasks={workspace.tasks}
                   people={workspace.people}
+                  departments={workspace.departments}
                   currentUserId={workspace.currentUser.id}
                   efficiency={efficiency}
                   efficiencyLoading={efficiencyLoading}
@@ -1940,6 +1942,7 @@ export function App() {
                 canCreateRequest={workspace.canCreatePaymentRequests}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
+                departments={workspace.departments}
                 positions={workspace.positions}
                 requests={workspace.requests}
                 attachments={workspace.attachments}
@@ -1969,7 +1972,7 @@ export function App() {
               <AIHisobotView token={session.accessToken} />
             ) : null}
             {displayedSection === "telegram_access" && isAdmin ? (
-              <TelegramAccessView token={session.accessToken} />
+              <TelegramAccessView token={session.accessToken} departments={workspace.departments} />
             ) : null}
             {displayedSection === "feed" ? (
               <FeedView
@@ -1990,6 +1993,7 @@ export function App() {
                 key={focusTarget?.section === "projects" ? focusTarget.revision : undefined}
                 projects={workspace.projects}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUser={workspace.currentUser}
                 workflow={workspace.projectWorkflow ?? undefined}
                 positions={workspace.positions}
@@ -2012,6 +2016,7 @@ export function App() {
                 mode={displayedSection === "project_hub" ? "projects" : "funding"}
                 token={session.accessToken}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 canCreateProject={modulePermissions.project_hub?.create ?? false}
                 canCreateRequest={modulePermissions.project_funding?.create ?? false}
@@ -2028,6 +2033,7 @@ export function App() {
                 key={focusTarget?.revision}
                 requests={workspace.tripRequests}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUser={workspace.currentUser}
                 workflow={workspace.tripWorkflow ?? undefined}
                 positions={workspace.positions}
@@ -2061,6 +2067,7 @@ export function App() {
                   setActiveSection("zoom_meetings");
                 }}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUserId={workspace.currentUser.id}
                 onCreate={handleCreateCalendarEvent}
                 onUpdate={handleUpdateCalendarEvent}
@@ -2098,6 +2105,7 @@ export function App() {
               <HrView
                 token={session.accessToken}
                 people={workspace.people}
+                departments={workspace.departments}
                 currentUser={workspace.currentUser}
               />
             ) : null}
@@ -2108,6 +2116,21 @@ export function App() {
                 allowAdministration={modulePermissions.employees?.admin ?? ["admin", "superadmin"].includes(workspace.currentUser.role)}
                 allowChatAdministration={Boolean(modulePermissions.messenger?.admin) && ["admin", "superadmin"].includes(workspace.currentUser.role)}
                 onInvite={() => { setAccountInvite(true); setAccountOpen(true); }}
+                onEmployeeChanged={(employee) => setWorkspace((current) => ({
+                  ...current,
+                  people: current.people.map((person) => person.id === employee.id
+                    ? { ...person, departmentId: employee.departmentId, jobTitle: employee.jobTitle }
+                    : person),
+                }))}
+                onDepartmentChanged={(department) => setWorkspace((current) => ({
+                  ...current,
+                  departments: current.departments.some((item) => item.id === department.id)
+                    ? current.departments.map((item) => item.id === department.id ? department : item)
+                    : [...current.departments, department],
+                  people: department.memberIds ? current.people.map((person) => department.memberIds?.includes(person.id)
+                    ? { ...person, departmentId: department.id }
+                    : person.departmentId === department.id ? { ...person, departmentId: null } : person) : current.people,
+                }))}
                 onCreateChat={chatActions.create}
                 onChatCreated={(chatId) => {
                   setFocusTarget((current) => ({ section: "messenger", entityId: chatId, revision: (current?.revision ?? 0) + 1 }));

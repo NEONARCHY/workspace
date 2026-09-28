@@ -24,6 +24,8 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 import {
   createPosition,
@@ -44,6 +46,8 @@ interface EmployeesViewProps {
   readonly onInvite?: () => void;
   readonly onCreateChat?: (input: CreateChatInput) => Promise<ChatSummary>;
   readonly onChatCreated?: (chatId: string) => void;
+  readonly onDepartmentChanged?: (department: WorkspaceDepartment) => void;
+  readonly onEmployeeChanged?: (employee: DirectoryEmployee) => void;
 }
 
 function replaceEmployee(
@@ -87,15 +91,17 @@ function replaceDepartment(
   };
 }
 
-export function EmployeesView({ token, currentUser, allowAdministration, allowChatAdministration, onInvite, onCreateChat, onChatCreated }: EmployeesViewProps) {
+export function EmployeesView({ token, currentUser, allowAdministration, allowChatAdministration, onInvite, onCreateChat, onChatCreated, onDepartmentChanged, onEmployeeChanged }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
+  const [employeeScopeFilter, setEmployeeScopeFilter] = useState<EmployeeScope>("central");
   const [selectedPositionId, setSelectedPositionId] = useState("");
   const [employeeRole, setEmployeeRole] = useState<Exclude<WorkspaceRole, "superadmin">>("employee");
   const [employeePositionId, setEmployeePositionId] = useState("");
   const [employeeDepartmentId, setEmployeeDepartmentId] = useState("");
   const [directManagerUserId, setDirectManagerUserId] = useState("");
+  const [managerScope, setManagerScope] = useState<EmployeeScope>("central");
   const [positionName, setPositionName] = useState("");
   const [positionActive, setPositionActive] = useState(true);
   const [newPositionName, setNewPositionName] = useState("");
@@ -154,6 +160,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           setEmployeePositionId(firstEmployee.positionId ?? "");
           setEmployeeDepartmentId(firstEmployee.departmentId ?? "");
           setDirectManagerUserId(firstEmployee.directManagerUserId ?? "");
+          setManagerScope(employeeScope(normalized.employees.find((employee) => employee.id === firstEmployee.directManagerUserId)?.departmentId, normalized.departments));
         }
         setSelectedPositionId(firstPosition?.id ?? "");
         setPositionName(firstPosition?.name ?? "");
@@ -190,6 +197,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     setEmployeePositionId(employee.positionId ?? "");
     setEmployeeDepartmentId(employee.departmentId ?? "");
     setDirectManagerUserId(employee.directManagerUserId ?? "");
+    setManagerScope(employeeScope(directory?.employees.find((item) => item.id === employee.directManagerUserId)?.departmentId, directory?.departments ?? []));
     setPanel("employee");
   };
 
@@ -228,6 +236,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         directManagerUserId || undefined,
       );
       setDirectory(replaceEmployee(directory, saved));
+      onEmployeeChanged?.(saved);
       setFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника");
@@ -247,6 +256,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         employeeStatusReason.trim(),
       );
       setDirectory(replaceEmployee(directory, saved));
+      onEmployeeChanged?.(saved);
       setEmployeeStatusAction(undefined);
       setEmployeeStatusReason("");
       setFeedback(
@@ -341,6 +351,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     const saved = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     const failedIds = new Set(targets.filter((_, index) => results[index]?.status === "rejected").map((employee) => employee.id));
     setDirectory((current) => saved.reduce((next, employee) => replaceEmployee(next, employee), current ?? directory));
+    for (const employee of saved) onEmployeeChanged?.(employee);
     setSelectedEmployeeIds((current) => new Set([...current].filter((id) => failedIds.has(id))));
     setBulkPanel(null);
     setFeedback(failedIds.size
@@ -385,7 +396,8 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   const search = employeeQuery.trim().toLocaleLowerCase("ru");
   const visibleEmployees = directory.employees.filter((employee) =>
-    `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${directory.departments.find((department) => department.id === employee.departmentId)?.name ?? ""}`.toLocaleLowerCase("ru").includes(search)
+    employeeScope(employee.departmentId, directory.departments) === employeeScopeFilter
+      && `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${directory.departments.find((department) => department.id === employee.departmentId)?.name ?? ""}`.toLocaleLowerCase("ru").includes(search)
       && (roleFilter === "all" || employee.role === roleFilter)
       && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
         || statusFilter === "invited" && ["pending", "invited"].includes(employee.status)
@@ -441,6 +453,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       </header>
 
       <div className="record-list-controls">
+        <EmployeeScopeSwitch value={employeeScopeFilter} onChange={setEmployeeScopeFilter} label="Показывать сотрудников" />
         <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин, должность или подразделение" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
         <label>Роль<Select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></label>
         <label>Состояние<Select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></Select></label>
@@ -449,7 +462,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       <EmployeeRecords
         employees={visibleEmployees}
         departments={directory.departments}
-        filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}`}
+        filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}:${employeeScopeFilter}`}
         selectedIds={selectedEmployeeIds}
         onOpen={selectEmployee}
         onToggle={toggleEmployee}
@@ -580,10 +593,13 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                   </Select>
                 </Field>
                 <Field label="Непосредственный руководитель" hint="Получает заявки на отпуск, отгул, опоздание и больничный.">
-                  <Select disabled={busy || !canManage || selectedEmployee.role === "superadmin"} value={directManagerUserId} onChange={(event) => setDirectManagerUserId(event.target.value)}>
-                    <option value="">Не назначен</option>
-                    {directory.employees.filter((employee) => employee.id !== selectedEmployee.id && employee.status === "active").map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
-                  </Select>
+                  <div className="scoped-person-field">
+                    <EmployeeScopeSwitch value={managerScope} onChange={(scope) => { setManagerScope(scope); setDirectManagerUserId(""); }} label="Группа руководителей" disabled={busy || !canManage || selectedEmployee.role === "superadmin"} />
+                    <Select aria-label="Непосредственный руководитель" disabled={busy || !canManage || selectedEmployee.role === "superadmin"} value={directManagerUserId} onChange={(event) => setDirectManagerUserId(event.target.value)}>
+                      <option value="">Не назначен</option>
+                      {directory.employees.filter((employee) => employee.id !== selectedEmployee.id && employee.status === "active" && employeeScope(employee.departmentId, directory.departments) === managerScope).map((employee) => <option key={employee.id} value={employee.id}>{employee.name}</option>)}
+                    </Select>
+                  </div>
                 </Field>
               </div>
               {canManage ? (
@@ -680,15 +696,18 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       {departmentsOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setDepartmentsOpen(false); }}>
         <DialogSurface className="directory-management-dialog" aria-label="Подразделения">
           <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть подразделения" onClick={() => setDepartmentsOpen(false)} /></div>
-          <DepartmentManagement token={token} departments={directory.departments} employees={directory.employees} onChanged={(department) => setDirectory((current) => current ? {
-            ...replaceDepartment(current, department),
-            employees: current.employees.map((employee) => ({
-              ...employee,
-              departmentId: department.memberIds?.includes(employee.id)
-                ? department.id
-                : employee.departmentId === department.id ? null : employee.departmentId,
-            })),
-          } : current)} />
+          <DepartmentManagement token={token} departments={directory.departments} employees={directory.employees} onChanged={(department) => {
+            setDirectory((current) => current ? {
+              ...replaceDepartment(current, department),
+              employees: department.memberIds ? current.employees.map((employee) => ({
+                ...employee,
+                departmentId: department.memberIds?.includes(employee.id)
+                  ? department.id
+                  : employee.departmentId === department.id ? null : employee.departmentId,
+              })) : current.employees,
+            } : current);
+            onDepartmentChanged?.(department);
+          }} />
         </DialogSurface>
       </Dialog> : null}
       {accessOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setAccessOpen(false); }}>
