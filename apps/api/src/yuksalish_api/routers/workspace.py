@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import re
+from collections.abc import AsyncIterator
 from contextlib import suppress
 from datetime import UTC, datetime
 from io import BytesIO
@@ -32,6 +33,7 @@ from yuksalish_api.absence_service import (
     update_absence,
 )
 from yuksalish_api.access_control import ModuleAction, ensure_module_action
+from yuksalish_api.ai_referent_authority import workspace_write_guard
 from yuksalish_api.auth import (
     AuthenticatedUser,
     InvalidTokenError,
@@ -1234,10 +1236,22 @@ async def get_profile_avatar(
     })
 
 
+async def require_attachment_write(
+    owner_type: AttachmentOwnerType,
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> AsyncIterator[None]:
+    if owner_type == "ai_referent_letter":
+        async for _ in workspace_write_guard(connection):
+            yield
+    else:
+        yield
+
+
 @router.put(
     "/attachments/{owner_type}/{owner_id}",
     response_model=AttachmentResponse,
     status_code=201,
+    dependencies=[Depends(require_attachment_write)],
 )
 async def put_attachment(
     owner_type: AttachmentOwnerType,

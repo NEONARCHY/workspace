@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import ssl
@@ -15,9 +16,10 @@ TOKEN_TARGET = "AIReferent.Workspace.Agent"
 
 
 class WorkspaceError(RuntimeError):
-    def __init__(self, message: str, status: int = 0):
+    def __init__(self, message: str, status: int = 0, *, retryable: bool = False):
         super().__init__(message)
         self.status = status
+        self.retryable = retryable
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -188,14 +190,91 @@ class WorkspaceClient:
                 if isinstance(detail, str)
                 else messages.get(exc.code, f"Ошибка API: HTTP {exc.code}"),
                 exc.code,
+                retryable=exc.code in {408, 500, 502, 503, 504},
             ) from None
         except (URLError, TimeoutError, OSError) as exc:
             raise WorkspaceError(
-                "Workspace недоступен. Проверьте сеть, адрес и сертификат."
+                "Workspace недоступен. Проверьте сеть, адрес и сертификат.",
+                retryable=True,
             ) from exc
 
     def configuration(self) -> dict[str, Any]:
         return self.request("/ai-referent/agent/configuration")
+
+    def reserve_offline_numbers(
+        self, reservation_id: str, count: int, epoch: str
+    ) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/number-reservations?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            {"reservationId": reservation_id, "count": count},
+            method="POST",
+        )
+
+    def start_offline_authority(self) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/authority:start?"
+            + urlencode({"agentId": self.agent_id}),
+            {}, method="POST",
+        )
+
+    def heartbeat_offline_authority(self, epoch: str) -> dict[str, Any]:
+        return self.request(
+            "/ai-referent/agent/offline/authority:heartbeat",
+            {"agentId": self.agent_id, "epoch": epoch}, method="POST",
+        )
+
+    def offline_rights(self, epoch: str, snapshot_id: str) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/rights?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            {"snapshotId": snapshot_id}, method="POST",
+        )
+
+    def upload_offline_blob(
+        self, epoch: str, sha256: str, content: bytes
+    ) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        if hashlib.sha256(content).hexdigest() != sha256:
+            raise WorkspaceError("Контрольная сумма локального файла не совпала.")
+        response = self.transfer(
+            f"/ai-referent/agent/offline/blobs/{sha256}?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            content, method="PUT",
+        )
+        receipt = json.loads(response)
+        if not isinstance(receipt, dict) or any(
+            not isinstance(key, str) for key in receipt
+        ):
+            raise WorkspaceError("Сервер вернул неверную квитанцию автономного файла.")
+        return {key: value for key, value in receipt.items()}
+
+    def replay_offline_operation(
+        self, epoch: str, operation: dict[str, Any]
+    ) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/operations?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            operation, method="POST",
+        )
+
+    def complete_offline_replay(self, manifest: dict[str, Any]) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/authority:complete?"
+            + urlencode({"agentId": self.agent_id}),
+            manifest, method="POST",
+        )
 
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(

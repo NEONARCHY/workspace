@@ -9,15 +9,23 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+from threading import RLock
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from .button_labels import button_label
 from .client import WorkspaceClient, WorkspaceError, connection_path, connection_settings
+from .offline_coordinator import OfflineCoordinator
+from .offline_journal import OfflineJournal
+from .offline_prefetch import OfflineSnapshotSeeder
+from .offline_prepare import OfflinePreparationWorker
+from .offline_workflow import OfflineWorkflow
 from .state import State, single_instance
 from .wizard import LetterWizard
 from .worker import DeliveryWorker
+
+_AUTHORITY_REFRESH_SECONDS = 10
 
 ACTIONS = {
     "s": ("submit", "На согласование"),
@@ -106,16 +114,220 @@ def button(text: str, data: str) -> dict[str, str]:
 
 
 class SharedBot:
-    def __init__(self, telegram: Any, api: WorkspaceClient, state: State):
+    def __init__(
+        self, telegram: Any, api: WorkspaceClient, state: State,
+        offline: OfflineJournal | None = None,
+    ):
         self.telegram, self.api, self.state = telegram, api, state
+        self.offline = offline
+        self.offline_workflow = OfflineWorkflow(offline) if offline is not None else None
+        self.offline_read = False
         self.wizard = LetterWizard(self)
+
+    def offline_active(self) -> bool:
+        state = self.offline.authority_state() if self.offline is not None else None
+        return state is not None and state["phase"] == "offline"
+
+    def _offline_request(
+        self, actor: str, path: str, payload: dict[str, Any] | None, method: str
+    ) -> dict[str, Any]:
+        workflow = self.offline_workflow
+        if workflow is None:
+            raise WorkspaceError("Автономный журнал недоступен.", 503)
+        parsed = urlsplit(path)
+        resource = parsed.path
+        if method == "GET" and resource in {"/reviewers", "/recipients"}:
+            return workflow.cached_resource(actor, path)
+        if method == "GET" and resource == "/letters":
+            query = parse_qs(parsed.query, strict_parsing=True)
+            try:
+                return workflow.list_letters(
+                    actor,
+                    offset=int(query.get("offset", ["0"])[0]),
+                    limit=int(query.get("limit", ["10"])[0]),
+                    active_only=query.get("activeOnly") == ["true"],
+                    sent_only=query.get("sentOnly") == ["true"],
+                )
+            except ValueError as error:
+                raise WorkspaceError("Неверные параметры списка писем.", 422) from error
+        if method == "GET" and resource == "/letters/progress":
+            query = parse_qs(parsed.query, strict_parsing=True)
+            try:
+                return workflow.progress_list(
+                    actor,
+                    offset=int(query.get("offset", ["0"])[0]),
+                    limit=int(query.get("limit", ["10"])[0]),
+                )
+            except ValueError as error:
+                raise WorkspaceError("Неверные параметры списка этапов.", 422) from error
+        if method == "GET" and resource.startswith("/letters/progress/"):
+            return workflow.progress_item(actor, resource.removeprefix("/letters/progress/"))
+        if method == "GET" and resource.startswith("/packets/outgoing/"):
+            return workflow.packet(actor, resource.removeprefix("/packets/outgoing/"))
+        if method == "POST" and resource == "/letters" and payload is not None:
+            return workflow.create(actor, payload.get("operationId", ""), payload)
+        parts = resource.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "letters":
+            letter_id = parts[1]
+            if len(parts) == 2 and method == "GET":
+                return workflow.read(actor, letter_id)
+            if len(parts) == 2 and method == "PATCH" and payload is not None:
+                return workflow.update(actor, letter_id, payload.get("operationId", ""), payload)
+            if len(parts) == 2 and method == "DELETE":
+                query = parse_qs(parsed.query, strict_parsing=True)
+                try:
+                    revision = int(query["expectedRevision"][0])
+                    operation_id = query["operationId"][0]
+                except (KeyError, IndexError, ValueError) as error:
+                    raise WorkspaceError("Неверные параметры удаления письма.", 422) from error
+                return workflow.delete(actor, letter_id, operation_id, revision)
+            if len(parts) == 3 and parts[2] == "actions" and method == "POST":
+                if payload is None:
+                    raise WorkspaceError("Данные решения отсутствуют.", 422)
+                revision = payload.get("expectedRevision")
+                if not isinstance(revision, int) or isinstance(revision, bool):
+                    raise WorkspaceError("Неверная версия письма.", 422)
+                return workflow.act(
+                    actor, letter_id, payload.get("operationId", ""),
+                    action=payload.get("action", ""),
+                    expected_revision=revision,
+                    comment=payload.get("comment", ""),
+                    comment_audio_id=payload.get("commentAudioId"),
+                )
+        raise WorkspaceError("Это действие пока недоступно без связи с Workspace.", 503)
+
+    def download_packet_file(
+        self, actor: str, kind: str, owner: str, file_id: str, source: str
+    ) -> bytes:
+        if self.offline_active():
+            if (
+                self.offline_workflow is None or kind != "outgoing"
+                or source not in {"attachment", "packet"}
+            ):
+                raise WorkspaceError("Файл недоступен в локальной копии.", 503)
+            return self.offline_workflow.packet_file(actor, owner, file_id, source)
+        return self.api.transfer(
+            f"/ai-referent/agent/packets/{kind}/{owner}/files/{file_id}?source={source}",
+            telegram_id=actor,
+        )
+
+    def upload_attachment(
+        self, actor: str, letter_id: str, operation_id: str, *,
+        file_name: str, content: bytes, role: str, expected_revision: int,
+    ) -> None:
+        if self.offline_active():
+            if self.offline_workflow is None:
+                raise WorkspaceError("Автономный журнал недоступен.", 503)
+            self.offline_workflow.attach(
+                actor, letter_id, operation_id, file_name=file_name,
+                content=content, role=role, expected_revision=expected_revision,
+            )
+            return
+        query = urlencode({
+            "fileName": file_name, "role": role, "operationId": operation_id,
+            "expectedRevision": expected_revision,
+        })
+        self.api.transfer(
+            f"/ai-referent/agent/letters/{letter_id}/attachment?{query}", content,
+            method="PUT", telegram_id=actor,
+            content_type=mimetypes.guess_type(file_name)[0] or "application/octet-stream",
+        )
+
+    def upload_comment_audio(
+        self, actor: str, letter_id: str, operation_id: str, *,
+        expected_revision: int, duration_ms: int, content: bytes,
+    ) -> str:
+        if self.offline_active():
+            if self.offline_workflow is None:
+                raise WorkspaceError("Автономный журнал недоступен.", 503)
+            result = self.offline_workflow.save_comment_audio(
+                actor, letter_id,
+                str(uuid5(NAMESPACE_URL, "ai-offline-voice:" + operation_id)),
+                expected_revision=expected_revision,
+                duration_ms=duration_ms, content=content, content_type="audio/ogg",
+            )
+            return str(result["id"])
+        response = self.api.transfer(
+            f"/ai-referent/agent/letters/{letter_id}/comment-audio?"
+            + urlencode({"expectedRevision": expected_revision, "durationMs": duration_ms}),
+            content, method="PUT", telegram_id=actor, content_type="audio/ogg",
+        )
+        import json
+
+        return str(json.loads(response)["id"])
+
+    def check_offline_documents(self, facsimile: Any) -> bool:
+        """Check one durable primary DOCX using the same Office checker as online mode."""
+        if not self.offline_active() or self.offline is None or self.offline_workflow is None:
+            return False
+        from .preflight import check_document
+
+        for operation in self.offline.pending_authorized():
+            if (
+                operation["kind"] != "letter.attachment"
+                or operation["payload"]["role"] != "primary"
+            ):
+                continue
+            actor, letter_id = operation["actor_id"], operation["letter_id"]
+            try:
+                letter = self.offline_workflow.read(actor, letter_id)
+            except WorkspaceError as error:
+                if error.status in {403, 404}:
+                    continue
+                raise
+            primary = next(
+                (item for item in reversed(letter["attachments"])
+                 if item["documentRole"] == "primary"), None,
+            )
+            if (
+                primary is None or primary["sha256"] != operation["blob_sha256"]
+                or letter.get("documentCheck") is not None
+            ):
+                continue
+            check_id = str(
+                uuid5(NAMESPACE_URL, "ai-offline-check-for:" + operation["operation_id"])
+            )
+            self.offline_workflow.check_document(
+                actor, letter_id, check_id,
+                lambda draft, reviewers, kind: check_document(
+                    facsimile, draft, reviewers, kind
+                ),
+            )
+            return True
+        return False
 
     def request(
         self, actor: str, path: str, payload: dict[str, Any] | None = None, method: str = "GET"
     ) -> dict[str, Any]:
-        return self.api.request(
-            "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
-        )
+        if self.offline_active():
+            self.offline_read = False
+            return self._offline_request(actor, path, payload, method)
+        try:
+            result = self.api.request(
+                "/ai-referent/agent" + path, payload, method=method, telegram_id=actor
+            )
+        except WorkspaceError as error:
+            if (
+                method != "GET" or self.offline is None
+                or error.status not in {0, 408, 500, 502, 503, 504}
+            ):
+                raise
+            cached = self.offline.snapshot(actor, path)
+            if cached is None and path.startswith("/letters/") and path.count("/") == 2:
+                letter = self.offline.cached_letter(actor, path.removeprefix("/letters/"))
+                if letter is not None:
+                    cached = {"payload": letter}
+            if cached is None:
+                raise WorkspaceError(
+                    "Workspace недоступен, а это письмо ещё не сохранено в локальной копии.",
+                    retryable=error.retryable,
+                ) from error
+            self.offline_read = True
+            return cached["payload"]
+        self.offline_read = False
+        if method == "GET" and self.offline is not None:
+            self.offline.cache(actor, path, result)
+        return result
 
     def say(
         self, actor: str, text: str, rows: list[list[dict[str, str]]] | None = None
@@ -225,6 +437,13 @@ class SharedBot:
                 if error.status in {403, 404}:
                     self.clear_system(actor, scope)
 
+    def complete_update(self, update: dict[str, Any]) -> None:
+        key = f"pending-update:{update['update_id']}"
+        actor = self.state.get(key)
+        if actor is not None:
+            self.clear_system(str(actor), key)
+            self.state.remove(key)
+
     def show(self, actor: str, letter_id: str) -> None:
         letter = self.request(actor, f"/letters/{UUID(letter_id)}")
         compact = UUID(letter["id"]).hex
@@ -234,7 +453,7 @@ class SharedBot:
             if action in letter["availableActions"]
         ]
         rows.append([button("Пакет документов", f"f:o:{compact}:0")])
-        if letter.get("canDelete"):
+        if letter.get("canDelete") and not self.offline_active():
             rows.append([button("Удалить письмо из базы", f"z:{compact}:{letter['revision']}")])
         if letter.get("canReplaceDocument"):
             rows.append([button("Загрузить новый DOCX или PDF", f"e:{compact}")])
@@ -243,6 +462,8 @@ class SharedBot:
             rows.append([button("Исправить письмо", f"w:edit:{compact}")])
             if letter.get("workflowKind") != "sign_only":
                 rows.append([button("Добавить вложение", f"x:{compact}")])
+        if self.offline_read:
+            rows = []
         latest = next(
             (event["comment"] for event in letter.get("events", []) if event.get("comment")), ""
         )
@@ -256,7 +477,11 @@ class SharedBot:
         self.system(
             actor,
             "letter-" + letter["id"],
-            f"{number} · {STATUSES[letter['status']]}\n"
+            ("⚠️ Офлайн-копия: сведения могли измениться. Действия недоступны.\n"
+             if self.offline_read else "")
+            + ("📴 Автономный режим: действия сохраняются на ПК референта.\n"
+               if self.offline_active() else "")
+            + f"{number} · {STATUSES[letter['status']]}\n"
             f"{letter['subject'] or letter.get('displayNumber') or 'Тема — исходящий номер'}\n"
             f"{destination}"
             f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
@@ -275,11 +500,13 @@ class SharedBot:
             f"/letters?offset={page * 10}&limit=10"
             + ("&activeOnly=true" if kind == "pending" else "&sentOnly=true"),
         )
+        list_offline = self.offline_read
         progress = (
             self.request(actor, f"/letters/progress?offset={page * 10}&limit=10")["letters"]
             if kind == "pending"
             else []
         )
+        offline_read = list_offline or self.offline_read
         rows = [
             [
                 button(
@@ -312,6 +539,10 @@ class SharedBot:
             "history",
             f"{'Согласование и черновики' if kind == 'pending' else 'История'} · "
             f"страница {page + 1}"
+            + ("\n⚠️ Офлайн-копия. Новые действия появятся после связи."
+               if offline_read else "")
+            + ("\n📴 Автономный режим. Показаны только сохранённые на ПК письма."
+               if self.offline_active() else "")
             + ("\nЧужие письма: только текущий этап." if progress else "")
             + ("\nПисем пока нет." if not result["letters"] and not progress else ""),
             rows,
@@ -319,6 +550,7 @@ class SharedBot:
 
     def show_progress(self, actor: str, letter_id: str) -> None:
         item = self.request(actor, f"/letters/progress/{UUID(letter_id)}")
+        offline_read = self.offline_read or self.offline_active()
         date = item["createdAt"][:16].replace("T", " ")
         number = item.get("displayNumber") or "Письмо без номера"
         self.system(
@@ -327,9 +559,11 @@ class SharedBot:
             f"{number} · {item['createdByName']} · {date}\n"
             f"Этап: {STATUSES[item['status']]}\n"
             "Для чужого письма здесь доступен только этап. Решения принимают назначенные "
-            "согласующие.",
+            "согласующие."
+            + ("\n📴 Последний сохранённый этап. Обновится после связи с Workspace."
+               if offline_read else ""),
             [
-                [button("Обновить этап", "g:" + UUID(item["id"]).hex)],
+                *([] if offline_read else [[button("Обновить этап", "g:" + UUID(item["id"]).hex)]]),
                 [button("← Согласование", "list:pending:0")],
             ],
         )
@@ -367,9 +601,13 @@ class SharedBot:
                 selected.insert(0, max(signed, key=lambda entry: entry["createdAt"]))
         return selected
 
-    def deliver_comments(self, actor: str, letter: dict[str, Any]) -> None:
+    def deliver_comments(
+        self, actor: str, letter: dict[str, Any], *, event_id: str | None = None
+    ) -> None:
         for event in reversed(letter.get("events", [])):
-            if event["eventType"] != "letter.return_for_revision":
+            if event["eventType"] != "letter.return_for_revision" or (
+                event_id is not None and event["id"] != event_id
+            ):
                 continue
             receipt = f"comment-delivered:{actor}:{event['id']}"
             if self.state.get(receipt):
@@ -378,9 +616,16 @@ class SharedBot:
             caption = f"Комментарий к письму {title} · {event['actorName']}"
             audio = event.get("audio")
             if audio:
-                content = self.api.transfer(
-                    "/ai-referent/agent/comment-audio/" + audio["id"], telegram_id=actor
-                )
+                if self.offline_active():
+                    if self.offline_workflow is None:
+                        raise WorkspaceError("Автономный журнал недоступен.", 503)
+                    content = self.offline_workflow.comment_audio_file(
+                        actor, letter["id"], audio["id"]
+                    )
+                else:
+                    content = self.api.transfer(
+                        "/ai-referent/agent/comment-audio/" + audio["id"], telegram_id=actor
+                    )
                 with tempfile.TemporaryDirectory(prefix="referent-voice-") as folder:
                     ogg = audio["contentType"] == "audio/ogg"
                     path = Path(folder) / ("Комментарий.ogg" if ogg else "Комментарий.webm")
@@ -397,6 +642,162 @@ class SharedBot:
             if event.get("comment"):
                 self.say(actor, caption + "\n" + event["comment"])
             self.state.put(receipt, True)
+
+    def offline_notifications(self) -> None:
+        """Deliver local decisions and signed PDFs without contacting Workspace."""
+        if not self.offline_active() or self.offline is None or self.offline_workflow is None:
+            return
+        actors = self.offline.verified_actors()
+        by_user = {item["userId"]: item["telegramId"] for item in actors}
+        delivered = 0
+        for operation in self.offline.pending_authorized(limit=1000):
+            if delivered >= 30:
+                return
+            kind, payload = operation["kind"], operation["payload"]
+            if kind == "letter.action":
+                action = payload.get("action")
+                if action == "submit":
+                    letter = self.offline_workflow.read(
+                        operation["actor_id"], operation["letter_id"]
+                    )
+                    recipient_ids = [letter["initialReviewerUserId"]]
+                elif action == "approve":
+                    recipient_ids = [payload.get("nextReviewerUserId")]
+                elif action == "return_for_revision":
+                    recipient_ids = [payload.get("creatorUserId")]
+                else:
+                    continue
+            elif kind in {
+                "letter.prepared", "letter.signed", "letter.dispatched",
+                "letter.external_result",
+            }:
+                reader = operation["actor_id"]
+                if kind in {"letter.dispatched", "letter.external_result"}:
+                    reader = next(
+                        (item["telegramId"] for item in actors
+                         if item["userId"] == payload["creatorUserId"]), reader,
+                    )
+                letter = self.offline_workflow.read(
+                    reader, operation["letter_id"]
+                )
+                recipient_ids = [letter["createdByUserId"]]
+                if kind == "letter.prepared" and letter["status"] == "awaiting_final_send":
+                    recipient_ids.append(letter["reviewerUserId"])
+                elif (
+                    (kind in {"letter.prepared", "letter.dispatched"}
+                     and letter["status"] == "referent_review_pending")
+                    or kind == "letter.external_result"
+                ):
+                    recipient_ids.extend(
+                        item["userId"] for item in actors
+                        if "admin" in item["moduleActions"]
+                    )
+            else:
+                continue
+            for user_id in set(recipient_ids):
+                recipient = by_user.get(user_id)
+                if recipient is None:
+                    continue
+                key = f"offline-notice:{operation['operation_id']}:{recipient}"
+                if self.state.get(key):
+                    continue
+                try:
+                    current = self.offline_workflow.read(recipient, operation["letter_id"])
+                except WorkspaceError as error:
+                    if error.status in {403, 404}:
+                        continue
+                    raise
+                if kind == "letter.prepared":
+                    if current["status"] not in {
+                        "awaiting_final_send", "referent_review_pending"
+                    }:
+                        self.state.put(key, True)
+                        continue
+                    packet = self.offline_workflow.packet(recipient, current["id"])
+                    signed = next(
+                        (item for item in packet["files"]
+                         if item["id"] == current.get("finalPdfFileId")
+                         and item["source"] == "packet"), None,
+                    )
+                    if signed is None or signed["byteSize"] > 20 * 1024 * 1024:
+                        raise WorkspaceError("Подписанный PDF недоступен через Telegram.", 503)
+                    file_key = key + ":pdf"
+                    if not self.state.get(file_key):
+                        content = self.offline_workflow.packet_file(
+                            recipient, current["id"], signed["id"], "packet"
+                        )
+                        with tempfile.TemporaryDirectory(prefix="offline-signed-") as folder:
+                            title = current.get("displayNumber") or current["subject"] or "letter"
+                            name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", title)[:100] + ".pdf"
+                            path = Path(folder) / name
+                            path.write_bytes(content)
+                            response = self.telegram.send_document(
+                                recipient, path, caption="Подписанный PDF · автономный режим"
+                            )
+                            if response.get("ok") is False:
+                                raise WorkspaceError("Telegram не подтвердил доставку PDF.")
+                        self.state.put(file_key, True)
+                if kind == "letter.signed":
+                    if current["status"] != "signed":
+                        self.state.put(key, True)
+                        continue
+                    packet = self.offline_workflow.packet(recipient, current["id"])
+                    pages = sorted(
+                        (item for item in packet["files"]
+                         if item["source"] == "packet"
+                         and item["name"].startswith(
+                             "signed/" + payload["commandId"] + "/"
+                         )), key=lambda item: item["name"],
+                    )
+                    if len(pages) != len(payload["pages"]):
+                        raise WorkspaceError("Не все подписанные страницы сохранены.", 503)
+                    for index, page in enumerate(pages, 1):
+                        file_key = f"{key}:page:{page['id']}"
+                        if self.state.get(file_key):
+                            continue
+                        if page["byteSize"] > 20 * 1024 * 1024:
+                            raise WorkspaceError(
+                                "Подписанная страница больше лимита Telegram.", 503
+                            )
+                        content = self.offline_workflow.packet_file(
+                            recipient, current["id"], page["id"], "packet"
+                        )
+                        with tempfile.TemporaryDirectory(prefix="offline-signed-page-") as folder:
+                            path = Path(folder) / Path(page["name"]).name
+                            path.write_bytes(content)
+                            response = self.telegram.send_document(
+                                recipient, path,
+                                caption=f"Подписанная страница {index}/{len(pages)}",
+                            )
+                            if response.get("ok") is False:
+                                raise WorkspaceError("Telegram не подтвердил доставку страницы.")
+                        self.state.put(file_key, True)
+                        delivered += 1
+                        if delivered >= 30:
+                            return
+                if kind == "letter.action" and payload.get("action") == "return_for_revision":
+                    event_id = str(uuid5(
+                        NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"]
+                    ))
+                    self.deliver_comments(recipient, current, event_id=event_id)
+                self.show(recipient, current["id"])
+                self.state.put(key, True)
+                delivered += 1
+        for effect in self.offline.unresolved_external_effects():
+            for item in actors:
+                if "admin" not in item["moduleActions"]:
+                    continue
+                recipient = item["telegramId"]
+                key = f"offline-unknown-send:{effect['effect_id']}:{recipient}"
+                if self.state.get(key):
+                    continue
+                self.say(
+                    recipient,
+                    "⚠️ Результат автономной отправки письма неизвестен. "
+                    "Проверьте журнал E-XAT/Webmail; повторная отправка заблокирована. "
+                    f"ID письма: {effect['letter_id']}",
+                )
+                self.state.put(key, True)
 
     def notifications(self) -> None:
         self.wizard.poll_checks()
@@ -534,7 +935,16 @@ class SharedBot:
             rows.append([button(item["name"].split("/")[-1][:45], f"g:{reference}")])
         if offset + 12 < len(packet["files"]):
             rows.append([button("Далее", f"f:{kind[0]}:{UUID(owner).hex}:{offset + 12}")])
-        self.say(actor, "Пакет документов" if rows else "Файлы пока не синхронизированы.", rows)
+        self.say(
+            actor,
+            ("Пакет документов · только локально сохранённые файлы"
+             if self.offline_active() else "Пакет документов")
+            if rows else (
+                "Файлы пока не сохранены на ПК референта."
+                if self.offline_active() else "Файлы пока не синхронизированы."
+            ),
+            rows,
+        )
 
     def recipients(self, actor: str, context: dict[str, Any]) -> None:
         params = urlencode({
@@ -699,7 +1109,8 @@ class SharedBot:
                     letter_id = str(UUID(data[2]))
                     result = self.request(
                         actor,
-                        f"/letters/{letter_id}?expectedRevision={int(data[3])}",
+                        f"/letters/{letter_id}?"
+                        + urlencode({"expectedRevision": int(data[3]), "operationId": operation}),
                         method="DELETE",
                     )
                     self.state.remove("wizard:" + actor)
@@ -799,9 +1210,9 @@ class SharedBot:
                     if not reference:
                         raise WorkspaceError("Откройте пакет документов заново.")
                     item = reference["file"]
-                    base = f"/ai-referent/agent/packets/{reference['kind']}/{reference['owner']}"
-                    content = self.api.transfer(
-                        f"{base}/files/{item['id']}?source={item['source']}", telegram_id=actor
+                    content = self.download_packet_file(
+                        actor, reference["kind"], reference["owner"],
+                        item["id"], item["source"],
                     )
                     with tempfile.TemporaryDirectory(prefix="workspace-letter-") as directory:
                         path = Path(directory) / Path(item["name"]).name
@@ -941,22 +1352,11 @@ class SharedBot:
                         self.telegram.download_file(metadata["result"]["file_path"], path)
                         if path.stat().st_size > 10 * 1024 * 1024:
                             raise WorkspaceError("Голосовой комментарий слишком большой.")
-                        response = self.api.transfer(
-                            f"/ai-referent/agent/letters/{context['letterId']}/comment-audio?"
-                            + urlencode(
-                                {
-                                    "expectedRevision": context["payload"]["expectedRevision"],
-                                    "durationMs": duration,
-                                }
-                            ),
-                            path.read_bytes(),
-                            method="PUT",
-                            telegram_id=actor,
-                            content_type="audio/ogg",
+                        audio_id = self.upload_comment_audio(
+                            actor, context["letterId"], operation,
+                            expected_revision=context["payload"]["expectedRevision"],
+                            duration_ms=duration, content=path.read_bytes(),
                         )
-                        import json
-
-                        audio_id = json.loads(response)["id"]
                 if len(text) < 3 and audio_id is None:
                     raise WorkspaceError("Комментарий должен содержать не менее 3 символов.")
                 payload = {
@@ -965,10 +1365,22 @@ class SharedBot:
                     "operationId": operation,
                     "commentAudioId": audio_id,
                 }
-                self.request(actor, f"/letters/{context['letterId']}/actions", payload, "POST")
+                result = self.request(
+                    actor, f"/letters/{context['letterId']}/actions", payload, "POST"
+                )
                 self.state.remove(key)
                 self.clear_system(actor, "comment-" + context["letterId"])
-                self.show(actor, context["letterId"])
+                if (
+                    self.offline_active() and result["status"] == "needs_revision"
+                    and self.offline is not None
+                    and "admin" in (self.offline.offline_actor(actor) or {}).get(
+                        "moduleActions", []
+                    )
+                    and context["payload"]["action"] == "return_for_revision"
+                ):
+                    self.say(actor, "Письмо возвращено автору. Дальнейший цикл доступен ему.")
+                else:
+                    self.show(actor, context["letterId"])
             elif context.get("step") == "upload" and message.get("document"):
                 document = message["document"]
                 name = Path(str(document.get("file_name") or "attachment.bin")).name
@@ -988,23 +1400,15 @@ class SharedBot:
                     self.telegram.download_file(metadata["result"]["file_path"], path)
                     if path.stat().st_size > 20 * 1024 * 1024:
                         raise WorkspaceError("Файл превышает лимит Telegram.")
-                    query = urlencode(
-                        {
-                            "fileName": name,
-                            "role": context["role"],
-                            **(
-                                {"expectedRevision": context["revision"]}
-                                if "revision" in context
-                                else {}
-                            ),
-                        }
-                    )
-                    self.api.transfer(
-                        f"/ai-referent/agent/letters/{context['letterId']}/attachment?{query}",
-                        path.read_bytes(),
-                        method="PUT",
-                        telegram_id=actor,
-                        content_type=mimetypes.guess_type(name)[0] or "application/octet-stream",
+                    revision = context.get("revision")
+                    if revision is None:
+                        revision = self.request(actor, "/letters/" + context["letterId"])[
+                            "revision"
+                        ]
+                    self.upload_attachment(
+                        actor, context["letterId"], operation, file_name=name,
+                        content=path.read_bytes(), role=context["role"],
+                        expected_revision=revision,
                     )
                 self.state.remove(key)
                 self.show(actor, context["letterId"])
@@ -1033,6 +1437,16 @@ class SharedBot:
             else:
                 self.say(actor, "Откройте /history или начните письмо командой /new.")
         except (WorkspaceError, ValueError, KeyError, IndexError) as error:
+            if isinstance(error, WorkspaceError) and error.retryable:
+                pending = f"pending-update:{update['update_id']}"
+                self.state.claim(pending, actor)
+                if self.state.get(f"system:{actor}:{pending}") is None:
+                    self.system(
+                        actor, pending,
+                        "Связь с Workspace прервалась. Действие сохранено и будет "
+                        "продолжено автоматически после восстановления связи.",
+                    )
+                raise
             if isinstance(error, WorkspaceError) and error.status == 0:
                 # Validation errors have no status too: expose only our sanitized message.
                 self.say(actor, str(error))
@@ -1061,6 +1475,28 @@ def run_shared(
         )
 
 
+def poll_durable_updates(
+    telegram: Any, controller: SharedBot, journal: OfflineJournal, *, limit: int | None = None
+) -> int:
+    """Never acknowledge Telegram before the update is durable and handled."""
+    pending = journal.pending_telegram_updates()
+    if not pending:
+        response = telegram.get_updates(offset=journal.telegram_offset())
+        journal.receive_telegram_updates(response.get("result", []))
+        pending = journal.pending_telegram_updates()
+    handled = 0
+    for update in pending:
+        controller.handle(update)
+        complete_update = getattr(controller, "complete_update", None)
+        if callable(complete_update):
+            complete_update(update)
+        journal.mark_telegram_update_handled(int(update["update_id"]))
+        handled += 1
+        if limit is not None and handled >= limit:
+            break
+    return handled
+
+
 def _run_shared(
     bot: Any, *, max_updates: int | None = None, stop_after_idle_seconds: int | None = None
 ) -> Any:
@@ -1068,8 +1504,13 @@ def _run_shared(
 
     client = WorkspaceClient()
     state = State(connection_path().parent / "shared-state.sqlite")
-    controller = SharedBot(bot.client, client, state)
+    offline = OfflineJournal(connection_path().parent / "offline")
+    offline.initialize_telegram_offset(state.get("telegram-offset"))
+    controller = SharedBot(bot.client, client, state, offline)
     worker = DeliveryWorker(bot.service, client, state)
+    offline_preparer = OfflinePreparationWorker(worker, offline)
+    coordinator = OfflineCoordinator(client, offline)
+    prefetch = OfflineSnapshotSeeder(client, offline)
     try:
         bot.client.set_my_commands(
             [
@@ -1084,11 +1525,79 @@ def _run_shared(
     except Exception as error:
         bot._status_log("workspace_commands_failed", error=type(error).__name__)
     done = threading.Event()
+    authority_lock = RLock()
+    worker_ready = [False]
+    last_authority_mode: str | None = None
+    last_authority_error: tuple[str, str] | None = None
+    next_authority_log = 0.0
+
+    def advance_authority() -> str:
+        nonlocal last_authority_mode, last_authority_error, next_authority_log
+        with authority_lock:
+            try:
+                mode = coordinator.tick()
+                if mode == "replay":
+                    mode = coordinator.replay_tick()
+                if mode != last_authority_mode:
+                    bot._status_log("workspace_authority_mode", mode=mode)
+                    last_authority_mode = mode
+                last_authority_error = None
+                return mode
+            except Exception as error:
+                reason = (type(error).__name__, safe_error_text(error))
+                if reason != last_authority_error or time.monotonic() >= next_authority_log:
+                    bot._status_log(
+                        "workspace_authority_failed", error=reason[0], detail=reason[1]
+                    )
+                    next_authority_log = time.monotonic() + 60
+                last_authority_error = reason
+                return "blocked"
+
+    def maintain_authority() -> None:
+        while not done.is_set():
+            if worker_ready[0] or offline.authority_state() is not None:
+                advance_authority()
+            done.wait(_AUTHORITY_REFRESH_SECONDS)
+
+    def seed_offline_views() -> None:
+        last_error: tuple[str, str] | None = None
+        next_log = 0.0
+        while not done.is_set():
+            try:
+                worked = prefetch.tick()
+                last_error = None
+            except Exception as error:
+                worked = False
+                reason = (type(error).__name__, safe_error_text(error))
+                if reason != last_error or time.monotonic() >= next_log:
+                    bot._status_log(
+                        "workspace_offline_prefetch_failed", error=reason[0], detail=reason[1]
+                    )
+                    next_log = time.monotonic() + 60
+                last_error = reason
+            done.wait(2 if worked else 10)
 
     def check_documents() -> None:
         last_error: tuple[str, str] | None = None
         next_log = 0.0
         while not done.is_set():
+            authority_state = offline.authority_state()
+            if authority_state is not None and authority_state["phase"] == "offline":
+                try:
+                    controller.check_offline_documents(bot.service.facsimile)
+                except Exception as error:
+                    reason = (type(error).__name__, safe_error_text(error))
+                    if reason != last_error or time.monotonic() >= next_log:
+                        bot._status_log(
+                            "workspace_offline_preflight_failed", error=reason[0], detail=reason[1]
+                        )
+                        next_log = time.monotonic() + 60
+                    last_error = reason
+                done.wait(5)
+                continue
+            if authority_state is not None and authority_state["phase"] != "online":
+                done.wait(5)
+                continue
             try:
                 worker.check_documents()
                 last_error = None
@@ -1103,11 +1612,38 @@ def _run_shared(
             done.wait(5)
 
     def execute() -> None:
-        ready = False
         attempts = 0
         next_sync = 0.0
+        last_prepare_error: tuple[str, str] | None = None
+        next_prepare_log = 0.0
         while not done.is_set():
-            if not ready:
+            authority_state = offline.authority_state()
+            if authority_state is not None and authority_state["phase"] == "offline":
+                try:
+                    offline_preparer.run_once()
+                    offline_preparer.run_dispatch_once()
+                    offline_preparer.run_send_once()
+                    last_prepare_error = None
+                except Exception as error:
+                    reason = (type(error).__name__, safe_error_text(error))
+                    if reason != last_prepare_error or time.monotonic() >= next_prepare_log:
+                        bot._status_log(
+                            "workspace_offline_prepare_failed",
+                            error=reason[0], detail=reason[1],
+                        )
+                        next_prepare_log = time.monotonic() + 60
+                    last_prepare_error = reason
+                done.wait(5)
+                continue
+            if not worker_ready[0]:
+                if authority_state is not None and authority_state["phase"] != "online":
+                    if advance_authority() not in {"legacy", "online"}:
+                        done.wait(5)
+                        continue
+                    authority_state = offline.authority_state()
+                    if authority_state is not None and authority_state["phase"] != "online":
+                        done.wait(5)
+                        continue
                 if time.monotonic() < next_sync:
                     done.wait(1)
                     continue
@@ -1123,9 +1659,12 @@ def _run_shared(
                         attempts=attempts,
                     )
                     continue
-                ready = True
+                worker_ready[0] = True
                 next_sync = time.monotonic() + 60
                 bot._status_log("workspace_bootstrap_completed", attempts=attempts)
+            if advance_authority() not in {"legacy", "online"}:
+                done.wait(5)
+                continue
             try:
                 worker.tick()
                 if time.monotonic() >= next_sync:
@@ -1139,27 +1678,43 @@ def _run_shared(
     check_thread = threading.Thread(
         target=check_documents, name="workspace-document-checks", daemon=True
     )
+    authority_thread = threading.Thread(
+        target=maintain_authority, name="workspace-authority", daemon=True
+    )
+    prefetch_thread = threading.Thread(
+        target=seed_offline_views, name="workspace-offline-prefetch", daemon=True
+    )
     thread = threading.Thread(target=execute, name="workspace-executor", daemon=True)
     check_thread.start()
+    authority_thread.start()
+    prefetch_thread.start()
     thread.start()
     seen, handled = 0, 0
     idle = time.monotonic()
     try:
         while max_updates is None or seen < max_updates:
+            authority_state = offline.authority_state()
+            if authority_state is None or authority_state["phase"] == "online":
+                try:
+                    controller.notifications()
+                except Exception as error:
+                    bot._status_log("workspace_notifications_failed", error=type(error).__name__)
+            elif authority_state["phase"] == "offline":
+                try:
+                    controller.offline_notifications()
+                except Exception as error:
+                    bot._status_log(
+                        "workspace_offline_notifications_failed", error=type(error).__name__
+                    )
             try:
-                controller.notifications()
-            except Exception as error:
-                bot._status_log("workspace_notifications_failed", error=type(error).__name__)
-            try:
-                response = bot.client.get_updates(offset=state.get("telegram-offset"))
-                for update in response.get("result", []):
-                    controller.handle(update)
-                    state.put("telegram-offset", int(update["update_id"]) + 1)
-                    seen += 1
-                    handled += 1
+                completed = poll_durable_updates(
+                    bot.client, controller, offline,
+                    limit=max_updates - seen if max_updates is not None else None,
+                )
+                if completed:
+                    seen += completed
+                    handled += completed
                     idle = time.monotonic()
-                    if max_updates is not None and seen >= max_updates:
-                        break
             except Exception as error:
                 bot._status_log("workspace_poll_error", error=type(error).__name__)
                 done.wait(5)
@@ -1171,5 +1726,7 @@ def _run_shared(
     finally:
         done.set()
         thread.join(timeout=45)
+        authority_thread.join(timeout=45)
+        prefetch_thread.join(timeout=45)
         check_thread.join(timeout=5)
     return PollingResult("stopped", seen, handled, [])

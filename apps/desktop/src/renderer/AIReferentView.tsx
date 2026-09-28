@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
+  AIReferentAuthorityStatus,
   AIReferentConfiguration,
   AIReferentDocumentCheck,
   AIReferentCommentAudio,
@@ -45,6 +46,7 @@ import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentFiles, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
 import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
+import { AIReferentAddressBook } from "./AIReferentAddressBook";
 import { AIReferentArchive, AIReferentTelegram } from "./AIReferentArchive";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -60,6 +62,7 @@ import {
   downloadWorkspaceAttachment,
   loadAIReferentRegistry,
   loadAIReferentLetter,
+  loadAIReferentAuthority,
   loadAIReferentReviewers,
   updateAIReferentLetter,
   uploadWorkspaceAttachment,
@@ -169,7 +172,7 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusRevision }: AIReferentViewProps) {
-  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "archive" | "telegram">("incoming");
+  const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "addresses" | "archive" | "telegram">("incoming");
   const [reviewerConfig, setReviewerConfig] = useState<AIReferentConfiguration>();
   const [registry, setRegistry] = useState<AIReferentRegistry>();
   const [loading, setLoading] = useState(true);
@@ -177,6 +180,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const busyRef = useRef(false);
   const [error, setError] = useState("");
   const [registryError, setRegistryError] = useState("");
+  const [authority, setAuthority] = useState<AIReferentAuthorityStatus>();
+  const [authorityError, setAuthorityError] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<"all" | AIReferentLetter["status"]>("all");
@@ -208,10 +213,36 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const boburId = reviewerConfig?.reviewers.find((item) => item.key === "bobur" && item.canApprove)?.userId;
   // Search and counts use the same server-side selection across all pages.
   const visibleLetters = registry?.letters ?? [];
+  const readOnly = authority?.writable !== true;
+
+  useEffect(() => {
+    let alive = true;
+    const reload = () => {
+      void loadAIReferentAuthority(token).then((result) => {
+        if (alive) { setAuthority(result); setAuthorityError(""); }
+      }).catch((reason: unknown) => {
+        if (alive) {
+          setAuthority(undefined);
+          setAuthorityError(reason instanceof Error ? reason.message : "Не удалось проверить режим AI Referent.");
+        }
+      });
+    };
+    reload();
+    const timer = setInterval(reload, 5000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [token]);
+
+  useEffect(() => {
+    if (!readOnly) return;
+    queueMicrotask(() => {
+      setConfirmAction(undefined);
+      setDeleteConfirmation("");
+    });
+  }, [readOnly]);
 
   useEffect(() => {
     const file = form.file;
-    if (!formOpen || !file) return;
+    if (!formOpen || !file || readOnly) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const fail = (reason: unknown) => { if (alive) setDocumentCheck({ file, error: reason instanceof Error ? reason.message : "Проверка недоступна. Повторите попытку." }); };
@@ -224,7 +255,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     };
     void checkAIReferentDocument(token, file, form.workflowKind).then(accept).catch(fail);
     return () => { alive = false; if (timer) clearTimeout(timer); };
-  }, [token, form.file, form.workflowKind, formOpen, checkAttempt]);
+  }, [token, form.file, form.workflowKind, formOpen, checkAttempt, readOnly]);
 
   const selectDocument = (file?: File) => {
     if (!file) return;
@@ -290,6 +321,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   };
 
   const openCreate = (workflowKind: LetterForm["workflowKind"] = "delivery") => {
+    if (readOnly) return;
     savedMetadata.current = undefined;
     saveOperation.current = crypto.randomUUID();
     setEditingId("");
@@ -299,6 +331,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   };
 
   const openEdit = (letter: AIReferentLetter) => {
+    if (readOnly) return;
     savedMetadata.current = undefined;
     editRevision.current = letter.revision;
     saveOperation.current = crypto.randomUUID();
@@ -310,6 +343,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   };
 
   const save = async () => {
+    if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return; }
     if (busyRef.current) return;
     if (form.file && activeCheck?.result?.status !== "passed") { setError("Дождитесь успешной проверки DOCX роботом."); return; }
     if (form.workflowKind === "delivery" && form.reviewerUserId === boburId && !form.finalReviewerUserId) { setError("Выберите предварительного согласующего перед Бобуром."); return; }
@@ -372,6 +406,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   };
 
   const act = async (letter: AIReferentLetter, action: AIReferentAction) => {
+    if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return; }
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
@@ -428,6 +463,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div>
       </header>
 
+      {readOnly ? <p className="ai-referent-readonly" role="status">
+        {authorityError ? `Режим только для просмотра: ${authorityError}` : authority?.detail || "Проверяем связь с роботом. Пока изменения недоступны."}
+      </p> : null}
+
       <div className="ai-referent-register-bar">
         <div className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
           <button
@@ -456,10 +495,13 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "settings"}
             className={registerKind === "settings" ? "active" : ""}
             onClick={() => setRegisterKind("settings")}>Согласующие</button> : null}
+          {canAdmin ? <button type="button" role="tab" aria-selected={registerKind === "addresses"}
+            className={registerKind === "addresses" ? "active" : ""}
+            onClick={() => setRegisterKind("addresses")}>Адресная книга</button> : null}
           <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
           <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
         </div>
-        {canCreate ? <div className="ai-referent-register-actions">
+        {canCreate && !readOnly ? <div className="ai-referent-register-actions">
           <Button className="ai-referent-register-action primary" appearance="primary" icon={<Add20Regular />} onClick={() => openCreate("delivery")}>
             Новое письмо
           </Button>
@@ -469,7 +511,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div> : null}
       </div>
 
-      {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} /> :
+      {registerKind === "settings" && canAdmin ? <AIReferentSettings token={token} people={people} readOnly={readOnly} /> :
+        registerKind === "addresses" && canAdmin ? <AIReferentAddressBook token={token} readOnly={readOnly} /> :
         registerKind === "archive" ? <AIReferentArchive token={token} /> :
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? <AIReferentIncomingRegister token={token} /> : (
@@ -653,7 +696,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
             <DialogActions className="ai-referent-form-actions">
               {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
               <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
-              <Button appearance="primary" disabled={busy || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
+              <Button appearance="primary" disabled={readOnly || busy || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>
@@ -735,7 +778,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   </div>
                 </section> : null}
                 {selected.deliveryError ? <p role="alert">{selected.deliveryError}</p> : null}
-                {selected.canReplaceDocument ? <section className="ai-referent-detail-card">
+                {selected.canReplaceDocument && !readOnly ? <section className="ai-referent-detail-card">
                   <h3>Замена администратором</h3>
                   <p>Без нового согласования. DOCX получит прежний номер и подпись; готовый PDF будет использован как есть. Проверьте номер, подпись и содержимое.</p>
                   <WorkspaceFileDropzone key={selected.id} label="Новый документ" hint="DOCX или готовый PDF" actionLabel={replacementFile ? "Заменить" : "Выбрать файл"} files={replacementFile ? [replacementFile] : []} accept=".docx,.pdf" icon={<Document20Regular aria-hidden="true" />} ariaLabel="Новый документ администратора" onFiles={(files) => { const file = files[0]; setReplacement(file ? { letterId: selected.id, file } : undefined); }} />
@@ -752,12 +795,12 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 {selected.availableActions.some((action) => ["return_for_revision", "confirm_sent", "confirm_not_sent"].includes(action)) ? (
                   <label className="ai-referent-decision-comment">Комментарий к решению<Textarea value={decisionComment} onChange={(_e, d) => setDecisionComment(d.value)} /></label>
                 ) : null}
-                {selected.availableActions.includes("return_for_revision") ? <AIReferentAudioComposer key={`${selected.id}:${selected.revision}`} token={token} letter={selected} disabled={busy} value={selectedAudio} onChange={(audio) => setDecisionAudio(audio ? { letterId: selected.id, revision: selected.revision, audio } : undefined)} /> : null}
+                {selected.availableActions.includes("return_for_revision") && !readOnly ? <AIReferentAudioComposer key={`${selected.id}:${selected.revision}`} token={token} letter={selected} disabled={busy} value={selectedAudio} onChange={(audio) => setDecisionAudio(audio ? { letterId: selected.id, revision: selected.revision, audio } : undefined)} /> : null}
                 {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
                 <div className="ai-referent-detail-actions">
-                  {selected.canEdit ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
-                  {selected.canDelete ? <Button disabled={busy} onClick={() => setDeleteConfirmation(selected.id)}>Удалить письмо из базы</Button> : null}
-                  {selected.availableActions.map((action) => (
+                  {selected.canEdit && !readOnly ? <Button appearance="secondary" onClick={() => openEdit(selected)}>Редактировать</Button> : null}
+                  {selected.canDelete && !readOnly ? <Button disabled={busy} onClick={() => setDeleteConfirmation(selected.id)}>Удалить письмо из базы</Button> : null}
+                  {!readOnly ? selected.availableActions.map((action) => (
                     <Button
                       key={action}
                       appearance={action === "approve" || action === "queue_delivery" || action === "submit" ? "primary" : "secondary"}
@@ -767,16 +810,16 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     >
                       {selected.workflowKind === "sign_only" ? ({ submit: "Отправить на подпись", approve: "Одобрить подпись", retry_delivery: "Повторить подпись", cancel: "Отменить заявку" } as Partial<Record<AIReferentAction, string>>)[action] ?? actionLabels[action] : actionLabels[action]}
                     </Button>
-                  ))}
+                  )) : null}
                 </div>
-                {deleteConfirmation === selected.id ? <section className="ai-referent-detail-card" aria-label="Подтверждение удаления"><p>Удалить письмо из общей базы Workspace и Telegram? Отправленные письма и выполняемую отправку удалить нельзя. Журнал удаления и резервные файлы сохранятся.</p><Button disabled={busy} onClick={() => {
+                {!readOnly && deleteConfirmation === selected.id ? <section className="ai-referent-detail-card" aria-label="Подтверждение удаления"><p>Удалить письмо из общей базы Workspace и Telegram? Отправленные письма и выполняемую отправку удалить нельзя. Журнал удаления и резервные файлы сохранятся.</p><Button disabled={busy} onClick={() => {
                   if (busyRef.current) return;
                   busyRef.current = true; setBusy(true); setError("");
                   void deleteAIReferentLetter(token, selected).then(() => { setSelectedId(""); setDeleteConfirmation(""); void refresh(); })
                     .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось удалить письмо."))
                     .finally(() => { busyRef.current = false; setBusy(false); });
                 }}>Подтвердить удаление</Button><Button disabled={busy} onClick={() => setDeleteConfirmation("")}>Не удалять</Button></section> : null}
-                {confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
+                {!readOnly && confirmAction && selected.availableActions.includes(confirmAction) ? <div className="ai-referent-detail-card" role="group" aria-label="Подтверждение действия"><p>{confirmAction === "send" ? "Робот отправит письмо внешнему получателю. Подтверждаете?" : confirmAction === "prepare_replacement" ? "Применить замену без повторного согласования? Номер сохранится. Готовый PDF используется как есть — проверьте подпись и содержимое." : confirmAction === "replace_document" ? "Робот закроет подготовленное окно. Затем вы сможете заменить документ без повторного согласования." : confirmAction === "mark_sent" ? "Подтверждаете, что письмо уже отправлено вручную? Робот запишет результат без повторной отправки." : "Подтвердите изменение состояния письма."}</p><Button appearance="primary" disabled={busy} onClick={() => void act(selected, confirmAction)}>Подтвердить</Button><Button disabled={busy} onClick={() => setConfirmAction(undefined)}>Отмена</Button></div> : null}
               </DialogContent>
             </DialogBody>
           ) : null}

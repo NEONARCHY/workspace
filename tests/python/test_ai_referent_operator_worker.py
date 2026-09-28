@@ -1,9 +1,11 @@
 """Administrator correction must not ask for approval or silently send a letter."""
 
+import hashlib
 import importlib
 import json
 import sys
 import threading
+import time
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock
 from uuid import uuid4
@@ -138,6 +140,7 @@ def test_failed_bootstrap_keeps_polling_and_checks_docx_without_delivery(
     bot.client.get_updates.side_effect = poll
     controller.notifications.side_effect = RuntimeError("notifications temporarily unavailable")
     monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock())
+    monkeypatch.setattr(modules.shared_bot, "OfflineCoordinator", Mock())
     monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock(return_value=controller))
     monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
     monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
@@ -179,6 +182,7 @@ def test_document_check_runs_while_archive_bootstrap_is_still_busy(
 
     bot.client.get_updates.side_effect = poll
     monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock())
+    monkeypatch.setattr(modules.shared_bot, "OfflineCoordinator", Mock())
     monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock())
     monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
     monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
@@ -214,6 +218,67 @@ def test_send_guard_checks_identity_and_lease_at_actual_adapter_call(modules, mo
     with delivery.guarded_send(service, row, None, fence):
         service.webmail_sender.click_prepared_send(7, logs_root="test")
     original.assert_called_once_with(7, logs_root="test")
+
+
+@pytest.mark.parametrize("route", ["exat", "webmail"])
+def test_offline_send_calls_durable_fence_at_click_without_workspace(
+    modules, tmp_path, monkeypatch, route,
+):
+    delivery = importlib.import_module("workspace_integration.delivery")
+    worker_module = importlib.import_module("workspace_integration.worker")
+    signed = tmp_path / "signed.pdf"
+    signed.write_bytes(b"%PDF-1.7 checked")
+    digest = hashlib.sha256(signed.read_bytes()).hexdigest()
+    letter_id = str(uuid4())
+    row = {"id": 7, "status": "approved", "destination_route": route,
+           "signed_file_path": str(signed)}
+    prepared = {**row, "status": "webmail_dry_run_prepared" if route == "webmail"
+                else "exat_compose_prepared"}
+    sent = {**row, "status": "webmail_sent" if route == "webmail" else "exat_sent"}
+    service = Mock(archive_root=tmp_path)
+    service.database.get_outgoing_letter.side_effect = [row, prepared, sent]
+    client = Mock(agent_id="referent-pc")
+    state = modules.shared_bot.State(tmp_path / "worker-state.sqlite")
+    state.put("letter:" + letter_id, 7)
+    worker = worker_module.DeliveryWorker(service, client, state)
+    monkeypatch.setattr(delivery, "prepared_open", Mock(return_value=True))
+    monkeypatch.setattr(worker_module, "prepared_open", Mock(return_value=True))
+    fence = Mock()
+    adapter = service.webmail_sender if route == "webmail" else service.exat_compose
+    service.confirm_manual_send.side_effect = lambda local_id: (
+        adapter.click_prepared_send(local_id)
+    )
+    result = worker.send(
+        {"id": str(uuid4()), "letterId": letter_id, "leaseToken": "offline-only",
+         "signedFile": {"sha256": digest}},
+        threading.Event(), offline_fence=fence,
+    )
+    assert result["outcome"] == "sent"
+    fence.assert_called_once_with()
+    adapter.click_prepared_send.assert_called_once_with(7)
+    client.request.assert_not_called()
+
+
+def test_offline_send_does_not_reuse_prior_online_sent_receipt(modules, tmp_path):
+    worker_module = importlib.import_module("workspace_integration.worker")
+    letter_id = str(uuid4())
+    service = Mock(archive_root=tmp_path)
+    service.database.get_outgoing_letter.return_value = {
+        "id": 7, "status": "exat_sent", "destination_route": "exat",
+    }
+    client = Mock(agent_id="referent-pc")
+    state = modules.shared_bot.State(tmp_path / "worker-state.sqlite")
+    state.put("letter:" + letter_id, 7)
+    fence = Mock()
+    worker = worker_module.DeliveryWorker(service, client, state)
+    with pytest.raises(modules.client.WorkspaceError, match="Сверьте E-XAT/Webmail"):
+        worker.send(
+            {"id": str(uuid4()), "letterId": letter_id, "leaseToken": "offline-only"},
+            threading.Event(), offline_fence=fence,
+        )
+    fence.assert_called_once_with()
+    service.confirm_manual_send.assert_not_called()
+    client.request.assert_not_called()
 
 
 def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
@@ -268,6 +333,11 @@ def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
     monkeypatch.setattr(modules.shared_bot, "threading", SimpleNamespace(Event=Stop, Thread=thread))
     monkeypatch.setattr(modules.shared_bot, "time", SimpleNamespace(monotonic=lambda: now[0]))
     monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock())
+    authority = Mock()
+    authority.tick.return_value = "legacy"
+    monkeypatch.setattr(
+        modules.shared_bot, "OfflineCoordinator", Mock(return_value=authority)
+    )
     monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock())
     monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
     monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
@@ -276,6 +346,120 @@ def test_bootstrap_recovers_and_failed_archive_retries_are_throttled(
     assert syncs == [120, 180]
     assert ticks and min(ticks) == 60
     bot._status_log.assert_any_call("workspace_bootstrap_completed", attempts=2)
+
+
+@pytest.mark.parametrize("mode", ["offline", "replay"])
+def test_runtime_fences_offline_jobs_and_replays_before_resuming(
+    modules, tmp_path, monkeypatch, mode
+):
+    monkeypatch.setitem(
+        sys.modules, "src.outgoing.telegram_bot",
+        SimpleNamespace(PollingResult=lambda *args: args),
+    )
+    now = [0.0]
+
+    class Stop:
+        def is_set(self):
+            return now[0] >= 15
+
+        def wait(self, seconds):
+            now[0] += seconds
+
+        def set(self):
+            now[0] = 15
+
+    targets = {}
+
+    def thread(*, target, name, **_kwargs):
+        targets[name] = target
+        return SimpleNamespace(start=lambda: None, join=lambda **_kwargs: None)
+
+    journal = modules.shared_bot.OfflineJournal(tmp_path / "offline")
+    journal.set_authority_phase("referent-pc", str(uuid4()), "online")
+    journal.set_authority_phase("referent-pc", journal.authority_state()["epoch"], mode)
+    worker, bot, controller = Mock(), Mock(), Mock()
+    client = Mock(agent_id="referent-pc")
+    authority = Mock()
+    authority.tick.side_effect = (
+        (lambda: "replay" if journal.authority_state()["phase"] == "replay" else "online")
+        if mode == "replay" else (lambda: "offline")
+    )
+    def replay_tick():
+        manifest = journal.replay_manifest()
+        journal.finish_replay(manifest["epoch"], str(uuid4()), 45, manifest)
+        return "online"
+
+    authority.replay_tick.side_effect = replay_tick
+    monkeypatch.setattr(modules.shared_bot, "threading", SimpleNamespace(Event=Stop, Thread=thread))
+    monkeypatch.setattr(modules.shared_bot, "time", SimpleNamespace(monotonic=lambda: now[0]))
+    monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock(return_value=client))
+    monkeypatch.setattr(
+        modules.shared_bot, "OfflineCoordinator", Mock(return_value=authority)
+    )
+    monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock(return_value=controller))
+    monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
+    monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
+
+    def poll(**_kwargs):
+        targets["workspace-authority" if mode == "offline" else "workspace-executor"]()
+        return {"result": [{"update_id": 1}]}
+
+    bot.client.get_updates.side_effect = poll
+    result = modules.shared_bot._run_shared(bot, max_updates=1)
+    assert result[:3] == ("stopped", 1, 1)
+    assert authority.tick.called
+    if mode == "offline":
+        authority.replay_tick.assert_not_called()
+        worker.bootstrap.assert_not_called()
+        worker.tick.assert_not_called()
+    else:
+        authority.replay_tick.assert_called()
+        worker.bootstrap.assert_called()
+        worker.tick.assert_called()
+    worker.sync.run.assert_not_called()
+
+
+def test_authority_renews_while_a_server_job_is_still_running(modules, tmp_path, monkeypatch):
+    monkeypatch.setitem(
+        sys.modules, "src.outgoing.telegram_bot",
+        SimpleNamespace(PollingResult=lambda *args: args),
+    )
+    client, controller, worker, bot = Mock(agent_id="referent-pc"), Mock(), Mock(), Mock()
+    authority = Mock()
+    authority.tick.return_value = "legacy"
+    entered, release = threading.Event(), threading.Event()
+    calls_at_job_start = [0]
+
+    def long_job():
+        calls_at_job_start[0] = authority.tick.call_count
+        entered.set()
+        assert release.wait(3)
+
+    worker.tick.side_effect = long_job
+    monkeypatch.setattr(modules.shared_bot, "WorkspaceClient", Mock(return_value=client))
+    monkeypatch.setattr(
+        modules.shared_bot, "OfflineCoordinator", Mock(return_value=authority)
+    )
+    monkeypatch.setattr(modules.shared_bot, "SharedBot", Mock(return_value=controller))
+    monkeypatch.setattr(modules.shared_bot, "DeliveryWorker", Mock(return_value=worker))
+    monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
+    monkeypatch.setattr(modules.shared_bot, "_AUTHORITY_REFRESH_SECONDS", 0.02)
+
+    def poll(**_kwargs):
+        try:
+            assert entered.wait(2)
+            deadline = time.monotonic() + 2
+            while authority.tick.call_count <= calls_at_job_start[0]:
+                assert time.monotonic() < deadline, "Authority stopped renewing during the job"
+                time.sleep(0.01)
+        finally:
+            release.set()
+        return {"result": [{"update_id": 1}]}
+
+    bot.client.get_updates.side_effect = poll
+    result = modules.shared_bot._run_shared(bot, max_updates=1)
+    assert result[:3] == ("stopped", 1, 1)
+    assert authority.tick.call_count > calls_at_job_start[0]
 
 
 def test_notifications_attach_only_current_version_after_admin_replacement(modules):

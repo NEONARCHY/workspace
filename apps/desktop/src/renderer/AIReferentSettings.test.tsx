@@ -52,6 +52,13 @@ describe("shared reviewer settings", () => {
     expect(screen.getByText(/Робот ещё не подтвердил/)).toBeInTheDocument();
   });
 
+  it("disables reviewer changes while the bot is disconnected", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentSettings token="test-token"
+      people={[]} readOnly /></FluentProvider>);
+    expect(await screen.findByRole("textbox", { name: "Telegram ID askar" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Сохранить настройки" })).toBeDisabled();
+  });
+
   it("ignores an old poll response arriving after a successful save", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
     show();

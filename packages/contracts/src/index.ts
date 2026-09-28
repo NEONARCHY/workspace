@@ -963,6 +963,12 @@ export interface AIReferentRecipientRegistry {
   readonly updatedAt: string | null;
 }
 
+export interface AIReferentManualRecipientInput {
+  readonly name: string;
+  readonly address: string;
+  readonly categoryKey: AIReferentRecipient["categoryKey"];
+}
+
 export interface AIReferentLetterInput {
   readonly workflowKind?: AIReferentWorkflowKind;
   readonly finalReviewerUserId?: string | null;
@@ -1073,6 +1079,13 @@ export interface AIReferentConfiguration {
     readonly lastSeenAt: string;
     readonly error: string | null;
   }[];
+}
+
+export interface AIReferentAuthorityStatus {
+  readonly writable: boolean;
+  readonly mode: "legacy" | "online" | "replay_required";
+  readonly leaseUntil: string | null;
+  readonly detail: string;
 }
 
 export interface AIReferentConfigurationUpdate {

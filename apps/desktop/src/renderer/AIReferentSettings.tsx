@@ -7,9 +7,10 @@ import { loadAIReferentConfiguration, saveAIReferentConfiguration } from "./work
 interface Props {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
+  readonly readOnly?: boolean;
 }
 
-export function AIReferentSettings({ token, people }: Props) {
+export function AIReferentSettings({ token, people, readOnly = false }: Props) {
   const [config, setConfig] = useState<AIReferentConfiguration>();
   const [draft, setDraft] = useState<AIReferentConfigurationUpdate>();
   const [dirty, setDirty] = useState(false);
@@ -63,7 +64,7 @@ export function AIReferentSettings({ token, people }: Props) {
   };
 
   const save = async () => {
-    if (!draft || busyRef.current) return;
+    if (!draft || busyRef.current || readOnly) return;
     busyRef.current = true;
     requestGeneration.current += 1;
     setSaving(true);
@@ -93,7 +94,7 @@ export function AIReferentSettings({ token, people }: Props) {
         {draft.reviewers.map((item, index) => {
           const saved = config.reviewers.find((row) => row.key === item.key);
           const person = accounts.find((row) => row.username === item.username);
-          return <fieldset key={item.key} disabled={saving} className="ai-referent-reviewer-card">
+          return <fieldset key={item.key} disabled={saving || readOnly} className="ai-referent-reviewer-card">
             <legend>{saved?.label || item.key}</legend>
             <span className={`ai-referent-reviewer-state ${saved?.canApprove ? "active" : ""}`}>{saved?.canApprove ? "Может согласовывать" : "Пока недоступен"}</span>
             <label>Аккаунт Workspace<WorkspaceSelect aria-label={`Аккаунт ${saved?.label}`}
@@ -118,7 +119,7 @@ export function AIReferentSettings({ token, people }: Props) {
         })}
       </div>
       <div className="ai-referent-settings-actions">
-        <Button appearance="primary" disabled={!dirty || saving || draft.expectedRevision !== config.revision}
+        <Button appearance="primary" disabled={readOnly || !dirty || saving || draft.expectedRevision !== config.revision}
           onClick={() => void save()}>{saving ? "Сохраняем…" : "Сохранить настройки"}</Button>
         <Button disabled={saving || !dirty} onClick={() => { accept(config, true); setError(""); setNotice(""); }}>
           {dirty ? "Сбросить ввод к актуальной версии" : "Настройки актуальны"}

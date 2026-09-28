@@ -83,6 +83,102 @@ class AIReferentActionRequest(ApiModel):
         return value.strip()
 
 
+class OfflineNumberReservationRequest(ApiModel):
+    reservation_id: UUID
+    count: int = Field(ge=1, le=20)
+
+
+class OfflineNumberReservationResponse(ApiModel):
+    reservation_id: UUID
+    agent_id: str
+    year_suffix: str
+    first_number: int
+    last_number: int
+    valid_until: datetime
+
+
+class OfflineAuthorityLease(ApiModel):
+    epoch: UUID
+    mode: Literal["online", "replay_required"]
+    lease_until: datetime
+    server_time: datetime
+    lease_seconds: int
+
+
+class OfflineAuthorityHeartbeat(ApiModel):
+    agent_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,128}$")
+    epoch: UUID
+
+
+class OfflineAuthorityStatus(ApiModel):
+    writable: bool
+    mode: Literal["legacy", "online", "replay_required"]
+    lease_until: datetime | None = None
+    detail: str = ""
+
+
+class OfflineTelegramActor(ApiModel):
+    telegram_id: str
+    user_id: UUID
+    full_name: str
+    role: str
+    reviewer_keys: list[str]
+    module_actions: list[Literal["view", "create", "edit", "approve", "admin"]] = Field(
+        default_factory=list
+    )
+
+
+class OfflineRightsSnapshotRequest(ApiModel):
+    snapshot_id: UUID
+
+
+class OfflineRightsSnapshot(ApiModel):
+    snapshot_id: UUID
+    epoch: UUID
+    verified_at: datetime
+    reviewer_revision: int
+    actors: list[OfflineTelegramActor]
+    content_sha256: str
+
+
+class OfflineBlobReceipt(ApiModel):
+    id: UUID
+    epoch: UUID
+    sha256: str
+    byte_size: int
+
+
+class OfflineReplayOperation(ApiModel):
+    operation_id: UUID
+    sequence: int = Field(ge=1)
+    actor_id: str = Field(pattern=r"^[0-9]{1,32}$")
+    letter_id: UUID
+    kind: str = Field(min_length=1, max_length=80)
+    payload: dict[str, object]
+    blob_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    authority_epoch: UUID
+    rights_snapshot_id: UUID
+    rights_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    required_action: Literal["create", "edit", "approve", "admin"]
+    occurred_at: datetime
+
+
+class OfflineReplayReceipt(ApiModel):
+    operation_id: UUID
+    sequence: int
+    letter_id: UUID
+    result_revision: int
+    accepted_at: datetime
+
+
+class OfflineReplayCompleteRequest(ApiModel):
+    epoch: UUID
+    operation_count: int = Field(ge=0)
+    last_sequence: int | None = Field(default=None, ge=1)
+    operations_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    external_effect_count: int = Field(ge=0)
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]
