@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -160,7 +161,11 @@ class DeliveryWorker:
         target.write_bytes(content)
         return target
 
-    def prepare(self, job: dict[str, Any]) -> dict[str, Any]:
+    def prepare(
+        self, job: dict[str, Any], *,
+        file_loader: Callable[[dict[str, Any], dict[str, Any], Path], Path] | None = None,
+        record_signed: Callable[[Path], None] | None = None,
+    ) -> dict[str, Any]:
         from src.outgoing.service import OutgoingReviewDecision
 
         folder = self.root / str(UUID(job["letterId"])) / str(UUID(job["id"]))
@@ -169,9 +174,10 @@ class DeliveryWorker:
         accepted = {".docx", ".pdf"} if job["kind"] == "reprepare" else {".docx"}
         if primary is None or Path(primary["name"]).suffix.lower() not in accepted:
             raise WorkspaceError("Для подготовки подписанного PDF требуется основной DOCX.")
-        draft = self.download(job, primary, folder)
+        load = file_loader or self.download
+        draft = load(job, primary, folder)
         extra = [
-            str(self.download(job, item, folder)) for item in files if item["role"] == "additional"
+            str(load(job, item, folder)) for item in files if item["role"] == "additional"
         ]
         entry = self.service._resolve_destination_entry(
             job["recipientAddress"] or job["recipientOrganization"]
@@ -243,14 +249,14 @@ class DeliveryWorker:
                 OutgoingReviewDecision(local_id, "approve"), defer_send=True
             )
         signed = Path(result["signed_file_path"])
-        self.sync.upload(
-            "outgoing",
-            job["letterId"],
-            signed,
-            f"signed/{job['id']}.pdf",
-            jobId=job["id"],
-            leaseToken=job["leaseToken"],
-        )
+        if record_signed is None:
+            self.sync.upload(
+                "outgoing",
+                job["letterId"], signed, f"signed/{job['id']}.pdf",
+                jobId=job["id"], leaseToken=job["leaseToken"],
+            )
+        else:
+            record_signed(signed)
         if not job.get("requiresFinalCheck"):
             self.prepared_handles[local_id] = prepare_compose(self.service, local_id)
         receipt = self.receipt(

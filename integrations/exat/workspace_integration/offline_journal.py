@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 
 def _json(value: Any) -> str:
@@ -1085,6 +1085,26 @@ class OfflineJournal:
                     seen.add(letter_id)
                     result.append({str(key): value for key, value in item.items()})
         return result
+
+    def next_unprepared_approval(self) -> dict[str, Any] | None:
+        """Find the earliest offline final approval without a signed-PDF receipt."""
+        with self.connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM operations WHERE kind = 'letter.action' "
+                "AND status = 'pending' ORDER BY sequence"
+            ).fetchall()
+        for row in rows:
+            operation = {**dict(row), "payload": json.loads(row["payload"])}
+            if (
+                operation["payload"].get("action") == "approve"
+                and operation["payload"].get("toStatus") == "queued"
+            ):
+                prepared_id = str(uuid5(
+                    NAMESPACE_URL, "ai-offline-prepare:" + operation["operation_id"]
+                ))
+                if self.operation(prepared_id) is None:
+                    return operation
+        return None
 
     def begin_external_effect(self, effect_id: str, letter_id: str, kind: str) -> bool:
         """False after a crash or retry: physical send must never auto-repeat."""

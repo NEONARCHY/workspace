@@ -6,11 +6,12 @@ import hashlib
 import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
+from integrations.exat.workspace_integration.offline_prepare import OfflinePreparationWorker
 from integrations.exat.workspace_integration.offline_replay import replay_one_draft_operation
 from integrations.exat.workspace_integration.offline_workflow import OfflineWorkflow
 from integrations.exat.workspace_integration.shared_bot import SharedBot
@@ -24,6 +25,7 @@ def _offline_journal(tmp_path):
     stranger = str(uuid4())
     reviewer = str(uuid4())
     bobur = str(uuid4())
+    operator = str(uuid4())
     journal.set_authority_phase("referent-pc", epoch, "online", lease_seconds=30)
     snapshot_id = journal.prepare_offline_rights(epoch)
     actors = [
@@ -42,6 +44,7 @@ def _offline_journal(tmp_path):
             ("456", stranger, "Другой", ["view", "create", "edit"]),
             ("789", reviewer, "Согласующий", ["view", "approve"]),
             ("999", bobur, "Бобур", ["view", "approve"]),
+            ("321", operator, "Референт", ["view", "admin"]),
         )
     ]
     encoded = json.dumps(actors, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
@@ -653,6 +656,59 @@ def test_offline_submission_and_final_review_require_number_reserve(tmp_path):
     assert approved["displayNumber"].startswith("0439/")
     assert journal.available_reserved_numbers("referent-pc") == 0
     assert OfflineWorkflow(OfflineJournal(tmp_path)).read("123", letter["id"])["status"] == "queued"
+    with pytest.raises(WorkspaceError, match="PDF"):
+        workflow.record_prepared("789", letter["id"], decision_id, b"not a PDF")
+    signed = b"%PDF-1.7 signed example"
+    prepared = workflow.record_prepared("789", letter["id"], decision_id, signed)
+    assert prepared["status"] == "referent_review_pending"
+    assert prepared["revision"] == 5
+    assert workflow.record_prepared("789", letter["id"], decision_id, signed) == prepared
+    with pytest.raises(WorkspaceError, match="другой PDF"):
+        workflow.record_prepared("789", letter["id"], decision_id, b"%PDF-different")
+    packet = workflow.packet("123", letter["id"])
+    assert [(item["id"], item["source"]) for item in packet["files"]] == [
+        (prepared["finalPdfFileId"], "packet")
+    ]
+    assert workflow.packet_file("123", letter["id"], prepared["finalPdfFileId"], "packet") == signed
+
+
+def test_offline_executor_reuses_local_document_and_never_contacts_workspace(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"original docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation({
+        "reservationId": reservation_id, "agentId": "referent-pc",
+        "yearSuffix": now.strftime("%y"), "firstNumber": 440, "lastNumber": 440,
+        "validUntil": (now + timedelta(days=1)).isoformat(),
+    })
+    approval_id = str(uuid4())
+    workflow.act("789", letter["id"], approval_id, action="approve", expected_revision=3)
+    worker = Mock()
+
+    def prepare(job, *, file_loader, record_signed):
+        assert job["outgoingNumber"] == 440
+        assert job["requiresFinalCheck"] is True
+        assert job["id"] == str(uuid5(NAMESPACE_URL, "ai-offline-command:" + approval_id))
+        draft = file_loader(job, job["files"][0], tmp_path / "download")
+        assert draft.read_bytes() == b"original docx"
+        signed = tmp_path / "signed.pdf"
+        signed.write_bytes(b"%PDF-1.7 locally signed")
+        record_signed(signed)
+
+    worker.prepare.side_effect = prepare
+    executor = OfflinePreparationWorker(worker, journal)
+    assert executor.run_once() is True
+    worker.prepare.assert_called_once()
+    assert executor.run_once() is False
+    assert workflow.read("123", letter["id"])["status"] == "referent_review_pending"
 
 
 def test_reviewer_return_requires_comment_and_preserves_author_access(tmp_path):
@@ -798,3 +854,130 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
         )
         == audio
     )
+    assert workflow.comment_audio_file("123", letter["id"], audio["id"]) == audio_bytes
+    with pytest.raises(WorkspaceError) as private:
+        workflow.comment_audio_file("789", letter["id"], audio["id"])
+    assert private.value.status == 403
+    api, telegram = Mock(), Mock()
+    api.request.side_effect = AssertionError("offline voice contacted Workspace")
+    telegram._multipart_api.return_value = {"ok": True}
+    bot = SharedBot(telegram, api, State(tmp_path / "voice-bot.sqlite"), journal)
+    bot.show = Mock()
+    bot.offline_notifications()
+    telegram._multipart_api.assert_called_once()
+    bot.offline_notifications()
+    telegram._multipart_api.assert_called_once()
+    api.request.assert_not_called()
+
+
+def test_bobur_can_return_prepared_pdf_and_offline_notice_reaches_him(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    bobur = journal.offline_actor("999")["userId"]
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), {
+        **_draft(reviewer), "finalReviewerUserId": bobur,
+    })
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document(
+        "123", letter["id"], str(uuid4()), lambda *_: ["askar", "bobur"]
+    )
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=3)
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation({
+        "reservationId": reservation_id, "agentId": "referent-pc",
+        "yearSuffix": now.strftime("%y"), "firstNumber": 441, "lastNumber": 441,
+        "validUntil": (now + timedelta(days=1)).isoformat(),
+    })
+    approval_id = str(uuid4())
+    workflow.act("999", letter["id"], approval_id, action="approve", expected_revision=4)
+    prepared = workflow.record_prepared("999", letter["id"], approval_id, b"%PDF-1.7 test")
+    assert prepared["status"] == "awaiting_final_send"
+    assert "return_for_revision" in prepared["availableActions"]
+    assert "release_delivery" not in prepared["availableActions"]
+    api, telegram = Mock(), Mock()
+    api.request.side_effect = AssertionError("offline notice contacted Workspace")
+    telegram.send_document.return_value = {"ok": True}
+    bot = SharedBot(telegram, api, State(tmp_path / "bot.sqlite"), journal)
+    bot.show = Mock()
+    bot.offline_notifications()
+    assert telegram.send_document.call_count == 2  # Author and Bobur receive signed PDF.
+    bot.offline_notifications()
+    assert telegram.send_document.call_count == 2
+    api.request.assert_not_called()
+    returned = workflow.act(
+        "999", letter["id"], str(uuid4()), action="return_for_revision",
+        expected_revision=6, comment="Исправьте дату",
+    )
+    assert returned["status"] == "needs_revision"
+    assert returned["finalPdfFileId"] is None
+    assert returned["reviewerUserId"] == reviewer
+    assert workflow.read("123", letter["id"])["canEdit"]
+    assert all(
+        item["source"] != "packet"
+        for item in workflow.packet("123", letter["id"])["files"]
+    )
+    assert any(
+        item["name"].endswith("letter.docx")
+        for item in workflow.packet("123", letter["id"])["files"]
+    )
+    bot.offline_notifications()
+    assert bot.state.get("comment-delivered:123:" + returned["events"][-1]["id"])
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="revised.docx",
+        content=b"revised", role="primary", expected_revision=7,
+    )
+    workflow.check_document(
+        "123", letter["id"], str(uuid4()), lambda *_: ["askar", "bobur"]
+    )
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=8)
+    workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=9)
+    again = workflow.act(
+        "999", letter["id"], str(uuid4()), action="approve", expected_revision=10
+    )
+    assert again["outgoingNumber"] == 441  # Reuse the assigned number, not another reserve.
+
+
+def test_referent_can_return_prepared_letter_but_not_review_as_reviewer(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=b"docx", role="primary", expected_revision=1,
+    )
+    workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    with pytest.raises(WorkspaceError):
+        workflow.act("321", letter["id"], str(uuid4()), action="approve", expected_revision=3)
+    reservation_id = journal.prepare_number_reservation("referent-pc", 1)
+    now = datetime.now(UTC)
+    journal.save_number_reservation({
+        "reservationId": reservation_id, "agentId": "referent-pc",
+        "yearSuffix": now.strftime("%y"), "firstNumber": 442, "lastNumber": 442,
+        "validUntil": (now + timedelta(days=1)).isoformat(),
+    })
+    approval_id = str(uuid4())
+    workflow.act("789", letter["id"], approval_id, action="approve", expected_revision=3)
+    workflow.record_prepared("789", letter["id"], approval_id, b"%PDF-1.7 test")
+    admin_letter = workflow.read("321", letter["id"])
+    assert admin_letter["availableActions"] == ["return_for_revision"]
+    returned = workflow.act(
+        "321", letter["id"], str(uuid4()), action="return_for_revision",
+        expected_revision=5, comment="Нужна новая версия",
+    )
+    assert returned["status"] == "needs_revision"
+    assert workflow.read("123", letter["id"])["finalPdfFileId"] is None
+    assert any(
+        item["name"].endswith("letter.docx")
+        for item in workflow.packet("123", letter["id"])["files"]
+    )
+    with pytest.raises(WorkspaceError) as after_return:
+        workflow.read("321", letter["id"])
+    assert after_return.value.status == 403
+    action = journal.letter_operations(letter["id"])[-1]
+    assert action["required_action"] == "admin"

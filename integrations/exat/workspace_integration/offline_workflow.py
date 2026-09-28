@@ -109,6 +109,20 @@ class OfflineWorkflow:
             for item in self.journal.letter_operations(letter["id"])
             if item["kind"] == "letter.attachment"
         }
+        prepared = next(
+            (item for item in reversed(self.journal.letter_operations(letter["id"]))
+             if item["kind"] == "letter.prepared"), None,
+        ) if letter.get("finalPdfFileId") is not None else None
+        if prepared is not None:
+            primary_ids = {
+                item["id"] for item in letter["attachments"]
+                if item["documentRole"] == "primary"
+            }
+            cached_files = [
+                item for item in cached_files
+                if isinstance(item, dict)
+                and not (item.get("source") == "attachment" and item.get("id") in primary_ids)
+            ]
         local_files = [
                 {
                     "id": item["id"],
@@ -118,8 +132,19 @@ class OfflineWorkflow:
                     "source": "attachment",
                     "createdAt": item["createdAt"],
                 }
-                for item in letter["attachments"] if item["id"] in local_ids
+                for item in letter["attachments"]
+                if item["id"] in local_ids
+                and (prepared is None or item["documentRole"] != "primary")
             ]
+        if prepared is not None:
+            local_files.append({
+                "id": letter["finalPdfFileId"],
+                "name": "signed/" + prepared["payload"]["commandId"] + ".pdf",
+                "byteSize": prepared["payload"]["byteSize"],
+                "sha256": prepared["blob_sha256"],
+                "source": "packet",
+                "createdAt": prepared["occurred_at"],
+            })
         files = [
             item for item in cached_files
             if isinstance(item, dict)
@@ -154,6 +179,37 @@ class OfflineWorkflow:
         except (FileNotFoundError, ValueError) as error:
             raise WorkspaceError("Локальный файл повреждён или отсутствует.", 503) from error
 
+    def comment_audio_file(self, telegram_id: str, letter_id: str, audio_id: str) -> bytes:
+        """A returned voice note is private to the author of its letter."""
+        letter = self.read(telegram_id, letter_id)
+        actor = self._actor(telegram_id, "view")
+        if letter["createdByUserId"] != actor["userId"]:
+            raise WorkspaceError("Голосовой комментарий доступен автору письма.", 403)
+        try:
+            audio_id = str(UUID(audio_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор голосового комментария.", 422) from error
+        used = any(
+            event["eventType"] == "letter.return_for_revision"
+            and isinstance(event.get("audio"), dict)
+            and event["audio"].get("id") == audio_id
+            for event in letter["events"]
+        )
+        if not used:
+            raise WorkspaceError("Комментарий не относится к этому письму.", 404)
+        operation = next(
+            (item for item in self.journal.letter_operations(letter["id"])
+             if item["kind"] == "letter.comment_audio"
+             and str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + item["operation_id"]))
+             == audio_id), None,
+        )
+        if operation is None or operation["blob_sha256"] is None:
+            raise WorkspaceError("Аудио пока недоступно без связи с Workspace.", 503)
+        try:
+            return self.journal.read_blob(operation["blob_sha256"])
+        except (FileNotFoundError, ValueError) as error:
+            raise WorkspaceError("Локальное аудио повреждено или отсутствует.", 503) from error
+
     def progress_list(self, telegram_id: str, *, offset: int, limit: int) -> dict[str, Any]:
         actor = self._actor(telegram_id, "view")
         if "admin" not in actor["moduleActions"]:
@@ -181,6 +237,67 @@ class OfflineWorkflow:
             if item["id"] == letter_id:
                 return item
         raise WorkspaceError("Этап письма не сохранён в локальной копии.", 404)
+
+    def record_prepared(
+        self, telegram_id: str, letter_id: str, approval_operation_id: str,
+        signed_pdf: bytes,
+    ) -> dict[str, Any]:
+        """Durably record one signed delivery PDF; no external send occurs here."""
+        actor = self._actor(telegram_id, "approve")
+        try:
+            letter_id = str(UUID(letter_id))
+            approval_operation_id = str(UUID(approval_operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный ID письма или согласования.", 422) from error
+        if (
+            not isinstance(signed_pdf, bytes)
+            or not signed_pdf.startswith(b"%PDF-")
+            or not 0 < len(signed_pdf) <= 50 * 1024 * 1024
+        ):
+            raise WorkspaceError("Подписанный PDF отсутствует или повреждён.", 422)
+        operation_id = str(uuid5(NAMESPACE_URL, "ai-offline-prepare:" + approval_operation_id))
+        command_id = str(uuid5(NAMESPACE_URL, "ai-offline-command:" + approval_operation_id))
+        digest = hashlib.sha256(signed_pdf).hexdigest()
+        with self._lock:
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (
+                    old["actor_id"] != telegram_id or old["letter_id"] != letter_id
+                    or old["kind"] != "letter.prepared" or old["blob_sha256"] != digest
+                ):
+                    raise WorkspaceError("Повтор подготовки содержит другой PDF.", 409)
+                return self.read(telegram_id, letter_id)
+            approval = self.journal.operation(approval_operation_id)
+            if (
+                approval is None or approval["kind"] != "letter.action"
+                or approval["letter_id"] != letter_id or approval["actor_id"] != telegram_id
+                or approval["payload"].get("action") != "approve"
+                or approval["payload"].get("toStatus") != "queued"
+            ):
+                raise WorkspaceError("Итоговое согласование для подготовки не найдено.", 409)
+            letter = self.read(telegram_id, letter_id)
+            if (
+                letter["status"] != "queued" or letter["workflowKind"] != "delivery"
+                or letter["reviewerUserId"] != actor["userId"]
+                or letter["revision"] != approval["payload"]["expectedRevision"] + 1
+            ):
+                raise WorkspaceError("Письмо не ожидает автономной подготовки.", 409)
+            final_bobur = letter["finalReviewerUserId"] == actor["userId"]
+            next_status = "awaiting_final_send" if final_bobur else "referent_review_pending"
+            self.journal.put_blob(signed_pdf)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id, actor_id=telegram_id, letter_id=letter_id,
+                kind="letter.prepared",
+                payload={
+                    "approvalOperationId": approval_operation_id,
+                    "commandId": command_id, "expectedRevision": letter["revision"],
+                    "fromStatus": "queued", "toStatus": next_status,
+                    "byteSize": len(signed_pdf), "actorUserId": actor["userId"],
+                    "actorName": actor["fullName"],
+                },
+                blob_sha256=digest, required_action="approve",
+            )
+            return self.read(telegram_id, letter_id)
 
     @staticmethod
     def _fields(payload: dict[str, Any]) -> dict[str, Any]:
@@ -570,8 +687,7 @@ class OfflineWorkflow:
         """Handle only decisions whose complete local effects are implemented."""
         if action not in {"submit", "approve", "return_for_revision", "cancel"}:
             raise WorkspaceError("Это решение пока недоступно без связи с сервером.", 503)
-        required = "approve" if action in {"approve", "return_for_revision"} else "edit"
-        actor = self._actor(telegram_id, required)
+        actor = self._actor(telegram_id, "view")
         try:
             letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
         except (TypeError, ValueError) as error:
@@ -618,8 +734,23 @@ class OfflineWorkflow:
                     comment_audio_id,
                 ):
                     raise WorkspaceError("Повтор решения содержит другие данные.", 409)
+                if (
+                    action == "return_for_revision"
+                    and payload.get("fromStatus") == "referent_review_pending"
+                ):
+                    return {
+                        "id": letter_id, "status": "needs_revision",
+                        "revision": expected_revision + 1,
+                    }
                 return self.read(telegram_id, letter_id)
             letter = self.read(telegram_id, letter_id)
+            required = (
+                "admin" if action == "return_for_revision"
+                and letter["status"] == "referent_review_pending"
+                else "approve" if action in {"approve", "return_for_revision"} else "edit"
+            )
+            if required not in actor["moduleActions"]:
+                raise WorkspaceError("У вас нет права на это решение.", 403)
             if letter["revision"] != expected_revision:
                 raise WorkspaceError("Письмо уже изменилось. Откройте актуальную версию.", 409)
             if comment_audio_id is not None:
@@ -689,10 +820,18 @@ class OfflineWorkflow:
                     raise WorkspaceError("Отменить письмо на этом этапе нельзя.", 403)
                 next_status = "cancelled"
             else:
-                if not reviewer or not actor.get("reviewerKeys"):
+                operator_return = (
+                    action == "return_for_revision"
+                    and letter["status"] == "referent_review_pending"
+                    and "admin" in actor["moduleActions"]
+                )
+                if not operator_return and (not reviewer or not actor.get("reviewerKeys")):
                     raise WorkspaceError("Решение доступно назначенному согласующему.", 403)
-                if letter["status"] != "pending_review":
-                    raise WorkspaceError("Письмо не ожидает решения согласующего.", 409)
+                if letter["status"] not in (
+                    {"pending_review", "awaiting_final_send", "referent_review_pending"}
+                    if action == "return_for_revision" else {"pending_review"}
+                ) or (letter["status"] == "referent_review_pending" and not operator_return):
+                    raise WorkspaceError("Письмо не ожидает этого решения.", 409)
                 if action == "return_for_revision":
                     next_status = "needs_revision"
                     next_reviewer = letter["initialReviewerUserId"]
@@ -704,15 +843,19 @@ class OfflineWorkflow:
                 else:
                     next_status = "queued"
                     if letter["workflowKind"] == "delivery":
-                        authority = self.journal.authority_state()
-                        if authority is None:
-                            raise WorkspaceError("Нет автономной аренды робота.", 503)
-                        try:
-                            outgoing_number, year_suffix = self.journal.take_reserved_number(
-                                letter_id, authority["agent_id"]
-                            )
-                        except ValueError as error:
-                            raise WorkspaceError(str(error), 409) from error
+                        if letter["outgoingNumber"] is not None:
+                            outgoing_number = letter["outgoingNumber"]
+                            year_suffix = letter["yearSuffix"]
+                        else:
+                            authority = self.journal.authority_state()
+                            if authority is None:
+                                raise WorkspaceError("Нет автономной аренды робота.", 503)
+                            try:
+                                outgoing_number, year_suffix = self.journal.take_reserved_number(
+                                    letter_id, authority["agent_id"]
+                                )
+                            except ValueError as error:
+                                raise WorkspaceError(str(error), 409) from error
             payload = {
                 "action": action,
                 "comment": comment,
@@ -725,6 +868,7 @@ class OfflineWorkflow:
                 "yearSuffix": year_suffix,
                 "actorUserId": actor["userId"],
                 "actorName": actor["fullName"],
+                "creatorUserId": letter["createdByUserId"],
             }
             self.journal.append_with_rights_evidence(
                 operation_id=operation_id,
@@ -734,6 +878,10 @@ class OfflineWorkflow:
                 payload=payload,
                 required_action=required,
             )
+            if required == "admin" and next_status == "needs_revision":
+                # The operator has completed the final intervention and must not
+                # acquire visibility into the author's next review cycle.
+                return {"id": letter_id, "status": next_status, "revision": expected_revision + 1}
             return self.read(telegram_id, letter_id)
 
     def save_comment_audio(
@@ -748,7 +896,7 @@ class OfflineWorkflow:
         content_type: str,
     ) -> dict[str, Any]:
         """Bind a private Opus blob to the reviewer and exact decision revision."""
-        actor = self._actor(telegram_id, "approve")
+        actor = self._actor(telegram_id, "view")
         try:
             letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
         except (TypeError, ValueError) as error:
@@ -800,12 +948,17 @@ class OfflineWorkflow:
                     "byteSize": len(content),
                 }
             letter = self.read(telegram_id, letter_id)
-            if (
-                letter["revision"] != expected_revision
-                or letter["status"] != "pending_review"
-                or letter["reviewerUserId"] != actor["userId"]
-                or not actor.get("reviewerKeys")
-            ):
+            operator = (
+                letter["status"] == "referent_review_pending"
+                and "admin" in actor["moduleActions"]
+            )
+            reviewer = (
+                letter["status"] in {"pending_review", "awaiting_final_send"}
+                and letter["reviewerUserId"] == actor["userId"]
+                and "approve" in actor["moduleActions"]
+                and bool(actor.get("reviewerKeys"))
+            )
+            if letter["revision"] != expected_revision or not (operator or reviewer):
                 raise WorkspaceError("Сейчас вы не можете вернуть это письмо.", 403)
             self.journal.put_blob(content)
             self.journal.append_with_rights_evidence(
@@ -815,7 +968,7 @@ class OfflineWorkflow:
                 kind="letter.comment_audio",
                 payload=payload,
                 blob_sha256=digest,
-                required_action="approve",
+                required_action="admin" if operator else "approve",
             )
             return {
                 "id": str(uuid5(NAMESPACE_URL, "ai-offline-audio:" + operation_id)),
@@ -1004,6 +1157,28 @@ class OfflineWorkflow:
                     }
                 )
                 continue
+            elif operation["kind"] == "letter.prepared":
+                if (
+                    letter is None or letter["status"] != payload["fromStatus"]
+                    or letter["revision"] != payload["expectedRevision"]
+                ):
+                    raise ValueError("Локальная подготовка потеряла порядок стадий.")
+                letter["status"] = payload["toStatus"]
+                letter["revision"] += 1
+                letter["updatedAt"] = operation["occurred_at"]
+                letter["finalPdfFileId"] = str(uuid5(
+                    NAMESPACE_URL, "ai-offline-signed:" + operation["operation_id"]
+                ))
+                letter["events"].append({
+                    "id": str(uuid5(
+                        NAMESPACE_URL, "ai-offline-event:" + operation["operation_id"]
+                    )),
+                    "eventType": "agent.prepared", "actorUserId": None,
+                    "actorName": "Робот", "fromStatus": payload["fromStatus"],
+                    "toStatus": payload["toStatus"], "comment": "", "audio": None,
+                    "createdAt": operation["occurred_at"],
+                })
+                continue
             else:
                 continue  # Later reducers own worker receipts.
             letter["events"].append(
@@ -1105,8 +1280,12 @@ class OfflineWorkflow:
             actor["userId"] == letter["reviewerUserId"]
             and "approve" in actor["moduleActions"]
             and actor.get("reviewerKeys")
-            and letter["status"] == "pending_review"
         ):
-            actions.extend(("approve", "return_for_revision"))
+            if letter["status"] == "pending_review":
+                actions.extend(("approve", "return_for_revision"))
+            elif letter["status"] == "awaiting_final_send":
+                actions.append("return_for_revision")
+        if letter["status"] == "referent_review_pending" and "admin" in actor["moduleActions"]:
+            actions.append("return_for_revision")
         letter["availableActions"] = actions
         return letter

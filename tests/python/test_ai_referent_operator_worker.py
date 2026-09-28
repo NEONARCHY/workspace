@@ -339,7 +339,7 @@ def test_runtime_fences_offline_jobs_and_replays_before_resuming(
     monkeypatch.setattr(modules.shared_bot, "connection_path", lambda: tmp_path / "connection")
 
     def poll(**_kwargs):
-        targets["workspace-executor"]()
+        targets["workspace-authority" if mode == "offline" else "workspace-executor"]()
         return {"result": [{"update_id": 1}]}
 
     bot.client.get_updates.side_effect = poll

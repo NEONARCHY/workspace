@@ -1,6 +1,6 @@
 """Small, retry-safe steps toward replaying autonomous AI Referent activity.
 
-Only draft changes, voice comments and decisions can be acknowledged. Do not resume
+Draft changes, voice comments, decisions and signed PDFs can be acknowledged. Do not resume
 Workspace writes until every operation kind and the final reconciliation protocol are implemented.
 """
 
@@ -51,6 +51,7 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     if operation["kind"] not in {
         "letter.create", "letter.update", "letter.attachment", "letter.document_check",
         "letter.comment_audio", "letter.action",
+        "letter.prepared",
     }:
         raise ValueError("Следующая автономная операция ещё не поддерживается сервером.")
     expected_revision = 1
@@ -68,7 +69,9 @@ def replay_one_draft_operation(journal: OfflineJournal, client: WorkspaceClient)
     state = journal.authority_state()
     if state is None or state["epoch"] != epoch or state["phase"] != "replay":
         raise ValueError("Воспроизведение разрешено только после подтверждения эпохи.")
-    if operation["kind"] in {"letter.attachment", "letter.document_check", "letter.comment_audio"}:
+    if operation["kind"] in {
+        "letter.attachment", "letter.document_check", "letter.comment_audio", "letter.prepared"
+    }:
         digest = operation["blob_sha256"]
         if not isinstance(digest, str):
             raise ValueError("Автономное вложение не содержит файл.")

@@ -26,6 +26,7 @@ from yuksalish_api.tables import (
     ai_referent_delivery_commands,
     ai_referent_document_checks,
     ai_referent_events,
+    ai_referent_files,
     ai_referent_letters,
     ai_referent_offline_number_reservations,
     ai_referent_offline_operation_receipts,
@@ -82,11 +83,12 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
     if not url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     engine = create_async_engine(url)
-    user_id, reviewer_id, snapshot_id = uuid4(), uuid4(), uuid4()
+    user_id, reviewer_id, operator_id, snapshot_id = uuid4(), uuid4(), uuid4(), uuid4()
     agent_id = f"offline-replay-{uuid4().hex}"
     actor_id = "98765432101"
     storage = InMemoryObjectStorage()
     reviewer_actor_id = "98765432102"
+    operator_actor_id = "98765432103"
     actors = [{
         "telegramId": actor_id,
         "userId": str(user_id),
@@ -101,6 +103,13 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
         "role": "superadmin",
         "reviewerKeys": ["askar"],
         "moduleActions": ["view", "approve"],
+    }, {
+        "telegramId": operator_actor_id,
+        "userId": str(operator_id),
+        "fullName": "Offline Test Operator",
+        "role": "admin",
+        "reviewerKeys": [],
+        "moduleActions": ["view", "admin"],
     }]
     rights_hash = hashlib.sha256(json.dumps(
         actors, ensure_ascii=False, sort_keys=True, separators=(",", ":")
@@ -117,6 +126,11 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                 await connection.execute(insert(users).values(
                     id=reviewer_id, username=f"reviewer-{reviewer_id.hex[:12]}",
                     full_name="Offline Test Reviewer", role="superadmin", status="active",
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                ))
+                await connection.execute(insert(users).values(
+                    id=operator_id, username=f"operator-{operator_id.hex[:12]}",
+                    full_name="Offline Test Operator", role="admin", status="active",
                     created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
                 ))
                 await connection.execute(update(ai_referent_reviewers).where(
@@ -504,6 +518,132 @@ async def test_draft_replay_retries_same_receipt_and_preserves_original_time():
                     ))
                 ).mappings().one()
                 assert command["kind"] == "prepare"
+                signed_pdf = b"%PDF-1.7 offline prepared document"
+                signed_hash = hashlib.sha256(signed_pdf).hexdigest()
+                await stage_offline_blob(
+                    connection, storage, agent_id=agent_id, epoch=epoch,
+                    sha256=signed_hash, content=signed_pdf, enabled=True,
+                )
+                prepared_id = uuid5(
+                    NAMESPACE_URL, "ai-offline-prepare:" + str(approved.operation_id)
+                )
+                prepared = OfflineReplayOperation(
+                    operation_id=prepared_id, sequence=46, actor_id=reviewer_actor_id,
+                    letter_id=operation.letter_id, kind="letter.prepared",
+                    payload={
+                        "approvalOperationId": str(approved.operation_id),
+                        "commandId": str(command["id"]), "expectedRevision": 7,
+                        "fromStatus": "queued", "toStatus": "referent_review_pending",
+                        "byteSize": len(signed_pdf), "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                    },
+                    blob_sha256=signed_hash, authority_epoch=epoch,
+                    rights_snapshot_id=snapshot_id, rights_content_sha256=rights_hash,
+                    required_action="approve",
+                    occurred_at=approved.occurred_at + timedelta(seconds=20),
+                )
+                prepared_receipt = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=prepared, enabled=True, storage=storage,
+                )
+                assert prepared_receipt.result_revision == 8
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=prepared, enabled=True, storage=storage,
+                ) == prepared_receipt
+                letter_after_prepare = (
+                    await connection.execute(select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert letter_after_prepare["status"] == "referent_review_pending"
+                assert letter_after_prepare["revision"] == 8
+                signed_file = (
+                    await connection.execute(select(ai_referent_files).where(
+                        ai_referent_files.c.id == letter_after_prepare["final_pdf_file_id"]
+                    ))
+                ).mappings().one()
+                assert signed_file["relative_path"] == f"signed/{command['id']}.pdf"
+                assert await storage.get(signed_file["storage_key"]) == signed_pdf
+                command_after_prepare = (
+                    await connection.execute(select(ai_referent_delivery_commands).where(
+                        ai_referent_delivery_commands.c.id == command["id"]
+                    ))
+                ).mappings().one()
+                assert command_after_prepare["status"] == "completed"
+                denied_return = OfflineReplayOperation(
+                    operation_id=uuid4(), sequence=47, actor_id=reviewer_actor_id,
+                    letter_id=operation.letter_id, kind="letter.action",
+                    payload={
+                        "action": "return_for_revision", "comment": "Нужна новая версия",
+                        "commentAudioId": None, "expectedRevision": 8,
+                        "fromStatus": "referent_review_pending", "toStatus": "needs_revision",
+                        "nextReviewerUserId": str(reviewer_id),
+                        "outgoingNumber": None, "yearSuffix": None,
+                        "actorUserId": str(reviewer_id),
+                        "actorName": "Offline Test Reviewer",
+                        "creatorUserId": str(user_id),
+                    },
+                    authority_epoch=epoch, rights_snapshot_id=snapshot_id,
+                    rights_content_sha256=rights_hash, required_action="approve",
+                    occurred_at=prepared.occurred_at + timedelta(seconds=20),
+                )
+                with pytest.raises(HTTPException) as denied_operator:
+                    await replay_offline_operation(
+                        connection, agent_id=agent_id, epoch=epoch,
+                        operation=denied_return, enabled=True,
+                    )
+                assert denied_operator.value.status_code == 403
+                operator_return = denied_return.model_copy(update={
+                    "operation_id": uuid4(), "actor_id": operator_actor_id,
+                    "required_action": "admin",
+                    "payload": {
+                        **denied_return.payload,
+                        "actorUserId": str(operator_id),
+                        "actorName": "Offline Test Operator",
+                    },
+                })
+                final_return = await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=operator_return, enabled=True,
+                )
+                assert final_return.result_revision == 9
+                assert await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=operator_return, enabled=True,
+                ) == final_return
+                after_return = (
+                    await connection.execute(select(ai_referent_letters).where(
+                        ai_referent_letters.c.id == operation.letter_id
+                    ))
+                ).mappings().one()
+                assert after_return["status"] == "needs_revision"
+                assert after_return["final_pdf_file_id"] is None
+                assert after_return["reviewer_user_id"] == reviewer_id
+                resubmit = submit_again.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 48,
+                    "payload": {
+                        **submit_again.payload, "expectedRevision": 9,
+                        "fromStatus": "needs_revision",
+                    },
+                    "occurred_at": operator_return.occurred_at + timedelta(seconds=20),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=resubmit, enabled=True,
+                )).result_revision == 10
+                reapprove = approved.model_copy(update={
+                    "operation_id": uuid4(), "sequence": 49,
+                    "payload": {**approved.payload, "expectedRevision": 10},
+                    "occurred_at": resubmit.occurred_at + timedelta(seconds=20),
+                })
+                assert (await replay_offline_operation(
+                    connection, agent_id=agent_id, epoch=epoch,
+                    operation=reapprove, enabled=True,
+                )).result_revision == 11
+                assert await connection.scalar(select(ai_referent_letters.c.outgoing_number).where(
+                    ai_referent_letters.c.id == operation.letter_id
+                )) == number_reservation.first_number
             finally:
                 await transaction.rollback()
     finally:
