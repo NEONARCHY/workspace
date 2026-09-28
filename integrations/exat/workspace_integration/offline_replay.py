@@ -1,7 +1,7 @@
-"""Small, retry-safe steps toward replaying autonomous AI Referent activity.
+"""Retry-safe replay of offline letters, files, decisions and external-send results.
 
-Draft changes, voice comments, decisions and signed PDFs can be acknowledged. Do not resume
-Workspace writes until every operation kind and the final reconciliation protocol are implemented.
+The Workspace write fence is released only after every operation and external
+effect has a matching server receipt; an unknown physical outcome stops replay.
 """
 
 from __future__ import annotations

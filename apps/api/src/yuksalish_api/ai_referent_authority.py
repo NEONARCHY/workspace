@@ -19,6 +19,7 @@ from sqlalchemy import insert, select, update
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .ai_referent_agent_service import expire_jobs
 from .ai_referent_schemas import (
     OfflineAuthorityLease,
     OfflineAuthorityStatus,
@@ -189,6 +190,15 @@ async def complete_authority_replay(
         or digest != payload.operations_sha256
     ):
         raise HTTPException(409, "Сервер получил не весь автономный журнал.")
+    # An old claimed job may have clicked E-XAT/Webmail while the API was lost.
+    # Expire its lease into delivery_unknown before lifting the write fence;
+    # an unexpired claim means the physical executor might still be running.
+    await expire_jobs(connection)
+    active_job = await connection.scalar(select(ai_referent_delivery_commands.c.id).where(
+        ai_referent_delivery_commands.c.status == "claimed"
+    ).limit(1))
+    if active_job is not None:
+        raise HTTPException(409, "Ранее взятое роботом задание ещё выполняется.")
     command_ids = [
         uuid5(NAMESPACE_URL, "ai-offline-command:" + str(row["operation_id"]))
         for row in receipts if row["kind"] == "letter.action"

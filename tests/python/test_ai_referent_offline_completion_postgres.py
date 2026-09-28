@@ -183,6 +183,64 @@ async def test_replay_refuses_claimed_send_but_releases_pending_server_job():
 
 @pytest.mark.anyio
 @pytest.mark.postgres
+async def test_replay_expires_old_server_send_to_manual_delivery_check():
+    url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
+    if not url:
+        pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
+    engine = create_async_engine(url)
+    agent_id = f"offline-complete-{uuid4().hex}"
+    letter_id, user_id, command_id = uuid4(), uuid4(), uuid4()
+    now = datetime.now(UTC)
+    try:
+        async with engine.connect() as connection:
+            transaction = await connection.begin()
+            try:
+                await connection.execute(delete(ai_referent_authority))
+                await connection.execute(update(ai_referent_configuration).values(
+                    execution_agent_id=agent_id
+                ))
+                epoch = (await start_authority(
+                    connection, agent_id=agent_id, enabled=True
+                )).epoch
+                await connection.execute(update(ai_referent_authority).values(
+                    mode="replay_required"
+                ))
+                await connection.execute(insert(users).values(
+                    id=user_id, username=f"offline-{user_id.hex[:12]}",
+                    full_name="Offline Employee", role="employee", status="active",
+                    created_at=now, updated_at=now,
+                ))
+                await connection.execute(insert(ai_referent_letters).values(
+                    id=letter_id, subject="Old claimed send", recipient_organization="Test",
+                    recipient_address="test@example.org", route="exat", note="",
+                    status="sending", workflow_kind="delivery", source="telegram",
+                    created_by_user_id=user_id, revision=2, delivery_error="",
+                    created_at=now, updated_at=now,
+                ))
+                await connection.execute(insert(ai_referent_delivery_commands).values(
+                    id=command_id, letter_id=letter_id, route="exat", kind="send",
+                    status="claimed", idempotency_key=f"letter:{letter_id}:2",
+                    claimed_by=agent_id, lease_token=uuid4(),
+                    lease_until=now - timedelta(seconds=1), attempt_count=1,
+                    last_error="", created_at=now, updated_at=now,
+                ))
+                lease = await complete_authority_replay(
+                    connection, agent_id=agent_id,
+                    payload=_manifest(epoch, []), enabled=True,
+                )
+                assert lease.mode == "online"
+                assert await connection.scalar(select(ai_referent_delivery_commands.c.status)
+                    .where(ai_referent_delivery_commands.c.id == command_id)) == "failed"
+                assert await connection.scalar(select(ai_referent_letters.c.status)
+                    .where(ai_referent_letters.c.id == letter_id)) == "delivery_unknown"
+            finally:
+                await transaction.rollback()
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
 async def test_replay_counts_confirmed_external_results_before_unfencing():
     url = os.environ.get("YUKSALISH_TEST_DATABASE_URL")
     if not url:
