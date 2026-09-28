@@ -13,28 +13,34 @@ import { WorkspaceDialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { compareReleaseVersions } from "./release-versions.mts";
 
+function formatUpdateDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatLongDate(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+}
+
 export function ReleaseHistoryDialog({ open, onOpenChange }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const entries = useMemo(() => [
-    ...__YUKSALISH_RELEASE_PREVIEW__.map((preview) => ({
-      key: `preview:${preview.id}`,
-      label: preview.label,
-      title: "Тестовое изменение",
-      detail: new Date(`${preview.date}T12:00:00`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }),
-      items: preview.items,
-      preview: true,
+    ...__YUKSALISH_UPDATE_ENTRIES__.map((update) => ({
+      key: `update:${update.id}`,
+      label: `${formatUpdateDate(update.date)} · ${update.version}`,
+      title: `Обновление ${update.version}`,
+      detail: formatLongDate(update.date),
+      items: update.items,
     })),
     ...[...__YUKSALISH_RELEASE_HISTORY__]
       .sort((left, right) => compareReleaseVersions(right.version, left.version))
       .map((release) => ({
         key: `release:${release.version}`,
-        label: `Версия ${release.version}`,
-        title: release.title,
-        detail: `Версия ${release.version}`,
+        label: `${formatUpdateDate(release.date)} · ${release.version}`,
+        title: `Обновление ${release.version}`,
+        detail: formatLongDate(release.date),
         items: release.items,
-        preview: false,
       })),
   ], []);
   const [selectedKey, setSelectedKey] = useState(entries[0]?.key ?? "");
@@ -52,7 +58,6 @@ export function ReleaseHistoryDialog({ open, onOpenChange }: {
                 {entries.map((entry) => <option value={entry.key} key={entry.key}>{entry.label}</option>)}
               </WorkspaceSelect>
             </label>
-            {selectedEntry.preview ? <p className="release-preview-note">Тестовые изменения показаны по отдельности. Новая официальная версия появится после публикации.</p> : null}
             <section key={selectedEntry.key}>
             <div className="release-history-heading">
               <h3>{selectedEntry.title}</h3>

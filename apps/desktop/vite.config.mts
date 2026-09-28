@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-import { compareReleaseVersions } from "./src/renderer/release-versions.mts";
+import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
 
 const tabsterEsmPath = fileURLToPath(
   new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
@@ -17,7 +17,15 @@ const releaseNotes = JSON.parse(readFileSync(new URL("./release-notes.json", imp
   title: string;
 };
 type ReleaseNoteEntry = { id: string; title?: string; items: string[]; fileName: string };
-type ReleaseHistoryEntry = { version: string; title: string; items: string[] };
+type ReleaseHistoryEntry = { version: string; date: string; title: string; items: string[] };
+
+// Notes are retained after publication, so numbering from this fixed boundary
+// gives the web build and a future EXE the same retrospective update history.
+const lastGroupedVersion = "1.0.17";
+
+function noteDate(fileName: string): string {
+  return `${fileName.slice(0, 4)}-${fileName.slice(4, 6)}-${fileName.slice(6, 8)}`;
+}
 
 function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
   if (!existsSync(directory)) return [];
@@ -30,37 +38,47 @@ function readNoteEntries(directory: URL): ReleaseNoteEntry[] {
     }));
 }
 
-function previewLabel(entry: ReleaseNoteEntry): string {
-  const topic = entry.title?.trim() || entry.items[0]?.trim() || "Изменение";
-  const shortTopic = topic.length > 38 ? `${topic.slice(0, 37).trimEnd()}…` : topic;
-  return `${entry.fileName.slice(6, 8)}.${entry.fileName.slice(4, 6)} · ${shortTopic}`;
-}
-
 const releasedRoot = new URL("./release-notes/released/", import.meta.url);
-const releaseHistory: ReleaseHistoryEntry[] = existsSync(releasedRoot)
+const releasedVersions = existsSync(releasedRoot)
   ? readdirSync(releasedRoot)
     .filter((name) => statSync(new URL(name, releasedRoot)).isDirectory())
-    .sort((left, right) => compareReleaseVersions(right, left))
-    .map((version) => ({
-      version,
-      title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,
-      items: readNoteEntries(new URL(`${version}/`, releasedRoot)).flatMap((entry) => entry.items),
-    })).filter((entry) => entry.items.length > 0)
+    .sort(compareReleaseVersions)
   : [];
+const releaseHistory: ReleaseHistoryEntry[] = releasedVersions
+    .filter((version) => compareReleaseVersions(version, lastGroupedVersion) <= 0)
+    .map((version) => {
+      const notes = readNoteEntries(new URL(`${version}/`, releasedRoot));
+      return {
+        version,
+        date: noteDate(notes.at(-1)?.fileName ?? ""),
+        title: version === releaseNotes.version ? releaseNotes.title : `Обновление ${version}`,
+        items: notes.flatMap((entry) => entry.items),
+      };
+    }).filter((entry) => entry.items.length > 0);
 const pendingEntries = readNoteEntries(new URL("./release-notes/pending/", import.meta.url));
 const pendingItems = pendingEntries.flatMap((entry) => entry.items);
-const previewEntries = pendingEntries.map((entry) => ({
-  id: entry.id,
-  date: `${entry.fileName.slice(0, 4)}-${entry.fileName.slice(4, 6)}-${entry.fileName.slice(6, 8)}`,
-  label: previewLabel(entry),
-  items: entry.items,
-})).reverse();
+const numberedNotes = [
+  ...releasedVersions.filter((version) => compareReleaseVersions(version, lastGroupedVersion) > 0)
+    .flatMap((version) => readNoteEntries(new URL(`${version}/`, releasedRoot))),
+  ...pendingEntries,
+];
+const versionedNotes = numberUpdateNotes(numberedNotes, lastGroupedVersion);
+const updateEntries = versionedNotes.map((entry) => ({
+  id: entry.id, date: noteDate(entry.fileName), version: entry.version, items: entry.items,
+}));
+const currentWebVersion = updateEntries[0]?.version ?? packageJson.version;
 const releasedCurrentItems = releaseHistory.find((entry) => entry.version === packageJson.version)?.items ?? [];
-const releaseNoteItems = pendingItems.length > 0 ? pendingItems : releasedCurrentItems;
+// The upload endpoint accepts at most 50 summary lines. The complete history
+// stays in the versioned entries even when there are more pending changes.
+const summarySource = pendingItems.length > 0 ? pendingItems
+  : releasedCurrentItems.length > 0 ? releasedCurrentItems
+    : [...versionedNotes].reverse().flatMap((entry) => entry.items);
+const releaseNoteItems = summarySource.slice(-50);
+const webUpdateItems = updateEntries[0]?.items ?? releaseNoteItems;
 if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
-  || releaseNoteItems.length === 0 || releaseNoteItems.length > 160
+  || releaseNoteItems.length === 0
   || releaseNoteItems.some((item) => item.trim().length < 12 || item.length > 160)) {
-  throw new Error("pending release notes must match package version and contain 1–160 concise user-facing changes");
+  throw new Error("release notes must match package version and contain concise user-facing changes");
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
@@ -71,9 +89,9 @@ export default defineConfig(({ mode }) => ({
   base: mode === "web" ? "/" : "./",
   define: {
     __YUKSALISH_BUILD_ID__: JSON.stringify(buildId),
-    __YUKSALISH_APP_VERSION__: JSON.stringify(packageJson.version),
+    __YUKSALISH_APP_VERSION__: JSON.stringify(mode === "web" ? currentWebVersion : packageJson.version),
     __YUKSALISH_RELEASE_NOTES__: JSON.stringify({ title: releaseNotes.title, items: releaseNoteItems }),
-    __YUKSALISH_RELEASE_PREVIEW__: JSON.stringify(previewEntries),
+    __YUKSALISH_UPDATE_ENTRIES__: JSON.stringify(updateEntries),
     __YUKSALISH_RELEASE_HISTORY__: JSON.stringify(releaseHistory),
   },
   resolve: {
@@ -130,12 +148,14 @@ export default defineConfig(({ mode }) => ({
           fileName: "version.json",
           source: JSON.stringify({
             buildId,
-            version: packageJson.version,
+            version: currentWebVersion,
             builtAt,
             title: releaseNotes.title,
-            notes: releaseNoteItems,
-            history: releaseHistory,
-            releaseUrl: `https://github.com/NEONARCHY/yuksalish-workspace/releases/tag/v${packageJson.version}`,
+            notes: webUpdateItems,
+            history: [
+              ...updateEntries.map((entry) => ({ ...entry, title: `Обновление ${entry.version}` })),
+              ...releaseHistory,
+            ],
           }),
         });
       },

@@ -70,18 +70,17 @@ describe("WorkspaceIdentity", () => {
     expect(onSupport).toHaveBeenCalledOnce();
   });
 
-  it("separates test changes from published releases in the connection popover", () => {
+  it("shows concise, sequential dates and versions in the connection history", () => {
     render(<FluentProvider theme={workspaceTheme}><ConnectionIndicator detail="Сервер подключён" error={false} /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Подключение: Сервер подключён" }));
     fireEvent.click(screen.getByRole("button", { name: "Ранние обновления" }));
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toBeInTheDocument();
     const versionPicker = screen.getByRole("combobox", { name: "Обновление" });
-    expect(versionPicker).toHaveValue("preview:20260928-preview-history-status-pointer");
-    expect(screen.getByText(/Тестовые изменения показаны по отдельности/)).toBeInTheDocument();
+    expect(versionPicker).toHaveValue("update:20260928-release-version-server-card");
     fireEvent.click(versionPicker);
-    expect(screen.getAllByRole("option")[0]).toHaveTextContent(/^28\.09 · /);
-    expect(screen.queryByRole("option", { name: "Версия 1.0.18" })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Версия 1.0.17" })).toBeInTheDocument();
+    expect(screen.getAllByRole("option")[0]).toHaveTextContent("28.09.2026 · 1.0.66");
+    expect(screen.getByRole("option", { name: /1\.0\.17/ })).toHaveTextContent(/^\d{2}\.\d{2}\.2026 · 1\.0\.17$/);
+    expect(screen.queryByRole("option", { name: /Добавлен HR-раздел/ })).not.toBeInTheDocument();
     fireEvent.change(versionPicker, { target: { value: "release:1.0.0" } });
     expect(versionPicker).toHaveValue("release:1.0.0");
     expect(screen.getByRole("dialog", { name: "Ранние обновления" })).toHaveTextContent("Обновление 1.0.0");

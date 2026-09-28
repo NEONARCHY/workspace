@@ -65,7 +65,7 @@ body { background: var(--ws-canvas); }
 .identity-popover { display: grid; gap: 8px; }
 .identity-popover h3, .identity-popover p { margin: 0; }
 .identity-popover p, .connection-popover small { color: var(--ws-muted); font-size: 12px; }
-.connection-popover { position: relative; display: grid; gap: 10px; overflow: visible; }
+.connection-popover { display: grid; gap: 10px; overflow: hidden; }
 .connection-popover :is(p,small) { margin: 0; }
 .connection-popover .fui-Button { justify-content: flex-start; margin: 4px -8px -8px; }
 .release-history-dialog { width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); border-radius: 24px; }
@@ -78,7 +78,6 @@ body { background: var(--ws-canvas); }
 .release-history-options.fui-Listbox { max-height: min(320px, calc(100vh - 80px)) !important; overflow-y: auto; scrollbar-width: thin; }
 .release-history-options .fui-Option { min-height: 36px; }
 .release-history-option-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.release-preview-note { margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
 .release-history-content section { padding: 16px; border: 1px solid var(--ws-line); border-radius: 16px; background: #f8fbfa; }
 .release-history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
 .release-history-heading h3 { margin: 0; font-size: 16px; }

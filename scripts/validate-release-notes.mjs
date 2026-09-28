@@ -40,7 +40,6 @@ for (const [index, entry] of entries.entries()) {
   }
 }
 const itemCount = entries.reduce((total, entry) => total + entry.items.length, 0);
-if (itemCount > 160) fail("a pending release may contain at most 160 changes");
 
 const [base, head = "HEAD"] = process.argv.slice(2);
 if (base && !/^0+$/.test(base)) {
@@ -51,4 +50,4 @@ if (base && !/^0+$/.test(base)) {
   }
 }
 
-console.log(`Release notes ${notes.version}: ${notes.title} (${entries.length} entries, ${itemCount} items)`);
+console.log(`Release notes ${notes.version}: ${notes.title} (${entries.length} entries, ${itemCount} historical items; latest 50 form the installer summary)`);
