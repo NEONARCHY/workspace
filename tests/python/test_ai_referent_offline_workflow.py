@@ -108,6 +108,25 @@ def test_offline_list_includes_local_drafts_without_disclosing_them_to_strangers
     assert workflow.list_letters("123", offset=0, limit=10, sent_only=True)["letters"] == []
 
 
+def test_sent_history_does_not_leak_to_former_reviewer(tmp_path):
+    journal, creator, reviewer = _offline_journal(tmp_path)
+    letter_id = str(uuid4())
+    sent = {
+        **_draft(reviewer), "id": letter_id, "status": "sent",
+        "createdByUserId": creator, "reviewerUserId": reviewer,
+        "initialReviewerUserId": reviewer, "revision": 4,
+        "updatedAt": "2026-09-25T12:00:00Z", "attachments": [], "events": [],
+    }
+    for actor in ("123", "789"):
+        journal.cache(actor, "/letters/" + letter_id, sent)
+    workflow = OfflineWorkflow(journal)
+    assert workflow.read("123", letter_id)["status"] == "sent"
+    with pytest.raises(WorkspaceError) as denied:
+        workflow.read("789", letter_id)
+    assert denied.value.status == 403
+    assert workflow.list_letters("789", offset=0, limit=10, sent_only=True)["letters"] == []
+
+
 def test_shared_bot_routes_offline_letter_actions_without_contacting_server(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     api = Mock()

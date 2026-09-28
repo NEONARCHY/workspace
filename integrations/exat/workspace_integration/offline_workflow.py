@@ -953,9 +953,18 @@ class OfflineWorkflow:
             "delivery_unknown",
             "sent",
         }
-        if actor["userId"] not in participant_ids and not (
-            "admin" in actor["moduleActions"] and letter["status"] in operator_statuses
-        ):
+        if letter["status"] == "sent":
+            visible = bool(
+                actor["userId"] == letter["createdByUserId"]
+                or actor.get("role") in {"manager", "admin", "superadmin"}
+                or "admin" in actor["moduleActions"]
+            )
+        else:
+            visible = bool(
+                actor["userId"] in participant_ids
+                or ("admin" in actor["moduleActions"] and letter["status"] in operator_statuses)
+            )
+        if not visible:
             raise WorkspaceError("Письмо недоступно этому сотруднику.", 403)
         creator = letter["createdByUserId"] == actor["userId"]
         letter["canEdit"] = (
