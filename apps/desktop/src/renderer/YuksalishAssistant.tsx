@@ -24,13 +24,26 @@ const quickPrompts = [
 
 function GeneratedReply({ content, animate }: { readonly content: string; readonly animate: boolean }) {
   const reducedMotion = useReducedMotion();
-  if (!animate || reducedMotion) return <p>{content}</p>;
-  const words = content.match(/\S+\s*|\s+/g) ?? [content];
-  return <p>{words.map((word, index) => <motion.span key={`${index}-${word}`}
-    initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-    transition={{ duration: 0.22, delay: Math.min(index * 0.018, 0.72) }}>
-    {word}
-  </motion.span>)}</p>;
+  const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)]+\))/g)
+    .filter(Boolean).map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
+      const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+      if (link) return <span className="assistant-source" key={index} title={link[2]}>{link[1]} · {link[2]}</span>;
+      return part;
+    });
+  return <div className="assistant-reply">{content.split("\n").map((line, index) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <div className="assistant-reply-spacer" key={index} />;
+    const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
+    const list = trimmed.match(/^(?:[-*]|\d+[.)])\s+(.+)$/);
+    return <motion.p key={index} className={heading ? "is-heading" : list ? "is-list" : ""}
+      initial={animate && !reducedMotion ? { opacity: 0, y: 4 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reducedMotion ? 0 : 0.22, delay: animate ? Math.min(index * 0.055, 0.6) : 0 }}>
+      {list && <span className="assistant-list-marker" aria-hidden="true">•</span>}
+      {inline(heading?.[1] ?? list?.[1] ?? trimmed)}
+    </motion.p>;
+  })}</div>;
 }
 
 export function YuksalishAssistant({ token }: { readonly token: string }) {
