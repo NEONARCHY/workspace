@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from integrations.exat.workspace_integration.client import WorkspaceError
 from integrations.exat.workspace_integration.offline_journal import OfflineJournal
+from integrations.exat.workspace_integration.offline_replay import replay_one_draft_operation
 from integrations.exat.workspace_integration.offline_workflow import OfflineWorkflow
 
 
@@ -148,6 +149,103 @@ def test_acknowledged_operations_are_not_applied_twice_over_server_snapshot(tmp_
     assert journal.offline_created_letter_ids() == []
 
 
+def test_replay_retains_frozen_base_after_acknowledging_create(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    updated = workflow.update(
+        "123", letter["id"], str(uuid4()),
+        {**_draft(reviewer), "subject": "After offline edit", "expectedRevision": 1},
+    )
+    epoch = journal.authority_state()["epoch"]
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+
+    class Client:
+        def __init__(self):
+            self.requests = []
+
+        def replay_offline_operation(self, requested_epoch, operation):
+            assert requested_epoch == epoch
+            self.requests.append(operation)
+            if len(self.requests) == 1:
+                raise WorkspaceError("Ответ сервера потерян.", retryable=True)
+            return {
+                "operationId": operation["operationId"],
+                "sequence": operation["sequence"],
+                "letterId": operation["letterId"],
+                "resultRevision": (
+                    operation["payload"].get("expectedRevision", 0) + 1
+                ),
+                "acceptedAt": "2026-09-28T12:00:00Z",
+            }
+
+    client = Client()
+    with pytest.raises(WorkspaceError):
+        replay_one_draft_operation(journal, client)
+    assert len(journal.pending_authorized()) == 2
+    assert replay_one_draft_operation(journal, client)
+    assert client.requests[0] == client.requests[1]
+    assert len(journal.pending_authorized()) == 1
+    assert journal.offline_created_letter_ids() == [letter["id"]]
+    journal.cache("123", "/letters/" + letter["id"], {**letter, "subject": "Partial"})
+    assert workflow.read("123", letter["id"]) == updated
+    assert replay_one_draft_operation(journal, client)
+    assert journal.pending_authorized() == []
+    assert workflow.read("123", letter["id"]) == updated
+    assert replay_one_draft_operation(journal, client) is False
+
+
+def test_replay_stages_attachment_before_operation(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    content = b"locally durable attachment"
+    attached = workflow.attach(
+        "123", letter["id"], str(uuid4()), file_name="letter.docx",
+        content=content, role="primary", expected_revision=1,
+    )
+    workflow.check_document(
+        "123", letter["id"], str(uuid4()), lambda *_: ["askar"]
+    )
+    epoch = journal.authority_state()["epoch"]
+    journal.set_authority_phase("referent-pc", epoch, "replay")
+
+    class Client:
+        def __init__(self):
+            self.staged = []
+            self.operations = []
+
+        def upload_offline_blob(self, requested_epoch, digest, body):
+            self.staged.append((requested_epoch, digest, body))
+            return {
+                "id": str(uuid4()), "epoch": requested_epoch,
+                "sha256": digest, "byteSize": len(body),
+            }
+
+        def replay_offline_operation(self, requested_epoch, operation):
+            assert requested_epoch == epoch
+            if operation["kind"] == "letter.attachment":
+                assert self.staged == [(epoch, attached["sha256"], content)]
+            self.operations.append(operation)
+            return {
+                "operationId": operation["operationId"],
+                "sequence": operation["sequence"],
+                "letterId": operation["letterId"],
+                "resultRevision": operation["payload"].get("expectedRevision", 0)
+                + (operation["kind"] != "letter.document_check"),
+                "acceptedAt": "2026-09-28T12:00:00Z",
+            }
+
+    client = Client()
+    assert replay_one_draft_operation(journal, client)
+    assert replay_one_draft_operation(journal, client)
+    assert replay_one_draft_operation(journal, client)
+    assert journal.pending_authorized() == []
+    assert len(client.operations) == 3
+    assert workflow.read("123", letter["id"])["revision"] == 2
+    assert workflow.read("123", letter["id"])["documentCheck"]["status"] == "passed"
+
+
 def test_idempotency_cannot_change_draft_payload(tmp_path):
     journal, _, reviewer = _offline_journal(tmp_path)
     workflow = OfflineWorkflow(journal)
@@ -204,18 +302,12 @@ def test_attachment_bytes_and_versions_survive_restart(tmp_path):
         )
         == primary
     )
-    assert (
+    with pytest.raises(WorkspaceError) as stale:
         reopened.attach(
-            "123",
-            letter["id"],
-            str(uuid4()),
-            file_name="letter.docx",
-            content=b"first document",
-            role="primary",
-            expected_revision=1,
+            "123", letter["id"], str(uuid4()), file_name="letter.docx",
+            content=b"first document", role="primary", expected_revision=1,
         )
-        == primary
-    )
+    assert stale.value.status == 409
     assert len(journal.pending_authorized()) == 2
     assert journal.read_blob(primary["sha256"]) == b"first document"
     second = reopened.attach(
@@ -225,7 +317,7 @@ def test_attachment_bytes_and_versions_survive_restart(tmp_path):
         file_name="revised.docx",
         content=b"second document",
         role="primary",
-        expected_revision=1,
+        expected_revision=2,
     )
     attachments = reopened.read("123", letter["id"])["attachments"]
     assert [(item["id"], item["documentRole"]) for item in attachments] == [
@@ -326,7 +418,7 @@ def test_local_preflight_is_durable_and_never_guesses_success(tmp_path):
         file_name="new.docx",
         content=b"new docx",
         role="primary",
-        expected_revision=1,
+        expected_revision=2,
     )
     assert reopened.read("123", letter["id"])["documentCheck"] is None
 
@@ -359,10 +451,10 @@ def test_offline_submission_and_final_review_require_number_reserve(tmp_path):
         letter["id"],
         str(uuid4()),
         action="submit",
-        expected_revision=1,
+        expected_revision=2,
     )
     assert submitted["status"] == "pending_review"
-    assert submitted["revision"] == 2
+    assert submitted["revision"] == 3
     assert "approve" in workflow.read("789", letter["id"])["availableActions"]
     decision_id = str(uuid4())
     with pytest.raises(WorkspaceError, match="резерва"):
@@ -371,7 +463,7 @@ def test_offline_submission_and_final_review_require_number_reserve(tmp_path):
             letter["id"],
             decision_id,
             action="approve",
-            expected_revision=2,
+            expected_revision=3,
         )
     assert workflow.read("789", letter["id"])["status"] == "pending_review"
     reservation_id = journal.prepare_number_reservation("referent-pc", 1)
@@ -391,7 +483,7 @@ def test_offline_submission_and_final_review_require_number_reserve(tmp_path):
         letter["id"],
         decision_id,
         action="approve",
-        expected_revision=2,
+        expected_revision=3,
     )
     assert approved["status"] == "queued"
     assert approved["outgoingNumber"] == 439
@@ -414,14 +506,14 @@ def test_reviewer_return_requires_comment_and_preserves_author_access(tmp_path):
         expected_revision=1,
     )
     workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
-    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
     with pytest.raises(WorkspaceError) as missing_comment:
         workflow.act(
             "789",
             letter["id"],
             str(uuid4()),
             action="return_for_revision",
-            expected_revision=2,
+            expected_revision=3,
         )
     assert missing_comment.value.status == 422
     returned = workflow.act(
@@ -429,7 +521,7 @@ def test_reviewer_return_requires_comment_and_preserves_author_access(tmp_path):
         letter["id"],
         str(uuid4()),
         action="return_for_revision",
-        expected_revision=2,
+        expected_revision=3,
         comment="Исправьте дату",
     )
     assert returned["status"] == "needs_revision"
@@ -461,11 +553,11 @@ def test_bobur_route_keeps_preliminary_reviewer_first(tmp_path):
         expected_revision=1,
     )
     workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["bobur"])
-    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
-    first = workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=2)
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
+    first = workflow.act("789", letter["id"], str(uuid4()), action="approve", expected_revision=3)
     assert first["status"] == "pending_review"
     assert first["reviewerUserId"] == bobur
-    assert first["revision"] == 3
+    assert first["revision"] == 4
     assert "approve" not in workflow.read("789", letter["id"])["availableActions"]
     assert "approve" in workflow.read("999", letter["id"])["availableActions"]
 
@@ -484,7 +576,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
         expected_revision=1,
     )
     workflow.check_document("123", letter["id"], str(uuid4()), lambda *_: ["askar"])
-    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=1)
+    workflow.act("123", letter["id"], str(uuid4()), action="submit", expected_revision=2)
     audio_bytes = b"OggS" + b"\0" * 8 + b"OpusHead" + b"\0" * 8
     audio_operation = str(uuid4())
     with pytest.raises(WorkspaceError) as invalid:
@@ -492,7 +584,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
             "789",
             letter["id"],
             str(uuid4()),
-            expected_revision=2,
+            expected_revision=3,
             duration_ms=1000,
             content=b"not opus",
             content_type="audio/ogg",
@@ -502,7 +594,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
         "789",
         letter["id"],
         audio_operation,
-        expected_revision=2,
+        expected_revision=3,
         duration_ms=1000,
         content=audio_bytes,
         content_type="audio/ogg",
@@ -513,7 +605,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
             letter["id"],
             str(uuid4()),
             action="return_for_revision",
-            expected_revision=2,
+            expected_revision=3,
             comment_audio_id=audio["id"],
         )
     assert foreign.value.status in {403, 422}
@@ -522,7 +614,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
         letter["id"],
         str(uuid4()),
         action="return_for_revision",
-        expected_revision=2,
+        expected_revision=3,
         comment_audio_id=audio["id"],
     )
     assert returned["status"] == "needs_revision"
@@ -536,7 +628,7 @@ def test_voice_return_is_bound_to_reviewer_and_revision(tmp_path):
             "789",
             letter["id"],
             audio_operation,
-            expected_revision=2,
+            expected_revision=3,
             duration_ms=1000,
             content=audio_bytes,
             content_type="audio/ogg",

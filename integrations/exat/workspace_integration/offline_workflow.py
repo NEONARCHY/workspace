@@ -781,6 +781,10 @@ class OfflineWorkflow:
                         "createdAt": operation["occurred_at"],
                     }
                 )
+                # The shared server increments the letter revision on every
+                # new attachment. Keep local and replayed revisions identical.
+                letter["revision"] += 1
+                letter["updatedAt"] = operation["occurred_at"]
                 continue
             elif operation["kind"] == "letter.document_check":
                 if letter is None or letter["revision"] != payload["expectedRevision"]:

@@ -148,6 +148,29 @@ class OfflineBlobReceipt(ApiModel):
     byte_size: int
 
 
+class OfflineReplayOperation(ApiModel):
+    operation_id: UUID
+    sequence: int = Field(ge=1)
+    actor_id: str = Field(pattern=r"^[0-9]{1,32}$")
+    letter_id: UUID
+    kind: str = Field(min_length=1, max_length=80)
+    payload: dict[str, object]
+    blob_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    authority_epoch: UUID
+    rights_snapshot_id: UUID
+    rights_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    required_action: Literal["create", "edit", "approve", "admin"]
+    occurred_at: datetime
+
+
+class OfflineReplayReceipt(ApiModel):
+    operation_id: UUID
+    sequence: int
+    letter_id: UUID
+    result_revision: int
+    accepted_at: datetime
+
+
 class AIReferentDocumentCheck(ApiModel):
     id: str
     status: Literal["pending", "checking", "passed", "failed"]

@@ -1083,6 +1083,24 @@ ai_referent_offline_blobs = sa.Table(
     sa.CheckConstraint("byte_size > 0", name="ck_ai_offline_blob_nonempty"),
 )
 
+ai_referent_offline_operation_receipts = sa.Table(
+    "ai_referent_offline_operation_receipts",
+    metadata,
+    sa.Column("operation_id", uuid_type, primary_key=True),
+    sa.Column("agent_id", sa.String(128), nullable=False),
+    sa.Column("epoch", uuid_type, nullable=False),
+    sa.Column("sequence", sa.BigInteger(), nullable=False),
+    sa.Column("letter_id", uuid_type, nullable=False),
+    sa.Column("kind", sa.String(80), nullable=False),
+    sa.Column("fingerprint", sa.String(64), nullable=False),
+    sa.Column("result_revision", sa.Integer(), nullable=False),
+    sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("accepted_at", sa.DateTime(timezone=True), nullable=False),
+    sa.UniqueConstraint("agent_id", "sequence", name="uq_ai_offline_replay_sequence"),
+    sa.CheckConstraint("sequence > 0", name="ck_ai_offline_replay_sequence"),
+    sa.CheckConstraint("result_revision > 0", name="ck_ai_offline_replay_revision"),
+)
+
 ai_referent_events = sa.Table(
     "ai_referent_events",
     metadata,

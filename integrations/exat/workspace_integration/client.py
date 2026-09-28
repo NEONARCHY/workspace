@@ -256,6 +256,17 @@ class WorkspaceClient:
             raise WorkspaceError("Сервер вернул неверную квитанцию автономного файла.")
         return {key: value for key, value in receipt.items()}
 
+    def replay_offline_operation(
+        self, epoch: str, operation: dict[str, Any]
+    ) -> dict[str, Any]:
+        from urllib.parse import urlencode
+
+        return self.request(
+            "/ai-referent/agent/offline/operations?"
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
+            operation, method="POST",
+        )
+
     def login(self, username: str, password: str, totp: str = "") -> str:
         result = self.request(
             "/auth/login",

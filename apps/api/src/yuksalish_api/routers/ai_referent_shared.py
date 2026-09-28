@@ -39,6 +39,7 @@ from ..ai_referent_files_service import (
 )
 from ..ai_referent_offline_blobs import stage_offline_blob
 from ..ai_referent_offline_numbers import reserve_offline_numbers
+from ..ai_referent_offline_replay import replay_offline_operation
 from ..ai_referent_offline_rights import export_offline_rights
 from ..ai_referent_preflight import (
     check_response,
@@ -69,6 +70,8 @@ from ..ai_referent_schemas import (
     OfflineBlobReceipt,
     OfflineNumberReservationRequest,
     OfflineNumberReservationResponse,
+    OfflineReplayOperation,
+    OfflineReplayReceipt,
     OfflineRightsSnapshot,
     OfflineRightsSnapshotRequest,
     UpdateAIReferentLetterRequest,
@@ -946,6 +949,25 @@ async def reserve_agent_offline_numbers(
         reservation_id=payload.reservation_id,
         count=payload.count,
         enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+    )
+
+
+@router.post(
+    "/agent/offline/operations",
+    response_model=OfflineReplayReceipt,
+    dependencies=[Depends(require_agent_token)],
+)
+async def replay_agent_offline_operation(
+    payload: OfflineReplayOperation,
+    request: Request,
+    connection: Connection,
+    agent_id: Annotated[str, Query(alias="agentId", pattern=r"^[A-Za-z0-9_.-]{1,128}$")],
+    epoch: UUID,
+) -> OfflineReplayReceipt:
+    return await replay_offline_operation(
+        connection, agent_id=agent_id, epoch=epoch, operation=payload,
+        enabled=request.app.state.settings.ai_referent_offline_authority_enabled,
+        storage=_storage(request),
     )
 
 
