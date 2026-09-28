@@ -169,3 +169,110 @@ def test_unknown_reviewer_is_rejected_before_journaling(tmp_path):
         )
     assert invalid_route.value.status == 422
     assert journal.pending_authorized() == []
+
+
+def test_attachment_bytes_and_versions_survive_restart(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    operation_id = str(uuid4())
+    primary = workflow.attach(
+        "123",
+        letter["id"],
+        operation_id,
+        file_name="letter.docx",
+        content=b"first document",
+        role="primary",
+        expected_revision=1,
+    )
+    reopened = OfflineWorkflow(OfflineJournal(tmp_path))
+    assert (
+        reopened.attach(
+            "123",
+            letter["id"],
+            operation_id,
+            file_name="letter.docx",
+            content=b"first document",
+            role="primary",
+            expected_revision=1,
+        )
+        == primary
+    )
+    assert (
+        reopened.attach(
+            "123",
+            letter["id"],
+            str(uuid4()),
+            file_name="letter.docx",
+            content=b"first document",
+            role="primary",
+            expected_revision=1,
+        )
+        == primary
+    )
+    assert len(journal.pending_authorized()) == 2
+    assert journal.read_blob(primary["sha256"]) == b"first document"
+    second = reopened.attach(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        file_name="revised.docx",
+        content=b"second document",
+        role="primary",
+        expected_revision=1,
+    )
+    attachments = reopened.read("123", letter["id"])["attachments"]
+    assert [(item["id"], item["documentRole"]) for item in attachments] == [
+        (primary["id"], "general"),
+        (second["id"], "primary"),
+    ]
+    assert set(journal.pending_blob_hashes()) == {primary["sha256"], second["sha256"]}
+
+
+def test_attachment_rejects_stale_or_foreign_write(tmp_path):
+    journal, _, reviewer = _offline_journal(tmp_path)
+    workflow = OfflineWorkflow(journal)
+    letter = workflow.create("123", str(uuid4()), _draft(reviewer))
+    with pytest.raises(WorkspaceError) as foreign:
+        workflow.attach(
+            "456",
+            letter["id"],
+            str(uuid4()),
+            file_name="letter.docx",
+            content=b"document",
+            role="primary",
+            expected_revision=1,
+        )
+    assert foreign.value.status == 403
+    with pytest.raises(WorkspaceError) as invalid:
+        workflow.attach(
+            "123",
+            letter["id"],
+            str(uuid4()),
+            file_name="../letter.docx",
+            content=b"document",
+            role="primary",
+            expected_revision=1,
+        )
+    assert invalid.value.status == 422
+    workflow.update(
+        "123",
+        letter["id"],
+        str(uuid4()),
+        {
+            **_draft(reviewer),
+            "expectedRevision": 1,
+        },
+    )
+    with pytest.raises(WorkspaceError) as stale:
+        workflow.attach(
+            "123",
+            letter["id"],
+            str(uuid4()),
+            file_name="letter.docx",
+            content=b"document",
+            role="primary",
+            expected_revision=1,
+        )
+    assert stale.value.status == 409
+    assert journal.pending_blob_hashes() == []

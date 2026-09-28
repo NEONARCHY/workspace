@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import hashlib
 from copy import deepcopy
+from pathlib import PurePath
 from threading import RLock
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -12,6 +14,7 @@ from .client import WorkspaceError
 from .offline_journal import OfflineJournal
 
 _EDITABLE = {"draft", "needs_revision"}
+_MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 _FIELDS = {
     "subject": 300,
     "recipientOrganization": 300,
@@ -191,6 +194,106 @@ class OfflineWorkflow:
             )
             return self.read(telegram_id, letter_id)
 
+    def attach(
+        self,
+        telegram_id: str,
+        letter_id: str,
+        operation_id: str,
+        *,
+        file_name: str,
+        content: bytes,
+        role: str,
+        expected_revision: int,
+    ) -> dict[str, Any]:
+        """Persist a document before returning success to the sender."""
+        actor = self._actor(telegram_id, "edit")
+        try:
+            letter_id, operation_id = str(UUID(letter_id)), str(UUID(operation_id))
+        except (TypeError, ValueError) as error:
+            raise WorkspaceError("Неверный идентификатор письма или действия.", 422) from error
+        if (
+            not isinstance(file_name, str)
+            or not file_name.strip()
+            or len(file_name) > 255
+            or file_name != PurePath(file_name).name
+            or any(char in file_name for char in ("/", "\\", "\0", "\r", "\n"))
+        ):
+            raise WorkspaceError("Неверное имя файла.", 422)
+        if role not in {"primary", "additional"} or (
+            role == "primary" and not file_name.lower().endswith(".docx")
+        ):
+            raise WorkspaceError("Основное письмо должно быть DOCX.", 422)
+        if not isinstance(content, bytes) or not 0 < len(content) <= _MAX_ATTACHMENT_BYTES:
+            raise WorkspaceError("Файл пустой или слишком большой.", 413)
+        if (
+            not isinstance(expected_revision, int)
+            or isinstance(expected_revision, bool)
+            or expected_revision < 1
+        ):
+            raise WorkspaceError("Не указана актуальная версия письма.", 422)
+        with self._lock:
+            digest = hashlib.sha256(content).hexdigest()
+            payload = {
+                "fileName": file_name,
+                "role": role,
+                "byteSize": len(content),
+                "expectedRevision": expected_revision,
+                "actorUserId": actor["userId"],
+                "actorName": actor["fullName"],
+            }
+            old = self.journal.operation(operation_id)
+            if old is not None:
+                if (
+                    old["actor_id"],
+                    old["letter_id"],
+                    old["kind"],
+                    old["payload"],
+                    old["blob_sha256"],
+                ) != (telegram_id, letter_id, "letter.attachment", payload, digest):
+                    raise WorkspaceError("Повтор загрузки содержит другой файл.", 409)
+                self.journal.put_blob(content)
+                attachment_id = str(uuid5(NAMESPACE_URL, "ai-offline-attachment:" + operation_id))
+                return next(
+                    item
+                    for item in self.read(telegram_id, letter_id)["attachments"]
+                    if item["id"] == attachment_id
+                )
+            letter = self.read(telegram_id, letter_id)
+            if letter["createdByUserId"] != actor["userId"] or letter["status"] not in _EDITABLE:
+                raise WorkspaceError("Загрузить файл может автор редактируемого письма.", 403)
+            if letter["revision"] != expected_revision:
+                raise WorkspaceError("Письмо уже изменилось. Обновите данные.", 409)
+            if letter["workflowKind"] == "sign_only" and role != "primary":
+                raise WorkspaceError("Для подписи загрузите только основной DOCX.", 422)
+            existing_attachment = next(
+                (
+                    item
+                    for item in letter["attachments"]
+                    if item["sha256"] == digest
+                    and item["fileName"] == file_name
+                    and item["documentRole"] == role
+                ),
+                None,
+            )
+            if existing_attachment is not None:
+                return existing_attachment
+            self.journal.put_blob(content)
+            self.journal.append_with_rights_evidence(
+                operation_id=operation_id,
+                actor_id=telegram_id,
+                letter_id=letter_id,
+                kind="letter.attachment",
+                payload=payload,
+                blob_sha256=digest,
+                required_action="edit",
+            )
+            attachment_id = str(uuid5(NAMESPACE_URL, "ai-offline-attachment:" + operation_id))
+            return next(
+                item
+                for item in self.read(telegram_id, letter_id)["attachments"]
+                if item["id"] == attachment_id
+            )
+
     def read(self, telegram_id: str, letter_id: str) -> dict[str, Any]:
         actor = self._actor(telegram_id, "view")
         try:
@@ -259,6 +362,36 @@ class OfflineWorkflow:
                         "updatedAt": operation["occurred_at"],
                     }
                 )
+            elif operation["kind"] == "letter.attachment":
+                if letter is None or letter["revision"] != payload["expectedRevision"]:
+                    raise ValueError("Локальная загрузка потеряла версию письма.")
+                if payload["role"] == "primary":
+                    for attachment in letter["attachments"]:
+                        if attachment["documentRole"] == "primary":
+                            attachment["documentRole"] = "general"
+                    letter["documentCheck"] = None
+                letter["attachments"].append(
+                    {
+                        "id": str(
+                            uuid5(
+                                NAMESPACE_URL, "ai-offline-attachment:" + operation["operation_id"]
+                            )
+                        ),
+                        "ownerType": "ai_referent_letter",
+                        "ownerId": letter_id,
+                        "fileName": payload["fileName"],
+                        "contentType": "application/octet-stream",
+                        "byteSize": payload["byteSize"],
+                        "sha256": operation["blob_sha256"],
+                        "uploadedByUserId": payload["actorUserId"],
+                        "documentRole": payload["role"],
+                        "mediaKind": "file",
+                        "mediaDurationMs": None,
+                        "mediaCodec": None,
+                        "createdAt": operation["occurred_at"],
+                    }
+                )
+                continue
             else:
                 continue  # Later reducers own attachments, decisions and worker receipts.
             letter["events"].append(
