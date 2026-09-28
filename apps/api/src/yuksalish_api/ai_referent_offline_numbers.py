@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .ai_referent_schemas import OfflineNumberReservationResponse
 from .ai_referent_service import AIReferentServiceError
 from .tables import (
+    ai_referent_authority,
     ai_referent_configuration,
     ai_referent_letters,
     ai_referent_number_counters,
@@ -25,17 +26,27 @@ from .tables import (
 
 
 async def reserve_offline_numbers(
-    connection: AsyncConnection, *, agent_id: str, reservation_id: UUID, count: int
+    connection: AsyncConnection, *, agent_id: str, epoch: UUID,
+    reservation_id: UUID, count: int, enabled: bool,
 ) -> OfflineNumberReservationResponse:
     """Reserve an idempotent range that ordinary numbering can never allocate."""
     if not 1 <= count <= 20:
         raise AIReferentServiceError(422, "Укажите от 1 до 20 номеров в одном резерве.")
+    if not enabled:
+        raise AIReferentServiceError(
+            409, "Автономный режим AI Referent пока не включён на сервере."
+        )
     # Serialize duplicate requests and reassignment of the physical execution agent.
     assigned = await connection.scalar(
         select(ai_referent_configuration.c.execution_agent_id).with_for_update()
     )
     if assigned != agent_id:
         raise AIReferentServiceError(409, "Этот компьютер не назначен агентом отправки.")
+    authority = (
+        await connection.execute(select(ai_referent_authority).with_for_update(read=True))
+    ).mappings().first()
+    if authority is None or authority["agent_id"] != agent_id or authority["epoch"] != epoch:
+        raise AIReferentServiceError(409, "Аренда робота не найдена или устарела.")
     previous = (
         await connection.execute(
             select(ai_referent_offline_number_reservations).where(
@@ -57,6 +68,8 @@ async def reserve_offline_numbers(
             valid_until=previous["valid_until"],
         )
     now = datetime.now(UTC)
+    if authority["mode"] != "online" or authority["lease_until"] <= now:
+        raise AIReferentServiceError(503, "Новые номера нельзя резервировать до сверки с роботом.")
     year_suffix = now.strftime("%y")
     maximum = await connection.scalar(
         select(func.max(ai_referent_letters.c.outgoing_number)).where(
@@ -110,6 +123,8 @@ async def reserve_offline_numbers(
             created_at=now,
         )
     )
+    if authority["lease_until"] <= datetime.now(UTC):
+        raise AIReferentServiceError(503, "Аренда робота истекла до завершения резерва.")
     return OfflineNumberReservationResponse(
         reservation_id=reservation_id,
         agent_id=agent_id,

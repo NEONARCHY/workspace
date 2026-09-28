@@ -198,12 +198,14 @@ class WorkspaceClient:
     def configuration(self) -> dict[str, Any]:
         return self.request("/ai-referent/agent/configuration")
 
-    def reserve_offline_numbers(self, reservation_id: str, count: int) -> dict[str, Any]:
+    def reserve_offline_numbers(
+        self, reservation_id: str, count: int, epoch: str
+    ) -> dict[str, Any]:
         from urllib.parse import urlencode
 
         return self.request(
             "/ai-referent/agent/offline/number-reservations?"
-            + urlencode({"agentId": self.agent_id}),
+            + urlencode({"agentId": self.agent_id, "epoch": epoch}),
             {"reservationId": reservation_id, "count": count},
             method="POST",
         )

@@ -43,7 +43,7 @@ def anyio_backend():
     return "asyncio"
 
 
-def test_all_workspace_letter_writes_have_server_guard():
+def test_all_online_referent_writes_have_server_guard():
     expected = {
         ("PUT", "/ai-referent/configuration"),
         ("POST", "/ai-referent/letters"),
@@ -55,7 +55,27 @@ def test_all_workspace_letter_writes_have_server_guard():
         ("POST", "/ai-referent/telegram-link"),
         ("DELETE", "/ai-referent/telegram-link"),
         ("POST", "/ai-referent/agent/document-checks/claim"),
+        ("POST", "/ai-referent/agent/document-checks/{check_id}/heartbeat"),
+        ("POST", "/ai-referent/agent/document-checks/{check_id}/result"),
+        ("PUT", "/ai-referent/agent/recipients"),
+        ("POST", "/ai-referent/agent/telegram-link"),
+        ("POST", "/ai-referent/agent/letters"),
+        ("PATCH", "/ai-referent/agent/letters/{letter_id}"),
+        ("POST", "/ai-referent/agent/letters/{letter_id}/actions"),
+        ("DELETE", "/ai-referent/agent/letters/{letter_id}"),
+        ("PUT", "/ai-referent/agent/letters/{letter_id}/attachment"),
+        ("PUT", "/ai-referent/agent/letters/{letter_id}/comment-audio"),
+        ("PUT", "/ai-referent/agent/files/{kind}/{owner_id}"),
         ("POST", "/ai-referent/agent/jobs/claim"),
+        ("POST", "/ai-referent/agent/jobs/{job_id}/heartbeat"),
+        ("POST", "/ai-referent/agent/jobs/{job_id}/result"),
+        ("POST", "/ai-referent/agent/ready"),
+        ("POST", "/ai-referent/agent/notifications/claim"),
+        ("POST", "/ai-referent/agent/notifications/{notification_id}/ack"),
+        ("PUT", "/ai-referent/agent/archive"),
+        ("POST", "/ai-referent/agent/configuration:ack"),
+        ("POST", "/ai-referent/agent/incoming:sync"),
+        ("PUT", "/ai-referent/agent/journal"),
     }
     found = set()
     for router in (ai_referent.router, ai_referent_shared.router):
@@ -69,6 +89,20 @@ def test_all_workspace_letter_writes_have_server_guard():
                     ), key
                     found.add(key)
     assert found == expected
+    offline_protocol = {
+        ("POST", "/ai-referent/agent/offline/authority:start"),
+        ("POST", "/ai-referent/agent/offline/authority:heartbeat"),
+        ("POST", "/ai-referent/agent/offline/rights"),
+        ("PUT", "/ai-referent/agent/offline/blobs/{sha256}"),
+        ("POST", "/ai-referent/agent/offline/number-reservations"),
+    }
+    for route in ai_referent_shared.router.routes:
+        if not any((method, route.path) in offline_protocol for method in route.methods or ()):
+            continue
+        assert not any(
+            dependency.call is authority.require_workspace_write
+            for dependency in route.dependant.dependencies
+        ), route.path
     attachment = next(
         route for route in workspace.router.routes
         if route.path == "/attachments/{owner_type}/{owner_id}" and "PUT" in route.methods

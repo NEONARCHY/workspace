@@ -139,7 +139,7 @@ async def get_agent_configuration(
 @router.post(
     "/agent/configuration:ack",
     status_code=204,
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def post_configuration_ack(
     payload: ReviewerRuntimeAcknowledgement,
@@ -152,7 +152,7 @@ async def post_configuration_ack(
 @router.post(
     "/agent/incoming:sync",
     response_model=AIReferentIncomingSyncResponse,
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def post_incoming_sync(
     payload: AIReferentIncomingSyncRequest,
@@ -164,7 +164,7 @@ async def post_incoming_sync(
 @router.put(
     "/agent/journal",
     response_model=AIReferentJournalResponse,
-    dependencies=[Depends(require_agent_token)],
+    dependencies=[Depends(require_agent_token), Depends(require_workspace_write)],
 )
 async def put_incoming_journal(
     request: Request,
