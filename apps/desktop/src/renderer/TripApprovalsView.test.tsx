@@ -101,6 +101,7 @@ describe("Trip approvals interaction", async () => {
     await drop("launch");
     expect(onAction).not.toHaveBeenCalled();
     expect(await screen.findByRole("button", { name: "Подтвердить решение" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("dialog")).not.toHaveAttribute("aria-hidden", "true"));
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(onAction).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));

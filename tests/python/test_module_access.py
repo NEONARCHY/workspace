@@ -174,12 +174,10 @@ async def test_department_assistant_denial_beats_personal_override() -> None:
 
 
 @pytest.mark.anyio
-async def test_regional_bulk_access_requires_verified_scope(
+async def test_regional_bulk_access_targets_only_verified_regions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     admin = AuthenticatedUser(uuid4(), "admin", "Admin", None, None, "admin")
-    with pytest.raises(DirectoryServiceError, match="scope migration"):
-        await set_regional_assistant_access(SimpleNamespace(), admin, False)
     regional_ids = [uuid4(), uuid4()]
     test_departments = sa.Table(
         "core_departments", sa.MetaData(), sa.Column("id", sa.Uuid()),
@@ -193,9 +191,21 @@ async def test_regional_bulk_access_requires_verified_scope(
     monkeypatch.setattr("yuksalish_api.directory_service.set_module_access_rule", save)
     result = await set_regional_assistant_access(connection, admin, False)
     assert result == ["one", "two"]
+    statement = connection.execute.await_args.args[0]
+    assert "regional" in statement.compile().params.values()
     assert save.await_count == 2
     assert all(call.args[2] == "department" and call.args[4] == "assistant"
                for call in save.await_args_list)
+
+
+@pytest.mark.anyio
+async def test_regional_bulk_access_rejects_empty_region_list() -> None:
+    admin = AuthenticatedUser(uuid4(), "admin", "Admin", None, None, "admin")
+    connection = SimpleNamespace(execute=AsyncMock(return_value=Mock(
+        scalars=lambda: Mock(all=lambda: [])
+    )))
+    with pytest.raises(DirectoryServiceError, match="No regional departments"):
+        await set_regional_assistant_access(connection, admin, False)
 
 
 def test_admin_can_act_on_any_configured_approval_stage() -> None:

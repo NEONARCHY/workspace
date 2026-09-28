@@ -110,8 +110,9 @@ describe("Private messenger", () => {
   it("puts the assistant text in an existing chat draft without sending it", async () => {
     const onSendMessage = vi.fn();
     renderMessenger({
-      focusChatId: initialChats[0]!.id,
+      focusChatId: initialChats[1]!.id,
       onSendMessage,
+      assistantRecipientId: people[1]!.id,
       assistantDraft: { kind: "message", ready: true, fields: {
         recipient: people[1]!.name, body: "Проверьте письмо, пожалуйста.",
       } },

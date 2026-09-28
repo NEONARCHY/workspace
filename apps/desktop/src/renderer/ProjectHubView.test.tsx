@@ -146,6 +146,20 @@ describe("standalone project hub", () => {
     expect(within(board).getByRole("region", { name: "Согласовано" })).toHaveTextContent("Аренда зала");
   });
 
+  it("shows column totals by currency without mixing requests from other stages", async () => {
+    vi.mocked(loadProjectHubRequests).mockResolvedValue([
+      approved, pending, { ...pending, id: "request-usd", title: "Перевод", amount: 2.5, currency: "USD" },
+    ]);
+    setup("funding");
+    const board = await screen.findByRole("region", { name: "Канбан проектных заявок" });
+    const pendingLane = within(board).getByRole("region", { name: "На согласовании" });
+    const approvedLane = within(board).getByRole("region", { name: "Согласовано" });
+    expect(pendingLane).toHaveTextContent(/100\s*UZS/);
+    expect(pendingLane).toHaveTextContent(/2,50\s*USD/);
+    expect(pendingLane).not.toHaveTextContent(/300\s*UZS/);
+    expect(approvedLane).toHaveTextContent(/300\s*UZS/);
+  });
+
   it("uploads a file only from the pending request card", async () => {
     setup("funding");
     fireEvent.click(await screen.findByRole("button", { name: /Печать баннеров/ }));
