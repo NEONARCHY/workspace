@@ -154,6 +154,9 @@ async function main() {
     await page.getByLabel(/Пароль/).fill("visual-only");
     await page.getByRole("button", { name: "Войти", exact: true }).click();
     await page.locator(".app-shell").waitFor();
+    if (await page.getByRole("button", { name: "Напомнить позже" }).isVisible()) {
+      await page.getByRole("button", { name: "Напомнить позже" }).click();
+    }
     await page.getByRole("button", { name: /Открыть меню профиля:/ }).click();
     await page.getByRole("button", { name: "Профиль сотрудника", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Публичный профиль сотрудника" });
@@ -176,6 +179,19 @@ async function main() {
     for (const [tier] of tierFixtures) {
       assert(renderedTiers.includes(`recognition-rarity-${tier}`), `missing ${tier} card`);
     }
+    const cardEdgeSpace = await dialog.locator(".achievement-grid").first().evaluate((grid) => {
+      const viewport = grid.closest(".fui-DialogContent").getBoundingClientRect();
+      const cards = [...grid.querySelectorAll(".achievement-card")].map((card) => card.getBoundingClientRect());
+      return {
+        left: Math.min(...cards.map((card) => card.left)) - viewport.left,
+        right: viewport.right - Math.max(...cards.map((card) => card.right)),
+        gridLeft: grid.getBoundingClientRect().left - viewport.left,
+        gridRight: viewport.right - grid.getBoundingClientRect().right,
+        paddingLeft: getComputedStyle(grid).paddingLeft,
+      };
+    });
+    assert(cardEdgeSpace.left >= 24 && cardEdgeSpace.right >= 24,
+      `achievement glow needs space at both edges: ${JSON.stringify(cardEdgeSpace)}`);
     assert.equal(await page.locator("svg.recognition-badge-artwork").count(), 0);
     assert.equal(
       await page.locator(".achievement-card img.recognition-badge-artwork").count(),
@@ -266,6 +282,8 @@ async function main() {
     assert.equal(new Set(rewardBases).size, 9, "every reward must have a distinct shimmer palette");
     await dialog.screenshot({ path: path.join(output, "reward-types.png") });
     await page.locator(".reward-icon-picker").screenshot({ path: path.join(output, "reward-picker.png") });
+    await page.getByRole("dialog", { name: "Выдать награду" }).getByRole("button", { name: "Отмена" }).click();
+    await page.waitForTimeout(350);
     await dialog.getByRole("button", { name: "Как это работает" }).click();
     const guide = page.getByRole("dialog", { name: "Как работают награды и достижения" });
     await guide.waitFor();

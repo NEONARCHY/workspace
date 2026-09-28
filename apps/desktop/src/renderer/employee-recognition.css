@@ -40,7 +40,7 @@
 .employee-achievements-section, .employee-rewards-section { display: grid; gap: 12px; }
 .employee-achievements-section > header, .employee-rewards-section > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 2px 0; }
 .employee-achievements-section h4 { margin: 8px 2px -4px; color: var(--ws-navy); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
-.achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 30px 30px; }
 .achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: 1; transition: filter 220ms var(--ws-ease), opacity 220ms var(--ws-ease); }
 .achievement-card.is-locked { filter: saturate(.72); opacity: .76; }
 .recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }

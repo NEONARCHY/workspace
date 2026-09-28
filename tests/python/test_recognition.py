@@ -41,6 +41,7 @@ def test_achievement_catalog_backfills_levels_and_tenure() -> None:
     assert by_code["tasks_100"].unlocked is False
     assert by_code["messages_500"].unlocked is True
     assert by_code["meetings_15"].tier == "platinum"
+    assert by_code["meetings_15"].description == "Созданные Zoom-встречи"
     assert by_code["letters_50"].unlocked is True
     assert by_code["feed_posts_5"].unlocked is True
     assert by_code["payments_created_30"].tier == "amethyst"

@@ -383,7 +383,7 @@ def _achievements(
         ),
         (
             "meetings", "Организатор встреч",
-            "Созданные Zoom-встречи без технических ошибок", "meetings", "camera",
+            "Созданные Zoom-встречи", "meetings", "camera",
             process_levels,
         ),
         (
