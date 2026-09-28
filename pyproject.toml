@@ -63,6 +63,7 @@ yuksalish_api = ["organization_knowledge.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
+pythonpath = ["."]
 addopts = "-q --strict-config --strict-markers --cov=yuksalish_api --cov=hisobot_import --cov-report=term-missing --cov-fail-under=80"
 markers = [
   "postgres: integration test requiring YUKSALISH_TEST_DATABASE_URL",
