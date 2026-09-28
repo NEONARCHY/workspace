@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, Maximize2, Mic, Minimize2, Reply, Square, X } from "lucide-react";
+import { ArrowUp, Maximize2, Mic, Minimize2, Paperclip, Reply, Square, X } from "lucide-react";
 
 import type { AssistantMessage, AssistantModel } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
+import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -16,10 +16,34 @@ const modelOptions: readonly { value: AssistantModel; label: string; description
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
 const REPLY_EXCERPT_LENGTH = 280;
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
+  pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", txt: "text/plain",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Не удалось прочитать файл. Выберите его повторно."));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return reject(new Error("Не удалось прочитать файл."));
+      resolve(reader.result.slice(reader.result.indexOf(",") + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
 const quickPrompts = [
   "Что нового у меня за последнее время?",
   "Какие мои задачи требуют внимания?",
   "Расскажи о проектах движения «Юксалиш»",
+] as const;
+const presets = [
+  { label: "Мои дела", prompt: "Какие мои задачи и события сейчас требуют внимания?" },
+  { label: "О сотруднике", prompt: "Расскажи о сотруднике [имя]: должность, стаж, достижения, награды и доступный показатель выполнения задач в срок." },
+  { label: "Разобрать файл", prompt: "Кратко перескажи приложенный файл, выдели главные факты и необходимые действия." },
+  { label: "Подготовить текст", prompt: "Помоги написать ясный рабочий текст на тему: " },
 ] as const;
 
 function GeneratedReply({ content, animate }: { readonly content: string; readonly animate: boolean }) {
@@ -59,9 +83,12 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   const [error, setError] = useState("");
   const [animatedReplyId, setAnimatedReplyId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<AssistantMessage | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [presetsOpen, setPresetsOpen] = useState(false);
   const [replyMenu, setReplyMenu] = useState<{ message: AssistantMessage; x: number; y: number } | null>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -208,29 +235,41 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
-    if (!value || busy) return;
+    if ((!value && !selectedFile) || busy) return;
     const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
-    const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${value}` : value;
+    const prompt = value || "Расскажи, что находится во вложении.";
+    const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${prompt}` : prompt;
     if (content.length > 4000) {
       setError("Сократите ответ: вместе с цитатой он должен быть не длиннее 4000 символов.");
       return;
     }
+    const file = selectedFile;
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
-      id: temporaryId, role: "user", model, content,
+      id: temporaryId, role: "user", model,
+      content: file ? `${content}\n\n📎 ${file.name}` : content,
       createdAt: new Date().toISOString(),
     }]);
     setDraft("");
+    setSelectedFile(null);
     setBusy(true);
     setError("");
     try {
-      const response = await sendAssistantMessage(token, model, content);
+      const suffix = file?.name.split(".").at(-1)?.toLowerCase() ?? "";
+      const mimeType = fileTypes[suffix];
+      if (file && !mimeType) throw new Error("Неподдерживаемый формат вложения.");
+      const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
+        name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
+      } : undefined;
+      const response = await sendAssistantMessage(token, model, content, attachment);
       setMessages((current) => [...current, response]);
       setAnimatedReplyId(response.id);
       setReplyingTo(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
       setDraft((current) => current ? `${value}\n${current}` : value);
+      setSelectedFile(file);
       setError(failure instanceof Error ? failure.message : "Не удалось получить ответ. Попробуйте ещё раз.");
     } finally {
       setBusy(false);
@@ -314,10 +353,29 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
         </div>
         <div className="assistant-composer-area">
           <div className="assistant-composer-inner">
+            <div className="assistant-presets">
+              <button type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
+                aria-controls="assistant-presets-list" onClick={() => setPresetsOpen((current) => !current)}>
+                Шаблоны запросов <span aria-hidden="true">{presetsOpen ? "−" : "+"}</span>
+              </button>
+              {presetsOpen && <div id="assistant-presets-list" className="assistant-presets-list">
+                {presets.map((preset) => <button key={preset.label} type="button"
+                  onClick={() => { setDraft(preset.prompt); setPresetsOpen(false); inputRef.current?.focus(); }}>
+                  {preset.label}
+                </button>)}
+              </div>}
+            </div>
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
               {replyingTo && <div className="assistant-reply-target"><Reply size={16} aria-hidden="true" />
                 <span><strong>Ответ на сообщение Yuksalish</strong><small>{replyingTo.content.replace(/\s+/g, " ").slice(0, REPLY_EXCERPT_LENGTH)}</small></span>
                 <button type="button" aria-label="Отменить ответ" onClick={() => setReplyingTo(null)}><X size={16} /></button>
+              </div>}
+              {selectedFile && <div className="assistant-file-chip"><Paperclip size={15} aria-hidden="true" />
+                <span title={selectedFile.name}>{selectedFile.name}</span>
+                <button type="button" aria-label="Убрать вложение" disabled={busy}
+                  onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
+                  <X size={15} />
+                </button>
               </div>}
               <textarea ref={inputRef} aria-label="Сообщение ассистенту" placeholder="Спросите о работе или движении «Юксалиш»…"
                 value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
@@ -337,6 +395,25 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                 </div>
                 <span className="assistant-model-description">{chosen.description}</span>
                 <div className="assistant-composer-actions">
+                  <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
+                    accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt" aria-label="Выбрать вложение"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (!file) return;
+                      const suffix = file.name.split(".").at(-1)?.toLowerCase() ?? "";
+                      if (!fileTypes[suffix] || file.size > MAX_FILE_BYTES || file.size === 0
+                        || file.name.length > 160) {
+                        setError("Выберите DOCX, PDF, изображение или TXT размером до 5 МБ.");
+                        event.target.value = "";
+                        return;
+                      }
+                      setSelectedFile(file); setError("");
+                    }} />
+                  <button type="button" className="assistant-attach-button" aria-label="Прикрепить файл"
+                    title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 5 МБ; файл передаётся ИИ, но не хранится в истории"
+                    disabled={busy || recording} onClick={() => fileInputRef.current?.click()}>
+                    <Paperclip size={18} />
+                  </button>
                   <button type="button" className={`assistant-voice-button${recording ? " is-recording" : ""}`}
                     aria-label={recording ? "Остановить запись" : "Голосовой ввод"}
                     title={recording ? "Остановить запись" : "Голосовой ввод · до 1 минуты; аудио передаётся ИИ для расшифровки"}
@@ -344,7 +421,7 @@ export function YuksalishAssistant({ token }: { readonly token: string }) {
                     {recording ? <Square size={16} /> : <Mic size={19} />}
                   </button>
                   <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
-                    disabled={busy || recording || !draft.trim() || !loaded}>
+                    disabled={busy || recording || (!draft.trim() && !selectedFile) || !loaded}>
                     <ArrowUp size={19} strokeWidth={2.4} />
                   </button>
                 </div>

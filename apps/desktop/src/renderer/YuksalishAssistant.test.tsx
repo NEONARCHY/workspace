@@ -39,7 +39,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(document.querySelector(".assistant-message.is-assistant"))
       .toHaveTextContent("Ваши задачи проверены."));
-    expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "pro", "Какие у меня задачи?");
+    expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "pro", "Какие у меня задачи?", undefined);
     expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
     expect(screen.getByRole("button", { name: "Свернуть окно" })).toBeInTheDocument();
@@ -80,6 +80,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
       "test-token", "flash-lite", "↳ Ответ на сообщение ассистента: Первый совет.\n\nА второй шаг?",
+      undefined,
     ));
     await waitFor(() => expect(screen.queryByText("Ответ на сообщение Yuksalish")).not.toBeInTheDocument());
   });
@@ -117,5 +118,38 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }))
       .toHaveFocus());
+  });
+
+  it("attaches a bounded PDF and keeps its name visible in the conversation", async () => {
+    vi.mocked(sendAssistantMessage).mockResolvedValue({
+      id: "file-answer", role: "assistant", model: "flash-lite",
+      content: "Это письмо.", createdAt: "2026-09-28T10:00:00Z",
+    });
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const input = screen.getByLabelText("Выбрать вложение") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(["%PDF-1.7\ntext"], "letter.pdf", { type: "application/pdf" })] } });
+    expect(screen.getByText("letter.pdf")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
+      "test-token", "flash-lite", "Расскажи, что находится во вложении.",
+      expect.objectContaining({ name: "letter.pdf", mime_type: "application/pdf" }),
+    ));
+    expect(document.querySelector(".assistant-message.is-user")).toHaveTextContent("letter.pdf");
+  });
+
+  it("keeps request templates available after the first conversation", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "older", role: "assistant", model: "flash-lite", content: "Здравствуйте.",
+      createdAt: "2026-09-28T09:00:00Z",
+    }]);
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Здравствуйте.");
+    fireEvent.click(screen.getByRole("button", { name: /Шаблоны запросов/ }));
+    fireEvent.click(screen.getByRole("button", { name: "О сотруднике" }));
+    expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" }).value)
+      .toContain("[имя]");
   });
 });

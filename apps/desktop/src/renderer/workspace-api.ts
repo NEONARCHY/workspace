@@ -561,9 +561,18 @@ export function loadAssistantMessages(token: string): Promise<readonly Assistant
   return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
 }
 
-export function sendAssistantMessage(token: string, model: AssistantModel, message: string): Promise<AssistantMessage> {
+export interface AssistantAttachmentInput {
+  readonly name: string;
+  readonly mime_type: "application/pdf" | "image/png" | "image/jpeg" | "image/webp" | "text/plain"
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  readonly data_base64: string;
+}
+
+export function sendAssistantMessage(
+  token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
+): Promise<AssistantMessage> {
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message }),
+    method: "POST", body: JSON.stringify({ model, message, attachment }),
   }, token, 65_000);
 }
 
