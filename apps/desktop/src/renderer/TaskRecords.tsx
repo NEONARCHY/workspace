@@ -6,8 +6,8 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 
 const statuses: Record<TaskStatus, string> = { new: "Новая", in_progress: "В работе", awaiting_review: "На проверке", completed: "Завершена", overdue: "Просрочена", cancelled: "Отменена" };
 
-export function TaskRecords({ tasks, people, selectedId, filterKey, onSelect }: {
-  tasks: readonly WorkspaceTask[]; people: readonly WorkspacePerson[]; selectedId?: string;
+export function TaskRecords({ tasks, people, currentUserId, selectedId, filterKey, onSelect }: {
+  tasks: readonly WorkspaceTask[]; people: readonly WorkspacePerson[]; currentUserId?: string; selectedId?: string;
   filterKey: string; onSelect: (id: string) => void;
 }) {
   const [sort, setSort] = useState<TableSort>({ key: "", descending: false });
@@ -45,7 +45,7 @@ export function TaskRecords({ tasks, people, selectedId, filterKey, onSelect }: 
             <div className="record-secondary">{task.checklistTotal > 0 && <span>План {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>
             {task.checklistTotal > 0 ? <span className="task-record-progress" aria-hidden="true"><i style={{ width: `${Math.round(task.checklistDone / task.checklistTotal * 100)}%` }} /></span> : null}
           </td>
-          <td><Badge appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
+          <td><Badge appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
           <td className={task.status === "overdue" ? "record-deadline overdue" : "record-deadline"}>{task.dueLabel}</td>
           <td>{person(task.authorId)}</td><td>{person(task.assigneeId)}</td><td className="record-project">{task.project || "Без проекта"}</td>
         </tr>)}</tbody>

@@ -9,15 +9,19 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.efficiency_service import (
+    METHODOLOGY_VERSION,
     load_efficiency_overview,
     materialize_efficiency_digest_notifications,
 )
+from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import (
+    accept_task_result,
     create_task,
     find_active_user_by_username,
     load_workspace,
     return_task_for_revision,
     set_task_efficiency_exclusion,
+    set_task_participant,
     submit_task_result,
     update_task,
 )
@@ -32,6 +36,7 @@ from yuksalish_api.workspace_schemas import (
     ReturnTaskForRevisionRequest,
     SubmitTaskResultRequest,
     TaskEfficiencyExclusionRequest,
+    TaskParticipantRequest,
     UpdateTaskRequest,
 )
 
@@ -45,10 +50,13 @@ async def _exercise_efficiency(database_url: str) -> None:
             try:
                 employee_row = await find_active_user_by_username(connection, "aziza")
                 manager_row = await find_active_user_by_username(connection, "baxtiyor")
+                co_assignee_row = await find_active_user_by_username(connection, "dilshod")
                 assert employee_row is not None and manager_row is not None
+                assert co_assignee_row is not None
                 employee = await load_authenticated_user(connection, employee_row["id"])
                 manager = await load_authenticated_user(connection, manager_row["id"])
-                assert employee is not None and manager is not None
+                co_assignee = await load_authenticated_user(connection, co_assignee_row["id"])
+                assert employee is not None and manager is not None and co_assignee is not None
                 due_at = datetime.now(UTC) + timedelta(hours=2)
                 task = await create_task(
                     connection,
@@ -59,12 +67,53 @@ async def _exercise_efficiency(database_url: str) -> None:
                         due_at=due_at,
                     ),
                 )
+                await set_task_participant(
+                    connection,
+                    manager,
+                    UUID(task.id),
+                    TaskParticipantRequest(
+                        user_id=str(co_assignee_row["id"]), role="co_assignee"
+                    ),
+                )
                 await submit_task_result(
                     connection,
-                    employee,
+                    co_assignee,
                     UUID(task.id),
                     SubmitTaskResultRequest(result_text="Result for manager review"),
                 )
+                with pytest.raises(WorkspaceRepositoryError) as forbidden_review:
+                    await accept_task_result(connection, co_assignee, UUID(task.id))
+                assert forbidden_review.value.status_code == 403
+                submission_metadata = await connection.scalar(
+                    select(task_efficiency_events.c["metadata"])
+                    .where(
+                        task_efficiency_events.c.task_id == UUID(task.id),
+                        task_efficiency_events.c.event_type == "result_submitted_for_review",
+                    )
+                    .order_by(task_efficiency_events.c.occurred_at.desc())
+                    .limit(1)
+                )
+                assert set(submission_metadata["executorIds"]) == {
+                    str(employee.id), str(co_assignee_row["id"])
+                }
+                review_notices = (
+                    await connection.execute(
+                        select(workspace_notifications.c.user_id).where(
+                            workspace_notifications.c.event_key.like("task:review:%"),
+                            workspace_notifications.c.title == "Результат ожидает проверки",
+                            workspace_notifications.c.entity_id == UUID(task.id),
+                        )
+                    )
+                ).scalars().all()
+                assert review_notices == [manager.id]
+                executor_review_notice = await connection.scalar(
+                    select(func.count()).select_from(workspace_notifications).where(
+                        workspace_notifications.c.event_key.like("task:review:executor:%"),
+                        workspace_notifications.c.entity_id == UUID(task.id),
+                        workspace_notifications.c.user_id == employee.id,
+                    )
+                )
+                assert executor_review_notice == 1
                 await return_task_for_revision(
                     connection,
                     manager,
@@ -139,7 +188,47 @@ async def _exercise_efficiency(database_url: str) -> None:
                         workspace_notifications.c.entity_id == UUID(task.id),
                     )
                 )
-                assert return_notices == 1
+                assert return_notices == 2
+                return_recipients = set((await connection.execute(
+                    select(workspace_notifications.c.user_id).where(
+                        workspace_notifications.c.event_key.like("efficiency:return:%"),
+                        workspace_notifications.c.entity_id == UUID(task.id),
+                    )
+                )).scalars())
+                assert return_recipients == {employee.id, co_assignee_row["id"]}
+                await submit_task_result(
+                    connection,
+                    employee,
+                    UUID(task.id),
+                    SubmitTaskResultRequest(result_text="Corrected result"),
+                )
+                await accept_task_result(connection, manager, UUID(task.id))
+                accepted_recipients = set((await connection.execute(
+                    select(workspace_notifications.c.user_id).where(
+                        workspace_notifications.c.event_key.like("task:accepted:%"),
+                        workspace_notifications.c.entity_id == UUID(task.id),
+                    )
+                )).scalars())
+                assert accepted_recipients == {employee.id, co_assignee_row["id"]}
+                employee_authored_task = await create_task(
+                    connection,
+                    co_assignee,
+                    CreateTaskRequest(
+                        title="Employee-authored task review",
+                        assignee_id=str(employee.id),
+                        due_at=due_at,
+                    ),
+                )
+                await submit_task_result(
+                    connection,
+                    employee,
+                    UUID(employee_authored_task.id),
+                    SubmitTaskResultRequest(result_text="Ready for author review"),
+                )
+                accepted_by_author = await accept_task_result(
+                    connection, co_assignee, UUID(employee_authored_task.id)
+                )
+                assert accepted_by_author.status == "completed"
                 digest_time = datetime.now(UTC).replace(hour=14, minute=0, second=0, microsecond=0)
                 await connection.execute(
                     insert(employee_efficiency_snapshots).values(
@@ -151,7 +240,7 @@ async def _exercise_efficiency(database_url: str) -> None:
                         on_time_count=999,
                         eligible_count=999,
                         overdue_count=0,
-                        methodology_version="EFF-1.0",
+                        methodology_version=METHODOLOGY_VERSION,
                         created_at=digest_time - timedelta(days=1),
                     )
                 )

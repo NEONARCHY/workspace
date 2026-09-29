@@ -24,7 +24,7 @@ from .tables import (
     workspace_notifications,
 )
 
-METHODOLOGY_VERSION = "EFF-1.0"
+METHODOLOGY_VERSION = "EFF-2.0"
 EFFICIENCY_TIMEZONE = "Asia/Tashkent"
 SMALL_SAMPLE_LIMIT = 5
 
@@ -43,11 +43,12 @@ class _TaskState:
     task_id: UUID
     known_from: datetime
     assignments: list[tuple[datetime, UUID]] = field(default_factory=list)
+    executor_assignments: list[tuple[datetime, frozenset[UUID]]] = field(default_factory=list)
     deadlines: list[_Deadline] = field(default_factory=list)
-    results: list[tuple[datetime, UUID | None, str]] = field(default_factory=list)
+    results: list[tuple[datetime, frozenset[UUID], str]] = field(default_factory=list)
     statuses: list[tuple[datetime, str]] = field(default_factory=list)
     exclusions: list[tuple[datetime, bool]] = field(default_factory=list)
-    return_events: list[tuple[datetime, UUID | None]] = field(default_factory=list)
+    return_events: list[tuple[datetime, frozenset[UUID]]] = field(default_factory=list)
     cancelled_at: datetime | None = None
 
 
@@ -102,6 +103,20 @@ def _assignee_at(state: _TaskState, moment: datetime) -> UUID | None:
     return max(relevant, key=lambda item: item[0])[1] if relevant else None
 
 
+def _executor_ids(value: object) -> frozenset[UUID]:
+    if not isinstance(value, list):
+        return frozenset()
+    return frozenset(parsed for item in value if (parsed := _parse_uuid(item)) is not None)
+
+
+def _executors_at(state: _TaskState, moment: datetime) -> frozenset[UUID]:
+    relevant = [item for item in state.executor_assignments if item[0] <= moment]
+    if relevant:
+        return max(relevant, key=lambda item: item[0])[1]
+    assignee = _assignee_at(state, moment)
+    return frozenset({assignee}) if assignee is not None else frozenset()
+
+
 def _status_at(state: _TaskState, moment: datetime) -> str:
     relevant = [item for item in state.statuses if item[0] <= moment]
     return max(relevant, key=lambda item: item[0])[1] if relevant else "new"
@@ -129,15 +144,25 @@ def replay_task_events(events: Sequence[Record], tracking_started_at: datetime) 
     for row in ordered:
         task_id = row["task_id"]
         occurred_at = _aware(row["occurred_at"])
+        if occurred_at < tracking_started_at:
+            continue
         event_type = str(row["event_type"])
         old_value, new_value = _event_values(row)
         state = states.setdefault(task_id, _TaskState(task_id=task_id, known_from=occurred_at))
         assignee = row.get("assignee_user_id") or _parse_uuid(new_value.get("assigneeId"))
+        metadata = row.get("metadata")
+        executor_ids = (
+            _executor_ids(metadata.get("executorIds"))
+            if isinstance(metadata, Mapping) else frozenset()
+        )
         due_at = _aware(row["due_at"]) if isinstance(row.get("due_at"), datetime) else None
 
         if event_type in {"initial_snapshot", "task_created"}:
             if isinstance(assignee, UUID):
                 state.assignments.append((occurred_at, assignee))
+                state.executor_assignments.append((
+                    occurred_at, executor_ids or frozenset({assignee})
+                ))
             status = new_value.get("status")
             if isinstance(status, str):
                 state.statuses.append((occurred_at, status))
@@ -157,11 +182,22 @@ def replay_task_events(events: Sequence[Record], tracking_started_at: datetime) 
             continue
 
         if event_type == "assignee_changed":
+            previous_assignee = _assignee_at(state, occurred_at)
             new_assignee = _parse_uuid(new_value.get("assigneeId")) or (
                 assignee if isinstance(assignee, UUID) else None
             )
             if new_assignee is not None:
                 state.assignments.append((occurred_at, new_assignee))
+                previous_executors = _executors_at(state, occurred_at)
+                revised = (previous_executors - {previous_assignee}) | {new_assignee}
+                state.executor_assignments.append((
+                    occurred_at, executor_ids or frozenset(revised)
+                ))
+            continue
+
+        if event_type == "task_executors_changed":
+            if executor_ids:
+                state.executor_assignments.append((occurred_at, executor_ids))
             continue
 
         if event_type == "deadline_changed":
@@ -178,19 +214,27 @@ def replay_task_events(events: Sequence[Record], tracking_started_at: datetime) 
 
         if event_type == "result_submitted_for_review":
             state.results.append(
-                (occurred_at, assignee if isinstance(assignee, UUID) else None, event_type)
+                (occurred_at, executor_ids or _executors_at(state, occurred_at), event_type)
             )
             state.statuses.append((occurred_at, "awaiting_review"))
         elif event_type == "result_accepted":
             state.statuses.append((occurred_at, "completed"))
         elif event_type == "task_completed":
+            submitted_executors = next(
+                (executors for _, executors, kind in reversed(state.results)
+                 if kind == "result_submitted_for_review"),
+                _executors_at(state, occurred_at),
+            )
             state.results.append(
-                (occurred_at, assignee if isinstance(assignee, UUID) else None, event_type)
+                (occurred_at, executor_ids or submitted_executors, event_type)
             )
             state.statuses.append((occurred_at, "completed"))
         elif event_type == "result_returned_for_revision":
+            submitted_executors = state.results[-1][1] if state.results else _executors_at(
+                state, occurred_at
+            )
             state.return_events.append(
-                (occurred_at, assignee if isinstance(assignee, UUID) else None)
+                (occurred_at, executor_ids or submitted_executors)
             )
             state.statuses.append((occurred_at, "in_progress"))
         elif event_type == "task_cancelled":
@@ -241,9 +285,9 @@ def _calculate_aggregate_from_states(
         }
 
     for state in states:
-        if state.known_from >= effective_end:
+        if state.known_from >= current_time:
             continue
-        current_assignee = _assignee_at(state, effective_end)
+        current_executors = _executors_at(state, effective_end)
         current_status = _status_at(state, effective_end)
         current_deadlines = [
             deadline
@@ -252,49 +296,70 @@ def _calculate_aggregate_from_states(
             and (deadline.replaced_at is None or deadline.replaced_at >= effective_end)
         ]
         if (
-            current_assignee == user_id
+            user_id in current_executors
             and current_status not in {"completed", "cancelled"}
             and not current_deadlines
         ):
             counters["no_due_date_count"] += 1
-        if current_assignee == user_id and current_status == "awaiting_review":
+        if user_id in current_executors and current_status == "awaiting_review":
             counters["awaiting_review_count"] += 1
         counters["returned_for_revision_count"] += sum(
             1
-            for occurred_at, assignee in state.return_events
-            if assignee == user_id and period_start <= occurred_at < effective_end
+            for occurred_at, executors in state.return_events
+            if user_id in executors and period_start <= occurred_at < effective_end
         )
 
+        # A motivated return revokes the previous submission for every executor
+        # recorded at that submission. Only a later submission can restore credit.
+        latest_return = max(
+            (occurred_at for occurred_at, _ in state.return_events if occurred_at <= current_time),
+            default=None,
+        )
+        valid_results = [
+            (occurred_at, executors)
+            for occurred_at, executors, _ in state.results
+            if occurred_at <= current_time
+            and (latest_return is None or occurred_at > latest_return)
+        ]
         seen_for_user = False
         for deadline in sorted(state.deadlines, key=lambda item: item.due_at):
-            if seen_for_user or not (period_start <= deadline.due_at < effective_end):
+            if seen_for_user:
                 continue
             if deadline.set_at > deadline.due_at:
                 continue
             if deadline.replaced_at is not None and deadline.replaced_at <= deadline.due_at:
                 continue
-            assignee_at_due = _assignee_at(state, deadline.due_at)
-            if assignee_at_due != user_id:
+            on_time_result = next(
+                (
+                    (occurred_at, executors)
+                    for occurred_at, executors in valid_results
+                    if occurred_at <= deadline.due_at
+                ),
+                None,
+            )
+            score_at = on_time_result[0] if on_time_result else deadline.due_at
+            if not (period_start <= score_at < effective_end):
+                continue
+            credited_executors = (
+                on_time_result[1] if on_time_result else _executors_at(state, deadline.due_at)
+            )
+            if user_id not in credited_executors:
                 continue
             seen_for_user = True
-            excluded = _excluded_at(state, effective_end)
-            cancelled = state.cancelled_at is not None and state.cancelled_at < effective_end
+            excluded = _excluded_at(state, current_time)
+            cancelled = state.cancelled_at is not None and state.cancelled_at <= current_time
             if excluded or cancelled:
                 counters["excluded_count"] += 1
                 continue
             counters["eligible_count"] += 1
-            completed_in_time = any(
-                assignee == user_id and occurred_at <= deadline.due_at
-                for occurred_at, assignee, _event_type in state.results
-            )
-            if completed_in_time:
+            if on_time_result:
                 counters["on_time_count"] += 1
             else:
                 counters["overdue_count"] += 1
 
         if (
-            current_assignee == user_id
-            and _excluded_at(state, effective_end)
+            user_id in current_executors
+            and _excluded_at(state, current_time)
             and not seen_for_user
         ):
             counters["excluded_count"] += 1
@@ -525,6 +590,8 @@ async def materialize_efficiency_digest_notifications(
                     .where(
                         employee_efficiency_snapshots.c.user_id == user_id,
                         employee_efficiency_snapshots.c.snapshot_date < local_date,
+                        employee_efficiency_snapshots.c.methodology_version
+                        == METHODOLOGY_VERSION,
                     )
                     .order_by(employee_efficiency_snapshots.c.snapshot_date.desc())
                     .limit(1)

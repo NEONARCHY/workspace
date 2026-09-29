@@ -27,6 +27,11 @@ describe("Corporate record tables", () => {
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
   });
+  it("marks a submitted result as requiring the author's review", () => {
+    const task = { ...initialTasks[0]!, status: "awaiting_review" as const };
+    render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId={task.authorId} filterKey="review" onSelect={vi.fn()} />));
+    expect(screen.getByText("Ждёт вашей проверки")).toBeInTheDocument();
+  });
   it("paginates and clamps the current page when records disappear", () => {
     const view = render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));
     fireEvent.click(screen.getByRole("button", { name: "Следующая страница: задачи" }));
