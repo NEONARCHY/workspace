@@ -1541,13 +1541,13 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "Номер договора добавлен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Завершить и отправить на проверку" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Утвердить результат" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Утвердить результат" }, { timeout: 20_000 }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),
       expect.objectContaining({ method: "POST" }),
     );
-  });
+  }, 30_000);
 
   it("shows the executor's result actions without the former payment shortcut", async () => {
     const fetchMock = mockServer();

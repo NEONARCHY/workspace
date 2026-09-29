@@ -755,6 +755,7 @@ function Conversation({
             {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
             {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
               <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
+              <small>Запросил: {people.find((person) => person.id === deadlineRequest.requesterUserId)?.name ?? "Исполнитель"}</small>
               <p>{message.body}</p>
               <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
               {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">

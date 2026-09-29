@@ -281,6 +281,8 @@ export function TasksView(props: TasksViewProps) {
   const [reviewBusy, setReviewBusy] = useState(false);
   const [resultUploading, setResultUploading] = useState(false);
   const resultFileInput = useRef<HTMLInputElement>(null);
+  const lifecycleRef = useRef<HTMLDivElement>(null);
+  const previousDetailStatus = useRef<{ id: string; status: WorkspaceTask["status"] } | undefined>(undefined);
   const [creatingSubtask, setCreatingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [subtaskAssigneeId, setSubtaskAssigneeId] = useState(currentUserId);
@@ -318,6 +320,14 @@ export function TasksView(props: TasksViewProps) {
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
+  useEffect(() => {
+    const current = selectedTask ? { id: selectedTask.id, status: selectedTask.status } : undefined;
+    if (detailOpen && current && previousDetailStatus.current?.id === current.id
+      && previousDetailStatus.current.status !== current.status) {
+      lifecycleRef.current?.focus();
+    }
+    previousDetailStatus.current = current;
+  }, [detailOpen, selectedTask]);
   useEffect(() => {
     if (!sourceNoticeTaskId) return undefined;
     const timer = window.setTimeout(() => setSourceNoticeTaskId((current) => (
@@ -628,7 +638,7 @@ export function TasksView(props: TasksViewProps) {
         </div> : null}
         <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
         </div>
-        <div className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
+        <div ref={lifecycleRef} tabIndex={-1} className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
         {canExtendDeadline ? <div className="task-deadline-control">
           <Button appearance="subtle" onClick={() => {
             const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
@@ -725,14 +735,14 @@ export function TasksView(props: TasksViewProps) {
         </div>
       </aside>{renderTaskChat(selectedTask)}</div></DialogSurface>
       </Dialog> : null}
-      <ConfirmActionDialog
-        open={pendingTaskDelete !== undefined}
+      {pendingTaskDelete ? <ConfirmActionDialog
+        open
         title="Удалить задачу?"
         message={`Задача «${pendingTaskDelete?.title ?? ""}», связанные подзадачи и чат задачи будут удалены без возможности восстановления.`}
         busy={deleting}
         onCancel={() => setPendingTaskDelete(undefined)}
         onConfirm={confirmTaskDelete}
-      />
+      /> : null}
     </section>
   );
 }
