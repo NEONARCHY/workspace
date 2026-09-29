@@ -202,7 +202,7 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView
       token="token" people={[]} canCreate focusRequestId="letter-1"
     /></FluentProvider>);
-    expect(await screen.findByRole("status")).toHaveTextContent("Доступен только просмотр");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Доступен только просмотр"));
     expect(screen.queryByRole("button", { name: "Новое письмо" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Согласовать" })).not.toBeInTheDocument();
     expect(actOnAIReferentLetter).not.toHaveBeenCalled();
