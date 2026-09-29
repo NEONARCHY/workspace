@@ -126,3 +126,5 @@ async def test_task_deadline_extension_requires_setter_decision() -> None:
         )
         assert direct.status_code == 200
         assert direct.json()["deadlineRequests"][-1]["status"] == "superseded"
+        deleted = await client.delete(f"/api/v1/tasks/{task_id}", headers=headers("malika"))
+        assert deleted.status_code == 204

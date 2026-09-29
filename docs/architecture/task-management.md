@@ -90,6 +90,8 @@ The task detail footer contains result submission for executors, and delete,
 accept and return actions for the author when applicable. The result composer
 also accepts task files, which remain available in the card after submission.
 The former payment-request shortcut is no longer part of the task card.
+Task deletion also removes its task chat and immutable message versions through
+a transaction-scoped purge guard; ordinary message history remains append-only.
 
 An executor or co-assignee can request a later deadline from the task chat with
 a reason and local date/time picker. The request and its message are stored in

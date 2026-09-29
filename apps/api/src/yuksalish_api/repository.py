@@ -4432,7 +4432,11 @@ async def delete_task(
                     attachments.c.owner_id.in_(message_ids),
                 )
             )
+        # The database allows this explicit task purge, but still rejects all
+        # ordinary edits or deletions of message history.
+        await connection.scalar(select(func.set_config("yuksalish.task_chat_purge", "on", True)))
         await connection.execute(delete(chats).where(chats.c.id.in_(task_chat_ids)))
+        await connection.scalar(select(func.set_config("yuksalish.task_chat_purge", "off", True)))
 
     await connection.execute(
         delete(attachments).where(
