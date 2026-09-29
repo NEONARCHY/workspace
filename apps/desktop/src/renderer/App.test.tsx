@@ -1478,6 +1478,30 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(screen.queryAllByRole("dialog")).toHaveLength(0));
   });
 
+  it("explains task sections and uploads files from the task dropzone", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Справка: Чек-лист" }));
+    expect(await screen.findByText(/Отмечайте выполненные пункты по мере работы/)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText(/Отмечайте выполненные пункты по мере работы/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Закрыть задачу" })).toBeInTheDocument();
+    expect(screen.getByText("Перетащите файлы сюда")).toBeInTheDocument();
+
+    fireEvent.drop(screen.getByText("Перетащите файлы сюда").closest(".ws-file-dropzone")!, {
+      dataTransfer: { files: [new File(["report"], "report.txt", { type: "text/plain" })] },
+    });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/attachments/task/"),
+      expect.objectContaining({ method: "PUT" }),
+    ));
+    expect(await screen.findByText("report.txt")).toBeInTheDocument();
+  }, 30_000);
+
   it("creates a subtask and runs result review with a motivated return", async () => {
     const fetchMock = mockServer();
     render(<App />);

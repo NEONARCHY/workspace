@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
 import { ArrowDownload24Regular, Attach24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
 import { MediaVolumeControl } from "./MediaVolumeControl";
+import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 
 interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
@@ -223,6 +224,8 @@ interface AttachmentPanelProps extends AttachmentChipsProps {
   readonly title?: string;
   readonly canUpload: boolean;
   readonly onUpload: (files: readonly File[]) => void | Promise<void>;
+  readonly dropzone?: boolean;
+  readonly headingAccessory?: ReactNode;
 }
 
 export function AttachmentPanel({
@@ -231,15 +234,17 @@ export function AttachmentPanel({
   onDownload,
   onUpload,
   title = "Вложения",
+  dropzone = false,
+  headingAccessory,
 }: AttachmentPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
-  const upload = async (files: FileList | null) => {
-    if (files === null || files.length === 0) return;
+  const upload = async (files: readonly File[]) => {
+    if (files.length === 0) return;
     setBusy(true);
     try {
-      await onUpload(Array.from(files));
+      await onUpload(files);
     } finally {
       setBusy(false);
       if (inputRef.current !== null) inputRef.current.value = "";
@@ -247,10 +252,11 @@ export function AttachmentPanel({
   };
 
   return (
-    <section className="attachment-panel">
+    <section className={`attachment-panel${dropzone ? " attachment-panel-dropzone" : ""}`}>
       <div className="attachment-panel-heading">
         <h3>{title}</h3>
-        {canUpload ? (
+        {headingAccessory}
+        {canUpload && !dropzone ? (
           <>
             <input
               ref={inputRef}
@@ -258,7 +264,7 @@ export function AttachmentPanel({
               type="file"
               multiple
               aria-label={`Добавить файлы: ${title}`}
-              onChange={(event) => void upload(event.target.files)}
+              onChange={(event) => void upload(Array.from(event.target.files ?? []))}
             />
             <Button
               appearance="subtle"
@@ -271,8 +277,17 @@ export function AttachmentPanel({
           </>
         ) : null}
       </div>
+      {canUpload && dropzone ? <WorkspaceFileDropzone
+        label={busy ? "Загружаем файлы…" : "Перетащите файлы сюда"}
+        hint="Или выберите файлы с компьютера. После загрузки они появятся ниже."
+        actionLabel={busy ? "Загрузка…" : "Выбрать файлы"}
+        ariaLabel={`Добавить файлы: ${title}`}
+        multiple
+        disabled={busy}
+        onFiles={(files) => void upload(files)}
+      /> : null}
       <AttachmentChips attachments={attachments} onDownload={onDownload} />
-      {attachments.length === 0 ? <p className="attachment-empty">Файлов пока нет</p> : null}
+      {attachments.length === 0 && (!dropzone || !canUpload) ? <p className="attachment-empty">Файлов пока нет</p> : null}
     </section>
   );
 }
