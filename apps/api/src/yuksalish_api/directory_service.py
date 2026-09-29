@@ -35,6 +35,8 @@ from .tables import (
     chat_members,
     chats,
     departments,
+    hisobot_unit_reports,
+    messages,
     module_access_rules,
     positions,
     users,
@@ -166,6 +168,7 @@ async def _department_response(
         id=str(row["id"]),
         code=row["code"],
         name=row["name"],
+        icon_key=row["icon_key"] or "building",
         scope=row["scope"],
         parent_id=str(row["parent_id"]) if row["parent_id"] else None,
         lead_user_id=str(row["lead_user_id"]) if row["lead_user_id"] else None,
@@ -322,6 +325,7 @@ async def create_department(
             id=department_id,
             code=payload.code,
             name=payload.name,
+            icon_key=payload.icon_key,
             scope=payload.scope,
             parent_id=payload.parent_id,
             created_at=datetime.now(UTC),
@@ -345,6 +349,7 @@ async def create_department(
         {
             "code": payload.code,
             "name": payload.name,
+            "iconKey": payload.icon_key,
             "scope": payload.scope,
             "parentId": str(payload.parent_id) if payload.parent_id else None,
         },
@@ -383,6 +388,8 @@ async def update_department(
         values["code"] = payload.code
     if payload.name is not None:
         values["name"] = payload.name
+    if payload.icon_key is not None:
+        values["icon_key"] = payload.icon_key
     if payload.scope is not None:
         values["scope"] = payload.scope
     if "parent_id" in payload.model_fields_set:
@@ -439,6 +446,7 @@ async def update_department(
             "before": {
                 "code": existing["code"],
                 "name": existing["name"],
+                "iconKey": existing["icon_key"],
                 "scope": existing["scope"],
                 "parentId": (str(existing["parent_id"]) if existing["parent_id"] else None),
                 "leadUserId": (str(existing["lead_user_id"]) if existing["lead_user_id"] else None),
@@ -446,6 +454,7 @@ async def update_department(
             "after": {
                 "code": values.get("code", existing["code"]),
                 "name": values.get("name", existing["name"]),
+                "iconKey": values.get("icon_key", existing["icon_key"]),
                 "scope": values.get("scope", existing["scope"]),
                 "parentId": (
                     str(values.get("parent_id", existing["parent_id"]))
@@ -460,6 +469,53 @@ async def update_department(
         },
     )
     return await _department_response(connection, department_id)
+
+
+async def delete_department(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    department_id: UUID,
+) -> None:
+    """Remove an unused department without orphaning people or Hisobot reports."""
+    _require_department_manager(actor)
+    existing = (await connection.execute(
+        select(departments).where(departments.c.id == department_id).with_for_update()
+    )).mappings().first()
+    if existing is None:
+        raise DirectoryServiceError(404, "Подразделение не найдено")
+    if await connection.scalar(
+        select(users.c.id).where(users.c.department_id == department_id).limit(1)
+    ):
+        raise DirectoryServiceError(409, "Сначала переведите сотрудников в другое подразделение")
+    if await connection.scalar(
+        select(departments.c.id).where(departments.c.parent_id == department_id).limit(1)
+    ):
+        raise DirectoryServiceError(409, "Сначала перенесите вложенные подразделения")
+    if await connection.scalar(select(hisobot_unit_reports.c.id).where(
+        hisobot_unit_reports.c.department_id == department_id
+    ).limit(1)):
+        raise DirectoryServiceError(
+            409, "Удаление невозможно: сохранены отчёты этого подразделения"
+        )
+    chat_ids = select(chats.c.id).where(
+        chats.c.context_type == "department", chats.c.context_id == department_id,
+    )
+    if await connection.scalar(
+        select(messages.c.id).where(messages.c.chat_id.in_(chat_ids)).limit(1)
+    ):
+        raise DirectoryServiceError(409, "Удаление невозможно: сохранена переписка подразделения")
+    now = datetime.now(UTC)
+    await connection.execute(update(chats).where(
+        chats.c.context_type == "department", chats.c.context_id == department_id,
+    ).values(context_type=None, context_id=None, deleted_at=now, deleted_by_user_id=actor.id))
+    await connection.execute(delete(module_access_rules).where(
+        module_access_rules.c.subject_type == "department",
+        module_access_rules.c.subject_key == str(department_id),
+    ))
+    await connection.execute(delete(departments).where(departments.c.id == department_id))
+    await _audit(connection, actor, "department.deleted", "department", department_id, {
+        "code": existing["code"], "name": existing["name"],
+    })
 
 
 async def update_department_members(

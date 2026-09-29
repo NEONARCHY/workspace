@@ -59,6 +59,11 @@
 .department-card-heading h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
 .department-card-heading p { margin: 3px 0 0; color: var(--ws-muted); font-size: 12px; }
 .department-card-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; color: var(--ws-link); border-radius: 12px; background: #e2f3f1; }
+.department-icon-field { display: grid; gap: 7px; min-width: 0; color: var(--ws-muted); font-size: 12px; }
+.department-icon-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.department-icon-options button { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; border: 1px solid var(--ws-line); border-radius: 11px; color: var(--ws-link); background: var(--ws-surface); cursor: pointer; }
+.department-icon-options button[aria-pressed="true"] { border-color: var(--ws-link); background: var(--ws-selected); box-shadow: inset 0 0 0 1px var(--ws-link); }
+.department-icon-options button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .department-workspace { min-height: 340px; grid-template-columns: minmax(250px,.8fr) minmax(0,1.2fr); gap: 14px; overflow: hidden; }
 .department-management .department-workspace { flex: 1 0 340px; }
 .department-tree, .department-editor { min-height: 0; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
@@ -67,13 +72,24 @@
 .department-tree-top small { color: var(--ws-muted); }
 .department-tree-list { min-height: 0; overflow: auto; padding-right: 3px; }
 .department-tree-list button { min-height: 54px; padding-block: 8px; padding-inline-end: 10px; cursor: pointer; }
+.department-tree-list button { grid-template-columns: 32px minmax(0, 1fr); align-items: center; column-gap: 9px; }
+.department-tree-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--ws-link); background: #e5f3f1; }
+.department-tree-copy { min-width: 0; }
 .department-tree-list button strong, .department-tree-list button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .department-tree-list button.selected { color: var(--ws-link); background: var(--ws-selected); box-shadow: inset 3px 0 var(--ws-link); }
 .department-tree-list button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
 .department-editor { align-content: start; gap: 16px; padding: 20px; overflow: auto; }
 .department-editor-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.department-editor-organization { align-items: end; }
+.department-editor-organization .fui-Field, .department-editor-organization .department-scope-field { min-width: 0; }
+.department-editor-organization .employee-scope-switch { display: flex; flex-wrap: nowrap; width: 100%; min-height: 40px; }
+.department-editor-organization .employee-scope-switch button { flex: 1; min-width: 0; white-space: normal; }
+.department-editor-organization .workspace-select { width: 100%; min-height: 40px; }
 .department-scope-field { display: grid; align-content: start; gap: 5px; min-width: 0; font-size: 12px; }
-.department-editor-actions { display: flex; justify-content: flex-end; }
+.department-editor-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.department-delete-confirm { display: grid; gap: 9px; padding: 12px; border: 1px solid #e2b3b3; border-radius: 12px; background: #fff8f7; }
+.department-delete-confirm p { margin: 0; font-size: 13px; }
+.department-delete-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .department-members-section { display: grid; gap: 12px; min-width: 0; padding-top: 16px; border-top: 1px solid var(--ws-line); }
 .department-member-list { max-height: 250px; min-width: 0; background: var(--ws-muted-surface); }
 .department-member-row { grid-template-columns: auto minmax(0,1fr); min-width: 0; }

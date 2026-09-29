@@ -29,6 +29,7 @@ import { useModalFocus } from "./useModalFocus";
 import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { BirthdayDayPicker, birthdayMonthLength, birthdayMonthName } from "./BirthdayDayPicker";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
@@ -388,14 +389,13 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </div></div>
           <div className="account-birthday-fields">
             <Field label="День">
-              <Input type="number" min={1} max={31} placeholder="День" value={birthdayDay}
-                onChange={(_, data) => setBirthdayDay(data.value)} />
+              <BirthdayDayPicker month={birthdayMonth} day={birthdayDay} disabled={birthdayBusy} onChange={(month, day) => { setBirthdayMonth(month); setBirthdayDay(day); }} />
             </Field>
             <Field label="Месяц">
-              <Select value={birthdayMonth} onChange={(event) => setBirthdayMonth(event.target.value)}>
+              <Select value={birthdayMonth} listboxClassName="birthday-month-list" onChange={(event) => { const next = event.target.value; setBirthdayMonth(next); if (birthdayDay && Number(birthdayDay) > birthdayMonthLength(Number(next))) setBirthdayDay(""); }}>
                 <option value="">Выберите месяц</option>
                 {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>
-                  {new Intl.DateTimeFormat("ru-RU", { month: "long" }).format(new Date(2000, index, 1))}
+                  {birthdayMonthName(index + 1)}
                 </option>)}
               </Select>
             </Field>

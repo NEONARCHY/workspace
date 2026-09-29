@@ -73,6 +73,11 @@
 .employee-bulk-lead { margin: 0; color: var(--ws-muted); line-height: 1.55; }
 @keyframes employee-bar-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 .employee-person small { display: none; }
+.employee-record-table .employee-person { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; column-gap: 12px; }
+.employee-record-table .employee-record-profile { min-width: 0; }
+.employee-record-table .employee-record-manage { justify-self: end; }
+.employee-department-name { display: inline-flex; align-items: center; gap: 6px; }
+.employee-department-name svg { flex: none; width: 17px; height: 17px; color: var(--ws-link); }
 .employee-record-manage { flex: none; min-height: 32px; padding: 5px 11px; border: 1px solid #c5dde0; border-radius: 10px; background: #f8fcfc; color: var(--ws-link); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color 180ms var(--ws-ease), border-color 180ms var(--ws-ease), transform 180ms var(--ws-ease); }
 .employee-record-manage:hover { border-color: #80bec6; background: #e7f4f3; transform: translateY(-1px); }
 .employee-record-manage:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }

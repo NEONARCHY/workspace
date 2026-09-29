@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createDepartment, updateDepartment } = vi.hoisted(() => ({ createDepartment: vi.fn(), updateDepartment: vi.fn() }));
+const { createDepartment, deleteDepartment, updateDepartment } = vi.hoisted(() => ({ createDepartment: vi.fn(), deleteDepartment: vi.fn(), updateDepartment: vi.fn() }));
 vi.mock("./workspace-api", () => ({
   createDepartment,
+  deleteDepartment,
   updateDepartment,
   updateDepartmentMembers: vi.fn(),
 }));
@@ -36,7 +37,7 @@ describe("DepartmentManagement", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "Тип выбранного подразделения" })).getByRole("button", { name: "Центральный аппарат" }));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить сведения" }));
     await waitFor(() => expect(updateDepartment).toHaveBeenCalledWith("token", "regional", {
-      name: "Регион", code: "regional", parentId: null, scope: "central",
+      name: "Регион", code: "regional", iconKey: "building", parentId: null, scope: "central",
     }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер недоступен");
   });
@@ -44,6 +45,7 @@ describe("DepartmentManagement", () => {
     const created = {
       id: "department-2",
       code: "test-otdel",
+      iconKey: "building",
       name: "Тест отдел",
       scope: "central",
       assignedUsersCount: 0,
@@ -68,6 +70,7 @@ describe("DepartmentManagement", () => {
     await waitFor(() => expect(createDepartment).toHaveBeenCalledWith("token", {
       name: "Тест отдел",
       code: "test-otdel",
+      iconKey: "building",
       scope: "central",
       parentId: undefined,
     }));
@@ -93,5 +96,26 @@ describe("DepartmentManagement", () => {
       "token", "department-1", { leadUserId: "user-1" },
     ));
     expect(await screen.findByText(/Главное лицо назначено/)).toBeInTheDocument();
+  });
+
+  it("shows one icon per department and saves a selected vector icon", async () => {
+    const department = { id: "department-1", code: "finance", name: "Финансы", assignedUsersCount: 0, iconKey: "building" as const };
+    updateDepartment.mockResolvedValue({ ...department, iconKey: "finance" });
+    render(<DepartmentManagement token="token" departments={[department]} employees={[]} onChanged={vi.fn()} />);
+    expect(screen.getByLabelText("Список подразделений").querySelector(".department-tree-icon svg")).not.toBeNull();
+    fireEvent.click(within(screen.getByRole("group", { name: "Иконка подразделения" })).getByRole("button", { name: "Финансы" }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить сведения" }));
+    await waitFor(() => expect(updateDepartment).toHaveBeenCalledWith("token", "department-1", expect.objectContaining({ iconKey: "finance" })));
+  });
+
+  it("deletes a department only after confirmation and removes it from the parent directory", async () => {
+    deleteDepartment.mockResolvedValue(undefined);
+    const onDeleted = vi.fn();
+    render(<DepartmentManagement token="token" departments={[{ id: "department-1", code: "finance", name: "Финансы", assignedUsersCount: 0 }]} employees={[]} onChanged={vi.fn()} onDeleted={onDeleted} />);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить подразделение" }));
+    expect(deleteDepartment).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Да, удалить" }));
+    await waitFor(() => expect(deleteDepartment).toHaveBeenCalledWith("token", "department-1"));
+    expect(onDeleted).toHaveBeenCalledWith("department-1");
   });
 });

@@ -26,6 +26,7 @@ from yuksalish_api.directory_service import (
     DirectoryServiceError,
     create_department,
     create_position,
+    delete_department,
     delete_module_access_rule,
     delete_position,
     load_directory,
@@ -73,6 +74,23 @@ async def post_department(
         {"type": "directory.department_created", "entityId": result.id}
     )
     return result
+
+
+@router.delete("/departments/{department_id}", status_code=204)
+async def remove_department(
+    department_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await delete_department(connection, current_user, department_id)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    await request.app.state.event_bus.publish(
+        {"type": "directory.department_deleted", "entityId": str(department_id)}
+    )
+    return Response(status_code=204)
 
 
 @router.put("/departments/{department_id}/members", response_model=DepartmentResponse)
