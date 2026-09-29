@@ -1,10 +1,11 @@
 """Contracts for the shared incoming and outgoing AI Referent module."""
 
+import re
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from .workspace_schemas import ApiModel, AttachmentResponse
 
@@ -45,6 +46,20 @@ AIReferentAction = Literal[
 ]
 
 
+def delivery_route_error(address: str, route: str) -> str:
+    # Legacy directory identifiers without an email domain remain supported.
+    value = address.strip().lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        return ""
+    expected = "exat" if value.endswith("@exat.uz") else "webmail"
+    if route == expected:
+        return ""
+    return (
+        "Для адреса @exat.uz выберите E-XAT."
+        if expected == "exat" else "Для этого адреса выберите Webmail."
+    )
+
+
 class AIReferentLetterFields(ApiModel):
     workflow_kind: AIReferentWorkflowKind = "delivery"
     subject: str = Field(default="", max_length=300)
@@ -59,6 +74,14 @@ class AIReferentLetterFields(ApiModel):
     @classmethod
     def optional_text_is_trimmed(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def delivery_channel_matches_address(self) -> Self:
+        if self.workflow_kind == "delivery":
+            error = delivery_route_error(self.recipient_address, self.route)
+            if error:
+                raise ValueError(error)
+        return self
 
 
 class CreateAIReferentLetterRequest(AIReferentLetterFields):
@@ -212,6 +235,7 @@ class AIReferentEventResponse(ApiModel):
 
 
 class AIReferentLetterResponse(ApiModel):
+    submission_block_reason: str = ""
     id: str
     display_number: str | None = None
     outgoing_number: int | None = None

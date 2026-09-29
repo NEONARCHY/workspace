@@ -20,6 +20,21 @@ from .client import WorkspaceError
 from .offline_journal import OfflineJournal
 
 _EDITABLE = {"draft", "needs_revision"}
+
+
+def _delivery_route_error(address: str, route: str) -> str:
+    value = address.strip().lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
+        return ""
+    expected = "exat" if value.endswith("@exat.uz") else "webmail"
+    if route == expected:
+        return ""
+    return (
+        "Для адреса @exat.uz выберите E-XAT."
+        if expected == "exat" else "Для этого адреса выберите Webmail."
+    )
+
+
 _MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 _MAX_COMMENT_AUDIO_BYTES = 10 * 1024 * 1024
 _FIELDS = {
@@ -713,6 +728,9 @@ class OfflineWorkflow:
             raise WorkspaceError("Подписание без отправки не использует Webmail.", 422)
         values["workflowKind"] = kind
         values["route"] = route
+        route_error = _delivery_route_error(values["recipientAddress"], route)
+        if kind == "delivery" and route_error:
+            raise WorkspaceError(route_error, 422)
         for key in ("reviewerUserId", "finalReviewerUserId"):
             value = payload.get(key)
             try:
@@ -1269,6 +1287,10 @@ class OfflineWorkflow:
                     not letter["recipientOrganization"] or not letter["recipientAddress"]
                 ):
                     raise WorkspaceError("Выберите организацию и адрес получателя.", 422)
+                if letter["workflowKind"] == "delivery":
+                    route_error = _delivery_route_error(letter["recipientAddress"], letter["route"])
+                    if route_error:
+                        raise WorkspaceError(route_error, 422)
                 if (
                     letter["workflowKind"] == "delivery"
                     and selected_key == "bobur"
@@ -1807,6 +1829,7 @@ class OfflineWorkflow:
         )
         letter["canReplaceDocument"] = False
         actions: list[str] = []
+        letter["submissionBlockReason"] = ""
         if creator and "edit" in actor["moduleActions"]:
             if letter["status"] in _EDITABLE:
                 catalog = self.journal.snapshot(telegram_id, "/reviewers")
@@ -1831,19 +1854,36 @@ class OfflineWorkflow:
                 recipient_ready = letter["workflowKind"] == "sign_only" or bool(
                     letter["recipientOrganization"] and letter["recipientAddress"]
                 )
-                if (
-                    selected_key
-                    and primary_ready
-                    and recipient_ready
-                    and check
-                    and check["status"] == "passed"
-                    and selected_key in check["reviewerKeys"]
-                    and not (
-                        letter["workflowKind"] == "delivery"
-                        and selected_key == "bobur"
-                        and not letter["finalReviewerUserId"]
-                    )
+                route_error = (
+                    _delivery_route_error(letter["recipientAddress"], letter["route"])
+                    if letter["workflowKind"] == "delivery" else ""
+                )
+                if not recipient_ready:
+                    reason = "Укажите организацию и адрес получателя."
+                elif route_error:
+                    reason = route_error
+                elif not selected_key:
+                    reason = "Выберите согласующего."
+                elif not primary_ready:
+                    reason = "Приложите основной документ DOCX."
+                elif (
+                    letter["workflowKind"] == "delivery"
+                    and selected_key == "bobur" and not letter["finalReviewerUserId"]
                 ):
+                    reason = "Перед Бобуром обязательно выберите предварительного согласующего."
+                elif not check or check["status"] in {"pending", "checking"}:
+                    reason = "Дождитесь проверки DOCX роботом на ПК референта."
+                elif check["status"] != "passed":
+                    reason = check.get("detail") or "Проверка DOCX не пройдена."
+                elif selected_key not in check["reviewerKeys"]:
+                    reason = (
+                        "В DOCX не найдено место для подписи выбранного руководителя. "
+                        "Проверьте согласующего или исправьте документ с IT-специалистом."
+                    )
+                else:
+                    reason = ""
+                letter["submissionBlockReason"] = reason
+                if not reason:
                     actions.append("submit")
             if letter["status"] in _EDITABLE | {"pending_review"}:
                 actions.append("cancel")

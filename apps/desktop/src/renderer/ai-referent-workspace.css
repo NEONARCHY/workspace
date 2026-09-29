@@ -540,8 +540,11 @@
 
 .ai-referent-detail-dialog.ai-referent-packet-dialog { width: min(660px, calc(100vw - 28px)); border-radius: 23px; }
 .fui-DialogSurface.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) { height: min(76dvh, 760px); min-height: min(500px, calc(100dvh - 28px)); overflow: hidden; }
-.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
-.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .ai-referent-detail-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .ai-referent-detail-actions { grid-column: 1 / -1; justify-self: stretch; display: flex; flex-wrap: wrap; align-items: center; padding-top: 10px; border-top: 1px solid var(--ws-line); }
+.ai-referent-detail-confirmations { grid-column: 1 / -1; max-height: 30dvh; overflow-y: auto; }
+.ai-referent-detail-confirmations:empty { display: none; }
+.ai-referent-detail-dialog:not(.ai-referent-packet-dialog) .ai-referent-detail-content { min-height: 0; align-content: start; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .ai-referent-packet-content { min-height: 180px; max-height: min(66vh, 620px); overflow-y: auto; }
 .ai-referent-packet-context { margin: 0; font-weight: 700; font-size: 15px; overflow-wrap: anywhere; }
 .ai-referent-packet-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 14px; margin: 0; padding: 12px; border: 1px solid #e0eaeb; border-radius: 13px; background: #f7fbfa; }
@@ -567,8 +570,8 @@
 
 .fui-DialogSurface.ai-referent-form-dialog { width: min(1000px, calc(100vw - 40px)); max-width: calc(100vw - 40px); height: min(86dvh, 820px); max-height: min(86dvh, 820px); overflow: hidden; border-radius: 23px; }
 .ai-referent-form-dialog .ai-referent-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.ai-referent-select-field { display: grid; min-width: 0; gap: 6px; }
-.ai-referent-select-field > span { font-size: 12px; color: var(--ws-muted); }
+.ai-referent-select-field { display: grid; align-content: start; min-width: 0; gap: 6px; }
+.ai-referent-select-field > span[id] { font-size: 12px; color: var(--ws-muted); }
 .ai-referent-preflight { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 14px; background: var(--ws-surface); border: 1px solid var(--ws-line); }
 .ai-referent-preflight small { display: block; margin-top: 4px; }
 .ai-referent-audio-comment { display: grid; justify-items: start; gap: 8px; min-width: 0; }
@@ -581,11 +584,12 @@
 .ai-referent-form-dialog .ai-referent-form > label:not(.ai-referent-upload-zone) { gap: 6px; }
 .ai-referent-form-dialog .ai-referent-form :is(.fui-Input, .fui-Textarea) { border-radius: 12px; }
 .ai-referent-form-dialog .ai-referent-form-actions { position: sticky; bottom: -1px; z-index: 2; margin-top: 2px; padding: 13px 0 3px; border-top: 1px solid #e3eded; background: #fff; }
-.ai-referent-form-dialog .ai-referent-form-actions { flex-wrap: wrap; }
+.ai-referent-form-dialog .ai-referent-form-actions { grid-column: 1 / -1; justify-self: stretch; display: flex; justify-content: flex-end; flex-wrap: wrap; }
 .ai-referent-form-dialog .ai-referent-form-actions .ai-referent-feedback { flex: 1 0 100%; margin: 0 0 5px; max-height: 5.5em; overflow-y: auto; }
 .ai-referent-attachments { display: grid; gap: 6px; margin: -6px 0 0; padding: 0; list-style: none; }
 .ai-referent-attachments li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 11px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); }
 .ai-referent-attachments li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-referent-attachments li > span > small { display: block; margin-top: 3px; color: var(--ws-muted); white-space: normal; }
 .ai-referent-attachment-action, .ai-referent-attachments button { flex: none; border: 0; background: transparent; color: var(--ws-link); font: inherit; font-weight: 600; cursor: pointer; }
 .ai-referent-attachment-action input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .ai-referent-attachment-action:focus-within, .ai-referent-attachments button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; border-radius: 4px; }

@@ -928,6 +928,7 @@ export interface AIReferentEvent {
 }
 
 export interface AIReferentLetter {
+  readonly submissionBlockReason?: string;
   readonly documentCheck?: AIReferentDocumentCheck | null;
   readonly finalPdfFileId?: string | null;
   readonly canDelete?: boolean;

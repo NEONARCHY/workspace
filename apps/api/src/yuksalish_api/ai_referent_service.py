@@ -23,6 +23,7 @@ from .ai_referent_schemas import (
     AIReferentRegistryResponse,
     CreateAIReferentLetterRequest,
     UpdateAIReferentLetterRequest,
+    delivery_route_error,
 )
 from .ai_referent_shared_service import notify_letter, operation_replay, remember_operation
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
@@ -340,6 +341,37 @@ async def _replacement_ready(connection: AsyncConnection, row: RowMapping) -> bo
     )
 
 
+def _submission_block_reason(
+    row: RowMapping, primary_count: int, check: RowMapping | None
+) -> str:
+    if row["workflow_kind"] == "delivery":
+        if not row["recipient_organization"] or not row["recipient_address"]:
+            return "Укажите организацию и адрес получателя."
+        route_error = delivery_route_error(row["recipient_address"], row["route"])
+        if route_error:
+            return route_error
+    if not row["reviewer_user_id"]:
+        return "Выберите согласующего."
+    if not primary_count:
+        return "Приложите основной документ DOCX."
+    if (
+        row["workflow_kind"] == "delivery"
+        and row["reviewer_key"] == "bobur"
+        and not row.get("final_reviewer_user_id")
+    ):
+        return "Перед Бобуром обязательно выберите предварительного согласующего."
+    if not check or check["status"] in {"pending", "checking"}:
+        return "Дождитесь проверки DOCX роботом на ПК референта."
+    if check["status"] != "passed":
+        return check["detail"] or "Проверка DOCX не пройдена. Загрузите исправленный документ."
+    if (row.get("final_reviewer_key") or row["reviewer_key"]) not in check["reviewer_keys"]:
+        return (
+            "В DOCX не найдено место для подписи выбранного руководителя. "
+            "Проверьте согласующего или исправьте документ с IT-специалистом."
+        )
+    return ""
+
+
 async def _response(
     connection: AsyncConnection,
     row: RowMapping,
@@ -352,14 +384,15 @@ async def _response(
     replacement_ready = await _replacement_ready(connection, row)
     if may_approve is None:
         may_approve = permissions.get("ai_referent", {}).get("approve", False)
+    primary_count = sum(
+        item.document_role == "primary" and item.file_name.lower().endswith(".docx")
+        for item in letter_attachments
+    )
     actions, can_edit = _available_actions(
         row,
         current_user,
         may_approve=may_approve,
-        attachment_count=sum(
-            item.document_role == "primary" and item.file_name.lower().endswith(".docx")
-            for item in letter_attachments
-        ),
+        attachment_count=primary_count,
         may_operate=permissions.get("ai_referent", {}).get("admin", False),
         replacement_file_ready=replacement_ready,
     )
@@ -367,18 +400,11 @@ async def _response(
         can_edit = False
         actions = [action for action in actions if action not in {"submit", "cancel"}]
     check = await letter_check(connection, row)
-    if "submit" in actions and (
-        not check
-        or check["status"] != "passed"
-        or (row.get("final_reviewer_key") or row["reviewer_key"]) not in check["reviewer_keys"]
-        or (
-            row["workflow_kind"] == "delivery"
-            and row["reviewer_key"] == "bobur"
-            and not row.get("final_reviewer_user_id")
-        )
-    ):
+    submission_block = _submission_block_reason(row, primary_count, check) if can_edit else ""
+    if "submit" in actions and submission_block:
         actions.remove("submit")
     return AIReferentLetterResponse(
+        submission_block_reason=submission_block,
         id=str(row["id"]),
         display_number=_display_number(row),
         outgoing_number=row["outgoing_number"],
@@ -865,6 +891,9 @@ async def act_on_letter(
             raise AIReferentServiceError(403, "Отправить письмо может его автор.")
         if not row["recipient_organization"] or not row["recipient_address"]:
             raise AIReferentServiceError(422, "Выберите организацию и адрес получателя.")
+        route_error = delivery_route_error(row["recipient_address"], row["route"])
+        if route_error:
+            raise AIReferentServiceError(422, route_error)
         if row["reviewer_user_id"] is None:
             raise AIReferentServiceError(422, "Сначала выберите согласующего.")
         values["reviewer_key"] = await _validate_reviewer(connection, row["reviewer_user_id"])

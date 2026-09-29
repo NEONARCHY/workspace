@@ -75,7 +75,7 @@ def _draft(reviewer):
     return {
         "subject": "Письмо",
         "recipientOrganization": "Организация",
-        "recipientAddress": "address@example.uz",
+        "recipientAddress": "address@exat.uz",
         "route": "exat",
         "note": "",
         "workflowKind": "delivery",
