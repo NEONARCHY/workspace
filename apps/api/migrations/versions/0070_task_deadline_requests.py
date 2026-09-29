@@ -6,8 +6,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0069_task_deadline_requests"
-down_revision: str = "0068_task_review_efficiency"
+revision: str = "0070_task_deadline_requests"
+down_revision: str = "0069_department_icons"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

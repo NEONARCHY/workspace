@@ -4,8 +4,8 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0070_task_chat_purge"
-down_revision: str = "0069_task_deadline_requests"
+revision: str = "0071_task_chat_purge"
+down_revision: str = "0070_task_deadline_requests"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
