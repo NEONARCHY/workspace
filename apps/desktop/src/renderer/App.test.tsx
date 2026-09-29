@@ -1492,19 +1492,22 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Создать подзадачу" }));
     expect((await screen.findAllByText("Сверить итоговые цифры")).length).toBeGreaterThan(0);
 
+    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Опишите выполненную работу");
     fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
       target: { value: "Договор и расчёты приложены" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
     expect(await screen.findByText("Договор и расчёты приложены", { selector: "p" })).toBeInTheDocument();
-    await screen.findByRole("button", { name: "Принять результат" });
+    await screen.findByRole("button", { name: "Завершить задачу" });
     expect(screen.getByText("Ожидает решения")).toBeInTheDocument();
+    expect(screen.getByText("Результат отправлен. Ожидает решения постановщика.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть в работу" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Пояснение причины" }), {
       target: { value: "Добавьте номер договора" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Вернуть исполнителю" }));
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть исполнителям" }));
     await waitFor(() => expect(screen.getByText("Добавьте номер договора", { selector: "p" })).toBeInTheDocument());
     expect(screen.getByText("Нужны исправления")).toBeInTheDocument();
 
@@ -1512,7 +1515,7 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "Номер договора добавлен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Принять результат" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Завершить задачу" }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),

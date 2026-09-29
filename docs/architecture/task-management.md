@@ -75,6 +75,15 @@ Blocking dependencies form a directed acyclic graph. The API rejects self-links 
 an edge that would create a cycle. A task cannot be submitted while a blocking task
 is incomplete, and a parent cannot be accepted while a subtask remains open.
 
+An assignee or co-assignee submits a written result for review. The author receives
+an action-required notification, while other executors see an informational one.
+The task is visibly marked as waiting for the author. The author (or an authorized
+manager) can finish it by accepting the result, or return it to work with a reason.
+Acceptance and return notify the primary assignee and co-assignees. Task actions
+are protected against duplicate clicks in the desktop form and checked again by
+the API. The EFF-2 metric credits all executors at the time of an on-time submission,
+not at acceptance; a reasoned return revokes that submission's credit.
+
 Relevant endpoints:
 
 - `POST /api/v1/tasks`

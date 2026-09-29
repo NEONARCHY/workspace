@@ -3967,6 +3967,10 @@ async def create_task(
                 ]
             )
         )
+    task_executor_ids = {assignee_id}
+    task_executor_ids.update(
+        participant_id for participant_id, role in participant_ids if role == "co_assignee"
+    )
     await record_task_event(
         connection,
         task_id=task_id,
@@ -3981,6 +3985,7 @@ async def create_task(
             "dueAt": payload.due_at.isoformat() if payload.due_at else None,
             "parentTaskId": str(parent_task_id) if parent_task_id else None,
         },
+        metadata={"executorIds": sorted(str(user_id) for user_id in task_executor_ids)},
     )
     await _sync_task_chat(
         connection,
@@ -4062,6 +4067,12 @@ async def update_task(
         )
     )
     if task_row["primary_assignee_user_id"] != assignee_id:
+        previous_executors = await _task_executor_ids(
+            connection, task_id, task_row["primary_assignee_user_id"]
+        )
+        revised_executors = (previous_executors - {task_row["primary_assignee_user_id"]}) | {
+            assignee_id
+        }
         await record_task_event(
             connection,
             task_id=task_id,
@@ -4072,6 +4083,7 @@ async def update_task(
             due_at=payload.due_at,
             old_value={"assigneeId": str(task_row["primary_assignee_user_id"])},
             new_value={"assigneeId": str(assignee_id)},
+            metadata={"executorIds": [str(user_id) for user_id in revised_executors]},
         )
     if task_row["due_at"] != payload.due_at:
         await record_task_event(
@@ -4296,6 +4308,22 @@ async def _ensure_subtasks_are_closed(
         )
 
 
+async def _task_executor_ids(
+    connection: AsyncConnection,
+    task_id: UUID,
+    primary_assignee_id: UUID,
+) -> set[UUID]:
+    co_assignees = (
+        await connection.execute(
+            select(task_participants.c.user_id).where(
+                task_participants.c.task_id == task_id,
+                task_participants.c.participant_role == "co_assignee",
+            )
+        )
+    ).scalars()
+    return {primary_assignee_id, *co_assignees}
+
+
 async def submit_task_result(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -4333,6 +4361,9 @@ async def submit_task_result(
             updated_at=now,
         )
     )
+    executor_ids = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
     event_id = await record_task_event(
         connection,
         task_id=task_id,
@@ -4343,7 +4374,10 @@ async def submit_task_result(
         due_at=task_row["due_at"],
         old_value={"status": task_row["status"]},
         new_value={"status": "awaiting_review"},
-        metadata={"resultLength": len(payload.result_text)},
+        metadata={
+            "resultLength": len(payload.result_text),
+            "executorIds": [str(user_id) for user_id in executor_ids],
+        },
     )
     if task_row["author_user_id"] != current_user.id:
         await _upsert_notification(
@@ -4357,6 +4391,20 @@ async def submit_task_result(
             section="tasks",
             entity_id=task_id,
             requires_action=True,
+            occurred_at=now,
+        )
+    for user_id in executor_ids - {current_user.id, task_row["author_user_id"]}:
+        await _upsert_notification(
+            connection,
+            user_id=user_id,
+            event_key=f"task:review:executor:{event_id}:{user_id}",
+            kind="task",
+            priority="normal",
+            title="Результат отправлен на проверку",
+            body=task_row["title"],
+            section="tasks",
+            entity_id=task_id,
+            requires_action=False,
             occurred_at=now,
         )
     return await _task_response(connection, task_id)
@@ -4388,11 +4436,14 @@ async def accept_task_result(
     }
     event_id = await record_task_event(event_type="result_accepted", **event_values)
     await record_task_event(event_type="task_completed", **event_values)
-    if task_row["primary_assignee_user_id"] != current_user.id:
+    executor_ids = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
+    for user_id in (executor_ids | {task_row["author_user_id"]}) - {current_user.id}:
         await _upsert_notification(
             connection,
-            user_id=task_row["primary_assignee_user_id"],
-            event_key=f"task:accepted:{event_id}",
+            user_id=user_id,
+            event_key=f"task:accepted:{event_id}:{user_id}",
             kind="task",
             priority="normal",
             title="Результат принят",
@@ -4437,19 +4488,23 @@ async def return_task_for_revision(
         "corrections_required": "нужны исправления",
         "other": "указана другая причина",
     }
-    await _upsert_notification(
-        connection,
-        user_id=task_row["primary_assignee_user_id"],
-        event_key=f"efficiency:return:{event_id}:{METHODOLOGY_VERSION}",
-        kind="task",
-        priority="attention",
-        title="Задача возвращена на доработку",
-        body=f"{task_row['title']} · {reason_labels[payload.reason_code]}",
-        section="tasks",
-        entity_id=task_id,
-        requires_action=True,
-        occurred_at=now,
+    executor_ids = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
     )
+    for user_id in (executor_ids | {task_row["author_user_id"]}) - {current_user.id}:
+        await _upsert_notification(
+            connection,
+            user_id=user_id,
+            event_key=f"efficiency:return:{event_id}:{METHODOLOGY_VERSION}:{user_id}",
+            kind="task",
+            priority="attention" if user_id in executor_ids else "normal",
+            title="Задача возвращена на доработку",
+            body=f"{task_row['title']} · {reason_labels[payload.reason_code]}",
+            section="tasks",
+            entity_id=task_id,
+            requires_action=user_id in executor_ids,
+            occurred_at=now,
+        )
     return await _task_response(connection, task_id)
 
 
@@ -4514,6 +4569,9 @@ async def set_task_participant(
     user_id = await _active_user_id(connection, payload.user_id)
     if user_id == task_row["primary_assignee_user_id"]:
         raise WorkspaceRepositoryError(409, "The primary assignee is already a task participant")
+    previous_executors = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
     await connection.execute(
         delete(task_participants).where(
             task_participants.c.task_id == task_id,
@@ -4527,6 +4585,20 @@ async def set_task_participant(
             participant_role=payload.role,
         )
     )
+    current_executors = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
+    if current_executors != previous_executors:
+        await record_task_event(
+            connection,
+            task_id=task_id,
+            event_type="task_executors_changed",
+            occurred_at=datetime.now(UTC),
+            actor_user_id=current_user.id,
+            assignee_user_id=task_row["primary_assignee_user_id"],
+            due_at=task_row["due_at"],
+            metadata={"executorIds": [str(item) for item in current_executors]},
+        )
     await _sync_task_chat(
         connection,
         task_id=task_id,
@@ -4545,12 +4617,29 @@ async def remove_task_participant(
     user_id: UUID,
 ) -> TaskResponse:
     task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    previous_executors = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
     await connection.execute(
         delete(task_participants).where(
             task_participants.c.task_id == task_id,
             task_participants.c.user_id == user_id,
         )
     )
+    current_executors = await _task_executor_ids(
+        connection, task_id, task_row["primary_assignee_user_id"]
+    )
+    if current_executors != previous_executors:
+        await record_task_event(
+            connection,
+            task_id=task_id,
+            event_type="task_executors_changed",
+            occurred_at=datetime.now(UTC),
+            actor_user_id=current_user.id,
+            assignee_user_id=task_row["primary_assignee_user_id"],
+            due_at=task_row["due_at"],
+            metadata={"executorIds": [str(item) for item in current_executors]},
+        )
     await _sync_task_chat(
         connection,
         task_id=task_id,
@@ -4960,21 +5049,6 @@ async def materialize_due_task_cycles(
                 )
             )
             generated_due_at = scheduled_at + duration if duration is not None else None
-            await record_task_event(
-                connection,
-                task_id=task_id,
-                event_type="task_created",
-                occurred_at=current_time,
-                actor_user_id=cycle["created_by_user_id"],
-                assignee_user_id=template["primary_assignee_user_id"],
-                due_at=generated_due_at,
-                new_value={
-                    "status": "new",
-                    "assigneeId": str(template["primary_assignee_user_id"]),
-                    "dueAt": generated_due_at.isoformat() if generated_due_at else None,
-                    "source": "task_cycle",
-                },
-            )
             participant_rows = (
                 (
                     await connection.execute(
@@ -4998,6 +5072,26 @@ async def materialize_due_task_cycles(
                         for row in participant_rows
                     ],
                 )
+            await record_task_event(
+                connection,
+                task_id=task_id,
+                event_type="task_created",
+                occurred_at=current_time,
+                actor_user_id=cycle["created_by_user_id"],
+                assignee_user_id=template["primary_assignee_user_id"],
+                due_at=generated_due_at,
+                new_value={
+                    "status": "new",
+                    "assigneeId": str(template["primary_assignee_user_id"]),
+                    "dueAt": generated_due_at.isoformat() if generated_due_at else None,
+                    "source": "task_cycle",
+                },
+                metadata={"executorIds": [
+                    str(user_id) for user_id in await _task_executor_ids(
+                        connection, task_id, template["primary_assignee_user_id"]
+                    )
+                ]},
+            )
             checklist_rows = (
                 (
                     await connection.execute(

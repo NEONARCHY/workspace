@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from .auth_service import hash_password
+from .efficiency_service import METHODOLOGY_VERSION
 from .position_policy import PAYMENT_CREATOR_POSITION_NAMES
 from .tables import (
     approval_edges,
@@ -757,8 +758,10 @@ async def seed_demo_data(
                     },
                     "reason_code": None,
                     "reason_text": None,
-                    "metadata": {"source": "demo_seed"},
-                    "methodology_version": "EFF-1.0",
+                    "metadata": {
+                        "source": "demo_seed", "executorIds": [str(assignee_id)]
+                    },
+                    "methodology_version": METHODOLOGY_VERSION,
                     "created_at": now,
                 }
                 for task_id, status, assignee_id, due_at in demo_task_states
@@ -780,8 +783,10 @@ async def seed_demo_data(
                     "new_value": {"status": "awaiting_review"},
                     "reason_code": None,
                     "reason_text": None,
-                    "metadata": {"source": "demo_seed"},
-                    "methodology_version": "EFF-1.0",
+                    "metadata": {
+                        "source": "demo_seed", "executorIds": [str(person_ids["aziza"])]
+                    },
+                    "methodology_version": METHODOLOGY_VERSION,
                     "created_at": now,
                 }
             ],
@@ -806,6 +811,28 @@ async def seed_demo_data(
                     "participant_role": "co_assignee",
                 },
             ],
+        )
+        await _insert_missing(
+            connection,
+            task_efficiency_events,
+            [{
+                "id": demo_uuid("task-event/106/executors"),
+                "task_id": demo_uuid("task/106"),
+                "event_type": "task_executors_changed",
+                "occurred_at": now + timedelta(microseconds=1),
+                "actor_user_id": person_ids["baxtiyor"],
+                "assignee_user_id": person_ids["baxtiyor"],
+                "due_at": now + timedelta(days=2),
+                "old_value": {},
+                "new_value": {},
+                "reason_code": None,
+                "reason_text": None,
+                "metadata": {"executorIds": [
+                    str(person_ids["baxtiyor"]), str(person_ids["dilshod"])
+                ]},
+                "methodology_version": METHODOLOGY_VERSION,
+                "created_at": now,
+            }],
         )
         demo_task_chat_specs = [
             (

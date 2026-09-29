@@ -30,6 +30,7 @@ def event(
     due_at: datetime | None = None,
     old: dict[str, object] | None = None,
     new: dict[str, object] | None = None,
+    metadata: dict[str, object] | None = None,
 ) -> dict[str, object]:
     return {
         "id": uuid4(),
@@ -40,6 +41,7 @@ def event(
         "due_at": due_at,
         "old_value": old or {},
         "new_value": new or {},
+        "metadata": metadata or {},
     }
 
 
@@ -125,6 +127,72 @@ def test_submission_before_deadline_is_on_time_even_when_accepted_later() -> Non
     assert result["percentage"] == 100
     assert result["on_time_count"] == 1
     assert result["overdue_count"] == 0
+
+
+def test_early_submission_counts_immediately_for_primary_and_co_assignee() -> None:
+    task_id = uuid4()
+    due = datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
+    submitted_at = datetime(2026, 9, 20, 8, 0, tzinfo=UTC)
+    events = [
+        event(task_id, "task_created", TRACKING + timedelta(minutes=1), due_at=due,
+              new={"status": "new", "assigneeId": str(IVAN)},
+              metadata={"executorIds": [str(IVAN), str(ANNA)]}),
+        event(task_id, "result_submitted_for_review", submitted_at, due_at=due,
+              metadata={"executorIds": [str(IVAN), str(ANNA)]}),
+    ]
+
+    assert aggregate(events, IVAN, as_of=submitted_at + timedelta(minutes=1))["percentage"] == 100
+    assert aggregate(events, ANNA, as_of=submitted_at + timedelta(minutes=1))["percentage"] == 100
+    october = calculate_aggregate(
+        events, user_id=ANNA, period="2026-10", tracking_started_at=TRACKING,
+        as_of=due + timedelta(minutes=1),
+    )
+    assert october["eligible_count"] == 0  # Do not count the same task twice.
+
+
+def test_return_revokes_credit_for_all_until_timely_resubmission() -> None:
+    task_id = uuid4()
+    due = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+    submitted_at = due - timedelta(days=2)
+    returned_at = submitted_at + timedelta(hours=1)
+    events = [
+        event(task_id, "task_created", TRACKING + timedelta(minutes=1), due_at=due,
+              new={"status": "new", "assigneeId": str(IVAN)},
+              metadata={"executorIds": [str(IVAN), str(ANNA)]}),
+        event(task_id, "result_submitted_for_review", submitted_at, due_at=due,
+              metadata={"executorIds": [str(IVAN), str(ANNA)]}),
+        event(task_id, "result_returned_for_revision", returned_at, due_at=due),
+    ]
+    for user_id in (IVAN, ANNA):
+        before_return = aggregate(events[:2], user_id, as_of=returned_at)
+        after_return = aggregate(events, user_id, as_of=returned_at + timedelta(minutes=1))
+        assert before_return["percentage"] == 100
+        assert after_return["percentage"] is None
+        assert after_return["returned_for_revision_count"] == 1
+
+    events.append(event(
+        task_id, "result_submitted_for_review", returned_at + timedelta(hours=1),
+        due_at=due, metadata={"executorIds": [str(IVAN), str(ANNA)]},
+    ))
+    assert aggregate(events, IVAN, as_of=due - timedelta(days=1))["percentage"] == 100
+    assert aggregate(events, ANNA, as_of=due - timedelta(days=1))["percentage"] == 100
+
+
+def test_co_assignee_obligation_follows_recorded_membership() -> None:
+    task_id = uuid4()
+    due = datetime(2026, 9, 25, 12, 0, tzinfo=UTC)
+    events = [
+        created(task_id, due),
+        event(task_id, "task_executors_changed", due - timedelta(days=2),
+              metadata={"executorIds": [str(IVAN), str(ANNA)]}),
+    ]
+    assert aggregate(events, ANNA)["overdue_count"] == 1
+
+    events.append(event(
+        task_id, "task_executors_changed", due - timedelta(days=1),
+        metadata={"executorIds": [str(IVAN)]},
+    ))
+    assert aggregate(events, ANNA)["eligible_count"] == 0
 
 
 def test_late_submission_is_overdue_and_awaiting_review_is_separate() -> None:
@@ -255,7 +323,7 @@ def test_assignee_change_before_due_attributes_deadline_to_new_assignee() -> Non
     assert aggregate(events, ANNA)["percentage"] == 100
 
 
-def test_motivated_return_is_separate_and_does_not_reduce_percentage() -> None:
+def test_motivated_return_removes_credit_after_deadline() -> None:
     task_id = uuid4()
     due = datetime(2026, 9, 10, 12, 0, tzinfo=UTC)
     result = aggregate([
@@ -264,7 +332,8 @@ def test_motivated_return_is_separate_and_does_not_reduce_percentage() -> None:
         event(task_id, "result_returned_for_revision", due + timedelta(hours=2), due_at=due),
     ])
 
-    assert result["percentage"] == 100
+    assert result["percentage"] == 0
+    assert result["overdue_count"] == 1
     assert result["returned_for_revision_count"] == 1
 
 
