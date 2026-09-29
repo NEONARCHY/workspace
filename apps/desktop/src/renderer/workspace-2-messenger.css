@@ -263,22 +263,30 @@
 .messenger-view .message-scroll {
   overflow-x: hidden;
   padding: 24px 24px 34px 14px;
-  background:
-    radial-gradient(circle at 18% 4%, rgb(101 200 197 / 7%), transparent 28%),
-    linear-gradient(180deg, #f2f6f5 0%, #f6f8f7 100%);
+  background: linear-gradient(90deg, #f5f8f7, transparent 3%, transparent 97%, #f5f8f7), linear-gradient(180deg, #f5f8f7, transparent 8%, transparent 92%, #f5f8f7), var(--chat-wash, #f5f8f7);
   scrollbar-width: thin;
   scrollbar-color: #b7c9c9 transparent;
 }
 
-.messenger-view .message-scroll[data-chat-background="dawn"] { background: radial-gradient(circle at 12% 9%, rgb(255 218 196 / 48%), transparent 36%), radial-gradient(circle at 86% 78%, rgb(221 214 251 / 58%), transparent 46%), linear-gradient(145deg, #fffaf5, #f5f2fb); }
-.messenger-view .message-scroll[data-chat-background="sky"] { background: radial-gradient(circle at 82% 12%, rgb(190 226 248 / 55%), transparent 42%), radial-gradient(circle at 16% 82%, rgb(219 244 249 / 58%), transparent 38%), linear-gradient(160deg, #f8fcff, #eaf3fa); }
-.messenger-view .message-scroll[data-chat-background="sage"] { background: radial-gradient(circle at 18% 18%, rgb(210 236 216 / 58%), transparent 40%), radial-gradient(circle at 84% 85%, rgb(230 240 212 / 55%), transparent 42%), linear-gradient(145deg, #f9fcf7, #ecf4ec); }
-.messenger-view .message-scroll[data-chat-background="lagoon"] { background: radial-gradient(circle at 14% 10%, rgb(226 255 250 / 56%), transparent 36%), radial-gradient(circle at 89% 86%, rgb(17 120 139 / 36%), transparent 45%), linear-gradient(145deg, #c2e9e5, #88c7d0 58%, #66aabb); }
-.messenger-view .message-scroll[data-chat-background="sunset"] { background: radial-gradient(circle at 85% 15%, rgb(255 245 207 / 75%), transparent 34%), radial-gradient(circle at 14% 82%, rgb(184 94 103 / 18%), transparent 44%), linear-gradient(150deg, #f7dcc0, #e9af9f 56%, #d9a6b4); }
-.messenger-view .message-scroll[data-chat-background="ocean"] { background: radial-gradient(circle at 20% 16%, rgb(197 244 246 / 45%), transparent 38%), radial-gradient(circle at 82% 84%, rgb(25 78 117 / 24%), transparent 42%), linear-gradient(145deg, #b4dbe6, #80b6cc 55%, #608cae); }
-.messenger-view .message-scroll[data-chat-background="iris"] { background: radial-gradient(circle at 78% 12%, rgb(247 228 255 / 65%), transparent 38%), radial-gradient(circle at 14% 82%, rgb(109 137 202 / 25%), transparent 46%), linear-gradient(145deg, #e3d6ee, #b9b9df 56%, #a4c8df); }
-.messenger-view .message-scroll[data-chat-background="contrast"] { background: radial-gradient(circle at 18% 20%, rgb(255 227 166 / 70%), transparent 35%), linear-gradient(155deg, #eac796, #dcb087); }
-.messenger-view .message-scroll[data-chat-background="night"] { background: radial-gradient(circle at 85% 8%, rgb(0 145 168 / 22%), transparent 40%), linear-gradient(145deg, #18324a, #102637); }
+.messenger-view .list-pane .employee-scope-switch {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: 100%;
+  box-sizing: border-box;
+  background: #e9efee;
+}
+.messenger-view .list-pane .employee-scope-switch button { width: 100%; min-width: 0; }
+.messenger-view .list-pane .employee-scope-switch button[aria-pressed="true"] { background: #fff; color: var(--messenger-ink); box-shadow: 0 5px 14px rgb(41 58 85 / 7%); }
+
+.messenger-view .message-scroll[data-chat-background="dawn"] { --chat-wash: radial-gradient(circle at 12% 9%, rgb(255 218 196 / 48%), transparent 36%), radial-gradient(circle at 86% 78%, rgb(221 214 251 / 58%), transparent 46%), linear-gradient(145deg, #fffaf5, #f5f2fb); }
+.messenger-view .message-scroll[data-chat-background="sky"] { --chat-wash: radial-gradient(circle at 82% 12%, rgb(190 226 248 / 55%), transparent 42%), radial-gradient(circle at 16% 82%, rgb(219 244 249 / 58%), transparent 38%), linear-gradient(160deg, #f8fcff, #eaf3fa); }
+.messenger-view .message-scroll[data-chat-background="sage"] { --chat-wash: radial-gradient(circle at 18% 18%, rgb(210 236 216 / 58%), transparent 40%), radial-gradient(circle at 84% 85%, rgb(230 240 212 / 55%), transparent 42%), linear-gradient(145deg, #f9fcf7, #ecf4ec); }
+.messenger-view .message-scroll[data-chat-background="lagoon"] { --chat-wash: radial-gradient(circle at 14% 10%, rgb(226 255 250 / 56%), transparent 36%), radial-gradient(circle at 89% 86%, rgb(17 120 139 / 36%), transparent 45%), linear-gradient(145deg, #c2e9e5, #88c7d0 58%, #66aabb); }
+.messenger-view .message-scroll[data-chat-background="sunset"] { --chat-wash: radial-gradient(circle at 85% 15%, rgb(255 245 207 / 75%), transparent 34%), radial-gradient(circle at 14% 82%, rgb(184 94 103 / 18%), transparent 44%), linear-gradient(150deg, #f7dcc0, #e9af9f 56%, #d9a6b4); }
+.messenger-view .message-scroll[data-chat-background="ocean"] { --chat-wash: radial-gradient(circle at 20% 16%, rgb(197 244 246 / 45%), transparent 38%), radial-gradient(circle at 82% 84%, rgb(25 78 117 / 24%), transparent 42%), linear-gradient(145deg, #b4dbe6, #80b6cc 55%, #608cae); }
+.messenger-view .message-scroll[data-chat-background="iris"] { --chat-wash: radial-gradient(circle at 78% 12%, rgb(247 228 255 / 65%), transparent 38%), radial-gradient(circle at 14% 82%, rgb(109 137 202 / 25%), transparent 46%), linear-gradient(145deg, #e3d6ee, #b9b9df 56%, #a4c8df); }
+.messenger-view .message-scroll[data-chat-background="contrast"] { --chat-wash: radial-gradient(circle at 18% 20%, rgb(255 227 166 / 70%), transparent 35%), linear-gradient(155deg, #eac796, #dcb087); }
+.messenger-view .message-scroll[data-chat-background="night"] { --chat-wash: radial-gradient(circle at 85% 8%, rgb(0 145 168 / 22%), transparent 40%), linear-gradient(145deg, #18324a, #102637); }
 .messenger-view .message-row.is-removing { overflow: hidden; opacity: 1; transition: height 220ms var(--ws-ease), opacity 180ms var(--ws-ease); }
 .messenger-view .message-row.is-removing.is-exiting { opacity: 0; }
 .chat-background-picker.fui-PopoverSurface { box-sizing: border-box; width: min(380px, calc(100vw - 24px)); padding: 16px; border: 1px solid rgb(41 58 85 / 10%); border-radius: 18px; background: #fbfdfd; box-shadow: 0 22px 54px rgb(37 64 76 / 20%); }

@@ -621,6 +621,10 @@
 .ai-referent-picker-selected strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #293a55; font-size: 14px; }
 .ai-referent-picker-manual { display: grid; gap: 9px; }
 .ai-referent-picker-manual label { display: grid; gap: 5px; }
+.ai-referent-manual-save { display: grid; gap: 8px; padding: 12px 15px; border: 1px solid rgb(0 145 168 / 24%); border-radius: 14px; background: rgb(236 249 248 / 88%); color: var(--ws-navy); }
+.ai-referent-manual-save small { overflow-wrap: anywhere; color: var(--ws-muted); }
+.ai-referent-manual-save > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-referent-manual-save [role="alert"] { color: #a12b37; }
 .ai-referent-recipient-picker button:focus-visible { outline: 2px solid #0091a8; outline-offset: 2px; }
 .ai-referent-form-dialog .ai-referent-upload-zone {
   position: relative;

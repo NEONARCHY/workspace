@@ -97,11 +97,12 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert recipients["totalCount"] == 1
         assert recipients["entries"][0]["addresses"] == ["FIN-01"]
         await call("GET", "/recipients/manual", author, expected=403)
-        await call("POST", "/recipients/manual", author, expected=403, json={
-            "name": "Новый адресат", "address": "office@exat.uz",
-        })
-        added = await call("POST", "/recipients/manual", admin, expected=201, json={
+        added = await call("POST", "/recipients/manual", author, expected=201, json={
             "name": "Новый адресат", "address": "office@exat.uz", "categoryKey": "other",
+        })
+        await call("POST", "/recipients/manual", author, expected=403, json={
+            "name": "Неверная категория", "address": "other@example.org",
+            "categoryKey": "ministries",
         })
         assert added["route"] == "exat"
         assert added["addresses"] == ["office@exat.uz"]
@@ -179,6 +180,8 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert bot_recipients["entries"][0]["addresses"] == ["FIN-01"]
         bot_added = await call("GET", "/agent/recipients?query=адресат", telegram("910003"))
         assert bot_added["entries"][0]["id"] == added["id"]
+        await call("DELETE", "/recipients/manual/" + added["id"].removeprefix("manual-"),
+                   author, expected=403)
         await call("DELETE", "/recipients/manual/" + added["id"].removeprefix("manual-"),
                    admin, expected=204)
         assert (await call("GET", "/recipients?query=адресат", author))["totalCount"] == 0

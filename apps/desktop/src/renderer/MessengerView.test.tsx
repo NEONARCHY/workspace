@@ -130,7 +130,7 @@ describe("Private messenger", () => {
   it("offers a rewrite without sending or replacing the draft before confirmation", async () => {
     vi.mocked(rewriteMessengerDraft).mockResolvedValue({ text: "Будьте добры, проверьте документ." });
     const onSendMessage = vi.fn();
-    renderMessenger({ onSendMessage });
+    renderMessenger({ onSendMessage, canUseAssistant: true });
     const composer = screen.getByLabelText<HTMLInputElement>("Новое сообщение");
     fireEvent.change(composer, { target: { value: "Глянь документ" } });
     fireEvent.click(screen.getByRole("button", { name: "Переформулировать черновик с ИИ" }));
@@ -140,6 +140,13 @@ describe("Private messenger", () => {
     expect(onSendMessage).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Заменить мой текст" }));
     expect(composer).toHaveValue("Будьте добры, проверьте документ.");
+  });
+  it("does not show or call AI rewrite without assistant access", () => {
+    vi.mocked(rewriteMessengerDraft).mockClear();
+    renderMessenger({ canUseAssistant: false });
+    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Текст" } });
+    expect(screen.queryByRole("button", { name: "Переформулировать черновик с ИИ" })).not.toBeInTheDocument();
+    expect(rewriteMessengerDraft).not.toHaveBeenCalled();
   });
   it("opens the message menu at the pointer in a viewport portal", () => {
     renderMessenger();

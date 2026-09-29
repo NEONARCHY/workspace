@@ -77,6 +77,7 @@ interface OutgoingMessageReveal {
 }
 
 export interface MessengerViewProps {
+  readonly canUseAssistant?: boolean;
   readonly assistantDraft?: AssistantActionDraft;
   readonly assistantRecipientId?: string;
   readonly token: string;
@@ -261,6 +262,7 @@ function Conversation({
   onOpenPersonProfile,
   embedded = false,
   assistantDraft,
+  canUseAssistant = false,
 }: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
@@ -408,7 +410,7 @@ function Conversation({
     { id: "caveman", label: "Пещерный мем" },
   ];
   const requestRewrite = async (style: AssistantRewriteStyle, source = activeComposerBody) => {
-    if (!source.trim() || rewriteBusy) return;
+    if (!canUseAssistant || !source.trim() || rewriteBusy) return;
     setRewriteBusy(true);
     setRewriteError("");
     try {
@@ -1150,7 +1152,7 @@ function Conversation({
                 onClick={() => setVoiceOpen(true)}
               />
             </Tooltip>
-            <div className="composer-rewrite-anchor" ref={rewriteRef}>
+            {canUseAssistant ? <div className="composer-rewrite-anchor" ref={rewriteRef}>
               <Tooltip content="Переформулировать черновик с ИИ" relationship="label">
                 <Button appearance="subtle" icon={<WandSparkles size={19} />}
                   aria-label="Переформулировать черновик с ИИ" aria-expanded={rewriteOpen}
@@ -1185,7 +1187,7 @@ function Conversation({
                 </div>}
                 {rewriteError && <p role="alert">{rewriteError}</p>}
               </div>}
-            </div>
+            </div> : null}
             <div className="composer-input">
               {!!pendingFiles.length && (
                 <div className="pending-files">
