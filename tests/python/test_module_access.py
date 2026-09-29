@@ -54,6 +54,10 @@ def test_request_paths_map_to_server_enforced_module_actions() -> None:
         "employees",
         "admin",
     )
+    assert request_module_action("/api/v1/directory/departments/department-id", "DELETE") == (
+        "employees",
+        "admin",
+    )
     assert request_module_action("/api/v1/tasks", "POST") == ("tasks", "create")
     assert request_module_action("/api/v1/efficiency", "GET") == ("team_overview", "view")
     assert request_module_action("/api/v1/tasks/task-id", "PATCH") == ("tasks", "edit")

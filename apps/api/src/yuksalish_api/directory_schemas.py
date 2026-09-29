@@ -8,6 +8,7 @@ from .workspace_schemas import ApiModel, ModulePermissionSet
 
 EditableRole = Literal["admin", "manager", "employee"]
 ModuleAccessSubject = Literal["role", "department", "position", "user"]
+DepartmentIcon = Literal["building", "team", "briefcase", "document", "globe", "finance"]
 
 
 class RoleDescriptorResponse(ApiModel):
@@ -50,6 +51,7 @@ class DepartmentResponse(ApiModel):
     id: str
     code: str
     name: str
+    icon_key: DepartmentIcon = "building"
     scope: Literal["central", "regional"]
     parent_id: str | None
     lead_user_id: str | None = None
@@ -65,6 +67,7 @@ class DepartmentMembersUpdateRequest(ApiModel):
 class DepartmentCreateRequest(ApiModel):
     code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
     name: str = Field(min_length=1, max_length=200)
+    icon_key: DepartmentIcon = "building"
     scope: Literal["central", "regional"] = "central"
     parent_id: UUID | None = None
 
@@ -85,6 +88,7 @@ class DepartmentUpdateRequest(ApiModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$",
     )
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    icon_key: DepartmentIcon | None = None
     scope: Literal["central", "regional"] | None = None
     parent_id: UUID | None = None
     lead_user_id: UUID | None = None

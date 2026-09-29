@@ -156,7 +156,7 @@ export function WorkspaceSelect({
         <Option className={variant === "priority" ? `workspace-priority-option priority-${option.value}` : undefined} disabled={option.disabled} key={option.value} text={option.text} value={option.value}>
           {peopleByKey.has(option.value)
             ? <span className="workspace-select-person-option"><Avatar name={peopleByKey.get(option.value)!.name} size={24} color="colorful" aria-hidden="true" /><span>{option.label}</span></span>
-            : listboxClassName ? <span className="release-history-option-text">{option.label}</span> : option.label}
+            : listboxClassName?.includes("release-history") ? <span className="release-history-option-text">{option.label}</span> : option.label}
         </Option>
       ))}
     </Dropdown>

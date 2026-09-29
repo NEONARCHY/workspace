@@ -4,6 +4,7 @@ import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { DepartmentIcon } from "./DepartmentIcon";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
 export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
@@ -20,6 +21,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
   const [sort, setSort] = useState<TableSort>({ key: "name", descending: false });
   const restoreFocusTarget = useRestoreFocusTarget();
   const departmentNames = useMemo(() => new Map(departments.map((department) => [department.id, department.name])), [departments]);
+  const departmentById = useMemo(() => new Map(departments.map((department) => [department.id, department])), [departments]);
   const sorted = useMemo(() => [...employees].sort((a, b) => {
     const value = (employee: DirectoryEmployee) => sort.key === "position" ? employee.jobTitle ?? ""
       : sort.key === "department" ? departmentNames.get(employee.departmentId ?? "") ?? ""
@@ -65,7 +67,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
               </span>
             )}
           </td>
-          <td className="employee-department">{departmentNames.get(employee.departmentId ?? "") ?? "Не назначено"}</td>
+          <td className="employee-department">{departmentById.get(employee.departmentId ?? "") ? <span className="employee-department-name"><DepartmentIcon iconKey={departmentById.get(employee.departmentId ?? "")?.iconKey} />{departmentNames.get(employee.departmentId ?? "")}</span> : "Не назначено"}</td>
           <td className="record-username">@{employee.username}</td>
           <td><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>
           <td><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : employee.status === "archived" ? "subtle" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>

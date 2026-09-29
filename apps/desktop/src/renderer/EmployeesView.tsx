@@ -18,6 +18,7 @@ import { Avatar, Button, Checkbox, DialogActions, DialogBody, DialogContent, Dia
 import { Add24Regular, Chat24Regular, Delete24Regular, Dismiss20Regular, MoreHorizontal20Regular, PeopleTeam24Regular, PersonEdit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./EmployeeRecords";
 import { DepartmentManagement } from "./DepartmentManagement";
+import { DepartmentIcon } from "./DepartmentIcon";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
@@ -47,6 +48,7 @@ interface EmployeesViewProps {
   readonly onCreateChat?: (input: CreateChatInput) => Promise<ChatSummary>;
   readonly onChatCreated?: (chatId: string) => void;
   readonly onDepartmentChanged?: (department: WorkspaceDepartment) => void;
+  readonly onDepartmentDeleted?: (id: string) => void;
   readonly onEmployeeChanged?: (employee: DirectoryEmployee) => void;
 }
 
@@ -91,7 +93,7 @@ function replaceDepartment(
   };
 }
 
-export function EmployeesView({ token, currentUser, allowAdministration, allowChatAdministration, onInvite, onCreateChat, onChatCreated, onDepartmentChanged, onEmployeeChanged }: EmployeesViewProps) {
+export function EmployeesView({ token, currentUser, allowAdministration, allowChatAdministration, onInvite, onCreateChat, onChatCreated, onDepartmentChanged, onDepartmentDeleted, onEmployeeChanged }: EmployeesViewProps) {
   const [directory, setDirectory] = useState<DirectoryBootstrap>();
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeQuery, setEmployeeQuery] = useState("");
@@ -589,7 +591,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                     onChange={(event) => setEmployeeDepartmentId(event.target.value)}
                   >
                     <option value="">Не назначено</option>
-                    {directory.departments.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                    {directory.departments.map((department) => <option key={department.id} value={department.id}><DepartmentIcon iconKey={department.iconKey} /> {department.name}</option>)}
                   </Select>
                 </Field>
                 <Field label="Непосредственный руководитель" hint="Получает заявки на отпуск, отгул, опоздание и больничный.">
@@ -696,7 +698,14 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       {departmentsOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setDepartmentsOpen(false); }}>
         <DialogSurface className="directory-management-dialog" aria-label="Подразделения">
           <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть подразделения" onClick={() => setDepartmentsOpen(false)} /></div>
-          <DepartmentManagement token={token} departments={directory.departments} employees={directory.employees} onChanged={(department) => {
+          <DepartmentManagement token={token} departments={directory.departments} employees={directory.employees} onDeleted={(departmentId) => {
+            setDirectory((current) => current ? {
+              ...current,
+              departments: current.departments.filter((item) => item.id !== departmentId),
+              accessRules: current.accessRules.filter((rule) => !(rule.subjectType === "department" && rule.subjectKey === departmentId)),
+            } : current);
+            onDepartmentDeleted?.(departmentId);
+          }} onChanged={(department) => {
             setDirectory((current) => current ? {
               ...replaceDepartment(current, department),
               employees: department.memberIds ? current.employees.map((employee) => ({

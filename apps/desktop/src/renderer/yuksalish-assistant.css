@@ -183,6 +183,16 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 @media (forced-colors: active) { .assistant-panel, .assistant-message, .assistant-composer { border: 1px solid CanvasText; } .assistant-launcher:focus-visible { outline-color: Highlight; } }
 
 .account-birthday-fields { display: grid; grid-template-columns: minmax(120px, 180px) minmax(160px, 240px); gap: 12px; max-width: 460px; }
+.account-birthday-fields .birthday-day-trigger { width: 100%; min-height: 36px; justify-content: flex-start; }
+.birthday-calendar.fui-PopoverSurface { width: min(292px, calc(100vw - 32px)); padding: 12px; }
+.birthday-calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 8px; }
+.birthday-calendar-header strong { font-size: 14px; }
+.birthday-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center; }
+.birthday-calendar-weekday { padding: 5px 0; color: var(--ws-muted); font-size: 11px; }
+.birthday-calendar-grid button { min-height: 34px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ws-text); font: inherit; cursor: pointer; }
+.birthday-calendar-grid button:hover, .birthday-calendar-grid button[aria-pressed="true"] { background: var(--ws-selected); color: var(--ws-link); }
+.birthday-calendar-grid button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 1px; }
+.fui-Listbox.birthday-month-list { max-height: 248px; }
 .account-birthday-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .account-birthday-note { color: #52697b; font-size: 12px; margin: 10px 0 0; }
 .feed-card.is-birthday { border-color: #b7dfde; background: linear-gradient(150deg, #f2fbf9, #fff 58%); }

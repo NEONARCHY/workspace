@@ -93,6 +93,7 @@ export interface WorkspaceDepartment {
   readonly id: string;
   readonly code: string;
   readonly name: string;
+  readonly iconKey?: "building" | "team" | "briefcase" | "document" | "globe" | "finance";
   readonly scope?: "central" | "regional";
   readonly parentId?: string | null;
   readonly leadUserId?: string | null;

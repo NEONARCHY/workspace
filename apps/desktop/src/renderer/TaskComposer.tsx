@@ -31,6 +31,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { workspacePlatform } from "./platform-adapter";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { DepartmentIcon } from "./DepartmentIcon";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -446,7 +447,7 @@ export function TaskComposer({
             </RecordSection>
 
             <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
-              {departments.length ? <div className="task-composer-department-row"><WorkspaceSelect aria-label="Отдел или подразделение" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Выберите отдел</option>{departments.map((department) => <option key={department.id} value={department.id}>{department.name} · {department.assignedUsersCount}</option>)}</WorkspaceSelect><Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить отдел как {participantRole === "observer" ? "наблюдателей" : "соисполнителей"}</Button><Button type="button" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить ответственным</Button><small>У ответственного отдела первый сотрудник становится координатором, остальные — соисполнителями.</small></div> : null}
+              {departments.length ? <div className="task-composer-department-row"><WorkspaceSelect aria-label="Отдел или подразделение" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Выберите отдел</option>{departments.map((department) => <option key={department.id} value={department.id}><DepartmentIcon iconKey={department.iconKey} /> {department.name} · {department.assignedUsersCount}</option>)}</WorkspaceSelect><Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить отдел как {participantRole === "observer" ? "наблюдателей" : "соисполнителей"}</Button><Button type="button" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить ответственным</Button><small>У ответственного отдела первый сотрудник становится координатором, остальные — соисполнителями.</small></div> : null}
               <div className="task-composer-add-row participant-add-row">
                 <PersonPicker label="Участник новой задачи" people={availableParticipants} departments={departments} value={participantId} onChange={setParticipantId} disabled={busy} />
                 <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>

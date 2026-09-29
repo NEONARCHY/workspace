@@ -2234,6 +2234,10 @@ export function App() {
                     ? { ...person, departmentId: department.id }
                     : person.departmentId === department.id ? { ...person, departmentId: null } : person) : current.people,
                 }))}
+                onDepartmentDeleted={(departmentId) => setWorkspace((current) => ({
+                  ...current,
+                  departments: current.departments.filter((item) => item.id !== departmentId),
+                }))}
                 onCreateChat={chatActions.create}
                 onChatCreated={(chatId) => {
                   setFocusTarget((current) => ({ section: "messenger", entityId: chatId, revision: (current?.revision ?? 0) + 1 }));
