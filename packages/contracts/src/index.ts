@@ -400,7 +400,7 @@ export interface ChatMessage {
   readonly chatId: string;
   readonly authorId: string;
   readonly body: string;
-  readonly systemKind?: "member_left" | "ownership_transferred" | null;
+  readonly systemKind?: "member_left" | "ownership_transferred" | "task_deadline_request" | null;
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;
@@ -1318,11 +1318,26 @@ export interface WorkspaceTask {
   readonly parentTaskTitle?: string | null;
   readonly chatId?: string | null;
   readonly latestReturn?: TaskReturn | null;
+  readonly efficiencyExcluded?: boolean;
+  readonly deadlineRequests?: readonly TaskDeadlineRequest[];
   readonly participants: readonly TaskParticipant[];
   readonly checklist: readonly TaskChecklistItem[];
   readonly comments: readonly TaskComment[];
   readonly dependencies: readonly TaskDependency[];
   readonly cycle?: TaskCycle | null;
+}
+
+export interface TaskDeadlineRequest {
+  readonly id: string;
+  readonly messageId: string;
+  readonly requesterUserId: string;
+  readonly oldDueAt: string;
+  readonly proposedDueAt: string;
+  readonly reason: string;
+  readonly status: "pending" | "approved" | "rejected" | "superseded";
+  readonly decidedByUserId?: string | null;
+  readonly decidedAt?: string | null;
+  readonly createdAt: string;
 }
 
 export interface TaskCycleInput {

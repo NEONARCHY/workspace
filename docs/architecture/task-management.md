@@ -35,6 +35,8 @@ Each task card contains:
   task endpoint, not only by the desktop filters.
 - The author and primary assignee can read and edit their task.
 - A co-assignee can work on the card; an observer can read and comment.
+- Only the author or an authorized manager can change the deadline directly.
+  Executors request a later deadline from the task chat instead of silently editing it.
 - Only the author, manager or administrator can change participants.
 - Only the author or an administrator can permanently delete a task. Deletion also
   removes its subtasks, managed task chats, attachment metadata and efficiency events,
@@ -84,6 +86,23 @@ are protected against duplicate clicks in the desktop form and checked again by
 the API. The EFF-2 metric credits all executors at the time of an on-time submission,
 not at acceptance; a reasoned return revokes that submission's credit.
 
+The task detail footer contains result submission for executors, and delete,
+accept and return actions for the author when applicable. The result composer
+also accepts task files, which remain available in the card after submission.
+The former payment-request shortcut is no longer part of the task card.
+Task deletion also removes its task chat and immutable message versions through
+a transaction-scoped purge guard; ordinary message history remains append-only.
+
+An executor or co-assignee can request a later deadline from the task chat with
+a reason and local date/time picker. The request and its message are stored in
+one transaction. The author or authorized manager accepts or rejects it in the
+chat message; the message then shows the persisted decision to every chat
+participant. A task has at most one pending request, duplicate decisions are
+idempotent, and a direct deadline change or task closure supersedes a pending
+request. An accepted extension records the same efficiency deadline event as a
+direct change. Extending an already missed deadline does not erase that prior
+late event from EFF-2 history.
+
 Relevant endpoints:
 
 - `POST /api/v1/tasks`
@@ -93,6 +112,9 @@ Relevant endpoints:
 - `POST /api/v1/tasks/{task_id}/submit-result`
 - `POST /api/v1/tasks/{task_id}/accept-result`
 - `POST /api/v1/tasks/{task_id}/return-for-revision`
+- `POST /api/v1/tasks/{task_id}/deadline-requests`
+- `POST /api/v1/tasks/{task_id}/deadline-requests/{request_id}/decision`
+- `POST /api/v1/tasks/{task_id}/extend-deadline`
 - `PUT|DELETE /api/v1/tasks/{task_id}/participants[...]`
 - `POST|PATCH|DELETE /api/v1/tasks/{task_id}/checklist[...]`
 - `POST /api/v1/tasks/{task_id}/comments`

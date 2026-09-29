@@ -191,6 +191,52 @@ describe("Private messenger", () => {
     expect(screen.getByRole("menu").parentElement).toBe(dialog.parentElement);
   });
 
+  it("sends an executor's deadline request from the task chat and lets its author decide", async () => {
+    const chat: ChatSummary = {
+      ...initialChats.find((item) => item.id === "task-t-104")!,
+      contextType: "task", contextId: "t-104",
+    };
+    const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60_000).toISOString();
+    const task = { ...initialTasks[0]!, dueAt, chatId: chat.id };
+    const onRequestTaskDeadline = vi.fn().mockResolvedValue(task);
+    const { props, rerender } = renderMessenger({
+      chats: [chat], tasks: [task], messages: [], currentUserId: "dilshod",
+      currentUserRole: "employee", onRequestTaskDeadline,
+    });
+    rerender(<FluentProvider theme={webLightTheme}>
+      <EmbeddedConversation {...props} chatId={chat.id} />
+    </FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Попросить перенос срока" }));
+    const reasonBox = screen.getByRole("textbox", { name: "Причина переноса срока" });
+    fireEvent.change(reasonBox, {
+      target: { value: "Ожидаем материалы" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить запрос в чат" }));
+    await waitFor(() => expect(onRequestTaskDeadline).toHaveBeenCalledOnce());
+    expect(onRequestTaskDeadline.mock.calls[0]?.[0].id).toBe(task.id);
+    expect(onRequestTaskDeadline.mock.calls[0]?.[2]).toBe("Ожидаем материалы");
+
+    const message: ChatMessage = {
+      id: "deadline-message", chatId: chat.id, authorId: "dilshod",
+      body: "Прошу перенести срок задачи. Причина: Ожидаем материалы",
+      systemKind: "task_deadline_request", time: "15:00",
+      createdAt: new Date().toISOString(),
+    };
+    const authorTask = { ...task, deadlineRequests: [{
+      id: "deadline-request", messageId: message.id, requesterUserId: "dilshod",
+      oldDueAt: dueAt, proposedDueAt: new Date(Date.now() + 4 * 24 * 60 * 60_000).toISOString(),
+      reason: "Ожидаем материалы", status: "pending" as const, createdAt: new Date().toISOString(),
+    }] };
+    const onDecideTaskDeadline = vi.fn().mockResolvedValue(authorTask);
+    rerender(<FluentProvider theme={webLightTheme}>
+      <EmbeddedConversation {...props} chatId={chat.id} tasks={[authorTask]} messages={[message]}
+        currentUserId="baxtiyor" onDecideTaskDeadline={onDecideTaskDeadline} />
+    </FluentProvider>);
+    expect(screen.getByText("Перенос срока · ожидает решения")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить перенос" }));
+    await waitFor(() => expect(onDecideTaskDeadline).toHaveBeenCalledWith(authorTask, "deadline-request", true));
+  });
+
   it("opens the source object from a linked chat", () => {
     const onOpenContext = vi.fn();
     renderMessenger({

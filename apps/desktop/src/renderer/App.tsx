@@ -138,12 +138,14 @@ import {
   createWorkspaceFeedPost,
   deleteWorkspaceFeedPost,
   deleteWorkspaceTask,
+  decideWorkspaceTaskDeadline,
   createWorkspaceProject,
   createWorkspaceTask,
   createWorkspaceTripRequest,
   createWorkspaceAbsence,
   deleteWorkspaceTaskChecklistItem,
   downloadWorkspaceAttachment,
+  extendWorkspaceTaskDeadline,
   loadWorkspace,
   loadSupportRegistry,
   loadWorkspaceEfficiency,
@@ -159,6 +161,7 @@ import {
   refreshAuthentication,
   removeWorkspaceTaskDependency,
   removeWorkspaceTaskParticipant,
+  requestWorkspaceTaskDeadline,
   returnWorkspaceTaskForRevision,
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
@@ -1155,6 +1158,25 @@ export function App() {
   const handleAcceptTaskResult = (task: WorkspaceTask) =>
     runTaskMutation((token) => acceptWorkspaceTaskResult(token, task.id));
 
+  const handleRequestTaskDeadline = async (
+    task: WorkspaceTask, proposedDueAt: string, reason: string,
+  ) => {
+    const updated = await runTaskMutation((token) => requestWorkspaceTaskDeadline(
+      token, task.id, proposedDueAt, reason,
+    ));
+    if (updated && session) await refreshWorkspace(session.accessToken).catch(reportError);
+    return updated;
+  };
+
+  const handleDecideTaskDeadline = (
+    task: WorkspaceTask, requestId: string, approved: boolean,
+  ) => runTaskMutation((token) => decideWorkspaceTaskDeadline(
+    token, task.id, requestId, approved,
+  ));
+
+  const handleExtendTaskDeadline = (task: WorkspaceTask, proposedDueAt: string) =>
+    runTaskMutation((token) => extendWorkspaceTaskDeadline(token, task.id, proposedDueAt));
+
   const handleTaskEfficiencyExclusion = (
     task: WorkspaceTask,
     excluded: boolean,
@@ -1227,36 +1249,6 @@ export function App() {
       reportError(error);
       return undefined;
     }
-  };
-
-  const handleCreateApprovalFromTask = async (
-    task: WorkspaceTask,
-    title: string,
-    amount: number,
-  ) => {
-    const request = await handleCreateApproval({
-      title,
-      amount,
-      currency: "UZS",
-      purpose: task.title,
-      sourceTaskId: task.id,
-      projectName: task.project,
-      projectCode: "",
-      sourceAccount: "",
-      destinationAccount: "",
-      requestPriority: task.priority === "urgent" ? "urgent" : "normal",
-      deadline: task.dueAt,
-      comment: `Создано из задачи: ${task.title}`,
-      tripPurpose: "",
-      employeeIds: [task.assigneeId],
-      paymentReason: task.title,
-      responsibleUserId: task.assigneeId,
-    });
-    if (request !== undefined) {
-      setActiveSection("payment_requests");
-      setConnectionDetail("Заявка создана из задачи");
-    }
-    return request;
   };
 
   const handleUploadTaskAttachments = async (task: WorkspaceTask, files: readonly File[]) => {
@@ -1803,6 +1795,8 @@ export function App() {
       await messengerMutation((token) => deleteWorkspaceMessage(token, message));
     }}
     onCreateTaskFromMessage={handleCreateTaskFromMessage}
+    onRequestTaskDeadline={handleRequestTaskDeadline}
+    onDecideTaskDeadline={handleDecideTaskDeadline}
     onDownloadAttachment={handleDownloadAttachment}
     onLoadAttachment={handleLoadAttachment}
     onMarkRead={handleMarkChatRead}
@@ -1954,6 +1948,8 @@ export function App() {
                 onEditMessage={async (message, body, mentionUserIds) => { await messengerMutation((token) => editWorkspaceMessage(token, message, body, mentionUserIds)); }}
                 onDeleteMessage={async (message) => { await messengerMutation((token) => deleteWorkspaceMessage(token, message)); }}
                 onCreateTaskFromMessage={handleCreateTaskFromMessage}
+                onRequestTaskDeadline={handleRequestTaskDeadline}
+                onDecideTaskDeadline={handleDecideTaskDeadline}
                 onCreateCalendarEventFromChat={(chat) => {
                   setCalendarChatDraft({
                     key: `${chat.id}:${Date.now()}`,
@@ -2008,8 +2004,8 @@ export function App() {
                 onReturnForRevision={handleReturnTaskForRevision}
                 onSubmitResult={handleSubmitTaskResult}
                 onAcceptResult={handleAcceptTaskResult}
+                onExtendDeadline={handleExtendTaskDeadline}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
-                onCreateApprovalFromTask={handleCreateApprovalFromTask}
                 onUploadAttachments={handleUploadTaskAttachments}
                 onDownloadAttachment={handleDownloadAttachment}
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}

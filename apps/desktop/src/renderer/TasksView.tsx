@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type {
-  ApprovalRequestSummary,
   AssistantActionDraft,
   EfficiencyOverview,
   TaskParticipantRole,
@@ -33,7 +32,7 @@ import {
   Dismiss24Regular,
   Edit24Regular,
   Search20Regular,
-  Money24Regular,
+  Attach24Regular,
 } from "@fluentui/react-icons";
 
 import { AttachmentPanel } from "./AttachmentPanel";
@@ -197,7 +196,7 @@ interface TasksViewProps {
   readonly onSubmitResult: (task: WorkspaceTask, resultText: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onAcceptResult: (task: WorkspaceTask) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
-  readonly onCreateApprovalFromTask: (task: WorkspaceTask, title: string, amount: number) => ApprovalRequestSummary | undefined | Promise<ApprovalRequestSummary | undefined>;
+  readonly onExtendDeadline: (task: WorkspaceTask, proposedDueAt: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
@@ -215,7 +214,7 @@ export function TasksView(props: TasksViewProps) {
     tasks, attachments, people, departments, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, renderTaskChat,
-    onCreateApprovalFromTask, onUploadAttachments, onDownloadAttachment, efficiency,
+    onExtendDeadline, onUploadAttachments, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
     onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
@@ -233,7 +232,7 @@ export function TasksView(props: TasksViewProps) {
   });
   const setSelectedId = (id: string) => {
     if (id !== selectedId) {
-      setEditing(false); setCreatingApproval(false); setCycleEditing(false); setDateError("");
+      setEditing(false); setExtendingDeadline(false); setCycleEditing(false); setDateError("");
       setChecklistTitle(""); setCommentBody(""); setParticipantId(""); setDependencyId("");
       setEfficiencyAction(""); setEfficiencyReasonText("");
       setResultText(""); setResultError(""); setCreatingSubtask(false); setSubtaskTitle(""); setSubtaskDueAt("");
@@ -271,15 +270,19 @@ export function TasksView(props: TasksViewProps) {
   const [cycleCalendarRule, setCycleCalendarRule] = useState<"weekdays" | "month_days">("weekdays");
   const [cycleWeekdays, setCycleWeekdays] = useState<readonly number[]>([0]);
   const [cycleMonthDays, setCycleMonthDays] = useState("1");
-  const [creatingApproval, setCreatingApproval] = useState(false);
   const [efficiencyAction, setEfficiencyAction] = useState<"return" | "exclude" | "include" | "">("");
   const [efficiencyReason, setEfficiencyReason] = useState<TaskReturnReason | TaskEfficiencyExclusionReason>("corrections_required");
   const [efficiencyReasonText, setEfficiencyReasonText] = useState("");
-  const [approvalTitle, setApprovalTitle] = useState("");
-  const [approvalAmount, setApprovalAmount] = useState("");
+  const [extendingDeadline, setExtendingDeadline] = useState(false);
+  const [extendedDueAt, setExtendedDueAt] = useState("");
+  const [deadlineBusy, setDeadlineBusy] = useState(false);
   const [resultText, setResultText] = useState("");
   const [resultError, setResultError] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [resultUploading, setResultUploading] = useState(false);
+  const resultFileInput = useRef<HTMLInputElement>(null);
+  const lifecycleRef = useRef<HTMLDivElement>(null);
+  const previousDetailStatus = useRef<{ id: string; status: WorkspaceTask["status"] } | undefined>(undefined);
   const [creatingSubtask, setCreatingSubtask] = useState(false);
   const [subtaskTitle, setSubtaskTitle] = useState("");
   const [subtaskAssigneeId, setSubtaskAssigneeId] = useState(currentUserId);
@@ -318,6 +321,14 @@ export function TasksView(props: TasksViewProps) {
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
   useEffect(() => {
+    const current = selectedTask ? { id: selectedTask.id, status: selectedTask.status } : undefined;
+    if (detailOpen && current && previousDetailStatus.current?.id === current.id
+      && previousDetailStatus.current.status !== current.status) {
+      lifecycleRef.current?.focus();
+    }
+    previousDetailStatus.current = current;
+  }, [detailOpen, selectedTask]);
+  useEffect(() => {
     if (!sourceNoticeTaskId) return undefined;
     const timer = window.setTimeout(() => setSourceNoticeTaskId((current) => (
       current === sourceNoticeTaskId ? null : current
@@ -332,9 +343,11 @@ export function TasksView(props: TasksViewProps) {
     && (selectedTask.authorId === currentUserId || ["admin", "superadmin"].includes(currentUser?.role ?? ""));
   const canManageParticipants = selectedTask !== undefined && (privileged || selectedTask.authorId === currentUserId);
   const canSubmitResult = selectedTask !== undefined
-    && (privileged || selectedTask.assigneeId === currentUserId || coAssignee)
+    && (selectedTask.assigneeId === currentUserId || coAssignee)
     && ["new", "in_progress", "overdue"].includes(selectedTask.status);
   const canReviewResult = selectedTask !== undefined && canManageParticipants && selectedTask.status === "awaiting_review";
+  const canExtendDeadline = selectedTask !== undefined && canManageParticipants
+    && !!selectedTask.dueAt && !["completed", "cancelled"].includes(selectedTask.status);
   const selectedSubtasks = selectedTask === undefined ? [] : tasks.filter((task) => task.parentTaskId === selectedTask.id);
   const selectedParent = selectedTask?.parentTaskId ? tasks.find((task) => task.id === selectedTask.parentTaskId) : undefined;
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -468,18 +481,31 @@ export function TasksView(props: TasksViewProps) {
     });
   };
 
-  const startApproval = () => {
-    if (selectedTask === undefined) return;
-    setApprovalTitle(selectedTask.title);
-    setApprovalAmount("");
-    setCreatingApproval(true);
+  const extendDeadline = async () => {
+    if (!selectedTask?.dueAt || deadlineBusy) return;
+    const proposed = new Date(extendedDueAt);
+    if (!Number.isFinite(proposed.getTime()) || proposed.getTime() <= Math.max(new Date().getTime(), new Date(selectedTask.dueAt).getTime())) {
+      setDateError("Выберите дату и время позже текущего срока и настоящего момента.");
+      return;
+    }
+    setDeadlineBusy(true);
+    setDateError("");
+    try {
+      if (await onExtendDeadline(selectedTask, proposed.toISOString())) setExtendingDeadline(false);
+    } finally {
+      setDeadlineBusy(false);
+    }
   };
 
-  const createApproval = async () => {
-    if (selectedTask === undefined) return;
-    const amount = Number(approvalAmount.replace(/\s/g, ""));
-    if (!approvalTitle.trim() || !Number.isFinite(amount) || amount <= 0) return;
-    if (await onCreateApprovalFromTask(selectedTask, approvalTitle.trim(), amount)) setCreatingApproval(false);
+  const uploadResultFiles = async (files: readonly File[]) => {
+    if (!selectedTask || files.length === 0 || resultUploading) return;
+    setResultUploading(true);
+    try {
+      await onUploadAttachments(selectedTask, files);
+    } finally {
+      setResultUploading(false);
+      if (resultFileInput.current) resultFileInput.current.value = "";
+    }
   };
 
   const submitEfficiencyAction = async () => {
@@ -605,14 +631,26 @@ export function TasksView(props: TasksViewProps) {
         <div className="task-detail-sticky-header">
         <Button className="task-detail-close" appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть задачу" onClick={() => setDetailOpen(false)} />
         {dateError ? <div className="auth-error" role="alert">{dateError}</div> : null}
-        <div className="task-detail-heading"><div><div className="task-detail-context"><span className="detail-kicker">{selectedTask.project || "Без проекта"}</span><span className="task-detail-context-type">Карточка задачи</span></div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}{canDelete ? <Button className="task-delete-button" appearance="subtle" icon={<Delete24Regular />} disabled={deleting} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить"}</Button> : null}</div></div>
+        <div className="task-detail-heading"><div><div className="task-detail-context"><span className="detail-kicker">{selectedTask.project || "Без проекта"}</span><span className="task-detail-context-type">Карточка задачи</span></div><h2>{selectedTask.title}</h2></div><div className="task-detail-heading-actions">{canEdit ? <Button appearance="subtle" icon={<Edit24Regular />} onClick={startEditing}>Редактировать карточку</Button> : null}</div></div>
         {selectedTask.sourceMessageId && sourceNoticeTaskId === selectedTask.id ? <div className="source-link-note" role="status">
           <span>Создана из сообщения · связь сохранена</span>
           <button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button>
         </div> : null}
         <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
         </div>
-        <div className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
+        <div ref={lifecycleRef} tabIndex={-1} className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
+        {canExtendDeadline ? <div className="task-deadline-control">
+          <Button appearance="subtle" onClick={() => {
+            const base = Math.max(Date.now(), new Date(selectedTask.dueAt!).getTime());
+            setExtendedDueAt(localDateTime(new Date(base + 24 * 60 * 60_000).toISOString()));
+            setExtendingDeadline(true);
+          }}>Продлить срок</Button>
+          {extendingDeadline ? <div className="task-deadline-editor" role="region" aria-label="Продление срока">
+            <label>Новый срок<WorkspaceDateTimePicker ariaLabel="Новый срок задачи" value={extendedDueAt} min={localDateTime(selectedTask.dueAt)} onChange={setExtendedDueAt} /></label>
+            <Button appearance="primary" disabled={deadlineBusy} onClick={() => void extendDeadline()}>{deadlineBusy ? "Сохраняем…" : "Сохранить срок"}</Button>
+            <Button appearance="subtle" disabled={deadlineBusy} onClick={() => setExtendingDeadline(false)}>Отмена</Button>
+          </div> : null}
+        </div> : null}
         <ol className="task-journey" aria-label="Маршрут задачи">
           {["Поставлена", "Выполняется", "Проверка", "Принята"].map((label, index) => <li className={index < taskJourneyStep(selectedTask.status) ? "done" : index === taskJourneyStep(selectedTask.status) ? "current" : ""} key={label}><span aria-hidden="true">{index + 1}</span><strong>{label}</strong></li>)}
         </ol>
@@ -632,8 +670,13 @@ export function TasksView(props: TasksViewProps) {
           {selectedTask.status === "awaiting_review" ? <p className="task-review-hint">Результат отправлен. Ожидает решения постановщика.</p> : null}
           {selectedTask.latestReturn && selectedTask.status !== "completed" ? <div className="task-return-note"><strong>{returnReasonLabels[selectedTask.latestReturn.reasonCode] ?? "Возвращено на доработку"}</strong>{selectedTask.latestReturn.reasonText ? <p>{selectedTask.latestReturn.reasonText}</p> : null}<small>{new Date(selectedTask.latestReturn.createdAt).toLocaleString("ru-RU")}</small></div> : null}
           {selectedTask.resultText ? <div className="task-submitted-result"><small>Переданный результат</small><p>{selectedTask.resultText}</p></div> : null}
-          {canSubmitResult ? <div className="task-result-composer"><Textarea aria-label="Результат задачи" placeholder="Опишите выполненную работу и добавьте всё, что нужно проверить" value={resultText} onChange={(_, data) => { setResultText(data.value); setResultError(""); }} />{resultError ? <span className="task-result-error" role="alert">{resultError}</span> : null}<Button appearance="primary" onClick={() => void submitResult()} disabled={reviewBusy}>{reviewBusy ? "Отправка…" : "Отправить на проверку"}</Button><small>Постановщик получит уведомление и сможет принять результат или вернуть задачу.</small></div> : null}
-          {canReviewResult ? <div className="task-review-actions"><Button appearance="primary" onClick={() => void acceptResult()} disabled={reviewBusy}>{reviewBusy ? "Сохранение…" : "Завершить задачу"}</Button><Button appearance="secondary" onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }} disabled={reviewBusy}>Вернуть в работу</Button></div> : null}
+          {canSubmitResult ? <div className="task-result-composer">
+            <Textarea aria-label="Результат задачи" placeholder="Опишите выполненную работу и добавьте всё, что нужно проверить" value={resultText} onChange={(_, data) => { setResultText(data.value); setResultError(""); }} />
+            {resultError ? <span className="task-result-error" role="alert">{resultError}</span> : null}
+            <input ref={resultFileInput} hidden type="file" multiple aria-label="Файлы результата" onChange={(event) => void uploadResultFiles(Array.from(event.target.files ?? []))} />
+            <Button appearance="secondary" icon={<Attach24Regular />} disabled={resultUploading || reviewBusy} onClick={() => resultFileInput.current?.click()}>{resultUploading ? "Загружаем файлы…" : "Добавить файлы к результату"}</Button>
+            <small>Файлы сохраняются в задаче сразу; постановщик увидит их вместе с результатом.</small>
+          </div> : null}
           {efficiencyAction === "return" && canReviewResult ? <div className="task-card-editor efficiency-action-form" role="region" aria-label="Мотивированный возврат"><label><span>Причина возврата</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="corrections_required">Нужны исправления</option><option value="incomplete_result">Результат неполный</option><option value="requirements_not_met">Требования не выполнены</option><option value="other">Другая причина</option></WorkspaceSelect></label><Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Что именно нужно исправить"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /><div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()} disabled={reviewBusy}>{reviewBusy ? "Возврат…" : "Вернуть исполнителям"}</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")} disabled={reviewBusy}>Отмена</Button></div></div> : null}
         </div>
 
@@ -675,23 +718,31 @@ export function TasksView(props: TasksViewProps) {
 
         <div className="detail-section task-comments-section"><TaskSectionHeading title="Комментарии" help="Обсуждение задачи доступно её участникам по действующим правам. Комментарий сохранится в истории задачи и будет виден коллегам с доступом." meta={selectedTask.comments.length} /><div className="task-comment-list">{selectedTask.comments.map((comment) => <div className="task-comment" key={comment.id}><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><Avatar name={personById(comment.authorUserId)?.name ?? ""} size={28} /></EmployeeProfileLink><span><EmployeeProfileLink userId={comment.authorUserId} personName={personById(comment.authorUserId)?.name ?? "Сотрудник"}><strong>{personById(comment.authorUserId)?.name}</strong></EmployeeProfileLink><small>{new Date(comment.createdAt).toLocaleString("ru-RU")}</small><p>{comment.body}</p>{onReactToComment ? <FeedReactions reactions={comment.reactions ?? []} disabled={false} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReactToComment(selectedTask, comment.id, emoji, reacted)} /> : null}</span></div>)}</div><div className="task-comment-composer"><Textarea aria-label="Новый комментарий" placeholder="Написать комментарий" value={commentBody} onChange={(_event, data) => setCommentBody(data.value)} /><Button appearance="primary" onClick={() => void addComment()} disabled={!commentBody.trim()}>Отправить</Button></div></div>
 
-        <div className="detail-section task-efficiency-actions"><TaskSectionHeading title="Учёт сроков" help="При своевременной сдаче результат засчитывается всем исполнителям в месяце сдачи. Возврат на доработку снимает зачёт; исключение из расчёта требует полномочий и причины." meta="EFF-2.0" /><p>Своевременная сдача сразу засчитывается основному исполнителю и соисполнителям. Возврат снимает этот зачёт до повторной сдачи.</p>{canManageParticipants ? <div className="task-editor-actions"><Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить по причине</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Вернуть в расчёт</Button></div> : null}
+        <div className="detail-section task-efficiency-actions">
+          <TaskSectionHeading title="Как учитывается срок" help="Это не настройка дедлайна, а объяснение показателя своевременного выполнения. Сдача до срока учитывается каждому исполнителю; возврат на доработку снимает зачёт до новой сдачи. Перенос срока после просрочки не стирает уже зафиксированное опоздание. Исключить задачу из расчёта может постановщик или уполномоченный сотрудник с указанием причины." meta="EFF-2.0" />
+          <p><strong>{selectedTask.efficiencyExcluded ? "Исключена из расчёта." : "Учитывается в сроках."}</strong> Показатель проверяет, сдан ли результат вовремя. Зачёт получают основной исполнитель и соисполнители; после возврата результат нужно сдать заново.</p>
+          {canManageParticipants ? <div className="task-editor-actions">{selectedTask.efficiencyExcluded
+            ? <Button appearance="subtle" onClick={() => setEfficiencyAction("include")}>Снова учитывать задачу</Button>
+            : <Button appearance="subtle" onClick={() => { setEfficiencyAction("exclude"); setEfficiencyReason("external_dependency"); }}>Исключить из расчёта</Button>}</div> : null}
         {efficiencyAction && efficiencyAction !== "return" ? <div className="task-card-editor efficiency-action-form" role="region" aria-label={efficiencyAction === "exclude" ? "Исключение из расчёта" : "Возврат в расчёт"}>{efficiencyAction !== "include" ? <label><span>Причина</span><WorkspaceSelect aria-label="Причина действия эффективности" value={efficiencyReason} onChange={(event) => setEfficiencyReason(event.target.value as typeof efficiencyReason)}><option value="external_dependency">Внешняя зависимость</option><option value="requirements_changed">Требования изменились</option><option value="cancelled">Задача отменена</option><option value="duplicate">Дубликат</option><option value="other">Другая причина</option></WorkspaceSelect></label> : <p>Задача снова будет учитываться по зафиксированным срокам и событиям.</p>}{efficiencyAction !== "include" ? <Textarea aria-label="Пояснение причины" placeholder={efficiencyReason === "other" ? "Обязательное пояснение" : "Дополнительное пояснение"} value={efficiencyReasonText} onChange={(_, data) => setEfficiencyReasonText(data.value)} /> : null}<div className="task-editor-actions"><Button appearance="primary" onClick={() => void submitEfficiencyAction()}>Подтвердить</Button><Button appearance="subtle" onClick={() => setEfficiencyAction("")}>Отмена</Button></div></div> : null}</div>
-        {creatingApproval ? <div className="linked-create-panel task-approval-create" role="region" aria-label="Заявка из задачи"><Money24Regular /><Input aria-label="Название заявки из задачи" value={approvalTitle} onChange={(_event, data) => setApprovalTitle(data.value)} /><Input aria-label="Сумма заявки из задачи" inputMode="numeric" placeholder="Сумма в UZS" value={approvalAmount} onChange={(_event, data) => setApprovalAmount(data.value)} /><Button appearance="primary" onClick={() => void createApproval()}>Отправить по маршруту</Button><Button appearance="subtle" onClick={() => setCreatingApproval(false)}>Отмена</Button></div> : null}
         <div className="detail-footer">
-          <TaskHelp title="Заявка на оплату">Создаёт связанную с задачей заявку на оплату. Заявка не отправится по маршруту, пока вы явно не подтвердите её в форме.</TaskHelp>
-          <Button appearance="secondary" icon={<Money24Regular />} onClick={startApproval}>Создать заявку на оплату</Button>
+          {canDelete ? <Button className="task-delete-button" appearance="secondary" icon={<Delete24Regular />} disabled={deleting || reviewBusy} onClick={() => void deleteSelectedTask()}>{deleting ? "Удаление…" : "Удалить задачу"}</Button> : null}
+          {canReviewResult ? <>
+            <Button appearance="secondary" disabled={reviewBusy} onClick={() => { setEfficiencyAction("return"); setEfficiencyReason("corrections_required"); }}>Вернуть на доработку</Button>
+            <Button appearance="primary" disabled={reviewBusy} onClick={() => void acceptResult()}>{reviewBusy ? "Сохранение…" : "Утвердить результат"}</Button>
+          </> : null}
+          {canSubmitResult && !canReviewResult ? <Button appearance="primary" disabled={reviewBusy || resultUploading || !resultText.trim()} onClick={() => void submitResult()}>{reviewBusy ? "Отправка…" : "Завершить и отправить на проверку"}</Button> : null}
         </div>
       </aside>{renderTaskChat(selectedTask)}</div></DialogSurface>
       </Dialog> : null}
-      <ConfirmActionDialog
-        open={pendingTaskDelete !== undefined}
+      {pendingTaskDelete ? <ConfirmActionDialog
+        open
         title="Удалить задачу?"
         message={`Задача «${pendingTaskDelete?.title ?? ""}», связанные подзадачи и чат задачи будут удалены без возможности восстановления.`}
         busy={deleting}
         onCancel={() => setPendingTaskDelete(undefined)}
         onConfirm={confirmTaskDelete}
-      />
+      /> : null}
     </section>
   );
 }

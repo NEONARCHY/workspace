@@ -51,6 +51,7 @@ from .tables import (
     task_comment_reactions,
     task_comments,
     task_cycles,
+    task_deadline_requests,
     task_dependencies,
     task_efficiency_events,
     task_participants,
@@ -88,7 +89,9 @@ from .workspace_schemas import (
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    DecideTaskDeadlineExtension,
     EffectiveModuleAccessResponse,
+    ExtendTaskDeadline,
     FeedCommentResponse,
     FeedPostResponse,
     MessageReactionResponse,
@@ -101,6 +104,7 @@ from .workspace_schemas import (
     PinFeedPostRequest,
     ProjectResponse,
     ProjectStageActionResponse,
+    RequestTaskDeadlineExtension,
     RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
@@ -111,6 +115,7 @@ from .workspace_schemas import (
     TaskCreateCycleRequest,
     TaskCycleRequest,
     TaskCycleResponse,
+    TaskDeadlineRequestResponse,
     TaskDependencyRequest,
     TaskDependencyResponse,
     TaskEfficiencyExclusionRequest,
@@ -291,6 +296,8 @@ def _task(
     parent_task_title: str | None = None,
     chat_id: UUID | None = None,
     latest_return: TaskReturnResponse | None = None,
+    efficiency_excluded: bool = False,
+    deadline_requests: Sequence[TaskDeadlineRequestResponse] = (),
 ) -> TaskResponse:
     checklist_done = sum(item.is_completed for item in checklist)
     return TaskResponse(
@@ -314,6 +321,8 @@ def _task(
         parent_task_title=parent_task_title,
         chat_id=str(chat_id) if chat_id else None,
         latest_return=latest_return,
+        efficiency_excluded=efficiency_excluded,
+        deadline_requests=list(deadline_requests),
         participants=list(participants),
         checklist=list(checklist),
         comments=list(comments),
@@ -1312,10 +1321,12 @@ async def _task_detail_maps(
     dict[UUID, str],
     dict[UUID, UUID],
     dict[UUID, TaskReturnResponse],
+    dict[UUID, list[TaskDeadlineRequestResponse]],
+    dict[UUID, bool],
 ]:
     task_ids = [row["id"] for row in task_rows]
     if not task_ids:
-        return {}, {}, {}, {}, {}, {}, {}, {}
+        return {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
 
     participant_rows = (
         (
@@ -1479,6 +1490,45 @@ async def _task_detail_maps(
                 created_at=row["occurred_at"],
             ),
         )
+    deadline_rows = (
+        (await connection.execute(
+            select(task_deadline_requests)
+            .where(task_deadline_requests.c.task_id.in_(task_ids))
+            .order_by(task_deadline_requests.c.created_at)
+        )).mappings().all()
+    )
+    deadline_by_task: dict[UUID, list[TaskDeadlineRequestResponse]] = {}
+    for row in deadline_rows:
+        deadline_by_task.setdefault(row["task_id"], []).append(TaskDeadlineRequestResponse(
+            id=str(row["id"]), message_id=str(row["message_id"]),
+            requester_user_id=str(row["requester_user_id"]),
+            old_due_at=row["old_due_at"], proposed_due_at=row["proposed_due_at"],
+            reason=row["reason"], status=row["status"],
+            decided_by_user_id=(
+                str(row["decided_by_user_id"]) if row["decided_by_user_id"] else None
+            ),
+            decided_at=row["decided_at"], created_at=row["created_at"],
+        ))
+    exclusion_rows = (
+        (await connection.execute(
+            select(task_efficiency_events)
+            .where(
+                task_efficiency_events.c.task_id.in_(task_ids),
+                task_efficiency_events.c.event_type.in_(
+                    {"efficiency_excluded", "efficiency_exclusion_changed"}
+                ),
+            )
+            .order_by(
+                task_efficiency_events.c.task_id,
+                task_efficiency_events.c.occurred_at.desc(),
+            )
+        )).mappings().all()
+    )
+    efficiency_excluded: dict[UUID, bool] = {}
+    for row in exclusion_rows:
+        efficiency_excluded.setdefault(
+            row["task_id"], bool((row["new_value"] or {}).get("excluded")),
+        )
     return (
         participants,
         checklist,
@@ -1488,6 +1538,8 @@ async def _task_detail_maps(
         parent_titles,
         task_chat_ids,
         latest_returns,
+        deadline_by_task,
+        efficiency_excluded,
     )
 
 
@@ -1508,6 +1560,8 @@ async def _task_response(
         parent_titles,
         task_chat_ids,
         latest_returns,
+        deadline_by_task,
+        efficiency_excluded,
     ) = await _task_detail_maps(connection, [row], current_user)
     return _task(
         row,
@@ -1519,6 +1573,8 @@ async def _task_response(
         parent_task_title=parent_titles.get(row["parent_task_id"]),
         chat_id=task_chat_ids.get(task_id),
         latest_return=latest_returns.get(task_id),
+        deadline_requests=deadline_by_task.get(task_id, []),
+        efficiency_excluded=efficiency_excluded.get(task_id, False),
     )
 
 
@@ -2516,6 +2572,8 @@ async def load_workspace(
         task_parent_titles,
         task_chat_ids,
         task_latest_returns,
+        task_deadline_by_task,
+        task_efficiency_excluded,
     ) = await _task_detail_maps(connection, task_rows, current_user)
 
     request_statement = select(approval_requests).order_by(approval_requests.c.updated_at.desc())
@@ -2723,6 +2781,8 @@ async def load_workspace(
                 parent_task_title=task_parent_titles.get(row["parent_task_id"]),
                 chat_id=task_chat_ids.get(row["id"]),
                 latest_return=task_latest_returns.get(row["id"]),
+                deadline_requests=task_deadline_by_task.get(row["id"], []),
+                efficiency_excluded=task_efficiency_excluded.get(row["id"], False),
             )
             for row in task_rows
         ]
@@ -4050,7 +4110,13 @@ async def update_task(
     task_id: UUID,
     payload: UpdateTaskRequest,
 ) -> TaskResponse:
-    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    task_row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
+    if task_row["due_at"] != payload.due_at:
+        await _task_access_row(connection, current_user, task_id, manage=True)
     assignee_id = await _active_user_id(connection, payload.assignee_id)
     now = datetime.now(UTC)
     await connection.execute(
@@ -4086,6 +4152,10 @@ async def update_task(
             metadata={"executorIds": [str(user_id) for user_id in revised_executors]},
         )
     if task_row["due_at"] != payload.due_at:
+        await connection.execute(update(task_deadline_requests).where(
+            task_deadline_requests.c.task_id == task_id,
+            task_deadline_requests.c.status == "pending",
+        ).values(status="superseded", decided_by_user_id=current_user.id, decided_at=now))
         await record_task_event(
             connection,
             task_id=task_id,
@@ -4097,6 +4167,10 @@ async def update_task(
             old_value={"dueAt": task_row["due_at"].isoformat() if task_row["due_at"] else None},
             new_value={"dueAt": payload.due_at.isoformat() if payload.due_at else None},
         )
+        if payload.due_at is not None:
+            await _resume_overdue_task_after_extension(
+                connection, task_row, task_id, current_user, payload.due_at, now,
+            )
     await connection.execute(
         delete(task_participants).where(
             task_participants.c.task_id == task_id,
@@ -4112,6 +4186,180 @@ async def update_task(
         assignee_user_id=assignee_id,
         occurred_at=now,
     )
+    return await _task_response(connection, task_id)
+
+
+def _forward_deadline(current_due_at: datetime | None, proposed_due_at: datetime) -> None:
+    if proposed_due_at.utcoffset() is None:
+        raise WorkspaceRepositoryError(422, "Specify a timezone for the deadline")
+    if current_due_at is None:
+        raise WorkspaceRepositoryError(409, "The task has no deadline")
+    if proposed_due_at <= current_due_at or proposed_due_at <= datetime.now(UTC):
+        raise WorkspaceRepositoryError(
+            422, "The new deadline must be later than the current deadline and now"
+        )
+
+
+async def _resume_overdue_task_after_extension(
+    connection: AsyncConnection,
+    row: Record,
+    task_id: UUID,
+    current_user: AuthenticatedUser,
+    new_due_at: datetime,
+    occurred_at: datetime,
+) -> None:
+    if row["status"] != "overdue" or new_due_at <= occurred_at:
+        return
+    await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+        status="in_progress", updated_at=occurred_at,
+    ))
+    await record_task_event(
+        connection, task_id=task_id, event_type="task_status_changed",
+        occurred_at=occurred_at + timedelta(microseconds=1),
+        actor_user_id=current_user.id, assignee_user_id=row["primary_assignee_user_id"],
+        due_at=new_due_at,
+        old_value={"status": "overdue"}, new_value={"status": "in_progress"},
+    )
+
+
+async def extend_task_deadline(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: ExtendTaskDeadline,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, manage=True)
+    row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
+    if row["status"] in {"completed", "cancelled"}:
+        raise WorkspaceRepositoryError(409, "A closed task cannot be extended")
+    _forward_deadline(row["due_at"], payload.proposed_due_at)
+    now = datetime.now(UTC)
+    await connection.execute(update(task_deadline_requests).where(
+        task_deadline_requests.c.task_id == task_id,
+        task_deadline_requests.c.status == "pending",
+    ).values(status="superseded", decided_by_user_id=current_user.id, decided_at=now))
+    await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+        due_at=payload.proposed_due_at, updated_at=now,
+    ))
+    await record_task_event(
+        connection, task_id=task_id, event_type="deadline_changed", occurred_at=now,
+        actor_user_id=current_user.id, assignee_user_id=row["primary_assignee_user_id"],
+        due_at=payload.proposed_due_at,
+        old_value={"dueAt": row["due_at"].isoformat()},
+        new_value={"dueAt": payload.proposed_due_at.isoformat()},
+    )
+    await _resume_overdue_task_after_extension(
+        connection, row, task_id, current_user, payload.proposed_due_at, now,
+    )
+    return await _task_response(connection, task_id)
+
+
+async def request_task_deadline_extension(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    payload: RequestTaskDeadlineExtension,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id)
+    row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
+    executor_ids = await _task_executor_ids(connection, task_id, row["primary_assignee_user_id"])
+    if current_user.id not in executor_ids:
+        raise WorkspaceRepositoryError(403, "Only a task executor can request an extension")
+    if row["status"] in {"completed", "cancelled"}:
+        raise WorkspaceRepositoryError(409, "A closed task cannot be extended")
+    _forward_deadline(row["due_at"], payload.proposed_due_at)
+    existing = await connection.scalar(select(task_deadline_requests.c.id).where(
+        task_deadline_requests.c.task_id == task_id,
+        task_deadline_requests.c.status == "pending",
+    ))
+    if existing is not None:
+        raise WorkspaceRepositoryError(409, "An extension request is already awaiting a decision")
+    chat_id = await connection.scalar(select(chats.c.id).where(
+        chats.c.context_type == "task", chats.c.context_id == task_id,
+    ))
+    if chat_id is None:
+        raise WorkspaceRepositoryError(409, "The task chat is unavailable")
+    body = f"Прошу перенести срок задачи «{row['title']}». Причина: {payload.reason}"
+    message = await messenger_service.send_chat_message(
+        connection, current_user, chat_id, SendMessageRequest(body=body),
+    )
+    message_id = UUID(message.id)
+    await connection.execute(update(messages).where(messages.c.id == message_id).values(
+        system_kind="task_deadline_request",
+    ))
+    await connection.execute(insert(task_deadline_requests).values(
+        id=uuid4(), task_id=task_id, message_id=message_id,
+        requester_user_id=current_user.id, old_due_at=row["due_at"],
+        proposed_due_at=payload.proposed_due_at, reason=payload.reason,
+        status="pending", decided_by_user_id=None, decided_at=None,
+        created_at=datetime.now(UTC),
+    ))
+    return await _task_response(connection, task_id)
+
+
+async def decide_task_deadline_extension(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    request_id: UUID,
+    payload: DecideTaskDeadlineExtension,
+) -> TaskResponse:
+    await _task_access_row(connection, current_user, task_id, manage=True)
+    row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
+    request_row = (await connection.execute(select(task_deadline_requests).where(
+        task_deadline_requests.c.id == request_id,
+        task_deadline_requests.c.task_id == task_id,
+    ).with_for_update())).mappings().first()
+    if request_row is None:
+        raise WorkspaceRepositoryError(404, "Extension request was not found")
+    desired = "approved" if payload.approved else "rejected"
+    if request_row["status"] == desired:
+        return await _task_response(connection, task_id)
+    if request_row["status"] != "pending":
+        raise WorkspaceRepositoryError(409, "This request has already been resolved")
+    if row["status"] in {"completed", "cancelled"} or row["due_at"] != request_row["old_due_at"]:
+        raise WorkspaceRepositoryError(
+            409, "The task or its deadline has changed; refresh the request"
+        )
+    now = datetime.now(UTC)
+    if payload.approved:
+        _forward_deadline(row["due_at"], request_row["proposed_due_at"])
+        await connection.execute(update(tasks).where(tasks.c.id == task_id).values(
+            due_at=request_row["proposed_due_at"], updated_at=now,
+        ))
+        await record_task_event(
+            connection, task_id=task_id, event_type="deadline_changed", occurred_at=now,
+            actor_user_id=current_user.id, assignee_user_id=row["primary_assignee_user_id"],
+            due_at=request_row["proposed_due_at"],
+            old_value={"dueAt": row["due_at"].isoformat()},
+            new_value={"dueAt": request_row["proposed_due_at"].isoformat()},
+            metadata={"requestId": str(request_id)},
+        )
+        await _resume_overdue_task_after_extension(
+            connection, row, task_id, current_user, request_row["proposed_due_at"], now,
+        )
+    await connection.execute(update(task_deadline_requests).where(
+        task_deadline_requests.c.id == request_id,
+    ).values(status=desired, decided_by_user_id=current_user.id, decided_at=now))
+    if request_row["requester_user_id"] != current_user.id:
+        await _upsert_notification(
+            connection,
+            user_id=request_row["requester_user_id"],
+            event_key=f"task:deadline:decision:{request_id}",
+            kind="task", priority="normal",
+            title="Перенос срока подтверждён" if payload.approved else "Перенос срока отклонён",
+            body=row["title"], section="tasks", entity_id=task_id,
+            requires_action=False, occurred_at=now,
+        )
     return await _task_response(connection, task_id)
 
 
@@ -4184,7 +4432,11 @@ async def delete_task(
                     attachments.c.owner_id.in_(message_ids),
                 )
             )
+        # The database allows this explicit task purge, but still rejects all
+        # ordinary edits or deletions of message history.
+        await connection.scalar(select(func.set_config("yuksalish.task_chat_purge", "on", True)))
         await connection.execute(delete(chats).where(chats.c.id.in_(task_chat_ids)))
+        await connection.scalar(select(func.set_config("yuksalish.task_chat_purge", "off", True)))
 
     await connection.execute(
         delete(attachments).where(
@@ -4219,7 +4471,11 @@ async def change_task_status(
     task_id: UUID,
     payload: ChangeTaskStatusRequest,
 ) -> TaskResponse:
-    task_row = await _task_access_row(connection, current_user, task_id, edit=True)
+    await _task_access_row(connection, current_user, task_id, edit=True)
+    task_row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
     if payload.status in {"awaiting_review", "completed"}:
         raise WorkspaceRepositoryError(
             409,
@@ -4239,6 +4495,13 @@ async def change_task_status(
         if not is_author and not _is_privileged(current_user):
             raise WorkspaceRepositoryError(403, "Only the task author can cancel it")
     updated_at = datetime.now(UTC)
+    if payload.status == "cancelled":
+        await connection.execute(update(task_deadline_requests).where(
+            task_deadline_requests.c.task_id == task_id,
+            task_deadline_requests.c.status == "pending",
+        ).values(
+            status="superseded", decided_by_user_id=current_user.id, decided_at=updated_at,
+        ))
     await connection.execute(
         update(tasks)
         .where(tasks.c.id == task_id)
@@ -4415,12 +4678,20 @@ async def accept_task_result(
     current_user: AuthenticatedUser,
     task_id: UUID,
 ) -> TaskResponse:
-    task_row = await _task_access_row(connection, current_user, task_id, manage=True)
+    await _task_access_row(connection, current_user, task_id, manage=True)
+    task_row = (
+        (await connection.execute(select(tasks).where(tasks.c.id == task_id).with_for_update()))
+        .mappings().one()
+    )
     if task_row["status"] != "awaiting_review":
         raise WorkspaceRepositoryError(409, "Only a submitted result can be accepted")
     await _ensure_task_can_be_submitted(connection, task_id)
     await _ensure_subtasks_are_closed(connection, task_id)
     now = datetime.now(UTC)
+    await connection.execute(update(task_deadline_requests).where(
+        task_deadline_requests.c.task_id == task_id,
+        task_deadline_requests.c.status == "pending",
+    ).values(status="superseded", decided_by_user_id=current_user.id, decided_at=now))
     await connection.execute(
         update(tasks).where(tasks.c.id == task_id).values(status="completed", updated_at=now)
     )

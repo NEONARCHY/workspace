@@ -147,7 +147,9 @@ class ChatMessageResponse(ApiModel):
     chat_id: str
     author_id: str
     body: str
-    system_kind: Literal["member_left", "ownership_transferred"] | None = None
+    system_kind: Literal[
+        "member_left", "ownership_transferred", "task_deadline_request"
+    ] | None = None
     time: str
     created_at: datetime
     own: bool
@@ -293,6 +295,19 @@ class TaskReturnResponse(ApiModel):
     created_at: datetime
 
 
+class TaskDeadlineRequestResponse(ApiModel):
+    id: str
+    message_id: str
+    requester_user_id: str
+    old_due_at: datetime
+    proposed_due_at: datetime
+    reason: str
+    status: Literal["pending", "approved", "rejected", "superseded"]
+    decided_by_user_id: str | None = None
+    decided_at: datetime | None = None
+    created_at: datetime
+
+
 class TaskResponse(ApiModel):
     id: str
     title: str
@@ -314,6 +329,8 @@ class TaskResponse(ApiModel):
     parent_task_title: str | None = None
     chat_id: str | None = None
     latest_return: TaskReturnResponse | None = None
+    efficiency_excluded: bool = False
+    deadline_requests: list[TaskDeadlineRequestResponse] = Field(default_factory=list)
     participants: list[TaskParticipantResponse] = Field(default_factory=list)
     checklist: list[TaskChecklistItemResponse] = Field(default_factory=list)
     comments: list[TaskCommentResponse] = Field(default_factory=list)
@@ -415,6 +432,27 @@ class UpdateTaskRequest(ApiModel):
         if not stripped:
             raise ValueError("Task title must not be blank")
         return stripped
+
+
+class RequestTaskDeadlineExtension(ApiModel):
+    proposed_due_at: datetime
+    reason: str = Field(min_length=1, max_length=2_000)
+
+    @field_validator("reason")
+    @classmethod
+    def reason_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("A reason is required")
+        return stripped
+
+
+class ExtendTaskDeadline(ApiModel):
+    proposed_due_at: datetime
+
+
+class DecideTaskDeadlineExtension(ApiModel):
+    approved: bool
 
 
 class ChangeTaskStatusRequest(ApiModel):

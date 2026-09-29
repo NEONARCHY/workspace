@@ -407,6 +407,22 @@ task_participants = sa.Table(
     sa.Column("participant_role", sa.String(24), primary_key=True),
 )
 
+task_deadline_requests = sa.Table(
+    "task_deadline_requests",
+    metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("task_id", uuid_type),
+    sa.Column("message_id", uuid_type),
+    sa.Column("requester_user_id", uuid_type),
+    sa.Column("old_due_at", sa.DateTime(timezone=True)),
+    sa.Column("proposed_due_at", sa.DateTime(timezone=True)),
+    sa.Column("reason", sa.Text()),
+    sa.Column("status", sa.String(16)),
+    sa.Column("decided_by_user_id", uuid_type),
+    sa.Column("decided_at", sa.DateTime(timezone=True)),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 task_checklist_items = sa.Table(
     "task_checklist_items",
     metadata,

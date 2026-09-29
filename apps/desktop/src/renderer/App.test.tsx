@@ -1465,7 +1465,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
-    fireEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить задачу" }));
     const confirmation = await screen.findByRole("dialog", { name: "Удалить задачу?" });
     fireEvent.click(within(confirmation).getByText("Удалить").closest("button")!);
 
@@ -1502,8 +1502,8 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByText("report.txt")).toBeInTheDocument();
   }, 30_000);
 
-  it("creates a subtask and runs result review with a motivated return", async () => {
-    const fetchMock = mockServer();
+  it("creates a subtask from the task card", async () => {
+    mockServer();
     render(<App />);
     await loginToWorkspace();
 
@@ -1515,19 +1515,21 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Создать подзадачу" }));
     expect((await screen.findAllByText("Сверить итоговые цифры")).length).toBeGreaterThan(0);
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Опишите выполненную работу");
-    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
-      target: { value: "Договор и расчёты приложены" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
-    expect(await screen.findByText("Договор и расчёты приложены", { selector: "p" })).toBeInTheDocument();
-    await screen.findByRole("button", { name: "Завершить задачу" });
+  it("runs result review with a motivated return", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    fireEvent.click(screen.getByRole("button", {
+      name: `Открыть задачу: ${initialTasks[1]!.title}`,
+    }));
     expect(screen.getByText("Ожидает решения")).toBeInTheDocument();
     expect(screen.getByText("Результат отправлен. Ожидает решения постановщика.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Вернуть в работу" }));
+    fireEvent.click(screen.getByRole("button", { name: "Вернуть на доработку" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Пояснение причины" }), {
       target: { value: "Добавьте номер договора" },
     });
@@ -1538,33 +1540,37 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
       target: { value: "Номер договора добавлен" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Отправить на проверку" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Завершить задачу" }));
+    fireEvent.click(screen.getByRole("button", { name: "Завершить и отправить на проверку" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Утвердить результат" }, { timeout: 20_000 }));
     expect(await screen.findByText("Принято")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/accept-result"),
       expect.objectContaining({ method: "POST" }),
     );
-  });
+  }, 30_000);
 
-  it("creates a payment request from the selected task", async () => {
-    mockServer();
+  it("shows the executor's result actions without the former payment shortcut", async () => {
+    const fetchMock = mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("dilshod");
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getAllByRole("button", { name: /^Открыть задачу:/ })[0]!);
-    fireEvent.click(screen.getByRole("button", { name: "Создать заявку на оплату" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Название заявки из задачи" }), {
-      target: { value: "Оплатить поставку по задаче" },
+    fireEvent.click(screen.getByRole("button", {
+      name: `Открыть задачу: ${initialTasks[0]!.title}`,
+    }));
+    expect(screen.queryByRole("button", { name: "Создать заявку на оплату" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Файлы результата"), {
+      target: { files: [new File(["report"], "result.txt", { type: "text/plain" })] },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки из задачи" }), {
-      target: { value: "4800000" },
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/attachments/task/"),
+      expect.objectContaining({ method: "PUT" }),
+    ));
+    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
+      target: { value: "Работа завершена, файл приложен" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
-
-    expect(await screen.findByText("Оплатить поставку по задаче")).toBeInTheDocument();
-    expect(screen.getByText("Версия 1 · создана из задачи")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled();
   });
 
   it("submits the complete payment card and publishes a workflow version", async () => {
