@@ -107,6 +107,13 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         bootstrap = await client.get("/api/v1/workspace/bootstrap", headers=author)
         people = {person["username"]: person["id"] for person in bootstrap.json()["people"]}
 
+        invalid_channel = await client.post(
+            "/api/v1/ai-referent/letters", headers=author,
+            json={"recipientOrganization": "Partner", "recipientAddress": "office@example.test",
+                  "route": "exat"},
+        )
+        assert invalid_channel.status_code == 422
+
         created = await client.post(
             "/api/v1/ai-referent/letters",
             headers=author,
@@ -123,6 +130,7 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
         letter = created.json()
         assert letter["status"] == "draft"
         assert "submit" not in letter["availableActions"]
+        assert letter["submissionBlockReason"] == "Приложите основной документ DOCX."
         assert letter["displayNumber"] is None
 
         uploaded = await client.put(
@@ -141,6 +149,8 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
 
         current = await client.get(f"/api/v1/ai-referent/letters/{letter['id']}", headers=author)
         letter = current.json()
+        assert letter["submissionBlockReason"] == ""
+        assert "submit" in letter["availableActions"]
         submitted = await client.post(
             f"/api/v1/ai-referent/letters/{letter['id']}/actions",
             headers=author,

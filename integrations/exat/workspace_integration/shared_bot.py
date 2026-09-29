@@ -458,7 +458,7 @@ class SharedBot:
         if letter.get("canReplaceDocument"):
             rows.append([button("Загрузить новый DOCX или PDF", f"e:{compact}")])
         if letter["canEdit"]:
-            rows.append([button("Продолжить письмо", f"w:resume:{compact}")])
+            rows.append([button("📝 Изменить реквизиты", f"w:resume:{compact}")])
             rows.append([button("Исправить письмо", f"w:edit:{compact}")])
             if letter.get("workflowKind") != "sign_only":
                 rows.append([button("Добавить вложение", f"x:{compact}")])
@@ -472,7 +472,10 @@ class SharedBot:
         )
         destination = (
             "Без отправки адресату\n" if letter.get("workflowKind") == "sign_only"
-            else f"Кому: {letter['recipientOrganization']}\n"
+            else (
+                f"Кому: {letter['recipientOrganization']}\n"
+                f"Адрес: {letter.get('recipientAddress') or 'Не указан'}\n"
+            )
         )
         self.system(
             actor,
@@ -487,6 +490,8 @@ class SharedBot:
             f"Согласующий: {letter.get('reviewerName') or 'Не назначен'}"
             + (f"\nКомментарий: {latest}" if latest else "")
             + (f"\nСлужебная заметка: {letter['note']}" if letter.get("note") else "")
+            + (f"\n{letter['submissionBlockReason']}"
+               if letter.get("canEdit") and letter.get("submissionBlockReason") else "")
             + (f"\n{letter['deliveryError']}" if letter.get("deliveryError") else ""),
             rows,
             letter_id=letter["id"],

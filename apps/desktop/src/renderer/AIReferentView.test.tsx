@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,7 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, uploadWorkspaceAttachment } from "./workspace-api";
+import { actOnAIReferentLetter, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
@@ -102,8 +102,40 @@ const incomingRegistry = {
   }],
 };
 
+const reviewerCatalog = {
+  revision: 1, updatedAt: "2026-09-29", runtimes: [], reviewers: [
+    { key: "umid" as const, userId: "user-2", username: "umid", fullName: "Умид Ражабов", telegramId: null, enabled: true, canApprove: true, suggestedUsername: "umid", label: "Умид", accountActive: true },
+  ],
+};
+
+const readyDraft: AIReferentLetter = {
+  ...registry.letters[0]!, status: "draft", revision: 3, canEdit: true,
+  recipientAddress: "office@example.test", route: "webmail",
+  availableActions: ["submit", "cancel"],
+  documentCheck: { id: "check", status: "passed", reviewerKeys: ["umid"], detail: "" },
+};
+
+async function openComposer() {
+  fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
+  // JSDOM has no layout for Tabster's initial focus search. Model real focus.
+  const subject = await screen.findByPlaceholderText("Если пропустить — исходящий номер");
+  act(() => subject.focus());
+}
+
+async function focusSavedDetail() {
+  await waitFor(() => expect(document.querySelector(".ai-referent-form-dialog")).toBeNull());
+  const button = await waitFor(() => {
+    const target = document.querySelector<HTMLButtonElement>(".ai-referent-detail-actions button");
+    expect(target).not.toBeNull();
+    return target!;
+  });
+  act(() => button.focus());
+}
+
 describe("AIReferentView", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(checkAIReferentDocument).mockReset();
@@ -179,7 +211,7 @@ describe("AIReferentView", () => {
   it("accepts dropped DOCX and blocks saving until the robot finishes", async () => {
     vi.mocked(checkAIReferentDocument).mockResolvedValue({ id: "check", status: "pending", reviewerKeys: [], detail: "" });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
+    await openComposer();
     const input = screen.getByLabelText("Выбрать основной документ DOCX");
     const zone = input.closest("label")!;
     const file = new File(["PK"], "Letter.docx");
@@ -200,15 +232,152 @@ describe("AIReferentView", () => {
     vi.mocked(checkAIReferentDocument).mockResolvedValueOnce({ id: "check", status: "failed", reviewerKeys: [], detail: "Обратитесь к IT-специалисту." })
       .mockResolvedValueOnce({ id: "check", status: "passed", reviewerKeys: ["askar"], detail: "" });
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
-    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
+    await openComposer();
     fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [new File(["PK"], "letter.docx")] } });
     expect(await screen.findByText("Обратитесь к IT-специалисту.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Повторить проверку" }));
     await waitFor(() => expect(checkAIReferentDocument).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled(), { timeout: 5000 });
     expect(screen.queryByText(/Подождите: робот проверяет/)).not.toBeInTheDocument();
+    expect(screen.getByText("С письмом всё в порядке.")).toBeInTheDocument();
+  });
+
+  it("keeps a valid DOCX as draft but blocks a mismatching signer", async () => {
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue(reviewerCatalog);
+    vi.mocked(checkAIReferentDocument).mockResolvedValue({ id: "check", status: "passed", reviewerKeys: ["askar"], detail: "" });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    const reviewer = screen.getByRole("combobox", { name: "Согласующий" });
+    await waitFor(() => expect(reviewer).toBeEnabled());
+    fireEvent.change(reviewer, { target: { value: "user-2" } });
+    fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [new File(["PK"], "askar.docx")] } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("В DOCX не найдено место для подписи выбранного руководителя.");
+    expect(screen.queryByText("С письмом всё в порядке.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить на согласование" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+  });
+
+  it("loads reviewers from Incoming, reports failure and retries without changing tabs", async () => {
+    vi.mocked(loadAIReferentReviewers).mockRejectedValue(new Error("Список временно недоступен"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    expect(await screen.findByText("Список временно недоступен")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Согласующий" })).toBeDisabled();
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue(reviewerCatalog);
+    fireEvent.click(screen.getByRole("button", { name: "Обновить согласующих" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Согласующий" })).toBeEnabled());
+    const reviewer = screen.getByRole("combobox", { name: "Согласующий" });
+    // Popup focus/layout is exercised in the real-browser smoke test.
+    fireEvent.change(reviewer, { target: { value: "user-2" } });
+    expect(reviewer).toHaveTextContent("Умид Ражабов");
+  });
+
+  it.each([["office@example.test", "Webmail", "E-XAT"], ["  office@EXAT.UZ  ", "E-XAT", "Webmail"]])(
+    "locks the channel to recipient %s",
+    async (address, selectedChannel, forbiddenChannel) => {
+      render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+      await openComposer();
+      fireEvent.click(await screen.findByRole("button", { name: "Ввести вручную" }));
+      fireEvent.change(await screen.findByRole("textbox", { name: "Адрес или получатель" }), { target: { value: address } });
+      const channel = screen.getByRole("combobox", { name: "Канал отправки" });
+      expect(channel).toHaveTextContent(selectedChannel);
+      fireEvent.change(channel, { target: { value: forbiddenChannel === "E-XAT" ? "exat" : "webmail" } });
+      expect(channel).toHaveTextContent(selectedChannel);
+    },
+  );
+
+  it.each(["draft", "submit", "submit-error"])("saves documents before optional submission (%s)", async (mode) => {
+    const submit = mode !== "draft";
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue(reviewerCatalog);
+    vi.mocked(checkAIReferentDocument).mockResolvedValue(readyDraft.documentCheck!);
+    vi.mocked(createAIReferentLetter).mockResolvedValue({ ...readyDraft, revision: 1 });
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(readyDraft);
+    vi.mocked(actOnAIReferentLetter).mockResolvedValue({ ...readyDraft, status: "pending_review", canEdit: false, availableActions: [], revision: 4 });
+    if (mode === "submit-error") vi.mocked(actOnAIReferentLetter).mockRejectedValue(new Error("Согласование временно недоступно"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Согласующий" })).toBeEnabled());
+    fireEvent.click(await screen.findByRole("button", { name: "Ввести вручную" }));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Партнёр" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Адрес или получатель" }), { target: { value: "office@example.test" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Согласующий" }), { target: { value: "user-2" } });
+    const file = new File(["PK"], "letter.docx");
+    fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [file] } });
+    const attachment = new File(["PDF"], "appendix.pdf");
+    fireEvent.change(screen.getByLabelText("Выбрать дополнительные вложения"), { target: { files: [attachment] } });
+    await screen.findByText("С письмом всё в порядке.");
+    const action = await screen.findByRole("button", { name: submit ? "Отправить на согласование" : "Сохранить черновик" });
+    fireEvent.click(action);
+    fireEvent.click(action);
+    await waitFor(() => expect(uploadWorkspaceAttachment).toHaveBeenCalledTimes(2));
+    expect(createAIReferentLetter).toHaveBeenCalledTimes(1);
+    expect(createAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ route: "webmail", reviewerUserId: "user-2", recipientAddress: "office@example.test" }));
+    if (submit) {
+      await waitFor(() => expect(actOnAIReferentLetter).toHaveBeenCalledTimes(1));
+      expect(actOnAIReferentLetter).toHaveBeenCalledWith("token", expect.objectContaining({ revision: 3 }), "submit", "", expect.any(String));
+      expect(vi.mocked(uploadWorkspaceAttachment).mock.invocationCallOrder.at(-1)).toBeLessThan(vi.mocked(actOnAIReferentLetter).mock.invocationCallOrder[0]!);
+      if (mode === "submit-error") {
+        expect(await screen.findAllByText("Согласование временно недоступно")).not.toHaveLength(0);
+        await focusSavedDetail();
+        expect(screen.getByRole("button", { name: "Редактировать" })).toBeEnabled();
+        expect(screen.getByRole("button", { name: "Отправить на согласование" })).toBeEnabled();
+      }
+    } else {
+      await focusSavedDetail();
+      await screen.findByRole("button", { name: "Редактировать" });
+      expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+    }
+  });
+
+  it("explains a blocked draft and keeps submission unavailable without bypassing preflight", async () => {
+    const letter = { ...readyDraft, availableActions: ["cancel"] as const, submissionBlockReason: "В DOCX нет подписи выбранного руководителя." };
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    expect(await screen.findByText(letter.submissionBlockReason)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Отправить на согласование" })).toBeDisabled();
+    for (const tab of ["Документы · 0", "История · 0", "Обзор"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.getByRole("button", { name: "Редактировать" }).closest(".ai-referent-detail-content")).toBeNull();
+    }
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("shows stored documents in edit mode without reuploading them (replace=%s)", async (replace) => {
+    const letter: AIReferentLetter = { ...readyDraft, attachments: [
+      { id: "primary", ownerId: readyDraft.id, ownerType: "ai_referent_letter", fileName: "Saved.docx", contentType: "application/octet-stream", byteSize: 50, sha256: "hash", uploadedByUserId: "user-1", documentRole: "primary", createdAt: readyDraft.createdAt },
+      { id: "additional", ownerId: readyDraft.id, ownerType: "ai_referent_letter", fileName: "Appendix.pdf", contentType: "application/pdf", byteSize: 50, sha256: "hash2", uploadedByUserId: "user-1", documentRole: "additional", createdAt: readyDraft.createdAt },
+    ] };
+    vi.mocked(loadAIReferentReviewers).mockResolvedValue(reviewerCatalog);
+    vi.mocked(loadAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(updateAIReferentLetter).mockResolvedValue(letter);
+    vi.mocked(checkAIReferentDocument).mockResolvedValue(readyDraft.documentCheck!);
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate focusRequestId="letter-1" /></FluentProvider>);
+    const edit = await screen.findByRole("button", { name: "Редактировать" });
+    act(() => edit.focus());
+    fireEvent.click(edit);
+    const subject = await screen.findByPlaceholderText("Если пропустить — исходящий номер");
+    act(() => subject.focus());
+    expect(within(screen.getByRole("list", { name: "Сохранённое письмо" })).getByText("Saved.docx")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Сохранённые вложения" })).getByText("Appendix.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Скачать Saved.docx" })).toBeEnabled();
+    const file = new File(["PK"], "Replacement.docx");
+    if (replace) {
+      fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [file] } });
+      await screen.findByText("С письмом всё в порядке.");
+      expect(screen.getByText("Будет заменено выбранным DOCX после сохранения.")).toBeInTheDocument();
+    }
+    fireEvent.change(subject, { target: { value: "Updated subject" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() => expect(updateAIReferentLetter).toHaveBeenCalledWith("token", "letter-1", expect.objectContaining({ subject: "Updated subject" }), 3));
+    await focusSavedDetail();
+    await screen.findByRole("button", { name: "Редактировать" });
+    expect(uploadWorkspaceAttachment).toHaveBeenCalledTimes(replace ? 1 : 0);
+    if (replace) expect(uploadWorkspaceAttachment).toHaveBeenCalledWith("token", "ai_referent_letter", "letter-1", file, "primary", undefined, 3);
+    expect(createAIReferentLetter).not.toHaveBeenCalled();
+    expect(actOnAIReferentLetter).not.toHaveBeenCalled();
   });
 
   it("requires a preliminary reviewer for Bobur and does not wrap dropdowns in labels", async () => {
@@ -219,7 +388,7 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "Исходящие" }));
     await waitFor(() => expect(loadAIReferentReviewers).toHaveBeenCalled());
-    fireEvent.click(await screen.findByRole("button", { name: "Новое письмо" }));
+    await openComposer();
     const reviewer = screen.getByRole("combobox", { name: "Согласующий" });
     fireEvent.change(reviewer, { target: { value: "bobur" } });
     expect(screen.getByRole("combobox", { name: /Предварительный согласующий/ })).toHaveTextContent("Выберите предварительного согласующего");
