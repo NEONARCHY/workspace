@@ -267,7 +267,9 @@
   backdrop-filter: blur(16px) saturate(1.05);
 }
 .fui-MenuPopover.fui-MenuPopover { min-width: 220px; padding: 7px; border-radius: 19px; }
-.fui-Listbox.fui-Listbox { min-width: min(220px, calc(100vw - 24px)); max-width: min(360px, calc(100vw - 24px)); padding: 7px; }
+.fui-Listbox.fui-Listbox { min-width: min(220px, calc(100vw - 24px)); max-width: min(360px, calc(100vw - 24px)); max-height: min(300px, calc(100dvh - 48px)); overflow-y: auto; overscroll-behavior: contain; padding: 7px; }
+.fui-Listbox .fui-Option { height: auto; min-height: 38px; align-items: flex-start; padding-block: 9px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
+.fui-Listbox .fui-Option > span { min-width: 0; overflow-wrap: anywhere; }
 .fui-MenuList { display: grid; gap: 3px; }
 :is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option) {
   min-height: 38px;

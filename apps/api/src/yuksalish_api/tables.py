@@ -20,6 +20,7 @@ departments = sa.Table(
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("code", sa.String(64)),
     sa.Column("name", sa.String(200)),
+    sa.Column("icon_key", sa.String(32)),
     sa.Column("scope", sa.String(16)),
     sa.Column("parent_id", uuid_type),
     sa.Column("lead_user_id", uuid_type),

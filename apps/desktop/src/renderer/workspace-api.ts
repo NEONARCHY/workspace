@@ -820,7 +820,7 @@ export function revokeAdministrativeChatInspection(token: string, inspectionId: 
 
 export function createDepartment(
   token: string,
-  payload: { readonly code: string; readonly name: string; readonly scope: NonNullable<WorkspaceDepartment["scope"]>; readonly parentId?: string },
+  payload: { readonly code: string; readonly name: string; readonly iconKey?: WorkspaceDepartment["iconKey"]; readonly scope: NonNullable<WorkspaceDepartment["scope"]>; readonly parentId?: string },
 ): Promise<WorkspaceDepartment> {
   return apiRequest<WorkspaceDepartment>(
     "/directory/departments",
@@ -832,13 +832,17 @@ export function createDepartment(
 export function updateDepartment(
   token: string,
   departmentId: string,
-  payload: { readonly code?: string; readonly name?: string; readonly scope?: WorkspaceDepartment["scope"]; readonly parentId?: string | null; readonly leadUserId?: string | null },
+  payload: { readonly code?: string; readonly name?: string; readonly iconKey?: WorkspaceDepartment["iconKey"]; readonly scope?: WorkspaceDepartment["scope"]; readonly parentId?: string | null; readonly leadUserId?: string | null },
 ): Promise<WorkspaceDepartment> {
   return apiRequest<WorkspaceDepartment>(
     `/directory/departments/${departmentId}`,
     { method: "PATCH", body: JSON.stringify(payload) },
     token,
   );
+}
+
+export function deleteDepartment(token: string, departmentId: string): Promise<void> {
+  return apiRequest<void>(`/directory/departments/${departmentId}`, { method: "DELETE" }, token);
 }
 
 export function updateDepartmentMembers(
