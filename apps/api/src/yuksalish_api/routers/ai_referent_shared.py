@@ -516,8 +516,9 @@ async def get_manual_recipients(connection: Connection, user: User) -> list[Reci
 async def post_manual_recipient(
     payload: ManualRecipientInput, connection: Connection, user: User
 ) -> RecipientEntry:
-    require_configuration_admin(user)
-    await ensure_module_action(connection, user, "ai_referent", "view")
+    await ensure_module_action(connection, user, "ai_referent", "create")
+    if user.role not in {"admin", "superadmin"} and payload.category_key != "other":
+        raise HTTPException(403, "Новый адресат сотрудника относится к категории «Другие».")
     return await add_manual_recipient(connection, user.id, payload)
 
 

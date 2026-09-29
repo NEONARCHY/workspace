@@ -19,6 +19,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { generateBirthdayGreeting } from "./workspace-api";
 
 interface FeedViewProps {
+  readonly canUseAssistant?: boolean;
   readonly assistantDraft?: AssistantActionDraft;
   readonly posts: readonly FeedPost[];
   readonly people: readonly WorkspacePerson[];
@@ -63,7 +64,7 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: 
   </div>;
 }
 
-export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft }: FeedViewProps) {
+export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false }: FeedViewProps) {
   const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
   const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -80,6 +81,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const person = (id: string | null) => id ? people.find((item) => item.id === id) : undefined;
 
   const createGreeting = async (postId: string) => {
+    if (!canUseAssistant) return;
     setGreetingBusy(true);
     setGreetingError("");
     try {
@@ -202,7 +204,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   <FeedReactions reactions={post.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
-                {post.systemKind === "birthday" && post.birthdayUserId !== currentUserId && <div className="feed-birthday-greeting">
+                {canUseAssistant && post.systemKind === "birthday" && post.birthdayUserId !== currentUserId && <div className="feed-birthday-greeting">
                   {greetingPostId !== post.id ? <Button appearance="primary" onClick={() => {
                     setGreetingPostId(post.id); setGreetingText(""); setGreetingError("");
                   }}>Сгенерировать поздравление для коллеги</Button> : <div className="feed-greeting-panel">

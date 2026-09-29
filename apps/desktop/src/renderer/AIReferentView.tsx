@@ -53,6 +53,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import {
   actOnAIReferentLetter,
+  addAIReferentManualRecipient,
   deleteAIReferentLetter,
   checkAIReferentDocument,
   loadAIReferentDocumentCheck,
@@ -208,6 +209,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const [editingId, setEditingId] = useState("");
   const [editingLetter, setEditingLetter] = useState<AIReferentLetter>();
   const [form, setForm] = useState<LetterForm>(emptyForm);
+  const [manualRecipientChoice, setManualRecipientChoice] = useState<"hidden" | "ask" | "declined" | "saved">("hidden");
+  const [manualRecipientBusy, setManualRecipientBusy] = useState(false);
+  const [manualRecipientError, setManualRecipientError] = useState("");
   const [decisionComment, setDecisionComment] = useState("");
   const [decisionAudio, setDecisionAudio] = useState<{ letterId: string; revision: number; audio: AIReferentCommentAudio }>();
   const [documentCheck, setDocumentCheck] = useState<{ file: File; result?: AIReferentDocumentCheck; error?: string }>();
@@ -226,6 +230,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const visibleLetters = registry?.letters ?? [];
   const readOnly = authority?.writable !== true;
   const requiredRoute = addressRoute(form.recipientAddress);
+  const needsManualRecipientChoice = manualRecipientChoice === "ask" && Boolean(requiredRoute)
+    && form.recipientOrganization.trim().length >= 2;
   const savedPrimary = editingLetter?.attachments.find((attachment) => attachment.documentRole === "primary");
   const savedAdditional = editingLetter?.attachments.filter((attachment) => attachment.documentRole !== "primary") ?? [];
   const signerKey = reviewerConfig?.reviewers.find((reviewer) => reviewer.userId === form.reviewerUserId)?.key;
@@ -357,6 +363,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     setEditingId("");
     setEditingLetter(undefined);
     setForm(emptyForm(workflowKind));
+    setManualRecipientChoice("hidden");
+    setManualRecipientError("");
     setError("");
     setFormOpen(true);
   };
@@ -370,6 +378,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     setEditingId(letter.id);
     setEditingLetter(letter);
     setForm(letterForm(letter));
+    setManualRecipientChoice("hidden");
+    setManualRecipientError("");
     setError("");
     setSelectedId("");
     setFormOpen(true);
@@ -378,6 +388,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
   const save = async (submit = false) => {
     if (readOnly) { setError("AI Referent временно доступен только для просмотра."); return; }
     if (busyRef.current) return;
+    if (needsManualRecipientChoice) {
+      setError("Выберите, сохранять ли новый адрес в общий справочник."); return;
+    }
     if (form.file && activeCheck?.result?.status !== "passed") { setError("Дождитесь успешной проверки DOCX роботом."); return; }
     if (form.workflowKind === "delivery" && form.reviewerUserId === boburId && !form.finalReviewerUserId) { setError("Выберите предварительного согласующего перед Бобуром."); return; }
     if (submit) {
@@ -679,7 +692,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div>
       )}
 
-      <Dialog open={formOpen} onOpenChange={(_event, data) => { if (!busy) setFormOpen(data.open); }}>
+      <Dialog open={formOpen} onOpenChange={(_event, data) => { if (!busy && !manualRecipientBusy) setFormOpen(data.open); }}>
         <DialogSurface className="ai-referent-form-dialog">
           <DialogBody>
             <DialogTitle
@@ -700,17 +713,32 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   token={token}
                   organization={form.recipientOrganization}
                   address={form.recipientAddress}
-                  onSelect={(recipient) => setForm((current) => ({
+                  onSelect={(recipient) => { setManualRecipientChoice("hidden"); setManualRecipientError(""); setForm((current) => ({
                     ...current,
                     recipientOrganization: recipient.addressBookOrganization || recipient.name,
                     recipientAddress: recipient.addresses[0] || "",
                     route: addressRoute(recipient.addresses[0] || "") ?? recipient.route,
-                  }))}
-                  onManualChange={(recipientOrganization, recipientAddress) => setForm((current) => ({
+                  })); }}
+                  onManualChange={(recipientOrganization, recipientAddress) => { setManualRecipientChoice(canCreate ? "ask" : "declined"); setManualRecipientError(""); setForm((current) => ({
                     ...current, recipientOrganization, recipientAddress,
                     route: addressRoute(recipientAddress) ?? current.route,
-                  }))}
+                  })); }}
                 /> : null}
+                {form.workflowKind === "delivery" && manualRecipientChoice !== "hidden" && requiredRoute && form.recipientOrganization.trim().length >= 2 ? <div className="ai-referent-manual-save" role="group" aria-label="Сохранение нового адресата">
+                  <strong>Сохранить введённый адрес в справочник?</strong>
+                  <small>«{form.recipientOrganization.trim()}» · {form.recipientAddress.trim()} — будет доступен всем сотрудникам и в Telegram-боте после синхронизации.</small>
+                  {manualRecipientChoice === "ask" ? <div>
+                    <Button size="small" appearance="primary" disabled={manualRecipientBusy || readOnly} onClick={() => {
+                      setManualRecipientBusy(true); setManualRecipientError("");
+                      void addAIReferentManualRecipient(token, { name: form.recipientOrganization.trim(), address: form.recipientAddress.trim(), categoryKey: "other" })
+                        .then(() => setManualRecipientChoice("saved"))
+                        .catch((reason: unknown) => setManualRecipientError(reason instanceof Error ? reason.message : "Не удалось добавить адрес."))
+                        .finally(() => setManualRecipientBusy(false));
+                    }}>{manualRecipientBusy ? "Сохраняем…" : "Да, сохранить для всех"}</Button>
+                    <Button size="small" disabled={manualRecipientBusy} onClick={() => { setManualRecipientChoice("declined"); setManualRecipientError(""); }}>Нет, только для письма</Button>
+                  </div> : <span role="status">{manualRecipientChoice === "saved" ? "Адрес сохранён в общем справочнике." : "Адрес останется только в этом письме."}</span>}
+                  {manualRecipientError ? <span role="alert">{manualRecipientError}</span> : null}
+                </div> : null}
                 <div className="ai-referent-form-grid">
                   {form.workflowKind === "delivery" ? <div className="ai-referent-select-field"><span id="referent-route-label">Канал отправки</span><Select aria-labelledby="referent-route-label" value={requiredRoute ?? form.route} onChange={(event) => setForm((current) => ({ ...current, route: requiredRoute ?? event.target.value as LetterForm["route"] }))}><option value="exat" disabled={requiredRoute === "webmail"}>E-XAT</option><option value="webmail" disabled={requiredRoute === "exat"}>Webmail</option></Select></div> : null}
                   <div className="ai-referent-select-field"><span id="referent-reviewer-label">Согласующий</span><Select aria-labelledby="referent-reviewer-label" disabled={busy || reviewersLoading || Boolean(reviewersError)} value={form.reviewerUserId} onChange={(event) => setForm((current) => ({ ...current, reviewerUserId: event.target.value, finalReviewerUserId: "" }))}><option value="">{reviewersLoading ? "Загружаем согласующих…" : "Не назначен"}</option>{reviewers.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}</Select></div>
@@ -761,9 +789,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
             </DialogContent>
             <DialogActions className="ai-referent-form-actions">
               {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
-              <Button appearance="secondary" disabled={busy} onClick={() => setFormOpen(false)}>Отмена</Button>
-              <Button appearance="secondary" disabled={readOnly || busy || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
-              <Button appearance="primary" icon={<Checkmark20Regular />} disabled={readOnly || busy || reviewersLoading || Boolean(reviewersError) || formSignatureMismatch || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save(true)}>Отправить на согласование</Button>
+              <Button appearance="secondary" disabled={busy || manualRecipientBusy} onClick={() => setFormOpen(false)}>Отмена</Button>
+              <Button appearance="secondary" disabled={readOnly || busy || manualRecipientBusy || needsManualRecipientChoice || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save()}>{busy ? "Сохраняем…" : "Сохранить черновик"}</Button>
+              <Button appearance="primary" icon={<Checkmark20Regular />} disabled={readOnly || busy || manualRecipientBusy || needsManualRecipientChoice || reviewersLoading || Boolean(reviewersError) || formSignatureMismatch || Boolean(form.file && activeCheck?.result?.status !== "passed")} onClick={() => void save(true)}>Отправить на согласование</Button>
             </DialogActions>
           </DialogBody>
         </DialogSurface>

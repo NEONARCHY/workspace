@@ -1675,6 +1675,7 @@ export function App() {
   }
 
   const modulePermissions = Object.fromEntries(workspace.moduleAccess.map((item) => [item.moduleKey, item.permissions]));
+  const canUseAssistant = modulePermissions.assistant?.view === true;
   const isAdmin = session.user.role === "admin" || session.user.role === "superadmin";
   const canView = (key: NavigationKey) => key === "notifications" || key === "settings"
     || (key !== "telegram_access" || isAdmin) && modulePermissions[key]?.view !== false;
@@ -1772,6 +1773,7 @@ export function App() {
     chatId: string,
     contextLabel: "задачи" | "проекта" | "поездки",
   ) => <EmbeddedConversation
+    canUseAssistant={canUseAssistant}
     chatId={chatId}
     contextLabel={contextLabel}
     token={session.accessToken}
@@ -1925,9 +1927,10 @@ export function App() {
             ) : null}
             {displayedSection === "messenger" ? (
               <MessengerView
+                canUseAssistant={canUseAssistant}
                 key={focusTarget?.revision}
-                assistantDraft={preparedAction?.kind === "message" ? preparedAction : undefined}
-                assistantRecipientId={preparedAction?.kind === "message" ? assistantRecipientId : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "message" ? preparedAction : undefined}
+                assistantRecipientId={canUseAssistant && preparedAction?.kind === "message" ? assistantRecipientId : undefined}
                 token={session.accessToken}
                 chats={workspace.chats}
                 personalPreferences={workspace.personalPreferences}
@@ -1973,7 +1976,7 @@ export function App() {
             {displayedSection === "tasks" ? (
               <TasksView
                 key={focusTarget?.revision}
-                assistantDraft={preparedAction?.kind === "task" ? preparedAction : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
                 people={workspace.people}
@@ -2073,8 +2076,9 @@ export function App() {
             ) : null}
             {displayedSection === "feed" ? (
               <FeedView
+                canUseAssistant={canUseAssistant}
                 key={focusTarget?.section === "feed" ? focusTarget.revision : undefined}
-                assistantDraft={preparedAction?.kind === "feed" ? preparedAction : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "feed" ? preparedAction : undefined}
                 posts={workspace.feedPosts}
                 people={workspace.people}
                 token={session.accessToken}
@@ -2112,7 +2116,7 @@ export function App() {
             {displayedSection === "project_hub" || displayedSection === "project_funding" ? (
               <ProjectHubView
                 key={`${displayedSection}:${focusTarget?.revision ?? 0}`}
-                assistantDraft={preparedAction?.kind === "project" ? preparedAction : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "project" ? preparedAction : undefined}
                 mode={displayedSection === "project_hub" ? "projects" : "funding"}
                 token={session.accessToken}
                 people={workspace.people}
@@ -2131,7 +2135,7 @@ export function App() {
             {displayedSection === "trip_approvals" ? (
               <TripApprovalsView
                 key={focusTarget?.revision}
-                assistantDraft={preparedAction?.kind === "trip" ? preparedAction : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "trip" ? preparedAction : undefined}
                 requests={workspace.tripRequests}
                 people={workspace.people}
                 departments={workspace.departments}
@@ -2183,7 +2187,7 @@ export function App() {
             {displayedSection === "absences" ? (
               <AbsencesView
                 key={focusTarget?.section === "absences" ? focusTarget.revision : undefined}
-                assistantDraft={preparedAction?.kind === "absence" ? preparedAction : undefined}
+                assistantDraft={canUseAssistant && preparedAction?.kind === "absence" ? preparedAction : undefined}
                 currentUserId={workspace.currentUser.id}
                 people={workspace.people}
                 requests={workspace.absenceRequests}
@@ -2289,7 +2293,7 @@ export function App() {
         />
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
-      {modulePermissions.assistant?.view === true ? (
+      {canUseAssistant ? (
         <YuksalishAssistant token={session.accessToken} onOpenReference={openAssistantReference}
           onPrepareAction={prepareAssistantAction} />
       ) : null}

@@ -75,6 +75,8 @@ async function main() {
     assert.equal(await page.getByRole("option", { name: "Webmail", exact: true }).getAttribute("aria-disabled"), "true");
     await page.keyboard.press("Escape");
     await address.fill("office@example.test");
+    await page.getByRole("group", { name: "Сохранение нового адресата" }).getByText("Сохранить введённый адрес в справочник?").waitFor();
+    await page.getByRole("button", { name: "Нет, только для письма" }).click();
     await channel.click();
     assert.equal(await page.getByRole("option", { name: "E-XAT", exact: true }).getAttribute("aria-disabled"), "true");
     await page.keyboard.press("Escape");

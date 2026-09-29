@@ -6,11 +6,12 @@ import { AIReferentView } from "./AIReferentView";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
-import { actOnAIReferentLetter, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
+import { actOnAIReferentLetter, addAIReferentManualRecipient, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
+  addAIReferentManualRecipient: vi.fn(),
   checkAIReferentDocument: vi.fn(),
   loadAIReferentDocumentCheck: vi.fn(),
   uploadAIReferentCommentAudio: vi.fn(),
@@ -153,6 +154,7 @@ describe("AIReferentView", () => {
       totalCount: 1, updatedAt: "2026-09-22T10:00:00Z",
     });
     vi.mocked(loadAIReferentManualRecipients).mockResolvedValue([]);
+    vi.mocked(addAIReferentManualRecipient).mockResolvedValue({ id: "manual-new", name: "Новый адресат", addresses: ["office@example.org"], route: "webmail", categoryKey: "other", addressBookOrganization: "Новый адресат" });
   });
 
   it("shows the address-book manager only to administrators", async () => {
@@ -187,6 +189,38 @@ describe("AIReferentView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ввести вручную" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Новый адресат" } });
     expect(onManualChange).toHaveBeenCalledWith("Новый адресат", "");
+  });
+
+  it("asks before sharing a manually entered address and keeps the draft local when declined", async () => {
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: "Ввести вручную" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Новый адресат" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Адрес или получатель" }), { target: { value: "office@example.org" } });
+    expect(screen.getByRole("group", { name: "Сохранение нового адресата" })).toHaveTextContent("Сохранить введённый адрес в справочник?");
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Нет, только для письма" }));
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
+    expect(addAIReferentManualRecipient).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Адрес или получатель" }), { target: { value: "new@example.org" } });
+    fireEvent.click(screen.getByRole("button", { name: "Да, сохранить для всех" }));
+    await waitFor(() => expect(addAIReferentManualRecipient).toHaveBeenCalledWith("token", { name: "Новый адресат", address: "new@example.org", categoryKey: "other" }));
+    expect(await screen.findByText("Адрес сохранён в общем справочнике.")).toBeInTheDocument();
+  });
+
+  it("keeps the sharing decision open after a server error without claiming the address was saved", async () => {
+    vi.mocked(addAIReferentManualRecipient).mockRejectedValue(new Error("Справочник временно недоступен"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    fireEvent.click(screen.getByRole("button", { name: "Ввести вручную" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Новый адресат" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Адрес или получатель" }), { target: { value: "office@example.org" } });
+    fireEvent.click(screen.getByRole("button", { name: "Да, сохранить для всех" }));
+    expect(await screen.findByText("Справочник временно недоступен")).toHaveAttribute("role", "alert");
+    expect(screen.queryByText("Адрес сохранён в общем справочнике.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Нет, только для письма" }));
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeEnabled();
   });
 
   it("uses a readable Windows-safe packet name", () => {
@@ -303,6 +337,7 @@ describe("AIReferentView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Ввести вручную" }));
     fireEvent.change(await screen.findByRole("textbox", { name: "Организация-получатель" }), { target: { value: "Партнёр" } });
     fireEvent.change(screen.getByRole("textbox", { name: "Адрес или получатель" }), { target: { value: "office@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Нет, только для письма" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Согласующий" }), { target: { value: "user-2" } });
     const file = new File(["PK"], "letter.docx");
     fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [file] } });
