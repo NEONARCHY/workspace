@@ -1292,6 +1292,30 @@ export function updateWorkspaceTask(
   );
 }
 
+export function requestWorkspaceTaskDeadline(
+  token: string, taskId: string, proposedDueAt: string, reason: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(`/tasks/${taskId}/deadline-requests`, {
+    method: "POST", body: JSON.stringify({ proposedDueAt, reason }),
+  }, token);
+}
+
+export function decideWorkspaceTaskDeadline(
+  token: string, taskId: string, requestId: string, approved: boolean,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(`/tasks/${taskId}/deadline-requests/${requestId}/decision`, {
+    method: "POST", body: JSON.stringify({ approved }),
+  }, token);
+}
+
+export function extendWorkspaceTaskDeadline(
+  token: string, taskId: string, proposedDueAt: string,
+): Promise<WorkspaceTask> {
+  return apiRequest<WorkspaceTask>(`/tasks/${taskId}/extend-deadline`, {
+    method: "POST", body: JSON.stringify({ proposedDueAt }),
+  }, token);
+}
+
 export function deleteWorkspaceTask(token: string, taskId: string): Promise<void> {
   return apiRequest<void>(`/tasks/${taskId}`, { method: "DELETE" }, token);
 }

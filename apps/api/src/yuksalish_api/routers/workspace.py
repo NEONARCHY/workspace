@@ -62,11 +62,13 @@ from yuksalish_api.repository import (
     create_project,
     create_task,
     create_trip_request,
+    decide_task_deadline_extension,
     delete_approval_request,
     delete_feed_comment,
     delete_feed_post,
     delete_task,
     delete_task_checklist_item,
+    extend_task_deadline,
     get_attachment,
     load_workspace,
     mark_all_notifications_read,
@@ -77,6 +79,7 @@ from yuksalish_api.repository import (
     publish_workflow,
     remove_task_dependency,
     remove_task_participant,
+    request_task_deadline_extension,
     respond_to_calendar_event,
     return_task_for_revision,
     save_workflow,
@@ -122,7 +125,9 @@ from yuksalish_api.workspace_schemas import (
     CreateTaskCommentRequest,
     CreateTaskRequest,
     CreateTripRequest,
+    DecideTaskDeadlineExtension,
     EfficiencyOverviewResponse,
+    ExtendTaskDeadline,
     FeedPostResponse,
     NotificationPreferencesResponse,
     NotificationPreferencesUpdate,
@@ -130,6 +135,7 @@ from yuksalish_api.workspace_schemas import (
     PinFeedPostRequest,
     ProfileAvatarResponse,
     ProjectResponse,
+    RequestTaskDeadlineExtension,
     RespondCalendarEventRequest,
     ReturnTaskForRevisionRequest,
     SaveWorkflowRequest,
@@ -661,6 +667,62 @@ async def post_task_return_for_revision(
         result = await return_task_for_revision(connection, current_user, task_id, payload)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/deadline-requests", response_model=TaskResponse, status_code=201)
+async def post_task_deadline_request(
+    task_id: UUID,
+    payload: RequestTaskDeadlineExtension,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await request_task_deadline_extension(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post(
+    "/tasks/{task_id}/deadline-requests/{request_id}/decision", response_model=TaskResponse,
+)
+async def post_task_deadline_decision(
+    task_id: UUID,
+    request_id: UUID,
+    payload: DecideTaskDeadlineExtension,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await decide_task_deadline_extension(
+            connection, current_user, task_id, request_id, payload,
+        )
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
+    return result
+
+
+@router.post("/tasks/{task_id}/extend-deadline", response_model=TaskResponse)
+async def post_task_extend_deadline(
+    task_id: UUID,
+    payload: ExtendTaskDeadline,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> TaskResponse:
+    try:
+        result = await extend_task_deadline(connection, current_user, task_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
     await _event_bus(request).publish({"type": "task.updated", "entityId": result.id})
     return result
 

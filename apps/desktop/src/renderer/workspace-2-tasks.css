@@ -299,7 +299,11 @@
 .task-record-dialog .task-section-empty { margin: 11px 0 0; padding: 12px 13px; border: 1px dashed #d5e3e5; border-radius: 10px; background: rgb(255 255 255 / 68%); color: #607587; font-size: 12px; }
 .task-record-dialog .task-review-hint { margin: 9px 0 0; color: var(--ws-muted, #526a7b); }
 .task-record-dialog .task-result-error { color: #a23b45; font-size: 13px; }
-.task-record-dialog .detail-footer { position: sticky; bottom: 0; z-index: 3; grid-template-columns: 28px minmax(0, 1fr); align-items: center; margin: 18px -22px 0; padding: 14px 22px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgb(41 58 85 / 8%); background: #f8fbfb; box-shadow: 0 -10px 28px rgb(32 54 72 / 7%); }
+.task-record-dialog .detail-footer { position: sticky; bottom: 0; z-index: 3; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; margin: 18px -22px 0; padding: 14px 22px calc(14px + env(safe-area-inset-bottom)); border-top: 1px solid rgb(41 58 85 / 8%); background: #f8fbfb; box-shadow: 0 -10px 28px rgb(32 54 72 / 7%); }
+.task-record-dialog .detail-footer .task-delete-button { margin-right: auto; }
+.task-record-dialog .task-deadline-control { display: grid; justify-items: start; gap: 8px; padding: 0 20px 12px; }
+.task-record-dialog .task-deadline-editor { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; width: 100%; }
+.task-record-dialog .task-deadline-editor label { display: grid; gap: 5px; min-width: min(100%, 230px); color: var(--ws-muted); font-size: 12px; }
 .task-detail-heading-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .task-delete-button { color: #a23b45; }
 .task-delete-button:hover { color: #8f2833; background: #fff0f1; }

@@ -26,6 +26,7 @@ import {
   DialogSurface,
   DialogTitle,
   Input,
+  Textarea,
   Popover,
   PopoverSurface,
   PopoverTrigger,
@@ -58,6 +59,7 @@ import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-a
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
 import {
@@ -111,6 +113,12 @@ export interface MessengerViewProps {
     message: ChatMessage,
     payload: WorkspaceTaskCreateInput,
   ) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
+  readonly onRequestTaskDeadline?: (
+    task: WorkspaceTask, proposedDueAt: string, reason: string,
+  ) => Promise<WorkspaceTask | undefined>;
+  readonly onDecideTaskDeadline?: (
+    task: WorkspaceTask, requestId: string, approved: boolean,
+  ) => Promise<WorkspaceTask | undefined>;
   readonly onCreateCalendarEventFromChat?: (chat: ChatSummary) => void;
   readonly onDownloadAttachment: (
     attachment: WorkspaceAttachment,
@@ -240,6 +248,8 @@ function Conversation({
   onEditMessage,
   onDeleteMessage,
   onCreateTaskFromMessage,
+  onRequestTaskDeadline,
+  onDecideTaskDeadline,
   onCreateCalendarEventFromChat,
   onDownloadAttachment,
   onLoadAttachment,
@@ -286,6 +296,12 @@ function Conversation({
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deadlineOpen, setDeadlineOpen] = useState(false);
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineReason, setDeadlineReason] = useState("");
+  const [deadlineBusy, setDeadlineBusy] = useState(false);
+  const [deadlineDecisionId, setDeadlineDecisionId] = useState<string>();
+  const [deadlineError, setDeadlineError] = useState("");
   const [vanishRequest, setVanishRequest] = useState<MessageVanishRequest>();
   const [outgoingReveal, setOutgoingReveal] = useState<OutgoingMessageReveal>();
   const vanishSequence = useRef(0);
@@ -569,6 +585,45 @@ function Conversation({
       setMentionPicker(false);
     });
   };
+  const taskForChat = chat.contextType === "task"
+    ? tasks.find((task) => task.id === chat.contextId) : undefined;
+  const currentExecutor = taskForChat?.assigneeId === currentUserId
+    || taskForChat?.participants.some((person) => person.userId === currentUserId && person.role === "co_assignee");
+  const canRequestDeadline = !!onRequestTaskDeadline && !!taskForChat?.dueAt
+    && !!currentExecutor && taskForChat.authorId !== currentUserId
+    && !["completed", "cancelled"].includes(taskForChat.status)
+    && !taskForChat.deadlineRequests?.some((item) => item.status === "pending");
+  const canDecideDeadline = taskForChat?.authorId === currentUserId
+    || ["manager", "admin", "superadmin"].includes(currentUserRole);
+  const requestDeadline = async () => {
+    if (!taskForChat?.dueAt || !onRequestTaskDeadline || deadlineBusy) return;
+    const proposed = new Date(deadlineDate);
+    if (!Number.isFinite(proposed.getTime()) || proposed.getTime() <= Math.max(Date.now(), new Date(taskForChat.dueAt).getTime())) {
+      setDeadlineError("Выберите дату и время позже текущего срока и настоящего момента.");
+      return;
+    }
+    if (!deadlineReason.trim()) { setDeadlineError("Укажите причину переноса."); return; }
+    setDeadlineError("");
+    setDeadlineBusy(true);
+    try {
+      if (await onRequestTaskDeadline(taskForChat, proposed.toISOString(), deadlineReason.trim())) {
+        setDeadlineOpen(false);
+        setDeadlineReason("");
+      }
+    } finally {
+      setDeadlineBusy(false);
+    }
+  };
+  const decideDeadline = async (requestId: string, approved: boolean) => {
+    if (!taskForChat || !onDecideTaskDeadline || deadlineDecisionId) return;
+    setDeadlineDecisionId(requestId);
+    setDeadlineError("");
+    try {
+      await onDecideTaskDeadline(taskForChat, requestId, approved);
+    } finally {
+      setDeadlineDecisionId(undefined);
+    }
+  };
   return (
     <article className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}>
       <header className="conversation-header">
@@ -585,6 +640,14 @@ function Conversation({
           </div>
         </div>
         <div className="conversation-header-actions">
+          {canRequestDeadline ? <Button appearance="secondary" icon={<CalendarLtr24Regular />} aria-expanded={deadlineOpen} onClick={() => {
+            if (!deadlineOpen && taskForChat?.dueAt) {
+              const next = new Date(Math.max(Date.now(), new Date(taskForChat.dueAt).getTime()) + 24 * 60 * 60_000);
+              setDeadlineDate(new Date(next.getTime() - next.getTimezoneOffset() * 60_000).toISOString().slice(0, 16));
+              setDeadlineError("");
+            }
+            setDeadlineOpen((current) => !current);
+          }}>Попросить перенос срока</Button> : null}
           <Popover positioning="below-end" trapFocus>
             <PopoverTrigger disableButtonEnhancement><Button className="chat-background-trigger" appearance="subtle" icon={<Color24Regular />} aria-label="Выбрать фон переписки">Фон</Button></PopoverTrigger>
             <PopoverSurface className="chat-background-picker" aria-label="Фон переписки">
@@ -617,6 +680,14 @@ function Conversation({
           </> : null}
         </div>
       </header>
+      {deadlineOpen && canRequestDeadline ? <div className="task-deadline-request-popover" role="region" aria-label="Запрос переноса срока">
+        <strong>Новый срок задачи</strong>
+        <p>Постановщик увидит запрос прямо в чате задачи.</p>
+        <label>Дата и время<WorkspaceDateTimePicker ariaLabel="Запрашиваемый срок" value={deadlineDate} min={taskForChat?.dueAt ? new Date(new Date(taskForChat.dueAt).getTime() - new Date(taskForChat.dueAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : undefined} onChange={setDeadlineDate} /></label>
+        <label>Причина<Textarea aria-label="Причина переноса срока" value={deadlineReason} onChange={(_, data) => setDeadlineReason(data.value)} placeholder="Что мешает завершить задачу в срок?" /></label>
+        {deadlineError ? <span role="alert">{deadlineError}</span> : null}
+        <div className="task-deadline-request-actions"><Button appearance="subtle" disabled={deadlineBusy} onClick={() => setDeadlineOpen(false)}>Отмена</Button><Button appearance="primary" disabled={deadlineBusy || !deadlineReason.trim()} onClick={() => void requestDeadline()}>{deadlineBusy ? "Отправляем…" : "Отправить запрос в чат"}</Button></div>
+      </div> : null}
       {personalPreferences?.archivedChatIds.includes(chat.id) && <div className="chat-archive-banner">
         <span>Этот чат в вашем архиве</span>
         <Button size="small" appearance="subtle" disabled={busy || !onPersonalChat} onClick={() => void run(() => onPersonalChat!(chat.id, "unarchive"))}>Вернуть из архива</Button>
@@ -678,11 +749,22 @@ function Conversation({
           const previousDate = previous
             ? new Date(previous).toLocaleDateString("ru-RU")
             : "История переписки";
+          const deadlineRequest = message.systemKind === "task_deadline_request"
+            ? taskForChat?.deadlineRequests?.find((item) => item.messageId === message.id) : undefined;
           if (message.systemKind) return <div key={message.id}>
             {(index === 0 || date !== previousDate) && <div className="date-separator">{date}</div>}
-            <div className="message-system" data-message-id={message.id} role="note">
+            {deadlineRequest ? <div className="task-deadline-message" data-message-id={message.id} role="group" aria-label="Запрос переноса срока">
+              <strong>Перенос срока · {deadlineRequest.status === "pending" ? "ожидает решения" : deadlineRequest.status === "approved" ? "подтверждён" : deadlineRequest.status === "rejected" ? "отклонён" : "неактуален"}</strong>
+              <p>{message.body}</p>
+              <div><span>Было: {new Date(deadlineRequest.oldDueAt).toLocaleString("ru-RU")}</span><span>Предложено: {new Date(deadlineRequest.proposedDueAt).toLocaleString("ru-RU")}</span></div>
+              {deadlineRequest.status === "pending" && canDecideDeadline && onDecideTaskDeadline ? <div className="task-deadline-message-actions">
+                <Button appearance="primary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, true)}>Подтвердить перенос</Button>
+                <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>
+              </div> : null}
+              <time>{message.time}</time>
+            </div> : <div className="message-system" data-message-id={message.id} role="note">
               <span>{message.body}</span><time>{message.time}</time>
-            </div>
+            </div>}
           </div>;
           const own = message.authorId === currentUserId;
           const messageAttachments = attachments.filter(

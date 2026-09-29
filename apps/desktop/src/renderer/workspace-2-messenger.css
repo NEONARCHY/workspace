@@ -553,6 +553,17 @@
   text-align: center;
 }
 .messenger-view .message-system time { flex: none; color: #7a929a; font-size: 10px; font-variant-numeric: tabular-nums; }
+.task-deadline-request-popover { display: grid; gap: 10px; width: min(340px, calc(100vw - 32px)); padding: 16px; }
+.task-deadline-request-popover > strong { color: var(--ws-ink); font-size: 15px; }
+.task-deadline-request-popover > p { margin: 0; color: var(--ws-muted); font-size: 12px; }
+.task-deadline-request-popover > label { display: grid; gap: 5px; color: var(--ws-ink); font-size: 12px; }
+.task-deadline-request-popover > [role="alert"] { color: #a23b45; font-size: 12px; }
+.task-deadline-message { display: grid; gap: 8px; width: min(100%, 520px); margin: 12px auto; padding: 15px; border: 1px solid #bcdfe0; border-radius: 14px; color: var(--ws-ink); background: #f6fcfb; }
+.task-deadline-message > strong { font-size: 14px; }
+.task-deadline-message > p { margin: 0; overflow-wrap: anywhere; }
+.task-deadline-message > div:not(.task-deadline-message-actions) { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--ws-muted); font-size: 12px; }
+.task-deadline-message-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.task-deadline-message > time { justify-self: end; color: var(--ws-muted); font-size: 11px; }
 
 /* A dropped pinned row can still be under the pointer; don't lift it a second time. */
 .messenger-view .chat-list-item.pinned .chat-row:hover { transform: none; }
