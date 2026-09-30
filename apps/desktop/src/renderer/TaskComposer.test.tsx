@@ -4,6 +4,12 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { TaskComposer } from "./TaskComposer";
 import { people } from "./test-fixtures/demo-data";
+import type { WorkspaceDepartment } from "@yuksalish/contracts";
+
+const taskDepartments: readonly WorkspaceDepartment[] = [{
+  id: "central-team", code: "central-team", name: "Проектный отдел", scope: "central",
+  assignedUsersCount: 3, memberIds: ["aziza", "baxtiyor", "dilshod"], leadUserId: "baxtiyor",
+}];
 
 afterEach(() => {
   cleanup();
@@ -64,4 +70,38 @@ it("flushes the new task draft before a web update reload", async () => {
     "task:aziza",
     expect.stringContaining('"title":"Задача перед обновлением"'),
   ));
+});
+
+it("adds an individual participant from the compact team browser", () => {
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} departments={taskDepartments} tasks={[]} currentUserId="aziza"
+      initialTitle="Подготовить документ" onClose={vi.fn()} onSubmit={vi.fn()} />
+  </FluentProvider>);
+
+  fireEvent.click(screen.getByText("Команда", { selector: "summary strong" }));
+  expect(screen.getByRole("group", { name: "Доступные сотрудники" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Бахтиёр Самугов/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
+  expect(screen.getByRole("button", { name: "Убрать участника Бахтиёр Самугов" })).toBeInTheDocument();
+});
+
+it("uses the department lead when the whole department becomes responsible", async () => {
+  const onSubmit = vi.fn().mockResolvedValue({ id: "created" });
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} departments={taskDepartments} tasks={[]} currentUserId="aziza"
+      initialTitle="Подготовить документ" onClose={vi.fn()} onSubmit={onSubmit} />
+  </FluentProvider>);
+
+  fireEvent.click(screen.getByText("Команда", { selector: "summary strong" }));
+  fireEvent.click(screen.getByRole("button", { name: "Отдел целиком" }));
+  fireEvent.click(screen.getByRole("button", { name: /Проектный отдел/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Назначить отдел ответственным" }));
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    assigneeId: "baxtiyor",
+    participants: expect.arrayContaining([
+      { userId: "aziza", role: "co_assignee" },
+      { userId: "dilshod", role: "co_assignee" },
+    ]),
+  })));
 });

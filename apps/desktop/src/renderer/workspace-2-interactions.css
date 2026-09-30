@@ -86,6 +86,9 @@
   color: var(--ws-text);
 }
 .workspace-select .fui-Dropdown__button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.workspace-select-listbox.fui-Listbox { max-height: min(320px, calc(100dvh - 80px)); max-width: min(440px, calc(100vw - 24px)); overflow-y: auto; }
+.workspace-select-listbox .fui-Option { height: auto; min-height: 36px; align-items: flex-start; padding-block: 8px; }
+.workspace-select-option-label { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 .workspace-select-person-wrap { position: relative; display: block; width: 100%; min-width: 0; }
 .workspace-select-person-wrap > .workspace-select { width: 100%; }
 .workspace-select-person-wrap > .workspace-select-person-avatar { position: absolute; z-index: 1; top: 50%; left: 10px; pointer-events: none; transform: translateY(-50%); }
@@ -203,8 +206,11 @@
 @media (min-width: 761px) {
   .app-rail .rail-label, .app-rail .rail-brand, .app-rail .rail-profile > span:last-child { transition: opacity 180ms var(--ws-ease), transform 300ms var(--ws-ease); }
   .rail-collapsed .app-rail .rail-label, .rail-collapsed .app-rail .rail-brand, .rail-collapsed .app-rail .rail-profile > span:last-child { display: block; opacity: 0; pointer-events: none; transform: translateX(-8px); }
-  .rail-collapsed .app-rail .rail-action { grid-template-columns: 28px minmax(0, 0fr) 0; justify-content: center; }
-  .rail-collapsed .app-rail .rail-action .rail-label { width: 0; }
+  .rail-collapsed .app-rail .rail-nav > .rail-slot > .rail-action { grid-template-columns: minmax(0, 1fr); gap: 0; justify-items: center; padding-inline: 0; }
+  .rail-collapsed .app-rail .rail-nav > .rail-slot > .rail-action .rail-label,
+  .rail-collapsed .app-rail .rail-nav > .rail-slot > .rail-action .rail-more-count { display: none; }
+  .rail-collapsed .app-rail .rail-nav > .rail-slot > .rail-action .rail-icon { width: 28px; height: 28px; }
+  .rail-collapsed .app-rail .workspace-logo { gap: 0; }
   .rail-collapsed .app-rail .rail-brand { width: 0; overflow: hidden; }
 }
 .app-rail .rail-more-drawer .rail-action { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; justify-content: stretch; min-height: 42px; padding: 7px 10px; text-align: left; }

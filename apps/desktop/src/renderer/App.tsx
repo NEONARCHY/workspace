@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type {
   ApprovalRequestSummary,
@@ -74,7 +74,6 @@ import {
   Video24Regular,
 } from "@fluentui/react-icons";
 
-import { AccountPanel } from "./AccountPanel";
 import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
@@ -83,37 +82,26 @@ import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
-import { ApprovalsView } from "./ApprovalsView";
-import { CalendarView } from "./CalendarView";
 import { CompanyLogo } from "./CompanyLogo";
-import { ZoomView } from "./ZoomView";
 import { NavigationEditor } from "./NavigationEditor";
 import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
-import { EmployeesView } from "./EmployeesView";
-import { FeedView } from "./FeedView";
 import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
-import { SupportDialog } from "./SupportDialog";
-import { ProjectsView } from "./ProjectsView";
-import { ProjectHubView } from "./ProjectHubView";
-import { TasksView } from "./TasksView";
-import { TeamDashboardView } from "./TeamDashboardView";
 import { WorkdayControl } from "./WorkdayControl";
-import { TripApprovalsView } from "./TripApprovalsView";
-import { AbsencesView } from "./AbsencesView";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
-import { MembersView } from "./MembersView";
-import { HrView } from "./HrView";
-import { AIReferentView } from "./AIReferentView";
-import { AIHisobotView } from "./AIHisobotView";
-import { TelegramAccessView } from "./TelegramAccessView";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
-import { EmployeeProfileDialog } from "./EmployeeProfileDialog";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
+import {
+  AbsencesView, AccountPanel, AIHisobotView, AIReferentView, ApprovalsView,
+  CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
+  MembersView, preloadWorkspaceModules, ProjectHubView, ProjectsView,
+  SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
+  TripApprovalsView, ZoomView,
+} from "./workspace-module-preload";
 import { createRefreshQueue } from "./refresh-queue";
 import { useCompactWindow } from "./use-compact-window";
 import {
@@ -147,6 +135,8 @@ import {
   downloadWorkspaceAttachment,
   extendWorkspaceTaskDeadline,
   loadWorkspace,
+  prewarmAssistantMessages,
+  clearAssistantPreload,
   loadSupportRegistry,
   loadWorkspaceEfficiency,
   loadMembersRegistry,
@@ -1637,6 +1627,27 @@ export function App() {
     });
   }, [reportError, session, workspace.notifications]);
 
+  const preloadToken = session?.accessToken;
+  const preloadUserId = session?.user.id;
+  const preloadAllowedKeys = workspace.moduleAccess
+    .filter((item) => item.permissions.view === true)
+    .map((item) => item.moduleKey).sort().join("|");
+  useEffect(() => {
+    if (!preloadToken || workspace.currentUser.id !== preloadUserId) return;
+    const allowed = new Set(preloadAllowedKeys.split("|"));
+    if (["admin", "superadmin"].includes(workspace.currentUser.role)) allowed.add("telegram_access");
+    const stopPreloading = preloadWorkspaceModules(allowed);
+    const assistantTimer = allowed.has("assistant")
+      ? window.setTimeout(() => prewarmAssistantMessages(preloadToken), 700)
+      : undefined;
+    return () => {
+      stopPreloading();
+      if (assistantTimer !== undefined) window.clearTimeout(assistantTimer);
+      clearAssistantPreload();
+    };
+  }, [preloadToken, preloadUserId, workspace.currentUser.id,
+      workspace.currentUser.role, preloadAllowedKeys]);
+
   if (session === undefined) {
     return (
       <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -1894,6 +1905,7 @@ export function App() {
           </div> : null}
 
           <main className="app-content" id="workspace-content" tabIndex={-1}>
+            <Suspense fallback={<div className="workspace-module-loading" role="status">Открываем раздел…</div>}>
             <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("messenger")}>
             {displayedSection === "notifications" ? (
               <NotificationCenter
@@ -2250,10 +2262,12 @@ export function App() {
               />
             ) : null}
             </RecoveryBoundary>
+            </Suspense>
           </main>
         </div>
       </div>
       {accountOpen ? (
+        <Suspense fallback={<div className="workspace-overlay-loading" role="status">Открываем настройки…</div>}>
         <RecoveryBoundary overlay onHome={closeAccount}>
         <AccountPanel
           token={session.accessToken}
@@ -2270,16 +2284,18 @@ export function App() {
           }))}
         />
         </RecoveryBoundary>
+        </Suspense>
       ) : null}
-      <EmployeeProfileDialog
+      {profileUserId ? <Suspense fallback={null}><EmployeeProfileDialog
         token={session.accessToken}
         userId={profileUserId}
         open={profileUserId !== undefined}
         people={workspace.people}
         onOpenPersonProfile={setProfileUserId}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
-      />
+      /></Suspense> : null}
       {supportOpen ? (
+        <Suspense fallback={null}>
         <SupportDialog
           token={session.accessToken}
           open
@@ -2291,6 +2307,7 @@ export function App() {
           }}
           onRegistryChange={setSupportRegistry}
         />
+        </Suspense>
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       {canUseAssistant ? (

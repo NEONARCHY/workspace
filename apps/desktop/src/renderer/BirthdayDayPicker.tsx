@@ -18,6 +18,7 @@ export function BirthdayDayPicker({ month, day, disabled, onChange }: {
   const [viewMonth, setViewMonth] = useState<number | null>(null);
   const displayedMonth = viewMonth ?? (Number(month) || new Date().getMonth() + 1);
   const firstDayOffset = (new Date(2024, displayedMonth - 1, 1).getDay() + 6) % 7;
+  const daysInMonth = birthdayMonthLength(displayedMonth);
   return <Popover open={open} onOpenChange={(_, data) => { setOpen(data.open); if (!data.open) setViewMonth(null); }} positioning="below-start" trapFocus>
     <PopoverTrigger disableButtonEnhancement><Button className="birthday-day-trigger" appearance="outline" icon={<CalendarLtr20Regular />} disabled={disabled} aria-label="Выберите день рождения">{day || "Выберите день"}</Button></PopoverTrigger>
     <PopoverSurface className="birthday-calendar" aria-label="Календарь дня рождения">
@@ -29,10 +30,11 @@ export function BirthdayDayPicker({ month, day, disabled, onChange }: {
       <div className="birthday-calendar-grid" role="group" aria-label={`Дни месяца ${birthdayMonthName(displayedMonth)}`}>
         {WEEKDAYS.map((name) => <span className="birthday-calendar-weekday" key={name}>{name}</span>)}
         {Array.from({ length: firstDayOffset }, (_, index) => <span key={`blank-${index}`} aria-hidden="true" />)}
-        {Array.from({ length: birthdayMonthLength(displayedMonth) }, (_, index) => {
+        {Array.from({ length: daysInMonth }, (_, index) => {
           const value = index + 1;
           return <button key={value} type="button" aria-label={`${value} ${birthdayMonthName(displayedMonth).toLocaleLowerCase("ru")}`} aria-pressed={Number(month) === displayedMonth && Number(day) === value} onClick={() => { onChange(String(displayedMonth), String(value)); setOpen(false); setViewMonth(null); }}>{value}</button>;
         })}
+        {Array.from({ length: 42 - firstDayOffset - daysInMonth }, (_, index) => <span key={`trailing-${index}`} aria-hidden="true" />)}
       </div>
     </PopoverSurface>
   </Popover>;

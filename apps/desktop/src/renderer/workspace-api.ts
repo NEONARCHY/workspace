@@ -599,7 +599,30 @@ async function apiRequest<T>(
     response.status === 204 ? undefined as T : await response.json() as T, timeout);
 }
 
+let warmedAssistantMessages: {
+  token: string;
+  startedAt: number;
+  promise: Promise<readonly AssistantMessage[]>;
+} | undefined;
+
+export function prewarmAssistantMessages(token: string): void {
+  if (warmedAssistantMessages?.token === token && Date.now() - warmedAssistantMessages.startedAt < 60_000) return;
+  const promise = apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
+  const entry = { token, startedAt: Date.now(), promise };
+  warmedAssistantMessages = entry;
+  void promise.catch(() => {
+    if (warmedAssistantMessages === entry) warmedAssistantMessages = undefined;
+  });
+}
+
+export function clearAssistantPreload(): void { warmedAssistantMessages = undefined; }
+
 export function loadAssistantMessages(token: string): Promise<readonly AssistantMessage[]> {
+  const entry = warmedAssistantMessages;
+  if (entry?.token === token && Date.now() - entry.startedAt < 60_000) {
+    warmedAssistantMessages = undefined;
+    return entry.promise;
+  }
   return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
 }
 
@@ -614,6 +637,7 @@ export function sendAssistantMessage(
   token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
   continueDraft = false,
 ): Promise<AssistantMessage> {
+  clearAssistantPreload();
   return apiRequest<AssistantMessage>("/assistant/messages", {
     method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft }),
   }, token, 65_000);

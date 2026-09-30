@@ -143,7 +143,7 @@ export function WorkspaceSelect({
       {...props}
       ref={controlRef}
       className={["workspace-select", isPersonSelect ? "workspace-select-person" : "", variant === "priority" ? `workspace-priority-select priority-${selectedValues[0]}` : "", className].filter(Boolean).join(" ")}
-      listbox={listboxClassName || variant === "priority" ? { className: [listboxClassName, variant === "priority" ? "workspace-priority-list" : ""].filter(Boolean).join(" ") } : undefined}
+      listbox={{ className: ["workspace-select-listbox", listboxClassName, variant === "priority" ? "workspace-priority-list" : ""].filter(Boolean).join(" ") }}
       multiselect={multiple}
       selectedOptions={selectedValues}
       value={selected.map((option) => option.text).join(", ")}
@@ -156,7 +156,7 @@ export function WorkspaceSelect({
         <Option className={variant === "priority" ? `workspace-priority-option priority-${option.value}` : undefined} disabled={option.disabled} key={option.value} text={option.text} value={option.value}>
           {peopleByKey.has(option.value)
             ? <span className="workspace-select-person-option"><Avatar name={peopleByKey.get(option.value)!.name} size={24} color="colorful" aria-hidden="true" /><span>{option.label}</span></span>
-            : listboxClassName?.includes("release-history") ? <span className="release-history-option-text">{option.label}</span> : option.label}
+            : listboxClassName?.includes("release-history") ? <span className="release-history-option-text">{option.label}</span> : <span className="workspace-select-option-label">{option.label}</span>}
         </Option>
       ))}
     </Dropdown>

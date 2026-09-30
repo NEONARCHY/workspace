@@ -1118,10 +1118,15 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/notifications/notification-task/read"),
       expect.objectContaining({ method: "PATCH" }),
     ));
-    fireEvent.click(screen.getByRole("button", {
+    await waitFor(() => expect(document.querySelector(".tasks-view")).not.toBeNull(), { timeout: 5000 });
+    const taskDialogClose = document.querySelector<HTMLButtonElement>(".task-detail-close");
+    expect(taskDialogClose).not.toBeNull();
+    fireEvent.click(taskDialogClose!);
+    await waitFor(() => expect(document.querySelector(".task-record-dialog")).toBeNull());
+    fireEvent.click(await screen.findByRole("button", {
       name: `Открыть задачу: ${initialTasks[1]!.title}`,
-    }));
-    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title }, { timeout: 3000 })).toBeInTheDocument();
+    }, { timeout: 5000 }));
+    expect(await screen.findByRole("heading", { name: initialTasks[1]!.title }, { timeout: 6000 })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
@@ -1369,8 +1374,8 @@ describe("corporate workspace authentication alpha", () => {
   it("opens the existing invitation form directly from the employee list", async () => {
     mockServer(); render(<App />); await loginToWorkspace("malika");
     fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Пригласить сотрудника" }));
-    expect(screen.getByRole("dialog", { name: "Приглашение сотрудника" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Пригласить сотрудника" }, { timeout: 5000 }));
+    expect(await screen.findByRole("dialog", { name: "Приглашение сотрудника" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Имя сотрудника" })).toBeInTheDocument();
     expect(screen.queryByText("Активные устройства")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Создать приглашение" })).toBeDisabled();
@@ -1906,7 +1911,7 @@ describe("corporate workspace authentication alpha", () => {
     const fetchMock = mockServer();
     render(<App />);
     await loginToWorkspace("aziza", "projects");
-    expect(screen.getByLabelText("Стадии проектов")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Стадии проектов")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новый проект" }));
     fireEvent.change(screen.getByLabelText("Код проекта"), { target: { value: "BP7-TEST" } });
     fireEvent.change(screen.getByLabelText("Название проекта"), { target: { value: "Тестовый проект BP-7" } });
@@ -1933,7 +1938,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Согласование поездок" }));
-    fireEvent.click(screen.getByRole("button", { name: "Новая командировка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новая командировка" }, { timeout: 5000 }));
     fireEvent.change(screen.getByLabelText("Цель поездки"), { target: { value: "Рабочая встреча BP-7" } });
     fireEvent.change(screen.getByLabelText("Куда едем"), { target: { value: "Бухара" } });
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
@@ -1953,7 +1958,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Лента" }));
-    expect(screen.getByText("Корпоративная лента подключена.")).toBeInTheDocument();
+    expect(await screen.findByText("Корпоративная лента подключена.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Новое объявление" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Заголовок публикации" }), {
       target: { value: "Итоги рабочего дня" },
@@ -1984,7 +1989,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(within(document.querySelector(".app-rail")!).getByRole("button", {
       name: "Календарь",
     }));
-    expect(screen.getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Календарь" })).toBeInTheDocument();
     expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     })).not.toBeInTheDocument();
