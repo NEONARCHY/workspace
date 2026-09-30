@@ -518,6 +518,10 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
   .eff-overview-grid { grid-template-columns: minmax(0,1fr); }
   .eff-context-stack { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+@media (max-width: 1000px) {
+  .task-composer .record-composer-columns { grid-template-columns: minmax(0, 1fr); }
+  .task-composer .record-composer-summary { position: static; }
+}
 @media (max-width: 760px) {
   .app-shell, .app-shell.rail-collapsed { gap: 8px; padding: 6px; grid-template-columns: 62px minmax(0,1fr); }
   .app-shell .app-rail { padding: 12px 5px; border-radius: 20px; }

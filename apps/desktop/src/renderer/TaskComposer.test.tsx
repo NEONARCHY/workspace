@@ -83,6 +83,7 @@ it("adds an individual participant from the compact team browser", () => {
   fireEvent.click(screen.getByRole("button", { name: /Бахтиёр Самугов/ }));
   fireEvent.click(screen.getByRole("button", { name: "Добавить сотрудника" }));
   expect(screen.getByRole("button", { name: "Убрать участника Бахтиёр Самугов" })).toBeInTheDocument();
+  expect(screen.getByText("Бахтиёр Самугов", { selector: ".task-composer-person-info strong" })).toBeInTheDocument();
 });
 
 it("uses the department lead when the whole department becomes responsible", async () => {
@@ -94,7 +95,10 @@ it("uses the department lead when the whole department becomes responsible", asy
 
   fireEvent.click(screen.getByText("Команда", { selector: "summary strong" }));
   fireEvent.click(screen.getByRole("button", { name: "Отдел целиком" }));
+  expect(screen.getByRole("button", { name: "Отдел целиком" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("button", { name: "Сотрудники" })).toHaveAttribute("aria-pressed", "false");
   fireEvent.click(screen.getByRole("button", { name: /Проектный отдел/ }));
+  expect(screen.getByRole("button", { name: "Назначить отдел ответственным" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Назначить отдел ответственным" }));
   fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
