@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import type {
   AssistantActionDraft,
@@ -89,14 +90,37 @@ function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
   return cycle.interval > 1 ? `${base} · интервал ${cycle.interval}` : base;
 }
 
-function TaskHelp({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+export function TaskHelp({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLSpanElement>(null);
+  const [position, setPosition] = useState<{ readonly top: number; readonly left: number } | null>(null);
+  const surfaceId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const surfaceRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const anchor = buttonRef.current?.getBoundingClientRect();
+      const surface = surfaceRef.current?.getBoundingClientRect();
+      if (!anchor || !surface) return;
+      const margin = 12;
+      const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - surface.width - margin));
+      const top = anchor.top >= surface.height + margin * 2
+        ? anchor.top - surface.height - 7
+        : Math.min(anchor.bottom + 7, window.innerHeight - surface.height - margin);
+      setPosition({ top: Math.max(margin, top), left });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    document.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      document.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!buttonRef.current?.contains(event.target as Node) && !surfaceRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const closeOnEscape = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -111,10 +135,10 @@ function TaskHelp({ title, children }: { readonly title: string; readonly childr
       document.removeEventListener("keydown", closeOnEscape, true);
     };
   }, [open]);
-  return <span className="task-section-help-wrap" ref={wrapperRef}>
-    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} title={`О разделе «${title}»`} onClick={() => setOpen((current) => !current)}>?</button>
-    {open ? <span className="task-section-help-surface" role="note"><strong>{title}</strong><span>{children}</span></span> : null}
-  </span>;
+  return <>
+    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={() => setOpen((current) => !current)}>?</button>
+    {open ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, document.body) : null}
+  </>;
 }
 
 function TaskSectionHeading({ title, help, meta }: {
