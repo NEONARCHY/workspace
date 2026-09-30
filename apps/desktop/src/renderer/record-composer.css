@@ -76,48 +76,56 @@
 .task-composer-add-row.participant-add-row, .task-composer-add-row.dependency-add-row { grid-template-columns: minmax(160px, 1.2fr) minmax(150px, .8fr) auto; }
 .task-composer-empty { margin: 14px 0 0; color: var(--ws-muted); font-size: 12px; }
 .task-composer-chip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 14px; }
-.task-composer-person-chip { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 48px; padding: 8px 9px; border-radius: 12px; background: #f2f7f9; box-shadow: inset 0 0 0 1px rgb(0 145 168 / 9%); }
-.task-composer-person-chip > span { display: grid; gap: 2px; }
+.task-composer-person-chip { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; min-height: 48px; padding: 8px 9px; border-radius: 12px; background: #f2f7f9; box-shadow: inset 0 0 0 1px rgb(0 145 168 / 9%); }
+.task-composer-person-chip > .employee-profile-link { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; gap: 9px; min-width: 0; }
+.task-composer-person-info { display: grid; gap: 2px; min-width: 0; }
+.task-composer-person-info > :is(strong, small) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-composer-person-chip strong { color: var(--ws-text); font-size: 12px; }
 .task-composer-person-chip small { color: var(--ws-muted); font-size: 11px; }
 .task-composer-person-chip > button, .task-composer-checklist button, .task-composer-dependencies button { display: grid; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; place-items: center; color: #667b8d; background: transparent; cursor: pointer; }
 .task-composer-person-chip > button:hover, .task-composer-checklist button:hover, .task-composer-dependencies button:hover { color: #932137; background: #fff0f2; }
-.task-team-builder { display: grid; gap: 16px; min-width: 0; }
-.task-team-lead { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 14px; border-radius: 13px; background: #edf5f5; }
-.task-team-lead-icon { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 10px; color: #146d7c; background: #dceeee; }
-.task-team-lead strong, .task-team-roster-heading strong { color: var(--ws-navy); font-size: 13px; font-weight: 650; }
-.task-team-lead p { margin: 4px 0 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
-.task-team-total { align-self: center; padding: 5px 8px; border-radius: 7px; color: #146d7c; background: #fff; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.task-team-modes { display: flex; gap: 4px; padding: 4px; border-radius: 11px; background: #eef3f4; }
-.task-team-modes button, .task-team-scopes button { border: 0; border-radius: 8px; color: #526979; background: transparent; font: inherit; cursor: pointer; }
-.task-team-modes button { flex: 1; min-width: 0; min-height: 38px; padding: 7px 12px; font-size: 13px; font-weight: 600; }
-.task-team-modes button[aria-pressed="true"], .task-team-scopes button[aria-pressed="true"] { color: #17586b; background: #fff; box-shadow: 0 1px 5px rgb(27 70 83 / 10%); }
-.task-team-modes button:not([aria-pressed="true"]):hover, .task-team-scopes button:not([aria-pressed="true"]):hover { color: #17586b; background: rgb(255 255 255 / 58%); }
-.task-team-picker { min-width: 0; overflow: hidden; border: 1px solid #dbe7e9; border-radius: 13px; background: #fff; }
-.task-team-picker-toolbar { display: grid; gap: 9px; padding: 12px; border-bottom: 1px solid #e9eff0; }
+.task-team-builder { display: grid; gap: 18px; min-width: 0; }
+.task-team-lead { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 3px 11px; padding: 13px 16px; border-left: 3px solid var(--ws-turquoise); border-radius: 5px 12px 12px 5px; background: #f1f7f7; }
+.task-team-lead > .fui-Avatar { grid-row: 1 / 3; }
+.task-team-lead-label { display: block; margin-bottom: 2px; color: var(--ws-link); font-size: 12px; font-weight: 600; }
+.task-team-lead strong, .task-team-roster-heading strong { color: var(--ws-navy); font-size: 14px; font-weight: 650; }
+.task-team-lead p { grid-column: 2; margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
+.task-team-modes { display: flex; gap: 22px; padding: 0 3px; border-bottom: 1px solid #d9e4e7; }
+.task-team-modes button, .task-team-scopes button { border: 0; color: #526979; background: transparent; font: inherit; cursor: pointer; }
+.task-team-modes button { min-height: 39px; margin-bottom: -1px; padding: 7px 2px 10px; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 600; }
+.task-team-modes button[aria-pressed="true"] { border-color: var(--ws-turquoise); color: var(--ws-navy); }
+.task-team-modes button:hover, .task-team-scopes button:not([aria-pressed="true"]):hover { color: var(--ws-link); }
+.task-team-picker { min-width: 0; overflow: hidden; border: 1px solid #dce8ea; border-radius: 12px; background: #fbfdfd; }
+.task-team-picker-toolbar { display: grid; gap: 10px; padding: 13px; border-bottom: 1px solid #e5ecee; }
 .task-team-picker-toolbar .fui-Input { width: 100%; min-width: 0; }
 .task-team-scopes { display: flex; gap: 4px; align-items: center; }
-.task-team-scopes button { min-height: 28px; padding: 5px 9px; font-size: 12px; font-weight: 600; }
-.task-team-options { display: grid; align-content: start; max-height: 220px; min-height: 102px; padding: 5px; overflow-y: auto; scrollbar-width: thin; }
-.task-team-option { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 9px; width: 100%; min-height: 52px; padding: 6px 9px; border: 1px solid transparent; border-radius: 9px; color: var(--ws-text); background: transparent; text-align: left; cursor: pointer; }
-.task-team-option:hover { background: #f2f7f7; }
-.task-team-option[aria-pressed="true"] { border-color: #9acbd0; background: #e9f5f5; }
+.task-team-scopes button { min-height: 28px; padding: 5px 9px; border-radius: 7px; font-size: 12px; font-weight: 600; }
+.task-team-scopes button[aria-pressed="true"] { color: var(--ws-link); background: #e7f3f4; }
+.task-team-options { display: grid; align-content: start; max-height: 236px; min-height: 102px; overflow-y: auto; scrollbar-width: thin; }
+.task-team-option { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; min-height: 58px; padding: 9px 13px; border: 0; border-bottom: 1px solid #edf2f3; color: var(--ws-text); background: #fff; text-align: left; cursor: pointer; }
+.task-team-option:last-child { border-bottom: 0; }
+.task-team-option:hover { background: #f3f8f8; }
+.task-team-option[aria-pressed="true"] { background: #eaf5f5; box-shadow: inset 3px 0 var(--ws-turquoise); }
 .task-team-option-copy { display: grid; gap: 2px; min-width: 0; }
-.task-team-option-copy strong { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.task-team-option-copy strong { overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1.3; text-overflow: ellipsis; text-wrap: pretty; }
 .task-team-option-copy small { overflow: hidden; color: var(--ws-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.task-team-option-state { padding: 4px 7px; border-radius: 6px; color: var(--ws-link); background: #edf6f6; font-size: 11px; font-weight: 600; }
+.task-team-option[aria-pressed="true"] .task-team-option-state { color: #fff; background: var(--ws-link); }
 .task-team-department-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 9px; color: #287481; background: #e7f1f1; }
-.task-team-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 12px; border-top: 1px solid #e9eff0; }
+.task-team-actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; padding: 13px; border-top: 1px solid #e5ecee; }
 .task-team-actions .workspace-select { width: 100%; min-width: 0; }
-.task-team-department-actions { display: grid; gap: 10px; padding: 13px; border-top: 1px solid #e9eff0; background: #f5f9f8; }
+.task-team-role { display: grid; gap: 5px; min-width: 0; color: var(--ws-muted); font-size: 12px; font-weight: 600; }
+.task-team-department-actions { display: grid; gap: 12px; padding: 14px; border-top: 1px solid #e5ecee; background: #f3f8f8; }
 .task-team-department-actions strong { color: var(--ws-navy); font-size: 13px; }
 .task-team-department-actions p, .task-team-department-actions > small { margin: 3px 0 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }
 .task-team-department-actions .workspace-select { width: 100%; }
 .task-team-department-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .task-team-department-buttons .fui-Button { min-width: 0; white-space: normal; text-align: center; }
 .task-team-no-results { margin: auto; padding: 16px; color: var(--ws-muted); font-size: 12px; text-align: center; }
-.task-team-roster-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.task-team-roster-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 15px; border-top: 1px solid #e5ecee; }
 .task-team-roster-heading span { color: var(--ws-muted); font-size: 12px; }
-.task-team-builder .task-composer-chip-list { margin-top: -6px; }
+.task-team-builder .task-composer-chip-list { grid-template-columns: minmax(0, 1fr); margin-top: -6px; }
+.task-team-builder .task-composer-person-chip { border: 1px solid #dfeaed; background: #f7fafb; box-shadow: none; }
 .task-team-empty { margin: -7px 0 0; padding: 12px; border: 1px dashed #cadadd; border-radius: 9px; color: var(--ws-muted); background: #fafcfc; font-size: 12px; line-height: 1.45; }
 .task-team-builder :is(button, input):focus-visible { outline: 2px solid #247d8d; outline-offset: 2px; }
 .task-composer-checklist { display: grid; gap: 7px; margin: 14px 0 0; padding: 0; list-style: none; }
@@ -153,8 +161,7 @@
   .task-composer-add-row.participant-add-row, .task-composer-add-row.dependency-add-row { grid-template-columns: minmax(0, 1fr); }
   .task-composer-add-row.participant-add-row .fui-Button, .task-composer-add-row.dependency-add-row .fui-Button { justify-self: start; }
   .task-composer-chip-list { grid-template-columns: minmax(0, 1fr); }
-  .task-team-lead { grid-template-columns: 38px minmax(0, 1fr); }
-  .task-team-total { grid-column: 2; justify-self: start; }
+  .task-team-lead { grid-template-columns: 36px minmax(0, 1fr); }
 }
 @media (max-width: 540px) {
   .task-composer-add-row { grid-template-columns: minmax(0, 1fr); }

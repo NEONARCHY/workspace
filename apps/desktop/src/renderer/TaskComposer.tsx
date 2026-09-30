@@ -464,12 +464,12 @@ export function TaskComposer({
               </div>
             </RecordSection>
 
-            <RecordSection collapsible summary={participants.length ? `${participants.length} дополнительных участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соберите участников задачи без длинных выпадающих списков.">
+            <RecordSection collapsible summary={participants.length ? `Дополнительно: ${participants.length}` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Добавьте людей или целый отдел к задаче.">
               <div className="task-team-builder">
                 <div className="task-team-lead">
-                  <span className="task-team-lead-icon" aria-hidden="true"><People20Regular /></span>
-                  <div><strong>Дополнительные участники</strong><p>Добавьте сотрудников по одному или выберите целый отдел. Ответственный указан в основной карточке.</p></div>
-                  <span className="task-team-total">{participants.length} добавлено</span>
+                  <Avatar name={assignee?.name ?? "Ответственный"} size={36} color="colorful" aria-hidden="true" />
+                  <div><span className="task-team-lead-label">Ответственный за задачу</span><strong>{assignee?.name ?? "Не выбран"}</strong></div>
+                  <p>Остальных можно добавить по одному или целым отделом.</p>
                 </div>
                 <div className="task-team-modes" role="group" aria-label="Способ добавления участников">
                   <button type="button" aria-pressed={teamMode === "people"} onClick={() => { setTeamMode("people"); setTeamSearch(""); setDepartmentId(""); }}>Сотрудники</button>
@@ -488,13 +488,14 @@ export function TaskComposer({
                       {filteredTeamPeople.length ? filteredTeamPeople.map((person) => <button type="button" key={person.id} className="task-team-option" aria-pressed={participantId === person.id} onClick={() => setParticipantId(person.id)}>
                         <Avatar name={person.name} size={32} color="colorful" aria-hidden="true" />
                         <span className="task-team-option-copy"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></span>
+                        <span className="task-team-option-state" aria-hidden="true">{participantId === person.id ? "Выбран" : "Выбрать"}</span>
                       </button>) : <p className="task-team-no-results">{teamQuery ? "По вашему запросу никого не нашли." : "В этом списке нет доступных сотрудников."}</p>}
                     </div>
                     <div className="task-team-actions">
-                      <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
+                      <label className="task-team-role"><span>Добавить как</span><WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
                         <option value="co_assignee">Соисполнитель</option>
                         <option value="observer">Наблюдатель</option>
-                      </WorkspaceSelect>
+                      </WorkspaceSelect></label>
                       <Button type="button" appearance="primary" icon={<Add20Regular />} disabled={!participantId} onClick={addParticipant}>Добавить сотрудника</Button>
                     </div>
                   </> : <>
@@ -502,14 +503,15 @@ export function TaskComposer({
                       {filteredTeamDepartments.length ? filteredTeamDepartments.map((department) => <button type="button" key={department.id} className="task-team-option" aria-pressed={departmentId === department.id} onClick={() => setDepartmentId(department.id)}>
                         <span className="task-team-department-icon" aria-hidden="true"><DepartmentIcon iconKey={department.iconKey} /></span>
                         <span className="task-team-option-copy"><strong>{department.name}</strong><small>{department.assignedUsersCount} сотрудников</small></span>
+                        <span className="task-team-option-state" aria-hidden="true">{departmentId === department.id ? "Выбран" : "Выбрать"}</span>
                       </button>) : <p className="task-team-no-results">{teamQuery ? "Отдел не найден. Попробуйте другое название." : "В этом контуре пока нет отделов с сотрудниками."}</p>}
                     </div>
                     <div className="task-team-department-actions">
                       <div><strong>{selectedDepartment?.name ?? "Выберите отдел из списка"}</strong><p>{selectedDepartment ? "Можно добавить сотрудников или назначить отдел ответственным за задачу." : "Состав отдела появится в задаче после выбора действия."}</p></div>
-                      <WorkspaceSelect aria-label="Роль участников отдела" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
+                      <label className="task-team-role"><span>Роль при добавлении</span><WorkspaceSelect aria-label="Роль участников отдела" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
                         <option value="co_assignee">Соисполнители</option>
                         <option value="observer">Наблюдатели</option>
-                      </WorkspaceSelect>
+                      </WorkspaceSelect></label>
                       <div className="task-team-department-buttons">
                         <Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить участников</Button>
                         <Button type="button" appearance="primary" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить отдел ответственным</Button>
@@ -518,12 +520,12 @@ export function TaskComposer({
                     </div>
                   </>}
                 </div>
-                <div className="task-team-roster-heading"><strong>В задаче</strong><span>{participants.length ? `${participants.length} участников` : "Пока только ответственный"}</span></div>
+                <div className="task-team-roster-heading"><strong>Дополнительные участники</strong><span>{participants.length ? `Добавлено: ${participants.length}` : "Пока никого нет"}</span></div>
               {participants.length ? <div className="task-composer-chip-list">
                 {participants.map((participant) => {
                   const person = peopleById.get(participant.userId);
                   return <div className="task-composer-person-chip" key={participant.userId}>
-                    <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><Avatar name={person?.name ?? "Сотрудник"} size={28} /><span><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span></EmployeeProfileLink>
+                    <EmployeeProfileLink userId={person?.id} personName={person?.name ?? "Сотрудник"}><Avatar name={person?.name ?? "Сотрудник"} size={28} /><span className="task-composer-person-info"><strong>{person?.name ?? "Сотрудник"}</strong><small>{participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"}</small></span></EmployeeProfileLink>
                     <button type="button" aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={() => setParticipants((current) => current.filter((item) => item.userId !== participant.userId))}><Delete20Regular /></button>
                   </div>;
                 })}
