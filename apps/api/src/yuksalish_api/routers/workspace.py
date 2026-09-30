@@ -1542,6 +1542,7 @@ async def download_attachment(
             "approval_request": "payment_requests",
             "project_funding_request": "project_funding",
             "absence": "absences",
+            "ai_referent_letter": "ai_referent",
         }[metadata.owner_type]
         await ensure_module_action(connection, current_user, attachment_module, "view")
         content = await _object_storage(request).get(storage_key)
