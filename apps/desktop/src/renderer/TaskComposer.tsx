@@ -22,6 +22,7 @@ import {
   CheckmarkCircle20Regular,
   Delete20Regular,
   People20Regular,
+  Search20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 
@@ -32,6 +33,7 @@ import { WorkspaceSelect } from "./WorkspaceSelect";
 import { workspacePlatform } from "./platform-adapter";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { DepartmentIcon } from "./DepartmentIcon";
+import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -103,6 +105,9 @@ export function TaskComposer({
   const [participantId, setParticipantId] = useState("");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");
   const [departmentId, setDepartmentId] = useState("");
+  const [teamMode, setTeamMode] = useState<"people" | "departments">("people");
+  const [teamScope, setTeamScope] = useState<EmployeeScope>("central");
+  const [teamSearch, setTeamSearch] = useState("");
   const [checklist, setChecklist] = useState<readonly string[]>([]);
   const [checklistTitle, setChecklistTitle] = useState("");
   const [dependencies, setDependencies] = useState<readonly DraftDependency[]>([]);
@@ -187,6 +192,17 @@ export function TaskComposer({
       person.id !== assigneeId
       && !participants.some((participant) => participant.userId === person.id),
   );
+  const teamQuery = teamSearch.trim().toLocaleLowerCase("ru");
+  const filteredTeamPeople = availableParticipants.filter((person) =>
+    employeeScope(person.departmentId, departments) === teamScope
+    && `${person.name} ${person.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(teamQuery),
+  );
+  const filteredTeamDepartments = departments.filter((department) =>
+    employeeScope(department.id, departments) === teamScope
+    && department.assignedUsersCount > 0
+    && `${department.name} ${department.code}`.toLocaleLowerCase("ru").includes(teamQuery),
+  );
+  const selectedDepartment = departments.find((department) => department.id === departmentId);
   const availableDependencies = tasks.filter(
     (task) => !dependencies.some((dependency) => dependency.dependsOnTaskId === task.id),
   );
@@ -205,7 +221,9 @@ export function TaskComposer({
     if (!department) return;
     const activeIds = (department.memberIds ?? []).filter((id) => activePeople.some((person) => person.id === id));
     if (!activeIds.length) { setError("В этом отделе пока нет активных сотрудников."); return; }
-    const coordinatorId = asResponsible ? activeIds[0]! : assigneeId;
+    const coordinatorId = asResponsible
+      ? (department.leadUserId && activeIds.includes(department.leadUserId) ? department.leadUserId : activeIds[0]!)
+      : assigneeId;
     if (asResponsible) setAssigneeId(coordinatorId);
     setParticipants((current) => {
       const next = new Map(current.map((item) => [item.userId, item]));
@@ -446,16 +464,61 @@ export function TaskComposer({
               </div>
             </RecordSection>
 
-            <RecordSection collapsible summary={participants.length ? `${participants.length} участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соисполнители работают с задачей, наблюдатели следят за ходом работы.">
-              {departments.length ? <div className="task-composer-department-row"><WorkspaceSelect aria-label="Отдел или подразделение" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}><option value="">Выберите отдел</option>{departments.map((department) => <option key={department.id} value={department.id}><DepartmentIcon iconKey={department.iconKey} /> {department.name} · {department.assignedUsersCount}</option>)}</WorkspaceSelect><Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить отдел как {participantRole === "observer" ? "наблюдателей" : "соисполнителей"}</Button><Button type="button" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить ответственным</Button><small>У ответственного отдела первый сотрудник становится координатором, остальные — соисполнителями.</small></div> : null}
-              <div className="task-composer-add-row participant-add-row">
-                <PersonPicker label="Участник новой задачи" people={availableParticipants} departments={departments} value={participantId} onChange={setParticipantId} disabled={busy} />
-                <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
-                  <option value="co_assignee">Соисполнитель</option>
-                  <option value="observer">Наблюдатель</option>
-                </WorkspaceSelect>
-                <Button type="button" icon={<Add20Regular />} disabled={!participantId} onClick={addParticipant}>Добавить</Button>
-              </div>
+            <RecordSection collapsible summary={participants.length ? `${participants.length} дополнительных участников` : "Добавить соисполнителей и наблюдателей"} title="Команда" description="Соберите участников задачи без длинных выпадающих списков.">
+              <div className="task-team-builder">
+                <div className="task-team-lead">
+                  <span className="task-team-lead-icon" aria-hidden="true"><People20Regular /></span>
+                  <div><strong>Дополнительные участники</strong><p>Добавьте сотрудников по одному или выберите целый отдел. Ответственный указан в основной карточке.</p></div>
+                  <span className="task-team-total">{participants.length} добавлено</span>
+                </div>
+                <div className="task-team-modes" role="group" aria-label="Способ добавления участников">
+                  <button type="button" aria-pressed={teamMode === "people"} onClick={() => { setTeamMode("people"); setTeamSearch(""); setDepartmentId(""); }}>Сотрудники</button>
+                  {departments.length ? <button type="button" aria-pressed={teamMode === "departments"} onClick={() => { setTeamMode("departments"); setTeamSearch(""); setParticipantId(""); }}>Отдел целиком</button> : null}
+                </div>
+                <div className="task-team-picker">
+                  <div className="task-team-picker-toolbar">
+                    <Input contentBefore={<Search20Regular />} aria-label={teamMode === "people" ? "Найти сотрудника для задачи" : "Найти отдел для задачи"} placeholder={teamMode === "people" ? "Имя или должность" : "Название отдела или подразделения"} value={teamSearch} onChange={(_, data) => { setTeamSearch(data.value); setParticipantId(""); setDepartmentId(""); }} />
+                    <div className="task-team-scopes" role="group" aria-label="Контур команды">
+                      <button type="button" aria-pressed={teamScope === "central"} onClick={() => { setTeamScope("central"); setParticipantId(""); setDepartmentId(""); }}>Центральный аппарат</button>
+                      <button type="button" aria-pressed={teamScope === "regional"} onClick={() => { setTeamScope("regional"); setParticipantId(""); setDepartmentId(""); }}>Регионы</button>
+                    </div>
+                  </div>
+                  {teamMode === "people" ? <>
+                    <div className="task-team-options" role="group" aria-label="Доступные сотрудники">
+                      {filteredTeamPeople.length ? filteredTeamPeople.map((person) => <button type="button" key={person.id} className="task-team-option" aria-pressed={participantId === person.id} onClick={() => setParticipantId(person.id)}>
+                        <Avatar name={person.name} size={32} color="colorful" aria-hidden="true" />
+                        <span className="task-team-option-copy"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></span>
+                      </button>) : <p className="task-team-no-results">{teamQuery ? "По вашему запросу никого не нашли." : "В этом списке нет доступных сотрудников."}</p>}
+                    </div>
+                    <div className="task-team-actions">
+                      <WorkspaceSelect aria-label="Роль участника новой задачи" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
+                        <option value="co_assignee">Соисполнитель</option>
+                        <option value="observer">Наблюдатель</option>
+                      </WorkspaceSelect>
+                      <Button type="button" appearance="primary" icon={<Add20Regular />} disabled={!participantId} onClick={addParticipant}>Добавить сотрудника</Button>
+                    </div>
+                  </> : <>
+                    <div className="task-team-options" role="group" aria-label="Доступные отделы и подразделения">
+                      {filteredTeamDepartments.length ? filteredTeamDepartments.map((department) => <button type="button" key={department.id} className="task-team-option" aria-pressed={departmentId === department.id} onClick={() => setDepartmentId(department.id)}>
+                        <span className="task-team-department-icon" aria-hidden="true"><DepartmentIcon iconKey={department.iconKey} /></span>
+                        <span className="task-team-option-copy"><strong>{department.name}</strong><small>{department.assignedUsersCount} сотрудников</small></span>
+                      </button>) : <p className="task-team-no-results">{teamQuery ? "Отдел не найден. Попробуйте другое название." : "В этом контуре пока нет отделов с сотрудниками."}</p>}
+                    </div>
+                    <div className="task-team-department-actions">
+                      <div><strong>{selectedDepartment?.name ?? "Выберите отдел из списка"}</strong><p>{selectedDepartment ? "Можно добавить сотрудников или назначить отдел ответственным за задачу." : "Состав отдела появится в задаче после выбора действия."}</p></div>
+                      <WorkspaceSelect aria-label="Роль участников отдела" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}>
+                        <option value="co_assignee">Соисполнители</option>
+                        <option value="observer">Наблюдатели</option>
+                      </WorkspaceSelect>
+                      <div className="task-team-department-buttons">
+                        <Button type="button" disabled={!departmentId} onClick={() => addDepartment(false)}>Добавить участников</Button>
+                        <Button type="button" appearance="primary" disabled={!departmentId} onClick={() => addDepartment(true)}>Назначить отдел ответственным</Button>
+                      </div>
+                      <small>Главное лицо отдела станет ответственным; если оно не назначено — первый активный сотрудник. Остальные будут соисполнителями.</small>
+                    </div>
+                  </>}
+                </div>
+                <div className="task-team-roster-heading"><strong>В задаче</strong><span>{participants.length ? `${participants.length} участников` : "Пока только ответственный"}</span></div>
               {participants.length ? <div className="task-composer-chip-list">
                 {participants.map((participant) => {
                   const person = peopleById.get(participant.userId);
@@ -464,7 +527,8 @@ export function TaskComposer({
                     <button type="button" aria-label={`Убрать участника ${person?.name ?? ""}`} onClick={() => setParticipants((current) => current.filter((item) => item.userId !== participant.userId))}><Delete20Regular /></button>
                   </div>;
                 })}
-              </div> : <p className="task-composer-empty">Дополнительные участники не выбраны.</p>}
+              </div> : <p className="task-team-empty">Выберите сотрудника или отдел выше. Дополнительные участники здесь появятся сразу.</p>}
+              </div>
             </RecordSection>
 
             <RecordSection collapsible summary={checklist.length ? `${checklist.length} пунктов чек-листа` : "Разделить результат на понятные шаги"} title="План выполнения" description="Чек-лист делает объём работы понятным до начала выполнения.">

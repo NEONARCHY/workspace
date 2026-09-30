@@ -1,4 +1,6 @@
-body:has(.yuksalish-assistant-root) .app-content { padding-right: 90px; box-sizing: border-box; }
+/* The floating assistant must not pull page scrollbars away from the window edge. */
+body:has(.yuksalish-assistant-root) .app-shell { padding-right: 0; }
+body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 
 .yuksalish-assistant-root { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
 /* Modal focus belongs to the foreground dialog; do not let the orb peek through its scrim. */
@@ -175,7 +177,7 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 .assistant-context-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--ws-navy); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .assistant-context-menu button:hover { background: #eef7f5; }
 .assistant-context-menu button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 1px; }
-@media (max-width: 800px) { body:has(.yuksalish-assistant-root) .app-content { padding-right: 70px; } .assistant-launcher { right: 6px; bottom: 8px; width: 58px; height: 58px; } }
+@media (max-width: 800px) { .assistant-launcher { right: 14px; bottom: 8px; width: 58px; height: 58px; } }
 @media (max-width: 600px) { .assistant-stream { padding-inline: 12px; } .assistant-composer-area { padding-inline: 12px; } .assistant-model-description { display: none; } .assistant-empty .gradient-orb, .assistant-empty .gradient-orb-fallback { width: 108px; height: 108px; } }
 @media (max-width: 600px) { .assistant-empty .gradient-orb { width: 82px; height: 82px; } .assistant-quick-prompts { max-width: 390px; } }
 @media (prefers-reduced-motion: reduce) { .assistant-launcher, .assistant-composer button, .thinking-orbs span, .border-beam.is-active { transition: none; animation: none; } .assistant-launcher:hover { transform: none; } }
@@ -187,7 +189,7 @@ body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop
 .birthday-calendar.fui-PopoverSurface { width: min(292px, calc(100vw - 32px)); padding: 12px; }
 .birthday-calendar-header { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 8px; }
 .birthday-calendar-header strong { font-size: 14px; }
-.birthday-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center; }
+.birthday-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-template-rows: repeat(7, 34px); gap: 3px; text-align: center; }
 .birthday-calendar-weekday { padding: 5px 0; color: var(--ws-muted); font-size: 11px; }
 .birthday-calendar-grid button { min-height: 34px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ws-text); font: inherit; cursor: pointer; }
 .birthday-calendar-grid button:hover, .birthday-calendar-grid button[aria-pressed="true"] { background: var(--ws-selected); color: var(--ws-link); }

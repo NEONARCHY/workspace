@@ -84,3 +84,4 @@
 }
 @media (prefers-reduced-motion: reduce) { .telegram-access-row { transition: none; } .telegram-access-row:hover { transform: none; } }
 @media (forced-colors: active) { .telegram-access-bot:has(input:checked), .telegram-access-status.is-verified { outline: 1px solid Highlight; } }
+.telegram-access-scope-note { grid-column: 1 / -1; margin: 0; color: var(--ws-muted); font-size: 12px; line-height: 1.45; }

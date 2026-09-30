@@ -24,11 +24,12 @@ function errorText(error: unknown): string {
 }
 
 function PersonAccessRow({
-  person, bots, token, onSaved,
+  person, bots, token, departments, onSaved,
 }: {
   readonly person: TelegramAccessPerson;
   readonly bots: readonly TelegramBotDescriptor[];
   readonly token: string;
+  readonly departments?: readonly WorkspaceDepartment[];
   readonly onSaved: (person: TelegramAccessPerson) => void;
 }) {
   const [telegramId, setTelegramId] = useState(person.telegramId ?? "");
@@ -40,6 +41,7 @@ function PersonAccessRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const managedDepartment = departments?.find((department) => department.id === person.departmentId);
   const dirty = telegramId !== (person.telegramId ?? "") ||
     selected.length !== person.botKeys.length ||
     selected.some((key) => !person.botKeys.includes(key)) ||
@@ -81,6 +83,8 @@ function PersonAccessRow({
         hisobotManager: managementAccess,
         expectedRevision: person.revision,
       });
+      setHisobotScope(saved.hisobotScope ?? "central");
+      setHisobotRegion(saved.hisobotRegion ?? regions[0]);
       onSaved(saved);
       setNotice(saved.telegramId
         ? "Сохранено. Доступ к подключённым ботам действует сразу."
@@ -142,11 +146,12 @@ function PersonAccessRow({
       </fieldset>
       {selected.includes("hisobot") ? <div className="telegram-access-hisobot" aria-label="Настройки AI Hisobot">
         <label>Контур отчётности
-          <select value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy}>
+          <select value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy || Boolean(managedDepartment)}>
             <option value="central">Центральный аппарат</option>
             <option value="hudud">Территориальное подразделение</option>
           </select>
         </label>
+        {managedDepartment ? <p className="telegram-access-scope-note">Контур определяется подразделением «{managedDepartment.name}» и обновляется автоматически. Для региона без узнаваемого названия выберите регион ниже.</p> : null}
         {hisobotScope === "hudud" ? <label>Регион
           <select value={hisobotRegion} onChange={(event) => setHisobotRegion(event.target.value)} disabled={busy}>
             {regions.map((region) => <option key={region} value={region}>{region}</option>)}
@@ -222,7 +227,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
     </div> : null}
     <div className="telegram-access-guide">
       <span className="telegram-access-guide-icon" aria-hidden="true">↗</span>
-      <p>Укажите Telegram ID, отметьте нужных ботов и сохраните строку. Для AI Hisobot также выберите контур и регион, а для руководства снимите обязанность сдавать отчёт. Чтобы получать сообщения, сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
+      <p>Укажите Telegram ID и доступ к ботам. Контур AI Hisobot наследуется из подразделения; для сотрудника без подразделения выберите его вручную. Для руководства снимите обязанность сдавать отчёт. Чтобы получать сообщения, сотруднику нужно открыть чат с ботом и нажать «Старт».</p>
     </div>
     <label className="telegram-access-search">
       <span>Найти сотрудника</span>
@@ -237,6 +242,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
         person={person}
         bots={registry.bots}
         token={token}
+        departments={departments}
         onSaved={(saved) => setRegistry((current) => current ? {
           ...current, people: current.people.map((item) => item.userId === saved.userId ? saved : item),
         } : current)}

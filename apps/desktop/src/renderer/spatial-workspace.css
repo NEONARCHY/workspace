@@ -89,6 +89,8 @@ body { background: var(--ws-canvas); }
   .release-version-picker { grid-template-columns: 1fr; gap: 7px; }
 }
 .app-content { border: 0; border-radius: 0; background: transparent; box-shadow: none; min-height: 0; }
+.workspace-module-loading { display: grid; height: 100%; place-items: center; color: var(--ws-muted); font-size: 13px; }
+.workspace-overlay-loading { position: fixed; z-index: 60; inset: 0; display: grid; place-items: center; background: rgb(16 42 67 / 16%); color: var(--ws-text); }
 .workspace-view { background: transparent; }
 .workspace-view > header, .workspace-view .section-toolbar, .bp7-header, .calendar-toolbar, .notification-header { min-height: 90px; padding: 16px var(--ws-view-title-inline) 22px; background: transparent; border: 0; }
 .workspace-view :is(h1,.section-toolbar h1,.bp7-header h1,.notification-header h1) { font-size: clamp(25px,2.1vw,34px); font-weight: 600; line-height: 1.15; letter-spacing: -.035em; }

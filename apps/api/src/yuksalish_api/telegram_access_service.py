@@ -9,10 +9,12 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
+from .hisobot_scope import effective_hisobot_scope
 from .tables import (
     ai_referent_configuration,
     ai_referent_reviewers,
     audit_events,
+    departments,
     hisobot_live_reports,
     telegram_bot_grants,
     telegram_identities,
@@ -60,8 +62,15 @@ def _person(
     account: RowMapping,
     identity: RowMapping | None,
     grants: dict[str, RowMapping],
+    department_rows: dict[UUID, RowMapping] | None = None,
 ) -> TelegramAccessPerson:
     verified = bool(identity and identity["telegram_id"] and identity["verified_at"])
+    hisobot = grants.get("hisobot")
+    scope, region = effective_hisobot_scope(
+        account["department_id"], department_rows or {},
+        hisobot["report_scope"] if hisobot else None,
+        hisobot["region_name"] if hisobot else None,
+    )
     return TelegramAccessPerson(
         user_id=account["id"],
         username=str(account["username"]),
@@ -75,8 +84,8 @@ def _person(
             identity["verification_source"] if identity is not None and verified else None
         ),
         bot_keys=[bot.key for bot in BOT_CATALOG if bot.key in grants],
-        hisobot_scope=grants["hisobot"]["report_scope"] if "hisobot" in grants else None,
-        hisobot_region=grants["hisobot"]["region_name"] if "hisobot" in grants else None,
+        hisobot_scope=scope if hisobot else None,
+        hisobot_region=region if hisobot else None,
         hisobot_report_required=bool(grants["hisobot"]["report_required"])
         if "hisobot" in grants else True,
         hisobot_manager=bool(grants["hisobot"]["hisobot_manager"])
@@ -105,10 +114,14 @@ async def list_telegram_access(connection: AsyncConnection) -> TelegramAccessReg
     grants: dict[UUID, dict[str, RowMapping]] = {}
     for grant in (await connection.execute(select(telegram_bot_grants))).mappings().all():
         grants.setdefault(grant["user_id"], {})[grant["bot_key"]] = grant
+    department_rows = {
+        row["id"]: row for row in (await connection.execute(select(departments))).mappings().all()
+    }
     return TelegramAccessRegistry(
         bots=BOT_CATALOG,
-        people=[_person(account, identities.get(account["id"]), grants.get(account["id"], {}))
-                for account in accounts],
+        people=[_person(
+            account, identities.get(account["id"]), grants.get(account["id"], {}), department_rows
+        ) for account in accounts],
     )
 
 
@@ -125,6 +138,14 @@ async def save_telegram_access(
         .with_for_update()
     )
     account = await _active_user(connection, user_id)
+    department_rows = {
+        row["id"]: row for row in (await connection.execute(select(departments))).mappings().all()
+    }
+    scope, region = effective_hisobot_scope(
+        account["department_id"], department_rows, payload.hisobot_scope, payload.hisobot_region
+    )
+    if "hisobot" in payload.bot_keys and scope == "hudud" and region is None:
+        raise HTTPException(422, "Для регионального подразделения укажите один из 14 регионов.")
     identity = (
         (
             await connection.execute(
@@ -196,8 +217,8 @@ async def save_telegram_access(
         await connection.execute(
             insert(telegram_bot_grants).values(
                 user_id=user_id, bot_key=bot_key,
-                report_scope=payload.hisobot_scope if bot_key == "hisobot" else None,
-                region_name=payload.hisobot_region if bot_key == "hisobot" else None,
+                report_scope=scope if bot_key == "hisobot" else None,
+                region_name=region if bot_key == "hisobot" else None,
                 report_required=payload.hisobot_report_required if bot_key == "hisobot" else None,
                 hisobot_manager=payload.hisobot_manager if bot_key == "hisobot" else None,
                 updated_by_user_id=actor.id, updated_at=now,
@@ -234,4 +255,4 @@ async def save_telegram_access(
             select(telegram_bot_grants).where(telegram_bot_grants.c.user_id == user_id)
         )).mappings().all()
     }
-    return _person(account, saved_identity, saved_grants)
+    return _person(account, saved_identity, saved_grants, department_rows)

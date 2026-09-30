@@ -1,7 +1,7 @@
 """Shared Hisobot state. PostgreSQL is authoritative for submissions from either client."""
 
 from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from typing import Any, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -25,6 +25,7 @@ from .hisobot_schemas import (
     HisobotUnitReport,
     ReportScope,
 )
+from .hisobot_scope import effective_hisobot_scope
 from .tables import (
     absence_requests,
     departments,
@@ -55,23 +56,17 @@ def _unit_report(row: object) -> HisobotUnitReport:
     return HisobotUnitReport.model_validate(row)
 
 
-async def _department_members(
-    connection: AsyncConnection, department_id: UUID,
-    scope: str, region_name: str | None,
-) -> list[str]:
+async def _department_members(connection: AsyncConnection, department_id: UUID) -> list[str]:
     query = (select(telegram_identities.c.telegram_id)
              .join(users, users.c.id == telegram_identities.c.user_id)
              .join(telegram_bot_grants, telegram_bot_grants.c.user_id == users.c.id)
              .where(users.c.department_id == department_id, users.c.status == "active",
                     telegram_bot_grants.c.bot_key == "hisobot",
-                    telegram_bot_grants.c.report_scope == scope,
                     telegram_identities.c.telegram_id.is_not(None)))
-    if scope == "hudud":
-        query = query.where(telegram_bot_grants.c.region_name == region_name)
     return list((await connection.execute(query)).scalars().all())
 
 
-async def _grant(connection: AsyncConnection, user: AuthenticatedUser) -> RowMapping:
+async def _grant(connection: AsyncConnection, user: AuthenticatedUser) -> dict[str, Any]:
     row = (await connection.execute(
         select(telegram_bot_grants, telegram_identities.c.telegram_id)
         .join(telegram_identities, telegram_identities.c.user_id == telegram_bot_grants.c.user_id)
@@ -81,7 +76,17 @@ async def _grant(connection: AsyncConnection, user: AuthenticatedUser) -> RowMap
     )).mappings().one_or_none()
     if row is None:
         raise HTTPException(403, "AI Hisobot: администратор ещё не выдал вам доступ и Telegram ID.")
-    return row
+    department_id = await connection.scalar(
+        select(users.c.department_id).where(users.c.id == user.id)
+    )
+    department_rows = {
+        item["id"]: item
+        for item in (await connection.execute(select(departments))).mappings().all()
+    }
+    scope, region = effective_hisobot_scope(
+        department_id, department_rows, row["report_scope"], row["region_name"]
+    )
+    return {**row, "report_scope": scope, "region_name": region}
 
 
 async def _today_report(connection: AsyncConnection, telegram_id: str,
@@ -307,9 +312,7 @@ async def submit_unit_report(
     if department is None:
         raise HTTPException(403, "Отчёт отдела может отправить только назначенное главное лицо.")
     scope = grant["report_scope"] or "central"
-    covered_ids = await _department_members(
-        connection, department["id"], scope, grant["region_name"]
-    )
+    covered_ids = await _department_members(connection, department["id"])
     if grant["telegram_id"] not in covered_ids:
         raise HTTPException(409, "Допуск главного лица не совпадает с подразделением.")  # noqa: RUF001
     return await _store_unit_report(
@@ -497,16 +500,26 @@ async def bridge_roster(connection: AsyncConnection) -> list[BridgeRosterMember]
         .where(users.c.status == "active", telegram_bot_grants.c.bot_key == "hisobot",
                telegram_identities.c.telegram_id.is_not(None))
     )).mappings().all()
-    return [BridgeRosterMember(
-        telegram_id=row["telegram_id"], employee_key=str(row["id"]),
-        full_name=row["full_name"], position=row["job_title"] or "",
-        report_scope=row["report_scope"] or "central", region_name=row["region_name"],
-        report_required=bool(row["report_required"]),
-        management_access=bool(row["hisobot_manager"]),
-        department_id=row["hisobot_department_id"] if row["hisobot_lead_user_id"] else None,
-        department_name=row["hisobot_department_name"] if row["hisobot_lead_user_id"] else None,
-        department_lead=row["hisobot_lead_user_id"] == row["id"],
-    ) for row in rows]
+    department_rows = {
+        item["id"]: item
+        for item in (await connection.execute(select(departments))).mappings().all()
+    }
+    roster = []
+    for row in rows:
+        scope, region = effective_hisobot_scope(
+            row["department_id"], department_rows, row["report_scope"], row["region_name"]
+        )
+        roster.append(BridgeRosterMember(
+            telegram_id=row["telegram_id"], employee_key=str(row["id"]),
+            full_name=row["full_name"], position=row["job_title"] or "",
+            report_scope=scope, region_name=region,
+            report_required=bool(row["report_required"]),
+            management_access=bool(row["hisobot_manager"]),
+            department_id=row["hisobot_department_id"] if row["hisobot_lead_user_id"] else None,
+            department_name=row["hisobot_department_name"] if row["hisobot_lead_user_id"] else None,
+            department_lead=row["hisobot_lead_user_id"] == row["id"],
+        ))
+    return roster
 
 
 async def replace_vacations(connection: AsyncConnection, snapshot: BridgeVacationSnapshot) -> None:
@@ -589,10 +602,12 @@ async def resolve_reminders(connection: AsyncConnection, day: date, telegram_id:
         telegram_identities.c.telegram_id.in_(covered_telegram_ids or [telegram_id])
     )
     if scope == "hudud" and region_name:
-        query = select(telegram_bot_grants.c.user_id).where(
-            telegram_bot_grants.c.bot_key == "hisobot",
-            telegram_bot_grants.c.report_scope == "hudud",
-            telegram_bot_grants.c.region_name == region_name,
+        regional_ids = [
+            member.telegram_id for member in await bridge_roster(connection)
+            if member.report_scope == "hudud" and member.region_name == region_name
+        ]
+        query = select(telegram_identities.c.user_id).where(
+            telegram_identities.c.telegram_id.in_(regional_ids)
         )
     user_ids = (await connection.execute(query)).scalars().all()
     if user_ids:

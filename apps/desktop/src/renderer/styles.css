@@ -1476,10 +1476,6 @@ button { -webkit-tap-highlight-color: transparent; }
 .department-member-row strong, .department-member-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .department-member-row small { color: var(--ws-text-muted); }
 
-.task-composer-department-row { display: grid; grid-template-columns: minmax(180px,1fr) auto auto; gap: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid var(--ws-border); border-radius: 14px; background: var(--ws-surface-soft); }
-.task-composer-department-row > small { grid-column: 1 / -1; color: var(--ws-text-muted); }
-@media (max-width: 900px) { .task-composer-department-row { grid-template-columns: 1fr; } .task-composer-department-row > small { grid-column: auto; } }
-
 .department-tree {
   padding: 8px;
   overflow: auto;
