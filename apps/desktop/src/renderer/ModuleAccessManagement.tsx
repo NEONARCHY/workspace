@@ -4,6 +4,7 @@ import type { DirectoryBootstrap, ModuleAccessRule, ModuleAccessSubject, ModuleP
 import { Button, Checkbox } from "@fluentui/react-components";
 import { LockClosed20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
+import { useAutoDismissFeedback } from "./useAutoDismissFeedback";
 
 import { deleteModuleAccessRule, setModuleAccessRule, setRegionalAssistantAccess } from "./workspace-api";
 
@@ -57,6 +58,8 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
   const [subjectKey, setSubjectKey] = useState("employee");
   const [busyKey, setBusyKey] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [feedbackIsError, setFeedbackIsError] = useState(false);
+  useAutoDismissFeedback(feedback, feedbackIsError, setFeedback);
   const subjects = useMemo(() => subjectType === "role"
     ? directory.roles.map((item) => ({ key: item.key, label: item.label }))
     : subjectType === "department"
@@ -106,11 +109,13 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     if (!selectedKey || busyKey) return;
     setBusyKey(moduleKey);
     setFeedback("");
+    setFeedbackIsError(false);
     try {
       const saved = await setModuleAccessRule(token, subjectType, selectedKey, moduleKey, permissions);
       onRuleChanged(saved);
       setFeedback("Права сохранены и уже применяются сервером.");
     } catch (error) {
+      setFeedbackIsError(true);
       setFeedback(error instanceof Error ? error.message : "Не удалось сохранить права");
     } finally {
       setBusyKey("");
@@ -121,11 +126,13 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     if (!selectedKey || busyKey) return;
     setBusyKey(moduleKey);
     setFeedback("");
+    setFeedbackIsError(false);
     try {
       await deleteModuleAccessRule(token, subjectType, selectedKey, moduleKey);
       onRuleDeleted(subjectType, selectedKey, moduleKey);
       setFeedback("Собственное правило удалено: снова действует наследование.");
     } catch (error) {
+      setFeedbackIsError(true);
       setFeedback(error instanceof Error ? error.message : "Не удалось вернуть наследование");
     } finally {
       setBusyKey("");
@@ -150,11 +157,13 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
     if (!regionalDepartments.length || busyKey) return;
     setBusyKey("assistant-regions");
     setFeedback("");
+    setFeedbackIsError(false);
     try {
       const rules = await setRegionalAssistantAccess(token, !allRegionsEnabled);
       for (const rule of rules) onRuleChanged(rule);
       setFeedback(`${rules.length} региональных подразделений: доступ к ИИ-ассистенту ${allRegionsEnabled ? "отключён" : "включён"}.`);
     } catch (error) {
+      setFeedbackIsError(true);
       setFeedback(error instanceof Error ? error.message : "Не удалось изменить доступ регионов");
     } finally {
       setBusyKey("");
@@ -185,7 +194,7 @@ export function ModuleAccessManagement({ token, directory, onRuleChanged, onRule
         {assistantAllowedForSelectedUser ? "Отключить сотруднику" : "Включить сотруднику"}
       </Button>
     </div> : null}
-    {feedback ? <div className="directory-feedback" role="status">{feedback}</div> : null}
+    {feedback ? <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div> : null}
     {!subjects.length ? <div className="directory-empty">Для этого уровня пока нет записей.</div> : <div className="access-matrix" role="table" aria-label="Матрица разрешений">
       <div className="access-matrix-row access-matrix-head" role="row"><span>Модуль</span>{actionLabels.map((action) => <span key={action.key}>{action.label}</span>)}<span>Источник</span></div>
       {directory.modules.map((module) => {

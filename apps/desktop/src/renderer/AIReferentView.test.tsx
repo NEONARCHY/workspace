@@ -179,6 +179,80 @@ describe("AIReferentView", () => {
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ addressBookOrganization: "Минфин", addresses: ["FIN-001"] }));
   });
 
+  it("loads every recipient while scrolling and numbers category icons", async () => {
+    const entries = Array.from({ length: 65 }, (_unused, index) => ({
+      id: `recipient-${index + 1}`,
+      name: `Организация ${index + 1}`,
+      categoryKey: (["ministries", "agencies", "committees", "international", "other"] as const)[index % 5]!,
+      addresses: [`recipient-${index + 1}@exat.uz`],
+      route: "exat" as const,
+      addressBookOrganization: `Организация ${index + 1}`,
+    }));
+    vi.mocked(loadAIReferentRecipients).mockImplementation(async (_token, filters) => ({
+      entries: entries.slice(filters?.offset ?? 0, (filters?.offset ?? 0) + (filters?.limit ?? 8)),
+      totalCount: entries.length,
+      updatedAt: "2026-09-30T08:00:00Z",
+    }));
+    const { container } = render(<FluentProvider theme={workspaceTheme}><AIReferentRecipientPicker
+      token="token" organization="" address="" onSelect={vi.fn()} onManualChange={vi.fn()}
+    /></FluentProvider>);
+    const list = container.querySelector<HTMLDivElement>(".ai-referent-picker-results");
+    if (!list) throw new Error("Recipient results were not rendered");
+    Object.defineProperties(list, {
+      clientHeight: { value: 246 },
+      scrollHeight: { value: 1000 },
+      scrollTop: { value: 754, writable: true },
+    });
+    await waitFor(() => expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(30));
+    fireEvent.scroll(list);
+    await waitFor(() => expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(60));
+    fireEvent.scroll(list);
+    await waitFor(() => expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(65));
+    expect(loadAIReferentRecipients).toHaveBeenCalledWith("token", { query: "", category: "", offset: 60, limit: 30 });
+    expect(list.querySelectorAll(".ai-referent-picker-result-number")[64]).toHaveTextContent("65");
+    const icons = list.querySelectorAll(".ai-referent-picker-result-mark svg");
+    expect(icons).toHaveLength(65);
+    expect(icons[0]?.innerHTML).not.toBe(icons[1]?.innerHTML);
+    expect(screen.queryByRole("button", { name: "Ещё →" })).not.toBeInTheDocument();
+  });
+
+  it("retains loaded recipients and retries a failed next page", async () => {
+    const entries = Array.from({ length: 31 }, (_unused, index) => ({
+      id: `recipient-${index}`,
+      name: `Адресат ${index}`,
+      categoryKey: "other" as const,
+      addresses: [`recipient-${index}@exat.uz`],
+      route: "exat" as const,
+      addressBookOrganization: `Адресат ${index}`,
+    }));
+    let nextPageAttempts = 0;
+    vi.mocked(loadAIReferentRecipients).mockImplementation(async (_token, filters) => {
+      if (filters?.offset === 30 && ++nextPageAttempts === 1) throw new Error("network");
+      return {
+        entries: entries.slice(filters?.offset ?? 0, (filters?.offset ?? 0) + (filters?.limit ?? 8)),
+        totalCount: entries.length,
+        updatedAt: "2026-09-30T08:00:00Z",
+      };
+    });
+    const { container } = render(<FluentProvider theme={workspaceTheme}><AIReferentRecipientPicker
+      token="token" organization="" address="" onSelect={vi.fn()} onManualChange={vi.fn()}
+    /></FluentProvider>);
+    const list = container.querySelector<HTMLDivElement>(".ai-referent-picker-results");
+    if (!list) throw new Error("Recipient results were not rendered");
+    Object.defineProperties(list, {
+      clientHeight: { value: 246 },
+      scrollHeight: { value: 1000 },
+      scrollTop: { value: 754, writable: true },
+    });
+    await waitFor(() => expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(30));
+    fireEvent.scroll(list);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить адресную книгу");
+    expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(30);
+    fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(list.querySelectorAll(".ai-referent-picker-result")).toHaveLength(31));
+    expect(nextPageAttempts).toBe(2);
+  });
+
   it("keeps manual address entry available when the catalog has not synced", async () => {
     vi.mocked(loadAIReferentRecipients).mockResolvedValue({ entries: [], totalCount: 0, updatedAt: null });
     const onManualChange = vi.fn();

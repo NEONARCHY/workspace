@@ -145,6 +145,14 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             content=b"PK outgoing letter test fixture",
         )
         assert uploaded.status_code == 201, uploaded.text
+        downloaded = await client.get(
+            f"/api/v1/attachments/{uploaded.json()['id']}", headers=author,
+        )
+        assert downloaded.status_code == 200, downloaded.text
+        assert downloaded.content == b"PK outgoing letter test fixture"
+        assert (await client.get(
+            f"/api/v1/attachments/{uploaded.json()['id']}",
+        )).status_code == 401
         await pass_preflight(client, engine, letter["id"], author, "test-referent-agent-token")
 
         current = await client.get(f"/api/v1/ai-referent/letters/{letter['id']}", headers=author)
