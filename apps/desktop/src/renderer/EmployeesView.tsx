@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
   ChatSummary,
@@ -27,6 +27,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { useAutoDismissFeedback } from "./useAutoDismissFeedback";
 
 import {
   createPosition,
@@ -108,6 +109,12 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [positionActive, setPositionActive] = useState(true);
   const [newPositionName, setNewPositionName] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [feedbackIsError, setFeedbackIsError] = useState(false);
+  useAutoDismissFeedback(feedback, feedbackIsError, setFeedback);
+  const showFeedback = useCallback((message: string, isError = false) => {
+    setFeedbackIsError(isError);
+    setFeedback(message);
+  }, []);
   const [busy, setBusy] = useState(false);
   const [pendingPositionDelete, setPendingPositionDelete] = useState<WorkspacePosition>();
   const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
@@ -169,12 +176,12 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         setPositionActive(firstPosition?.isActive ?? true);
       })
       .catch((error: unknown) => {
-        if (active) setFeedback(error instanceof Error ? error.message : "Не удалось загрузить сотрудников");
+        if (active) showFeedback(error instanceof Error ? error.message : "Не удалось загрузить сотрудников", true);
       });
     return () => {
       active = false;
     };
-  }, [token, loadAttempt]);
+  }, [token, loadAttempt, showFeedback]);
 
   const selectedEmployee = useMemo(
     () => directory?.employees.find((employee) => employee.id === selectedEmployeeId),
@@ -239,9 +246,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       );
       setDirectory(replaceEmployee(directory, saved));
       onEmployeeChanged?.(saved);
-      setFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
+      showFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника");
+      showFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника", true);
     } finally {
       setBusy(false);
     }
@@ -261,13 +268,13 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       onEmployeeChanged?.(saved);
       setEmployeeStatusAction(undefined);
       setEmployeeStatusReason("");
-      setFeedback(
+      showFeedback(
         saved.status === "active"
           ? `${saved.name}: доступ восстановлен.`
           : `${saved.name}: статус «${employeeStatusLabel(saved.status)}» сохранён, активные сеансы отозваны.`,
       );
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось изменить состояние сотрудника");
+      showFeedback(error instanceof Error ? error.message : "Не удалось изменить состояние сотрудника", true);
     } finally {
       setBusy(false);
     }
@@ -282,9 +289,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         isActive: positionActive,
       });
       setDirectory(replacePosition(directory, saved));
-      setFeedback("Должность обновлена. Назначенные сотрудники сохранили связь со справочником.");
+      showFeedback("Должность обновлена. Назначенные сотрудники сохранили связь со справочником.");
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось сохранить должность");
+      showFeedback(error instanceof Error ? error.message : "Не удалось сохранить должность", true);
     } finally {
       setBusy(false);
     }
@@ -298,9 +305,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setDirectory({ ...directory, positions: [...directory.positions, created] });
       selectPosition(created);
       setNewPositionName("");
-      setFeedback("Новая должность добавлена в справочник.");
+      showFeedback("Новая должность добавлена в справочник.");
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось создать должность");
+      showFeedback(error instanceof Error ? error.message : "Не удалось создать должность", true);
     } finally {
       setBusy(false);
     }
@@ -329,10 +336,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setPositionName(next?.name ?? "");
       setPositionActive(next?.isActive ?? true);
       setEmployeePositionId((current) => current === pendingPositionDelete.id ? "" : current);
-      setFeedback(`Должность «${pendingPositionDelete.name}» удалена. Связь с сотрудниками снята.`);
+      showFeedback(`Должность «${pendingPositionDelete.name}» удалена. Связь с сотрудниками снята.`);
       setPendingPositionDelete(undefined);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось удалить должность");
+      showFeedback(error instanceof Error ? error.message : "Не удалось удалить должность", true);
     } finally {
       setBusy(false);
     }
@@ -356,9 +363,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     for (const employee of saved) onEmployeeChanged?.(employee);
     setSelectedEmployeeIds((current) => new Set([...current].filter((id) => failedIds.has(id))));
     setBulkPanel(null);
-    setFeedback(failedIds.size
+    showFeedback(failedIds.size
       ? `Обновлено: ${saved.length}. Не удалось обновить: ${failedIds.size}. Повторите операцию для оставшихся сотрудников.`
-      : `${kind === "position" ? "Должность" : "Роль"} обновлена для ${saved.length} сотрудников.`);
+      : `${kind === "position" ? "Должность" : "Роль"} обновлена для ${saved.length} сотрудников.`, failedIds.size > 0);
     setBusy(false);
   };
 
@@ -380,7 +387,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       setChatTitle("");
       onChatCreated?.(chat.id);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Не удалось создать чат");
+      showFeedback(error instanceof Error ? error.message : "Не удалось создать чат", true);
     } finally {
       setBusy(false);
     }
@@ -442,7 +449,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
               setFeedback("");
               void updateRecognitionSettings(token, data.checked)
                 .then(setRecognitionSettings)
-                .catch((cause: unknown) => setFeedback(cause instanceof Error ? cause.message : "Не удалось изменить видимость"))
+                .catch((cause: unknown) => showFeedback(cause instanceof Error ? cause.message : "Не удалось изменить видимость", true))
                 .finally(() => setRecognitionSettingsBusy(false));
             }}
           /> : null}
@@ -529,7 +536,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           </div>
         </aside>
       ) : null}
-      <Dialog open={panel !== null} onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setPanel(null); }}>
+      {panel ? <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") setPanel(null); }}>
         <DialogSurface className="directory-record-dialog" aria-label={panel === "employee" ? "Карточка сотрудника" : "Справочник должностей"}>
         <div className="record-dialog-close">
           <Button
@@ -542,7 +549,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
             onClick={() => setPanel(null)}
           />
         </div>
-        {feedback && <div className="directory-feedback" role="status">{feedback}</div>}
+        {feedback && <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div>}
         {panel === "employee" ? <div className="employee-detail">
           {selectedEmployee ? (
             <>
@@ -694,7 +701,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           ) : null}
         </aside>}
         </DialogSurface>
-      </Dialog>
+      </Dialog> : null}
       {departmentsOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setDepartmentsOpen(false); }}>
         <DialogSurface className="directory-management-dialog" aria-label="Подразделения">
           <div className="record-dialog-close"><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть подразделения" onClick={() => setDepartmentsOpen(false)} /></div>
@@ -802,7 +809,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           </DialogBody>
         </DialogSurface>
       </Dialog> : null}
-      {feedback && !panel ? <div className="directory-feedback" role="status">{feedback}</div> : null}
+      {feedback && !panel ? <div className="directory-feedback" role={feedbackIsError ? "alert" : "status"}>{feedback}</div> : null}
       <ConfirmActionDialog
         open={pendingPositionDelete !== undefined}
         title="Удалить должность?"

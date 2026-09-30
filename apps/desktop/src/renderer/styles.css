@@ -938,7 +938,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .position-editor { display: grid; gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid #d8dee7; border-radius: 9px; background: #f8fafc; }
 .position-editor-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .position-delete-button { color: #a4262c !important; }
-.directory-feedback { position: absolute; z-index: 10; right: 22px; bottom: 20px; max-width: 520px; padding: 11px 13px; border: 1px solid #b8d8f0; border-radius: 8px; color: #17496d; background: #e7f2fb; box-shadow: 0 8px 20px rgb(28 52 76 / 12%); font-size: 12px; }
+.directory-feedback { position: absolute; z-index: 10; right: 22px; bottom: 20px; max-width: 520px; padding: 11px 13px; border: 1px solid #b8d8f0; border-radius: 8px; color: #17496d; background: #e7f2fb; box-shadow: 0 8px 20px rgb(28 52 76 / 12%); font-size: 12px; pointer-events: none; }
 .employee-admin-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .employee-status-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .employee-archive-button { color: #a4262c !important; }

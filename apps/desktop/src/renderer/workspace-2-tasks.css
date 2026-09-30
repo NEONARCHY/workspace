@@ -266,13 +266,11 @@
 .task-record-dialog .detail-section-line { min-height: 28px; gap: 10px; }
 .task-record-dialog .task-section-heading { display: inline-flex; min-width: 0; align-items: center; gap: 8px; }
 .task-record-dialog .task-section-meta { padding: 4px 8px; border-radius: 8px; color: #456376; background: rgb(226 239 239 / 74%); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
-.task-section-help-wrap { position: relative; display: inline-flex; flex: none; }
-.task-section-help-wrap:has(.task-section-help-surface) { z-index: 8; }
 .task-section-help { display: inline-grid; width: 28px; height: 28px; flex: none; place-items: center; padding: 0; border: 1px solid #bfd4d9; border-radius: 50%; color: #006779; background: #fff; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer; transition: background-color 160ms ease, border-color 160ms ease; }
 .task-section-help:hover { border-color: #73b9bf; background: #eaf7f6; }
 .task-section-help:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
 .task-lifecycle-summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
-.task-section-help-surface { position: absolute; top: calc(100% + 7px); left: 0; display: block; width: min(290px, calc(100vw - 48px)); padding: 13px 15px; border: 1px solid #c8dddf; border-radius: 12px; color: #293a55; background: #fff; box-shadow: 0 12px 28px rgb(41 58 85 / 15%); text-align: left; }
+.task-section-help-surface { z-index: 1300; display: block; box-sizing: border-box; width: min(390px, calc(100vw - 32px)); max-height: min(60vh, 420px); overflow: auto; padding: 13px 15px; border: 1px solid #c8dddf; border-radius: 12px; color: #293a55; background: #fff; box-shadow: 0 12px 28px rgb(41 58 85 / 15%); text-align: left; }
 .task-section-help-surface strong { display: block; font-size: 14px; }
 .task-section-help-surface > span { display: block; margin: 6px 0 0; color: #4d6274; font-size: 13px; font-weight: 400; line-height: 1.45; }
 .task-record-dialog .attachment-panel-heading { justify-content: flex-start; gap: 8px; margin-bottom: 12px; }

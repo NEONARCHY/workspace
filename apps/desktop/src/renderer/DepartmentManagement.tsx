@@ -8,6 +8,7 @@ import { DepartmentIcon, departmentIconChoices } from "./DepartmentIcon";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { useAutoDismissFeedback } from "./useAutoDismissFeedback";
 
 interface Props { readonly token: string; readonly departments: readonly WorkspaceDepartment[]; readonly employees: readonly DirectoryEmployee[]; readonly onChanged: (value: WorkspaceDepartment) => void; readonly onDeleted?: (id: string) => void }
 
@@ -56,6 +57,7 @@ export function DepartmentManagement({ token, departments, employees, onChanged,
   const [leadUserId, setLeadUserId] = useState(selected?.leadUserId ?? "");
   const [busy, setBusy] = useState(false); const [feedback, setFeedback] = useState("");
   const [feedbackIsError, setFeedbackIsError] = useState(false);
+  useAutoDismissFeedback(feedback, feedbackIsError, setFeedback);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const invalidParentIds = useMemo(() => { const result = new Set<string>(selectedId ? [selectedId] : []); let changed = true; while (changed) { changed = false; for (const item of departments) if (item.parentId && result.has(item.parentId) && !result.has(item.id)) { result.add(item.id); changed = true; } } return result; }, [departments, selectedId]);
   const visibleEmployees = employees.filter((employee) => employee.status === "active" && employeeScope(employee.departmentId, departments) === memberScope && (!memberQuery.trim() || `${employee.name} ${employee.jobTitle ?? ""}`.toLocaleLowerCase("ru").includes(memberQuery.trim().toLocaleLowerCase("ru"))));
