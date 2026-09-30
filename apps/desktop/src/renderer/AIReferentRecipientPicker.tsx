@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AIReferentRecipient, AIReferentRecipientRegistry } from "@yuksalish/contracts";
 import { Input, Spinner } from "@fluentui/react-components";
+import { Briefcase20Regular, Building20Regular, Document20Regular, Globe20Regular, PeopleTeam20Regular } from "@fluentui/react-icons";
 
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
 import { loadAIReferentRecipients } from "./workspace-api";
@@ -14,6 +15,18 @@ const categories = [
   ["international", "Международные"],
   ["other", "Другие"],
 ] as const;
+
+const pageSize = 30;
+
+function categoryIcon(categoryKey: string) {
+  switch (categoryKey) {
+    case "ministries": return <Building20Regular />;
+    case "agencies": return <Briefcase20Regular />;
+    case "committees": return <PeopleTeam20Regular />;
+    case "international": return <Globe20Regular />;
+    default: return <Document20Regular />;
+  }
+}
 
 interface RecipientPickerProps {
   readonly token: string;
@@ -36,29 +49,40 @@ export function AIReferentRecipientPicker({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
+  const pageRequested = useRef(false);
 
   useEffect(() => {
     if (mode !== "search") return;
     let active = true;
     const timer = window.setTimeout(() => {
+      pageRequested.current = true;
       setLoading(true);
       setError("");
-      void loadAIReferentRecipients(token, { query, category, offset })
+      void loadAIReferentRecipients(token, { query, category, offset, limit: pageSize })
         .then((data) => {
           if (!active) return;
-          setResult(data);
+          setResult((current) => offset === 0 || !current ? data : {
+            ...data,
+            entries: [...current.entries, ...data.entries.filter((entry) => !current.entries.some((loaded) => loaded.id === entry.id))],
+          });
         })
         .catch(() => {
           if (!active) return;
           setError("Не удалось загрузить адресную книгу. Можно повторить или ввести адрес вручную.");
         })
-        .finally(() => { if (active) setLoading(false); });
+        .finally(() => { if (active) { pageRequested.current = false; setLoading(false); } });
     }, query ? 180 : 0);
     return () => { active = false; window.clearTimeout(timer); };
   }, [token, mode, query, category, offset, retry]);
 
   const changeQuery = (value: string) => { setQuery(value); setOffset(0); setResult(null); };
   const changeCategory = (value: string) => { setCategory(value); setOffset(0); setResult(null); };
+  const loadNextPage = (element: HTMLDivElement) => {
+    if (pageRequested.current || error || !result || result.entries.length >= result.totalCount) return;
+    if (element.scrollHeight - element.scrollTop - element.clientHeight > 60) return;
+    pageRequested.current = true;
+    setOffset(result.entries.length);
+  };
   const choose = (recipient: AIReferentRecipient) => {
     if (!recipient.addresses.length) return;
     onSelect(recipient);
@@ -100,24 +124,23 @@ export function AIReferentRecipientPicker({
               <button key={key} type="button" aria-pressed={category === key} onClick={() => changeCategory(key)}>{label}</button>
             ))}
           </div>
-          <div className="ai-referent-picker-results" aria-live="polite">
-            {loading ? <div className="ai-referent-picker-message"><Spinner size="tiny" label="Ищем адресатов…" /></div> : null}
+          <div className="ai-referent-picker-results" aria-live="polite" onScroll={(event) => loadNextPage(event.currentTarget)}>
             {!loading && error ? <div className="ai-referent-picker-message" role="alert">{error} <button type="button" onClick={() => setRetry((value) => value + 1)}>Повторить</button></div> : null}
             {!loading && !error && result?.updatedAt === null ? <div className="ai-referent-picker-message">Справочник ещё не синхронизирован с ПК референта.</div> : null}
             {!loading && !error && result?.updatedAt && !result.entries.length ? <div className="ai-referent-picker-message">По этому запросу адресатов нет.</div> : null}
-            {!loading && !error && result?.entries.map((entry) => (
+            {result?.entries.map((entry, index) => (
               <button className="ai-referent-picker-result" type="button" key={entry.id} disabled={!entry.addresses.length} onClick={() => choose(entry)}>
-                <span className="ai-referent-picker-result-mark" aria-hidden="true">{entry.name.slice(0, 1)}</span>
-                <span><strong>{entry.name}</strong><small>{entry.addresses[0] || "Адрес пока не настроен"}</small></span>
+                <span className="ai-referent-picker-result-number" aria-hidden="true">{index + 1}</span>
+                <span className="ai-referent-picker-result-mark" aria-hidden="true">{categoryIcon(entry.categoryKey)}</span>
+                <span className="ai-referent-picker-result-label"><strong>{entry.name}</strong><small>{entry.addresses[0] || "Адрес пока не настроен"}</small></span>
                 <em>{entry.route === "exat" ? "E-XAT" : "Webmail"}</em>
               </button>
             ))}
+            {loading ? <div className="ai-referent-picker-message"><Spinner size="tiny" label="Загружаем адресатов…" /></div> : null}
           </div>
           <div className="ai-referent-picker-bottom">
-            <span>{result?.updatedAt ? `${result.totalCount} адресатов` : ""}</span>
+            <span>{result?.updatedAt ? `${result.totalCount} адресатов${result.entries.length < result.totalCount ? ` · показано ${result.entries.length}` : ""}` : ""}</span>
             <div>
-              {offset > 0 ? <button type="button" onClick={() => setOffset(Math.max(0, offset - 8))}>Назад</button> : null}
-              {result && offset + result.entries.length < result.totalCount ? <button type="button" onClick={() => setOffset(offset + 8)}>Ещё →</button> : null}
               <button type="button" onClick={() => setMode("manual")}>Ввести вручную</button>
             </div>
           </div>
