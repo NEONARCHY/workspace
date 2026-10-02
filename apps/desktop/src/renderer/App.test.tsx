@@ -1323,10 +1323,19 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    await waitFor(() => expect(document.querySelector(".view-switch")).not.toBeNull());
     fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
     expect(screen.getByRole("heading", { name: "Календарь задач" })).toBeInTheDocument();
     expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar")).toBeNull();
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
+    const taskMonth = new Date(initialTasks[0]!.dueAt!);
+    const today = new Date();
+    const monthOffset = (taskMonth.getFullYear() - today.getFullYear()) * 12
+      + taskMonth.getMonth() - today.getMonth();
+    const monthButton = screen.getByRole("button", {
+      name: monthOffset < 0 ? "Предыдущий месяц задач" : "Следующий месяц задач",
+    });
+    for (let index = 0; index < Math.abs(monthOffset); index += 1) fireEvent.click(monthButton);
     expect(document.querySelectorAll(".task-calendar-item")).toHaveLength(initialTasks.length);
 
     fireEvent.click(screen.getByRole("button", {
