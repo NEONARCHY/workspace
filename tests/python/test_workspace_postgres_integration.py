@@ -764,7 +764,15 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     tasks.c.cycle_occurrence_key != "initial",
                 )
             ) == 1
-            assert await materialize_due_task_cycles(connection) == 0
+            await materialize_due_task_cycles(connection)
+            assert await connection.scalar(
+                select(func.count())
+                .select_from(tasks)
+                .where(
+                    tasks.c.cycle_id == UUID(task.cycle.id),
+                    tasks.c.cycle_occurrence_key != "initial",
+                )
+            ) == 1
             task = await set_task_cycle(
                 connection,
                 aziza,
@@ -779,7 +787,15 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert task.cycle is not None
             assert task.cycle.is_enabled is False
-            assert await materialize_due_task_cycles(connection) == 0
+            await materialize_due_task_cycles(connection)
+            assert await connection.scalar(
+                select(func.count())
+                .select_from(tasks)
+                .where(
+                    tasks.c.cycle_id == UUID(task.cycle.id),
+                    tasks.c.cycle_occurrence_key != "initial",
+                )
+            ) == 1
 
             calendar_start = datetime(2026, 9, 7, 4, tzinfo=UTC)
             task = await set_task_cycle(
@@ -800,7 +816,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             assert task.cycle.calendar_rule == "weekdays"
             assert task.cycle.weekdays == [0, 2]
             assert task.cycle.next_run_at == calendar_start
-            assert await materialize_due_task_cycles(connection, calendar_start) == 1
+            await materialize_due_task_cycles(connection, calendar_start)
             assert await connection.scalar(
                 select(func.count())
                 .select_from(tasks.join(chats, chats.c.context_id == tasks.c.id))
