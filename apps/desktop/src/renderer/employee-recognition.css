@@ -21,6 +21,11 @@
 .employee-profile-hero-stat strong { color: var(--ws-navy); font-size: 22px; font-variant-numeric: tabular-nums; }
 .employee-profile-hero-stat span { font-size: 10px; }
 .employee-profile-hero-stat small { margin-top: 3px; font-size: 10px; text-transform: none; letter-spacing: 0; }
+.employee-profile-chat-action.fui-Button { width: fit-content; min-height: 32px; margin-top: 10px; padding-inline: 12px; border: 1px solid #b9d9dc; border-radius: 10px; color: #075e70; background: rgb(255 255 255 / 88%); font-size: 12px; font-weight: 650; box-shadow: 0 4px 12px rgb(31 62 78 / 7%); }
+.employee-profile-chat-action.fui-Button:hover { border-color: #83bbc1; background: #fff; }
+.employee-profile-chat-action.fui-Button span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: normal; text-transform: none; }
+.employee-profile-chat-action.fui-Button:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
+.employee-profile-chat-error { margin: 0 0 8px; padding: 8px 12px; border-radius: 9px; color: #9c3749; background: #fff1f2; font-size: 12px; }
 .employee-profile-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: rgb(236 245 246 / 94%); backdrop-filter: blur(14px); }
 .employee-profile-tabs button { min-height: 34px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
 .employee-profile-tabs button:hover { color: var(--ws-navy); }

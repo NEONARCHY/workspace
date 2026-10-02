@@ -13,6 +13,7 @@ import {
   loadHisobotUnitReports, saveHisobotReport, saveHisobotUnitReport,
 } from "./workspace-api";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 const dateLabel = (value: string) => value.split("-").reverse().join(".");
 const errorText = (error: unknown) => error instanceof Error ? error.message : "Не удалось загрузить AI Hisobot.";
@@ -194,11 +195,11 @@ export function AIHisobotView({ token }: { readonly token: string }) {
     {loading ? <p className="hisobot-loading" role="status">Загружаем отчёты…</p> : null}
     {error ? <div className="hisobot-error" role="alert">{error}</div> : null}
     {profile ? <>
-      <nav className="hisobot-tabs" aria-label="Разделы AI Hisobot">
-        <button type="button" className={tab === "today" ? "active" : ""} onClick={() => setTab("today")}>Сегодня</button>
-        <button type="button" className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Моя история</button>
-        {profile.managementAccess ? <button type="button" className={tab === "team" ? "active" : ""} onClick={() => setTab("team")}>Отчёты сотрудников</button> : null}
-      </nav>
+      <SlidingSegmented as="nav" className="hisobot-tabs" aria-label="Разделы AI Hisobot">
+        <button type="button" aria-pressed={tab === "today"} className={tab === "today" ? "active" : ""} onClick={() => setTab("today")}>Сегодня</button>
+        <button type="button" aria-pressed={tab === "history"} className={tab === "history" ? "active" : ""} onClick={() => setTab("history")}>Моя история</button>
+        {profile.managementAccess ? <button type="button" aria-pressed={tab === "team"} className={tab === "team" ? "active" : ""} onClick={() => setTab("team")}>Отчёты сотрудников</button> : null}
+      </SlidingSegmented>
 
       {tab === "today" ? <div className="hisobot-today-layout">
         <div className="hisobot-panel hisobot-compose">

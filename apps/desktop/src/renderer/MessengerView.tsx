@@ -861,6 +861,13 @@ function Conversation({
                         : ""}
                       {message.time}
                     </time>
+                    {!message.deletedAt && (
+                      <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
+                        <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
+                          active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
+                          onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
+                      </div>
+                    )}
                   </div>
                   {!!message.reactions?.length && (
                     <div className="message-reactions" aria-label="Реакции на сообщение">
@@ -875,13 +882,6 @@ function Conversation({
                           onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
                         />
                       ))}
-                    </div>
-                  )}
-                  {!message.deletedAt && (
-                    <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
-                      <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
-                        active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
-                        onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
                     </div>
                   )}
                 </div>

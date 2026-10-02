@@ -15,6 +15,7 @@ import {
 import {
   ArrowLeft24Regular,
   BookQuestionMark24Regular,
+  Chat24Regular,
   Dismiss24Regular,
   Reward24Regular,
 } from "@fluentui/react-icons";
@@ -35,6 +36,7 @@ import type {
   EmployeeEfficiency,
   WorkspacePerson,
 } from "@yuksalish/contracts";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { RecognitionBadgeArtwork } from "./RecognitionBadgeArtwork";
@@ -368,17 +370,21 @@ function RewardHistoryContent({ group, onBack, people, token, onOpenIssuer }: {
 export function EmployeeProfileDialog({
   token,
   userId,
+  currentUserId,
   open,
   onOpenChange,
   people = [],
   onOpenPersonProfile,
+  onOpenChat,
 }: {
   readonly token: string;
   readonly userId?: string;
+  readonly currentUserId?: string;
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
   readonly people?: readonly WorkspacePerson[];
   readonly onOpenPersonProfile?: (userId: string) => void;
+  readonly onOpenChat?: (userId: string) => Promise<void>;
 }) {
   const [profileState, setProfileState] = useState<{
     readonly userId: string;
@@ -402,6 +408,8 @@ export function EmployeeProfileDialog({
   const [rewardContext, setRewardContext] = useState("");
   const [selectedRewardIcon, setSelectedRewardIcon] = useState<string>();
   const [rewardBusy, setRewardBusy] = useState(false);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState<{ userId: string; message: string }>();
 
   useEffect(() => {
     if (rewardOpen) {
@@ -591,6 +599,22 @@ export function EmployeeProfileDialog({
                     <h2>{profile.person.name}</h2>
                     <p>{profile.person.jobTitle ?? "Должность не указана"}</p>
                     {profile.departmentName ? <small>{profile.departmentName}</small> : null}
+                    {onOpenChat && profile.person.id !== currentUserId ? <Button
+                      className="employee-profile-chat-action"
+                      size="small"
+                      icon={<Chat24Regular />}
+                      disabled={chatBusy}
+                      onClick={() => {
+                        setChatBusy(true);
+                        setChatError(undefined);
+                        void onOpenChat(profile.person.id).then(() => onOpenChange(false)).catch((failure: unknown) => {
+                          setChatError({
+                            userId: profile.person.id,
+                            message: failure instanceof Error ? failure.message : "Не удалось открыть чат.",
+                          });
+                        }).finally(() => setChatBusy(false));
+                      }}
+                    >{chatBusy ? "Открываем…" : "Написать сообщение"}</Button> : null}
                   </div>
                   <div className="employee-profile-hero-stat">
                     <strong>{profile.rewards.length}</strong>
@@ -598,8 +622,9 @@ export function EmployeeProfileDialog({
                     <small>{countLabel(unlocked.length, ["достижение", "достижения", "достижений"])}</small>
                   </div>
                 </header>
+                {chatError?.userId === profile.person.id ? <p className="employee-profile-chat-error" role="alert">{chatError.message}</p> : null}
 
-                <nav className="employee-profile-tabs" aria-label="Навигация по профилю">
+                <SlidingSegmented as="nav" className="employee-profile-tabs" aria-label="Навигация по профилю">
                   {(["overview", "rewards", "achievements"] as const).map((key) => <button
                     type="button"
                     key={key}
@@ -608,7 +633,7 @@ export function EmployeeProfileDialog({
                     aria-controls={`employee-profile-${key}`}
                     onClick={() => navigateTo(key)}
                   >{{ overview: "Обзор", rewards: "Награды", achievements: "Достижения" }[key]}</button>)}
-                </nav>
+                </SlidingSegmented>
               </div>
 
               <section ref={overviewRef} id="employee-profile-overview" className="employee-profile-overview" aria-label="Обзор">

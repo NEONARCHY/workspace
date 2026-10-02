@@ -13,6 +13,7 @@ import { Add24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20R
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
@@ -154,7 +155,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
   return (
     <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
       <header className="bp7-header workflow-hero-header">
-        <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <div className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></div> : null}</div>
+        <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}</div>
         <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
       </header>
 
@@ -172,14 +173,14 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       </section>
 
       <div className="trip-commandbar ws2-process-toolbar">
-        <div className="ws2-segmented" role="group" aria-label="Вид поездок">
+        <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид поездок">
           <button type="button" className={view === "kanban" ? "active" : ""} aria-pressed={view === "kanban"} onClick={() => setView("kanban")}>Канбан</button>
           <button type="button" className={view === "list" ? "active" : ""} aria-pressed={view === "list"} onClick={() => setView("list")}>Список</button>
-        </div>
+        </SlidingSegmented>
         <Input contentBefore={<Search20Regular />} className="trip-search" aria-label="Поиск поездок" placeholder="Цель, город, сотрудник или номер" value={query} onChange={(_, data) => setQuery(data.value)} />
-        <div className="ws2-segmented" role="group" aria-label="Фильтр поездок">
+        <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр поездок">
           {([["running", "В работе"], ["all", "Все"], ["finished", "Завершённые"]] as const).map(([key, label]) => <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<span>{filterCounts[key]}</span></button>)}
-        </div>
+        </SlidingSegmented>
       </div>
       {feedback}
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}

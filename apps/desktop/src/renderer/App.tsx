@@ -103,6 +103,7 @@ import {
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
 import { createRefreshQueue } from "./refresh-queue";
+import { initialKnownNotificationIds } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
@@ -436,7 +437,7 @@ export function App() {
     ]);
     setUpdatePolicy(undefined);
     activeToken.current = authenticated.accessToken;
-    knownNotificationIds.current = new Set(loaded.notifications.map((item) => item.id));
+    knownNotificationIds.current = initialKnownNotificationIds(loaded.notifications);
     setFocusTarget(undefined);
     setWorkspace({ ...loaded, moduleAccess: loaded.moduleAccess ?? fallbackModuleAccess(loaded.currentUser), personalPreferences: loaded.personalPreferences ?? defaultPersonalPreferences });
     setSupportRegistry(loadedSupport ?? emptySupportRegistry(loaded.currentUser));
@@ -665,11 +666,7 @@ export function App() {
     if (session === undefined) return;
     let known = knownNotificationIds.current;
     if (known === null) {
-      // Other kinds keep their existing no-replay behaviour. A mandatory Hisobot
-      // reminder still needs to appear after restarting an offline desktop app.
-      known = new Set(workspace.notifications
-        .filter((item) => item.kind !== "hisobot" || item.readAt || item.desktopDeliveredAt)
-        .map((item) => item.id));
+      known = initialKnownNotificationIds(workspace.notifications);
       knownNotificationIds.current = known;
     }
     const preferences = workspace.notificationPreferences;
@@ -687,14 +684,13 @@ export function App() {
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
-      known.add(notification.id);
       if (
         (notification.kind !== "hisobot" && !preferences.desktopEnabled)
         || !kindEnabled[notification.kind]
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
-        || notification.desktopDeliveredAt
-        || notification.readAt
       ) continue;
+      known.add(notification.id);
+      if (notification.desktopDeliveredAt || notification.readAt) continue;
       void workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
@@ -702,7 +698,10 @@ export function App() {
         section: notification.section,
         entityId: notification.entityId ?? undefined,
       }).then((shown) => {
-        if (!shown) return;
+        if (!shown) {
+          known?.delete(notification.id);
+          return;
+        }
         void markWorkspaceNotificationDesktopDelivered(
           session.accessToken,
           notification.id,
@@ -718,7 +717,10 @@ export function App() {
           // the native toast is being shown. Delivery acknowledgement is
           // best-effort and must not surface a stale 404 as a workspace error.
         });
-      }).catch(reportError);
+      }).catch((error: unknown) => {
+        known?.delete(notification.id);
+        reportError(error);
+      });
     }
   }, [reportError, session, workspace.notificationPreferences, workspace.notifications]);
 
@@ -1917,6 +1919,22 @@ export function App() {
                 onMarkRead={handleMarkNotificationRead}
                 onMarkAllRead={handleMarkAllNotificationsRead}
                 onUpdatePreferences={handleNotificationPreferences}
+                onTestSystemNotification={async () => {
+                  if (workspacePlatform.kind === "web" && !window.isSecureContext) {
+                    throw new Error("Системные уведомления требуют защищённого подключения HTTPS.");
+                  }
+                  const allowed = await workspacePlatform.requestNotificationPermission();
+                  if (!allowed) throw new Error("Разрешите уведомления для этого сайта в браузере и Windows.");
+                  const shown = await workspacePlatform.showNotification({
+                    id: `workspace-test-${Date.now()}`,
+                    title: "Yuksalish Workspace",
+                    body: "Проверка системных уведомлений",
+                    section: "notifications",
+                    testOnly: true,
+                  });
+                  if (!shown) throw new Error("Клиент не смог передать уведомление Windows. Проверьте разрешения и настройки уведомлений.");
+                  setWorkspace((current) => ({ ...current, notifications: [...current.notifications] }));
+                }}
                 absenceRequests={workspace.absenceRequests}
                 onAbsenceAction={async (absenceRequest, action) => {
                   await handleAbsenceAction(absenceRequest, action);
@@ -2289,9 +2307,24 @@ export function App() {
       {profileUserId ? <Suspense fallback={null}><EmployeeProfileDialog
         token={session.accessToken}
         userId={profileUserId}
+        currentUserId={workspace.currentUser.id}
         open={profileUserId !== undefined}
         people={workspace.people}
         onOpenPersonProfile={setProfileUserId}
+        onOpenChat={canView("messenger") ? async (recipientId) => {
+          const existing = workspace.chats.find((chat) => chat.kind === "direct"
+            && chat.members.some((member) => member.userId === recipientId)
+            && chat.members.some((member) => member.userId === workspace.currentUser.id));
+          if (existing && !existing.permissions.sendMessages) {
+            throw new Error("В этот чат нельзя отправлять сообщения.");
+          }
+          if (!existing && modulePermissions.messenger?.create !== true) {
+            throw new Error("Нет права создавать личный чат с этим сотрудником.");
+          }
+          const chat = existing ?? await chatActions.create({ kind: "direct", title: "", description: "", memberIds: [recipientId] });
+          setFocusTarget((current) => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 }));
+          setActiveSection("messenger");
+        } : undefined}
         onOpenChange={(open) => { if (!open) setProfileUserId(undefined); }}
       /></Suspense> : null}
       {supportOpen ? (

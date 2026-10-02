@@ -188,6 +188,9 @@ describe("Private messenger", () => {
     </FluentProvider>);
 
     const dialog = await screen.findByRole("dialog", { name: "Карточка поездки" });
+    const messageBubble = within(dialog).getByText(message.body).closest(".message-body");
+    expect(messageBubble?.querySelector(".message-actions")).not.toBeNull();
+    expect(messageBubble?.nextElementSibling).toHaveClass("message-reactions");
     const reaction = within(dialog).getByRole("button", { name: /👍: Бахтиёр Самугов/ });
     fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
     const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu");
@@ -691,8 +694,8 @@ describe("Private messenger", () => {
     renderMessenger({ messages: [message], onEditMessage, onDeleteMessage });
     const bubble = screen.getByText("Мой текст").closest(".message-body")!;
     const controls = screen.getByRole("group", { name: "Реакция на сообщение" });
-    expect(bubble).not.toContainElement(controls);
-    expect(bubble.parentElement).toContainElement(controls);
+    expect(bubble).toContainElement(controls);
+    expect(bubble.parentElement?.querySelector(".message-reactions .message-actions")).toBeNull();
     expect(bubble.querySelector("time")).toHaveTextContent("12:00");
     openMessageMenu("Мой текст");
     fireEvent.click(screen.getByRole("button", { name: "Изменить" }));

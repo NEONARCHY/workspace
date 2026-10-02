@@ -23,12 +23,13 @@ const people: readonly WorkspacePerson[] = [
   { id: "peer", username: "aziza", name: "Азиза Каримова", initials: "АК", role: "employee", color: "brand" },
 ];
 
+const meetingDay = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const meeting: ZoomMeeting = {
   id: "meeting-1",
   topic: "Планёрка отдела",
   description: "Итоги недели",
-  startsAt: "2026-10-01T04:00:00Z",
-  endsAt: "2026-10-01T05:00:00Z",
+  startsAt: `${meetingDay}T04:00:00Z`,
+  endsAt: `${meetingDay}T05:00:00Z`,
   durationMinutes: 60,
   status: "scheduled",
   source: "workspace",

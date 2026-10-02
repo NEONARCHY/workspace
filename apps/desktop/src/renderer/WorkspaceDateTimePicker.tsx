@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
+import { SlidingSegmented } from "./SlidingSegmented";
 import {
   CalendarLtr20Regular,
   ChevronLeft20Regular,
@@ -228,7 +229,7 @@ export function WorkspaceDateTimePicker({
         <button type="button" className="ws-calendar-today" disabled={Boolean(minimumDate && dateKey(new Date()) < minimumDate)} onClick={returnToToday}>Сегодня</button>
       </div> : null}
       {mode !== "date" ? <div className="ws-time-panel">
-        <header><span><Clock20Regular aria-hidden="true" /> Время</span><span className="ws-clock-mode" role="group" aria-label="Формат времени"><button type="button" aria-pressed={clockMode === 24} onClick={() => setClockMode(24)}>24</button><button type="button" aria-pressed={clockMode === 12} onClick={() => setClockMode(12)}>12</button></span></header>
+        <header><span><Clock20Regular aria-hidden="true" /> Время</span><SlidingSegmented as="span" className="ws-clock-mode" role="group" aria-label="Формат времени"><button type="button" aria-pressed={clockMode === 24} onClick={() => setClockMode(24)}>24</button><button type="button" aria-pressed={clockMode === 12} onClick={() => setClockMode(12)}>12</button></SlidingSegmented></header>
         <div className="ws-time-wheels">
           <div className="ws-time-wheel" ref={hourWheel} role="listbox" aria-label="Часы" data-wheel="hour" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{visibleHours.map((item) => {
             const selected = clockMode === 24 ? item === hour : item === twelveHour;
@@ -237,7 +238,7 @@ export function WorkspaceDateTimePicker({
           })}</div>
           <span className="ws-time-separator">:</span>
           <div className="ws-time-wheel" ref={minuteWheel} role="listbox" aria-label="Минуты" data-wheel="minute" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{Array.from({ length: 60 }, (_, item) => <button type="button" role="option" aria-selected={item === minute} key={item} onClick={() => updateTime(hour, item)}>{two(item)}</button>)}</div>
-          {clockMode === 12 ? <div className="ws-time-period" role="group" aria-label="Половина дня"><button type="button" aria-pressed={period === "AM"} onClick={() => updateTime(hour % 12, minute)}>AM</button><button type="button" aria-pressed={period === "PM"} onClick={() => updateTime((hour % 12) + 12, minute)}>PM</button></div> : null}
+          {clockMode === 12 ? <SlidingSegmented className="ws-time-period" role="group" aria-label="Половина дня"><button type="button" aria-pressed={period === "AM"} onClick={() => updateTime(hour % 12, minute)}>AM</button><button type="button" aria-pressed={period === "PM"} onClick={() => updateTime((hour % 12) + 12, minute)}>PM</button></SlidingSegmented> : null}
         </div>
       </div> : null}
       <footer className="ws-date-time-actions">

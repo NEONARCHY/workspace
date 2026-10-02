@@ -125,6 +125,10 @@
 .notifications-view .notification-settings-title { padding: 0 0 15px; border-color: rgb(41 58 85 / 9%); }
 .notifications-view .notification-settings-title > svg { display: grid; width: 39px; height: 39px; padding: 8px; border-radius: 13px; color: var(--ws-link); background: rgb(255 255 255 / 64%); }
 .notifications-view .notification-preference-list > label { min-height: 58px; border-color: rgb(41 58 85 / 8%); }
+.notification-test { display: grid; justify-items: start; gap: 8px; margin-top: 16px; }
+.notification-test .fui-Button { border-color: #b7d4d1; color: #154e59; background: rgb(255 255 255 / 78%); }
+.notification-test p { margin: 0; color: #486b6f; font-size: 11px; line-height: 1.5; }
+.notification-test p[role="alert"] { color: #a03d50; }
 .notifications-view .notification-settings-note { border: 0; border-radius: 13px; background: rgb(255 255 255 / 52%); }
 .notifications-view .notification-context { margin: -6px -6px 18px; padding: 17px; border: 1px solid rgb(255 255 255 / 72%); border-radius: 18px; background: rgb(255 255 255 / 66%); }
 
