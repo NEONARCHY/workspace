@@ -472,6 +472,37 @@ describe("Private messenger", () => {
       conversation.textContent!.indexOf(laterMessage.body),
     );
     expect(notes[0]).toHaveClass("message-system");
+    expect(notes[0]).toHaveTextContent("Состав группы");
+    expect(notes[1]).toHaveTextContent("Права управления");
+  });
+
+  it("groups nearby bubbles by author without merging across system notices or long pauses", () => {
+    const makeMessage = (id: string, authorId: string, time: string): ChatMessage => ({
+      ...initialMessages[0]!, id, chatId: "finance", authorId, body: `Текст ${id}`,
+      createdAt: `2026-09-27T${time}:00Z`, time,
+    });
+    const messages: ChatMessage[] = [
+      makeMessage("first", "baxtiyor", "09:00"),
+      makeMessage("second", "baxtiyor", "09:01"),
+      { ...makeMessage("notice", "baxtiyor", "09:02"), systemKind: "member_left", body: "Бахтиёр вышел из группы" },
+      makeMessage("after-notice", "baxtiyor", "09:03"),
+      makeMessage("own-first", "aziza", "09:04"),
+      { ...makeMessage("own-last", "aziza", "09:05"), reactions: [
+        { emoji: "👍", count: 1, reactedByCurrentUser: false, reactorUserIds: ["baxtiyor"] },
+      ] },
+      makeMessage("late", "aziza", "09:20"),
+    ];
+    renderMessenger({ messages });
+    const row = (id: string) => document.querySelector<HTMLElement>(`.message-row:has([data-message-id="${id}"])`);
+    expect(row("first")).toHaveClass("is-group-first");
+    expect(row("second")).toHaveClass("is-group-last");
+    expect(row("second")?.querySelector(".message-avatar-spacer")).toBeInTheDocument();
+    expect(row("second")).toHaveTextContent("Текст second");
+    expect(row("after-notice")?.className).not.toMatch(/is-group-/);
+    expect(row("own-first")).toHaveClass("is-group-first");
+    expect(row("own-last")).toHaveClass("is-group-last");
+    expect(row("own-last")?.querySelector(".message-reactions")).toHaveTextContent("👍");
+    expect(row("late")?.className).not.toMatch(/is-group-/);
   });
 
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
