@@ -71,7 +71,7 @@ jobs:
         shell: bash
         run: |
           for attempt in 1 2 3; do
-            if audit_log="$(pip-audit 2>&1)"; then
+            if audit_log="$(pip-audit --skip-editable 2>&1)"; then
               printf '%s\n' "$audit_log"
               exit 0
             else

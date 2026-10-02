@@ -22,6 +22,7 @@ import type {
 import { Badge, Button, Input, Textarea } from "@fluentui/react-components";
 import { Add24Regular, ArrowLeft24Regular, ArrowRight24Regular, Chat24Regular, Dismiss20Regular, Edit24Regular, Search20Regular } from "@fluentui/react-icons";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { PersonPicker } from "./PersonPicker";
 
@@ -253,7 +254,7 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
           <span className="view-kicker">BP‑7 · Общая воронка</span>
           <h1>Список проектов</h1>
           <p>{projects.length} проектов · {activeCount} в работе · бюджеты сохраняются в валюте проекта</p>
-          {canManageWorkflow && workflow ? <div className="process-view-tabs" role="group" aria-label="Разделы проектов"><button type="button" className={view === "board" ? "active" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>Список проектов</button><button type="button" className={view === "designer" ? "active" : ""} aria-pressed={view === "designer"} onClick={() => setView("designer")}>Конструктор маршрутов</button></div> : null}
+          {canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы проектов"><button type="button" className={view === "board" ? "active" : ""} aria-pressed={view === "board"} onClick={() => setView("board")}>Список проектов</button><button type="button" className={view === "designer" ? "active" : ""} aria-pressed={view === "designer"} onClick={() => setView("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}
         </div>
         {canCreate ? (
           <Button appearance="primary" icon={<Add24Regular />} onClick={() => {
@@ -278,18 +279,18 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
       </section>
 
       <div className="ws2-process-toolbar project-toolbar">
-        <div className="ws2-segmented" role="group" aria-label="Вид проектов">
+        <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид проектов">
           <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
           <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
-        </div>
+        </SlidingSegmented>
         <Input contentBefore={<Search20Regular />} aria-label="Поиск проектов" placeholder="Код, название или руководитель" value={query} onChange={(_, data) => setQuery(data.value)} />
-        <div className="ws2-segmented" role="group" aria-label="Фильтр проектов">
+        <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр проектов">
           {([["active", "В работе"], ["all", "Все"], ["completed", "Завершённые"]] as const).map(([key, label]) => (
             <button type="button" key={key} className={filter === key ? "active" : ""} aria-pressed={filter === key} onClick={() => setFilter(key)}>
               {label}<span>{filterCounts[key]}</span>
             </button>
           ))}
-        </div>
+        </SlidingSegmented>
       </div>
 
       {presentation === "kanban" ? <SpatialBoard canDrop={(id, target) => { const project = projects.find(item => item.id === id); return !!project?.canMove && availableStages(project).includes(target as ProjectStage); }} onMove={async (id, target) => { const project = projects.find(item => item.id === id); if (project) await move(project, target as ProjectStage); }}>

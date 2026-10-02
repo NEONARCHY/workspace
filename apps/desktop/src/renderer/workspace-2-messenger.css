@@ -367,15 +367,15 @@
 .messenger-view .message-actions {
   position: absolute;
   z-index: 3;
-  top: auto;
-  bottom: 1px;
+  top: 50%;
+  bottom: auto;
   right: auto;
   left: calc(100% + 6px);
   min-height: 30px;
   margin: 0;
   opacity: 0;
   pointer-events: none;
-  transform: none;
+  transform: translateY(-50%);
   transition: opacity 150ms var(--ws-ease);
 }
 .messenger-view .message:hover .message-actions:not(.is-visible),

@@ -42,6 +42,7 @@ import "./yuksalish-assistant.css";
 import "./ai-hisobot.css";
 import "./telegram-access.css";
 import "./employee-scope.css";
+import "./sliding-segmented.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

@@ -4,6 +4,7 @@ export interface NotificationPayload {
   readonly body: string;
   readonly section: string;
   readonly entityId?: string;
+  readonly testOnly?: boolean;
 }
 
 export interface NotificationNavigation {

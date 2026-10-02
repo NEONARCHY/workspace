@@ -22,6 +22,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import {
   cancelZoomMeeting,
@@ -404,7 +405,7 @@ export function ZoomView({
 
       <div className="zoom-split">
         <section className="zoom-list" aria-label="Расписание конференций">
-          <div className="view-switch zoom-buckets" role="group" aria-label="Период">
+          <SlidingSegmented className="view-switch zoom-buckets" role="group" aria-label="Период">
             <button
               type="button"
               className={bucket === "upcoming" ? "active" : ""}
@@ -421,7 +422,7 @@ export function ZoomView({
             >
               Прошедшие
             </button>
-          </div>
+          </SlidingSegmented>
           {visible.length === 0 ? (
             <p className="zoom-empty">
               {bucket === "upcoming"

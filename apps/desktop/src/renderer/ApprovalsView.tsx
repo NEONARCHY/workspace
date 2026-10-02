@@ -10,6 +10,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { PersonPicker } from "./PersonPicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 import type {
@@ -1453,7 +1454,7 @@ export function ApprovalsView({
               : "Настройка логики процесса без изменения кода"}
           </p>
           <div className="approvals-tabs">
-            <div className="approval-mode-switch" aria-label="Разделы согласований">
+            <SlidingSegmented className="approval-mode-switch" role="group" aria-label="Разделы согласований">
               <button
                 type="button"
                 aria-pressed={mode === "requests"}
@@ -1472,7 +1473,7 @@ export function ApprovalsView({
                   Конструктор маршрутов
                 </button>
               ) : null}
-            </div>
+            </SlidingSegmented>
           </div>
         </div>
         <div className="toolbar-actions">
@@ -1559,12 +1560,12 @@ export function ApprovalsView({
             </div>
           </div>
           <div className="approval-view-toolbar ws2-process-toolbar">
-            <div className="ws2-segmented" role="group" aria-label="Вид заявок">
+            <SlidingSegmented className="ws2-segmented" role="group" aria-label="Вид заявок">
               <button type="button" className={presentation === "kanban" ? "active" : ""} aria-pressed={presentation === "kanban"} onClick={() => setPresentation("kanban")}>Канбан</button>
               <button type="button" className={presentation === "list" ? "active" : ""} aria-pressed={presentation === "list"} onClick={() => setPresentation("list")}>Список</button>
-            </div>
+            </SlidingSegmented>
             <Input contentBefore={<Search20Regular />} className="approval-search" aria-label="Поиск заявок" placeholder="Номер, название или проект" value={requestQuery} onChange={(_event, data) => setRequestQuery(data.value)} />
-            <div className="ws2-segmented" role="group" aria-label="Фильтр заявок">
+            <SlidingSegmented className="ws2-segmented" role="group" aria-label="Фильтр заявок">
               {([
                 ["all", "Все", filterCounts.all],
                 ["actionable", "Нужно моё решение", filterCounts.actionable],
@@ -1582,7 +1583,7 @@ export function ApprovalsView({
                   {label}<span className="approval-filter-count" aria-hidden="true">{count}</span>
                 </button>
               ))}
-            </div>
+            </SlidingSegmented>
           </div>
           {actionError && !selectedRequest ? (
             <div className="approval-board-notice approval-action-error" role="alert">
@@ -1873,7 +1874,7 @@ export function ApprovalsView({
                   <button type="button" aria-label="Закрыть карточку заявки" onClick={closeDetail}>×</button>
                 </header>
 
-                <nav className="approval-detail-tabs" aria-label="Разделы заявки">
+                <SlidingSegmented as="nav" className="approval-detail-tabs" aria-label="Разделы заявки">
                   {([
                     ["overview", "Обзор"],
                     ["route", "Маршрут"],
@@ -1883,7 +1884,7 @@ export function ApprovalsView({
                     <button key={tab} type="button" className={detailTab === tab ? "active" : ""}
                       aria-pressed={detailTab === tab} onClick={() => setDetailTab(tab)}>{label}</button>
                   ))}
-                </nav>
+                </SlidingSegmented>
 
                 {detailTab === "route" ? <div ref={stageRibbonRef} className="approval-stage-ribbon detail-route" role="region" tabIndex={0} aria-label="Стадии заявки">
                   {boardColumns.map((column, index) => (

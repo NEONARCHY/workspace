@@ -25,6 +25,7 @@ import {
   Search20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
 import { PersonPicker } from "./PersonPicker";
@@ -471,17 +472,17 @@ export function TaskComposer({
                   <div><span className="task-team-lead-label">Ответственный за задачу</span><strong>{assignee?.name ?? "Не выбран"}</strong></div>
                   <p>Остальных можно добавить по одному или целым отделом.</p>
                 </div>
-                <div className="task-team-modes" role="group" aria-label="Способ добавления участников">
+                <SlidingSegmented className="task-team-modes" role="group" aria-label="Способ добавления участников">
                   <button type="button" aria-pressed={teamMode === "people"} onClick={() => { setTeamMode("people"); setTeamSearch(""); setDepartmentId(""); }}>Сотрудники</button>
                   {departments.length ? <button type="button" aria-pressed={teamMode === "departments"} onClick={() => { setTeamMode("departments"); setTeamSearch(""); setParticipantId(""); }}>Отдел целиком</button> : null}
-                </div>
+                </SlidingSegmented>
                 <div className="task-team-picker">
                   <div className="task-team-picker-toolbar">
                     <Input contentBefore={<Search20Regular />} aria-label={teamMode === "people" ? "Найти сотрудника для задачи" : "Найти отдел для задачи"} placeholder={teamMode === "people" ? "Имя или должность" : "Название отдела или подразделения"} value={teamSearch} onChange={(_, data) => { setTeamSearch(data.value); setParticipantId(""); setDepartmentId(""); }} />
-                    <div className="task-team-scopes" role="group" aria-label="Контур команды">
+                    <SlidingSegmented className="task-team-scopes" role="group" aria-label="Контур команды">
                       <button type="button" aria-pressed={teamScope === "central"} onClick={() => { setTeamScope("central"); setParticipantId(""); setDepartmentId(""); }}>Центральный аппарат</button>
                       <button type="button" aria-pressed={teamScope === "regional"} onClick={() => { setTeamScope("regional"); setParticipantId(""); setDepartmentId(""); }}>Регионы</button>
-                    </div>
+                    </SlidingSegmented>
                   </div>
                   {teamMode === "people" ? <>
                     <div className="task-team-options" role="group" aria-label="Доступные сотрудники">

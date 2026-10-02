@@ -4,6 +4,7 @@ import { Button, Field, Input } from "@fluentui/react-components";
 import { Eye24Regular, EyeOff24Regular } from "@fluentui/react-icons";
 import { AuthWaves } from "./AuthWaves";
 import { CompanyLogo } from "./CompanyLogo";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 interface LoginViewProps {
   readonly busy: boolean;
@@ -66,7 +67,7 @@ export function LoginView({
       </section>
 
       <section className="auth-card" aria-label="Вход в Yuksalish Workspace">
-        <div className="auth-mode-switch" aria-label="Способ входа">
+        <SlidingSegmented className="auth-mode-switch" role="group" aria-label="Способ входа">
           <button
             type="button"
             aria-pressed={mode === "login"}
@@ -91,7 +92,7 @@ export function LoginView({
           >
             Сброс доступа
           </button>
-        </div>
+        </SlidingSegmented>
 
         <form id="auth-form" aria-labelledby="auth-form-heading" onSubmit={submit}>
           <div>

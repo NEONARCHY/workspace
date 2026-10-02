@@ -28,6 +28,7 @@ interface DesktopNotificationPayload {
   readonly body: string;
   readonly section: string;
   readonly entityId?: string;
+  readonly testOnly?: boolean;
 }
 
 function isAllowedNavigation(target: string): boolean {
@@ -147,7 +148,7 @@ void app.whenReady().then(() => {
     const window = BrowserWindow.fromWebContents(event.sender);
     if (
       window === null
-      || window.isFocused()
+      || (window.isFocused() && payload?.testOnly !== true)
       || !Notification.isSupported()
       || typeof payload?.id !== "string"
       || typeof payload?.title !== "string"

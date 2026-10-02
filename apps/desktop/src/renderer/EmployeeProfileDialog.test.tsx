@@ -90,7 +90,10 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function renderProfile(value: EmployeeRecognitionProfile = profile) {
+function renderProfile(value: EmployeeRecognitionProfile = profile, options: {
+  currentUserId?: string;
+  onOpenChat?: (userId: string) => Promise<void>;
+} = {}) {
   vi.mocked(loadEmployeeRecognitionProfile).mockResolvedValue(value);
   vi.mocked(loadWorkspaceEfficiency).mockResolvedValue({
     period: "2026-09", timezone: "Asia/Tashkent", methodologyVersion: "1", trackingStartedAt: "2026-01-01", currentUserId: "manager",
@@ -98,12 +101,24 @@ function renderProfile(value: EmployeeRecognitionProfile = profile) {
   });
   const onOpenPersonProfile = vi.fn();
   render(<FluentProvider theme={workspaceTheme}>
-    <EmployeeProfileDialog token="token" userId="baxtiyor" open onOpenChange={vi.fn()} onOpenPersonProfile={onOpenPersonProfile} people={[value.person, { id: "temur", name: "Темур Алмазов", initials: "ТА", role: "employee", color: "#0091a8" }]} />
+    <EmployeeProfileDialog token="token" userId="baxtiyor" currentUserId={options.currentUserId} open onOpenChange={vi.fn()} onOpenPersonProfile={onOpenPersonProfile} onOpenChat={options.onOpenChat} people={[value.person, { id: "temur", name: "Темур Алмазов", initials: "ТА", role: "employee", color: "#0091a8" }]} />
   </FluentProvider>);
   return onOpenPersonProfile;
 }
 
 describe("EmployeeProfileDialog", () => {
+  it("opens a direct chat from another employee's profile, but not from one's own", async () => {
+    const onOpenChat = vi.fn().mockResolvedValue(undefined);
+    renderProfile(profile, { currentUserId: "temur", onOpenChat });
+    fireEvent.click(await screen.findByRole("button", { name: "Написать сообщение" }));
+    await waitFor(() => expect(onOpenChat).toHaveBeenCalledWith("baxtiyor"));
+
+    cleanup();
+    renderProfile(profile, { currentUserId: "baxtiyor", onOpenChat });
+    expect(await screen.findByRole("heading", { name: "Бахтиёр Самугов" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Написать сообщение" })).not.toBeInTheDocument();
+  });
+
   it("shows public work data and explains achievement rules", async () => {
     renderProfile();
 

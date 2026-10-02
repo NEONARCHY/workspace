@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
   AIReferentAuthorityStatus,
@@ -537,7 +538,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
       </p> : null}
 
       <div className="ai-referent-register-bar">
-        <div className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
+        <SlidingSegmented className="ai-referent-register-tabs" role="tablist" aria-label="Реестры корреспонденции">
           <button
             type="button"
             role="tab"
@@ -569,7 +570,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
             onClick={() => setRegisterKind("addresses")}>Адресная книга</button> : null}
           <button type="button" role="tab" aria-selected={registerKind === "archive"} className={registerKind === "archive" ? "active" : ""} onClick={() => setRegisterKind("archive")}>Архив и журналы</button>
           <button type="button" role="tab" aria-selected={registerKind === "telegram"} className={registerKind === "telegram" ? "active" : ""} onClick={() => setRegisterKind("telegram")}>Мой Telegram</button>
-        </div>
+        </SlidingSegmented>
         {canCreate && !readOnly ? <div className="ai-referent-register-actions">
           <Button className="ai-referent-register-action primary" appearance="primary" icon={<Add20Regular />} onClick={() => openCreate("delivery")}>
             Новое письмо
@@ -819,10 +820,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 </div>
                 {selected.documentCheck && selected.canEdit && !selected.submissionBlockReason && selected.documentCheck.status !== "passed" ? <p className="ai-referent-preflight" role="status">{selected.documentCheck.detail || "Робот проверяет DOCX. Согласование станет доступно после успешной проверки."}</p> : null}
                 {selected.canEdit && selected.submissionBlockReason ? <p className="ai-referent-preflight" role="status">{selected.submissionBlockReason}</p> : null}
-                <div className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
+                <SlidingSegmented className="ai-referent-detail-tabs" role="tablist" aria-label="Разделы письма">
                   {([ ["overview", "Обзор"], ["files", `Документы · ${visibleDocumentCount}`], ["history", `История · ${selected.events.length}`] ] as const).map(([key, label]) =>
                     <button type="button" role="tab" key={key} aria-selected={detailTab === key} className={detailTab === key ? "active" : ""} onClick={() => setDetailTab(key)}>{label}</button>)}
-                </div>
+                </SlidingSegmented>
                 {detailTab === "overview" ? <>
                 {selected.finalPdfFileId ? <section className="ai-referent-detail-card"><h3>Письмо · подписанный PDF</h3><p>Это актуальная версия письма. Вложения доступны в пакете документов.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => {
                   setError("");

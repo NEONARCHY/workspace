@@ -8,6 +8,7 @@ import type {
   WorkspaceNotification,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { Button, Input, Switch } from "@fluentui/react-components";
 import {
   AlertOn24Regular,
@@ -36,6 +37,7 @@ interface NotificationCenterProps {
   readonly onUpdatePreferences: (
     preferences: NotificationPreferences,
   ) => void | Promise<void>;
+  readonly onTestSystemNotification?: () => Promise<void>;
   readonly absenceRequests?: readonly AbsenceRequest[];
   readonly onAbsenceAction?: (request: AbsenceRequest, action: AbsenceAction) => void | Promise<void>;
 }
@@ -83,6 +85,7 @@ export function NotificationCenter({
   onMarkRead,
   onMarkAllRead,
   onUpdatePreferences,
+  onTestSystemNotification,
   absenceRequests = [],
   onAbsenceAction,
 }: NotificationCenterProps) {
@@ -90,6 +93,8 @@ export function NotificationCenter({
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [testingNotification, setTestingNotification] = useState(false);
+  const [testStatus, setTestStatus] = useState<{ readonly message: string; readonly error: boolean }>();
   const [contextId, setContextId] = useState<string | undefined>(focusNotification?.id);
   const contextRef = useRef<HTMLElement>(null);
   const contextTrigger = useRef<HTMLButtonElement>(null);
@@ -223,7 +228,7 @@ export function NotificationCenter({
               <strong>{filter === "attention" ? "Очередь решений" : filter === "unread" ? "Непрочитанное" : "Все события"}</strong>
               <span>{visible.length} {visible.length === 1 ? "событие" : "событий"}</span>
             </div>
-            <div className="notification-kind-filters" role="group" aria-label="Фильтр по разделу">
+            <SlidingSegmented className="notification-kind-filters" role="group" aria-label="Фильтр по разделу">
               <button type="button" aria-pressed={kindFilter === "all"} onClick={() => setKindFilter("all")}>Все разделы</button>
               {availableKinds.map((kind) => (
                 <button key={kind} type="button" aria-pressed={kindFilter === kind} onClick={() => setKindFilter(kind)}>
@@ -231,7 +236,7 @@ export function NotificationCenter({
                   {kindLabels[kind]}
                 </button>
               ))}
-            </div>
+            </SlidingSegmented>
           </div>
           <div className="notification-stream" aria-live="polite">
           {visible.length === 0 ? (
@@ -312,8 +317,20 @@ export function NotificationCenter({
               </label>
             ))}
           </div>
+          {onTestSystemNotification ? <div className="notification-test">
+            <Button size="small" disabled={testingNotification} onClick={() => {
+              setTestingNotification(true);
+              setTestStatus(undefined);
+              void onTestSystemNotification().then(() => {
+                setTestStatus({ message: "Проверочное уведомление отправлено в Windows. Если баннер не появился, проверьте разрешения браузера и режим «Не беспокоить» в Windows.", error: false });
+              }).catch((failure: unknown) => {
+                setTestStatus({ message: failure instanceof Error ? failure.message : "Не удалось показать уведомление.", error: true });
+              }).finally(() => setTestingNotification(false));
+            }}>{testingNotification ? "Проверяем…" : "Проверить уведомление"}</Button>
+            {testStatus ? <p role={testStatus.error ? "alert" : "status"}>{testStatus.message}</p> : null}
+          </div> : null}
           <p className="notification-settings-note">
-            Внутренний список сохраняется всегда. Эти настройки управляют только всплывающими уведомлениями Windows.
+            Внутренний список сохраняется всегда. Системные уведомления приходят, пока сайт открыт; для веб-версии нужны HTTPS и разрешение браузера.
           </p>
         </aside>
       </div>

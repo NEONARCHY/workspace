@@ -10,6 +10,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 const absenceLabels: Record<string, string> = {
   vacation: "В отпуске",
@@ -107,15 +108,18 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>
     </header>
     <div className="team-presence-toolbar">
-      <button type="button" aria-pressed={onlyWorking} className={onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(true)}>Сейчас работают</button>
-      <button type="button" aria-pressed={!onlyWorking} className={!onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(false)}>Вся команда</button>
-      <small>Данные на {data ? clockLabel(data.asOf) : "—"}</small>
-      <Button appearance="subtle" size="small" icon={<ArrowSync20Regular />} aria-label="Обновить отметки" onClick={() => {
+      <SlidingSegmented className="team-presence-filter" role="group" aria-label="Показать сотрудников">
+        <button type="button" aria-pressed={onlyWorking} className={onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(true)}>Сейчас работают</button>
+        <button type="button" aria-pressed={!onlyWorking} className={!onlyWorking ? "active" : ""} onClick={() => setOnlyWorking(false)}>Вся команда</button>
+      </SlidingSegmented>
+      <div className="team-presence-toolbar-meta"><small>Обновлено в {data ? clockLabel(data.asOf) : "—"}</small>
+        <Button appearance="subtle" size="small" icon={<ArrowSync20Regular />} aria-label="Обновить отметки" onClick={() => {
         void loadTeamWorkday(token).then((result) => {
           if (!Array.isArray(result.members)) throw new Error("Сервер вернул неполный обзор команды");
           setData(result); setError("");
         }).catch((failure: unknown) => setError(failure instanceof Error ? failure.message : "Не удалось обновить отметки"));
-      }} />
+        }} />
+      </div>
     </div>
     {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
     <div className="team-presence-people">

@@ -1,0 +1,101 @@
+.sliding-segmented {
+  position: relative;
+  isolation: isolate;
+}
+
+.sliding-segmented > button {
+  position: relative;
+  z-index: 1;
+}
+
+.sliding-segmented > .sliding-segmented-indicator {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  border-radius: 10px;
+  background: var(--sliding-indicator-background, #fff);
+  box-shadow: 0 4px 12px rgb(31 62 72 / 10%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 260ms var(--ws-ease-physical, cubic-bezier(.2, 0, 0, 1));
+}
+
+/* Legacy active backgrounds would cover the moving surface. Keep their text colours. */
+.sliding-segmented > button[aria-pressed="true"],
+.sliding-segmented > button[aria-selected="true"] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.sliding-segmented.employee-scope-switch {
+  flex-wrap: nowrap;
+}
+.sliding-segmented.employee-scope-switch > button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.sliding-segmented.notification-kind-filters {
+  --sliding-indicator-background: #e8f4f2;
+  border-radius: 12px;
+  background: #edf3f2;
+}
+.sliding-segmented.notification-kind-filters > button:first-child {
+  position: relative;
+  left: auto;
+  margin-left: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.sliding-segmented.team-presence-filter {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 11px;
+  background: #eaf1f1;
+}
+.sliding-segmented.approval-detail-tabs {
+  --sliding-indicator-background: #e1f0ed;
+}
+.sliding-segmented.task-team-modes {
+  display: inline-flex;
+  gap: 3px;
+  width: fit-content;
+  padding: 4px;
+  border: 1px solid #d9e4e7;
+  border-radius: 11px;
+  background: #edf4f3;
+}
+.sliding-segmented.task-team-modes > button {
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 8px;
+}
+.sliding-segmented.task-team-scopes {
+  --sliding-indicator-background: #e7f3f4;
+  width: fit-content;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f1f6f6;
+}
+.sliding-segmented.task-filters {
+  --sliding-indicator-background: #e7f1fa;
+}
+.sliding-segmented.task-filters > .task-search {
+  margin-left: auto;
+}
+.sliding-segmented.ws-time-period {
+  --sliding-indicator-background: #fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sliding-segmented > .sliding-segmented-indicator { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .sliding-segmented > .sliding-segmented-indicator { border: 1px solid Highlight; background: Canvas; box-shadow: none; }
+  .sliding-segmented > button[aria-pressed="true"],
+  .sliding-segmented > button[aria-selected="true"] { outline: 1px solid Highlight; }
+}
