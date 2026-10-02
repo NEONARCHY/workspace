@@ -76,6 +76,18 @@ interface OutgoingMessageReveal {
   readonly phase: "waiting" | "revealing";
 }
 
+function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): boolean {
+  if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
+    || first.authorId !== second.authorId || !first.createdAt || !second.createdAt
+    || first.replyToMessageId || second.replyToMessageId || first.isPinned || second.isPinned
+    || first.reactions?.length || first.deletedAt || second.deletedAt) return false;
+  const firstAt = Date.parse(first.createdAt);
+  const secondAt = Date.parse(second.createdAt);
+  return Number.isFinite(firstAt) && Number.isFinite(secondAt)
+    && secondAt >= firstAt && secondAt - firstAt <= 5 * 60_000
+    && new Date(firstAt).toDateString() === new Date(secondAt).toDateString();
+}
+
 export interface MessengerViewProps {
   readonly canUseAssistant?: boolean;
   readonly assistantDraft?: AssistantActionDraft;
@@ -765,11 +777,16 @@ function Conversation({
                 <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>
               </div> : null}
               <time>{message.time}</time>
-            </div> : <div className="message-system" data-message-id={message.id} role="note">
-              <span>{message.body}</span><time>{message.time}</time>
+            </div> : <div className="message-system" data-kind={message.systemKind} data-message-id={message.id} role="note" title={message.body}>
+              {message.body}
             </div>}
           </div>;
           const own = message.authorId === currentUserId;
+          const groupedWithPrevious = !query && messagesShareBubbleGroup(renderedMessages[index - 1], message);
+          const groupedWithNext = !query && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
+          const groupPosition = groupedWithPrevious
+            ? groupedWithNext ? "is-group-middle" : "is-group-last"
+            : groupedWithNext ? "is-group-first" : "";
           const messageAttachments = attachments.filter(
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
           );
@@ -783,7 +800,7 @@ function Conversation({
               ? " message-particle-revealing"
               : "";
           return (
-            <div key={message.id} className={`message-row${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
+            <div key={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
@@ -812,14 +829,16 @@ function Conversation({
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
-                {!own && (
+                {!own && (groupedWithPrevious ? <span className="message-avatar-spacer" aria-hidden="true" /> :
                   <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>
                     {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
                   <div className="message-body">
-                    {!own && <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>}
+                    {!own && (groupedWithPrevious
+                      ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
+                      : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
                     {parent && (
                       <blockquote className="message-quote">
                         <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>

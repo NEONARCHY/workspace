@@ -10,6 +10,7 @@ import {
   Send24Regular,
   Add24Regular,
   ArrowReply24Regular,
+  ChevronDown20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
@@ -42,8 +43,7 @@ function dateLabel(value: string): string {
   }).format(new Date(value));
 }
 
-function commentThreadRootId(comment: FeedComment, comments: readonly FeedComment[]): string {
-  const commentsById = new Map(comments.map((item) => [item.id, item]));
+function commentThreadRootId(comment: FeedComment, commentsById: ReadonlyMap<string, FeedComment>): string {
   const visited = new Set<string>();
   let rootId = comment.id;
   let parentId = comment.parentCommentId;
@@ -53,6 +53,26 @@ function commentThreadRootId(comment: FeedComment, comments: readonly FeedCommen
     parentId = commentsById.get(parentId)?.parentCommentId;
   }
   return rootId;
+}
+
+interface FeedCommentThread {
+  readonly root: FeedComment;
+  readonly replies: readonly FeedComment[];
+}
+
+function groupFeedComments(comments: readonly FeedComment[]): readonly FeedCommentThread[] {
+  const commentsById = new Map(comments.map((item) => [item.id, item]));
+  const threads = new Map<string, { root: FeedComment; replies: FeedComment[] }>();
+  for (const item of comments) {
+    const root = commentsById.get(commentThreadRootId(item, commentsById)) ?? item;
+    let thread = threads.get(root.id);
+    if (!thread) {
+      thread = { root, replies: [] };
+      threads.set(root.id, thread);
+    }
+    if (item.id !== root.id) thread.replies.push(item);
+  }
+  return [...threads.values()];
 }
 
 export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
@@ -71,6 +91,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const [busy, setBusy] = useState(false);
   const [composerOpen, setComposerOpen] = useState(assistantDraft?.kind === "feed");
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
+  const [expandedThreads, setExpandedThreads] = useState<Record<string, boolean>>({});
   const [pendingDelete, setPendingDelete] = useState<{ post: FeedPost; commentId?: string }>();
   const [greetingPostId, setGreetingPostId] = useState<string>();
   const [greetingLanguage, setGreetingLanguage] = useState<GreetingLanguage>("ru");
@@ -128,9 +149,15 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
   const comment = async (post: FeedPost) => {
     const value = commentDrafts[post.id]?.trim();
     if (!value) return;
+    const replyTarget = replying[post.id];
     setBusy(true);
     try {
-      if (await onComment(post, value, replying[post.id]?.id)) {
+      if (await onComment(post, value, replyTarget?.id)) {
+        if (replyTarget) {
+          const commentsById = new Map(post.comments.map((item) => [item.id, item]));
+          const rootId = commentThreadRootId(replyTarget, commentsById);
+          setExpandedThreads((current) => ({ ...current, [`${post.id}:${rootId}`]: true }));
+        }
         setCommentDrafts((current) => ({ ...current, [post.id]: "" }));
         setReplying((current) => ({ ...current, [post.id]: undefined }));
       }
@@ -168,6 +195,33 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
         <div className="feed-list">
           {posts.map((post) => {
             const author = person(post.authorUserId);
+            const threads = groupFeedComments(post.comments);
+            const renderComment = (item: FeedComment, thread?: FeedCommentThread) => {
+              const commentAuthor = person(item.authorUserId);
+              const threadKey = thread ? `${post.id}:${thread.root.id}` : "";
+              const expanded = !!expandedThreads[threadKey];
+              return <div className={`feed-comment${thread ? "" : " is-reply"}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
+                {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><ProfileAvatar person={commentAuthor} token={token} size={28} /></EmployeeProfileLink> : null}
+                <div className="feed-comment-content">
+                  <div className="feed-comment-heading">
+                    {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><strong>{commentAuthor.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
+                    <time dateTime={item.createdAt}>{dateLabel(item.createdAt)}</time>
+                  </div>
+                  <p>{item.body}</p>
+                  <div className="feed-comment-meta">
+                    <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
+                    <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                    {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
+                  </div>
+                  {thread?.replies.length ? <button className="feed-thread-toggle" type="button"
+                    aria-expanded={expanded} aria-controls={`feed-replies-${post.id}-${item.id}`}
+                    onClick={() => setExpandedThreads((current) => ({ ...current, [threadKey]: !expanded }))}>
+                    <ChevronDown20Regular aria-hidden="true" />
+                    {expanded ? "Скрыть ответы" : `Показать ответы · ${thread.replies.length}`}
+                  </button> : null}
+                </div>
+              </div>;
+            };
             return (
               <article className={`feed-card ${post.isPinned ? "pinned" : ""} ${post.systemKind === "birthday" ? "is-birthday" : ""}`} key={post.id}>
                 <header>
@@ -228,30 +282,12 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 </div>}
                 {post.comments.length > 0 ? (
                   <div className="feed-comments">
-                    {post.comments.map((item, index) => {
-                      const commentAuthor = person(item.authorUserId);
-                      const depth = item.parentCommentId ? 1 : 0;
-                      const threadRootId = commentThreadRootId(item, post.comments);
-                      const nextComment = post.comments[index + 1];
-                      const nextThreadRootId = nextComment ? commentThreadRootId(nextComment, post.comments) : undefined;
-                      const hasReplies = !depth && nextThreadRootId === item.id;
-                      const isLastReply = Boolean(depth) && nextThreadRootId !== threadRootId;
-                      return (
-                        <div className={`feed-comment ${depth ? "is-reply" : ""} ${hasReplies ? "has-replies" : ""} ${isLastReply ? "is-last-reply" : ""}`} key={item.id} data-parent-comment-id={item.parentCommentId ?? undefined}>
-                          {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><ProfileAvatar person={commentAuthor} token={token} size={28} /></EmployeeProfileLink> : null}
-                          <span>
-                            {commentAuthor ? <EmployeeProfileLink userId={commentAuthor.id} personName={commentAuthor.name}><strong>{commentAuthor.name}</strong></EmployeeProfileLink> : <strong>Сотрудник</strong>}
-                            <p>{item.body}</p>
-                            <span className="feed-comment-meta">
-                              <small>{dateLabel(item.createdAt)}</small>
-                              <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
-                              <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
-                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
-                            </span>
-                          </span>
-                        </div>
-                      );
-                    })}
+                    {threads.map((thread) => <div className={`feed-thread${thread.replies.length && expandedThreads[`${post.id}:${thread.root.id}`] ? " is-expanded" : ""}`} key={thread.root.id}>
+                      {renderComment(thread.root, thread)}
+                      <div className="feed-thread-replies" id={`feed-replies-${post.id}-${thread.root.id}`} hidden={!expandedThreads[`${post.id}:${thread.root.id}`]}>
+                        {thread.replies.map((item) => renderComment(item))}
+                      </div>
+                    </div>)}
                   </div>
                 ) : null}
                 <div className="feed-comment-composer">
