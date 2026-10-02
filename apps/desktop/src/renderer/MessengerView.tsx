@@ -38,12 +38,9 @@ import {
   Attach24Regular,
   CalendarLtr24Regular,
   Color24Regular,
-  Info20Regular,
-  Key20Regular,
   Mic24Regular,
   Pin24Regular,
   PinOff24Regular,
-  People20Regular,
   Search24Regular,
   Send24Filled,
   TaskListSquareLtr24Regular,
@@ -780,17 +777,8 @@ function Conversation({
                 <Button appearance="secondary" disabled={!!deadlineDecisionId} onClick={() => void decideDeadline(deadlineRequest.id, false)}>Отклонить</Button>
               </div> : null}
               <time>{message.time}</time>
-            </div> : <div className="message-system" data-kind={message.systemKind} data-message-id={message.id} role="note">
-              <span className="message-system-icon" aria-hidden="true">
-                {message.systemKind === "ownership_transferred" ? <Key20Regular />
-                  : message.systemKind === "member_left" ? <People20Regular /> : <Info20Regular />}
-              </span>
-              <span className="message-system-copy">
-                <strong>{message.systemKind === "ownership_transferred" ? "Права управления"
-                  : message.systemKind === "member_left" ? "Состав группы" : "Событие в чате"}</strong>
-                <span>{message.body}</span>
-              </span>
-              <time>{message.time}</time>
+            </div> : <div className="message-system" data-kind={message.systemKind} data-message-id={message.id} role="note" title={message.body}>
+              {message.body}
             </div>}
           </div>;
           const own = message.authorId === currentUserId;

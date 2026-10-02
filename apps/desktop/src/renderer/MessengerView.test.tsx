@@ -472,8 +472,10 @@ describe("Private messenger", () => {
       conversation.textContent!.indexOf(laterMessage.body),
     );
     expect(notes[0]).toHaveClass("message-system");
-    expect(notes[0]).toHaveTextContent("Состав группы");
-    expect(notes[1]).toHaveTextContent("Права управления");
+    expect(notes[0]).toHaveTextContent(leftNotice.body);
+    expect(notes[1]).toHaveTextContent(ownerNotice.body);
+    expect(notes[0]!.querySelector("svg, time, strong")).toBeNull();
+    expect(notes[1]!.querySelector("svg, time, strong")).toBeNull();
   });
 
   it("groups nearby bubbles by author without merging across system notices or long pauses", () => {

@@ -557,28 +557,18 @@
 }
 .messenger-view .message-system {
   box-sizing: border-box;
-  display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 10px;
-  width: min(100%, 440px);
+  display: block;
+  width: fit-content;
+  max-width: calc(100% - 24px);
   margin: 14px auto;
-  padding: 11px 12px;
-  border: 1px solid #d8e7e7;
-  border-radius: 15px;
-  background: rgb(255 255 255 / 94%);
-  box-shadow: 0 8px 20px -14px rgb(41 58 85 / 24%);
-  color: var(--ws-text);
+  overflow: hidden;
+  color: var(--ws-muted);
   font-size: 12px;
   line-height: 1.45;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.messenger-view .message-system-icon { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 10px; color: var(--ws-link); background: #e9f4f3; }
-.messenger-view .message-system-icon svg { width: 18px; height: 18px; }
-.messenger-view .message-system[data-kind="member_left"] .message-system-icon { color: var(--ws-navy); background: #edf1f5; }
-.messenger-view .message-system-copy { display: grid; min-width: 0; gap: 2px; overflow-wrap: anywhere; }
-.messenger-view .message-system-copy strong { color: var(--ws-navy); font-size: 12px; font-weight: 700; }
-.messenger-view .message-system-copy > span { color: var(--ws-muted); }
-.messenger-view .message-system time { color: var(--ws-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .task-deadline-request-popover { display: grid; gap: 10px; width: min(420px, calc(100% - 32px)); margin: 8px 16px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
 .task-deadline-request-popover > strong { color: var(--ws-ink); font-size: 15px; }
 .task-deadline-request-popover > p { margin: 0; color: var(--ws-muted); font-size: 12px; }
@@ -725,8 +715,8 @@
   .messenger-view .list-pane,
   .messenger-view .conversation-pane,
   .messenger-view .message-body,
-  .messenger-view .message-system,
   .messenger-view .composer { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .messenger-view .message-system { color: CanvasText; }
   .messenger-view .message-vanish-canvas,
   .messenger-view .message-reveal-canvas { display: none; }
 }

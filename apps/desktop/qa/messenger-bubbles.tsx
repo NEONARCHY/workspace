@@ -54,6 +54,10 @@ createRoot(document.getElementById("root")!).render(
 );
 
 if (new URLSearchParams(window.location.search).has("open")) {
+  window.setTimeout(() => document.querySelector<HTMLButtonElement>(".chat-row")?.click(), 400);
+}
+
+if (new URLSearchParams(window.location.search).has("open")) {
   window.setTimeout(() => document.querySelector<HTMLElement>('[data-chat-id="finance"] .chat-row')?.click(), 400);
 }
 if (new URLSearchParams(window.location.search).has("bottom")) {

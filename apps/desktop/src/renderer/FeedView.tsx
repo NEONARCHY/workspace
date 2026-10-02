@@ -282,7 +282,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 </div>}
                 {post.comments.length > 0 ? (
                   <div className="feed-comments">
-                    {threads.map((thread) => <div className="feed-thread" key={thread.root.id}>
+                    {threads.map((thread) => <div className={`feed-thread${thread.replies.length && expandedThreads[`${post.id}:${thread.root.id}`] ? " is-expanded" : ""}`} key={thread.root.id}>
                       {renderComment(thread.root, thread)}
                       <div className="feed-thread-replies" id={`feed-replies-${post.id}-${thread.root.id}`} hidden={!expandedThreads[`${post.id}:${thread.root.id}`]}>
                         {thread.replies.map((item) => renderComment(item))}
