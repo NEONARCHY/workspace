@@ -380,6 +380,7 @@ export function App() {
   const [accountInvite, setAccountInvite] = useState(false);
   const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); };
   const [navigationEditing, setNavigationEditing] = useState(false);
+  const [aiModulesOpen, setAiModulesOpen] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
   const railCollapsed = railPreference ?? compactWindow;
@@ -1780,6 +1781,8 @@ export function App() {
     .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
     .map((key) => navItems.find((item) => item.key === key)!);
   const sidebarItems = groupAiNavigation(orderedNavItems);
+  const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
+  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 46 + 9 : 0;
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
@@ -1852,9 +1855,9 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation items={sidebarItems} renderItem={(item, inOverflow, closeOverflow) => {
+          /> : <AdaptiveNavigation items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow, closeOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
-                <AiModulesNavigation modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} onCloseOverflow={closeOverflow}
+                <AiModulesNavigation modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen} onCloseOverflow={closeOverflow}
                   onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];

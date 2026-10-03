@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight20Regular, Sparkle24Regular } from "@fluentui/react-icons";
 import type { NavigationKey } from "@yuksalish/contracts";
+import { moveBefore } from "./personal-organization";
 
 export interface AiModuleNavigationItem {
   readonly key: NavigationKey;
@@ -33,14 +34,28 @@ export function groupAiNavigation<T extends AiModuleNavigationItem>(items: reado
   return result;
 }
 
-export function AiModulesNavigation({ modules, activeKey, inOverflow = false, onSelect, onCloseOverflow }: {
+export function moveAiNavigationGroup(order: readonly NavigationKey[], source: string, target: string): NavigationKey[] {
+  const groups = groupAiNavigation(order.map((key) => ({ key, label: key, icon: null })));
+  return moveBefore(groups.map((item) => item.key), source, target).flatMap((key) => {
+    const item = groups.find((group) => group.key === key)!;
+    return item.key === "ai_modules" ? item.modules.map((module) => module.key) : [item.key];
+  });
+}
+
+export function AiModulesNavigation({ modules, activeKey, inOverflow = false, inline = false, open: controlledOpen, onOpenChange, onSelect, onCloseOverflow }: {
   readonly modules: readonly AiModuleNavigationItem[];
   readonly activeKey: NavigationKey;
   readonly inOverflow?: boolean;
+  readonly inline?: boolean;
+  readonly open?: boolean;
+  readonly onOpenChange?: (open: boolean) => void;
   readonly onSelect: (key: NavigationKey) => void;
   readonly onCloseOverflow: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = useCallback((next: boolean) => { setLocalOpen(next); onOpenChange?.(next); }, [onOpenChange]);
+  const inlinePanel = inline || inOverflow;
   const [position, setPosition] = useState({ left: 0, top: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -49,6 +64,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, on
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent) => {
+      if (inlinePanel) return;
       if (!(event.target instanceof Node)) return;
       if (!triggerRef.current?.contains(event.target) && !panelRef.current?.contains(event.target)) setOpen(false);
     };
@@ -67,11 +83,11 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, on
       document.removeEventListener("keydown", onKeyDown, true);
       window.removeEventListener("resize", onViewportChange);
     };
-  }, [open]);
+  }, [open, inlinePanel, setOpen]);
 
   const toggle = () => {
     if (open) { setOpen(false); return; }
-    if (!inOverflow && triggerRef.current) {
+    if (!inlinePanel && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       const panelWidth = 244;
       const panelHeight = Math.min(360, 42 + modules.length * 46);
@@ -92,14 +108,14 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, on
 
   return <>
     <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " active" : ""}`} type="button"
-      aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inOverflow ? undefined : "dialog"}
+      aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inlinePanel ? undefined : "dialog"}
       aria-controls={open ? "rail-ai-modules" : undefined} onClick={toggle}>
       <span className="rail-icon"><Sparkle24Regular /></span>
       <span className="rail-label">ИИ-модули</span>
       <ChevronRight20Regular className="rail-ai-chevron" aria-hidden="true" />
     </button>
-    {open && inOverflow ? <div id="rail-ai-modules" className="rail-ai-inline" ref={panelRef}>{links}</div> : null}
-    {open && !inOverflow ? createPortal(<div id="rail-ai-modules" className="rail-ai-popover" role="dialog" aria-label="ИИ-модули"
+    {open && inlinePanel ? <div id="rail-ai-modules" className="rail-ai-inline" ref={panelRef}>{links}</div> : null}
+    {open && !inlinePanel ? createPortal(<div id="rail-ai-modules" className="rail-ai-popover" role="dialog" aria-label="ИИ-модули"
       ref={panelRef} style={position} onPointerDown={(event) => event.stopPropagation()}>{links}</div>, document.body) : null}
   </>;
 }

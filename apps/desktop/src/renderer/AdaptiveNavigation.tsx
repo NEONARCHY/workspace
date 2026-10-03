@@ -10,9 +10,11 @@ export interface AdaptiveNavigationItem {
 export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   items,
   renderItem,
+  expandedItem,
 }: {
   readonly items: readonly T[];
   readonly renderItem: (item: T, inOverflow: boolean, closeOverflow: () => void) => ReactNode;
+  readonly expandedItem?: { readonly key: string; readonly height: number };
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -29,14 +31,25 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         setVisibleCount(items.length);
         return;
       }
-      const capacity = Math.max(1, Math.floor(container.clientHeight / slotHeight));
-      setVisibleCount(items.length <= capacity ? items.length : Math.max(0, capacity - 1));
+      const heights = items.map((item) => slotHeight + (item.key === expandedItem?.key ? expandedItem.height : 0));
+      if (heights.reduce((total, height) => total + height, 0) <= container.clientHeight) {
+        setVisibleCount(items.length);
+        return;
+      }
+      let used = slotHeight; // Reserve the More button before fitting the prefix.
+      let count = 0;
+      while (count < items.length && used + heights[count]! <= container.clientHeight) used += heights[count++]!;
+      // Never unmount the expanded trigger while moving the items below it to More.
+      const expandedIndex = items.findIndex((item) => item.key === expandedItem?.key);
+      const collapsedCapacity = Math.max(0, Math.floor(container.clientHeight / slotHeight) - 1);
+      if (expandedIndex >= 0 && expandedIndex < collapsedCapacity) count = Math.max(count, expandedIndex + 1);
+      setVisibleCount(count);
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [items.length]);
+  }, [items, expandedItem?.key, expandedItem?.height]);
 
   useEffect(() => {
     if (!open) return;

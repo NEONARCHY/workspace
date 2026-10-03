@@ -3,7 +3,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NavigationKey } from "@yuksalish/contracts";
 
-import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
+import { AiModulesNavigation, groupAiNavigation, moveAiNavigationGroup } from "./AiModulesNavigation";
 
 const items = [
   { key: "tasks" as NavigationKey, label: "Задачи", icon: <span>T</span> },
@@ -14,6 +14,20 @@ const items = [
 
 describe("AI module sidebar group", () => {
   afterEach(cleanup);
+
+  it("moves both AI modules as one block without losing other identities", () => {
+    expect(moveAiNavigationGroup(["tasks", "ai_referent", "feed", "ai_hisobot"], "ai_modules", "tasks"))
+      .toEqual(["ai_referent", "ai_hisobot", "tasks", "feed"]);
+    expect(moveAiNavigationGroup(["ai_hisobot", "tasks", "ai_referent", "feed"], "ai_modules", "feed"))
+      .toEqual(["tasks", "feed", "ai_hisobot", "ai_referent"]);
+  });
+
+  it("expands inline in the regular sidebar rather than creating a floating panel", () => {
+    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} onCloseOverflow={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
+    expect(view.container.querySelector(".rail-ai-inline .rail-ai-links")).not.toBeNull();
+    expect(document.querySelector(".rail-ai-popover")).toBeNull();
+  });
 
   it("puts permitted AI modules in one slot at their first original position", () => {
     const grouped = groupAiNavigation(items);
