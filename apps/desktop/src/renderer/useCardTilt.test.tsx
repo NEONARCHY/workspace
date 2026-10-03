@@ -36,8 +36,37 @@ describe("Achievement-like board card tilt", () => {
       const callbacks = [...frames.values()]; frames.clear();
       callbacks.forEach(callback => callback(16));
     });
-    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-2.4);
-    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(3.2);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-1.68);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(2.24);
+  });
+  it("eases back from its current angle rather than snapping flat on leave", () => {
+    const { card, frames, flush, move } = setup();
+    move(); flush();
+    card.dispatchEvent(new Event("pointerleave"));
+    expect(card.style.getPropertyValue("--ws-card-tilt-x")).toBe("-12deg");
+    act(() => {
+      const callbacks = [...frames.values()]; frames.clear();
+      callbacks.forEach(callback => callback(2000));
+    });
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-10.92);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(14.56);
+    expect(frames.size).toBe(1);
+  });
+  it("has the same tracking speed at 60 and 120 Hz", () => {
+    const sample = (hz: number) => {
+      const result = setup();
+      result.move();
+      act(() => {
+        for (let i = 0; i <= hz / 5; i++) {
+          const callbacks = [...result.frames.values()]; result.frames.clear();
+          callbacks.forEach(callback => callback(i * 1000 / hz));
+        }
+      });
+      const angle = parseFloat(result.card.style.getPropertyValue("--ws-card-tilt-y"));
+      result.unmount();
+      return angle;
+    };
+    expect(sample(60)).toBeCloseTo(sample(120), 6);
   });
   it("follows the mouse, settles without an endless RAF and returns exactly flat", () => {
     const { card, frames, flush, move } = setup();
