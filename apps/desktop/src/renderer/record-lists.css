@@ -1,12 +1,13 @@
 /* Full-width work lists. Same brand tokens and motion; no effects on table geometry. */
 .tasks-view.bp5-tasks { display: flex; flex-direction: column; min-height: 0; }
 .tasks-view.bp5-tasks .tasks-main { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
-.employees-view { display: flex; flex-direction: column; min-height: 0; }
+.employees-view { --employee-view-inset: var(--ws-view-edge); display: flex; flex-direction: column; min-height: 0; }
 .tasks-view .section-toolbar, .employees-view .section-toolbar { flex: none; min-height: 94px; }
 .tasks-view .task-filters { flex: none; align-items: center; padding: 12px var(--ws-view-edge) 16px; }
 .tasks-view .task-search { flex: 1 1 260px; min-width: 160px; max-width: none; margin-left: auto; }
 .task-role-filter { min-height: 36px; padding: 7px 10px; color: var(--ws-text); border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; font-size: 13px; }
 .record-list-controls { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 12px; padding: 4px var(--ws-view-edge) 18px; }
+.employees-view > .record-list-controls { padding-inline: var(--employee-view-inset); }
 .record-list-controls .employee-search { flex: 1 1 280px; width: auto; margin: 0; }
 .record-list-controls > label { display: flex; flex-direction: column; gap: 5px; color: var(--ws-muted); font-size: 12px; }
 .record-list-controls select { min-height: 36px; min-width: 165px; max-width: 100%; padding: 6px 28px 6px 10px; border: 1px solid var(--ws-control-line); border-radius: 10px; background: white; color: var(--ws-text); font-size: 13px; }
@@ -144,6 +145,7 @@
 .tasks-view.bp5-tasks .kanban-stack { min-height: 0; padding: 2px 3px 8px 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
 .tasks-view.bp5-tasks .kanban-stack:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; border-radius: 9px; }
 @media (max-width: 760px) {
+  .employees-view { --employee-view-inset: 12px; }
   .record-table-frame { margin: 0 12px 12px; }
   .record-list-controls { padding: 4px 14px 14px; gap: 10px; }
   .record-list-controls .employee-search { flex-basis: 100%; }

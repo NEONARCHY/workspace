@@ -1,5 +1,7 @@
 /* The header launcher reserves its own space; page scrollbars stay at the window edge. */
 body:has(.yuksalish-assistant-root) .app-shell { padding-right: 0; }
+/* Directory panels retain the same clearance as the navigation island. */
+body:has(.employees-view) .app-shell { padding-right: var(--ws-shell-gap); }
 body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 
 .yuksalish-assistant-root { display: contents; }
