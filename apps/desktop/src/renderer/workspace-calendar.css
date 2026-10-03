@@ -21,10 +21,24 @@
   min-width: 0;
   margin: 0;
 }
+.calendar-view:not(.task-calendar-embedded) .calendar-side {
+  background: transparent;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
 .calendar-view:not(.task-calendar-embedded) .calendar-detail {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   padding: 18px;
   border-radius: 20px;
   background: #fff;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-detail .calendar-side-nav {
   margin: -4px -4px 14px;
@@ -44,6 +58,9 @@
   }
   .calendar-view:not(.task-calendar-embedded) .calendar-main {
     height: 100%;
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
+    height: max(480px, calc(100dvh - 100px));
   }
 }
 @media (forced-colors: active) {
