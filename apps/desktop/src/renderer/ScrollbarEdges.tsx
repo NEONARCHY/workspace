@@ -1,13 +1,17 @@
 import { useEffect } from "react";
 
-const fadeDistance = 24;
+const fadeDistance = 48;
+const easeEdge = (distance: number) => {
+  const progress = Math.min(1, distance / fadeDistance);
+  return progress * progress * (3 - 2 * progress);
+};
 
 export function scrollbarEdgeOpacity(position: number, viewport: number, extent: number) {
   const maximum = Math.max(0, extent - viewport);
   const clamped = Math.max(0, Math.min(maximum, position));
   return {
-    start: Math.min(1, clamped / fadeDistance),
-    end: Math.min(1, (maximum - clamped) / fadeDistance),
+    start: easeEdge(clamped),
+    end: easeEdge(maximum - clamped),
   };
 }
 

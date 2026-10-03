@@ -9,9 +9,14 @@ describe("scrollbar edges", () => {
     expect(scrollbarEdgeOpacity(150, 100, 400)).toEqual({ start: 1, end: 1 });
     expect(scrollbarEdgeOpacity(300, 100, 400)).toEqual({ start: 1, end: 0 });
   });
-  it("gradually fades over the last 24 pixels", () => {
-    expect(scrollbarEdgeOpacity(12, 100, 400)).toEqual({ start: 0.5, end: 1 });
-    expect(scrollbarEdgeOpacity(288, 100, 400)).toEqual({ start: 1, end: 0.5 });
+  it("softly fades over the last 48 pixels, symmetrically at either end", () => {
+    expect(scrollbarEdgeOpacity(24, 100, 400)).toEqual({ start: 0.5, end: 1 });
+    expect(scrollbarEdgeOpacity(276, 100, 400)).toEqual({ start: 1, end: 0.5 });
+    expect(scrollbarEdgeOpacity(12, 100, 400).start).toBe(0.15625);
+    expect(scrollbarEdgeOpacity(36, 100, 400).start).toBe(0.84375);
+    for (const distance of [0, 12, 24, 36, 48]) {
+      expect(scrollbarEdgeOpacity(distance, 100, 400).start).toBe(scrollbarEdgeOpacity(300 - distance, 100, 400).end);
+    }
   });
   it("clamps overscroll and handles a container that no longer overflows", () => {
     expect(scrollbarEdgeOpacity(-4, 100, 400)).toEqual({ start: 0, end: 1 });
