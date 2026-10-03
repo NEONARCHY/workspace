@@ -195,6 +195,7 @@ interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
+  readonly token?: string;
   readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
@@ -330,7 +331,8 @@ export function TasksView(props: TasksViewProps) {
       const matchesRole = roleFilter === "all" || roleFilter === "author" && task.authorId === currentUserId
         || roleFilter === "assignee" && task.assigneeId === currentUserId
         || task.participants.some(item => item.userId === currentUserId && item.role === roleFilter);
-      return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""}`.toLocaleLowerCase("ru").includes(search));
+      const participantNames = task.participants.map((item) => names.get(item.userId) ?? "").join(" ");
+      return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""} ${participantNames}`.toLocaleLowerCase("ru").includes(search));
     });
   }, [currentUserId, filter, tasks, query, people, roleFilter]);
 
@@ -620,7 +622,7 @@ export function TasksView(props: TasksViewProps) {
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </SlidingSegmented> : null}
 
-        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} actions={<>{newTaskButton}{taskViewSwitch}</>} /> : (
+        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} actions={<>{newTaskButton}{taskViewSwitch}</>} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" aria-label="Kanban задач">
             {kanbanStatuses.map((status) => {

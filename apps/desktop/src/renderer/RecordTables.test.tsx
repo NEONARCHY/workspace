@@ -27,6 +27,34 @@ describe("Corporate record tables", () => {
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
   });
+  it("shows every task role as an avatar and opens profiles from avatars and their popovers", async () => {
+    const onSelect = vi.fn(); const onOpenProfile = vi.fn();
+    const task = { ...initialTasks[0]!, participants: [
+      { userId: "aziza", role: "co_assignee" as const },
+      { userId: "malika", role: "observer" as const },
+    ] };
+    render(wrap(<TaskRecords tasks={[task]} people={people} filterKey="all" onSelect={onSelect} />, onOpenProfile));
+    const table = screen.getByRole("table", { name: "Задачи" });
+    expect(within(table).getByRole("columnheader", { name: /Участники/ })).toBeInTheDocument();
+    expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(4);
+    const assignee = within(table).getByRole("button", { name: "Открыть профиль: Дилшод Рахимов" });
+    fireEvent.pointerEnter(assignee);
+    const popup = await screen.findByLabelText("Исполнитель: Дилшод Рахимов");
+    expect(within(popup).getByText("Исполнитель")).toBeInTheDocument();
+    expect(within(popup).getByText("Дилшод Рахимов")).toBeInTheDocument();
+    expect(popup.querySelector(".fui-Avatar")).toBeNull();
+    fireEvent.click(within(popup).getByRole("button", { name: "Открыть профиль: Дилшод Рахимов" }));
+    expect(onOpenProfile).toHaveBeenCalledWith("dilshod");
+    const observer = within(table).getByRole("button", { name: "Открыть профиль: Малика Нурова" });
+    fireEvent.pointerEnter(observer);
+    expect(screen.queryByRole("dialog", { name: "Исполнитель: Дилшод Рахимов" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Наблюдатель: Малика Нурова" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Наблюдатель: Малика Нурова" })).not.toBeInTheDocument();
+    fireEvent.click(observer);
+    expect(onOpenProfile).toHaveBeenCalledWith("malika");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
   it("marks a submitted result as requiring the author's review", () => {
     const task = { ...initialTasks[0]!, status: "awaiting_review" as const };
     render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId={task.authorId} filterKey="review" onSelect={vi.fn()} />));

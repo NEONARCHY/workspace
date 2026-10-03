@@ -2006,6 +2006,7 @@ export function App() {
             {displayedSection === "tasks" ? (
               <TasksView
                 key={focusTarget?.revision}
+                token={session.accessToken}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
