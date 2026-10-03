@@ -47,6 +47,7 @@ import "./employee-scope.css";
 import "./sliding-segmented.css";
 import "./scrollbars.css";
 import "./accent-surfaces.css";
+import "./workspace-calendar.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

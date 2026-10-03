@@ -1,0 +1,54 @@
+/* Standalone schedule only; the task calendar owns its separate layout. */
+.calendar-view:not(.task-calendar-embedded) .calendar-main {
+  padding-bottom: 0;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-board {
+  row-gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-grid {
+  gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-day-summary {
+  align-items: center;
+  gap: 8px;
+  min-height: 68px;
+  margin-block: 14px 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-day-summary > p {
+  min-width: 0;
+  margin: 0;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail {
+  padding: 18px;
+  border-radius: 20px;
+  background: #fff;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail .calendar-side-nav {
+  margin: -4px -4px 14px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail-list > div {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail .calendar-form-actions {
+  flex-wrap: wrap;
+}
+@container workspace (max-width: 1100px) {
+  .calendar-view:not(.task-calendar-embedded) {
+    /* Fill the visible workspace before the agenda continues below it.
+       Short windows still scroll rather than squeezing the day cells. */
+    grid-template-rows: max(720px, 100%) auto;
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-main {
+    height: 100%;
+  }
+}
+@media (forced-colors: active) {
+  .calendar-view:not(.task-calendar-embedded) :is(.calendar-day-summary, .calendar-detail) {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+}
