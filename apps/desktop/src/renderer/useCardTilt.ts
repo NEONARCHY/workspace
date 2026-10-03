@@ -16,8 +16,8 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>, enabled: boolean
       y += (targetY - y) * .12;
       const moving = Math.abs(targetX - x) > .002 || Math.abs(targetY - y) > .002;
       if (!moving) { x = targetX; y = targetY; }
-      element.style.setProperty("--ws-card-tilt-x", `${-y * 6}deg`);
-      element.style.setProperty("--ws-card-tilt-y", `${x * 8}deg`);
+      element.style.setProperty("--ws-card-tilt-x", `${-y * 12}deg`);
+      element.style.setProperty("--ws-card-tilt-y", `${x * 16}deg`);
       frame = moving ? requestAnimationFrame(paint) : 0;
     };
     const schedule = () => { if (!frame) frame = requestAnimationFrame(paint); };

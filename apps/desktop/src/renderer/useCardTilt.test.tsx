@@ -32,8 +32,8 @@ describe("Achievement-like board card tilt", () => {
   it("follows the mouse, settles without an endless RAF and returns exactly flat", () => {
     const { card, frames, flush, move } = setup();
     move(); flush();
-    expect(card.style.getPropertyValue("--ws-card-tilt-x")).toBe("-6deg");
-    expect(card.style.getPropertyValue("--ws-card-tilt-y")).toBe("8deg");
+    expect(card.style.getPropertyValue("--ws-card-tilt-x")).toBe("-12deg");
+    expect(card.style.getPropertyValue("--ws-card-tilt-y")).toBe("16deg");
     expect(frames.size).toBe(0);
     card.dispatchEvent(new Event("pointerleave")); flush();
     expect(card.style.getPropertyValue("--ws-card-tilt-x")).toBe("0deg");

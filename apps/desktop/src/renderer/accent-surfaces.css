@@ -23,7 +23,7 @@ body :is(
   .task-return-note, .eff-inline-error, .eff-sample-note, .eff-history-note,
   .calendar-past-note, .notification-settings-note, .team-dash-data-note,
   .record-summary-note, .task-team-lead, .task-composer-dependencies > div,
-  .trip-purpose, .feed-reply-context, .feed-card.pinned,
+  .trip-purpose, .feed-reply-context,
   .message-quote, .assistant-message-quote, .assistant-reply-target,
   .zoom-notice, .account-profile-anchor .account-section,
   .notifications-view .notification-row,
@@ -31,7 +31,7 @@ body :is(
   .project-hub-project.selected, .project-hub-funding-card.selected,
   .project-hub-task-card.selected, .team-dash-person.selected, .task-row.selected,
   .workflow-process-view .workflow-hero-header,
-  .app-rail .rail-action.active, .chat-list-item .chat-row.selected,
+  .chat-list-item .chat-row.selected,
   .department-tree-list button.selected, .task-team-option[aria-pressed="true"],
   .trip-list-item.selected, :where(.record-table .record-row.selected td:first-child),
   :where(.eff-table tbody tr.selected)
@@ -43,6 +43,13 @@ body :is(
     color-mix(in srgb, var(--ws-surface-accent) 7%, transparent) 42%,
     transparent 100%);
 }
+
+/* The rail already owns one animated active surface. Do not paint a second
+   surface behind its inset pseudo-element. Feed comments stay flat/neutral. */
+body .app-rail .rail-action.active { background: transparent; }
+body .feed-card.pinned { background-image: none; }
+body .feed-comment { background: #f1f6f4; }
+body .feed-comment.is-reply { background: #f7faf9; }
 
 html body .app-provider :is(.kanban-card.priority-urgent, .notification-row.priority-urgent,
   .approval-deadline-control.deadline-urgent, .calendar-event-pill.deadline,

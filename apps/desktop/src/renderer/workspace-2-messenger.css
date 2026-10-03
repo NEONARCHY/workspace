@@ -168,9 +168,10 @@
 }
 
 .messenger-view .chat-list-item {
-  margin: 2px 0;
+  margin: 0 0 8px;
   border-radius: 17px;
 }
+.messenger-view .chat-list-item:last-child { margin-bottom: 0; }
 
 .messenger-view .chat-list-item .chat-row {
   width: 100%;
