@@ -24,7 +24,7 @@ describe("AdaptiveNavigation overflow", () => {
 
   it("stays open for a click inside and closes for a click anywhere outside", () => {
     render(<>
-      <AdaptiveNavigation items={items} renderItem={(item) => <button className="rail-action" type="button">{item.label}</button>} />
+      <AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action" type="button">{item.label}</button>} />
       <button type="button">Внешняя кнопка</button>
     </>);
     const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
@@ -39,7 +39,7 @@ describe("AdaptiveNavigation overflow", () => {
   });
 
   it("closes on a visible section and Escape returns focus to More", () => {
-    render(<AdaptiveNavigation items={items} renderItem={(item) => <button className="rail-action" type="button">{item.label}</button>} />);
+    render(<AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action" type="button">{item.label}</button>} />);
     const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
     fireEvent.click(more);
     fireEvent.click(screen.getByRole("button", { name: "Первый" }));
