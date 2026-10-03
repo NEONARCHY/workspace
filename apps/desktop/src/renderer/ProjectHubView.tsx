@@ -19,6 +19,7 @@ import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import { PersonPicker } from "./PersonPicker";
+import { ChatIconPicker } from "./ChatAvatar";
 import { ScopedPeopleCheckboxes } from "./ScopedPeopleCheckboxes";
 import { approvalColumnTotals } from "./approval-board";
 
@@ -37,6 +38,7 @@ interface Props {
   readonly canViewFunding: boolean;
   readonly focusId?: string;
   readonly onOpenCalendar?: (eventId: string) => void;
+  readonly onOpenChat?: (chatId: string) => void;
 }
 
 const emptyHub: ProjectHubOverview = { projects: [], workstreams: [], items: [], requests: [] };
@@ -68,7 +70,7 @@ function errorText(error: unknown): string {
 }
 
 function emptyProject(currentUserId: string): ProjectHubProjectInput {
-  return { code: "", title: "", description: "", managerUserId: currentUserId,
+  return { code: "", title: "", description: "", managerUserId: currentUserId, chatIconKey: "project",
     responsibleUserIds: [], approverUserIds: [], startDate: null, endDate: null,
     budget: 0, currency: "UZS", accessStatus: "open", lifecycleStatus: "active" };
 }
@@ -79,7 +81,7 @@ function emptyItem(workstreamId = ""): ProjectHubItemInput {
 }
 
 export function ProjectHubView({ mode, token, people, departments, currentUserId, canCreateProject,
-  canCreateRequest, canViewFunding, focusId, onOpenCalendar,
+  canCreateRequest, canViewFunding, focusId, onOpenCalendar, onOpenChat,
   assistantDraft }: Props) {
   const [hub, setHub] = useState<ProjectHubOverview>(emptyHub);
   const [requests, setRequests] = useState<readonly ProjectHubRequest[]>([]);
@@ -291,6 +293,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
       <main className="project-hub-canvas">
         {selectedProject ? <>
           <div className="project-hub-title"><div><span className="view-kicker">{selectedProject.code} · {selectedProject.lifecycleStatus === "active" ? "В РАБОТЕ" : "ЗАВЕРШЁН"}</span><h2>{selectedProject.title}</h2><p>{selectedProject.description || "Описание проекта ещё не добавлено."}</p></div>
+            {selectedProject.chatId && onOpenChat ? <Button onClick={() => onOpenChat(selectedProject.chatId!)}>Открыть чат проекта</Button> : null}
             {selectedProject.canEdit ? <Button onClick={() => startProject(selectedProject)}>Настроить проект</Button> : null}</div>
           <div className="project-hub-metrics" aria-label="Обзор проекта">
             <div><span>Бюджет</span><strong>{formatMoney(selectedProject.budget, selectedProject.currency)}</strong><small>План проекта</small></div>
@@ -356,6 +359,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
     <Dialog open={formMode !== null} onOpenChange={(_, data) => { if (!data.open && !busy) setFormMode(null); }}><DialogSurface className="project-hub-dialog" aria-labelledby="project-hub-dialog-title">
        <div className="project-hub-dialog-head"><div><span className="view-kicker">ПРОЕКТНОЕ ПРОСТРАНСТВО</span><h2 id="project-hub-dialog-title">{formMode === "project" ? editingProjectId ? "Настроить проект" : "Новый проект" : formMode === "workstream" ? editingWorkstreamId ? "Изменить направление" : "Новое направление" : formMode === "item" ? editingItemId ? "Изменить работу" : "Новая работа" : formMode === "status" ? statusTarget === "rejected" ? "Отклонить задачу" : "Отменить работу" : "Новая проектная заявка"}</h2></div><Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть" disabled={busy} onClick={() => setFormMode(null)} /></div>
       {formMode === "project" ? <form onSubmit={(event) => { event.preventDefault(); void mutate(() => saveProjectHubProject(token, projectForm, editingProjectId), true); }}><div className="project-hub-form-scroll"><div className="project-hub-fields"><label>Название проекта<Input required value={projectForm.title} onChange={(_, data) => setProjectForm({ ...projectForm, title: data.value })} /></label><label>Код проекта<Input required value={projectForm.code} onChange={(_, data) => setProjectForm({ ...projectForm, code: data.value })} /></label><label className="wide">Описание<Textarea value={projectForm.description} onChange={(_, data) => setProjectForm({ ...projectForm, description: data.value })} /></label><div className="scoped-person-field"><span>Руководитель</span><PersonPicker label="Руководитель проекта" people={people} departments={departments} value={projectForm.managerUserId} onChange={(managerUserId) => setProjectForm({ ...projectForm, managerUserId })} /></div><label>Бюджет<Input required type="number" min="0" value={String(projectForm.budget)} onChange={(_, data) => setProjectForm({ ...projectForm, budget: Number(data.value) })} /></label><label>Валюта<WorkspaceSelect value={projectForm.currency} onChange={(event) => setProjectForm({ ...projectForm, currency: event.target.value as ProjectHubProjectInput["currency"] })}><option>UZS</option><option>USD</option><option>EUR</option></WorkspaceSelect></label><label>Начало<WorkspaceDateTimePicker mode="date" ariaLabel="Начало проекта" value={projectForm.startDate ?? ""} onChange={(value) => setProjectForm({ ...projectForm, startDate: value || null })} /></label><label>Срок проекта<WorkspaceDateTimePicker mode="date" ariaLabel="Срок проекта" value={projectForm.endDate ?? ""} min={projectForm.startDate ?? undefined} onChange={(value) => setProjectForm({ ...projectForm, endDate: value || null })} /></label><label>Доступ<WorkspaceSelect value={projectForm.accessStatus} onChange={(event) => setProjectForm({ ...projectForm, accessStatus: event.target.value as ProjectHubProjectInput["accessStatus"] })}><option value="open">Открытый</option><option value="closed">Закрытый</option></WorkspaceSelect></label><label>Состояние<WorkspaceSelect value={projectForm.lifecycleStatus} onChange={(event) => setProjectForm({ ...projectForm, lifecycleStatus: event.target.value as ProjectHubProjectInput["lifecycleStatus"] })}><option value="active">Активный</option><option value="completed">Завершённый</option></WorkspaceSelect></label></div>
+        {!editingProjectId ? <div><p>Иконка чата проекта</p><ChatIconPicker value={projectForm.chatIconKey ?? "project"} onChange={(chatIconKey) => setProjectForm({ ...projectForm, chatIconKey })} disabled={busy} /></div> : null}
         <ScopedPeopleCheckboxes label="Другие ответственные" people={people} departments={departments} selectedIds={projectForm.responsibleUserIds} onChange={(responsibleUserIds) => setProjectForm({ ...projectForm, responsibleUserIds })} disabled={busy} />
         <fieldset className="project-hub-approvers"><legend>Порядок согласующих</legend><p>Порядок применяется к новым проектным заявкам.</p><PersonPicker label="Добавить согласующего" people={people.filter((person) => !projectForm.approverUserIds.includes(person.id))} departments={departments} value="" onChange={addApprover} />{projectForm.approverUserIds.map((id, index) => <div key={id}><b>{index + 1}</b><span>{personName(id)}</span><Button type="button" appearance="subtle" disabled={index === 0} onClick={() => moveApprover(index, -1)}>↑</Button><Button type="button" appearance="subtle" disabled={index === projectForm.approverUserIds.length - 1} onClick={() => moveApprover(index, 1)}>↓</Button><Button type="button" appearance="subtle" onClick={() => setProjectForm({ ...projectForm, approverUserIds: projectForm.approverUserIds.filter((value) => value !== id) })}>Убрать</Button></div>)}</fieldset></div><div className="project-hub-dialog-footer">{actionError ? <span role="alert">{actionError}</span> : null}<Button type="button" disabled={busy} onClick={() => setFormMode(null)}>Отмена</Button><Button type="submit" appearance="primary" disabled={busy}>{busy ? "Сохраняем…" : "Сохранить проект"}</Button></div></form> : null}
       {formMode === "workstream" && selectedProject ? <form onSubmit={(event) => { event.preventDefault(); void mutate(() => saveProjectHubWorkstream(token, selectedProject.id, { ...workstreamForm, startDate: workstreamForm.startDate || null, endDate: workstreamForm.endDate || null }, editingWorkstreamId), true); }}><div className="project-hub-form-scroll"><p>Направление объединяет задачи и мероприятия в рамках проекта.</p><div className="project-hub-fields"><label className="wide">Название направления<Input required maxLength={240} value={workstreamForm.title} onChange={(_, data) => setWorkstreamForm({ ...workstreamForm, title: data.value })} placeholder="Например, Проведение форума" /></label><label className="wide">Описание<Textarea value={workstreamForm.description} onChange={(_, data) => setWorkstreamForm({ ...workstreamForm, description: data.value })} /></label><label>Начало<WorkspaceDateTimePicker mode="date" ariaLabel="Начало направления" value={workstreamForm.startDate} onChange={(value) => setWorkstreamForm({ ...workstreamForm, startDate: value })} /></label><label>Срок направления<WorkspaceDateTimePicker mode="date" ariaLabel="Срок направления" min={workstreamForm.startDate || undefined} value={workstreamForm.endDate} onChange={(value) => setWorkstreamForm({ ...workstreamForm, endDate: value })} /></label></div></div><div className="project-hub-dialog-footer">{actionError ? <span role="alert">{actionError}</span> : null}<Button type="button" disabled={busy} onClick={() => setFormMode(null)}>Отмена</Button><Button type="submit" appearance="primary" disabled={busy}>Сохранить направление</Button></div></form> : null}

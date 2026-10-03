@@ -39,6 +39,7 @@ from .workspace_schemas import (
     SendMessageRequest,
     SetChatMemberRequest,
     TransferChatOwnerRequest,
+    UpdateChatAvatarRequest,
     UpdateChatRequest,
 )
 
@@ -99,6 +100,15 @@ def can_manage_messages(chat: Record, member: Record) -> bool:
     return permissions.manage_messages or (chat["kind"] == "direct" and permissions.send_messages)
 
 
+def can_edit_chat_avatar(chat: Record, member: Record, user_id: UUID) -> bool:
+    if chat["context_type"] in {"project", "project_hub", "trip"}:
+        return bool(chat["created_by_user_id"] == user_id)
+    return (
+        chat["kind"] == "group" and chat["context_type"] is None
+        and member_permissions(member).edit_info
+    )
+
+
 async def chat_access(
     connection: AsyncConnection,
     user: AuthenticatedUser,
@@ -127,7 +137,7 @@ async def chat_access(
         and member is None
         and (
             (user.role in {"admin", "superadmin"} or is_executive_leader(user.job_title))
-            and chat["context_type"] in {"project", "trip", "task"}
+            and chat["context_type"] in {"project", "project_hub", "trip", "task"}
         )
     ):
         member = cast(Record, {
@@ -252,6 +262,8 @@ async def chat_summary(
         id=str(chat_id),
         title=title,
         description=chat["description"] or "",
+        avatar_icon_key=chat["avatar_icon_key"],
+        can_edit_avatar=can_edit_chat_avatar(chat, membership, user.id),
         kind=chat["kind"],
         context_type=chat["context_type"],
         context_id=str(chat["context_id"]) if chat["context_id"] else None,
@@ -351,6 +363,7 @@ async def create_chat(
             kind=payload.kind,
             title=payload.title or None,
             description=payload.description,
+            avatar_icon_key=payload.avatar_icon_key,
             direct_key=direct_key,
             created_by_user_id=user.id,
             created_at=now,
@@ -397,6 +410,22 @@ async def update_chat(
         )
     )
     await audit(connection, user, "chat.updated", chat_id, payload.model_dump())
+    return await chat_summary(connection, user, chat_id)
+
+
+async def update_chat_avatar(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    chat_id: UUID,
+    payload: UpdateChatAvatarRequest,
+) -> ChatSummaryResponse:
+    chat, member = await chat_access(connection, user, chat_id, lock=True)
+    if not can_edit_chat_avatar(chat, member, user.id):
+        raise WorkspaceRepositoryError(403, "Нет права изменять иконку этого чата")
+    await connection.execute(update(chats).where(chats.c.id == chat_id).values(
+        avatar_icon_key=payload.avatar_icon_key, updated_at=datetime.now(UTC),
+    ))
+    await audit(connection, user, "chat.avatar_updated", chat_id, payload.model_dump())
     return await chat_summary(connection, user, chat_id)
 
 

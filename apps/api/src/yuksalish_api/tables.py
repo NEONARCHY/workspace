@@ -220,6 +220,7 @@ chats = sa.Table(
     sa.Column("kind", sa.String(24)),
     sa.Column("direct_key", sa.String(73)),
     sa.Column("description", sa.Text()),
+    sa.Column("avatar_icon_key", sa.String(24)),
     sa.Column("title", sa.String(240)),
     sa.Column("context_type", sa.String(32)),
     sa.Column("context_id", uuid_type),

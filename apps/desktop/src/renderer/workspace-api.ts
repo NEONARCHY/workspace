@@ -43,6 +43,7 @@ import type {
   ChatMessage,
   ChatMember,
   ChatSummary,
+  ChatAvatarIconKey,
   CreateChatInput,
   MessageOptions,
   MessageReactionEmoji,
@@ -1088,6 +1089,10 @@ export function createWorkspaceChat(token: string, payload: CreateChatInput): Pr
 
 export function updateWorkspaceChat(token: string, id: string, title: string, description: string): Promise<ChatSummary> {
   return apiRequest(`/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title, description }) }, token);
+}
+
+export function updateWorkspaceChatAvatar(token: string, id: string, avatarIconKey: ChatAvatarIconKey | null): Promise<ChatSummary> {
+  return apiRequest(`/chats/${id}/avatar-icon`, { method: "PUT", body: JSON.stringify({ avatarIconKey }) }, token);
 }
 
 export function deleteWorkspaceChat(token: string, id: string): Promise<void> {

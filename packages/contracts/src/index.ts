@@ -367,11 +367,15 @@ export interface ChatMember {
   readonly permissions: ChatPermissions;
 }
 
+export const chatAvatarIconKeys = ["team", "plane", "project", "briefcase", "building", "globe", "calendar", "document", "target", "compass", "star", "sparkles"] as const;
+export type ChatAvatarIconKey = (typeof chatAvatarIconKeys)[number];
+
 export interface CreateChatInput {
   readonly kind: "direct" | "group";
   readonly title: string;
   readonly description: string;
   readonly memberIds: readonly string[];
+  readonly avatarIconKey?: ChatAvatarIconKey | null;
 }
 
 export interface MessageOptions {
@@ -391,6 +395,8 @@ export interface ChatSummary {
   readonly description: string;
   readonly ownerId?: string | null;
   readonly canDelete?: boolean;
+  readonly avatarIconKey?: ChatAvatarIconKey | null;
+  readonly canEditAvatar?: boolean;
   readonly members: readonly ChatMember[];
   readonly permissions: ChatPermissions;
 }
@@ -1465,6 +1471,7 @@ export interface WorkspaceProject {
 }
 
 export interface ProjectInput {
+  readonly chatIconKey?: ChatAvatarIconKey | null;
   readonly code: string;
   readonly title: string;
   readonly description: string;
@@ -1478,6 +1485,7 @@ export interface ProjectInput {
 
 export interface ProjectHubProject {
   readonly id: string;
+  readonly chatId?: string | null;
   readonly code: string;
   readonly title: string;
   readonly description: string;
@@ -1500,7 +1508,7 @@ export interface ProjectHubProject {
 export type ProjectHubProjectInput = Pick<ProjectHubProject,
   "code" | "title" | "description" | "managerUserId" | "responsibleUserIds" |
   "approverUserIds" | "startDate" | "endDate" | "budget" | "currency" |
-  "accessStatus" | "lifecycleStatus">;
+  "accessStatus" | "lifecycleStatus"> & { readonly chatIconKey?: ChatAvatarIconKey | null };
 
 export interface ProjectHubWorkstream {
   readonly id: string;
@@ -1623,6 +1631,7 @@ export interface TripRequest {
 }
 
 export interface TripRequestInput {
+  readonly chatIconKey?: ChatAvatarIconKey | null;
   readonly purpose: string;
   readonly destination: string;
   readonly startDate: string;

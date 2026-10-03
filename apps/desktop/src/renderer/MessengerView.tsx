@@ -6,6 +6,7 @@ import type {
   AssistantActionDraft,
   ChatMessage,
   ChatSummary,
+  ChatAvatarIconKey,
   MessageReaction,
   MessageReactionEmoji,
   PersonalPreferences,
@@ -21,10 +22,12 @@ import {
   Avatar,
   Button,
   Dialog,
+  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
   DialogTitle,
+  DialogTrigger,
   Input,
   Textarea,
   Popover,
@@ -62,6 +65,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
+import { ChatAvatar, ChatIconPicker, defaultChatIcon } from "./ChatAvatar";
 import {
   MessageRevealOverlay,
   MessageVanishOverlay,
@@ -126,7 +130,7 @@ export interface MessengerViewProps {
   ) => void | Promise<void>;
   readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
-  readonly onOpenContext?: (contextType: "task" | "project" | "trip", contextId: string) => void;
+  readonly onOpenContext?: (contextType: "task" | "project" | "project_hub" | "trip", contextId: string) => void;
   readonly onOpenPersonProfile?: (userId: string) => void;
 }
 
@@ -242,6 +246,7 @@ function Conversation({
   tasks,
   currentUserId,
   currentUserRole,
+  chatActions,
   onSendMessage,
   onSendVoiceMessage,
   onReactMessage,
@@ -263,7 +268,7 @@ function Conversation({
   embedded = false,
   assistantDraft,
   canUseAssistant = false,
-}: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
+}: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
@@ -295,6 +300,8 @@ function Conversation({
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
   const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -321,6 +328,7 @@ function Conversation({
   const wasEditing = useRef(false);
   const focusAfterSend = useRef(false);
   const restoreFocusTarget = useRestoreFocusTarget();
+  const avatarRestoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const scrollInitialized = useRef(false);
@@ -631,7 +639,25 @@ function Conversation({
       <header className="conversation-header">
         {!embedded ? <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
-          <Avatar name={chat.title} size={40} color="colorful" />
+          {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
+            onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>
+            <DialogTrigger disableButtonEnhancement><button {...avatarRestoreFocusTarget} type="button" className="chat-avatar-edit-trigger" aria-label="Изменить иконку чата" title="Изменить иконку чата">
+              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />
+            </button></DialogTrigger>
+            <DialogSurface className="chat-avatar-picker" aria-label="Иконка чата"><DialogBody>
+              <DialogTitle>Иконка чата</DialogTitle>
+              <DialogContent>
+              <ChatIconPicker value={avatarDraft} onChange={setAvatarDraft} disabled={busy} />
+              <p>Иконку увидят все участники чата.</p>
+              {error ? <p className="messenger-error" role="alert">{error}</p> : null}
+              </DialogContent>
+              <DialogActions className="chat-dialog-actions">
+                <Button onClick={() => setAvatarPickerOpen(false)}>Отмена</Button>
+                <Button aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, null); setAvatarPickerOpen(false); }); }}>По умолчанию</Button>
+                <Button appearance="primary" aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, avatarDraft); setAvatarPickerOpen(false); }); }}>{busy ? "Сохраняем…" : "Сохранить иконку"}</Button>
+              </DialogActions>
+            </DialogBody></DialogSurface>
+          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />}
           <div>
           <h2>{chat.title}</h2>
           <p>
@@ -664,8 +690,8 @@ function Conversation({
             </PopoverSurface>
           </Popover>
           {!embedded ? <>
-          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "trip", chat.contextId!)}>
-            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "project" ? "Открыть проект" : "Открыть поездку"}
+          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "project_hub" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "project_hub" | "trip", chat.contextId!)}>
+            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "trip" ? "Открыть поездку" : "Открыть проект"}
           </Button> : null}
           {onCreateCalendarEventFromChat ? <Button
             className="conversation-calendar-action"
@@ -920,7 +946,7 @@ function Conversation({
           <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
         </DialogContent></DialogBody>
       </DialogSurface></Dialog>}
-      {error && (
+      {error && !avatarPickerOpen && (
         <div className="messenger-error" role="alert">
           {error}
         </div>

@@ -4,6 +4,8 @@ import { useMiddleMousePan } from "./useMiddleMousePan";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { DecisionReason } from "./DecisionReason";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
+import { ChatIconPicker } from "./ChatAvatar";
+import type { ChatAvatarIconKey } from "@yuksalish/contracts";
 import { tripColumns, tripDropAction } from "./trip-board";
 import type { AssistantActionDraft, TripAction, TripRequest, TripRequestInput, TripStage, WorkflowDefinition, WorkflowPosition, WorkspaceDepartment, WorkspacePerson } from "@yuksalish/contracts";
 import { Avatar, Badge, Button, Checkbox, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -46,6 +48,7 @@ interface TripApprovalsViewProps {
   readonly onPublishWorkflow?: (workflow: WorkflowDefinition) => Promise<WorkflowDefinition | undefined> | WorkflowDefinition | undefined;
 }
 interface TripFormState {
+  chatIconKey?: ChatAvatarIconKey;
   purpose: string; destination: string; startDate: string; endDate: string; employeeIds: readonly string[];
 }
 function emptyForm(currentUserId: string): TripFormState {
@@ -260,6 +263,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
                 <label className="record-field-wide">Цель поездки<Textarea aria-label="Цель поездки" aria-required autoFocus resize="vertical" value={form.purpose} onChange={(_, data) => setForm({ ...form, purpose: data.value })} /></label>
                 <label className="record-field-wide">Куда едем<Input aria-label="Куда едем" aria-required placeholder="Город, страна или место встречи" value={form.destination} onChange={(_, data) => setForm({ ...form, destination: data.value })} /></label>
               </div></RecordSection>
+              {formMode === "create" && <RecordSection title="Иконка чата поездки" description="По умолчанию — самолёт. После создания иконку можно изменить в чате."><ChatIconPicker value={form.chatIconKey ?? "plane"} onChange={(chatIconKey) => setForm({ ...form, chatIconKey })} disabled={busy} /></RecordSection>}
               <RecordSection title="Даты поездки"><div className="record-field-grid">
                 <label>Дата начала<WorkspaceDateTimePicker mode="date" ariaLabel="Дата начала" required value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>
                 <label>Дата окончания<WorkspaceDateTimePicker mode="date" ariaLabel="Дата окончания" required value={form.endDate} min={form.startDate} onChange={(value) => setForm({ ...form, endDate: value })} /></label>

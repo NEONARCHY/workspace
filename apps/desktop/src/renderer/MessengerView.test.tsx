@@ -26,6 +26,7 @@ vi.mock("./workspace-api", async (importOriginal) => ({
 function actions(): ChatActions {
   return {
     create: vi.fn(),
+    setAvatar: vi.fn(),
     update: vi.fn(),
     add: vi.fn(),
     setMember: vi.fn(),
@@ -80,6 +81,42 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("saves a shared icon only on confirmation and keeps a failed choice for retry", async () => {
+    const chatActions = actions();
+    vi.mocked(chatActions.setAvatar!).mockRejectedValueOnce(new Error("Не удалось сохранить иконку"))
+      .mockResolvedValue({ ...initialChats[0]!, avatarIconKey: "star" });
+    renderMessenger({ chats: [{ ...initialChats[0]!, canEditAvatar: true }], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Изменить иконку чата" }));
+    fireEvent.click(screen.getByRole("button", { name: "Иконка: Звезда" }));
+    expect(chatActions.setAvatar).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить иконку" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось сохранить иконку"));
+    expect(screen.getByRole("button", { name: "Иконка: Звезда" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить иконку" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Сохранить иконку" })).not.toBeInTheDocument());
+    expect(chatActions.setAvatar).toHaveBeenNthCalledWith(1, "finance", "star");
+    expect(chatActions.setAvatar).toHaveBeenNthCalledWith(2, "finance", "star");
+  });
+
+  it("resets a managed trip icon to its semantic default and prevents unauthorized editing", async () => {
+    const chatActions = actions();
+    const tripChat = { ...initialChats[0]!, contextType: "trip", contextId: "trip-1", avatarIconKey: "star" as const, canEditAvatar: true };
+    vi.mocked(chatActions.setAvatar!).mockResolvedValue({ ...tripChat, avatarIconKey: null });
+    const view = renderMessenger({ chats: [tripChat], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Изменить иконку чата" }));
+    fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
+    await waitFor(() => expect(chatActions.setAvatar).toHaveBeenCalledWith("finance", null));
+    view.unmount();
+    renderMessenger({ chats: [{ ...tripChat, canEditAvatar: false }], chatActions });
+    expect(screen.queryByRole("button", { name: "Изменить иконку чата" })).not.toBeInTheDocument();
+  });
+
+  it("opens the current Projects module from its managed conversation", () => {
+    const onOpenContext = vi.fn();
+    renderMessenger({ chats: [{ ...initialChats[0]!, kind: "project", contextType: "project_hub", contextId: "hub-1" }], onOpenContext });
+    fireEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
+    expect(onOpenContext).toHaveBeenCalledWith("project_hub", "hub-1");
+  });
   it("reviews an assistant message before creating a direct chat, then keeps it unsent", async () => {
     const chatActions = actions();
     const newChat: ChatSummary = {
@@ -343,6 +380,7 @@ describe("Private messenger", () => {
         title: "Проектная команда",
         description: "",
         memberIds: ["baxtiyor"],
+        avatarIconKey: "team",
       }),
     );
     await waitFor(() =>
@@ -980,6 +1018,7 @@ describe("Private messenger", () => {
     fireEvent.change(dialog.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Команда запуска" },
     });
+    fireEvent.click(dialog.getByRole("button", { name: "Иконка: Звезда" }));
     fireEvent.click(dialog.getByRole("button", { name: "Бахтиёр Самугов" }));
     fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
     fireEvent.click(dialog.getByRole("button", { name: "Создать группу" }));
@@ -993,7 +1032,9 @@ describe("Private messenger", () => {
       title: "Команда запуска",
       description: "",
       memberIds: ["baxtiyor", "malika"],
+      avatarIconKey: "star",
     });
+    expect(dialog.getByRole("button", { name: "Иконка: Звезда" })).toHaveAttribute("aria-pressed", "true");
     expect(
       dialog.getByRole("button", { name: "Малика Нурова" }),
     ).toHaveAttribute("aria-pressed", "true");

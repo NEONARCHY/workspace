@@ -160,6 +160,7 @@ import {
   sendWorkspaceMessage,
   createWorkspaceChat,
   updateWorkspaceChat,
+  updateWorkspaceChatAvatar,
   deleteWorkspaceChat,
   addWorkspaceChatMembers,
   setWorkspaceChatMember,
@@ -903,6 +904,11 @@ export function App() {
     return result;
   };
   const chatActions: ChatActions = {
+    setAvatar: async (id, key) => {
+      const chat = await messengerMutation((token) => updateWorkspaceChatAvatar(token, id, key));
+      setWorkspace((current) => ({ ...current, chats: current.chats.map(item => item.id === chat.id ? chat : item) }));
+      return chat;
+    },
     create: async (input) => {
       const chat = await messengerMutation((token) => createWorkspaceChat(token, input));
       setWorkspace((current) => ({ ...current, chats: [chat, ...current.chats.filter((item) => item.id !== chat.id)] }));
@@ -2007,7 +2013,7 @@ export function App() {
                 onLoadAttachment={handleLoadAttachment}
                 onMarkRead={handleMarkChatRead}
                 onOpenContext={(contextType, contextId) => {
-                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : "trip_approvals";
+                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : "trip_approvals";
                   setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
                   setActiveSection(section);
                 }}
@@ -2168,6 +2174,7 @@ export function App() {
                 canCreateProject={modulePermissions.project_hub?.create ?? false}
                 canCreateRequest={modulePermissions.project_funding?.create ?? false}
                 canViewFunding={modulePermissions.project_funding?.view ?? false}
+                onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
                 focusId={focusTarget?.section === displayedSection ? focusTarget.entityId : undefined}
                 onOpenCalendar={(eventId) => {
                   setFocusTarget((current) => ({ section: "calendar", entityId: eventId, revision: (current?.revision ?? 0) + 1 }));

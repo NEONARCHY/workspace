@@ -23,6 +23,7 @@ from yuksalish_api.workspace_schemas import (
     PinMessageRequest,
     SetChatMemberRequest,
     TransferChatOwnerRequest,
+    UpdateChatAvatarRequest,
     UpdateChatRequest,
 )
 
@@ -78,6 +79,19 @@ async def update_chat(
 ) -> ChatSummaryResponse:
     try:
         result = await service.update_chat(connection, user, chat_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return result
+
+
+@router.put("/chats/{chat_id}/avatar-icon", response_model=ChatSummaryResponse)
+async def update_chat_avatar(
+    chat_id: UUID, payload: UpdateChatAvatarRequest,
+    user: User, connection: Connection, request: Request,
+) -> ChatSummaryResponse:
+    try:
+        result = await service.update_chat_avatar(connection, user, chat_id, payload)
     except WorkspaceRepositoryError as error:
         raise HTTPException(error.status_code, error.detail) from error
     await changed(connection, request)
