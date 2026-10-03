@@ -1,4 +1,7 @@
 /* Standalone schedule only; the task calendar owns its separate layout. */
+.calendar-view:not(.task-calendar-embedded) {
+  padding-right: 20px;
+}
 .calendar-view:not(.task-calendar-embedded) .calendar-main {
   padding-bottom: 0;
   padding-right: 20px;
@@ -52,6 +55,7 @@
   flex-wrap: wrap;
 }
 @container workspace (max-width: 1100px) {
+  .calendar-view:not(.task-calendar-embedded) { padding-right: 0; }
   .calendar-view:not(.task-calendar-embedded) {
     /* Fill the visible workspace before the agenda continues below it.
        Short windows still scroll rather than squeezing the day cells. */

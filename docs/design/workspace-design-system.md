@@ -53,6 +53,15 @@ Use axe-core on local authenticated screens with read-only test routes; save bef
 
 ## Boundaries
 
+### Recognition card clearance — 2026-10-04
+
+The profile scroll viewport extends into the dialog's existing 24 px inset,
+with 30 px inline padding preserving the content position and leaving room
+for hover shadows and tilted edges. Reward and achievement grids share the
+same inline alignment; achievement grids no longer add a separate 30 px inset.
+Recognition motion, rarity surfaces, focus outlines and reduced-motion behavior
+remain unchanged. Scrolling stays inside the profile, not the page.
+
 API and PostgreSQL remain at 0.14.0 / migration 0017. No backend rewrite, production import, public publishing, new business module implementation or real organisation data modification. Dark mode and a formal external accessibility certification are separate deliverables; this package implements the supplied light visual direction.
 
 ## Verified delivery — 2026-09-04
