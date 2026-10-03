@@ -308,10 +308,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
   const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(670, viewport.height - 36);
   return <div className="yuksalish-assistant-root">
-    {!open && <button type="button" className="assistant-launcher" ref={launcherRef}
-      aria-label="Открыть ассистента Yuksalish" onClick={() => setOpen(true)}>
+    <button type="button" className="assistant-launcher" ref={launcherRef}
+      aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
+      aria-expanded={open} onClick={() => open ? close() : setOpen(true)}>
       <GradientOrb />
-    </button>}
+    </button>
     <AnimatePresence onExitComplete={() => launcherRef.current?.focus()}>
       {open && <motion.section
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}

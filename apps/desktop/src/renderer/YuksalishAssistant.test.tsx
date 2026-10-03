@@ -21,6 +21,31 @@ describe("YuksalishAssistant", () => {
     vi.mocked(sendAssistantMessage).mockReset();
   });
 
+  it("keeps its header slot, toggles the dialog and restores focus without losing the draft", async () => {
+    render(<header className="global-bar"><div className="workspace-top-context">
+      <YuksalishAssistant token="test-token" />
+      <button type="button">Профиль</button>
+    </div></header>);
+    const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+    expect(launcher).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(launcher);
+    await screen.findByText("С чего начнём?");
+    expect(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" })).toBe(launcher);
+    expect(launcher).toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
+      target: { value: "Мой черновик" },
+    });
+    fireEvent.click(launcher);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(launcher).toHaveFocus());
+    expect(launcher).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(launcher);
+    expect(screen.getByRole("textbox", { name: "Сообщение ассистенту" })).toHaveValue("Мой черновик");
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(launcher).toHaveFocus());
+  });
+
   it("opens globally, switches model and keeps a real answer in the stream", async () => {
     vi.mocked(sendAssistantMessage).mockResolvedValue({
       id: "reply-1", role: "assistant", model: "pro",

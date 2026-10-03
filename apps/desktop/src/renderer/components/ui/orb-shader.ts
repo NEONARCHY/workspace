@@ -79,9 +79,10 @@ export const orbFragmentShader = /* glsl */ `
       return vec4(colorIn.rgb / (a + 1e-5), a);
     }
 
-    const vec3 baseColor1 = vec3(0.12, 0.30, 0.95);
-    const vec3 baseColor2 = vec3(0.48, 0.18, 0.88);
-    const vec3 baseColor3 = vec3(0.055, 0.07, 0.20);
+    const vec3 baseColor1 = vec3(0.14, 0.38, 0.90);
+    const vec3 baseColor2 = vec3(0.44, 0.29, 0.85);
+    const vec3 baseColor3 = vec3(0.0, 0.5686, 0.6588); // Yuksalish turquoise #0091A8.
+    const vec3 shadeColor = vec3(0.1608, 0.2275, 0.3333); // Yuksalish navy #293A55.
     uniform float innerRadius;
     uniform float noiseScale;
 
@@ -122,10 +123,11 @@ export const orbFragmentShader = /* glsl */ `
       float v2 = (1.0 - smoothstep(mix(innerRadius, 1.0, n0 * 0.5), 1.0, len));
       float v3 = smoothstep(innerRadius, mix(innerRadius, 1.0, 0.5), len);
       
-      vec3 colBase = mix(color1, color2, cl);
+      vec3 colBase = mix(color1, color3, smoothstep(0.0, 0.5, cl));
+      colBase = mix(colBase, color2, smoothstep(0.5, 1.0, cl));
       float fadeAmount = mix(1.0, 0.1, bgLuminance);
       
-      vec3 darkCol = mix(color3, colBase, v0);
+      vec3 darkCol = mix(adjustHue(shadeColor, hue) * 0.55, colBase, v0);
       darkCol = (darkCol + colBase * v1 * (0.5 + hover * hoverIntensity)) * v2 * v3;
       darkCol = clamp(darkCol, 0.0, 1.0);
       
