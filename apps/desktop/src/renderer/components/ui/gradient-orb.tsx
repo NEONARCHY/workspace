@@ -5,6 +5,7 @@ import { Vector3 } from "three";
 import type { ShaderMaterial } from "three";
 import { orbFragmentShader } from "./orb-shader";
 import { advanceOrbMotion } from "./orb-motion";
+import { attachOrbInteraction } from "./orb-interaction";
 
 export interface GradientOrbConfig {
   readonly hue?: number;
@@ -35,9 +36,10 @@ const vertexShader = /* glsl */ `
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 
-function OrbScene({ config, targetHover }: {
+function OrbScene({ config, targetHover, paused }: {
   readonly config: GradientOrbConfig;
   readonly targetHover: RefObject<number>;
+  readonly paused: boolean;
 }) {
   const { hue = 0, rotationSpeed = .3, noiseScale = .65, innerRadius = .6,
     hoverIntensity = .5, rotateOnHover = true, forceHoverState = false } = config;
@@ -52,13 +54,15 @@ function OrbScene({ config, targetHover }: {
   useFrame((state, seconds) => {
     const frameUniforms = material.current?.uniforms;
     if (!frameUniforms) return;
+    const { width, height } = state.gl.domElement;
+    frameUniforms.iResolution!.value.set(width, height, width / Math.max(1, height));
+    // Demand frames paint the initial ring/resize, but never advance paused motion.
+    if (paused) return;
     motion.current = advanceOrbMotion(motion.current, forceHoverState ? 1 : targetHover.current,
       seconds, rotateOnHover, rotationSpeed);
     frameUniforms.iTime!.value += Math.min(seconds, .05);
     frameUniforms.hover!.value = motion.current.hover;
     frameUniforms.rot!.value = motion.current.rotation;
-    const { width, height } = state.gl.domElement;
-    frameUniforms.iResolution!.value.set(width, height, width / Math.max(1, height));
   });
   return <mesh>
     <planeGeometry args={[2, 2]} />
@@ -67,9 +71,10 @@ function OrbScene({ config, targetHover }: {
   </mesh>;
 }
 
-export function GradientOrb({ config = {}, className = "" }: {
+export function GradientOrb({ config = {}, className = "", paused = false }: {
   readonly config?: GradientOrbConfig;
   readonly className?: string;
+  readonly paused?: boolean;
 }) {
   const container = useRef<HTMLSpanElement>(null);
   const targetHover = useRef(0);
@@ -80,25 +85,10 @@ export function GradientOrb({ config = {}, className = "" }: {
   useEffect(() => {
     const element = container.current;
     if (!element || staticOrb || !supportsWebGl) return;
-    // The launcher responds across its hit target, including keyboard focus.
     const surface = element.closest("button") ?? element;
     let intersecting = true;
-    const updateActive = () => setActive(intersecting && document.visibilityState !== "hidden");
-    const move = (event: Event) => {
-      if (!(event instanceof PointerEvent) || event.pointerType === "touch") return;
-      const rect = element.getBoundingClientRect();
-      const size = Math.min(rect.width, rect.height);
-      const x = (event.clientX - rect.left - rect.width / 2) * 2 / Math.max(1, size);
-      const y = (event.clientY - rect.top - rect.height / 2) * 2 / Math.max(1, size);
-      targetHover.current = Math.hypot(x, y) < .8 ? 1 : 0;
-    };
-    const focus = () => { targetHover.current = 1; };
-    const leave = () => { targetHover.current = surface.matches(":focus-visible") ? 1 : 0; };
-    const blur = () => { targetHover.current = 0; };
-    surface.addEventListener("pointermove", move, { passive: true });
-    surface.addEventListener("pointerleave", leave);
-    surface.addEventListener("focus", focus);
-    surface.addEventListener("blur", blur);
+    const updateActive = () => setActive(!paused && intersecting && document.visibilityState !== "hidden");
+    const detachInteraction = paused ? undefined : attachOrbInteraction(element, surface, targetHover);
     document.addEventListener("visibilitychange", updateActive);
     const observer = typeof IntersectionObserver === "undefined" ? undefined : new IntersectionObserver(([entry]) => {
       intersecting = entry?.isIntersecting ?? false;
@@ -109,19 +99,16 @@ export function GradientOrb({ config = {}, className = "" }: {
     return () => {
       observer?.disconnect();
       document.removeEventListener("visibilitychange", updateActive);
-      surface.removeEventListener("pointermove", move);
-      surface.removeEventListener("pointerleave", leave);
-      surface.removeEventListener("focus", focus);
-      surface.removeEventListener("blur", blur);
+      detachInteraction?.();
       targetHover.current = 0;
     };
-  }, [staticOrb, supportsWebGl]);
+  }, [staticOrb, supportsWebGl, paused]);
   if (staticOrb || !supportsWebGl) return fallback;
   return <OrbBoundary fallback={fallback}><span ref={container} className={`gradient-orb ${className}`} aria-hidden="true">
     <Canvas orthographic camera={{ position: [0, 0, 1], zoom: 1 }}
       gl={{ alpha: true, antialias: true, premultipliedAlpha: true }}
-      dpr={[1, 1.5]} frameloop={active ? "always" : "never"} fallback={fallback}>
-      <OrbScene config={config} targetHover={targetHover} />
+      dpr={[1, 1.5]} frameloop={active ? "always" : "demand"} fallback={fallback}>
+      <OrbScene config={config} targetHover={targetHover} paused={!active} />
     </Canvas>
   </span></OrbBoundary>;
 }

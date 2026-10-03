@@ -35,6 +35,17 @@ describe("React Bits assistant orb", () => {
     const { container } = render(<GradientOrb />);
     expect(container.querySelector(".gradient-orb canvas")).toHaveAttribute("data-frameloop", "always");
   });
+  it("freezes the existing canvas while paused and resumes without remounting it", () => {
+    vi.stubGlobal("WebGLRenderingContext", function WebGL() {});
+    const { container, rerender } = render(<GradientOrb />);
+    const canvas = container.querySelector("canvas");
+    rerender(<GradientOrb paused />);
+    expect(container.querySelector("canvas")).toBe(canvas);
+    expect(canvas).toHaveAttribute("data-frameloop", "demand");
+    rerender(<GradientOrb />);
+    expect(container.querySelector("canvas")).toBe(canvas);
+    expect(canvas).toHaveAttribute("data-frameloop", "always");
+  });
   it.each(["prefers-reduced-motion", "forced-colors"])("respects %s", (preference) => {
     vi.stubGlobal("WebGLRenderingContext", function WebGL() {});
     vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes(preference), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
@@ -49,7 +60,7 @@ describe("React Bits assistant orb", () => {
     const { container } = render(<GradientOrb />);
     visibility.mockReturnValue("hidden");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
-    expect(container.querySelector("canvas")).toHaveAttribute("data-frameloop", "never");
+    expect(container.querySelector("canvas")).toHaveAttribute("data-frameloop", "demand");
     visibility.mockReturnValue("visible");
     act(() => document.dispatchEvent(new Event("visibilitychange")));
     expect(container.querySelector("canvas")).toHaveAttribute("data-frameloop", "always");

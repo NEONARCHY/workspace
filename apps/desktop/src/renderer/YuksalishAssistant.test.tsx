@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
@@ -69,6 +69,40 @@ describe("YuksalishAssistant", () => {
     expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
     expect(screen.getByRole("button", { name: "Свернуть окно" })).toBeInTheDocument();
+  });
+  it("keeps the launcher mounted but unavailable under another dialog", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+    const dialog = document.createElement("section");
+    dialog.setAttribute("role", "dialog");
+    try {
+      act(() => document.body.append(dialog));
+      await waitFor(() => expect(launcher).toBeDisabled());
+      expect(document.querySelector(".assistant-launcher")).toBe(launcher);
+      fireEvent.click(launcher);
+      expect(launcher).toHaveAttribute("aria-expanded", "false");
+      act(() => dialog.remove());
+      await waitFor(() => expect(launcher).toBeEnabled());
+      fireEvent.click(launcher);
+      await screen.findByRole("dialog", { name: "Ассистент Yuksalish" });
+    } finally { dialog.remove(); }
+  });
+  it("does not steal focus from a dialog opened while the assistant is closing", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+    fireEvent.click(launcher);
+    await screen.findByText("С чего начнём?");
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+    const dialog = document.createElement("section");
+    dialog.setAttribute("role", "dialog");
+    const control = document.createElement("button");
+    dialog.append(control);
+    try {
+      act(() => { document.body.append(dialog); control.focus(); });
+      await waitFor(() => expect(document.querySelector(".assistant-panel")).toBeNull());
+      expect(control).toHaveFocus();
+      expect(launcher).toBeDisabled();
+    } finally { act(() => dialog.remove()); }
   });
 
   it("preserves the draft when the server rejects the request", async () => {

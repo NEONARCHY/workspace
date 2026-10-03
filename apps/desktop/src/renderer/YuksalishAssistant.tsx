@@ -4,6 +4,7 @@ import { ArrowUp, ArrowUpRight, Maximize2, Mic, Minimize2, Paperclip, Reply, Squ
 
 import type { AssistantActionDraft, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
+import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocking-dialog";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
 
@@ -76,6 +77,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   readonly onPrepareAction?: (draft: AssistantActionDraft) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const blockingDialog = useBlockingDialog();
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState<readonly AssistantMessage[]>([]);
@@ -307,13 +309,15 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
   const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(670, viewport.height - 36);
-  return <div className="yuksalish-assistant-root">
+  return <div className="yuksalish-assistant-root" data-blocking-dialog={blockingDialog || undefined}>
     <button type="button" className="assistant-launcher" ref={launcherRef}
       aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
-      aria-expanded={open} onClick={() => open ? close() : setOpen(true)}>
-      <GradientOrb />
+      aria-expanded={open} disabled={blockingDialog} onClick={() => open ? close() : setOpen(true)}>
+      <GradientOrb paused={open || blockingDialog} />
     </button>
-    <AnimatePresence onExitComplete={() => launcherRef.current?.focus()}>
+    <AnimatePresence onExitComplete={() => {
+      if (!hasBlockingDialog()) launcherRef.current?.focus({ preventScroll: true });
+    }}>
       {open && <motion.section
         initial={reducedMotion ? false : { opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -329,7 +333,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.18,
             delay: reducedMotion ? 0 : 0.15 }}>
         <header className="assistant-header">
-          <span className="assistant-header-icon"><GradientOrb /></span>
+          <span className="assistant-header-icon"><GradientOrb paused={blockingDialog} /></span>
           <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Рабочие вопросы и тексты</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
@@ -343,7 +347,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         ref={streamRef} aria-live="polite">
           <div className="assistant-stream-inner">
             {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
-              <GradientOrb />
+              <GradientOrb paused={blockingDialog} />
               <h2>С чего начнём?</h2>
               <p>Помогу разобраться в рабочих делах, найти сведения о движении или улучшить текст.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
