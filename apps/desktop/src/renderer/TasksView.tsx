@@ -617,13 +617,15 @@ export function TasksView(props: TasksViewProps) {
           <div className="task-focus-object overdue"><span>Риск срока</span><strong>{taskCounts.overdue}</strong><small>{taskCounts.overdue ? "нужно обратить внимание" : "всё идёт по плану"}</small></div>
         </div> : null}
 
-        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <SlidingSegmented className="task-filters" aria-label="Фильтры задач">
+        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-filters">
+          <SlidingSegmented className="task-filter-tabs" role="group" aria-label="Фильтры задач">
           {(Object.keys(taskFilterLabels) as TaskFilter[]).map((key) => (
             <button className={filter === key ? "active" : ""} aria-label={taskFilterLabels[key]} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button"><span>{taskFilterLabels[key]}</span><b aria-hidden="true">{taskCounts[key]}</b></button>
           ))}
+          </SlidingSegmented>
           <WorkspaceSelect className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></WorkspaceSelect>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
-        </SlidingSegmented> : null}
+        </div> : null}
 
         {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>

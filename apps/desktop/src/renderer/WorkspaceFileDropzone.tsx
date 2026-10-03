@@ -1,4 +1,4 @@
-import type { DragEvent, ReactNode } from "react";
+import { useEffect, useState, type DragEvent, type ReactNode } from "react";
 
 import { Attach20Regular } from "@fluentui/react-icons";
 
@@ -29,6 +29,19 @@ export function WorkspaceFileDropzone({
   ariaLabel,
   onFiles,
 }: WorkspaceFileDropzoneProps) {
+  // Chromium treats a hidden file input as focus-visible even after a mouse
+  // click. Track real keyboard traversal instead of showing a click halo.
+  const [keyboardFocus, setKeyboardFocus] = useState(false);
+  useEffect(() => {
+    const keyboard = (event: KeyboardEvent) => { if (event.key === "Tab") setKeyboardFocus(true); };
+    const pointer = () => setKeyboardFocus(false);
+    document.addEventListener("keydown", keyboard, true);
+    document.addEventListener("pointerdown", pointer, true);
+    return () => {
+      document.removeEventListener("keydown", keyboard, true);
+      document.removeEventListener("pointerdown", pointer, true);
+    };
+  }, []);
   const select = (selected: FileList | null) => {
     const next = Array.from(selected ?? []);
     if (next.length) onFiles(multiple ? next : next.slice(0, 1));
@@ -39,6 +52,7 @@ export function WorkspaceFileDropzone({
   };
   return <label
     className={`ws-file-dropzone${emphasized ? " is-emphasized" : ""}${disabled ? " is-disabled" : ""}`}
+    data-keyboard-focus={keyboardFocus || undefined}
     onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = disabled ? "none" : "copy"; }}
     onDrop={drop}
   >

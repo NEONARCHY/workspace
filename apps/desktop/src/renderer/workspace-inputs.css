@@ -72,7 +72,7 @@ html input.ws-date-time-required-proxy { position: absolute; width: 1px; height:
 .ws-file-dropzone { position: relative; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 90px; padding: 14px; border: 1px dashed #b9d5d8; border-radius: 17px; background: linear-gradient(118deg, #f4fbfa, #fbfdfd); color: #293a55; cursor: pointer; transition: transform 160ms var(--ws-ease-spatial, ease), border-color 160ms ease, background-color 160ms ease; }
 .ws-file-dropzone.is-emphasized { border-color: #99ced1; background: linear-gradient(118deg, #eaf8f6, #f9fdfd); }
 .ws-file-dropzone:hover:not(.is-disabled) { transform: translateY(-1px); border-color: #168699; background: #eef9f7; }
-.ws-file-dropzone:focus-within { outline: 2px solid #006779; outline-offset: 2px; }
+.ws-file-dropzone[data-keyboard-focus="true"]:focus-within { outline: 2px solid #006779; outline-offset: 2px; }
 .ws-file-dropzone.is-disabled { opacity: .58; cursor: not-allowed; }
 .ws-file-dropzone-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; opacity: 0; overflow: hidden; clip-path: inset(50%); }
 .ws-file-dropzone-icon { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #cce4e3; border-radius: 13px; background: #fff; color: #00798c; box-shadow: 0 8px 16px -14px rgb(0 103 121 / 40%); }

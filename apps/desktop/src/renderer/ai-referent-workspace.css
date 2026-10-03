@@ -592,7 +592,7 @@
 .ai-referent-attachments li > span > small { display: block; margin-top: 3px; color: var(--ws-muted); white-space: normal; }
 .ai-referent-attachment-action, .ai-referent-attachments button { flex: none; border: 0; background: transparent; color: var(--ws-link); font: inherit; font-weight: 600; cursor: pointer; }
 .ai-referent-attachment-action input { position: absolute; width: 1px; height: 1px; opacity: 0; }
-.ai-referent-attachment-action:focus-within, .ai-referent-attachments button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; border-radius: 4px; }
+.ai-referent-attachment-action:has(:focus-visible), .ai-referent-attachments button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; border-radius: 4px; }
 .ai-referent-attachments button:disabled { opacity: .45; cursor: default; }
 .ai-referent-recipient-picker { display: grid; gap: 12px; padding: 16px; border: 1px solid #d6e7e8; border-radius: 17px; background: linear-gradient(135deg, #f3fbfa, #fbfefe 72%); }
 .ai-referent-picker-heading, .ai-referent-picker-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -647,7 +647,6 @@
 }
 .ai-referent-form-dialog .ai-referent-upload-primary { border-color: #99ced1; background: linear-gradient(118deg, #eaf8f6, #f9fdfd); }
 .ai-referent-upload-zone:hover { transform: translateY(-1px); border-color: #168699; background: #eef9f7; }
-.ai-referent-upload-zone:focus-within { outline: 2px solid #006779; outline-offset: 2px; }
 .ai-referent-upload-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: 0; opacity: 0; overflow: hidden; clip-path: inset(50%); }
 .ai-referent-upload-icon { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid #cce4e3; border-radius: 13px; background: #fff; color: #00798c; box-shadow: 0 8px 16px -14px rgb(0 103 121 / 40%); }
 .ai-referent-upload-copy { display: grid !important; gap: 3px !important; min-width: 0; }

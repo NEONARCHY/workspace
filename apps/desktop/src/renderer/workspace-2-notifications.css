@@ -83,16 +83,15 @@
 
 .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr) 310px; gap: 12px; min-height: 0; }
 .notification-stream-shell { display: grid; grid-template-rows: max-content minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; border: 1px solid rgb(255 255 255 / 80%); border-radius: 25px; background: rgb(255 255 255 / 76%); box-shadow: 0 16px 42px rgb(41 58 85 / 7%); }
-.notification-stream-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 20px; padding: 17px 18px 13px; border-bottom: 1px solid var(--notification-line); }
-.notification-stream-toolbar > div:first-child { display: grid; gap: 3px; white-space: nowrap; }
+.notification-stream-toolbar { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: 10px; padding: 17px 18px 13px; border-bottom: 1px solid var(--notification-line); }
+.notification-stream-toolbar > div:first-child { display: flex; align-items: center; justify-content: space-between; gap: 12px; white-space: nowrap; }
 .notification-stream-toolbar strong { color: var(--notification-ink); font-size: 14px; }
 .notification-stream-toolbar span { color: var(--notification-muted); font-size: 10px; }
-.notification-kind-filters { display: flex; justify-content: flex-start; gap: 5px; min-width: 0; overflow-x: auto; padding-inline: 1px; scroll-padding-inline: 1px; scrollbar-width: none; }
+.notification-kind-filters { display: flex; justify-content: flex-start; gap: 4px; min-width: 0; min-height: 46px; overflow-x: auto; padding: 4px; scroll-padding-inline: 4px; border: 1px solid #dce8e8; border-radius: 15px; background: #eaf1f1; scrollbar-width: none; }
 .notification-kind-filters::-webkit-scrollbar { display: none; }
-.notification-kind-filters button { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 5px 9px; border: 1px solid transparent; border-radius: 11px; color: var(--notification-muted); background: transparent; font: inherit; font-size: 10px; white-space: nowrap; cursor: pointer; }
-.notification-kind-filters button:first-child { position: sticky; left: 1px; z-index: 1; flex: 0 0 auto; margin-left: auto; background: rgb(255 255 255 / 96%); box-shadow: 13px 0 14px -14px rgb(41 58 85 / 70%); }
+.notification-kind-filters button { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 38px; padding: 9px 14px; border: 0; border-radius: 11px; color: rgb(41 58 85 / 66%); background: transparent; font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .notification-kind-filters button:hover { background: #f0f6f5; }
-.notification-kind-filters button[aria-pressed="true"] { border-color: #c9e2df; color: var(--ws-link); background: #e8f4f2; }
+.notification-kind-filters button[aria-pressed="true"] { color: var(--notification-ink); }
 .notification-kind-filters svg { font-size: 15px; }
 
 .notifications-view .notification-stream { min-height: 0; padding: 10px 12px 24px; overflow-y: auto; overscroll-behavior: contain; border-radius: 0; background: transparent; scrollbar-width: thin; scrollbar-color: rgb(51 112 126 / 32%) transparent; }
@@ -111,7 +110,7 @@
 .notifications-view .notification-row.unread:hover { background: linear-gradient(112deg, #d1eee9 0%, #ddeef4 62%, #e9e5f4 100%); box-shadow: inset 0 0 0 1px rgb(20 119 135 / 20%), 0 9px 22px rgb(35 82 96 / 10%); }
 .notifications-view .notification-row.unread .notification-open > b { color: #193750; font-weight: 700; }
 .notifications-view .notification-row.read:not(.priority-attention):not(.priority-urgent) { opacity: 1; background: transparent; }
-.notifications-view .notification-kind { width: 42px; height: 42px; border-radius: 14px; }
+.notifications-view .notification-kind { width: 42px; height: 42px; border-radius: 14px; background: #fff; }
 .notifications-view .notification-open { gap: 6px; padding-top: 1px; }
 .notifications-view .notification-open > b { color: var(--notification-ink); font-size: 15px; }
 .notifications-view .notification-open > p { max-width: 78ch; color: var(--notification-muted); font-size: 13px; }

@@ -10,10 +10,10 @@ html body :is(.app-provider, .fui-FluentProvider) * {
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
-  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar { width: 4px; height: 4px; }
-  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-track,
-  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-corner { background: transparent; }
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar { width: 4px; height: 4px; }
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-track,
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-corner { background: transparent; }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:hover,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:active {
@@ -35,7 +35,7 @@ html body :is(.app-provider, .fui-FluentProvider) * {
 }
 
 @media (pointer: coarse) {
-  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar { width: 8px; height: 8px; }
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar { width: 8px; height: 8px; }
 }
 @media (forced-colors: active) {
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) * { scrollbar-color: auto; }
