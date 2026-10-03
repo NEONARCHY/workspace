@@ -21,14 +21,14 @@ html body :is(.app-provider, .fui-FluentProvider) * {
     border-radius: 999px;
     background: linear-gradient(to bottom,
       rgb(141 164 170 / var(--ws-scroll-start, 0)),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-start, 0))) min(32px, 8.75%),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-start, 0))) min(64px, 17.5%),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-start, 0))) min(96px, 26.25%),
-      #8da4aa min(128px, 35%),
-      #8da4aa calc(100% - min(128px, 35%)),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-end, 1))) calc(100% - min(96px, 26.25%)),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-end, 1))) calc(100% - min(64px, 17.5%)),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-end, 1))) calc(100% - min(32px, 8.75%)),
+      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-quarter, min(32px, 8.75%)),
+      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-half, min(64px, 17.5%)),
+      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-three-quarters, min(96px, 26.25%)),
+      #8da4aa var(--ws-thumb-fade-length, min(128px, 35%)),
+      #8da4aa calc(100% - var(--ws-thumb-fade-length, min(128px, 35%))),
+      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-three-quarters, min(96px, 26.25%))),
+      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-half, min(64px, 17.5%))),
+      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-quarter, min(32px, 8.75%))),
       rgb(141 164 170 / var(--ws-scroll-end, 1)));
   }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal,
@@ -48,6 +48,13 @@ html body :is(.app-provider, .fui-FluentProvider) * {
   }
   html body .app-provider.app-provider .task-kanban { scrollbar-width: none; }
   html body .app-provider .task-kanban::-webkit-scrollbar { height: 0; }
+  /* Pseudo-element tokens do not leak into nested fields or the chat pane. */
+  html body :is(.app-provider, .fui-FluentProvider) .task-record-dialog .task-detail::-webkit-scrollbar-thumb {
+    --ws-thumb-fade-quarter: min(48px, 11.25%);
+    --ws-thumb-fade-half: min(96px, 22.5%);
+    --ws-thumb-fade-three-quarters: min(144px, 33.75%);
+    --ws-thumb-fade-length: min(192px, 45%);
+  }
 }
 
 @media (pointer: coarse) {

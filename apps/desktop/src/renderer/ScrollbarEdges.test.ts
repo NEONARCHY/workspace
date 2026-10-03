@@ -23,6 +23,11 @@ describe("scrollbar edges", () => {
     expect(scrollbarEdgeOpacity(310, 100, 400)).toEqual({ start: 1, end: 0 });
     expect(scrollbarEdgeOpacity(0, 100, 80)).toEqual({ start: 0, end: 0 });
   });
+  it("allows the task pane to start fading earlier without changing default scrollbars", () => {
+    expect(scrollbarEdgeOpacity(100, 800, 2400)).toEqual({ start: 1, end: 1 });
+    expect(scrollbarEdgeOpacity(100, 800, 2400, 200)).toEqual({ start: 0.5, end: 1 });
+    expect(scrollbarEdgeOpacity(1500, 800, 2400, 200)).toEqual({ start: 1, end: 0.5 });
+  });
   it("updates native thumb properties without changing scroll position and cleans up", () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frames.push(callback); return frames.length; });

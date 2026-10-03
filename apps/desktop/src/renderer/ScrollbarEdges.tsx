@@ -1,17 +1,17 @@
 import { useEffect } from "react";
 
 const fadeDistance = 48;
-const easeEdge = (distance: number) => {
-  const progress = Math.min(1, distance / fadeDistance);
+const easeEdge = (distance: number, transitionDistance: number) => {
+  const progress = Math.min(1, distance / Math.max(1, transitionDistance));
   return progress * progress * (3 - 2 * progress);
 };
 
-export function scrollbarEdgeOpacity(position: number, viewport: number, extent: number) {
+export function scrollbarEdgeOpacity(position: number, viewport: number, extent: number, transitionDistance = fadeDistance) {
   const maximum = Math.max(0, extent - viewport);
   const clamped = Math.max(0, Math.min(maximum, position));
   return {
-    start: easeEdge(clamped),
-    end: easeEdge(maximum - clamped),
+    start: easeEdge(clamped, transitionDistance),
+    end: easeEdge(maximum - clamped, transitionDistance),
   };
 }
 
@@ -21,7 +21,11 @@ export function observeScrollbarEdges(root: HTMLElement) {
   const pending = new Set<HTMLElement>([root]);
   let frame = 0;
   const update = (element: HTMLElement) => {
-    const vertical = scrollbarEdgeOpacity(element.scrollTop, element.clientHeight, element.scrollHeight);
+    // The long task pane otherwise changes its edge opacity only during the
+    // very last wheel tick. Scale its approach zone with the visible pane.
+    const approachDistance = element.matches(".task-record-dialog .task-detail")
+      ? Math.max(96, Math.min(256, element.clientHeight * .25)) : fadeDistance;
+    const vertical = scrollbarEdgeOpacity(element.scrollTop, element.clientHeight, element.scrollHeight, approachDistance);
     const horizontal = scrollbarEdgeOpacity(Math.abs(element.scrollLeft), element.clientWidth, element.scrollWidth);
     for (const [key, value] of Object.entries({
       "--ws-scroll-start": vertical.start,
