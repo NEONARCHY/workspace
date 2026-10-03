@@ -14,12 +14,23 @@
 
 /* Selection changes the surface, not the labels' width or the group's position. */
 .tasks-view .view-switch > button { font-weight: 600; }
+.tasks-view .task-calendar-navigation-slot { flex: 0 0 140px; min-height: 42px; }
+.tasks-view .task-toolbar-actions { flex-wrap: nowrap; }
+.app-provider .tasks-view .workspace-select.task-role-filter { height: 36px; min-height: 36px; padding: 0; }
+.app-provider .tasks-view .task-search { height: 36px; min-height: 36px; }
 
 .tasks-view.efficiency-mode .eff-commandbar.compact {
-  min-height: 42px;
-  margin-bottom: 6px;
-  padding-block: 3px;
+  position: absolute;
+  top: 0;
+  right: 4px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0;
 }
+.tasks-view .efficiency-view { display: flex; flex-direction: column; padding-bottom: 0; }
+.tasks-view .eff-overview-grid { flex: none; }
+.tasks-view .eff-context-stack { padding-top: 46px; }
+.tasks-view .eff-people { flex: 1 0 auto; }
 
 .task-workbench-summary {
   display: grid;
@@ -95,7 +106,7 @@
 .tasks-view .task-filters > button.active b { background: rgb(0 145 168 / 12%); }
 
 .tasks-view .record-table-frame.task-records {
-  margin: 0 var(--ws-view-edge) 20px;
+  margin: 0 var(--ws-view-edge);
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 90%);
   border-radius: 20px;
@@ -123,18 +134,22 @@
 
 .tasks-view.bp5-tasks .task-kanban {
   gap: 12px;
-  padding: 0 var(--ws-view-edge) 20px;
+  padding: 0 var(--ws-view-edge);
   scroll-padding-inline: var(--ws-view-edge);
+  scrollbar-width: none;
 }
+.tasks-view.bp5-tasks .task-kanban::-webkit-scrollbar { height: 0; }
+.tasks-view.bp5-tasks .task-kanban:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; }
 
 .tasks-view.bp5-tasks .kanban-column {
+  padding-inline: 0;
   border: 1px solid rgb(255 255 255 / 84%);
   border-radius: 20px;
   background: rgb(225 235 235 / 68%);
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 70%);
 }
 
-.tasks-view.bp5-tasks .kanban-column > header { padding: 14px 14px 10px; }
+.tasks-view.bp5-tasks .kanban-column > header { padding: 14px 26px 10px; }
 .tasks-view.bp5-tasks .kanban-stack {
   padding: 3px 9px 12px;
   scrollbar-gutter: stable both-edges;
@@ -177,20 +192,20 @@
 .task-card-progress b { font-size: 11px; font-variant-numeric: tabular-nums; }
 
 .tasks-view .task-calendar-embedded {
-  grid-template-columns: minmax(650px, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: minmax(0, 1fr);
   flex: 1 1 auto;
   min-height: 0;
   padding: 0;
 }
 .tasks-view.calendar-mode .tasks-main { overflow: hidden; }
-.tasks-view .task-calendar-embedded .calendar-main { gap: 10px; padding: 12px 22px 22px; }
-.tasks-view .task-calendar-embedded .calendar-toolbar { min-height: 54px; margin-bottom: 8px; padding-top: 4px; padding-bottom: 8px; }
-.tasks-view .task-calendar-embedded .calendar-toolbar-actions { margin-left: auto; }
-.tasks-view .task-calendar-embedded .calendar-title h2 { margin: 0; color: var(--ws-text); font-size: 20px; font-weight: 600; }
-.tasks-view .task-calendar-embedded .task-calendar-board { min-height: 0; }
-.tasks-view .task-calendar-embedded .task-calendar-grid { min-width: 0; }
-.tasks-view .task-calendar-embedded .calendar-side { background: #fff; }
-.tasks-view .task-calendar-embedded .task-calendar-unscheduled { margin-top: 22px; box-shadow: none; }
+.tasks-view .task-calendar-embedded .calendar-main { grid-template-rows: minmax(0, 1fr); min-height: 0; gap: 0; padding: 0 16px 0 4px; }
+.task-calendar-local-navigation { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.tasks-view .task-calendar-embedded .task-calendar-board { min-height: 0; padding: 8px; row-gap: 8px; }
+.tasks-view .task-calendar-embedded .task-calendar-grid { min-width: 0; gap: 8px; }
+.tasks-view .task-calendar-embedded .calendar-side { margin-top: 0; background: #fff; }
+.tasks-view .task-calendar-embedded .task-calendar-unscheduled { margin-top: 22px; padding: 0; background: transparent; box-shadow: none; }
+.tasks-view .task-calendar-embedded .calendar-day-heading > p { text-transform: none; }
 
 .task-record-dialog {
   width: min(1480px, calc(100vw - 32px)) !important;
@@ -307,6 +322,8 @@
 .task-delete-button:hover { color: #8f2833; background: #fff0f1; }
 
 @media (max-width: 900px) {
+  .tasks-view .task-toolbar-actions { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; }
+  .tasks-view .task-toolbar-actions .view-switch { grid-column: 1 / -1; justify-self: end; }
   .task-record-workspace { grid-template-columns: 1fr; overflow-y: auto; }
   .task-record-workspace > .task-detail { max-height: none; overflow: visible; }
   .task-record-workspace > .embedded-chat { min-height: 620px; border-top: 1px solid rgb(41 58 85 / 10%); border-left: 0; }
@@ -315,8 +332,11 @@
   .tasks-view .task-filters { margin-inline: 14px; }
   .tasks-view .record-table-frame.task-records { margin-inline: 14px; }
   .tasks-view.bp5-tasks .task-kanban { padding-inline: 14px; }
-  .tasks-view .task-calendar-embedded { grid-template-columns: 1fr; overflow: visible; }
+  .tasks-view .task-calendar-embedded { grid-template-columns: 1fr; grid-template-rows: auto; overflow-y: auto; }
   .tasks-view .task-calendar-embedded .calendar-side { border-top: 1px solid var(--ws-line); border-left: 0; }
+  .tasks-view .task-calendar-embedded .calendar-main { min-height: 620px; padding-inline: 4px; }
+  .tasks-view.efficiency-mode .eff-commandbar.compact { position: static; align-self: flex-end; margin-bottom: 8px; }
+  .tasks-view .eff-context-stack { padding-top: 0; }
 }
 
 @media (max-width: 700px) {

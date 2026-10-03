@@ -596,6 +596,7 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </SlidingSegmented>;
   const newTaskButton = <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
+  const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
 
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
@@ -603,6 +604,7 @@ export function TasksView(props: TasksViewProps) {
         <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
+            <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
             {newTaskButton}
             {taskViewSwitch}
           </div>
@@ -622,9 +624,9 @@ export function TasksView(props: TasksViewProps) {
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
         </SlidingSegmented> : null}
 
-        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} /> : (
+        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
-          <div className="task-kanban" aria-label="Kanban задач">
+          <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>

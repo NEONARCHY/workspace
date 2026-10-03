@@ -1341,7 +1341,10 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     await waitFor(() => expect(document.querySelector(".view-switch")).not.toBeNull());
     fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
-    expect(screen.getByRole("heading", { name: "Календарь задач" })).toBeInTheDocument();
+    expect(screen.queryByText("Рабочий календарь")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Календарь задач" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Предыдущий месяц задач" }).closest(".task-calendar-navigation-slot")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Сегодня" }).closest(".section-toolbar")).not.toBeNull();
     expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar .view-switch")).not.toBeNull();
     expect(document.querySelector(".task-calendar-embedded .view-switch")).toBeNull();
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
