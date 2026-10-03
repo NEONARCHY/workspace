@@ -26,6 +26,9 @@ describe("workspace date and file inputs", () => {
     fireEvent.click(screen.getByRole("button", { name: "12" }));
     expect(screen.getByRole("button", { name: "12" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("group", { name: "Половина дня" })).toBeVisible();
+    const dials = screen.getByRole("listbox", { name: "Часы" }).closest(".ws-time-dials");
+    expect(dials).toContainElement(screen.getByRole("listbox", { name: "Минуты" }));
+    expect(dials).not.toContainElement(screen.getByRole("group", { name: "Половина дня" }));
   });
 
   it("returns the visible calendar to today before selecting the date", () => {

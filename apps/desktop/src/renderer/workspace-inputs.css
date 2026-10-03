@@ -56,8 +56,9 @@ html input.ws-date-time-required-proxy { position: absolute; width: 1px; height:
 .ws-clock-mode { display: flex; padding: 2px; border-radius: 9px; background: #e7efef; }
 .ws-clock-mode button, .ws-time-period button { min-width: 28px; padding: 4px 6px; border: 0; border-radius: 7px; background: transparent; color: #637589; font: inherit; font-size: 11px; cursor: pointer; }
 .ws-clock-mode button[aria-pressed="true"], .ws-time-period button[aria-pressed="true"] { background: #fff; color: #006779; box-shadow: 0 2px 7px rgb(34 74 84 / 12%); }
-.ws-time-wheels { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; }
-.ws-time-wheels::before { position: absolute; z-index: 0; top: 67px; right: 0; left: 0; height: 34px; border: 1px solid #a9d6d8; border-radius: 10px; background: rgb(255 255 255 / 72%); content: ""; pointer-events: none; }
+.ws-time-wheels { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; }
+.ws-time-dials { position: relative; display: flex; align-items: center; gap: 4px; }
+.ws-time-dials::before { position: absolute; z-index: 0; top: 67px; right: 0; left: 0; height: 34px; border: 1px solid #a9d6d8; border-radius: 10px; background: rgb(255 255 255 / 72%); content: ""; pointer-events: none; }
 .ws-time-wheel { z-index: 1; width: 46px; height: 168px; overflow: auto; padding-block: 67px; scrollbar-width: none; scroll-snap-type: y proximity; touch-action: none; cursor: grab; mask-image: linear-gradient(transparent, #000 24%, #000 76%, transparent); }
 .ws-time-wheel:active { cursor: grabbing; }
 .ws-time-wheel.is-dragging { scroll-snap-type: none; }

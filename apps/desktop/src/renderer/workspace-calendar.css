@@ -1,6 +1,7 @@
 /* Standalone schedule only; the task calendar owns its separate layout. */
 .calendar-view:not(.task-calendar-embedded) .calendar-main {
   padding-bottom: 0;
+  padding-right: 20px;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-board {
   row-gap: 8px;
@@ -60,8 +61,26 @@
     height: 100%;
   }
   .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
-    height: max(480px, calc(100dvh - 100px));
+    position: fixed;
+    z-index: 30;
+    top: 80px;
+    right: 12px;
+    bottom: 14px;
+    width: min(360px, calc(100vw - 24px));
+    height: auto;
+    margin: 0;
+    border: 0;
+    box-shadow: -14px 8px 40px -20px rgb(41 58 85 / 30%);
   }
+  .calendar-view:not(.task-calendar-embedded):has(.calendar-detail) {
+    grid-template-rows: max(720px, 100%);
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-main {
+    padding-right: var(--ws-view-edge);
+  }
+}
+@media (max-width: 1100px) {
+  .calendar-view:not(.task-calendar-embedded) .calendar-main { padding-right: 16px; }
 }
 @media (forced-colors: active) {
   .calendar-view:not(.task-calendar-embedded) :is(.calendar-day-summary, .calendar-detail) {

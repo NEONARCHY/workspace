@@ -286,7 +286,10 @@ export function CalendarView({
   const visibleEventsPerDay = 2;
 
   useEffect(() => {
-    if (draft || selected?.id) sideRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+    if (draft || selected?.id) {
+      const pane = sideRef.current?.querySelector<HTMLElement>(".calendar-detail") ?? sideRef.current;
+      pane?.scrollTo?.({ top: 0 });
+    }
   }, [draft, selected?.id]);
 
   useEffect(() => {
@@ -669,7 +672,13 @@ export function CalendarView({
         </div>
       </div>
 
-      <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня">
+      <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented && selected && !draft) {
+            event.stopPropagation();
+            setSelected(undefined);
+          }
+        }}>
         {error && (selected || !draft) ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
         {draft && selected ? (
           <div className="calendar-form">
