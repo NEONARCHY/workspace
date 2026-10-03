@@ -19,7 +19,7 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>, enabled: boolean
       previousTime = timestamp;
       // Keep the same feel on 60/120/144 Hz screens. Returning is deliberately
       // softer than pointer tracking, and never clears the current rotation.
-      const blend = 1 - Math.pow(1 - (followingPointer ? .14 : .09), elapsed / frameDuration);
+      const blend = 1 - Math.pow(1 - (followingPointer ? .12 : .09), elapsed / frameDuration);
       x += (targetX - x) * blend;
       y += (targetY - y) * blend;
       const moving = Math.abs(targetX - x) > .002 || Math.abs(targetY - y) > .002;

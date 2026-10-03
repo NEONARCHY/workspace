@@ -36,8 +36,8 @@ describe("Achievement-like board card tilt", () => {
       const callbacks = [...frames.values()]; frames.clear();
       callbacks.forEach(callback => callback(16));
     });
-    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-1.68);
-    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(2.24);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-1.44);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(1.92);
   });
   it("eases back from its current angle rather than snapping flat on leave", () => {
     const { card, frames, flush, move } = setup();
