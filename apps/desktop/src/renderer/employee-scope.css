@@ -29,6 +29,8 @@
 }
 .employee-scope-switch button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .employee-scope-switch button:disabled { cursor: default; opacity: .55; }
+.employees-view .record-list-controls > .employee-scope-switch { box-sizing: border-box; flex: none; height: 36px; }
+.employees-view .record-list-controls > .employee-scope-switch > button { flex: 0 0 auto; min-height: 28px; padding-block: 0; line-height: 16px; white-space: nowrap; }
 .person-picker-surface .employee-scope-switch { box-sizing: border-box; display: flex; flex-wrap: nowrap; width: 100%; margin-block: 10px 8px; }
 .person-picker-surface .employee-scope-switch button { flex: 1; min-width: 0; }
 .scoped-person-field { display: grid; gap: 7px; min-width: 0; font-size: 13px; }

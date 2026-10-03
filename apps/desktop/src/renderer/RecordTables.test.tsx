@@ -19,6 +19,23 @@ const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
 afterEach(cleanup);
 
 describe("Corporate record tables", () => {
+  it("keeps each hover layer decorative and inside an existing cell", () => {
+    render(wrap(<>
+      <TaskRecords tasks={tasks.slice(0, 2)} people={people} filterKey="all" onSelect={vi.fn()} />
+      <EmployeeRecords employees={employees.slice(0, 2)} filterKey="all" {...employeeRecordProps()} />
+    </>));
+    const layers = document.querySelectorAll(".list-row-hover-wash");
+    expect(layers).toHaveLength(4);
+    layers.forEach(layer => {
+      expect(layer).toHaveAttribute("aria-hidden", "true");
+      expect(layer.parentElement?.tagName).toBe("TD");
+      expect(layer).not.toHaveAttribute("tabindex");
+    });
+    const taskRows = within(screen.getByRole("table", { name: "Задачи" })).getAllByRole("row").slice(1);
+    const employeeRows = within(screen.getByRole("table", { name: "Сотрудники" })).getAllByRole("row").slice(1);
+    taskRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(6));
+    employeeRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(7));
+  });
   it("shows a semantic task table with real participants and no fictitious activity dates", () => {
     render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));
     const table = screen.getByRole("table", { name: "Задачи" });
