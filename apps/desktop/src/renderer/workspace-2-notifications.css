@@ -99,7 +99,8 @@
 .notifications-view .notification-stream::-webkit-scrollbar { width: 7px; }
 .notifications-view .notification-stream::-webkit-scrollbar-track { background: transparent; }
 .notifications-view .notification-stream::-webkit-scrollbar-thumb { border-radius: 999px; background: rgb(51 112 126 / 28%); }
-.notifications-view .notification-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 13px; max-width: none; min-height: 105px; margin: 0; padding: 17px 13px 17px 17px; border: 0; border-bottom: 1px solid var(--notification-line); border-radius: 16px; background: transparent; box-shadow: none; transform: none; }
+.notifications-view .notification-row { grid-template-columns: 44px minmax(0, 1fr) auto; gap: 13px; max-width: none; min-height: 105px; margin: 0 0 8px; padding: 17px 13px 17px 17px; border: 0; border-bottom: 1px solid var(--notification-line); border-radius: 16px; background: transparent; box-shadow: none; transform: none; }
+.notifications-view .notification-row:last-child { margin-bottom: 0; }
 .notifications-view .notification-row::before { top: 22px; bottom: 22px; left: 6px; width: 2px; }
 .notifications-view .notification-row:hover { border-color: transparent; background: #f4f9f8; box-shadow: none; transform: none; }
 .notifications-view .notification-row.unread {

@@ -7,6 +7,15 @@
   --ws-accent-success: #4f9f6f;
 }
 
+/* No fixed hover rotation: the cursor controls both axes with a damped return.
+   The class is removed before drag/drop, so existing FLIP/landing wins. */
+body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) {
+  transform: perspective(1200px) rotateX(var(--ws-card-tilt-x, 0deg)) rotateY(var(--ws-card-tilt-y, 0deg));
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) { transform: none; }
+}
+
 body :is(
   .kanban-card.priority-urgent, .kanban-card.priority-high,
   .calendar-event-pill, .calendar-agenda-card,
