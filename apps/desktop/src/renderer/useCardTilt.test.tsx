@@ -29,6 +29,16 @@ function setup(reduced = false) {
 }
 
 describe("Achievement-like board card tilt", () => {
+  it("responds on the first frame without changing the maximum angles", () => {
+    const { card, frames, move } = setup();
+    move();
+    act(() => {
+      const callbacks = [...frames.values()]; frames.clear();
+      callbacks.forEach(callback => callback(16));
+    });
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-x"))).toBeCloseTo(-2.4);
+    expect(parseFloat(card.style.getPropertyValue("--ws-card-tilt-y"))).toBeCloseTo(3.2);
+  });
   it("follows the mouse, settles without an endless RAF and returns exactly flat", () => {
     const { card, frames, flush, move } = setup();
     move(); flush();

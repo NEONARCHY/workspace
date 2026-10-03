@@ -11,6 +11,8 @@
    The class is removed before drag/drop, so existing FLIP/landing wins. */
 body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) {
   transform: perspective(1200px) rotateX(var(--ws-card-tilt-x, 0deg)) rotateY(var(--ws-card-tilt-y, 0deg));
+  /* RAF already smooths the transform; a second CSS transition adds lag. */
+  transition-property: box-shadow, border-color;
 }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) { transform: none; }

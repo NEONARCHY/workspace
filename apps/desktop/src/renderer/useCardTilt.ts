@@ -12,8 +12,8 @@ export function useCardTilt(ref: RefObject<HTMLElement | null>, enabled: boolean
     let x = 0, y = 0, targetX = 0, targetY = 0;
     let bounds: DOMRect | undefined;
     const paint = () => {
-      x += (targetX - x) * .12;
-      y += (targetY - y) * .12;
+      x += (targetX - x) * .20;
+      y += (targetY - y) * .20;
       const moving = Math.abs(targetX - x) > .002 || Math.abs(targetY - y) > .002;
       if (!moving) { x = targetX; y = targetY; }
       element.style.setProperty("--ws-card-tilt-x", `${-y * 12}deg`);
