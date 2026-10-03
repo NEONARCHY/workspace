@@ -34,6 +34,19 @@ Design read: light enterprise workspace for daily staff use, restrained Fluent U
 
 ## Accessibility and verification
 
+### Semantic accent surfaces — 2026-10-03
+
+Per the owner's refinement, existing left-edge semantic strips are replaced
+with a static horizontal pastel wash: 15% accent at the left, 7% at 42%,
+transparent at the right over an almost-white surface. Priority, calendar
+event type, warning/success and account-section colours retain their meanings.
+Kanban priority is independent of hover/selected/drag shadows; list title cells
+receive the same quieter treatment. Transparent borders preserve existing
+geometry, while marker pseudo-elements/inset-only strips are removed.
+Ordinary separators, progress tracks and thread/timeline connectors are excluded.
+Forced colours removes the wash and retains native focus/selection indicators.
+No new motion, dependencies, API changes or data mutations are introduced.
+
 Target: WCAG 2.2 AA for affected screens. Automated scans are evidence, not certification; full screen-reader certification is not claimed. Check contrast, labelled controls, keyboard access, visible unobscured focus, zoom/reflow, reduced motion, forced colours and dialog focus restoration. Criteria reference: [W3C WCAG quick reference](https://www.w3.org/WAI/WCAG22/quickref/).
 
 Use axe-core on local authenticated screens with read-only test routes; save before/after screenshots and reports. Run existing unit, responsive, workflows, messenger, personal-organization, payment/trip and branding regression scenarios. Verify the packaged Electron version with an isolated profile before delivering the installer. No test sends real messages or approval decisions.

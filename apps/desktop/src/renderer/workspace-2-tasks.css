@@ -166,8 +166,6 @@
 }
 .tasks-view .kanban-card:not(.is-hover-suppressed):hover { transform: translateY(-3px) rotate(-.15deg); box-shadow: 0 15px 30px rgb(41 58 85 / 11%); }
 .tasks-view .kanban-card.selected { border-color: rgb(0 145 168 / 45%); box-shadow: 0 14px 30px rgb(0 145 168 / 12%); }
-.tasks-view .kanban-card.priority-urgent { box-shadow: inset 3px 0 #b94f4a, 0 8px 20px rgb(41 58 85 / 7%); }
-.tasks-view .kanban-card.priority-high { box-shadow: inset 3px 0 #d39b2c, 0 8px 20px rgb(41 58 85 / 7%); }
 .tasks-view .spatial-card-open { gap: 10px; padding: 14px; }
 .tasks-view .spatial-grip { top: 8px; right: 5px; }
 .tasks-view .task-card-topline { min-width: 0; padding-right: 27px; }
