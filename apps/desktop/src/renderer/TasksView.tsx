@@ -93,6 +93,7 @@ function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
 
 export function TaskHelp({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [portalContainer, setPortalContainer] = useState<Element | null>(null);
   const [position, setPosition] = useState<{ readonly top: number; readonly left: number } | null>(null);
   const surfaceId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -137,8 +138,8 @@ export function TaskHelp({ title, children }: { readonly title: string; readonly
     };
   }, [open]);
   return <>
-    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={() => setOpen((current) => !current)}>?</button>
-    {open ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, document.body) : null}
+    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={(event) => { setPortalContainer(event.currentTarget.closest(".fui-DialogSurface") ?? document.body); setOpen((current) => !current); }}>?</button>
+    {open && portalContainer ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, portalContainer) : null}
   </>;
 }
 
