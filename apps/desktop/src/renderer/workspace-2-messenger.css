@@ -285,7 +285,7 @@
 
 .messenger-view .message-scroll {
   overflow-x: hidden;
-  padding: 24px 12px 34px 14px;
+  padding: 24px 8px 34px 10px;
   background: var(--chat-wash, #f5f8f7);
   scrollbar-width: thin;
   scrollbar-color: #b7c9c9 transparent;
@@ -671,7 +671,7 @@
   .messenger-view .conversation-pane { height: 100%; border-radius: 0; }
   .messenger-view.conversation-open .list-pane { display: none; }
   .messenger-view:not(.conversation-open) .conversation-pane { display: none; }
-  .messenger-view .message-scroll { padding-inline: 14px 10px; }
+  .messenger-view .message-scroll { padding-inline: 10px 8px; }
 }
 
 @media (hover: none) {

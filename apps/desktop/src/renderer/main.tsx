@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { ScrollbarEdges } from "./ScrollbarEdges";
 import { InterfaceLocalization } from "./InterfaceLocalization";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
@@ -44,6 +45,7 @@ import "./ai-hisobot.css";
 import "./telegram-access.css";
 import "./employee-scope.css";
 import "./sliding-segmented.css";
+import "./scrollbars.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {
@@ -60,6 +62,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><InterfaceLocalization /><App /></RecoveryBoundary>
+    <RecoveryBoundary><InterfaceLocalization /><ScrollbarEdges /><App /></RecoveryBoundary>
   </StrictMode>,
 );

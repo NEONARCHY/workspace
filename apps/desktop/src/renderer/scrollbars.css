@@ -1,0 +1,42 @@
+/* One native scrollbar treatment, including Fluent portals. Keep browser input intact. */
+html body :is(.app-provider, .fui-FluentProvider) * {
+  scrollbar-width: thin;
+  scrollbar-color: #8da4aa transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+  /* Standard scrollbar-width/color otherwise suppress Chromium's custom thumb/buttons. */
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) * {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar { width: 4px; height: 4px; }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-track,
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-corner { background: transparent; }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb,
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb:hover {
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(to bottom,
+      rgb(141 164 170 / var(--ws-scroll-start, 0)), #8da4aa min(64px, 25%),
+      #8da4aa calc(100% - min(64px, 25%)), rgb(141 164 170 / var(--ws-scroll-end, 1)));
+  }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal,
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal:hover {
+    background: linear-gradient(to right,
+      rgb(141 164 170 / var(--ws-scroll-left, 0)), #8da4aa min(64px, 25%),
+      #8da4aa calc(100% - min(64px, 25%)), rgb(141 164 170 / var(--ws-scroll-right, 1)));
+  }
+  html body .app-provider.app-provider .task-kanban { scrollbar-width: none; }
+  html body .app-provider .task-kanban::-webkit-scrollbar { height: 0; }
+}
+
+@media (pointer: coarse) {
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar { width: 8px; height: 8px; }
+}
+@media (forced-colors: active) {
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) * { scrollbar-color: auto; }
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb,
+  html body :is(.app-provider, .fui-FluentProvider) *::-webkit-scrollbar-thumb:hover { background: CanvasText; }
+}
