@@ -2,6 +2,7 @@ import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GradientOrb } from "./gradient-orb";
 import { advanceOrbMotion } from "./orb-motion";
+import { orbFragmentShader } from "./orb-shader";
 
 const canvasState = vi.hoisted(() => ({ fail: false }));
 vi.mock("@react-three/fiber", () => ({
@@ -14,6 +15,15 @@ vi.mock("@react-three/fiber", () => ({
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); canvasState.fail = false; });
 
 describe("React Bits assistant orb", () => {
+  it("applies hover to ring rotation and waves, not just colour or launcher scale", () => {
+    const image = orbFragmentShader.slice(orbFragmentShader.indexOf("vec4 mainImage"), orbFragmentShader.indexOf("void main()"));
+    expect(image).toContain("float s = sin(rot)");
+    expect(image).toContain("float c = cos(rot)");
+    expect(image).toContain("uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y)");
+    expect(image).toContain("uv.x += hover * hoverIntensity * 0.1 * sin(uv.y * 10.0 + iTime)");
+    expect(image).toContain("uv.y += hover * hoverIntensity * 0.1 * sin(uv.x * 10.0 + iTime)");
+    expect(image).not.toMatch(/uv\s*\*=/);
+  });
   it("keeps a static ring without WebGL", () => {
     vi.stubGlobal("WebGLRenderingContext", undefined);
     const { container } = render(<GradientOrb className="assistant-header-icon" />);

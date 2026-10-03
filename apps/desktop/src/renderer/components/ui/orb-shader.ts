@@ -1,5 +1,5 @@
 // Adapted from the owner-supplied React Bits Orb shader: blue/violet rim,
-// transparent center, and hover light changes without geometric scaling.
+// transparent center, and eased hover rotation/waves without geometric scaling.
 export const orbFragmentShader = /* glsl */ `
     precision highp float;
 
@@ -112,9 +112,9 @@ export const orbFragmentShader = /* glsl */ `
       v0 *= (1.0 - smoothstep(r0, r0 * 1.05, len));
       float innerFade = smoothstep(r0 * 0.8, r0 * 0.95, len);
       v0 *= mix(innerFade, 1.0, bgLuminance * 0.7);
-      float cl = cos(ang + iTime * 0.9 + rot * 0.8) * 0.5 + 0.5;
+      float cl = cos(ang + iTime * 0.9) * 0.5 + 0.5;
       
-      float a = -iTime - rot * 2.0;
+      float a = -iTime;
       vec2 pos = vec2(cos(a), sin(a)) * r0;
       float d = distance(uv, pos);
       float v1 = light2(1.5, 5.0, d);
@@ -145,7 +145,13 @@ export const orbFragmentShader = /* glsl */ `
       float size = min(iResolution.x, iResolution.y);
       vec2 uv = (fragCoord - center) / size * 2.0;
       
-      // Hover affects the light phase/intensity, not the orb's shape or bounds.
+      // Owner-supplied React Bits interaction. hover and rot arrive eased;
+      // rotate/warp the ring texture, never scale or move the launcher itself.
+      float s = sin(rot);
+      float c = cos(rot);
+      uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
+      uv.x += hover * hoverIntensity * 0.1 * sin(uv.y * 10.0 + iTime);
+      uv.y += hover * hoverIntensity * 0.1 * sin(uv.x * 10.0 + iTime);
       return draw(uv);
     }
 
