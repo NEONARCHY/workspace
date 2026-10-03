@@ -51,8 +51,8 @@
 .task-participant-co { --task-participant-ring: #71869b; }
 .task-participant-observer { --task-participant-ring: #b6c4ca; }
 .task-participant-author { --task-participant-ring: #95bbc2; }
-.task-participant-popover { position: fixed; z-index: 100; box-sizing: border-box; width: min(220px, calc(100vw - 24px)); padding: 9px 12px; border: 1px solid var(--ws-line); border-radius: 13px; color: var(--ws-text); background: var(--ws-surface); box-shadow: var(--ws-shadow-float); }
-.task-participant-profile { display: grid; gap: 1px; color: var(--ws-text); }
+.task-participant-popover { position: fixed; z-index: 100; box-sizing: border-box; width: max-content; max-width: min(320px, calc(100vw - 24px)); padding: 9px 12px; border: 1px solid var(--ws-line); border-radius: 13px; color: var(--ws-text); background: var(--ws-surface); box-shadow: var(--ws-shadow-float); }
+.task-participant-profile { display: grid; justify-items: center; gap: 1px; max-width: 100%; text-align: center; overflow-wrap: anywhere; color: var(--ws-text); }
 .task-participant-profile small { color: var(--ws-muted); font-size: 11px; }
 .task-participant-profile strong { font-size: 13px; font-weight: 600; }
 @media (forced-colors: active) { .task-participant-avatar .fui-Avatar { border-color: Canvas; outline-color: CanvasText; } .task-participant-popover { border-color: CanvasText; box-shadow: none; } }

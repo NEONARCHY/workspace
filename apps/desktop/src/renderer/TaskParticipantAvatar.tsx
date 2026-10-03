@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Avatar } from "@fluentui/react-components";
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
@@ -14,9 +14,7 @@ export function TaskParticipantAvatar({ person, role, token }: {
   readonly token?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
   const [pointerOpened, setPointerOpened] = useState(false);
-  const [origin, setOrigin] = useState("50% 100%");
   const reduceMotion = useReducedMotion();
   const cursorX = useMotionValue(0);
   const cursorTilt = useMotionValue(0);
@@ -36,14 +34,9 @@ export function TaskParticipantAvatar({ person, role, token }: {
     closeActiveParticipantPopover = closeSelf.current;
     const rect = anchorRef.current?.getBoundingClientRect();
     if (!rect) return;
-    const width = 220;
-    const left = Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - 12));
-    const top = rect.top >= 74 ? rect.top - 55 : rect.bottom + 9;
     cursorX.set(0);
     cursorTilt.set(0);
     setPointerOpened(fromPointer);
-    setOrigin(rect.top >= 74 ? "50% 100%" : "50% 0%");
-    setPosition({ left, top });
     setOpen(true);
   };
   const followPointer = (clientX: number) => {
@@ -64,6 +57,19 @@ export function TaskParticipantAvatar({ person, role, token }: {
       if (closeActiveParticipantPopover === closeSelf.current) closeActiveParticipantPopover = undefined;
     }, 140);
   };
+  useLayoutEffect(() => {
+    if (!open) return;
+    const anchor = anchorRef.current?.getBoundingClientRect();
+    const popover = popoverRef.current;
+    if (!anchor || !popover) return;
+    const width = popover.offsetWidth;
+    const height = popover.offsetHeight;
+    const above = anchor.top >= height + 21;
+    const left = Math.max(12, Math.min(anchor.left + anchor.width / 2 - width / 2, window.innerWidth - width - 12));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${above ? anchor.top - height - 9 : anchor.bottom + 9}px`;
+    popover.style.transformOrigin = `${Math.max(0, Math.min(width, anchor.left + anchor.width / 2 - left))}px ${above ? "100%" : "0%"}`;
+  }, [open, name, role]);
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -114,7 +120,7 @@ export function TaskParticipantAvatar({ person, role, token }: {
     {open ? createPortal(<motion.div ref={popoverRef} className="task-participant-popover" role="dialog" aria-label={`${role}: ${name}`}
       initial={reduceMotion || !pointerOpened ? false : { opacity: 0, y: 7 }}
       animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 360, damping: 29 }}
-      style={{ ...position, x: springX, rotate: springTilt, transformOrigin: origin }}
+      style={{ x: springX, rotate: springTilt }}
       onPointerEnter={() => { window.clearTimeout(closeTimer.current); cursorX.set(0); cursorTilt.set(0); }} onPointerLeave={hideSoon}
       onFocus={() => window.clearTimeout(closeTimer.current)} onBlur={hideSoon} onClickCapture={() => setOpen(false)}>
       <EmployeeProfileLink userId={person?.id} personName={name} className="task-participant-profile">
