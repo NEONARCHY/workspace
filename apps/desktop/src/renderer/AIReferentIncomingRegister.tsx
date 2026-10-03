@@ -8,7 +8,6 @@ import { Button, Spinner } from "@fluentui/react-components";
 import {
   ArrowClockwise20Regular,
   ArrowDownload20Regular,
-  Attach20Regular,
   MailInbox20Regular,
   Warning20Regular,
 } from "@fluentui/react-icons";
@@ -19,6 +18,7 @@ import {
 } from "./workspace-api";
 import { AIReferentFiles } from "./AIReferentFiles";
 import { AIReferentGooeySearch } from "./AIReferentGooeySearch";
+import { AIReferentPagination } from "./AIReferentPagination";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
@@ -57,6 +57,12 @@ function isAttention(letter: AIReferentIncomingLetter): boolean {
   return attentionStatuses.has(letter.status) || Boolean(letter.errorMessage);
 }
 
+function fileCountLabel(count: number): string {
+  const end = count % 10;
+  const teen = count % 100 >= 11 && count % 100 <= 14;
+  return `${count} ${!teen && end === 1 ? "файл" : !teen && end >= 2 && end <= 4 ? "файла" : "файлов"}`;
+}
+
 export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegisterProps) {
   const [registry, setRegistry] = useState<AIReferentIncomingRegistry>();
   const [loading, setLoading] = useState(true);
@@ -88,6 +94,9 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
   }, [query, refresh]);
 
   const letters = registry?.letters ?? [];
+  const syncLabel = registry?.lastSyncAt
+    ? `Последняя синхронизация: ${dateTime(registry.lastSyncAt)}${registry.journal.updatedAt ? ` · Excel: ${dateTime(registry.journal.updatedAt)}` : ""}`
+    : "Робот ещё не синхронизировался с Workspace";
 
   const downloadJournal = async () => {
     if (!registry?.journal.available || downloading) return;
@@ -153,12 +162,13 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
         </div>
       </div>
 
-      <div className="ai-incoming-sync-line" aria-live="polite">
-        <span className={registry?.lastSyncAt ? "online" : "offline"} aria-hidden="true" />
-        {registry?.lastSyncAt
-          ? `Последняя синхронизация: ${dateTime(registry.lastSyncAt)}`
-          : "Робот ещё не синхронизировался с Workspace"}
-        {registry?.journal.updatedAt ? ` · Excel: ${dateTime(registry.journal.updatedAt)}` : ""}
+      <div className="ai-referent-list-bar">
+        <div className="ai-incoming-sync-line" aria-live="polite" title={syncLabel}>
+          <span className={registry?.lastSyncAt ? "online" : "offline"} aria-hidden="true" />
+          {syncLabel}
+        </div>
+        <AIReferentPagination label="Страницы входящих писем" page={page} found={registry?.filteredCount ?? 0}
+          loading={loading} hasNext={(page + 1) * 100 < (registry?.filteredCount ?? 0)} onPageChange={setPage} />
       </div>
 
       {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
@@ -194,9 +204,10 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
                     <small>{letter.senderOrganization || letter.senderPerson || "Отправитель не определён"} · Ответственный: {letter.responsibleUserName ?? (letter.responsibleDisplayName || "не назначен")}</small>
                   </td>
                   <td>
-                    <span className="ai-incoming-attachment-count"><Attach20Regular /> {letter.attachmentsCount} {letter.attachmentsCount === 1 ? "файл" : "файлов"}</span>
+                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id}
+                      triggerLabel={fileCountLabel(letter.attachmentsCount)}
+                      letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
                     {letter.mainDocumentFilename ? <small title={letter.mainDocumentFilename}>{letter.mainDocumentFilename}</small> : null}
-                    <AIReferentFiles token={token} kind="incoming" ownerId={letter.id} letterLabel={`${letter.platformIncomingNumber || letter.sequenceNumber} — ${letter.subject || "Без темы"}`} />
                   </td>
                   <td>
                     <span className={`ai-incoming-status status-${isAttention(letter) ? "attention" : "ok"}`}>
@@ -210,11 +221,6 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
           </table>
         </div>
       ) : null}
-      <div className="ai-referent-pagination" role="group" aria-label="Страницы входящих писем">
-        <Button disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Назад</Button>
-        <span>Страница {page + 1} · Найдено {registry?.filteredCount ?? 0}</span>
-        <Button disabled={loading || (page + 1) * 100 >= (registry?.filteredCount ?? 0)} onClick={() => setPage(page + 1)}>Далее</Button>
-      </div>
     </div>
   );
 }

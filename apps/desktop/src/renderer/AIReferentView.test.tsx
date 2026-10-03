@@ -557,6 +557,23 @@ describe("AIReferentView", () => {
     fireEvent.click(await within(packet).findByRole("button", { name: "Обновить" }));
     expect(await screen.findByText("Робот ещё не передал файлы этого письма.")).toBeInTheDocument();
     expect(loadAIReferentPacket).toHaveBeenLastCalledWith("token", "incoming", "incoming-1");
+    fireEvent.keyDown(within(packet).getByRole("button", { name: "Закрыть пакет" }), { key: "Escape", code: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Пакет документов" })).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("keeps incoming pagination above the list and resets it when filtering", async () => {
+    vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue({ ...incomingRegistry, filteredCount: 260 });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await screen.findByText("Входящее письмо");
+    const pages = screen.getByRole("group", { name: "Страницы входящих писем" });
+    expect(pages.closest(".ai-referent-list-bar")).not.toBeNull();
+    expect(pages.compareDocumentPosition(screen.getByRole("region", { name: "Реестр входящих писем" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Пакет документов" })).toHaveTextContent("2 файла");
+    fireEvent.click(within(pages).getByRole("button", { name: "Далее" }));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 100 })));
+    fireEvent.click(screen.getByRole("button", { name: /требуют внимания/ }));
+    await waitFor(() => expect(loadAIReferentIncomingRegistry).toHaveBeenLastCalledWith("token", expect.objectContaining({ offset: 0, category: "attention" })));
   });
 
   it("shows incoming letters from the robot and keeps the outgoing register available", async () => {

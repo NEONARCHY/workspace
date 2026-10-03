@@ -1,12 +1,11 @@
 .app-content > .ai-hisobot-view {
   display: flex; flex-direction: column; gap: 14px; width: auto;
-  height: calc(100% - var(--ws-view-edge-double, 8px)); min-height: 0;
-  margin: var(--ws-view-edge, 4px); padding: 18px var(--ws-view-panel-title-inline, 20px) 20px;
-  overflow: hidden; border: 1px solid rgb(255 255 255 / 82%);
+  height: calc(100% - var(--ws-view-edge, 4px)); min-height: 0;
+  margin: var(--ws-view-edge, 4px) var(--ws-view-edge, 4px) 0; padding: 18px var(--ws-view-panel-title-inline, 20px) 20px;
+  overflow: hidden; border: 1px solid var(--ws-line);
   border-radius: var(--ws-radius, 22px); color: var(--ws-text, #293a55);
-  background: radial-gradient(ellipse at 83% -12%, #d8edeb 0, transparent 42%),
-    radial-gradient(ellipse at 0% 100%, #edf1f8 0, transparent 46%), #f5f9f8;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 72%);
+  background: var(--ws-surface);
+  box-shadow: var(--ws-shadow-card);
 }
 .ai-hisobot-header { position: relative; isolation: isolate; flex: none; min-height: 94px; padding: 4px 2px 8px; }
 .ai-hisobot-header-copy { position: relative; z-index: 2; }

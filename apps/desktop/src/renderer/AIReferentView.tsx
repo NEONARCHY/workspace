@@ -45,6 +45,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { AIReferentIncomingRegister } from "./AIReferentIncomingRegister";
 import { AIReferentSettings } from "./AIReferentSettings";
 import { AIReferentFiles, referentDownloadName, saveReferentBlob } from "./AIReferentFiles";
+import { AIReferentPagination } from "./AIReferentPagination";
 import { AIReferentAudioComposer, AIReferentAudioPlayer } from "./AIReferentAudioComment";
 import { AIReferentRecipientPicker } from "./AIReferentRecipientPicker";
 import { AIReferentAddressBook } from "./AIReferentAddressBook";
@@ -642,6 +643,11 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         </div>
       </div>
 
+      <div className="ai-referent-list-bar">
+        <span className="ai-referent-list-count">Найдено {registry?.totalCount ?? 0}</span>
+        <AIReferentPagination label="Страницы исходящих писем" page={page} loading={loading}
+          hasNext={(registry?.letters.length ?? 0) >= 50} onPageChange={setPage} />
+      </div>
       {registryError ? <p className="ai-referent-feedback" role="alert">{registryError}</p> : null}
       {error ? <p className="ai-referent-feedback" role="alert">{error}</p> : null}
       {loading ? <div className="ai-referent-loading"><Spinner label="Загружаем письма" /></div> : null}
@@ -689,7 +695,6 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           ))}
         </div>
       ) : null}
-      <div className="ai-referent-pagination" role="group" aria-label="Страницы исходящих писем"><Button disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>Назад</Button><span>Страница {page + 1}</span><Button disabled={loading || (registry?.letters.length ?? 0) < 50} onClick={() => setPage((value) => value + 1)}>Далее</Button></div>
         </div>
       )}
 
