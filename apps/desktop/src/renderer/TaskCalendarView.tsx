@@ -66,7 +66,7 @@ export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewP
       <header className="calendar-toolbar">
         <div className="calendar-title">
           <span>Рабочий календарь</span>
-          <h1>Календарь задач</h1>
+          <h2>Календарь задач</h2>
           <p>{monthLabel}</p>
         </div>
         <div className="calendar-toolbar-actions">

@@ -1317,6 +1317,22 @@ describe("corporate workspace authentication alpha", () => {
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
   });
 
+  it("keeps the same task navigation header mounted across all four views", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    const navigation = await screen.findByRole("group", { name: "Представление задач" });
+    const header = navigation.closest(".section-toolbar");
+    expect(header).not.toBeNull();
+    for (const name of ["Kanban", "Календарь", "Эффективность", "Список"]) {
+      fireEvent.click(within(navigation).getByRole("button", { name }));
+      expect(screen.getByRole("group", { name: "Представление задач" })).toBe(navigation);
+      expect(navigation.closest(".section-toolbar")).toBe(header);
+      expect(within(header as HTMLElement).getByRole("button", { name: "Новая задача" })).toBeInTheDocument();
+    }
+  });
+
   it("shows filtered tasks in the calendar with their automatic chat beside the details", async () => {
     mockServer();
     render(<App />);
@@ -1326,7 +1342,8 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(document.querySelector(".view-switch")).not.toBeNull());
     fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
     expect(screen.getByRole("heading", { name: "Календарь задач" })).toBeInTheDocument();
-    expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar")).toBeNull();
+    expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar .view-switch")).not.toBeNull();
+    expect(document.querySelector(".task-calendar-embedded .view-switch")).toBeNull();
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
     const taskMonth = new Date(initialTasks[0]!.dueAt!);
     const today = new Date();

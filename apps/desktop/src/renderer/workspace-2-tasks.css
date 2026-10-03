@@ -7,14 +7,13 @@
 }
 
 .tasks-view .section-toolbar {
+  flex: none;
   border-bottom: 0;
   background: transparent;
 }
 
-.tasks-view.efficiency-mode .section-toolbar {
-  min-height: 72px;
-  padding-block: 10px 8px;
-}
+/* Selection changes the surface, not the labels' width or the group's position. */
+.tasks-view .view-switch > button { font-weight: 600; }
 
 .tasks-view.efficiency-mode .eff-commandbar.compact {
   min-height: 42px;
@@ -187,7 +186,7 @@
 .tasks-view .task-calendar-embedded .calendar-main { gap: 10px; padding: 12px 22px 22px; }
 .tasks-view .task-calendar-embedded .calendar-toolbar { min-height: 54px; margin-bottom: 8px; padding-top: 4px; padding-bottom: 8px; }
 .tasks-view .task-calendar-embedded .calendar-toolbar-actions { margin-left: auto; }
-.tasks-view .task-calendar-embedded .calendar-title h1 { text-transform: capitalize; }
+.tasks-view .task-calendar-embedded .calendar-title h2 { margin: 0; color: var(--ws-text); font-size: 20px; font-weight: 600; }
 .tasks-view .task-calendar-embedded .task-calendar-board { min-height: 0; }
 .tasks-view .task-calendar-embedded .task-calendar-grid { min-width: 0; }
 .tasks-view .task-calendar-embedded .calendar-side { background: #fff; }
