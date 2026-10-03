@@ -1,5 +1,5 @@
 // Adapted from the owner-supplied React Bits Orb shader: blue/violet rim,
-// opaque near-black core, and hover light changes without geometric scaling.
+// transparent center, and hover light changes without geometric scaling.
 export const orbFragmentShader = /* glsl */ `
     precision highp float;
 
@@ -135,15 +135,7 @@ export const orbFragmentShader = /* glsl */ `
       
       vec3 finalCol = mix(darkCol, lightCol, bgLuminance);
       
-      // Composite the luminous rim over a solid core, retaining transparency
-      // only outside the orb. The core follows the same softly animated radius.
-      vec4 ring = extractAlpha(finalCol);
-      float ringAlpha = clamp(ring.a, 0.0, 1.0);
-      float coreAlpha = 1.0 - smoothstep(r0 * 0.85, r0, len);
-      float alpha = ringAlpha + coreAlpha * (1.0 - ringAlpha);
-      vec3 premultiplied = ring.rgb * ringAlpha
-        + vec3(0.012, 0.018, 0.035) * coreAlpha * (1.0 - ringAlpha);
-      return vec4(premultiplied / max(alpha, 1e-5), alpha);
+      return extractAlpha(finalCol);
     }
 
     vec4 mainImage(vec2 fragCoord) {

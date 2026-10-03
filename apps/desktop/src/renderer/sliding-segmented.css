@@ -74,12 +74,13 @@
   border-radius: 8px;
 }
 .sliding-segmented.task-team-scopes {
-  --sliding-indicator-background: #e7f3f4;
+  --sliding-indicator-background: #fff;
   width: fit-content;
   padding: 3px;
-  border-radius: 10px;
-  background: #f1f6f6;
+  border-radius: 11px;
+  background: #edf4f3;
 }
+.sliding-segmented.task-team-scopes > button[aria-pressed="true"] { color: var(--ws-text); }
 .sliding-segmented.task-filter-tabs {
   --sliding-indicator-background: #fff;
 }
