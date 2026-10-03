@@ -22,6 +22,7 @@
 }
 
 .messenger-view .list-pane {
+  container: messenger-list / inline-size;
   gap: 14px;
   padding: 22px 14px 14px;
   border-radius: 26px;
@@ -122,6 +123,28 @@
 
 .messenger-view .chat-buckets > button > svg { width: 16px; height: 16px; flex: none; }
 .messenger-view .chat-bucket-label { min-width: 0; white-space: nowrap; word-spacing: 0; }
+
+/* Keep the labels and counters readable when the list pane is compact. */
+@container messenger-list (max-width: 340px) {
+  .messenger-view .chat-buckets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+  .messenger-view .chat-buckets > button { justify-content: center; }
+  .messenger-view .chat-bucket-slider {
+    bottom: auto;
+    height: 38px;
+    width: calc((100% - 10px) / 2);
+  }
+  .messenger-view .chat-buckets.is-task-chats .chat-bucket-slider {
+    width: calc((100% - 10px) / 2);
+    transform: translateX(calc(100% + 4px));
+  }
+  .messenger-view .chat-buckets.is-archive .chat-bucket-slider { transform: translateY(42px); }
+  .messenger-view .chat-buckets:is(.is-project-chats, .is-trip-chats, .is-more) .chat-bucket-slider {
+    transform: translate(calc(100% + 4px), 42px);
+  }
+}
 
 .messenger-view .chat-buckets > button[aria-pressed="true"] {
   color: var(--messenger-ink);
@@ -270,6 +293,7 @@
 
 .messenger-view .list-pane .employee-scope-switch {
   display: grid;
+  align-items: stretch;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
   box-sizing: border-box;

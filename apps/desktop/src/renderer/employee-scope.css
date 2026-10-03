@@ -1,6 +1,6 @@
 .employee-scope-switch {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: wrap;
   gap: 3px;
   max-width: 100%;
