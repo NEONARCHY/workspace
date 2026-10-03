@@ -11,11 +11,13 @@ interface IndicatorPosition {
   readonly y: number;
   readonly width: number;
   readonly height: number;
+  readonly animate: boolean;
 }
 
 /** A shared moving selection surface for button groups and tab lists. */
 export function SlidingSegmented({ children, className = "", as = "div", ...props }: SlidingSegmentedProps) {
   const containerRef = useRef<HTMLElement>(null);
+  const selectedRef = useRef<HTMLButtonElement | null>(null);
   const [position, setPosition] = useState<IndicatorPosition>();
   const Element = as;
 
@@ -27,17 +29,25 @@ export function SlidingSegmented({ children, className = "", as = "div", ...prop
         ':scope > button[aria-pressed="true"], :scope > button[aria-selected="true"]',
       );
       if (!active) {
+        selectedRef.current = null;
         setPosition(undefined);
         return;
       }
-      const frame = container.getBoundingClientRect();
-      const button = active.getBoundingClientRect();
+      // Layout offsets share the indicator's padding-box origin. Screen rects
+      // include the container border and temporary page-entry transforms.
+      if (!active.offsetWidth || !active.offsetHeight) {
+        selectedRef.current = null;
+        setPosition(undefined);
+        return;
+      }
       const next = {
-        x: button.left - frame.left + container.scrollLeft,
-        y: button.top - frame.top + container.scrollTop,
-        width: button.width,
-        height: button.height,
+        x: active.offsetLeft,
+        y: active.offsetTop,
+        width: active.offsetWidth,
+        height: active.offsetHeight,
+        animate: selectedRef.current !== null && selectedRef.current !== active,
       };
+      selectedRef.current = active;
       setPosition((previous) => previous
         && previous.x === next.x && previous.y === next.y
         && previous.width === next.width && previous.height === next.height
@@ -61,6 +71,9 @@ export function SlidingSegmented({ children, className = "", as = "div", ...prop
       height: position.height,
       transform: `translate(${position.x}px, ${position.y}px)`,
       opacity: 1,
+      // Initial placement, font loading and resizing snap into place. Only a
+      // change of selection in this mounted group uses the shared transition.
+      transition: position.animate ? undefined : "none",
     } : undefined} />
   </Element>;
 }

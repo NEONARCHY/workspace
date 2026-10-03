@@ -23,6 +23,7 @@ import {
 import { TeamPresencePanel } from "./TeamPresencePanel";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 interface TeamDashboardViewProps {
@@ -399,9 +400,9 @@ export function TeamDashboardView({
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
         <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p></div>
-        <div className="team-dash-filters" aria-label="Фильтр нагрузки">
+        <SlidingSegmented className="team-dash-filters" role="group" aria-label="Фильтр нагрузки">
           {([ ["all", "Все"], ["risk", "С просрочкой"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
-        </div>
+        </SlidingSegmented>
       </header>
       {efficiencyError ? <div className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</div> : null}
       <div className="team-dash-people">
