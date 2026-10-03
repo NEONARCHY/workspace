@@ -371,7 +371,6 @@
 
 .messenger-view .message { position: relative; margin-bottom: 7px; }
 .messenger-view .message > .fui-Avatar { margin-top: 5px; }
-.messenger-view .message-content .message-reactions { position: relative; z-index: 1; margin: -3px 9px 0; }
 
 .messenger-view .message-body {
   position: relative;
