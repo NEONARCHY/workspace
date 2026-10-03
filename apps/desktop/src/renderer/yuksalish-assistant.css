@@ -5,13 +5,12 @@ body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 .yuksalish-assistant-root { position: fixed; inset: 0; z-index: 45; pointer-events: none; }
 /* Modal focus belongs to the foreground dialog; do not let the orb peek through its scrim. */
 body:has(.account-scrim, .record-composer-backdrop, .fui-DialogSurface__backdrop) .yuksalish-assistant-root { visibility: hidden; }
-.assistant-launcher { position: absolute; right: 12px; bottom: 14px; width: 72px; height: 72px; border: 0; padding: 0; background: transparent; cursor: pointer; pointer-events: auto; border-radius: 50%; filter: drop-shadow(0 7px 11px rgba(7, 80, 94, .12)); transition: transform 340ms cubic-bezier(.22, 1, .36, 1); }
-@media (hover: hover) { .assistant-launcher:hover { transform: translateY(-4px) scale(1.1); } }
+.assistant-launcher { position: absolute; right: 12px; bottom: 14px; width: 72px; height: 72px; border: 0; padding: 0; background: transparent; cursor: pointer; pointer-events: auto; border-radius: 50%; filter: drop-shadow(0 7px 11px rgba(7, 80, 94, .12)); }
 .assistant-launcher:focus-visible { outline: 3px solid #0e6e77; outline-offset: 3px; }
 .gradient-orb, .gradient-orb-fallback { display: block; width: 100%; height: 100%; background: transparent; }
 .gradient-orb canvas { display: block; }
-.gradient-orb-fallback { border-radius: 50%; background: conic-gradient(from 35deg, #0091a8, #84ded4, #293a55, #0091a8);
-  mask-image: radial-gradient(circle, transparent 43%, #000 56%, #000 64%, transparent 76%); }
+.gradient-orb-fallback { border-radius: 50%; background: radial-gradient(circle, #030509 44%, transparent 60%), conic-gradient(from 35deg, #1f4df2, #7a2ee0, #1f4df2);
+  mask-image: radial-gradient(circle, #000 64%, transparent 76%); }
 
 .assistant-panel { position: absolute; display: block; overflow: hidden; pointer-events: auto; border: 1px solid #bddbdc; color: var(--ws-ink, #293a55); background: #f8fcfc; box-shadow: 0 28px 76px rgba(26, 57, 76, .22); }
 .assistant-panel-content { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }

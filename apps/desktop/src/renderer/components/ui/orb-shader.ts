@@ -1,5 +1,5 @@
-// Adapted from the owner-supplied React Bits Orb shader: transparent ring,
-// Yuksalish turquoise/navy, and defined ascending smoothstep ranges.
+// Adapted from the owner-supplied React Bits Orb shader: blue/violet rim,
+// opaque near-black core, and hover light changes without geometric scaling.
 export const orbFragmentShader = /* glsl */ `
     precision highp float;
 
@@ -79,9 +79,9 @@ export const orbFragmentShader = /* glsl */ `
       return vec4(colorIn.rgb / (a + 1e-5), a);
     }
 
-    const vec3 baseColor1 = vec3(0.0, 0.568627, 0.658824);
-    const vec3 baseColor2 = vec3(0.32, 0.87, 0.83);
-    const vec3 baseColor3 = vec3(0.160784, 0.227451, 0.333333);
+    const vec3 baseColor1 = vec3(0.12, 0.30, 0.95);
+    const vec3 baseColor2 = vec3(0.48, 0.18, 0.88);
+    const vec3 baseColor3 = vec3(0.055, 0.07, 0.20);
     uniform float innerRadius;
     uniform float noiseScale;
 
@@ -111,9 +111,9 @@ export const orbFragmentShader = /* glsl */ `
       v0 *= (1.0 - smoothstep(r0, r0 * 1.05, len));
       float innerFade = smoothstep(r0 * 0.8, r0 * 0.95, len);
       v0 *= mix(innerFade, 1.0, bgLuminance * 0.7);
-      float cl = cos(ang + iTime * 2.0) * 0.5 + 0.5;
+      float cl = cos(ang + iTime * 0.9 + rot * 0.8) * 0.5 + 0.5;
       
-      float a = iTime * -1.0;
+      float a = -iTime - rot * 2.0;
       vec2 pos = vec2(cos(a), sin(a)) * r0;
       float d = distance(uv, pos);
       float v1 = light2(1.5, 5.0, d);
@@ -126,7 +126,7 @@ export const orbFragmentShader = /* glsl */ `
       float fadeAmount = mix(1.0, 0.1, bgLuminance);
       
       vec3 darkCol = mix(color3, colBase, v0);
-      darkCol = (darkCol + v1) * v2 * v3;
+      darkCol = (darkCol + colBase * v1 * (0.5 + hover * hoverIntensity)) * v2 * v3;
       darkCol = clamp(darkCol, 0.0, 1.0);
       
       vec3 lightCol = (colBase + v1) * mix(1.0, v2 * v3, fadeAmount);
@@ -135,7 +135,15 @@ export const orbFragmentShader = /* glsl */ `
       
       vec3 finalCol = mix(darkCol, lightCol, bgLuminance);
       
-      return extractAlpha(finalCol);
+      // Composite the luminous rim over a solid core, retaining transparency
+      // only outside the orb. The core follows the same softly animated radius.
+      vec4 ring = extractAlpha(finalCol);
+      float ringAlpha = clamp(ring.a, 0.0, 1.0);
+      float coreAlpha = 1.0 - smoothstep(r0 * 0.85, r0, len);
+      float alpha = ringAlpha + coreAlpha * (1.0 - ringAlpha);
+      vec3 premultiplied = ring.rgb * ringAlpha
+        + vec3(0.012, 0.018, 0.035) * coreAlpha * (1.0 - ringAlpha);
+      return vec4(premultiplied / max(alpha, 1e-5), alpha);
     }
 
     vec4 mainImage(vec2 fragCoord) {
@@ -143,14 +151,7 @@ export const orbFragmentShader = /* glsl */ `
       float size = min(iResolution.x, iResolution.y);
       vec2 uv = (fragCoord - center) / size * 2.0;
       
-      float angle = rot;
-      float s = sin(angle);
-      float c = cos(angle);
-      uv = vec2(c * uv.x - s * uv.y, s * uv.x + c * uv.y);
-      
-      uv.x += hover * hoverIntensity * 0.1 * sin(uv.y * 10.0 + iTime);
-      uv.y += hover * hoverIntensity * 0.1 * sin(uv.x * 10.0 + iTime);
-      
+      // Hover affects the light phase/intensity, not the orb's shape or bounds.
       return draw(uv);
     }
 
