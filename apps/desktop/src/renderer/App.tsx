@@ -91,6 +91,7 @@ import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
+import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
@@ -1778,6 +1779,7 @@ export function App() {
   const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
     .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
     .map((key) => navItems.find((item) => item.key === key)!);
+  const sidebarItems = groupAiNavigation(orderedNavItems);
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
@@ -1850,7 +1852,11 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation items={orderedNavItems} renderItem={(item) => {
+          /> : <AdaptiveNavigation items={sidebarItems} renderItem={(item, inOverflow, closeOverflow) => {
+              if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
+                <AiModulesNavigation modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} onCloseOverflow={closeOverflow}
+                  onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
+              </div>;
               const badge = badgeBySection[item.key];
               const icon = displayedSection === item.key && item.key === "messenger"
                 ? <Chat24Filled />

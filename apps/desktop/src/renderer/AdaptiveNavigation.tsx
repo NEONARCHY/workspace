@@ -12,7 +12,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   renderItem,
 }: {
   readonly items: readonly T[];
-  readonly renderItem: (item: T, inOverflow: boolean) => ReactNode;
+  readonly renderItem: (item: T, inOverflow: boolean, closeOverflow: () => void) => ReactNode;
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -64,11 +64,11 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   const drawerOpen = open && overflow.length > 0;
   return <nav ref={containerRef} className="rail-nav personal-rail-nav adaptive-rail-nav"
     onClickCapture={(event) => {
-      if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action)")) {
+      if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
         setOpen(false);
       }
     }}>
-    {visible.map((item) => renderItem(item, false))}
+    {visible.map((item) => renderItem(item, false, () => setOpen(false)))}
     {overflow.length ? <div className="rail-slot rail-more-slot">
       <button ref={moreRef} type="button" className={`rail-action rail-more-action ${drawerOpen ? "active" : ""}`}
         aria-label={`Ещё, ${overflow.length} разделов`} aria-expanded={drawerOpen} aria-controls="rail-more-drawer" onClick={() => setOpen((current) => !current)}>
@@ -85,8 +85,8 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
           <header><span>Другие разделы</span><small>{overflow.length}</small></header>
           <div>
             {overflow.map((item) => (
-              <div key={item.key} className="rail-more-entry" onClick={() => setOpen(false)}>
-                {renderItem(item, true)}
+              <div key={item.key} className="rail-more-entry">
+                {renderItem(item, true, () => setOpen(false))}
               </div>
             ))}
           </div>

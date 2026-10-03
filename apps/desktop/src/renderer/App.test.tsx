@@ -1886,8 +1886,7 @@ describe("corporate workspace authentication alpha", () => {
     );
     expect(labels).toEqual([
       "Задачи",
-      "AI Referent",
-      "AI Hisobot",
+      "ИИ-модули",
       "Лента",
       "Проекты",
       "Проектные заявки",
@@ -1902,6 +1901,10 @@ describe("corporate workspace authentication alpha", () => {
       "Уведомления",
       "Настройки",
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
+    const aiModules = await screen.findByRole("navigation", { name: "Выбор ИИ-модуля" });
+    expect(within(aiModules).getByRole("button", { name: "AI Referent" })).toBeInTheDocument();
+    expect(within(aiModules).getByRole("button", { name: "AI Hisobot" })).toBeInTheDocument();
   });
 
   it("keeps the sidebar editor open after clicking the pencil", async () => {
