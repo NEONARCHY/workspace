@@ -11,6 +11,7 @@ import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { useContextMotion } from "./useContextMotion";
 
 const absenceLabels: Record<string, string> = {
   vacation: "В отпуске",
@@ -42,6 +43,9 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
   const [end, setEnd] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const peopleMotion = useContextMotion(`${Boolean(data)}:${onlyWorking}`, {
+    resize: true, enter: true, rows: ":scope > .team-presence-person, :scope > .team-presence-empty",
+  });
 
   useEffect(() => {
     let active = true;
@@ -122,7 +126,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>
     </div>
     {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
-    <div className="team-presence-people">
+    <div className="team-presence-people" ref={peopleMotion}>
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
         <EmployeeProfileLink userId={person.userId} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /></EmployeeProfileLink>
         <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
@@ -131,7 +135,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
           ? `${clockLabel(person.session.startedAt)}${person.session.endedAt ? `–${clockLabel(person.session.endedAt)}` : " · в работе"}`
           : "Без отметки"}</span>
         <span className="team-presence-schedule"><Clock20Regular aria-hidden="true" /> {person.schedule.startsAt.slice(0, 5)}–{person.schedule.endsAt.slice(0, 5)}</span>
-        {person.canEditSchedule ? <Button appearance="subtle" size="small" onClick={() => openSchedule(person)}>График</Button> : null}
+        <div className="team-presence-actions">{person.canEditSchedule ? <Button appearance="subtle" size="small" onClick={() => openSchedule(person)}>График</Button> : null}</div>
         {person.session?.isWeekend ? <small className="team-presence-weekend">Работа в выходной</small> : null}
       </div>)}
       {!data && !error ? <p className="team-presence-empty">Загружаем отметки команды…</p> : null}

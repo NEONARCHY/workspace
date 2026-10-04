@@ -21,6 +21,7 @@ import {
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
+import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
@@ -156,6 +157,8 @@ export function TeamDashboardView({
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
+  const attentionMotion = useContextMotion(`${scope}:${selectedPersonId}:${attentionFilter}`);
+  const workloadMotion = useContextMotion(`${scope}:${teamFilter}`);
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -298,7 +301,7 @@ export function TeamDashboardView({
           <div><span>Следующее действие</span><h3 id="attention-title">Требует внимания</h3></div>
           {selectedPersonId ? <Button appearance="subtle" onClick={() => setSelectedPersonId(undefined)}>Показать всю команду</Button> : <small>сначала самое срочное</small>}
         </header>
-        <div className="team-dash-attention-list">
+        <div className="team-dash-attention-list" ref={attentionMotion}>
           {attentionTasks.map(({ task, attention }) => {
             const assignee = personById.get(task.assigneeId);
             return <button className={`team-dash-task tone-${attention.tone}`} key={task.id} type="button" onClick={() => onSelectTask(task.id)}>
@@ -406,7 +409,7 @@ export function TeamDashboardView({
         </SlidingSegmented>
       </header>
       {efficiencyError ? <div className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</div> : null}
-      <div className="team-dash-people">
+      <div className="team-dash-people" ref={workloadMotion}>
         {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name} className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>

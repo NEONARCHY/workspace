@@ -3,7 +3,7 @@
 .workday-control-away { display: inline-flex; align-items: center; gap: 6px; color: var(--ws-muted); font-size: 12px; }
 .workday-control-error { border: 0; background: transparent; color: #a03d50; font: inherit; font-size: 12px; cursor: pointer; }
 
-.team-presence-panel { min-width: 0; margin-top: 16px; padding: 25px 28px 16px; border: 1px solid #d3e2e2; border-radius: 26px; background: #fcfefd; box-shadow: 0 16px 36px rgb(35 76 97 / 7%), inset 0 1px 0 #fff; }
+.team-presence-panel { container: team-presence / inline-size; min-width: 0; margin-top: 16px; padding: 25px 28px 16px; border: 1px solid #d3e2e2; border-radius: 26px; background: #fcfefd; box-shadow: 0 16px 36px rgb(35 76 97 / 7%), inset 0 1px 0 #fff; }
 .team-presence-heading { display: flex; justify-content: space-between; align-items: center; gap: 28px; }
 .team-presence-intro > span { color: #167582; font-size: 11px; font-weight: 700; letter-spacing: .075em; text-transform: uppercase; }
 .team-presence-intro h3 { margin: 7px 0 6px; color: #193b52; font-size: 24px; font-weight: 650; line-height: 1.18; letter-spacing: -.025em; }
@@ -19,35 +19,47 @@
 .team-presence-toolbar-meta { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .team-presence-toolbar-meta small { color: #718791; font-size: 11px; font-variant-numeric: tabular-nums; }
 .team-presence-toolbar-meta .fui-Button { min-width: 30px; min-height: 30px; border-radius: 9px; }
-.team-presence-people { max-height: 330px; overflow: auto; scrollbar-width: thin; }
-.team-presence-person { display: grid; grid-template-columns: 36px minmax(145px, 1.7fr) minmax(125px, 1fr) minmax(120px, .8fr) minmax(105px, .8fr) auto; align-items: center; gap: 12px; padding: 15px 8px; border-bottom: 1px solid #e6eeee; border-radius: 10px; transition: background 160ms ease; }
+.team-presence-people { display: grid; grid-template-columns: 36px minmax(0, 1fr) 164px 112px 112px 72px; column-gap: 12px; max-height: 330px; padding-inline: 8px; overflow: auto; scrollbar-width: thin; }
+.team-presence-person { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; column-gap: 12px; row-gap: 8px; padding-block: 14px; border-bottom: 1px solid #e6eeee; border-radius: 10px; transition: background-color var(--ws-motion-micro) var(--ws-ease); }
 .team-presence-person:hover { background: #f1f8f6; }
 .team-presence-person:last-child { border-bottom: 0; }
 .team-presence-person-name { display: grid; min-width: 0; }
-.team-presence-person-name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.team-presence-person-name strong { overflow-wrap: anywhere; font-weight: 600; }
+.team-presence-person-name small { overflow-wrap: anywhere; line-height: 1.4; }
+.team-presence-actions { grid-column: 6; grid-row: 1; min-width: 0; }
+.team-presence-person-name { grid-column: 2; grid-row: 1; }
+.team-presence-status { grid-column: 3; grid-row: 1; }
+.team-presence-times { grid-column: 4; grid-row: 1; font-variant-numeric: tabular-nums; }
+.team-presence-schedule { grid-column: 5; grid-row: 1; font-variant-numeric: tabular-nums; }
 .team-presence-person-name small, .team-presence-times, .team-presence-schedule { color: var(--ws-muted); font-size: 12px; }
 .team-presence-schedule { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .team-presence-status { width: fit-content; padding: 5px 8px; border-radius: 9px; color: var(--ws-muted); background: var(--ws-muted-surface); font-size: 12px; font-weight: 600; }
 .team-presence-status.is-working { color: #276a52; background: #e7f5ee; }
 .team-presence-status.is-approved_absence { color: #705a1a; background: #fff3d8; }
 .team-presence-weekend { grid-column: 2 / -1; color: var(--ws-link); }
-.team-presence-empty { margin: 0; padding: 24px 4px; color: var(--ws-muted); }
+.team-presence-empty { grid-column: 1 / -1; margin: 0; padding: 12px 4px 0; color: var(--ws-muted); font-size: 14px; line-height: 1.5; }
 .team-presence-error { margin: 12px 0; color: #9b3048; font-size: 13px; }
 .workday-schedule-dialog .fui-DialogContent p { color: var(--ws-muted); }
 .workday-schedule-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 18px; }
 
-@media (max-width: 1150px) {
-  .team-presence-person { grid-template-columns: 36px minmax(130px, 1.5fr) minmax(120px, 1fr) minmax(90px, .7fr) auto; }
-  .team-presence-schedule { grid-column: 2 / 4; }
-  .team-presence-weekend { grid-column: 4 / -1; }
+@container team-presence (max-width: 900px) {
+  .team-presence-people { grid-template-columns: 36px minmax(0, 1fr) 150px 104px 72px; }
+  .team-presence-actions { grid-column: 5; }
+  .team-presence-schedule { grid-column: 2 / 4; grid-row: 2; }
+  .team-presence-weekend { grid-column: 4 / -1; grid-row: 2; }
 }
 @media (max-width: 800px) {
   .workday-control .fui-Button { padding-inline: 8px; }
+  .team-presence-panel { padding-inline: 16px; }
   .team-presence-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .team-presence-person { grid-template-columns: 36px minmax(0, 1fr) auto; }
-  .team-presence-status, .team-presence-times, .team-presence-schedule { grid-column: 2 / -1; }
-  .team-presence-person .fui-Button { grid-column: 3; grid-row: 1; }
-  .team-presence-weekend { grid-column: 2 / -1; }
+}
+@container team-presence (max-width: 600px) {
+  .team-presence-people { grid-template-columns: 36px minmax(0, 1fr) 72px; }
+  .team-presence-actions { grid-column: 3; }
+  .team-presence-status { grid-column: 2 / -1; grid-row: 2; }
+  .team-presence-times { grid-column: 2 / -1; grid-row: 3; }
+  .team-presence-schedule { grid-column: 2 / -1; grid-row: 4; }
+  .team-presence-weekend { grid-column: 2 / -1; grid-row: 5; }
 }
 @media (forced-colors: active) {
   .team-presence-status, .team-presence-count { border: 1px solid CanvasText; }

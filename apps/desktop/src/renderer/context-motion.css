@@ -1,0 +1,9 @@
+/* Presence / scope / people share an explicit 12 px vertical rhythm. */
+.team-dashboard > .employee-scope-switch { margin-top: 12px; }
+.team-dashboard > .employee-scope-switch > button { flex: none; white-space: nowrap; }
+.team-dashboard > .team-focus-strip { padding-top: 0; margin-top: 12px; }
+.team-dashboard > .team-presence-panel + .team-focus-strip { margin-top: 12px; }
+
+/* WAAPI is bound to native toggle, so hidden details reliably replay entry.
+   Native disclosure, drafts and focus remain owned by the existing form. */
+.record-disclosure > .record-disclosure-body { animation: none; }

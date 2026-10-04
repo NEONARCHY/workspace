@@ -9,6 +9,7 @@ import type {
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { useContextMotion } from "./useContextMotion";
 import { Button, Input, Switch } from "@fluentui/react-components";
 import {
   AlertOn24Regular,
@@ -92,6 +93,7 @@ export function NotificationCenter({
   const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "attention");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
+  const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [testingNotification, setTestingNotification] = useState(false);
   const [testStatus, setTestStatus] = useState<{ readonly message: string; readonly error: boolean }>();
@@ -240,7 +242,7 @@ export function NotificationCenter({
               ))}
             </SlidingSegmented>
           </div>
-          <div className="notification-stream" aria-live="polite">
+          <div className="notification-stream" aria-live="polite" ref={streamMotion}>
           {visible.length === 0 ? (
             <div className="notification-empty">
               <CheckmarkCircle24Regular />
