@@ -21,7 +21,9 @@ async def test_settings_round_trip_audit_permissions_and_profile_visibility() ->
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     # This global-setting test must never run against the LAN application's database.
-    assert (make_url(database_url).database or "").startswith("yuksalish_recognition_qa_")
+    assert (make_url(database_url).database or "").startswith(
+        ("yuksalish_test", "yuksalish_recognition_qa_")
+    )
     signing_key = SecretStr("recognition-settings-test-signing-key")
     app = create_app(Settings(
         environment="test", database_url=database_url, seed_demo_data=False,
@@ -33,6 +35,11 @@ async def test_settings_round_trip_audit_permissions_and_profile_visibility() ->
         AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client,
     ):
         async with app.state.database_engine.begin() as connection:
+            original_settings = [dict(row) for row in (
+                await connection.execute(select(recognition_settings).where(
+                    recognition_settings.c.id == 1
+                ))
+            ).mappings()]
             now = datetime.now(UTC)
             await connection.execute(insert(users), [
                 {"id": user_id, "username": f"settings-{user_id.hex[:12]}",
@@ -78,7 +85,11 @@ async def test_settings_round_trip_audit_permissions_and_profile_visibility() ->
                 assert value is False
         finally:
             async with app.state.database_engine.begin() as connection:
-                await connection.execute(delete(recognition_settings))
+                await connection.execute(delete(recognition_settings).where(
+                    recognition_settings.c.id == 1
+                ))
+                if original_settings:
+                    await connection.execute(insert(recognition_settings), original_settings)
                 await connection.execute(delete(audit_events).where(
                     audit_events.c.actor_user_id.in_([admin_id, employee_id])
                 ))

@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -59,6 +60,7 @@ async def exercise(url: str) -> None:
                         role="user",
                         model="flash-lite",
                         content="Legacy test conversation",
+                        created_at=datetime.now(UTC),
                     )
                 )
             first_list = (await client.get("/api/v1/assistant/chats", headers=owner)).json()
@@ -81,6 +83,7 @@ async def exercise(url: str) -> None:
                             model="flash-lite",
                             content=f"Test chat {index}",
                             references=[{"label": "Temporary reference"}],
+                            created_at=datetime.now(UTC),
                         )
                     )
             for index, chat_id in enumerate(created_ids):

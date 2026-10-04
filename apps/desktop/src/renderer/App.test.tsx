@@ -1910,17 +1910,18 @@ describe("corporate workspace authentication alpha", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the new project sections while hiding legacy projects and payments", async () => {
+  it("shows project sections and payments while hiding legacy projects and collapsed AI links", async () => {
     mockServer();
     render(<App />);
     await loginToWorkspace();
 
     const navigation = screen.getByRole("navigation");
-    const labels = Array.from(navigation.querySelectorAll("button")).map((button) =>
+    const labels = within(navigation).getAllByRole("button").map((button) =>
       button.getAttribute("aria-label"),
     );
     expect(labels).toEqual([
       "Задачи",
+      "Заявки на оплату",
       "ИИ-модули",
       "Лента",
       "Проекты",
