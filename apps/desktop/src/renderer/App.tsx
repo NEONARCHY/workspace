@@ -2242,6 +2242,7 @@ export function App() {
                 people={workspace.people}
                 requests={workspace.absenceRequests}
                 summary={workspace.presenceSummary}
+                token={session.accessToken}
                 canAdmin={modulePermissions.absences?.admin === true}
                 onCreate={handleCreateAbsence}
                 onAction={handleAbsenceAction}

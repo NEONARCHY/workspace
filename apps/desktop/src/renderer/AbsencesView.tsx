@@ -1,14 +1,14 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, AssistantActionDraft, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Textarea } from "@fluentui/react-components";
+import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Add24Regular, CalendarLtr24Regular, Checkmark24Regular, Dismiss24Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
+import { PresenceSummaryDialog, presenceStatusLabels as statusLabels } from "./PresenceSummaryDialog";
 
 const labels: Record<AbsenceKind, string> = { vacation: "Отпуск", personal_time: "Отгул / личное отсутствие", late_arrival: "Опоздание", sick_leave: "Больничный", business_event: "Конференция / мероприятие" };
-const statusLabels: Record<string, string> = { working: "На работе", trip: "В поездке", vacation: "В отпуске", personal_time: "Отсутствует", late_arrival: "Опаздывает", sick_leave: "Болеет", business_event: "На мероприятии" };
 
 interface Props {
   readonly assistantDraft?: AssistantActionDraft;
@@ -17,6 +17,7 @@ interface Props {
   readonly requests: readonly AbsenceRequest[];
   readonly summary: readonly PresenceSummaryItem[];
   readonly canAdmin: boolean;
+  readonly token?: string;
   readonly onCreate: (payload: AbsenceRequestInput) => Promise<AbsenceRequest | undefined>;
   readonly onAction: (request: AbsenceRequest, action: AbsenceAction, comment?: string) => Promise<AbsenceRequest | undefined>;
   readonly onUploadDocument: (requestId: string, file: File) => Promise<void>;
@@ -28,7 +29,10 @@ function assistantInputDate(value: string | undefined, defaultTime: string): str
   return value.length === 10 ? `${value}T${defaultTime}` : value.slice(0, 16);
 }
 
-export function AbsencesView({ currentUserId, people, requests, summary, canAdmin, onCreate, onAction, onUploadDocument, assistantDraft }: Props) {
+export function AbsencesView({ currentUserId, people, requests, summary, canAdmin, token, onCreate, onAction, onUploadDocument, assistantDraft }: Props) {
+  const [presenceStatus, setPresenceStatus] = useState<PresenceSummaryItem["status"]>("working");
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const summaryFocusTarget = useRestoreFocusTarget();
   const frameRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const frame = frameRef.current;
@@ -79,7 +83,8 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
   const name = (id: string) => people.find(person => person.id === id)?.name ?? "Сотрудник";
   return <section ref={frameRef} className="workspace-view absences-view" aria-label="Отсутствия">
     <header className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Заявите об отсутствии, опоздании или больничном — руководитель сразу получит уведомление.</p></div><Button appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></header>
-    {canAdmin ? <section className="absence-summary" aria-label="Сводка присутствия">{Object.entries(statusLabels).map(([key, label]) => <div key={key} data-presence-status={key}><strong>{counts[key] ?? 0}</strong><span>{label}</span></div>)}</section> : null}
+    {canAdmin ? <section className="absence-summary" aria-label="Сводка присутствия">{(Object.keys(statusLabels) as PresenceSummaryItem["status"][]).map(key => <button type="button" key={key} {...summaryFocusTarget} data-presence-status={key} aria-label={`${statusLabels[key]}: ${counts[key] ?? 0}. Открыть список сотрудников`} aria-haspopup="dialog" aria-expanded={presenceOpen && presenceStatus === key} onClick={() => { setPresenceStatus(key); setPresenceOpen(true); }}><strong>{counts[key] ?? 0}</strong><span>{statusLabels[key]}</span></button>)}</section> : null}
+    {canAdmin ? <PresenceSummaryDialog open={presenceOpen} status={presenceStatus} summary={summary} requests={requests} people={people} token={token} onClose={() => setPresenceOpen(false)} /> : null}
     <div className="absence-canvas"><section className="absence-column"><header><span>Личный контур</span><h2>Мои заявки</h2></header>{own.length ? own.map(item => <AbsenceCard key={item.id} item={item} personId={item.directManagerUserId} name={name(item.directManagerUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><CalendarLtr24Regular /><p>Заявок пока нет</p><span>Новое отсутствие появится здесь после отправки.</span></div>}</section>
       <section className="absence-column"><header><span>Команда</span><h2>Требуют решения</h2></header>{team.length ? team.map(item => <AbsenceCard key={item.id} item={item} personId={item.requesterUserId} name={name(item.requesterUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><Checkmark24Regular /><p>Очередь свободна</p><span>Новых решений от команды сейчас нет.</span></div>}</section>
       {canAdmin && summary.length ? <section className="absence-column absence-presence"><header><span>Организация</span><h2>Сегодня</h2></header>{summary.map(item => <button type="button" key={item.userId}><span className={`absence-presence-dot is-${item.status}`} /><EmployeeProfileLink userId={item.userId} personName={name(item.userId)}><strong>{name(item.userId)}</strong></EmployeeProfileLink><small>{statusLabels[item.status] ?? item.status}</small></button>)}</section> : null}

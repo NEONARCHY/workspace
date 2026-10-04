@@ -51,6 +51,7 @@ import "./list-row-hover.css";
 import "./workspace-calendar.css";
 import "./confirm-action-dialog.css";
 import "./context-motion.css";
+import "./presence-summary-dialog.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

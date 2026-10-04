@@ -579,7 +579,9 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 
 .absences-view { display: grid; gap: 18px; align-content: start; }
 .absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(144px, 1fr)); gap: 10px; }
-.absence-summary > div { --ws-presence-accent: var(--ws-turquoise); display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 96px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--ws-presence-accent) 22%, transparent), color-mix(in srgb, var(--ws-presence-accent) 9%, transparent) 48%, transparent), #fcfefe; box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
+.absence-summary > button { --ws-presence-accent: var(--ws-turquoise); display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 96px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--ws-presence-accent) 22%, transparent), color-mix(in srgb, var(--ws-presence-accent) 9%, transparent) 48%, transparent), #fcfefe; box-shadow: 0 8px 22px rgb(41 58 85 / 7%); font: inherit; text-align: left; cursor: pointer; transition: border-color 160ms var(--ws-ease); }
+.absence-summary > button:hover { border-color: var(--ws-presence-accent); }
+.absence-summary > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
 .absence-summary > [data-presence-status="working"] { --ws-presence-accent: #69ae82; }
 .absence-summary > [data-presence-status="trip"] { --ws-presence-accent: var(--ws-turquoise); }
 .absence-summary > [data-presence-status="vacation"] { --ws-presence-accent: #e2b25d; }
@@ -588,7 +590,7 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .absence-summary > [data-presence-status="sick_leave"] { --ws-presence-accent: #c97a88; }
 .absence-summary > [data-presence-status="business_event"] { --ws-presence-accent: #6793b5; }
 @media (forced-colors: active) {
-  .absence-summary > div { background: Canvas; border-color: CanvasText; }
+  .absence-summary > button { background: Canvas; border-color: CanvasText; }
 }
 .absence-summary strong { display: block; font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
 .absence-summary span { color: var(--ws-text, #293a55); font-size: 16px; font-weight: 500; line-height: 1.35; overflow-wrap: normal; }
