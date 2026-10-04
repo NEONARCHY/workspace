@@ -27,7 +27,7 @@ body :is(
   .record-summary-note, .task-team-lead, .task-composer-dependencies > div,
   .trip-purpose, .feed-reply-context,
   .message-quote, .assistant-message-quote, .assistant-reply-target,
-  .zoom-notice, .account-profile-anchor .account-section,
+  .zoom-notice, :where(.account-profile-anchor:not(.account-settings-redesigned)) .account-section,
   .notifications-view .notification-row,
   :where(.notifications-view .notification-metrics > button.active),
   .project-hub-project.selected, .project-hub-funding-card.selected,
@@ -66,7 +66,7 @@ html body .app-provider :is(.approval-deadline-control:not(.deadline-attention, 
 html body .app-provider :is(.eff-history-note, .notification-settings-note, .calendar-event-pill.general,
   .calendar-agenda-card.general) { --ws-surface-accent: #6793b5; }
 html body .app-provider :is(.calendar-event-pill.trip, .calendar-agenda-card.trip) { --ws-surface-accent: #8178bb; }
-html body .app-provider .account-profile-anchor .account-section { --ws-surface-accent: var(--account-section-accent, #82bec4); }
+html body .app-provider .account-profile-anchor:not(.account-settings-redesigned) .account-section { --ws-surface-accent: var(--account-section-accent, #82bec4); }
 html body .app-provider .feed-card.pinned { --ws-surface-accent: #74b5af; }
 
 /* Priority is a surface wash, never an inset shadow: hover, selection and
@@ -85,7 +85,7 @@ html body .app-provider :is(.calendar-event-pill, .calendar-agenda-card,
   .notification-settings-note, .team-dash-data-note, .record-summary-note,
   .task-team-lead, .task-composer-dependencies > div, .trip-purpose,
   .feed-reply-context, .feed-card.pinned, .message-quote, .assistant-message-quote,
-  .zoom-notice, .account-profile-anchor .account-section) {
+  .zoom-notice, :where(.account-profile-anchor:not(.account-settings-redesigned)) .account-section) {
   border-left-color: transparent;
 }
 body .tasks-view .task-record-signal { visibility: hidden; }

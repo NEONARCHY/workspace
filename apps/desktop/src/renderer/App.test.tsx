@@ -1432,7 +1432,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
-    const board = screen.getByLabelText("Kanban задач");
+    const board = screen.getByLabelText("Kanban задач: горизонтальная прокрутка");
     expect(board).toBeInTheDocument();
     expect(board.querySelectorAll(".kanban-column")).toHaveLength(5);
     expect(screen.getByLabelText("Новые: задачи")).toHaveAttribute("tabindex", "0");

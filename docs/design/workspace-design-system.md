@@ -22,6 +22,15 @@ Design read: light enterprise workspace for daily staff use, restrained Fluent U
 
 ## Tokens and components
 
+### Account settings — 2026-10-04
+
+Account settings deliberately opt out of the previous semantic section washes.
+White working forms, a quiet canvas and separate personal/administrative
+navigation establish hierarchy; accent is reserved for selection and truthful
+security statuses. Hidden pages preserve drafts. Container queries adapt the
+navigation to the real available width, including CSS zoom. See
+[account-settings-redesign.md](account-settings-redesign.md).
+
 - Palette: navy ink, cool neutral canvas, white surfaces, turquoise accent. Solid surfaces; no expensive backdrop filters over work areas.
 - Typography: **Gilroy** Regular (400), Medium (500), SemiBold (600) and Bold (700), bundled locally; Segoe UI is a fallback only during loading. 14 px body, 12 px supporting text, 24-28 px screen titles. Tabular digits for money, dates and counters. Original TTFs copied from the owner's installed Windows fonts, with no download or conversion. Font licensing is not independently certified by this UI audit; the organisation remains responsible for distribution rights.
 - Spacing: 4/8/12/16/24/32 px; desktop section gutters 24 px, compact 12-16 px.
