@@ -1,7 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FluentProvider } from "@fluentui/react-components";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
+import { workspaceTheme } from "./workspace-theme";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
 vi.mock("thinking-orbs", () => ({
@@ -94,7 +96,8 @@ describe("YuksalishAssistant", () => {
     vi.mocked(clearAssistantChat).mockImplementationOnce(() => new Promise<void>((_, reject) => {
       rejectClear = reject;
     })).mockResolvedValue(undefined);
-    render(<YuksalishAssistant token="test-token" />);
+    // Match App's provider boundary for Fluent's portal, focus and motion lifecycle.
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test-token" /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("Переписка для очистки");
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
@@ -105,8 +108,11 @@ describe("YuksalishAssistant", () => {
     // Wait for Fluent's exit presence, not only its hidden accessibility state.
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Очистить чат" }));
     const confirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
+    fireEvent.click(within(confirmation).getByRole("button", { name: "Очистить чат" }));
+    expect(confirmation).toBeInTheDocument();
+    expect(confirmation).toHaveAccessibleName("Очистить текущий чат?");
+    expect(confirmation).not.toHaveAttribute("aria-hidden", "true");
     expect(within(confirmation).getByRole("button", { name: "Очищаем…" })).toBeDisabled();
     expect(within(confirmation).getByRole("button", { name: "Отмена" })).toBeDisabled();
     expect(confirmation).toHaveAttribute("aria-busy", "true");
