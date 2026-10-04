@@ -26,10 +26,15 @@ describe("recognition preparation", () => {
     expect(options?.root).toBe(document.querySelector(".fui-DialogContent"));
     expect(options?.rootMargin).toBe("240px 0px");
     const target = screen.getByRole("button");
-    act(() => callback([{ isIntersecting: false, target } as IntersectionObserverEntry], observer));
+    const entry = (isIntersecting: boolean): IntersectionObserverEntry => ({
+      isIntersecting, target, boundingClientRect: target.getBoundingClientRect(),
+      intersectionRect: target.getBoundingClientRect(), intersectionRatio: isIntersecting ? 1 : 0,
+      rootBounds: null, time: 0,
+    });
+    act(() => callback([entry(false)], observer));
     act(() => vi.advanceTimersByTime(100));
     expect(screen.getByRole("button")).toHaveTextContent("Copy without expensive layers");
-    act(() => callback([{ isIntersecting: true, target } as IntersectionObserverEntry], observer));
+    act(() => callback([entry(true)], observer));
     act(() => vi.advanceTimersByTime(100));
     expect(screen.getByRole("button")).toHaveTextContent("Prepared");
     cleanup(); expect(disconnect).toHaveBeenCalled();
