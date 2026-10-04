@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
+import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   Comment24Regular,
   Pin24Filled,
@@ -65,6 +65,7 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: 
 }
 
 export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false }: FeedViewProps) {
+  const deleteFocusTarget = useRestoreFocusTarget();
   const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
   const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -189,6 +190,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   ) : null}
                   {post.canDelete ? (
                     <Button
+                      {...deleteFocusTarget}
                       appearance="subtle"
                       size="small"
                       icon={<Delete24Regular />}
@@ -246,7 +248,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
                               <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
-                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
+                              {item.canDelete ? <Button {...deleteFocusTarget} className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
                             </span>
                           </span>
                         </div>

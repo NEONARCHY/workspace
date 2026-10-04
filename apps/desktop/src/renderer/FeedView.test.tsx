@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -32,5 +32,21 @@ describe("birthday greeting access", () => {
   it("shows AI greeting controls to employees with assistant access", () => {
     view(true);
     expect(screen.getByRole("button", { name: "Сгенерировать поздравление для коллеги" })).toBeInTheDocument();
+  });
+
+  it("requires confirmation to delete a comment and keeps it intact on cancellation", () => {
+    const post: FeedPost = { ...birthday, systemKind: null, comments: [{ id: "comment-test", authorUserId: "employee-1", body: "Сохранить этот комментарий", canDelete: true, createdAt: birthday.createdAt }] };
+    const onDeleteComment = vi.fn();
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[post]} people={[]} token="token" currentUserId="employee-1"
+      onCreate={vi.fn()} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={onDeleteComment} onPin={vi.fn()} onDelete={vi.fn()}
+    /></FluentProvider>);
+    const trigger = screen.getByRole("button", { name: "Удалить комментарий" });
+    expect(trigger).toHaveAttribute("data-tabster");
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: "Удалить комментарий?" });
+    expect(onDeleteComment).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(screen.getByText("Сохранить этот комментарий")).toBeInTheDocument();
+    expect(onDeleteComment).not.toHaveBeenCalled();
   });
 });
