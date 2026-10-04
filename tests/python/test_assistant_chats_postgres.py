@@ -82,7 +82,11 @@ async def exercise(url: str) -> None:
                             role="user",
                             model="flash-lite",
                             content=f"Test chat {index}",
-                            references=[{"label": "Temporary reference"}],
+                            references=[{
+                                "label": "Temporary reference",
+                                "section": "tasks",
+                                "entityId": None,
+                            }],
                             created_at=datetime.now(UTC),
                         )
                     )

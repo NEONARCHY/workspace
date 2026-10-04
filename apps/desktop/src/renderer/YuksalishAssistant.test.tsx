@@ -99,11 +99,16 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(clearAssistantChat).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Очистить текущий чат?" })).not.toBeInTheDocument());
+    // Wait for Fluent's exit presence, not only its hidden accessibility state.
+    await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
     fireEvent.click(await screen.findByRole("button", { name: "Очистить чат" }));
     await screen.findByText("Сбой очистки");
+    expect(clearAssistantChat).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Переписка для очистки")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Очистить чат" }));
+    const retryButton = await screen.findByRole("button", { name: "Очистить чат" });
+    await waitFor(() => expect(retryButton).toBeEnabled());
+    fireEvent.click(retryButton);
     await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
     expect(clearAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
     expect(screen.getByRole("option", { name: "Первый чат" })).toBeInTheDocument();
