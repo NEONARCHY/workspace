@@ -1,10 +1,12 @@
 /* Standalone schedule only; the task calendar owns its separate layout. */
 .calendar-view:not(.task-calendar-embedded) {
-  padding-right: 20px;
+  /* Include an actual native scrollbar in the total visible edge clearance. */
+  padding-right: max(0px, calc(20px - var(--ws-calendar-scrollbar-inset, 0px)));
+  column-gap: 20px;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-main {
   padding-bottom: 0;
-  padding-right: 20px;
+  padding-right: 0;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-board {
   row-gap: 8px;
@@ -26,6 +28,8 @@
   margin: 0;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-side {
+  padding: 0;
+  scrollbar-gutter: auto;
   background: transparent;
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
@@ -55,11 +59,11 @@
   flex-wrap: wrap;
 }
 @container workspace (max-width: 1100px) {
-  .calendar-view:not(.task-calendar-embedded) { padding-right: 0; }
   .calendar-view:not(.task-calendar-embedded) {
     /* Fill the visible workspace before the agenda continues below it.
        Short windows still scroll rather than squeezing the day cells. */
     grid-template-rows: max(720px, 100%) auto;
+    row-gap: 20px;
   }
   .calendar-view:not(.task-calendar-embedded) .calendar-main {
     height: 100%;
@@ -68,9 +72,9 @@
     position: fixed;
     z-index: 30;
     top: 80px;
-    right: 12px;
+    right: 20px;
     bottom: 14px;
-    width: min(360px, calc(100vw - 24px));
+    width: min(360px, calc(100vw - 40px));
     height: auto;
     margin: 0;
     border: 0;
@@ -80,11 +84,8 @@
     grid-template-rows: max(720px, 100%);
   }
   .calendar-view:not(.task-calendar-embedded) .calendar-main {
-    padding-right: var(--ws-view-edge);
+    padding-right: 0;
   }
-}
-@media (max-width: 1100px) {
-  .calendar-view:not(.task-calendar-embedded) .calendar-main { padding-right: 16px; }
 }
 @media (forced-colors: active) {
   .calendar-view:not(.task-calendar-embedded) :is(.calendar-day-summary, .calendar-detail) {

@@ -26,22 +26,27 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     const container = containerRef.current;
     if (!container) return;
     const update = () => {
-      const slotHeight = 50;
+      // Collapsed icons are taller than labelled rows. Fit the actual hit target,
+      // including the gap, rather than letting More overflow into the profile.
+      const action = container.querySelector<HTMLElement>(":scope > .rail-slot > .rail-action, :scope > .rail-action");
+      const actionHeight = action?.offsetHeight || 45;
+      const gap = Number.parseFloat(getComputedStyle(container).rowGap) || 5;
+      const slotHeight = actionHeight + gap;
       if (container.clientHeight <= 0) {
         setVisibleCount(items.length);
         return;
       }
       const heights = items.map((item) => slotHeight + (item.key === expandedItem?.key ? expandedItem.height : 0));
-      if (heights.reduce((total, height) => total + height, 0) <= container.clientHeight) {
+      if (heights.reduce((total, height) => total + height, 0) - gap <= container.clientHeight) {
         setVisibleCount(items.length);
         return;
       }
-      let used = slotHeight; // Reserve the More button before fitting the prefix.
+      let used = actionHeight; // Reserve More, with no unused trailing gap.
       let count = 0;
       while (count < items.length && used + heights[count]! <= container.clientHeight) used += heights[count++]!;
       // Never unmount the expanded trigger while moving the items below it to More.
       const expandedIndex = items.findIndex((item) => item.key === expandedItem?.key);
-      const collapsedCapacity = Math.max(0, Math.floor(container.clientHeight / slotHeight) - 1);
+      const collapsedCapacity = Math.max(0, Math.floor((container.clientHeight + gap) / slotHeight) - 1);
       if (expandedIndex >= 0 && expandedIndex < collapsedCapacity) count = Math.max(count, expandedIndex + 1);
       setVisibleCount(count);
     };

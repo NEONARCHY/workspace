@@ -568,9 +568,19 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 
 .absences-view { display: grid; gap: 18px; align-content: start; }
 .absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
-.absence-summary > div { min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(135deg, #fff, #f2fafb); box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
+.absence-summary > div { --ws-presence-accent: var(--ws-turquoise); min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--ws-presence-accent) 22%, transparent), color-mix(in srgb, var(--ws-presence-accent) 9%, transparent) 48%, transparent), #fcfefe; box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
+.absence-summary > [data-presence-status="working"] { --ws-presence-accent: #69ae82; }
+.absence-summary > [data-presence-status="trip"] { --ws-presence-accent: var(--ws-turquoise); }
+.absence-summary > [data-presence-status="vacation"] { --ws-presence-accent: #e2b25d; }
+.absence-summary > [data-presence-status="personal_time"] { --ws-presence-accent: var(--ws-accent-neutral, #8ca5b7); }
+.absence-summary > [data-presence-status="late_arrival"] { --ws-presence-accent: #a292c9; }
+.absence-summary > [data-presence-status="sick_leave"] { --ws-presence-accent: #c97a88; }
+.absence-summary > [data-presence-status="business_event"] { --ws-presence-accent: #6793b5; }
+@media (forced-colors: active) {
+  .absence-summary > div { background: Canvas; border-color: CanvasText; }
+}
 .absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
-.absence-summary span { color: var(--ws-muted, #607086); font-size: 12px; }
+.absence-summary span { color: var(--ws-text, #293a55); font-size: 12px; }
 .absences-view { position: relative; display: flex; min-height: 0; flex-direction: column; gap: 14px; }
 .absences-view .record-header { display: flex; min-height: 0; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 0; }
 .absences-view .record-header > div { flex: 1 1 280px; }

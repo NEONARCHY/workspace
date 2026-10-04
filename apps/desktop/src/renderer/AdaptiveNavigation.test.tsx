@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
 
@@ -18,6 +18,7 @@ describe("AdaptiveNavigation overflow", () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     if (originalClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);
     else Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
   });
@@ -64,5 +65,17 @@ describe("AdaptiveNavigation overflow", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(more).toHaveAttribute("aria-expanded", "false");
     expect(more).toHaveFocus();
+  });
+  it("reserves More using the actual taller collapsed button height", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(48);
+    render(<AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);
+    expect(screen.getByRole("button", { name: "Ещё, 3 разделов" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Первый" })).not.toBeInTheDocument();
+  });
+  it.each([[153, true], [154, false]])("fits the precise row/gap boundary at %i px", (height, overflow) => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(48);
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => height });
+    render(<AdaptiveNavigation items={items} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);
+    expect(Boolean(screen.queryByRole("button", { name: /Ещё/ }))).toBe(overflow);
   });
 });

@@ -1894,7 +1894,7 @@ export function App() {
               );
             }} />}
           <div className="rail-bottom">
-            <button className="rail-profile" type="button" aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
+            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${workspace.currentUser.name}`} aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
               <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
               <span>{workspace.currentUser.name}</span>
             </button>

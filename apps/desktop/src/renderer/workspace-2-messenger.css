@@ -6,7 +6,7 @@
   position: relative;
   grid-template-columns: clamp(310px, 25vw, 382px) minmax(0, 1fr);
   gap: 12px;
-  padding: 4px 4px 0;
+  padding: 4px 20px 0 4px;
   overflow: hidden;
   background:
     radial-gradient(circle at 72% -12%, rgb(101 200 197 / 9%), transparent 34%),
@@ -691,7 +691,7 @@
 }
 
 @media (max-width: 760px) {
-  .messenger-view { display: block; padding: 0; }
+  .messenger-view { display: block; padding: 0 20px 0 0; }
   .messenger-view .list-pane,
   .messenger-view .conversation-pane { height: 100%; border-radius: 0; }
   .messenger-view.conversation-open .list-pane { display: none; }

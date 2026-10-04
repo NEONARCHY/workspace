@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type {
   CalendarEvent,
@@ -200,6 +200,23 @@ export function CalendarView({
   const lastChatDraftKey = useRef<string | undefined>(undefined);
   const nextPreparedTaskKey = useRef(1);
   const sideRef = useRef<HTMLElement>(null);
+  const frameRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => {
+      const style = getComputedStyle(frame);
+      const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
+      const inset = `${Math.max(0, frame.offsetWidth - frame.clientWidth - borders)}px`;
+      if (frame.style.getPropertyValue("--ws-calendar-scrollbar-inset") !== inset) {
+        frame.style.setProperty("--ws-calendar-scrollbar-inset", inset);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
   const selectedDayIsPast = isPastDay(selectedDay);
@@ -558,7 +575,7 @@ export function CalendarView({
   };
 
   return (
-    <section className="workspace-view calendar-view" aria-label="Календарь">
+    <section ref={frameRef} className="workspace-view calendar-view" aria-label="Календарь">
       <div className="calendar-main">
         <header className="calendar-toolbar">
           <div className="calendar-title">
