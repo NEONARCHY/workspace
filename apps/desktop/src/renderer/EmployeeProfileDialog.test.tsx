@@ -8,6 +8,7 @@ import {
   issueEmployeeReward,
   loadEmployeeRecognitionProfile,
   loadWorkspaceEfficiency,
+  loadPersonalEfficiency,
 } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
 import { clearProfilePreload, loadPreparedProfile } from "./profile-preload";
@@ -16,6 +17,7 @@ vi.mock("./workspace-api", () => ({
   issueEmployeeReward: vi.fn(),
   loadEmployeeRecognitionProfile: vi.fn(),
   loadWorkspaceEfficiency: vi.fn(),
+  loadPersonalEfficiency: vi.fn(),
   loadProfileAvatar: vi.fn(),
 }));
 
@@ -109,6 +111,21 @@ function renderProfile(value: EmployeeRecognitionProfile = profile, options: {
 }
 
 describe("EmployeeProfileDialog", () => {
+  it("offers personal efficiency only in the own profile and loads it on demand", async () => {
+    renderProfile(profile, { currentUserId: "baxtiyor" });
+    const button = await screen.findByRole("button", { name: "Моя эффективность" });
+    expect(loadPersonalEfficiency).not.toHaveBeenCalled();
+    vi.mocked(loadPersonalEfficiency).mockRejectedValue(new Error("Нет соединения"));
+    fireEvent.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет соединения");
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "К профилю" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Моя эффективность" })).toHaveFocus());
+    cleanup(); clearProfilePreload();
+    renderProfile(profile, { currentUserId: "manager" });
+    await screen.findByRole("heading", { name: "Бахтиёр Самугов" });
+    expect(screen.queryByRole("button", { name: "Моя эффективность" })).not.toBeInTheDocument();
+  });
   it("measures pinned header clearance, adapts to unpinned layout and cleans up observers", async () => {
     const observers: { callback: ResizeObserverCallback; observer: ResizeObserver; targets: Set<Element> }[] = [];
     class HeaderResizeObserver extends ResizeObserver {

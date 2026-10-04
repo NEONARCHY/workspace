@@ -56,6 +56,7 @@ import type {
   DirectoryBootstrap,
   DirectoryEmployee,
   EfficiencyOverview,
+  PersonalEfficiency,
   EmployeeRecognitionProfile,
   EmployeeReward,
   EmployeeRewardInput,
@@ -1411,6 +1412,11 @@ export function acceptWorkspaceTaskResult(
     { method: "POST" },
     token,
   );
+}
+
+export function loadPersonalEfficiency(token: string, period?: string): Promise<PersonalEfficiency> {
+  const suffix = period ? `?period=${encodeURIComponent(period)}` : "";
+  return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, {}, token);
 }
 
 export function loadWorkspaceEfficiency(

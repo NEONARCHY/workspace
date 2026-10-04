@@ -50,7 +50,7 @@ function Metric({ label, value, note, maximum, tone }: { readonly label: string;
   </div>;
 }
 
-function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency }) {
+export function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency }) {
   const score = Math.max(0, Math.min(100, employee.percentage ?? 0));
   const circumference = 2 * Math.PI * 67;
   const filled = circumference * score / 100;
@@ -66,7 +66,7 @@ function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency }) {
   </div>;
 }
 
-function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
+export function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
   const points = employee.history.filter((point) => point.percentage != null);
   if (points.length < 2) return <div className="eff-history-empty">
     <div className="eff-empty-chart" aria-hidden="true"><i /><i /><i /><i /><i /></div>
@@ -77,19 +77,19 @@ function HistoryChart({ employee }: { readonly employee: EmployeeEfficiency }) {
   const right = 618;
   const top = 18;
   const bottom = 164;
-  const chartPoints = points.map((point, index) => ({
+  const chartPoints = employee.history.map((point, index) => ({
     ...point,
-    x: points.length === 1 ? (left + right) / 2 : left + index * (right - left) / (points.length - 1),
+    x: employee.history.length === 1 ? (left + right) / 2 : left + index * (right - left) / (employee.history.length - 1),
     y: bottom - (point.percentage ?? 0) / 100 * (bottom - top),
   }));
-  const polyline = chartPoints.map((point) => `${point.x},${point.y}`).join(" ");
+  const path = chartPoints.map((point, index) => point.percentage == null ? "" : `${index === 0 || chartPoints[index - 1]!.percentage == null ? "M" : "L"}${point.x},${point.y}`).join(" ");
   return <>
     <div className="eff-history-chart" role="img" aria-label={`Динамика выполнения в срок: ${points.map((point) => `${monthLabel(point.period)} — ${point.percentage}%`).join("; ")}`}>
       <svg viewBox="0 0 640 210" aria-hidden="true">
         <defs><filter id="eff-line-glow" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="4" result="line-blur" /><feMerge><feMergeNode in="line-blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
         {[100, 75, 50, 25, 0].map((tick) => { const y = bottom - tick / 100 * (bottom - top); return <g key={tick}><line className="eff-chart-grid" x1={left} x2={right} y1={y} y2={y} /><text className="eff-chart-axis" x="4" y={y + 4}>{tick}%</text></g>; })}
-        <polyline className="eff-chart-line" points={polyline} />
-        {chartPoints.map((point) => <g key={point.period}>
+        <path className="eff-chart-line" d={path} />
+        {chartPoints.filter((point) => point.percentage != null).map((point) => <g key={point.period}>
           <circle className="eff-chart-dot-glow" cx={point.x} cy={point.y} r="8" />
           <circle className="eff-chart-dot" cx={point.x} cy={point.y} r="4" />
           <text className="eff-chart-value" x={point.x} y={Math.max(12, point.y - 12)} textAnchor="middle">{point.percentage}%</text>
@@ -106,7 +106,7 @@ function EmployeeSummary({ employee, title }: { readonly employee: EmployeeEffic
     { label: "Выполнено вовремя", value: employee.onTimeCount, tone: "success" as const },
     { label: "Просрочено", value: employee.overdueCount, tone: "danger" as const },
     { label: "Ожидает проверки", value: employee.awaitingReviewCount, tone: "review" as const },
-    { label: "Возвращено на доработку", value: employee.returnedForRevisionCount, note: "не снижает процент", tone: "revision" as const },
+    { label: "Возвращено на доработку", value: employee.returnedForRevisionCount, note: "отменяет зачёт предыдущей сдачи", tone: "revision" as const },
     { label: "Без срока", value: employee.noDueDateCount, note: "не входит в расчёт", tone: "neutral" as const },
     { label: "Исключено", value: employee.excludedCount, note: "по подтверждённой причине", tone: "excluded" as const },
   ];

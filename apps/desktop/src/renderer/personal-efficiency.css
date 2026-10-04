@@ -1,0 +1,49 @@
+.personal-efficiency { display: grid; gap: 16px; min-width: 0; color: var(--ws-text); container: personal-efficiency / inline-size; }
+.personal-eff-commandbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.personal-eff-commandbar label { display: grid; gap: 6px; min-width: 180px; margin-left: auto; font-size: 12px; }
+.personal-eff-commandbar .workspace-select .fui-Dropdown__button { white-space: nowrap; }
+.personal-eff-lead { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 28px; align-items: center; padding: 24px; border: 1px solid var(--ws-control-line); border-radius: 20px; background: linear-gradient(110deg, color-mix(in srgb, var(--ws-link) 15%, white), var(--ws-surface)); }
+.personal-eff-lead h2 { margin: 8px 0; font-size: 26px; overflow-wrap: anywhere; }
+.personal-eff-lead p { margin: 8px 0; }
+.personal-eff-lead small { display: block; margin-top: 12px; line-height: 1.6; }
+.personal-eff-metrics, .personal-eff-workload { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.personal-eff-metrics article, .personal-eff-workload > div { display: grid; gap: 8px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 14px; background: linear-gradient(100deg, color-mix(in srgb, var(--personal-tone, var(--ws-link)) 12%, white), var(--ws-surface)); }
+.personal-eff-metrics strong { font-size: 28px; font-variant-numeric: tabular-nums; }
+.personal-eff-metrics span, .personal-eff-workload span { font-size: 13px; }
+.personal-efficiency [data-tone=success], .personal-efficiency [data-status=completed] { --personal-tone: var(--ws-success, #286143); }
+.personal-efficiency [data-tone=danger] { --personal-tone: var(--ws-danger, #a3434d); }
+.personal-efficiency [data-tone=review], .personal-efficiency [data-status=review] { --personal-tone: var(--ws-warning, #875d13); }
+.personal-efficiency [data-status=new] { --personal-tone: var(--ws-link); }
+.personal-efficiency [data-status=in-progress] { --personal-tone: var(--ws-brand, #0091a8); }
+.personal-eff-panel { padding: 20px; min-width: 0; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.personal-eff-panel header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.personal-eff-panel h3 { margin: 0; font-size: 18px; }
+.personal-eff-panel header > span, .personal-eff-panel p { font-size: 13px; line-height: 1.6; color: var(--ws-muted); }
+.personal-eff-workload-bar { display: flex; overflow: hidden; height: 12px; gap: 3px; margin-bottom: 16px; border-radius: 8px; background: var(--ws-muted-surface); }
+.personal-eff-workload-bar i { background: var(--personal-tone, var(--ws-link)); }
+.personal-eff-workload strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+.personal-eff-task-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.personal-eff-task-list li { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 14px; border: 1px solid var(--ws-line); border-radius: 12px; background: linear-gradient(100deg, color-mix(in srgb, var(--personal-tone, var(--ws-link)) 8%, white), var(--ws-surface)); }
+.personal-eff-task-list li > div { display: grid; gap: 6px; min-width: 0; }
+.personal-eff-task-list strong, .personal-eff-task-list button { overflow-wrap: anywhere; text-align: left; font-weight: 600; }
+.personal-eff-task-list button { padding: 0; border: 0; background: transparent; color: var(--ws-link); font: inherit; font-weight: 600; cursor: pointer; }
+.personal-eff-task-list button:hover { text-decoration: underline; }
+.personal-eff-task-list :is(span, small, time) { font-size: 12px; line-height: 1.5; }
+.personal-eff-task-list time { flex: none; color: var(--ws-muted); }
+.personal-eff-notice { padding: 10px 14px; border-radius: 10px; background: var(--ws-muted-surface); font-size: 13px; line-height: 1.6; }
+.personal-eff-method summary { cursor: pointer; font-weight: 600; }
+.personal-eff-loading { min-height: 240px; display: grid; place-items: center; }
+.personal-eff-error { padding: 24px; border: 1px solid var(--ws-line); border-radius: 16px; }
+@container personal-efficiency (max-width: 650px) {
+  .personal-eff-commandbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .personal-eff-commandbar > button { justify-self: start; }
+  .personal-eff-commandbar > button:last-child { justify-self: end; }
+  .personal-eff-commandbar label { grid-column: 1 / -1; order: 2; margin-left: 0; min-width: 0; }
+  .personal-eff-lead { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .personal-eff-lead > .eff-gauge { justify-self: center; }
+  .personal-eff-metrics, .personal-eff-workload { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .personal-eff-panel { padding: 14px; }
+}
+@media (forced-colors: active) {
+  .personal-eff-lead, .personal-eff-metrics article, .personal-eff-workload > div, .personal-eff-task-list li { background: Canvas; border-color: CanvasText; }
+}

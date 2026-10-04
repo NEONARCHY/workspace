@@ -41,7 +41,7 @@ from yuksalish_api.auth import (
     require_user,
 )
 from yuksalish_api.database import get_connection
-from yuksalish_api.efficiency_service import load_efficiency_overview
+from yuksalish_api.efficiency_service import load_efficiency_overview, load_personal_efficiency
 from yuksalish_api.events import WorkspaceEventBus
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
@@ -132,6 +132,7 @@ from yuksalish_api.workspace_schemas import (
     NotificationPreferencesResponse,
     NotificationPreferencesUpdate,
     NotificationResponse,
+    PersonalEfficiencyResponse,
     PinFeedPostRequest,
     ProfileAvatarResponse,
     ProjectResponse,
@@ -247,6 +248,19 @@ async def efficiency_overview(
     try:
         result = await load_efficiency_overview(connection, current_user, period)
         return EfficiencyOverviewResponse.model_validate(result)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
+
+@router.get("/profile/me/efficiency", response_model=PersonalEfficiencyResponse)
+async def personal_efficiency(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    period: Annotated[str | None, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")] = None,
+) -> PersonalEfficiencyResponse:
+    try:
+        result = await load_personal_efficiency(connection, current_user, period)
+        return PersonalEfficiencyResponse.model_validate(result)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

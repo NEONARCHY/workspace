@@ -199,6 +199,8 @@ it("opens a focused standalone invitation without unrelated settings", async () 
     user={{ id: "admin-1", username: "admin", name: "Администратор", initials: "А", role: "admin", color: "#0091a8" }}
     onClose={vi.fn()} onLogout={vi.fn()} /></FluentProvider>);
   expect(screen.getByRole("dialog", { name: "Приглашение сотрудника" })).toBeInTheDocument();
+  expect(screen.getAllByRole("heading", { name: "Пригласить сотрудника" })).toHaveLength(1);
+  expect(document.querySelector(".account-invite-only")).toBeInTheDocument();
   expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole("textbox", { name: "Имя сотрудника" })).toHaveFocus());
 });

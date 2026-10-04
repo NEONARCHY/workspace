@@ -18,6 +18,7 @@ import {
   Chat24Regular,
   Dismiss24Regular,
   Reward24Regular,
+  DataTrending24Regular,
 } from "@fluentui/react-icons";
 import {
   useEffect,
@@ -43,6 +44,7 @@ import { RecognitionBadgeArtwork, prewarmRecognitionArtwork } from "./Recognitio
 import { getPreparedProfile, invalidatePreparedProfile, loadPreparedProfile, loadPreparedProfileEfficiency } from "./profile-preload";
 import { useRecognitionReady } from "./useRecognitionReady";
 import { RecognitionGuide } from "./RecognitionGuide";
+import { PersonalEfficiencyView } from "./PersonalEfficiencyView";
 import {
   issueEmployeeReward,
 } from "./workspace-api";
@@ -376,6 +378,7 @@ export function EmployeeProfileDialog({
   people = [],
   onOpenPersonProfile,
   onOpenChat,
+  onOpenTask,
 }: {
   readonly token: string;
   readonly userId?: string;
@@ -385,6 +388,7 @@ export function EmployeeProfileDialog({
   readonly people?: readonly WorkspacePerson[];
   readonly onOpenPersonProfile?: (userId: string) => void;
   readonly onOpenChat?: (userId: string) => Promise<void>;
+  readonly onOpenTask?: (taskId: string) => void;
 }) {
   const [profileState, setProfileState] = useState<{
     readonly userId: string;
@@ -396,6 +400,10 @@ export function EmployeeProfileDialog({
   });
   const [errorState, setErrorState] = useState<{ readonly userId: string; readonly message: string }>();
   const [tab, setTab] = useState<"overview" | "achievements" | "rewards">("overview");
+  const [personalUserId, setPersonalUserId] = useState<string>();
+  const personalShown = userId !== undefined && userId === currentUserId && personalUserId === userId;
+  const personalTriggerRef = useRef<HTMLButtonElement>(null);
+  const personalWasShown = useRef(false);
   const overviewRef = useRef<HTMLElement>(null);
   const achievementsRef = useRef<HTMLElement>(null);
   const rewardsRef = useRef<HTMLElement>(null);
@@ -462,7 +470,18 @@ export function EmployeeProfileDialog({
       content.style.removeProperty("--employee-profile-header-inset");
       header.classList.remove("is-unpinned");
     };
-  }, [open, profile]);
+  }, [open, profile, personalShown]);
+
+  useEffect(() => {
+    if (personalShown) { personalWasShown.current = true; return; }
+    if (!personalWasShown.current || !open) return;
+    personalWasShown.current = false;
+    const frame = requestAnimationFrame(() => {
+      personalTriggerRef.current?.focus({ preventScroll: true });
+      if (profileContentRef.current) profileContentRef.current.scrollTop = profileScrollRef.current;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, personalShown]);
 
   useEffect(() => {
     if (!open || !userId) return;
@@ -612,6 +631,7 @@ export function EmployeeProfileDialog({
     <Dialog open={open} onOpenChange={(_, data) => {
       if (!data.open) {
         setTab("overview");
+        setPersonalUserId(undefined);
         setRewardOpen(false);
         setGuideOpen(false);
         setSelectedRewardIcon(undefined);
@@ -624,11 +644,11 @@ export function EmployeeProfileDialog({
         <DialogBody>
           <DialogTitle
             action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть профиль" onClick={() => onOpenChange(false)} />}
-          >Профиль сотрудника</DialogTitle>
+          >{personalShown ? "Моя эффективность" : "Профиль сотрудника"}</DialogTitle>
           <DialogContent ref={profileContentRef}>
             {!profile && !error ? <div className="employee-profile-loading"><Spinner label="Загружаем профиль" /></div> : null}
             {error && !profile ? <div className="employee-profile-error" role="alert">{error}</div> : null}
-            {profile ? <div className="employee-profile-shell">
+            {profile && personalShown ? <PersonalEfficiencyView token={token} onBack={() => setPersonalUserId(undefined)} onOpenTask={onOpenTask ? (taskId) => { onOpenTask(taskId); onOpenChange(false); } : undefined} /> : profile ? <div className="employee-profile-shell">
               <div ref={profileHeaderRef} className="employee-profile-sticky">
                 <header className="employee-profile-hero">
                   <ProfileAvatar person={profile.person} token={token} size={72} />
@@ -637,6 +657,11 @@ export function EmployeeProfileDialog({
                     <h2>{profile.person.name}</h2>
                     <p>{profile.person.jobTitle ?? "Должность не указана"}</p>
                     {profile.departmentName ? <small className="employee-profile-department">{profile.departmentName}</small> : null}
+                    {profile.person.id === currentUserId ? <Button ref={personalTriggerRef} className="employee-profile-chat-action" size="small" icon={<DataTrending24Regular />} onClick={() => {
+                      profileScrollRef.current = profileContentRef.current?.scrollTop ?? 0;
+                      setPersonalUserId(profile.person.id);
+                      if (profileContentRef.current) profileContentRef.current.scrollTop = 0;
+                    }}>Моя эффективность</Button> : null}
                     {onOpenChat && profile.person.id !== currentUserId ? <Button
                       className="employee-profile-chat-action"
                       size="small"

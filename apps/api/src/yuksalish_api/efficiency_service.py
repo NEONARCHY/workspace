@@ -10,16 +10,19 @@ from typing import Any
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from .access_control import module_permissions_for_user
 from .auth import AuthenticatedUser
 from .tables import (
     employee_efficiency_methodologies,
     employee_efficiency_snapshots,
     task_efficiency_events,
+    task_participants,
+    tasks,
     users,
     workspace_notifications,
 )
@@ -537,6 +540,147 @@ async def load_efficiency_overview(
         "current_user_id": str(current_user.id),
         "employees": aggregates,
     }
+
+
+async def load_personal_efficiency(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    period: str | None = None,
+    *,
+    as_of: datetime | None = None,
+) -> dict[str, Any]:
+    """Self only; aggregates use the same ledger, task names retain current access rules."""
+    now = _aware(as_of or datetime.now(UTC))
+    requested_period = period or period_for(now)
+    period_bounds(requested_period)
+    methodology = (
+        (
+            await connection.execute(
+                select(employee_efficiency_methodologies).where(
+                    employee_efficiency_methodologies.c.version == METHODOLOGY_VERSION
+                )
+            )
+        )
+        .mappings()
+        .one()
+    )
+    tracking = methodology["tracking_started_at"]
+    events = (await connection.execute(select(task_efficiency_events))).mappings().all()
+    states = replay_task_events(events, tracking)
+    aggregates = {
+        period_key: _calculate_aggregate_from_states(
+            states,
+            user_id=current_user.id,
+            period=period_key,
+            tracking_started_at=tracking,
+            as_of=now,
+        )
+        for period_key in previous_periods(requested_period, 6)
+    }
+    summary = {
+        "user_id": str(current_user.id),
+        "name": current_user.full_name,
+        "job_title": current_user.job_title or "Должность не указана",
+        "period": requested_period,
+        "timezone": methodology["timezone"],
+        "methodology_version": methodology["version"],
+        "tracking_started_at": tracking,
+        **aggregates[requested_period],
+        "history": [
+            {
+                "period": key,
+                "percentage": value["percentage"],
+                "on_time_count": value["on_time_count"],
+                "eligible_count": value["eligible_count"],
+                "history_completeness": value["history_completeness"],
+            }
+            for key, value in aggregates.items()
+        ],
+    }
+    permissions = await module_permissions_for_user(connection, current_user)
+    details_visible = bool(permissions.get("tasks", {}).get("view", False))
+    result: dict[str, Any] = {
+        "employee": summary,
+        "task_details_visible": details_visible,
+        "workload": {"new": 0, "in_progress": 0, "awaiting_review": 0, "completed": 0},
+        "recent_tasks": [],
+        "impact_tasks": [],
+        "impact_task_count": 0,
+    }
+    if not details_visible:
+        return result
+    # These are the same reader constraints as the workspace/task card. A former
+    # executor can retain a ledger credit without retaining access to its title.
+    participant_ids = select(task_participants.c.task_id).where(
+        task_participants.c.user_id == current_user.id
+    )
+    statement = select(tasks).order_by(tasks.c.updated_at.desc(), tasks.c.id)
+    if current_user.role == "employee":
+        statement = statement.where(
+            or_(
+                tasks.c.author_user_id == current_user.id,
+                tasks.c.primary_assignee_user_id == current_user.id,
+                tasks.c.id.in_(participant_ids),
+            )
+        )
+    rows = (await connection.execute(statement)).mappings().all()
+    co_assignee_ids = set(
+        (
+            await connection.execute(
+                select(task_participants.c.task_id).where(
+                    task_participants.c.user_id == current_user.id,
+                    task_participants.c.participant_role == "co_assignee",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_id = {state.task_id: state for state in states}
+    for row in rows:
+        state = by_id.get(row["id"])
+        contribution = _calculate_aggregate_from_states(
+            [state] if state else [],
+            user_id=current_user.id,
+            period=requested_period,
+            tracking_started_at=tracking,
+            as_of=now,
+        )
+        item = {
+            "id": str(row["id"]),
+            "title": row["title"],
+            "status": row["status"],
+            "due_at": row["due_at"],
+            "updated_at": row["updated_at"],
+            **{
+                key: contribution[key]
+                for key in (
+                    "on_time_count",
+                    "overdue_count",
+                    "excluded_count",
+                    "returned_for_revision_count",
+                )
+            },
+        }
+        if any(
+            item[key]
+            for key in (
+                "on_time_count",
+                "overdue_count",
+                "excluded_count",
+                "returned_for_revision_count",
+            )
+        ):
+            result["impact_task_count"] += 1
+            if len(result["impact_tasks"]) < 20:
+                result["impact_tasks"].append(item)
+        if row["primary_assignee_user_id"] == current_user.id or row["id"] in co_assignee_ids:
+            status = row["status"]
+            if status in result["workload"]:
+                result["workload"][status] += 1
+            if status not in {"completed", "cancelled"} and len(result["recent_tasks"]) < 10:
+                result["recent_tasks"].append(item)
+    return result
 
 
 async def materialize_efficiency_digest_notifications(
