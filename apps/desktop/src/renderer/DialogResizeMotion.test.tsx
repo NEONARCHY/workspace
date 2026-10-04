@@ -14,7 +14,11 @@ const dialog = (height = 200, className = "fui-DialogSurface") => {
 };
 beforeEach(() => {
   observers.length = 0; frames.clear(); preferences.clear(); reduced = false; frameId = 0; animate.mockReset();
-  animate.mockImplementation(() => ({ playState: "running", cancel: vi.fn(), onfinish: null }));
+  animate.mockImplementation(function (this: HTMLElement) {
+    const animation = { playState: "running", effect: { target: this } as { target: HTMLElement } | null, cancel: vi.fn(), onfinish: null };
+    animation.cancel.mockImplementation(() => { animation.playState = "idle"; animation.effect = null; });
+    return animation;
+  });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => { frames.set(++frameId, callback); return frameId; });
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
   vi.stubGlobal("matchMedia", () => ({ get matches() { return reduced; }, addEventListener: (_: string, callback: () => void) => preferences.add(callback), removeEventListener: (_: string, callback: () => void) => preferences.delete(callback) }));
@@ -27,9 +31,13 @@ beforeEach(() => {
     observe(node: Node) { this.node = node; }
   });
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) { return Number(this.dataset.width ?? 0); });
-  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) { return Number(this.dataset.height ?? 0); });
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+    const active = animate.mock.results.some((result, index) => animate.mock.contexts[index] === this && result.value?.playState === "running" && result.value?.effect);
+    return Number((active ? this.dataset.visibleHeight : undefined) ?? this.dataset.height ?? 0);
+  });
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-    const height = Number(this.dataset.visibleHeight ?? this.dataset.height ?? 0), width = Number(this.dataset.width ?? 0);
+    const zoom = Number(this.dataset.zoom ?? 1);
+    const height = Number(this.dataset.visibleHeight ?? this.dataset.height ?? 0) * zoom, width = Number(this.dataset.width ?? 0) * zoom;
     return { height, width, x: 0, y: 20, top: 20, left: 0, right: width, bottom: height + 20, toJSON: () => ({}) };
   });
   Object.defineProperty(HTMLElement.prototype, "animate", { configurable: true, value: animate });
@@ -97,17 +105,51 @@ it("ignores page cards and allows specialized dialogs to opt out", () => {
   stop = observeDialogResizeMotion(document.body); card.dataset.height = "400"; node.dataset.height = "400"; notify(card); notify(node); flush();
   expect(animate).not.toHaveBeenCalled();
 });
-it("excludes focus-trapping popovers even though they carry modal dialog semantics", () => {
+it("shares one frame tween with anchored popovers without taking over positioning", () => {
   const popover = dialog(170, "fui-PopoverSurface person-picker-surface");
   popover.setAttribute("role", "dialog"); popover.setAttribute("aria-modal", "true");
+  popover.style.transform = "translate(30px, 180px)";
   const modal = dialog(200, "custom-dialog");
   modal.setAttribute("role", "dialog"); modal.setAttribute("aria-modal", "true");
   stop = observeDialogResizeMotion(document.body);
   popover.dataset.height = "340"; modal.dataset.height = "320";
   notify(popover); notify(modal); flush();
-  expect(observers.some(observer => observer.node === popover)).toBe(false);
+  expect(observers.filter(observer => observer.node === popover)).toHaveLength(2);
+  expect(animate).toHaveBeenCalledTimes(2);
+  expect(animate.mock.calls[0]?.[0]).toEqual([{ height: "170px" }, { height: "340px" }]);
+  expect(popover.dataset.surfaceResizing).toBe("true");
+  expect(popover.style.transform).toBe("translate(30px, 180px)");
+  const animation = animate.mock.results[0]!.value;
+  animation.playState = "finished"; animation.onfinish(); flush();
+  expect(popover).not.toHaveAttribute("data-surface-resizing");
+});
+it("retargets in layout pixels at 200% zoom rather than doubling frame dimensions", () => {
+  const node = dialog(); node.dataset.zoom = "2"; stop = observeDialogResizeMotion(document.body);
+  node.dataset.height = "320"; notify(node); flush();
+  node.dataset.visibleHeight = "260"; node.dataset.height = "160";
+  observers.filter(observer => observer.node === node).at(-1)!.callback(); flush();
+  expect(animate.mock.calls[1]?.[0]).toEqual([{ height: "260px" }, { height: "160px" }]);
+});
+it("keeps an above-end popover's attached corner fixed while its size changes", () => {
+  const node = dialog(340, "fui-PopoverSurface");
+  node.setAttribute("data-popper-placement", "top-end"); node.style.transform = "translate(30px, 180px)";
+  stop = observeDialogResizeMotion(document.body);
+  node.dataset.height = "180"; node.dataset.width = "300"; notify(node); flush();
+  expect(animate.mock.calls[0]?.[0]).toEqual([
+    { width: "400px", height: "340px", transform: "translate(30px, 180px)" },
+    { width: "300px", height: "180px", transform: "translate(30px, 180px) translate(100px, 160px)" },
+  ]);
+  // No persisted transform: Popper resumes its current inline position.
+  expect(node.style.transform).toBe("translate(30px, 180px)");
+});
+it("allows custom floating frames to opt in and specialized popovers to opt out", () => {
+  const custom = dialog(180, "custom-float"), popover = dialog(180, "fui-PopoverSurface");
+  custom.dataset.surfaceResizeMotion = "on"; popover.dataset.surfaceResizeMotion = "off";
+  stop = observeDialogResizeMotion(document.body);
+  custom.dataset.height = "280"; popover.dataset.height = "280"; notify(custom); notify(popover); flush();
   expect(animate).toHaveBeenCalledOnce();
-  expect(animate.mock.calls[0]?.[0]).toEqual([{ height: "200px" }, { height: "320px" }]);
+  expect(animate.mock.calls[0]?.[0]).toEqual([{ height: "180px" }, { height: "280px" }]);
+  stop(); expect(custom).not.toHaveAttribute("data-surface-resizing");
 });
 it("honours reduced/forced preferences and cancels immediately when settings change", () => {
   const node = dialog(); stop = observeDialogResizeMotion(document.body); reduced = true;

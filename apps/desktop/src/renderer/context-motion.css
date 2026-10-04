@@ -8,3 +8,14 @@
 /* WAAPI is bound to native toggle, so hidden details reliably replay entry.
    Native disclosure, drafts and focus remain owned by the existing form. */
 .record-disclosure > .record-disclosure-body { animation: none; }
+
+/* Only clip a floating frame while its size is interpolated. Scroll containers
+   keep their own stable gutter; Popper resumes positioning after the tween. */
+.fui-PopoverSurface[data-surface-resizing="true"] { overflow: clip; }
+
+.person-picker-surface { container-type: inline-size; }
+.person-picker-surface .employee-scope-switch button {
+  padding-inline: 6px;
+  font-size: clamp(10px, 3.6cqi, 12px);
+  white-space: nowrap;
+}

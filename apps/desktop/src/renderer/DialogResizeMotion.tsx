@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 
-// Focus-trapping Fluent popovers also expose role=dialog/aria-modal=true.
-// Their anchored positioning and inner scroll viewport must not be resized here.
-const dialogSelector = '.fui-DialogSurface, [role="dialog"][aria-modal="true"]:not(.fui-PopoverSurface), [role="alertdialog"][aria-modal="true"]:not(.fui-PopoverSurface)';
+// Centered and anchored surfaces share one frame tween; no cloned/scaled text.
+const dialogSelector = '.fui-DialogSurface, .fui-PopoverSurface, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], [data-surface-resize-motion="on"]';
 const preferenceQuery = "(prefers-reduced-motion: reduce), (forced-colors: active)";
 interface Size { readonly width: number; readonly height: number }
 interface TrackedDialog {
@@ -15,7 +14,7 @@ interface TrackedDialog {
 }
 const naturalSize = (node: HTMLElement): Size => ({ width: node.offsetWidth, height: node.offsetHeight });
 
-/** Auto-sizing dialog frames only. No text scaling, DOM cloning or React renders per frame. */
+/** Auto-sizing floating frames only. No text scaling or React renders per frame. */
 export function observeDialogResizeMotion(root: HTMLElement) {
   const tracked = new Map<HTMLElement, TrackedDialog>();
   const pending = new Set<TrackedDialog>();
@@ -25,13 +24,17 @@ export function observeDialogResizeMotion(root: HTMLElement) {
   const cancel = (item: TrackedDialog) => {
     if (item.animation) { item.animation.onfinish = null; item.animation.cancel(); item.animation = undefined; }
     item.bodyAnimation?.cancel(); item.bodyAnimation = undefined;
+    item.node.removeAttribute("data-surface-resizing");
   };
   const measure = (item: TrackedDialog) => {
     const { node } = item;
     if (!node.isConnected) return;
     const running = item.animation?.playState === "running";
     const rect = node.getBoundingClientRect();
-    const from = running ? { width: rect.width, height: rect.height } : item.size;
+    const visibleTransform = getComputedStyle(node).transform;
+    // offset dimensions are layout pixels even at CSS zoom 200%; the screen
+    // rectangle would double the starting size when interrupting a transition.
+    const from = running ? naturalSize(node) : item.size;
     // Briefly remove only our effect to measure auto layout, then restore it
     // synchronously. Unchanged typing/polling must not restart a running tween.
     const active = running ? item.animation : undefined;
@@ -47,20 +50,31 @@ export function observeDialogResizeMotion(root: HTMLElement) {
     item.size = next;
     if (!from.width || !from.height || !next.width || !next.height || !node.animate
       || document.visibilityState === "hidden" || preferences?.matches || viewportChanging || nativeResize
-      || node.dataset.dialogResizeMotion === "off" || rect.bottom <= 0 || rect.top >= window.innerHeight) return;
+      || node.dataset.dialogResizeMotion === "off" || node.dataset.surfaceResizeMotion === "off"
+      || rect.bottom <= 0 || rect.top >= window.innerHeight) return;
     const widthChanged = Math.abs(next.width - from.width) > 1;
     const heightChanged = Math.abs(next.height - from.height) > 1;
     if (!widthChanged && !heightChanged) return;
     const style = getComputedStyle(node);
     const duration = Math.min(260, Math.max(160, parseFloat(style.getPropertyValue("--ws-motion-normal")) || 220));
     const easing = style.getPropertyValue("--ws-ease").trim() || "cubic-bezier(.2, 0, 0, 1)";
+    const placement = node.getAttribute("data-popper-placement");
+    // Popper's asynchronous size observer otherwise trails an above/right
+    // anchored frame by a paint. Bridge its translation during this single
+    // tween, keeping the attached edge fixed, then return ownership to Popper.
+    const vertical = placement?.startsWith("top") || placement?.startsWith("bottom");
+    const xFactor = vertical ? (placement?.endsWith("-end") ? 1 : placement?.endsWith("-start") ? 0 : .5) : placement?.startsWith("left") ? 1 : 0;
+    const yFactor = vertical ? (placement?.startsWith("top") ? 1 : 0) : placement?.endsWith("-end") ? 1 : placement?.endsWith("-start") ? 0 : .5;
+    const baseTransform = visibleTransform === "none" ? "translate(0px, 0px)" : visibleTransform;
+    const anchored = placement && node.classList.contains("fui-PopoverSurface");
     // Explicit owner-requested exception to transform/opacity: one bounded
     // frame needs real layout dimensions, so its glyphs remain unscaled.
     const animation = node.animate([
-      { ...(widthChanged ? { width: `${from.width}px` } : {}), ...(heightChanged ? { height: `${from.height}px` } : {}) },
-      { ...(widthChanged ? { width: `${next.width}px` } : {}), ...(heightChanged ? { height: `${next.height}px` } : {}) },
+      { ...(widthChanged ? { width: `${from.width}px` } : {}), ...(heightChanged ? { height: `${from.height}px` } : {}), ...(anchored ? { transform: baseTransform } : {}) },
+      { ...(widthChanged ? { width: `${next.width}px` } : {}), ...(heightChanged ? { height: `${next.height}px` } : {}), ...(anchored ? { transform: `${baseTransform} translate(${(from.width - next.width) * xFactor}px, ${(from.height - next.height) * yFactor}px)` } : {}) },
     ], { duration, easing });
     item.animation = animation;
+    node.dataset.surfaceResizing = "true";
     const body = node.querySelector<HTMLElement>(":scope > .fui-DialogBody");
     if (heightChanged && body?.animate) {
       const inset = [style.paddingTop, style.paddingBottom, style.borderTopWidth, style.borderBottomWidth]
@@ -75,6 +89,7 @@ export function observeDialogResizeMotion(root: HTMLElement) {
     animation.onfinish = () => {
       if (item.animation !== animation) return;
       item.animation = undefined;
+      node.removeAttribute("data-surface-resizing");
       item.bodyAnimation?.cancel(); item.bodyAnimation = undefined;
       // Natural sizing resumes; an image/font/content change during the
       // transition is reconciled without retaining a pixel height.

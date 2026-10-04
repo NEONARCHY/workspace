@@ -9,7 +9,7 @@ const people: WorkspacePerson[] = [
   { id: "aziza", name: "Азиза Каримова", initials: "АК", role: "manager", jobTitle: "Руководитель", color: "#0091a8" },
   { id: "dilshod", name: "Дилшод Рахимов", initials: "ДР", role: "employee", jobTitle: "Специалист", color: "#293a55" },
 ];
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Contextual person selection", () => {
   it("searches the provided directory, selects explicitly and closes the context layer", async () => {
     const onChange = vi.fn();
@@ -56,7 +56,7 @@ describe("Contextual person selection", () => {
     expect(within(list).queryByText("Азиза Каримова")).toBeNull();
     expect(within(list).getByText("Дилшод Рахимов")).toBeInTheDocument();
   });
-  it("keeps selection, search and scope controls outside the independently revealing list", () => {
+  it("keeps selection, search and scope controls outside the bounded scroll list", () => {
     const onChange = vi.fn();
     const departments = [{ id: "central", code: "central", name: "ЦА", scope: "central" as const, assignedUsersCount: 2 }];
     render(<FluentProvider theme={workspaceTheme}><PersonPicker people={people} departments={departments} value="aziza" label="Ответственный" onChange={onChange} /></FluentProvider>);
@@ -74,5 +74,18 @@ describe("Contextual person selection", () => {
     fireEvent.change(search, { target: { value: "специалист" } });
     expect(within(list).queryByText("Азиза Каримова")).toBeNull();
     expect(within(list).getByText("Дилшод Рахимов")).toBeInTheDocument();
+  });
+  it("bounds a large directory in layout pixels at 200% zoom", () => {
+    vi.stubGlobal("innerWidth", 640); vi.stubGlobal("innerHeight", 480);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(200);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ x: 30, y: 400, top: 400, bottom: 440, left: 30, right: 430, width: 400, height: 40, toJSON: () => ({}) });
+    const departments = [{ id: "central", code: "central", name: "ЦА", scope: "central" as const, assignedUsersCount: 100 }];
+    const many = Array.from({ length: 100 }, (_, index) => ({ ...people[0]!, id: `person-${index}` }));
+    render(<FluentProvider theme={workspaceTheme}><PersonPicker people={many} departments={departments} value="" label="Ответственный" onChange={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Ответственный" }));
+    const list = screen.getByLabelText("Доступные сотрудники");
+    expect(within(list).getAllByRole("button")).toHaveLength(100);
+    expect(list.parentElement).toHaveStyle({ maxHeight: "66px" });
+    expect(screen.getByRole("dialog", { name: "Ответственный" })).toHaveStyle({ width: "300px" });
   });
 });
