@@ -846,8 +846,9 @@ describe("Private messenger", () => {
   it("saves each employee's chat background without changing messages", async () => {
     localStorage.removeItem("yuksalish:chat-background:aziza");
     renderMessenger();
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
-    fireEvent.click(screen.getByRole("button", { name: /Тихий рассвет/ }));
+    fireEvent.click(screen.getByLabelText("Выбрать фон переписки"));
+    const picker = within(screen.getByLabelText("Фон переписки"));
+    fireEvent.click(picker.getByRole("button", { name: /Тихий рассвет/ }));
     expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "dawn");
     expect(localStorage.getItem("yuksalish:chat-background:aziza")).toBe("dawn");
     expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
@@ -858,10 +859,11 @@ describe("Private messenger", () => {
     localStorage.setItem("yuksalish:chat-background:aziza", "paper");
     renderMessenger();
     expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "lagoon");
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
-    expect(screen.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Выбрать фон переписки"));
+    const picker = within(screen.getByLabelText("Фон переписки"));
+    expect(picker.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
+    expect(picker.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
+    expect(picker.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
     localStorage.removeItem("yuksalish:chat-background:aziza");
   });
 
