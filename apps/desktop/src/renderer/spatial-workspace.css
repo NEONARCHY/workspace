@@ -589,11 +589,11 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 }
 .absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
 .absence-summary span { color: var(--ws-text, #293a55); font-size: 12px; }
-.absences-view { position: relative; display: flex; min-height: 0; flex-direction: column; gap: 14px; }
-.absences-view .record-header { display: flex; min-height: 0; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 0; }
+.absences-view { position: relative; display: flex; min-height: 0; flex-direction: column; gap: 14px; padding-right: 20px; }
+.absences-view .record-header { display: flex; min-height: 0; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; padding-right: 0; padding-bottom: 0; }
 .absences-view .record-header > div { flex: 1 1 280px; }
 .absences-view .record-header > button { flex: none; }
-.absences-view :is(.absence-summary, .absence-canvas) { margin-inline: var(--ws-view-edge); }
+.absences-view :is(.absence-summary, .absence-canvas) { margin-inline: var(--ws-view-edge) 0; }
 .absence-canvas { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)) minmax(230px, .72fr); flex: 1 1 auto; gap: 12px; min-height: 0; margin-bottom: var(--ws-view-edge); }
 .absence-column { display: flex; min-height: 0; flex-direction: column; gap: 9px; padding: 14px; overflow-y: auto; border: 1px solid rgb(210 225 226 / 76%); border-radius: 22px; background: rgb(249 252 252 / 72%); scrollbar-width: thin; scrollbar-color: rgb(91 121 128 / 28%) transparent; }
 .absence-column > header { padding: 2px 3px 8px; }

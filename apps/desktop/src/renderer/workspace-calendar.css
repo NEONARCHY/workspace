@@ -29,6 +29,9 @@
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-side {
   padding: 0;
+  /* This transparent scroll viewport must not cut the first heading glyphs.
+     Its individual summary, empty-state and detail cards retain their radii. */
+  border-radius: 0;
   scrollbar-gutter: auto;
   background: transparent;
 }

@@ -33,7 +33,7 @@ async function main(){
     await evaluate(`(() => {const b=document.querySelector('[data-navigation-key="${key}"] button');if(!b)throw Error('Missing section ${key}');b.click();})()`);
     await pause(500);
   };
-  const screenshot=async name=>{const r=await send('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(output,(before?'before-':'after-')+name+'.png'),Buffer.from(r.data,'base64'));};
+  const screenshot=async (name,clip)=>{const r=await send('Page.captureScreenshot',{format:'png',...(clip?{clip}: {})});await fs.writeFile(path.join(output,(before?'before-':'after-')+name+'.png'),Buffer.from(r.data,'base64'));};
   const assertEdge=(value,label)=>{if(!before)assert(Math.abs(value-20)<1,label+' must be 20px, got '+value);};
   const luminance=rgb=>rgb.map(c=>c/255).map(c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4).reduce((sum,c,i)=>sum+c*[.2126,.7152,.0722][i],0);
   try{
@@ -79,14 +79,29 @@ async function main(){
         const metrics=await evaluate(`(() => {
           const view=document.querySelector('.calendar-view:not(.task-calendar-embedded)'),summary=view.querySelector('.calendar-day-summary').getBoundingClientRect();
           const empty=view.querySelector('.calendar-empty')?.getBoundingClientRect(),board=view.querySelector('.calendar-board').getBoundingClientRect();
-          const side=view.querySelector('.calendar-side').getBoundingClientRect();
+          const aside=view.querySelector('.calendar-side'),side=aside.getBoundingClientRect();
+          const heading=view.querySelector('.calendar-day-heading > span'),range=document.createRange();range.selectNodeContents(heading);
+          const text=range.getBoundingClientRect(),style=getComputedStyle(aside);
           return {right:innerWidth-summary.right,emptyRight:empty?innerWidth-empty.right:null,
+            heading:heading.textContent,sideRadius:style.borderTopLeftRadius,sideOverflow:style.overflowY,headingInset:text.x-side.x,
             columnGap:side.x>board.right?summary.x-board.right:null,width:summary.width,past:!!view.querySelector('.calendar-past-note'),rootOverflow:document.documentElement.scrollWidth>innerWidth};
         })()`);
         assertEdge(metrics.right,'Calendar day edge');if(metrics.emptyRight!==null)assertEdge(metrics.emptyRight,'Calendar empty edge');if(metrics.columnGap!==null)assertEdge(metrics.columnGap,'Calendar grid/agenda gap');
-        if(!before)assert(!metrics.rootOverflow);calendar.push(metrics);await screenshot(width+'x'+height+'-calendar-'+(past?'past':'today'));
+        if(!before){assert(!metrics.rootOverflow);assert.equal(metrics.sideRadius,'0px','Transparent agenda must not clip the heading with a rounded scroll viewport');}
+        calendar.push(metrics);await screenshot(width+'x'+height+'-calendar-'+(past?'past':'today'));
+        if(past){
+          await evaluate("document.querySelector('.calendar-day-heading').scrollIntoView({block:'center'})");await pause(150);
+          const clip=await evaluate("(()=>{const r=document.querySelector('.calendar-day-heading').getBoundingClientRect();return {x:r.x,y:r.y,width:Math.min(r.width,360),height:r.height,scale:1};})()");
+          await screenshot(width+'x'+height+'-past-heading',clip);
+        }
       }
       await section('absences');await waitFor("!!document.querySelector('.absence-summary')");
+      const absenceEdges=await evaluate(`(() => {
+        const view=document.querySelector('.absences-view'),right=s=>innerWidth-view.querySelector(s).getBoundingClientRect().right;
+        return {header:right('.record-header'),action:right('.record-header > button'),summary:right('.absence-summary'),panels:right('.absence-canvas'),rootOverflow:document.documentElement.scrollWidth>innerWidth};
+      })()`);
+      for(const key of ['header','action','summary','panels'])assertEdge(absenceEdges[key],'Absences '+key);
+      if(!before)assert(!absenceEdges.rootOverflow);
       const presence=await evaluate(`Array.from(document.querySelectorAll('.absence-summary > div'),tile=>({status:tile.dataset.presenceStatus,gradient:getComputedStyle(tile).backgroundImage,accent:getComputedStyle(tile).getPropertyValue('--ws-presence-accent').trim(),color:getComputedStyle(tile.querySelector('span')).color}))`);
       if(!before){
         assert.equal(presence.length,7);assert.equal(new Set(presence.map(t=>t.gradient)).size,7);assert(presence.every(t=>t.gradient.startsWith('linear-gradient(90deg')));
@@ -97,7 +112,7 @@ async function main(){
           assert(tile.labelContrast>=4.5,'Low presence label contrast: '+tile.status+' '+tile.labelContrast.toFixed(2));
         }
       }
-      await screenshot(width+'x'+height+'-presence');results.push({width,height,navigation,messenger,calendar,presence});
+      await screenshot(width+'x'+height+'-presence');results.push({width,height,navigation,messenger,calendar,presence,absenceEdges});
       console.log('PASS',width+'x'+height,before?'baseline captured':'centered rail, More reachable, 20px edges, seven washes');
     }
     if(!before){

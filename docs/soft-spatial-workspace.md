@@ -12,6 +12,9 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
   fading left-to-right (22% → 9% at 48% → transparent), with unchanged counts and
   permissions. Labels use navy ink to retain AA contrast at the strongest tint;
   forced colors removes the wash. Messenger's outer right edge is 20 px at desktop/compact widths.
+  Absences also reserves a single 20 px outer right inset for its header action,
+  summary tiles and all lower panels; inner trailing margins/padding do not add
+  a second inset. Their existing left alignment and semantic washes are retained.
   Collapsed navigation measures the rendered action height and row gap before
   reserving More; the hidden profile label reserves no width or flex gap. No
   scrollbar is introduced into the collapsed rail. Calendar agenda clearance is
