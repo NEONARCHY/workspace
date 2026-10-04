@@ -51,7 +51,7 @@ async function main(){
     }
     await evaluate("Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Прочитать все').click()");
     await waitFor("Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()==='Прочитать все')?.disabled");
-    assert.equal(await evaluate("document.querySelector('.notification-progress-card > strong').textContent"),before?'98%':'100%');
+    assert.equal(await evaluate("document.querySelector('.notification-progress-card > strong').textContent"),'100%');
     assert.equal(await evaluate("document.querySelectorAll('.notification-row-meta em').length"),7,'Read must not resolve actions');
     await shot('notifications');
     if(!before){
@@ -62,11 +62,19 @@ async function main(){
       await waitFor("!document.querySelector('.task-record-dialog')");
       console.log('PASS browser notification deep link and task close');
     }
-    for(const [width,height] of [[1440,900],[1024,768],[640,480]]){
+    for(const [width,height] of [[2048,900],[1440,900],[1280,900],[1024,768],[640,480]]){
       await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});await pause(450);
       await section('team_overview');await waitFor("document.querySelectorAll('.team-dash-metric').length===4");
-      const metrics=await evaluate(`Array.from(document.querySelectorAll('.team-dash-metric'),b=>({tone:b.className,background:getComputedStyle(b).backgroundImage,selected:b.getAttribute('aria-pressed'),overflow:b.scrollWidth>b.clientWidth}))`);
-      if(!before){assert(metrics.every(m=>m.background.startsWith('linear-gradient(90deg')));assert.equal(new Set(metrics.map(m=>m.background)).size,4);assert(metrics.every(m=>!m.overflow));}
+      const metrics=await evaluate(`Array.from(document.querySelectorAll('.team-dash-metric'),b=>{
+        const s=getComputedStyle(b),box=b.getBoundingClientRect(),iconNode=b.querySelector('.team-dash-metric-icon'),icon=iconNode.getBoundingClientRect(),number=b.querySelector('strong').getBoundingClientRect();
+        const label=b.querySelector('span'),copy=b.querySelector('.team-dash-metric-copy')??label.parentElement,copyBox=copy.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(label);const text=range.getBoundingClientRect();
+        return {tone:b.className,background:s.backgroundImage,origin:s.backgroundOrigin,repeat:s.backgroundRepeat,iconBackground:getComputedStyle(iconNode).backgroundColor,selected:b.getAttribute('aria-pressed'),overflow:b.scrollWidth>b.clientWidth,
+          labelCenterX:text.x+text.width/2-(box.x+box.width/2),copyCenterY:copyBox.y+copyBox.height/2-(box.y+box.height/2),iconCenterY:icon.y+icon.height/2-(box.y+box.height/2),numberCenterY:number.y+number.height/2-(box.y+box.height/2)};
+      })`);
+      if(!before){
+        assert(metrics.every(m=>m.background.startsWith('linear-gradient(90deg')));assert.equal(new Set(metrics.map(m=>m.background)).size,4);assert(metrics.every(m=>!m.overflow));
+        for(const m of metrics){assert.equal(m.iconBackground,'rgb(255, 255, 255)','Icon surface must be pure white');assert(m.origin.split(',').every(v=>v.trim()==='border-box'),'Gradient must include transparent border');assert(m.repeat.split(',').every(v=>v.trim()==='no-repeat'),'Gradient must not tile into the left border');for(const key of ['labelCenterX','copyCenterY','iconCenterY','numberCenterY'])assert(Math.abs(m[key])<1,key+' must be centered, got '+m[key]);}
+      }
       await evaluate("document.querySelector('.team-dash-metric.tone-danger').click()");assert.equal(await evaluate("document.querySelector('.team-dash-metric.tone-danger').getAttribute('aria-pressed')"),'true');
       await shot(width+'x'+height+'-metrics');
       await section('tasks');await waitFor("!!document.querySelector('.task-filter-tabs')");

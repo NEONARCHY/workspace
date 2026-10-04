@@ -134,7 +134,8 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
 }) {
   return <button type="button" onClick={onSelect} aria-pressed={active} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
-    <div><span>{label}</span><strong>{value.toLocaleString("ru-RU")}</strong><small>{note}</small></div>
+    <div className="team-dash-metric-copy"><span>{label}</span><small>{note}</small></div>
+    <strong>{value.toLocaleString("ru-RU")}</strong>
   </button>;
 }
 

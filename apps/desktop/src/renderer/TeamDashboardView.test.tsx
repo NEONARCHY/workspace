@@ -102,6 +102,19 @@ describe("TeamDashboardView", () => {
     expect(onSelectTask).toHaveBeenCalledWith("overdue");
   });
 
+  it("keeps each metric label and note in one copy block, separate from its counter", () => {
+    renderDashboard();
+    for (const label of ["Активные задачи", "Нужна помощь", "Ждут решения", "Срок сегодня"]) {
+      const card = screen.getByText(label).closest("button")!;
+      const copy = card.querySelector(".team-dash-metric-copy");
+      expect(copy).toHaveTextContent(label);
+      expect(copy?.querySelector("small")).toBeInTheDocument();
+      expect(copy?.querySelector("strong")).toBeNull();
+      expect(card.querySelector(":scope > strong")).toBeInTheDocument();
+      expect(card.querySelector(".team-dash-metric-icon")).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("filters the attention queue by employee and exposes an explicit reset", () => {
     renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: /Азиза Каримова.*1 активная задача/i }));

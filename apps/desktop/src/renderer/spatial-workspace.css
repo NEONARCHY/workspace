@@ -446,6 +446,9 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .team-focus-strip > button[aria-pressed=true] { border-color: #9dc8be; color: var(--ws-text); background: #fff; box-shadow: var(--ws-shadow-card); }
 .team-focus-strip > button > span:not(.fui-Avatar) { max-width: 130px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .team-dash-metric { text-align: left; cursor: pointer; border: 1px solid transparent; border-radius: 22px; box-shadow: var(--ws-shadow-card); color: var(--ws-text); background: linear-gradient(90deg, color-mix(in srgb, var(--metric-color) 18%, transparent), color-mix(in srgb, var(--metric-color) 7%, transparent) 48%, transparent), #fcfdfd; }
+/* Start at the outer border, not the padding box: a repeating gradient would
+   otherwise wrap its transparent right end into a thin white left edge. */
+.team-dash-metric { background-origin: border-box; background-repeat: no-repeat; }
 .team-dash-metric.tone-brand { --metric-color: var(--ws-turquoise); }
 .team-dash-metric[aria-pressed=true] { border-color: color-mix(in srgb, var(--metric-color) 65%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--metric-color) 30%, transparent), var(--ws-shadow-card); }
 .team-dash-metric:hover { border-color: color-mix(in srgb, var(--metric-color) 60%, white); }
@@ -458,7 +461,7 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
   .team-dash-metric :is(strong,span,small) { color: CanvasText; }
 }
 .team-dash-metric strong { font-size: 36px; font-weight: 600; text-shadow: none; }
-.team-dash-metric-icon { box-shadow: none; }
+.team-dash-metric-icon { background: #fff; box-shadow: none; }
 .team-dash-panel { border: 0; border-radius: 24px; box-shadow: var(--ws-shadow-card); }
 .team-dash-panel-heading { border: 0; }
 .team-dash-flow { background: #e1edeb; }
