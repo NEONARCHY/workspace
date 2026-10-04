@@ -358,7 +358,7 @@
   padding: 9px 11px;
   border: 1px solid rgb(149 190 196 / 46%);
   border-radius: 14px 14px 16px 8px;
-  background: rgb(255 255 255 / 76%);
+  background: #eaf5f5;
   box-shadow: 0 8px 20px rgb(31 79 96 / 8%), inset 0 1px 0 #fff;
 }
 
@@ -526,7 +526,7 @@
   padding: 14px;
   border: 1px solid rgb(174 205 210 / 67%);
   border-radius: 17px 17px 20px 10px;
-  background: rgb(255 255 255 / 78%);
+  background: #f4f8fa;
   box-shadow: 0 10px 26px rgb(38 83 99 / 7%), inset 0 1px 0 #fff;
 }
 
@@ -558,7 +558,7 @@
 
 .team-dash-flow-legend {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 144px), 1fr));
   gap: 7px;
   margin: 0;
 }
@@ -573,7 +573,11 @@
   border: 1px solid color-mix(in srgb, var(--flow-color) 18%, #dfeaec);
   border-radius: 11px 11px 13px 6px;
   color: inherit;
-  background: color-mix(in srgb, var(--flow-color) 7%, white);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--flow-color) 22%, transparent),
+    color-mix(in srgb, var(--flow-color) 9%, transparent) 48%, transparent), #fff;
+  background-origin: border-box;
+  background-repeat: no-repeat;
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -595,17 +599,21 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #5a7183;
-  font-size: 11px;
+  min-width: 0;
+  color: var(--team-ink);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .team-dash-flow-legend button > span i {
+  flex: none;
   width: 8px;
   height: 8px;
   border-radius: 3px 3px 4px 2px;
 }
 
 .team-dash-flow-legend button > strong {
+  flex: none;
   color: var(--team-navy);
   font-size: 14px;
   font-weight: 700;
@@ -613,6 +621,7 @@
 }
 
 .team-dash-week {
+  container: team-week / inline-size;
   position: relative;
   z-index: 1;
   display: flex;
@@ -622,7 +631,8 @@
   padding: 14px;
   border: 1px solid rgb(174 205 210 / 67%);
   border-radius: 17px 17px 11px 20px;
-  background: linear-gradient(145deg, rgb(255 255 255 / 83%), rgb(247 251 251 / 78%));
+  min-width: 0;
+  background: #f4f8fa;
   box-shadow: 0 10px 26px rgb(38 83 99 / 7%), inset 0 1px 0 #fff;
 }
 
@@ -675,7 +685,7 @@
 
 .team-dash-week-bars {
   display: grid;
-  grid-template-columns: repeat(7, minmax(24px, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   align-items: stretch;
   flex: 1;
   gap: 4px;
@@ -684,14 +694,16 @@
 
 .team-dash-week-bars > button {
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: minmax(78px, 1fr) 18px 34px;
+  align-items: center;
   justify-items: center;
-  gap: 3px;
+  gap: 4px;
+  min-width: 0;
   padding: 7px 2px 6px;
   border: 1px solid transparent;
   border-radius: 10px 10px 12px 6px;
   color: inherit;
-  background: rgb(239 246 247 / 64%);
+  background: #e7f0f4;
   font: inherit;
   cursor: pointer;
   transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, transform 180ms cubic-bezier(.2, .8, .2, 1);
@@ -699,7 +711,7 @@
 
 .team-dash-week-bars > button.is-today {
   border-color: rgb(75 172 142 / 24%);
-  background: rgb(231 247 239 / 76%);
+  background: #dff2e9;
 }
 
 .team-dash-week-bars > button:is(:hover, [aria-pressed="true"]) {
@@ -717,7 +729,7 @@
   align-items: end;
   overflow: hidden;
   border-radius: 7px 7px 4px 4px;
-  background: #edf2f4;
+  background: #cfdee5;
 }
 
 .team-dash-week-bars i {
@@ -735,14 +747,34 @@
 
 .team-dash-week-bars strong {
   color: #315269;
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 18px;
   font-variant-numeric: tabular-nums;
 }
 
 .team-dash-week-bars small {
-  color: #7a8f9d;
-  font-size: 11px;
-  white-space: nowrap;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  min-width: 0;
+  color: var(--team-ink);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.team-dash-week-today-short { display: none; }
+
+@container team-week (max-width: 420px) {
+  .team-dash-week-today-full { display: none; }
+  .team-dash-week-today-short { display: inline; }
+}
+
+@container team-week (max-width: 280px) {
+  .team-dash-week-bars {
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    flex: none;
+  }
 }
 
 .team-dash-flow-legend > button:focus-visible,
@@ -1318,15 +1350,23 @@
     flex: 1;
   }
 
-  .team-dash-week-bars {
-    gap: 2px;
-  }
+}
 
-  .team-dash-week-bars small {
-    font-size: 11px;
-    transform: rotate(-35deg);
-    transform-origin: center;
+@media (forced-colors: active) {
+  .team-dash-flow, .team-dash-flow-total, .team-dash-flow-overview,
+  .team-dash-week, .team-dash-flow-legend > button, .team-dash-week-bars > button {
+    background: Canvas;
+    border-color: CanvasText;
+    box-shadow: none;
+    color: CanvasText;
   }
+  .team-dash-flow-legend > button[aria-pressed="true"],
+  .team-dash-week-bars > button:is(.is-today, [aria-pressed="true"]) {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .team-dash-week-bars > button > span { background: Canvas; border: 1px solid CanvasText; }
+  .team-dash-week-bars :is(button, .is-today) i { background: Highlight; box-shadow: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

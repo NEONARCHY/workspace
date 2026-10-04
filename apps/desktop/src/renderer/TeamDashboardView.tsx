@@ -53,7 +53,7 @@ const activeStatuses = new Set<WorkspaceTask["status"]>([
   "overdue",
 ]);
 
-const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short", day: "numeric" });
+const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short" });
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
 const timeFormatter = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const fullDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -350,12 +350,17 @@ export function TeamDashboardView({
               key={day.date.toISOString()}
               className={index === 0 ? "is-today" : ""}
               aria-label={`Задачи со сроком ${index === 0 ? "сегодня" : fullDayFormatter.format(day.date)}: ${day.count}`}
+              title={fullDayFormatter.format(day.date)}
               aria-pressed={flowSelection?.kind === "day" && startOfDay(flowSelection.date).getTime() === day.date.getTime()}
               onClick={() => selectFlow({ kind: "day", date: day.date, label: index === 0 ? "Сегодня" : fullDayFormatter.format(day.date) })}
             >
-              <span><i style={{ height: `${Math.max(day.count ? 16 : 3, day.count / maximumDayCount * 100)}%` }} /></span>
+              <span aria-hidden="true"><i style={{ height: `${Math.max(day.count ? 16 : 3, day.count / maximumDayCount * 100)}%` }} /></span>
               <strong>{day.count}</strong>
-              <small>{index === 0 ? "сегодня" : shortDayFormatter.format(day.date)}</small>
+              <small aria-hidden="true">
+                {index === 0 ? <span><span className="team-dash-week-today-full">сегодня</span><span className="team-dash-week-today-short">сег.</span></span>
+                  : <span>{shortDayFormatter.format(day.date)}</span>}
+                <span>{day.date.getDate()}</span>
+              </small>
             </button>)}
           </div>
         </div>

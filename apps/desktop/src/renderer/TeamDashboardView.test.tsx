@@ -168,4 +168,23 @@ describe("TeamDashboardView", () => {
     expect(within(drawer).getByText("В этот день задач нет")).toBeInTheDocument();
     expect(drawer).not.toHaveTextContent(/drawer/i);
   });
+
+  it("keeps seven dates, separate caption rows and full accessible day names", () => {
+    renderDashboard();
+    const flow = screen.getByRole("complementary", { name: "Работа команды" });
+    const days = flow.querySelectorAll(".team-dash-week-bars > button");
+    expect(days).toHaveLength(7);
+    expect([...days].map(day => day.querySelector("small > span:last-child")?.textContent)).toEqual(["9", "10", "11", "12", "13", "14", "15"]);
+    expect(days[0]).toHaveAccessibleName("Задачи со сроком сегодня: 1");
+    expect(days[1]).toHaveAccessibleName("Задачи со сроком четверг, 10 сентября: 1");
+    expect(days[0]?.querySelector(".team-dash-week-today-full")).toHaveTextContent("сегодня");
+    expect(days[0]?.querySelector(".team-dash-week-today-short")).toHaveTextContent("сег.");
+    for (const day of days) {
+      expect(day.querySelector("small")).toHaveAttribute("aria-hidden", "true");
+      expect(day.querySelector("small")?.children).toHaveLength(2);
+      expect(day.querySelector(":scope > span")).toHaveAttribute("aria-hidden", "true");
+      expect(day.querySelector(":scope > strong")).toBeInTheDocument();
+      expect(day.getAttribute("title")).toMatch(/сентября/);
+    }
+  });
 });
