@@ -99,10 +99,11 @@ import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
-  MembersView, preloadWorkspaceModules, ProjectHubView, ProjectsView,
+  MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
+import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
 import { initialKnownNotificationIds } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
@@ -1646,12 +1647,19 @@ export function App() {
     if (!preloadToken || workspace.currentUser.id !== preloadUserId) return;
     const allowed = new Set(preloadAllowedKeys.split("|"));
     if (["admin", "superadmin"].includes(workspace.currentUser.role)) allowed.add("telegram_access");
-    const stopPreloading = preloadWorkspaceModules(allowed);
+    let cancelled = false;
+    const artworkStops = new Set<() => void>();
+    const stopPreloading = preloadWorkspaceModules(allowed, () => prepareEmployeeProfile(preloadToken, preloadUserId).then((stop) => {
+      if (cancelled) stop(); else artworkStops.add(stop);
+    }));
     const assistantTimer = allowed.has("assistant")
       ? window.setTimeout(() => prewarmAssistantMessages(preloadToken), 700)
       : undefined;
     return () => {
       stopPreloading();
+      cancelled = true;
+      artworkStops.forEach((stop) => stop());
+      clearProfilePreload();
       if (assistantTimer !== undefined) window.clearTimeout(assistantTimer);
       clearAssistantPreload();
     };
@@ -1831,7 +1839,9 @@ export function App() {
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
       <WorkspacePeopleProvider people={workspace.people}>
-      <EmployeeProfileProvider onOpenProfile={setProfileUserId}>
+      <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
+        void prepareEmployeeProfile(session.accessToken, userId).catch(() => undefined);
+      }}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">

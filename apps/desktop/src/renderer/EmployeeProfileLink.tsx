@@ -9,6 +9,7 @@ import {
 type OpenEmployeeProfile = (userId: string) => void;
 
 const EmployeeProfileContext = createContext<OpenEmployeeProfile | undefined>(undefined);
+const PrepareEmployeeProfileContext = createContext<OpenEmployeeProfile | undefined>(undefined);
 
 export function useOpenEmployeeProfile() {
   return useContext(EmployeeProfileContext);
@@ -17,11 +18,13 @@ export function useOpenEmployeeProfile() {
 export function EmployeeProfileProvider({
   children,
   onOpenProfile,
+  onPrepareProfile,
 }: {
   readonly children: ReactNode;
   readonly onOpenProfile: OpenEmployeeProfile;
+  readonly onPrepareProfile?: OpenEmployeeProfile;
 }) {
-  return <EmployeeProfileContext.Provider value={onOpenProfile}>{children}</EmployeeProfileContext.Provider>;
+  return <PrepareEmployeeProfileContext.Provider value={onPrepareProfile}><EmployeeProfileContext.Provider value={onOpenProfile}>{children}</EmployeeProfileContext.Provider></PrepareEmployeeProfileContext.Provider>;
 }
 
 export function EmployeeProfileLink({
@@ -38,6 +41,7 @@ export function EmployeeProfileLink({
   readonly as?: "span" | "div" | "li";
 }) {
   const openProfile = useContext(EmployeeProfileContext);
+  const prepareProfile = useContext(PrepareEmployeeProfileContext);
   const available = Boolean(userId && openProfile);
 
   const stopPointer = (event: PointerEvent<HTMLElement>) => {
@@ -60,6 +64,8 @@ export function EmployeeProfileLink({
     aria-haspopup={available ? "dialog" : undefined}
     aria-label={available ? `Открыть профиль: ${personName}` : undefined}
     onPointerDown={stopPointer}
+    onPointerEnter={() => { if (available && userId) prepareProfile?.(userId); }}
+    onFocus={() => { if (available && userId) prepareProfile?.(userId); }}
     onClick={(event) => {
       if (!available) return;
       event.preventDefault();

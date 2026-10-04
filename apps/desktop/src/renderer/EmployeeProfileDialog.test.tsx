@@ -10,6 +10,7 @@ import {
   loadWorkspaceEfficiency,
 } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
+import { clearProfilePreload } from "./profile-preload";
 
 vi.mock("./workspace-api", () => ({
   issueEmployeeReward: vi.fn(),
@@ -88,6 +89,7 @@ const profile: EmployeeRecognitionProfile = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  clearProfilePreload();
 });
 
 function renderProfile(value: EmployeeRecognitionProfile = profile, options: {

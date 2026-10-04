@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import type { NavigationKey } from "@yuksalish/contracts";
+import { isProfilePreloadSession, loadPreparedProfile, loadPreparedProfileEfficiency } from "./profile-preload";
 
 /* Split secondary views from the login/messenger shell. The same imports are
    reused by React.lazy and the post-render idle warmer, so a click during
@@ -53,11 +54,25 @@ const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
   ["hr", hr], ["employees", employees],
 ];
 
-export function preloadWorkspaceModules(allowed: ReadonlySet<string>): () => void {
+export async function prepareEmployeeProfile(token: string, userId: string): Promise<() => void> {
+  const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+  if (connection?.saveData || document.visibilityState === "hidden") return () => undefined;
+  const [artwork, data] = await Promise.all([
+    import("./RecognitionBadgeArtwork"), loadPreparedProfile(token, userId), profile(),
+    loadPreparedProfileEfficiency(token).catch(() => undefined),
+  ]);
+  if (!isProfilePreloadSession(token)) return () => undefined;
+  return artwork.prewarmRecognitionArtwork([
+    ...data.achievements.filter((item) => item.unlocked).slice(-4).map((item) => item.iconKey),
+    ...data.rewards.map((item) => item.iconKey), ...data.achievements.map((item) => item.iconKey),
+  ]);
+}
+
+export function preloadWorkspaceModules(allowed: ReadonlySet<string>, warmProfile?: () => Promise<unknown>): () => void {
   const connection = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
   if (connection?.saveData) return () => undefined;
-  const loaders = [...new Set(sectionLoaders.filter(([key]) => allowed.has(key)).map(([, load]) => load)),
-    account, profile, support];
+  const loaders = [warmProfile ?? profile, account,
+    ...new Set(sectionLoaders.filter(([key]) => allowed.has(key)).map(([, load]) => load)), support];
   let stopped = false;
   let index = 0;
   let idleId: number | undefined;

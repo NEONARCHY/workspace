@@ -39,12 +39,12 @@ import type {
 import { SlidingSegmented } from "./SlidingSegmented";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
-import { RecognitionBadgeArtwork } from "./RecognitionBadgeArtwork";
+import { RecognitionBadgeArtwork, prewarmRecognitionArtwork } from "./RecognitionBadgeArtwork";
+import { getPreparedProfile, invalidatePreparedProfile, loadPreparedProfile, loadPreparedProfileEfficiency } from "./profile-preload";
+import { useRecognitionReady } from "./useRecognitionReady";
 import { RecognitionGuide } from "./RecognitionGuide";
 import {
   issueEmployeeReward,
-  loadEmployeeRecognitionProfile,
-  loadWorkspaceEfficiency,
 } from "./workspace-api";
 
 const tierLabels: Readonly<Record<EmployeeAchievement["tier"], string>> = {
@@ -208,23 +208,23 @@ function serviceLabel(profile: EmployeeRecognitionProfile): string {
 function AchievementCard({ achievement }: { readonly achievement: EmployeeAchievement }) {
   const percent = Math.min(100, Math.round(achievement.progress / achievement.target * 100));
   const [elementRef, onPointerMove, onPointerLeave] = useHolographicMotion<HTMLElement>();
+  const ready = useRecognitionReady(elementRef);
   return <article
     ref={elementRef}
-    className={`achievement-card recognition-holographic-card recognition-rarity-${achievement.tier} ${achievement.unlocked ? "is-unlocked" : "is-locked"}`}
+    className={`achievement-card recognition-holographic-card recognition-rarity-${achievement.tier} ${achievement.unlocked ? "is-unlocked" : "is-locked"}${ready ? "" : " recognition-is-preparing"}`}
     style={holographicStyle}
     onPointerMove={achievement.unlocked ? onPointerMove : undefined}
     onPointerLeave={achievement.unlocked ? onPointerLeave : undefined}
   >
     <div className="recognition-card-surface" aria-hidden="true">
-      <span className="recognition-card-foil" />
-      <span className="recognition-card-glare" />
+      {ready ? <><span className="recognition-card-foil" /><span className="recognition-card-glare" /></> : null}
     </div>
     <div className="recognition-card-content">
-      <RecognitionEmblem
+      {ready ? <RecognitionEmblem
         iconKey={achievement.iconKey}
         tier={achievement.tier}
         unlocked={achievement.unlocked}
-      />
+      /> : <span className="recognition-emblem" aria-hidden="true" />}
       <div className="recognition-card-details">
         <span className="achievement-tier">{tierLabels[achievement.tier]}</span>
         <h3>{achievement.title}</h3>
@@ -246,6 +246,7 @@ function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
   readonly onOpenIssuer: (userId: string) => void;
 }) {
   const [elementRef, onPointerMove, onPointerLeave] = useHolographicMotion<HTMLButtonElement>();
+  const ready = useRecognitionReady(elementRef);
   const [previewOpen, setPreviewOpen] = useState(false);
   const historyRequested = useRef(false);
   const previewCloseTimer = useRef<number | undefined>(undefined);
@@ -287,7 +288,7 @@ function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
     <button
       type="button"
       ref={elementRef}
-      className="employee-reward-card recognition-holographic-card recognition-rarity-prism"
+      className={`employee-reward-card recognition-holographic-card recognition-rarity-prism${ready ? "" : " recognition-is-preparing"}`}
       data-reward-icon={group.iconKey}
       style={holographicStyle}
       onPointerMove={onPointerMove}
@@ -299,11 +300,10 @@ function RewardCard({ group, onOpenHistory, people, token, onOpenIssuer }: {
       aria-label={`${group.title}: ${countLabel(group.issuances.length, ["награда", "награды", "наград"])}. Открыть историю выдач`}
     >
       <span className="recognition-card-surface" aria-hidden="true">
-        <span className="recognition-card-foil" />
-        <span className="recognition-card-glare" />
+        {ready ? <><span className="recognition-card-foil" /><span className="recognition-card-glare" /></> : null}
       </span>
       <span className="recognition-card-content">
-        <RecognitionEmblem iconKey={group.iconKey} compact />
+        {ready ? <RecognitionEmblem iconKey={group.iconKey} compact /> : <span className="recognition-emblem is-compact" aria-hidden="true" />}
         <span className="recognition-card-details">
           <strong className="reward-card-title">{group.title}</strong>
           <span className="reward-card-description">{group.description}</span>
@@ -388,8 +388,12 @@ export function EmployeeProfileDialog({
 }) {
   const [profileState, setProfileState] = useState<{
     readonly userId: string;
+    readonly token: string;
     readonly profile: EmployeeRecognitionProfile;
-  }>();
+  } | undefined>(() => {
+    const prepared = getPreparedProfile(token, userId);
+    return userId && prepared ? { userId, token, profile: prepared } : undefined;
+  });
   const [errorState, setErrorState] = useState<{ readonly userId: string; readonly message: string }>();
   const [tab, setTab] = useState<"overview" | "achievements" | "rewards">("overview");
   const overviewRef = useRef<HTMLElement>(null);
@@ -432,9 +436,9 @@ export function EmployeeProfileDialog({
     readonly value?: EmployeeEfficiency;
   }>();
   const [efficiencyRetry, setEfficiencyRetry] = useState(0);
-  const profile = profileState && profileState.userId === userId
+  const profile = profileState && profileState.userId === userId && profileState.token === token
     ? profileState.profile
-    : undefined;
+    : getPreparedProfile(token, userId);
   const error = errorState && errorState.userId === userId ? errorState.message : "";
 
   useEffect(() => {
@@ -463,8 +467,8 @@ export function EmployeeProfileDialog({
   useEffect(() => {
     if (!open || !userId) return;
     let active = true;
-    void loadEmployeeRecognitionProfile(token, userId)
-      .then((loaded) => { if (active) setProfileState({ userId, profile: loaded }); })
+    void loadPreparedProfile(token, userId)
+      .then((loaded) => { if (active) { setErrorState(undefined); setProfileState({ userId, token, profile: loaded }); } })
       .catch((cause: unknown) => {
         if (active) setErrorState({
           userId,
@@ -475,9 +479,17 @@ export function EmployeeProfileDialog({
   }, [open, token, userId]);
 
   useEffect(() => {
+    if (!open || !profile) return;
+    return prewarmRecognitionArtwork([
+      ...profile.achievements.filter((item) => item.unlocked).slice(-4).map((item) => item.iconKey),
+      ...profile.rewards.map((item) => item.iconKey), ...profile.achievements.map((item) => item.iconKey),
+    ]);
+  }, [open, profile]);
+
+  useEffect(() => {
     if (!open || !userId) return;
     let active = true;
-    void loadWorkspaceEfficiency(token).then((overview) => {
+    void loadPreparedProfileEfficiency(token, efficiencyRetry > 0).then((overview) => {
       if (active) setEfficiencyState({ userId, token, retry: efficiencyRetry, status: "ready", value: overview.employees.find((employee) => employee.userId === userId) });
     }).catch(() => {
       if (active) setEfficiencyState({ userId, token, retry: efficiencyRetry, status: "error" });
@@ -567,8 +579,10 @@ export function EmployeeProfileDialog({
       });
       setProfileState({
         userId: profile.person.id,
+        token,
         profile: { ...profile, rewards: [reward, ...profile.rewards] },
       });
+      invalidatePreparedProfile(token, profile.person.id);
       setRewardOpen(false);
       setRewardContext("");
     } catch (cause) {

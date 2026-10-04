@@ -45,6 +45,12 @@
 .achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 0 30px; }
 .achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: 1; transition: filter 220ms var(--ws-ease), opacity 220ms var(--ws-ease); }
 .achievement-card.is-locked { filter: saturate(.72); opacity: .76; }
+/* Do not create offscreen 3D layers during the dialog entrance. The card's
+   surface, copy and emblem footprint remain unchanged; full effects are
+   restored before the card enters the viewport. No paint containment clips
+   the existing hover shadows or tilted edges. */
+.recognition-holographic-card.recognition-is-preparing { transform: none; perspective: none; transform-style: flat; }
+.recognition-is-preparing .recognition-card-content { transform: none; }
 .recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }
 .recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: var(--recognition-card-base, linear-gradient(145deg, #fff, #eef8f7)); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
 .recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: calc(.12 + var(--recognition-active, 0) * .72); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }
