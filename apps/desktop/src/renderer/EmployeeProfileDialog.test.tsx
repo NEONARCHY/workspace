@@ -10,7 +10,7 @@ import {
   loadWorkspaceEfficiency,
 } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
-import { clearProfilePreload } from "./profile-preload";
+import { clearProfilePreload, loadPreparedProfile } from "./profile-preload";
 
 vi.mock("./workspace-api", () => ({
   issueEmployeeReward: vi.fn(),
@@ -122,11 +122,19 @@ describe("EmployeeProfileDialog", () => {
     }
     vi.stubGlobal("ResizeObserver", HeaderResizeObserver);
     try {
+      // Exercise the actual warm-open path, where data precedes portal mounting.
+      vi.mocked(loadEmployeeRecognitionProfile).mockResolvedValue(profile);
+      await loadPreparedProfile("token", "baxtiyor");
       renderProfile();
       await screen.findByRole("heading", { name: profile.person.name });
       const header = document.querySelector<HTMLElement>(".employee-profile-sticky")!;
       const content = header.closest<HTMLElement>(".fui-DialogContent")!;
-      const measured = observers.find((entry) => entry.targets.has(header))!;
+      // The heading can be present before the passive layout observer attaches.
+      const measured = await waitFor(() => {
+        const entry = observers.find((candidate) => candidate.targets.has(header));
+        if (!entry) throw new Error("Profile header observer has not attached");
+        return entry;
+      });
       expect(measured.targets.has(content)).toBe(true);
       header.style.position = "sticky";
       Object.defineProperty(header, "offsetHeight", { value: 244, configurable: true });
