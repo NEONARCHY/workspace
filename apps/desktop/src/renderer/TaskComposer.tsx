@@ -97,9 +97,18 @@ export function TaskComposer({
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [project, setProject] = useState("");
-  const [assigneeId, setAssigneeId] = useState(() => people.find((person) =>
-    person.name.toLocaleLowerCase("ru-RU") === initialAssigneeName?.toLocaleLowerCase("ru-RU"),
-  )?.id ?? currentUserId);
+  const [assigneeId, setAssigneeId] = useState(() => {
+    if (!initialAssigneeName?.trim()) return currentUserId;
+    const tokens = initialAssigneeName.toLocaleLowerCase("ru-RU").split(/[^\p{L}]+/u)
+      .filter((word) => word && !["ака", "опа", "aka"].includes(word));
+    const matches = people.filter((person) => {
+      if (person.status && person.status !== "active") return false;
+      const parts = person.name.toLocaleLowerCase("ru-RU").split(/[^\p{L}]+/u);
+      return tokens.length > 0 && tokens.every((word) => parts.includes(word));
+    });
+    // Never silently assign a request for an unknown/ambiguous colleague to the current user.
+    return matches.length === 1 ? matches[0]!.id : "";
+  });
   const [priority, setPriority] = useState<WorkspaceTask["priority"]>("normal");
   const [dueAt, setDueAt] = useState(initialDueAt);
   const [participants, setParticipants] = useState<readonly DraftParticipant[]>([]);
@@ -445,6 +454,9 @@ export function TaskComposer({
                       setParticipants((current) => current.filter((item) => item.userId !== next));
                     }}
                   />
+                  {initialAssigneeName && !assigneeId && <small>
+                    Не удалось однозначно определить «{initialAssigneeName}». Выберите сотрудника из списка.
+                  </small>}
                 </label>
                 <label>
                   <span>Срок</span>

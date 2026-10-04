@@ -200,6 +200,130 @@ describe("YuksalishAssistant", () => {
     expect(document.querySelector(".assistant-message.is-user")).toHaveTextContent("letter.pdf");
   });
 
+  it("pastes a file into the focused editor without sending or replacing text", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const editor = screen.getByRole("textbox", { name: "Сообщение ассистенту" });
+    fireEvent.change(editor, { target: { value: "Разбери документ" } });
+    fireEvent.paste(editor, { clipboardData: { files: [new File(["text"], "notes.txt", { type: "text/plain" })] } });
+    expect(screen.getByText("notes.txt")).toBeInTheDocument();
+    expect(editor).toHaveValue("Разбери документ");
+    expect(editor).toHaveFocus();
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+    const normalPaste = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(normalPaste, "clipboardData", { value: { files: [] } });
+    fireEvent(editor, normalPaste);
+    expect(normalPaste.defaultPrevented).toBe(false);
+  });
+
+  it("accepts drops on the header and stream in both sizes, not only on the editor", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const dataTransfer = { types: ["Files"], files: [new File(["report"], "drop.txt")], dropEffect: "none" };
+    const header = document.querySelector(".assistant-header")!;
+    fireEvent.dragEnter(header, { dataTransfer });
+    expect(screen.getByText("Отпустите файл здесь")).toBeInTheDocument();
+    fireEvent.dragOver(header, { dataTransfer });
+    expect(dataTransfer.dropEffect).toBe("copy");
+    fireEvent.drop(header, { dataTransfer });
+    expect(screen.getByText("drop.txt")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    fireEvent.drop(document.querySelector(".assistant-stream")!, { dataTransfer: {
+      ...dataTransfer, files: [new File(["new"], "expanded.txt")],
+    } });
+    expect(screen.getByText("expanded.txt")).toBeInTheDocument();
+    expect(screen.queryByText("drop.txt")).not.toBeInTheDocument();
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("rejects multiple, oversized and unsupported dropped files without losing the valid attachment", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const panel = screen.getByRole("dialog", { name: "Ассистент Yuksalish" });
+    const drop = (files: File[]) => fireEvent.drop(panel, { dataTransfer: { types: ["Files"], files } });
+    const valid = new File(["text"], "keep.txt");
+    drop([valid]);
+    drop([valid, new File(["text"], "second.txt")]);
+    expect(screen.getByRole("alert")).toHaveTextContent("по одному файлу");
+    drop([new File(["code"], "unsafe.exe")]);
+    expect(screen.getByRole("alert")).toHaveTextContent("DOCX");
+    const oversized = new File(["large"], "large.pdf");
+    Object.defineProperty(oversized, "size", { value: 5 * 1024 * 1024 + 1 });
+    drop([oversized]);
+    expect(screen.getByRole("alert")).toHaveTextContent("до 5 МБ");
+    drop([new File([], "empty.txt")]);
+    expect(screen.getByRole("alert")).toHaveTextContent("непустой");
+    expect(screen.getByText("keep.txt")).toBeInTheDocument();
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("restores a pasted attachment and text after a failed send", async () => {
+    vi.mocked(sendAssistantMessage).mockRejectedValue(new Error("Временная ошибка"));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const editor = screen.getByRole("textbox", { name: "Сообщение ассистенту" });
+    fireEvent.change(editor, { target: { value: "Проверь текст" } });
+    fireEvent.paste(editor, { clipboardData: { files: [new File(["text"], "retry.txt")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Временная ошибка");
+    expect(editor).toHaveValue("Проверь текст");
+    expect(screen.getByText("retry.txt")).toBeInTheDocument();
+  });
+
+  it("fills all primary workflows without automatically sending a request", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    for (const [label, text] of [
+      [/Создать задачу/, "Создай задачу: "], [/Начать проект/, "Создай проект: "],
+      [/Спланировать поездку/, "Подготовь командировку: "], [/Оформить отсутствие/, "Подготовь заявку на отсутствие: "],
+    ] as const) {
+      fireEvent.click(screen.getByRole("button", { name: label }));
+      expect(screen.getByRole("textbox", { name: "Сообщение ассистенту" })).toHaveValue(text);
+    }
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("stops resize motion when reduced motion or forced colors changes while open", async () => {
+    class Preference extends EventTarget { matches = false; }
+    const reduced = new Preference(), forced = new Preference(), other = new Preference();
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => query.includes("reduced-motion")
+      ? reduced : query.includes("forced-colors") ? forced : other));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const cancel = vi.fn();
+    const animate = vi.fn(() => ({ cancel }) as unknown as Animation);
+    screen.getByRole("dialog", { name: "Ассистент Yuksalish" }).animate = animate;
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    expect(animate).toHaveBeenCalledTimes(1);
+    act(() => { reduced.matches = true; reduced.dispatchEvent(new Event("change")); });
+    expect(cancel).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
+    expect(animate).toHaveBeenCalledTimes(1);
+    act(() => { forced.matches = true; reduced.matches = false; forced.dispatchEvent(new Event("change")); });
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    expect(animate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat a general question after a ready draft as a draft edit", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "ready", role: "assistant", model: "flash-lite", content: "Готово к проверке.",
+      createdAt: "2026-09-28T10:00:00Z", actionDraft: { kind: "task", ready: true, fields: { title: "Отчёт" } },
+    }]);
+    vi.mocked(sendAssistantMessage).mockResolvedValue({ id: "general", role: "assistant", model: "flash-lite", content: "Четыре.", createdAt: "2026-09-28T10:01:00Z" });
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Готово к проверке.");
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Сколько будет 2 + 2?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "flash-lite", "Сколько будет 2 + 2?", undefined, false));
+  });
+
   it("puts a voice request in the composer before the user submits an action", async () => {
     const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
     const stopTrack = vi.fn();
@@ -256,13 +380,13 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("Здравствуйте.");
-    fireEvent.click(screen.getByRole("button", { name: /Шаблоны запросов/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Быстрые действия/ }));
     fireEvent.click(screen.getByRole("button", { name: "О сотруднике" }));
     expect(screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" }).value)
       .toContain("[имя]");
   });
 
-  it("shows stored answer sources without presenting hidden model reasoning", async () => {
+  it("removes the redundant answer preparation expander even from old history", async () => {
     vi.mocked(loadAssistantMessages).mockResolvedValue([{
       id: "sourced", role: "assistant", model: "flash-lite", content: "Сведения о сотруднике.",
       createdAt: "2026-09-28T09:00:00Z", sourceLabels: ["Проверены доступные профили сотрудников"],
@@ -270,11 +394,8 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("Сведения о сотруднике.");
-    const details = screen.getByText("Как подготовлен ответ").closest("details")!;
-    details.open = true;
-    expect(details).toHaveAttribute("open");
-    expect(screen.getByText("Проверены доступные профили сотрудников")).toBeInTheDocument();
-    expect(screen.getByText(/не скрытые рассуждения модели/)).toBeInTheDocument();
+    expect(screen.queryByText("Как подготовлен ответ")).not.toBeInTheDocument();
+    expect(screen.queryByText("Проверены доступные профили сотрудников")).not.toBeInTheDocument();
   });
 
   it("opens a server-provided record without closing the assistant", async () => {
@@ -308,6 +429,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     expect(await screen.findAllByRole("button", { name: "Открыть заполненную форму" })).toHaveLength(1);
     expect(onPrepareAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Уточнить черновик" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
       target: { value: "Добавь описание" },
     });

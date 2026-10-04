@@ -43,7 +43,7 @@
 
 .app-provider :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
-  textarea:not(.fui-Textarea__textarea),
+  textarea:not(.fui-Textarea__textarea):not(.assistant-editor),
   select:not(.fui-Select__select)
 ) {
   border: 1px solid color-mix(in srgb, var(--ws-control-line) 72%, white);
@@ -58,12 +58,12 @@
 
 .app-provider :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
-  textarea:not(.fui-Textarea__textarea),
+  textarea:not(.fui-Textarea__textarea):not(.assistant-editor),
   select:not(.fui-Select__select)
 ):focus,
 .app-provider :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not(.fui-Input__input):not(.ai-gooey-search-input),
-  textarea:not(.fui-Textarea__textarea),
+  textarea:not(.fui-Textarea__textarea):not(.assistant-editor),
   select:not(.fui-Select__select)
 ):focus-visible {
   border-color: var(--ws-focus-line);

@@ -72,6 +72,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("opens an editable assistant-prefilled project without saving it", async () => {
+    render(<FluentProvider theme={workspaceTheme}><ProjectHubView
+      mode="projects" token="test-token" people={people} currentUserId={people[0]!.id}
+      canCreateProject canCreateRequest canViewFunding
+      assistantDraft={{ kind: "project", ready: true, fields: {
+        title: "Проект команды", code: "TEAM-30", description: "План действий",
+        startDate: "2030-10-01", endDate: "2030-10-31",
+      } }}
+    /></FluentProvider>);
+    expect(await screen.findByRole("textbox", { name: "Название проекта" })).toHaveValue("Проект команды");
+    expect(screen.getByRole("textbox", { name: "Код проекта" })).toHaveValue("TEAM-30");
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+  });
   it("opens the managed project chat and does not offer one to unrelated readers", async () => {
     const onOpenChat = vi.fn();
     const props = { mode: "projects" as const, token: "test-token", people, currentUserId: people[0]!.id,

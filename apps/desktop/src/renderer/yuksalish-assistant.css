@@ -139,13 +139,6 @@ body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 .assistant-references button:hover { background: #dff2f2; }
 .assistant-references button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .assistant-references button:disabled { opacity: .55; cursor: not-allowed; }
-.assistant-answer-context { margin-top: 10px; padding-top: 8px; border-top: 1px solid #e4eeec; color: #52697b; font-size: 12px; line-height: 1.45; }
-.assistant-answer-context summary { width: fit-content; color: var(--ws-link); font-weight: 600; cursor: pointer; }
-.assistant-answer-context summary:hover { text-decoration: underline; }
-.assistant-answer-context summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; border-radius: 3px; }
-.assistant-answer-context p { margin: 7px 0 0; }
-.assistant-answer-context ul { margin: 7px 0 0; padding-left: 18px; }
-.assistant-answer-context li + li { margin-top: 3px; }
 .assistant-composer { gap: 8px; }
 .assistant-composer-toolbar { padding-top: 7px; border-top: 1px solid #edf3f2; }
 .assistant-model-description { font-size: 12px; }
