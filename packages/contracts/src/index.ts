@@ -495,6 +495,14 @@ export interface AssistantActionDraft {
   readonly ready: boolean;
 }
 
+export interface AssistantChat {
+  readonly id: string;
+  readonly title: string;
+  readonly isDefault: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
 export interface AssistantMessage {
   readonly id: string;
   readonly role: "user" | "assistant";

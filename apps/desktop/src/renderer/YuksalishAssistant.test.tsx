@@ -2,13 +2,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
-import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
+import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
 vi.mock("thinking-orbs", () => ({
   ThinkingOrb: ({ state }: { state: string }) => <span data-testid={`thinking-${state}`} />,
 }));
 
 vi.mock("./workspace-api", () => ({
+  clearAssistantChat: vi.fn(), createAssistantChat: vi.fn(), listAssistantChats: vi.fn(),
   loadAssistantMessages: vi.fn(),
   sendAssistantMessage: vi.fn(),
   transcribeAssistantVoice: vi.fn(),
@@ -17,8 +18,107 @@ vi.mock("./workspace-api", () => ({
 describe("YuksalishAssistant", () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
   beforeEach(() => {
+    vi.mocked(listAssistantChats).mockResolvedValue([{ id: "first", title: "Первый чат", isDefault: true,
+      createdAt: "2026-10-04T09:00:00Z", updatedAt: "2026-10-04T09:00:00Z" }]);
+    vi.mocked(createAssistantChat).mockReset();
+    vi.mocked(clearAssistantChat).mockReset();
     vi.mocked(loadAssistantMessages).mockResolvedValue([]);
     vi.mocked(sendAssistantMessage).mockReset();
+  });
+
+  it("creates a separate chat and reopens saved history with its unsent draft", async () => {
+    const oldMessage = { id: "saved", role: "assistant" as const, model: "flash-lite" as const,
+      content: "Сохранённая переписка", createdAt: "2026-10-04T09:00:00Z" };
+    vi.mocked(loadAssistantMessages).mockResolvedValue([oldMessage]);
+    vi.mocked(createAssistantChat).mockResolvedValue({ id: "second", title: "Новый чат", isDefault: false,
+      createdAt: "2026-10-04T10:00:00Z", updatedAt: "2026-10-04T10:00:00Z" });
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Сохранённая переписка");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Несохранённый текст" } });
+    fireEvent.click(screen.getByRole("button", { name: "Новый чат" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveValue("second"));
+    expect(screen.queryByText("Сохранённая переписка")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    expect(createAssistantChat).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole("combobox", { name: "Чат ассистента" }), { target: { value: "first" } });
+    await screen.findByText("Сохранённая переписка");
+    expect(screen.getByRole("textbox")).toHaveValue("Несохранённый текст");
+    expect(loadAssistantMessages).toHaveBeenLastCalledWith("test-token", "first");
+  });
+
+  it("keeps history and draft when switching or creating a chat fails", async () => {
+    vi.mocked(listAssistantChats).mockResolvedValue(["first", "second"].map((id) => ({ id,
+      title: id, isDefault: id === "first", createdAt: "2026-10-04", updatedAt: "2026-10-04" })));
+    vi.mocked(loadAssistantMessages).mockResolvedValueOnce([{ id: "saved", role: "assistant", model: "flash-lite",
+      content: "Прежняя переписка", createdAt: "2026-10-04T09:00:00Z" }]).mockRejectedValue(new Error("Сбой загрузки"));
+    vi.mocked(createAssistantChat).mockRejectedValue(new Error("Сбой создания"));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Прежняя переписка");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Мой текст" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Чат ассистента" }), { target: { value: "second" } });
+    await screen.findByText("Сбой загрузки");
+    expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveValue("first");
+    expect(screen.getByRole("textbox")).toHaveValue("Мой текст");
+    expect(screen.getByText("Прежняя переписка")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Новый чат" }));
+    await screen.findByText("Сбой создания");
+    expect(screen.getByRole("textbox")).toHaveValue("Мой текст");
+  });
+
+  it("sends to the selected new chat and blocks switching until its answer arrives", async () => {
+    vi.mocked(createAssistantChat).mockResolvedValue({ id: "second", title: "Новый чат", isDefault: false,
+      createdAt: "2026-10-04T10:00:00Z", updatedAt: "2026-10-04T10:00:00Z" });
+    let resolveAnswer!: (value: Awaited<ReturnType<typeof sendAssistantMessage>>) => void;
+    vi.mocked(sendAssistantMessage).mockImplementation(() => new Promise((resolve) => { resolveAnswer = resolve; }));
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    fireEvent.click(screen.getByRole("button", { name: "Новый чат" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveValue("second"));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Другой разговор" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "flash-lite", "Другой разговор", undefined, false, "second"));
+    expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Новый чат" })).toBeDisabled();
+    resolveAnswer({ id: "answer", role: "assistant", model: "flash-lite", content: "Новый ответ", createdAt: "2026-10-04T10:01:00Z" });
+    await screen.findByText("Новый ответ");
+    expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toBeEnabled();
+  });
+
+  it("confirms clearing only the current chat and keeps its content on failure", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "saved", role: "assistant", model: "flash-lite",
+      content: "Переписка для очистки", createdAt: "2026-10-04T09:00:00Z" }]);
+    vi.mocked(clearAssistantChat).mockRejectedValueOnce(new Error("Сбой очистки")).mockResolvedValue(undefined);
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Переписка для очистки");
+    fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
+    await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(clearAssistantChat).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Очистить текущий чат?" })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Очистить чат" }));
+    await screen.findByText("Сбой очистки");
+    expect(screen.getByText("Переписка для очистки")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Очистить чат" }));
+    await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
+    expect(clearAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
+    expect(screen.getByRole("option", { name: "Первый чат" })).toBeInTheDocument();
+  });
+
+  it("accepts the 50 MB boundary without sending automatically", async () => {
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const file = new File(["%PDF-1.7"], "large.pdf", { type: "application/pdf" });
+    Object.defineProperty(file, "size", { value: 50_000_000 });
+    fireEvent.change(screen.getByLabelText("Выбрать вложение"), { target: { files: [file] } });
+    expect(screen.getByText("large.pdf")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
   });
 
   it("keeps its header slot, toggles the dialog and restores focus without losing the draft", async () => {
@@ -65,7 +165,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(document.querySelector(".assistant-message.is-assistant"))
       .toHaveTextContent("Ваши задачи проверены."));
-    expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "pro", "Какие у меня задачи?", undefined, false);
+    expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "pro", "Какие у меня задачи?", undefined, false, "first");
     expect(screen.queryByText(/Gemini/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
     expect(screen.getByRole("button", { name: "Свернуть окно" })).toBeInTheDocument();
@@ -140,7 +240,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
       "test-token", "flash-lite", "↳ Ответ на сообщение ассистента: Первый совет.\n\nА второй шаг?",
-      undefined, false,
+      undefined, false, "first",
     ));
     await waitFor(() => expect(screen.queryByText("Ответ на сообщение Yuksalish")).not.toBeInTheDocument());
   });
@@ -195,7 +295,7 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
       "test-token", "flash-lite", "Расскажи, что находится во вложении.",
       expect.objectContaining({ name: "letter.pdf", mime_type: "application/pdf" }),
-      false,
+      false, "first",
     ));
     expect(document.querySelector(".assistant-message.is-user")).toHaveTextContent("letter.pdf");
   });
@@ -251,9 +351,9 @@ describe("YuksalishAssistant", () => {
     drop([new File(["code"], "unsafe.exe")]);
     expect(screen.getByRole("alert")).toHaveTextContent("DOCX");
     const oversized = new File(["large"], "large.pdf");
-    Object.defineProperty(oversized, "size", { value: 5 * 1024 * 1024 + 1 });
+    Object.defineProperty(oversized, "size", { value: 50_000_001 });
     drop([oversized]);
-    expect(screen.getByRole("alert")).toHaveTextContent("до 5 МБ");
+    expect(screen.getByRole("alert")).toHaveTextContent("до 50 МБ");
     drop([new File([], "empty.txt")]);
     expect(screen.getByRole("alert")).toHaveTextContent("непустой");
     expect(screen.getByText("keep.txt")).toBeInTheDocument();
@@ -321,7 +421,7 @@ describe("YuksalishAssistant", () => {
     await screen.findByText("Готово к проверке.");
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Сколько будет 2 + 2?" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
-    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "flash-lite", "Сколько будет 2 + 2?", undefined, false));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "flash-lite", "Сколько будет 2 + 2?", undefined, false, "first"));
   });
 
   it("puts a voice request in the composer before the user submits an action", async () => {
@@ -363,7 +463,7 @@ describe("YuksalishAssistant", () => {
       expect(sendAssistantMessage).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
       await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
-        "test-token", "flash-lite", "Создай задачу проверить отчёт", undefined, false,
+        "test-token", "flash-lite", "Создай задачу проверить отчёт", undefined, false, "first",
       ));
       expect(stopTrack).toHaveBeenCalled();
     } finally {
@@ -435,7 +535,7 @@ describe("YuksalishAssistant", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
-      "test-token", "flash-lite", "Добавь описание", undefined, true,
+      "test-token", "flash-lite", "Добавь описание", undefined, true, "first",
     ));
     fireEvent.click((await screen.findAllByRole("button", { name: "Открыть заполненную форму" }))[0]!);
     expect(onPrepareAction).toHaveBeenCalledWith(draft);

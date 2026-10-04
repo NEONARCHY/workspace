@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Reply, Sparkles, Square, Upload, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Plus, Reply, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
 
-import type { AssistantActionDraft, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
+import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocking-dialog";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
+import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -17,7 +18,7 @@ const modelOptions: readonly { value: AssistantModel; label: string; description
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
 const REPLY_EXCERPT_LENGTH = 280;
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 50_000_000;
 const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
   webp: "image/webp", txt: "text/plain",
@@ -120,6 +121,14 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState<readonly AssistantMessage[]>([]);
+  const [chats, setChats] = useState<readonly AssistantChat[]>([]);
+  const [chatId, setChatId] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearError, setClearError] = useState("");
+  const chatOperationRef = useRef(false);
+  const chatDraftsRef = useRef(new Map<string, string>());
+  const mountedRef = useRef(true);
   const [model, setModel] = useState<AssistantModel>("flash-lite");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -205,7 +214,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
 
   const acceptFiles = (files: readonly File[]) => {
     if (!files.length) return;
-    if (busy || recording || transcribing) {
+    if (busy || recording || transcribing || chatBusy) {
       setError("Дождитесь окончания ответа или голосового ввода, затем прикрепите файл.");
       return;
     }
@@ -216,7 +225,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     const file = files[0]!;
     const suffix = file.name.split(".").at(-1)?.toLowerCase() ?? "";
     if (!fileTypes[suffix] || file.size > MAX_FILE_BYTES || file.size === 0 || file.name.length > 160) {
-      setError("Выберите непустой DOCX, PDF, PNG, JPEG, WebP или TXT до 5 МБ с именем до 160 символов.");
+      setError("Выберите непустой DOCX, PDF, PNG, JPEG, WebP или TXT до 50 МБ с именем до 160 символов.");
       return;
     }
     setSelectedFile(file);
@@ -227,17 +236,28 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const isFileDrag = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
 
   useEffect(() => {
+    mountedRef.current = true;
+    const drafts = chatDraftsRef.current;
+    return () => { mountedRef.current = false; drafts.clear(); };
+  }, []);
+
+  useEffect(() => {
     if (!open || loaded) return;
     let active = true;
-    void loadAssistantMessages(token)
-      .then((history) => { if (active) { setMessages(history); setLoaded(true); } })
+    void listAssistantChats(token)
+      .then(async (available) => {
+        const selected = available[0];
+        if (!selected) throw new Error("Чат не найден");
+        const history = await loadAssistantMessages(token, selected.id);
+        if (active) { setChats(available); setChatId(selected.id); setMessages(history); setLoaded(true); setError(""); }
+      })
       .catch(() => { if (active) setError("Не удалось загрузить историю. Закройте и откройте ассистента ещё раз."); });
     return () => { active = false; };
   }, [open, loaded, token]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    if (open && !blockingDialog) inputRef.current?.focus();
+  }, [open, blockingDialog]);
 
   useLayoutEffect(() => {
     if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || transcribing
@@ -249,12 +269,55 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (replyMenu) setReplyMenu(null);
-        else close();
+        else if (!confirmClear) close();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, open, replyMenu]);
+  }, [close, open, replyMenu, confirmClear]);
+
+  const chatControlsDisabled = !loaded || busy || recording || transcribing || preparingAction || chatBusy || confirmClear;
+  const changeChat = async (targetId?: string) => {
+    if (chatControlsDisabled || chatOperationRef.current || targetId === chatId) return;
+    chatOperationRef.current = true;
+    setChatBusy(true); setError("");
+    try {
+      const created = targetId ? null : await createAssistantChat(token);
+      const nextId = targetId ?? created!.id;
+      // A freshly created conversation is known to be empty; no second request can
+      // leave an unreachable chat after a history-loading failure.
+      const history = created ? [] : await loadAssistantMessages(token, nextId);
+      if (!mountedRef.current) return;
+      chatDraftsRef.current.set(chatId, draft);
+      if (created) setChats((current) => [created, ...current]);
+      setChatId(nextId); setMessages(history); setDraft(chatDraftsRef.current.get(nextId) ?? "");
+      setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
+      setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (failure) {
+      if (mountedRef.current) setError(failure instanceof Error ? failure.message : "Не удалось открыть чат.");
+    } finally {
+      chatOperationRef.current = false; setChatBusy(false); inputRef.current?.focus();
+    }
+  };
+
+  const clearCurrentChat = async () => {
+    if (chatOperationRef.current || !chatId) return;
+    chatOperationRef.current = true; setChatBusy(true); setClearError("");
+    try {
+      await clearAssistantChat(token, chatId);
+      if (!mountedRef.current) return;
+      setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
+      setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      chatDraftsRef.current.delete(chatId);
+      setChats((current) => current.map((chat) => chat.id === chatId
+        ? { ...chat, title: chat.isDefault ? "Первый чат" : "Новый чат" } : chat));
+      setConfirmClear(false); setError("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (failure) {
+      if (mountedRef.current) setClearError(failure instanceof Error ? failure.message : "Не удалось очистить чат.");
+    } finally { chatOperationRef.current = false; setChatBusy(false); }
+  };
 
   useEffect(() => {
     if (!replyMenu) return;
@@ -338,7 +401,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
-    if ((!value && !selectedFile) || busy || recording || transcribing || !loaded) return;
+    if ((!value && !selectedFile) || busy || recording || transcribing || !loaded || chatBusy || confirmClear) return;
     const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
     const prompt = value || "Расскажи, что находится во вложении.";
     const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${prompt}` : prompt;
@@ -367,14 +430,20 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
         name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
       } : undefined;
-      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft);
+      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId);
+      if (!mountedRef.current) return;
       setMessages((current) => [...current, response]);
+      setChats((current) => current.map((chat) => chat.id === chatId ? {
+        ...chat, updatedAt: response.createdAt,
+        title: ["Первый чат", "Новый чат"].includes(chat.title) ? content.slice(0, 100) : chat.title,
+      } : chat));
       setAnimatedReplyId(response.id);
       setDismissedDraftId(undefined);
       setEditingDraftId(undefined);
       setReplyingTo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
+      if (!mountedRef.current) return;
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
       setDraft((current) => current ? `${value}\n${current}` : value);
       setSelectedFile(file);
@@ -458,8 +527,23 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <button type="button" aria-label="Закрыть ассистента" title="Закрыть"
             onClick={close}><X size={19} /></button>
         </header>
+        <nav className="assistant-chat-controls" aria-label="Чаты ассистента">
+          <select aria-label="Чат ассистента" title={chats.find((chat) => chat.id === chatId)?.title}
+            value={chatId} disabled={chatControlsDisabled}
+            onChange={(event) => void changeChat(event.target.value)}>
+            {!chats.length && <option value="">Загрузка чатов…</option>}
+            {chats.map((chat) => <option key={chat.id} value={chat.id}>{chat.title}</option>)}
+          </select>
+          <button type="button" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
+            <Plus size={16} aria-hidden="true" /> Новый чат
+          </button>
+          <button type="button" aria-label="Очистить текущий чат" title="Очистить текущий чат"
+            disabled={chatControlsDisabled || !messages.length}
+            onClick={() => { setClearError(""); setConfirmClear(true); }}><Trash2 size={16} /></button>
+        </nav>
+        {chatBusy && <span className="assistant-chat-status" role="status">Обновляю чат…</span>}
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
-        ref={streamRef} aria-live="polite">
+        ref={streamRef} aria-live="polite" inert={chatBusy || confirmClear}>
           <div className="assistant-stream-inner">
             {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
               <span className="assistant-empty-mark"><Sparkles size={25} aria-hidden="true" /></span>
@@ -523,11 +607,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <div className="assistant-composer-inner">
             <div className="assistant-presets">
               <button type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
-                aria-controls="assistant-presets-list" onClick={() => setPresetsOpen((current) => !current)}>
+                aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear} onClick={() => setPresetsOpen((current) => !current)}>
                 Быстрые действия <ChevronDown size={14} aria-hidden="true" />
               </button>
               {presetsOpen && <div id="assistant-presets-list" className="assistant-presets-list">
-                {presets.map((preset) => <button key={preset.label} type="button"
+                {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
                   onClick={() => { setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
                   {preset.label}
                 </button>)}
@@ -550,7 +634,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 </button>
               </div>}
               <textarea ref={inputRef} className="assistant-editor" aria-label="Сообщение ассистенту" placeholder="Задайте вопрос или опишите, что нужно сделать…"
-                value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
+                value={draft} disabled={chatBusy || confirmClear} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
                   const files = Array.from(event.clipboardData.files);
                   if (!files.length) return;
@@ -578,25 +662,25 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                       event.target.value = "";
                     }} />
                   <button type="button" className="assistant-attach-button" aria-label="Прикрепить файл"
-                    title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 5 МБ; файл передаётся ИИ, но не хранится в истории"
-                    disabled={busy || recording || transcribing} onClick={() => fileInputRef.current?.click()}>
+                    title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 50 МБ; TXT и текст DOCX — до 50 000 символов. Файл не сохраняется в истории"
+                    disabled={busy || recording || transcribing || chatBusy || confirmClear} onClick={() => fileInputRef.current?.click()}>
                     <Paperclip size={18} />
                   </button>
                   <button type="button" className={`assistant-voice-button${recording ? " is-recording" : ""}`}
                     aria-label={recording ? "Остановить запись" : "Голосовой ввод"}
                     title={recording ? "Остановить запись" : "Голосовой ввод · до 1 минуты; аудио передаётся ИИ для расшифровки"}
-                    disabled={transcribing || busy} onClick={() => void (recording ? stopRecording() : startRecording())}>
+                    disabled={transcribing || busy || chatBusy || confirmClear || !loaded} onClick={() => void (recording ? stopRecording() : startRecording())}>
                     {recording ? <Square size={16} /> : <Mic size={19} />}
                   </button>
                   <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
-                    disabled={busy || recording || transcribing || (!draft.trim() && !selectedFile) || !loaded}>
+                    disabled={busy || recording || transcribing || chatBusy || confirmClear || (!draft.trim() && !selectedFile) || !loaded}>
                     <ArrowUp size={19} strokeWidth={2.4} />
                   </button>
                 </div>
               </div>
             </form>
             {error && <p className="assistant-error" role="alert">{error}</p>}
-            {selectedFile && <small className="assistant-attachment-notice">Файл будет передан ИИ с сообщением. Содержимое не хранится в истории.</small>}
+            {selectedFile && <small className="assistant-attachment-notice">Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов.</small>}
             <small className="assistant-privacy">ИИ может ошибаться. Рабочие действия — после вашего подтверждения.</small>
           </div>
         </div>
@@ -605,7 +689,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           transition={{ duration: reducedMotion ? 0 : 0.16 }}>
           <Upload size={32} aria-hidden="true" /><strong>Отпустите файл здесь</strong>
-          <span>DOCX, PDF, PNG, JPEG, WebP или TXT · один файл до 5 МБ</span>
+          <span>DOCX, PDF, PNG, JPEG, WebP или TXT · один файл до 50 МБ</span>
           <small>Добавится к сообщению — отправка только по вашему нажатию.</small>
         </motion.div>}</AnimatePresence>
         {replyMenu && <div className="assistant-context-menu" role="menu" style={{ left: replyMenu.x, top: replyMenu.y }}>
@@ -615,5 +699,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         </div>}
       </motion.section>}
     </AnimatePresence>
+    <ConfirmActionDialog open={confirmClear} title="Очистить текущий чат?"
+      message={clearError || "Переписка этого чата будет удалена без восстановления. Остальные чаты сохранятся."}
+      confirmLabel="Очистить чат" busyLabel="Очищаем…" busy={chatBusy}
+      onCancel={() => setConfirmClear(false)} onConfirm={clearCurrentChat} />
   </div>;
 }

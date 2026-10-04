@@ -504,10 +504,10 @@ def test_assistant_file_accepts_only_bounded_supported_content() -> None:
         )
     with pytest.raises(ValueError, match="повреждено"):
         parse_assistant_attachment("report.pdf", "application/pdf", "not-base64")
-    with pytest.raises(ValueError, match="5 МБ"):
+    with pytest.raises(ValueError, match="50 МБ"):
         parse_assistant_attachment(
             "large.pdf", "application/pdf",
-            base64.b64encode(b"%PDF-" + b"x" * (5 * 1024 * 1024)).decode(),
+            base64.b64encode(b"%PDF-" + b"x" * (50_000_000)).decode(),
         )
     with pytest.raises(ValueError, match="UTF-8"):
         parse_assistant_attachment("note.txt", "text/plain", base64.b64encode(b"\xff").decode())

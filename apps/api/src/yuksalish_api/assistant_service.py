@@ -131,7 +131,8 @@ MODELS: dict[AssistantModel, str] = {
     "flash-lite": "gemini-3.5-flash-lite",
 }
 
-MAX_ASSISTANT_FILE_BYTES = 5 * 1024 * 1024
+MAX_ASSISTANT_FILE_BYTES = 50_000_000
+MAX_ASSISTANT_FILE_BASE64_CHARS = ((MAX_ASSISTANT_FILE_BYTES + 2) // 3) * 4
 DOCX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
@@ -146,12 +147,14 @@ def parse_assistant_attachment(
     name: str, mime_type: str, data_base64: str
 ) -> AssistantAttachment:
     """Bound size and check signatures before forwarding transient data to the model."""
+    if len(data_base64) > MAX_ASSISTANT_FILE_BASE64_CHARS:
+        raise ValueError("Размер вложения должен быть от 1 байта до 50 МБ.")
     try:
         content = base64.b64decode(data_base64, validate=True)
     except (binascii.Error, ValueError) as error:
         raise ValueError("Вложение повреждено. Выберите файл повторно.") from error
     if not content or len(content) > MAX_ASSISTANT_FILE_BYTES:
-        raise ValueError("Размер вложения должен быть от 1 байта до 5 МБ.")
+        raise ValueError("Размер вложения должен быть от 1 байта до 50 МБ.")
     suffix = name.rsplit(".", 1)[-1].casefold() if "." in name else ""
     signatures = {
         "pdf": ("application/pdf", content.startswith(b"%PDF-")),
@@ -198,13 +201,15 @@ def parse_assistant_attachment(
 
 
 async def message_history(
-    connection: AsyncConnection, user_id: UUID
+    connection: AsyncConnection, user_id: UUID, chat_id: UUID | None = None,
 ) -> list[AssistantMessageRecord]:
     rows = (
         (
             await connection.execute(
                 select(assistant_messages)
-                .where(assistant_messages.c.user_id == user_id)
+                .where(assistant_messages.c.user_id == user_id,
+                       assistant_messages.c.chat_id == chat_id,
+                       assistant_messages.c.cleared_at.is_(None))
                 .order_by(assistant_messages.c.created_at.desc(), assistant_messages.c.id.desc())
                 .limit(100)
             )
@@ -747,7 +752,7 @@ async def generate_text(
     if not api_key:
         raise ValueError("Ассистент пока не настроен администратором.")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODELS[model]}:generateContent"
-    async with httpx.AsyncClient(timeout=45.0) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(45.0, write=120.0)) as client:
         response = await client.post(
             url,
             headers={"x-goog-api-key": api_key},
@@ -974,6 +979,7 @@ async def ask_assistant(
     message: str,
     attachment: AssistantAttachment | None = None,
     continue_draft: bool = False,
+    chat_id: UUID | None = None,
 ) -> AssistantMessageRecord:
     if not api_key:
         raise ValueError("Ассистент пока не настроен администратором.")
@@ -989,7 +995,8 @@ async def ask_assistant(
     )
     if (recent_count or 0) >= 30:
         raise OverflowError("Лимит запросов за час исчерпан. Попробуйте позже.")
-    history = await message_history(connection, user.id)
+    history = (await message_history(connection, user.id, chat_id) if chat_id is not None
+               else await message_history(connection, user.id))
     source_labels: list[str] = []
     if history:
         source_labels.append("Последние сообщения этого диалога")
@@ -1190,6 +1197,7 @@ async def ask_assistant(
         assistant_messages.insert().values(
             id=uuid4(),
             user_id=user.id,
+            chat_id=chat_id,
             role="user",
             model=model,
             content=stored_message,
@@ -1202,6 +1210,7 @@ async def ask_assistant(
         assistant_messages.insert().values(
             id=answer_id,
             user_id=user.id,
+            chat_id=chat_id,
             role="assistant",
             model=model,
             content=answer,

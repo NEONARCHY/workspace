@@ -1,4 +1,5 @@
 import type {
+  AssistantChat,
   AssistantMessage,
   AssistantModel,
   BirthdayPreference,
@@ -629,13 +630,26 @@ export function prewarmAssistantMessages(token: string): void {
 
 export function clearAssistantPreload(): void { warmedAssistantMessages = undefined; }
 
-export function loadAssistantMessages(token: string): Promise<readonly AssistantMessage[]> {
+export function listAssistantChats(token: string): Promise<readonly AssistantChat[]> {
+  return apiRequest<readonly AssistantChat[]>("/assistant/chats", {}, token);
+}
+
+export function createAssistantChat(token: string): Promise<AssistantChat> {
+  return apiRequest<AssistantChat>("/assistant/chats", { method: "POST" }, token);
+}
+
+export function clearAssistantChat(token: string, chatId: string): Promise<void> {
+  clearAssistantPreload();
+  return apiRequest<void>(`/assistant/chats/${encodeURIComponent(chatId)}/messages`, { method: "DELETE" }, token);
+}
+
+export function loadAssistantMessages(token: string, chatId?: string): Promise<readonly AssistantMessage[]> {
   const entry = warmedAssistantMessages;
-  if (entry?.token === token && Date.now() - entry.startedAt < 60_000) {
+  if (!chatId && entry?.token === token && Date.now() - entry.startedAt < 60_000) {
     warmedAssistantMessages = undefined;
     return entry.promise;
   }
-  return apiRequest<readonly AssistantMessage[]>("/assistant/messages", {}, token);
+  return apiRequest<readonly AssistantMessage[]>(`/assistant/messages${chatId ? `?chat_id=${encodeURIComponent(chatId)}` : ""}`, {}, token);
 }
 
 export interface AssistantAttachmentInput {
@@ -647,12 +661,12 @@ export interface AssistantAttachmentInput {
 
 export function sendAssistantMessage(
   token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
-  continueDraft = false,
+  continueDraft = false, chatId?: string,
 ): Promise<AssistantMessage> {
   clearAssistantPreload();
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft }),
-  }, token, 65_000);
+    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft, chat_id: chatId }),
+  }, token, attachment ? 180_000 : 65_000);
 }
 
 export type AssistantRewriteStyle = "conversational" | "friendly" | "professional" | "corporate" | "caveman";

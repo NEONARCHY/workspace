@@ -6,6 +6,12 @@
 .assistant-panel .assistant-header-title small { font-size: 12px; color: var(--assistant-quiet); }
 .assistant-panel .assistant-header button { width: 36px; height: 36px; border-radius: 12px; }
 .assistant-panel .assistant-header-icon .gradient-orb canvas { max-width: 100%; max-height: 100%; }
+.assistant-panel .assistant-chat-controls { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; padding: 10px 18px; border-bottom: 1px solid #e3edef; background: #f6fafb; }
+.assistant-panel .assistant-chat-controls select { flex: 1; min-width: 0; width: 0; height: 36px; border: 1px solid #c5dce2; border-radius: 10px; padding: 6px 9px; background: #fff; color: var(--ws-ink); font: inherit; font-size: 13px; }
+.assistant-panel .assistant-chat-controls button { display: flex; align-items: center; justify-content: center; gap: 5px; flex: none; min-height: 36px; padding: 6px 9px; border: 1px solid #c5dce2; border-radius: 10px; background: #fff; color: var(--ws-link); font: inherit; font-size: 13px; cursor: pointer; }
+.assistant-panel .assistant-chat-controls button:disabled { opacity: .5; cursor: default; }
+.assistant-panel .assistant-chat-controls :focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.assistant-panel .assistant-chat-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .assistant-panel .assistant-stream { padding: 22px 18px; background: linear-gradient(145deg, #f3f9fa, #fbfcfd 65%); }
 .assistant-panel .assistant-stream-inner,
 .assistant-panel .assistant-composer-inner { width: min(100%, 800px); }
