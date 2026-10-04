@@ -640,7 +640,7 @@ export function EmployeeProfileDialog({
       }
       onOpenChange(data.open);
     }}>
-      <DialogSurface className="employee-profile-dialog" aria-label="Публичный профиль сотрудника">
+      <DialogSurface className="employee-profile-dialog" aria-label={personalShown ? "Моя эффективность" : "Публичный профиль сотрудника"}>
         <DialogBody>
           <DialogTitle
             action={<Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть профиль" onClick={() => onOpenChange(false)} />}
