@@ -8,7 +8,10 @@ private drafts and upload retry ordering remain unchanged.
 
 - Keep Gilroy, navy `#293A55`, turquoise `#0091A8`, contrast link `#006779`,
   white working surfaces and the shared muted canvas `#F2F6F6`.
-- Replace the large decorative dark hero with a compact, readable context header.
+- Owner refinement: restore the original navy-to-turquoise hero in both modules,
+  including white title/copy, static decorative rings, translucent count card,
+  translucent refresh and white creation button. Reuse the original header rules
+  in `project-hub.css`; retain responsive wrapping and native forced colours.
 - Stretch the project index and detail surface; give the filter its own full-width
   row and make the empty detail state explain the next action.
 - Match the main surface's bottom edge to the navigation rail, preserving the
@@ -25,6 +28,15 @@ CSS changes are isolated in the final `project-workspace.css` layer; the shared
 dropzone adds optional delegated file-list rendering and safe drag feedback.
 
 ## Verification
+
+Header restoration verified on 2026-10-04: actual components with the full CSS
+stack match the supplied original heroes at 1640×900 (148 px height, original
+gradient/rings, white title and creation button, translucent counter). Funding
+header controls remain inside at 1024×768, 640×480 and 200% CSS zoom. Both empty
+modules have zero automated axe A/AA violations in the checked fixture states.
+21 ProjectHubView tests, TypeScript, release-note validation and production web
+build passed. No new UI logic or permissions changed. LAN deployment remains
+blocked by an unresponsive Docker engine; no services were restarted.
 
 - 26 tests passed across ProjectHubView, WorkspaceFileDropzone and
   ScopedPeopleCheckboxes, including draft/upload retries, file identity/removal,

@@ -14,33 +14,7 @@
 }
 .project-hub-view.workspace-view > .project-hub-header {
   flex: 0 0 auto;
-  min-height: 100px;
-  gap: 20px;
-  padding: 18px 20px;
-  border: 1px solid var(--ws-line);
-  border-radius: 18px;
-  color: var(--ws-text);
-  background: linear-gradient(100deg, #e4f4f3, #fff 72%);
-  box-shadow: none;
 }
-.project-hub-view .project-hub-header::after { content: none; }
-.project-hub-view .project-hub-header h1 { margin: 0 0 6px; color: var(--ws-text); font-size: 28px; }
-.project-hub-view .project-hub-header p { margin: 0; color: var(--project-muted); font-size: 14px; }
-.project-hub-view .project-hub-header-side { gap: 16px; }
-.project-hub-view .project-hub-hero-summary {
-  min-width: 0;
-  padding: 0 16px 0 0;
-  border: 0;
-  border-right: 1px solid var(--ws-control-line);
-  border-radius: 0;
-  background: none;
-}
-.project-hub-view .project-hub-hero-summary strong { color: var(--ws-text); font-size: 26px; }
-.project-hub-view .project-hub-hero-summary span { color: var(--project-muted); }
-.project-hub-view .project-hub-header-actions .fui-Button { min-height: 38px; color: var(--ws-text); border-color: var(--ws-control-line); background: #fff; }
-.project-hub-view .project-hub-header-actions .fui-Button:hover { color: var(--ws-text); border-color: var(--ws-link); background: var(--ws-muted-surface); }
-.project-hub-view .project-hub-header-actions .project-hub-primary-action { color: #fff; border-color: var(--ws-text); background: var(--ws-text); }
-.project-hub-view .project-hub-header-actions .project-hub-primary-action:hover { color: #fff; border-color: var(--ws-link); background: var(--ws-link); }
 .project-hub-view .project-hub-header-actions .fui-Button:disabled { opacity: .55; cursor: not-allowed; }
 .project-hub-view .project-hub-layout {
   flex: 1 1 0;
@@ -123,8 +97,6 @@
   .project-hub-view .project-hub-funding-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-hub-view .project-hub-funding-layout { flex: 0 0 auto; grid-template-rows: auto minmax(360px, 1fr); }
   .project-hub-view .project-hub-header-side { justify-content: flex-start; }
-  .project-hub-view .project-hub-hero-summary { flex-direction: row; gap: 8px; align-items: center; min-width: 0; border: 0; padding: 0; }
-  .project-hub-view .project-hub-hero-summary span { margin: 0; }
   .project-hub-view .project-hub-index-top > div { grid-template-columns: 1fr; }
   .project-hub-view > .project-hub-header { padding: 16px 12px; }
   .project-hub-view .project-hub-title, .project-hub-view .project-hub-section-head,
@@ -142,6 +114,16 @@
   .project-hub-dialog-footer [role="alert"] { flex-basis: 100%; }
 }
 @media (forced-colors: active) {
+  .project-hub-view.workspace-view > .project-hub-header,
+  .project-hub-view .project-hub-hero-summary,
+  .project-hub-view .project-hub-header-actions .fui-Button {
+    color: CanvasText;
+    border-color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+  }
+  .project-hub-view .project-hub-header :is(h1, p, strong, span) { color: CanvasText; }
+  .project-hub-view .project-hub-header::after { display: none; }
   .project-hub-view.workspace-view > .project-hub-header,
   .project-hub-view .project-hub-index, .project-hub-view .project-hub-canvas,
   .project-hub-dialog .project-hub-request-files .ws-file-dropzone,
