@@ -1436,6 +1436,27 @@ export interface EfficiencyOverview {
   readonly employees: readonly EmployeeEfficiency[];
 }
 
+export interface PersonalEfficiencyTask {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly dueAt: string | null;
+  readonly updatedAt: string;
+  readonly onTimeCount: number;
+  readonly overdueCount: number;
+  readonly excludedCount: number;
+  readonly returnedForRevisionCount: number;
+}
+
+export interface PersonalEfficiency {
+  readonly employee: EmployeeEfficiency;
+  readonly taskDetailsVisible: boolean;
+  readonly workload: Readonly<Record<"new" | "inProgress" | "awaitingReview" | "completed", number>>;
+  readonly recentTasks: readonly PersonalEfficiencyTask[];
+  readonly impactTasks: readonly PersonalEfficiencyTask[];
+  readonly impactTaskCount: number;
+}
+
 export type TaskReturnReason =
   | "incomplete_result"
   | "requirements_not_met"

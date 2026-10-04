@@ -322,7 +322,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   ];
 
   return (
-    <div className="account-scrim account-profile-anchor account-settings-redesigned" role="presentation" onMouseDown={onClose}>
+    <div className={`account-scrim account-profile-anchor account-settings-redesigned${initialSection === "invite" ? " account-invite-only" : ""}`} role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
         ref={panelRef}
@@ -543,7 +543,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
             <section ref={inviteRef} className="account-section" data-account-section="invite">
             <div className="account-section-title">
               <div>
-                <h3>Пригласить сотрудника</h3>
+                {initialSection !== "invite" ? <h3>Пригласить сотрудника</h3> : null}
                 <p>Код действует 48 часов и принимается только один раз.</p>
               </div>
             </div>

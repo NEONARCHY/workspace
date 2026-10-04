@@ -11,6 +11,7 @@ from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.efficiency_service import (
     METHODOLOGY_VERSION,
     load_efficiency_overview,
+    load_personal_efficiency,
     materialize_efficiency_digest_notifications,
 )
 from yuksalish_api.errors import WorkspaceRepositoryError
@@ -151,6 +152,21 @@ async def _exercise_efficiency(database_url: str) -> None:
                 assert task.id not in payload
                 assert "comments" not in payload and "attachments" not in payload
                 assert {row["name"] for row in overview["employees"]}
+                personal = await load_personal_efficiency(connection, employee)
+                assert personal["employee"]["user_id"] == str(employee.id)
+                assert personal["employee"] == next(
+                    row for row in overview["employees"] if row["user_id"] == str(employee.id)
+                )
+                contribution = next(row for row in personal["impact_tasks"] if row["id"] == task.id)
+                assert contribution["excluded_count"] == 1
+                assert contribution["returned_for_revision_count"] == 1
+                assert contribution["on_time_count"] == 0
+                assert "result_text" not in str(personal)
+                co_personal = await load_personal_efficiency(connection, co_assignee)
+                assert task.id in {row["id"] for row in co_personal["recent_tasks"]}
+                manager_personal = await load_personal_efficiency(connection, manager)
+                assert manager_personal["employee"]["user_id"] == str(manager.id)
+                assert task.id not in {row["id"] for row in manager_personal["recent_tasks"]}
                 event_types = set(
                     (
                         await connection.execute(

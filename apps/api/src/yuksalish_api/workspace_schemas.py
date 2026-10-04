@@ -568,6 +568,34 @@ class EfficiencyOverviewResponse(ApiModel):
     employees: list[EmployeeEfficiencyResponse]
 
 
+class PersonalEfficiencyTaskResponse(ApiModel):
+    id: str
+    title: str
+    status: str
+    due_at: datetime | None
+    updated_at: datetime
+    on_time_count: int
+    overdue_count: int
+    excluded_count: int
+    returned_for_revision_count: int
+
+
+class PersonalEfficiencyWorkloadResponse(ApiModel):
+    new: int
+    in_progress: int
+    awaiting_review: int
+    completed: int
+
+
+class PersonalEfficiencyResponse(ApiModel):
+    employee: EmployeeEfficiencyResponse
+    task_details_visible: bool
+    workload: PersonalEfficiencyWorkloadResponse
+    recent_tasks: list[PersonalEfficiencyTaskResponse]
+    impact_tasks: list[PersonalEfficiencyTaskResponse]
+    impact_task_count: int
+
+
 class TaskParticipantRequest(ApiModel):
     user_id: str
     role: TaskParticipantRole

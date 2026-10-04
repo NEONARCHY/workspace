@@ -17,6 +17,8 @@
 .tasks-view .task-calendar-navigation-slot { flex: 0 0 140px; min-height: 42px; }
 .tasks-view .task-toolbar-actions { flex-wrap: nowrap; }
 .app-provider .tasks-view .workspace-select.task-role-filter { height: 36px; min-height: 36px; padding: 0; }
+.app-provider .tasks-view .workspace-select.task-role-filter { flex: 0 0 184px; width: 184px; }
+.tasks-view .task-role-filter .fui-Dropdown__button { white-space: nowrap; align-items: center; }
 .app-provider .tasks-view .task-search { height: 36px; min-height: 36px; }
 
 .tasks-view.efficiency-mode .eff-commandbar.compact {

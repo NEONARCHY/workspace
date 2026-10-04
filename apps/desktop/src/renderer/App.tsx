@@ -2341,6 +2341,10 @@ export function App() {
         open={profileUserId !== undefined}
         people={workspace.people}
         onOpenPersonProfile={setProfileUserId}
+        onOpenTask={canView("tasks") ? (taskId) => {
+          setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
+          setActiveSection("tasks");
+        } : undefined}
         onOpenChat={canView("messenger") ? async (recipientId) => {
           const existing = workspace.chats.find((chat) => chat.kind === "direct"
             && chat.members.some((member) => member.userId === recipientId)
