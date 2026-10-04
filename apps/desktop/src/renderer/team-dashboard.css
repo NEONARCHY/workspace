@@ -521,6 +521,7 @@
 }
 
 .team-dash-flow-overview {
+  container: team-flow-overview / inline-size;
   position: relative;
   z-index: 1;
   padding: 14px;
@@ -558,18 +559,20 @@
 
 .team-dash-flow-legend {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 144px), 1fr));
+  grid-template-columns: var(--flow-columns, repeat(auto-fit, minmax(min(100%, 144px), 1fr)));
   gap: 7px;
   margin: 0;
 }
 
 .team-dash-flow-legend > button {
   display: flex;
+  aspect-ratio: var(--flow-tile-ratio, auto);
+  flex-direction: var(--flow-tile-direction, row);
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: var(--flow-tile-alignment, space-between);
+  gap: var(--flow-tile-gap, 10px);
   min-width: 0;
-  padding: 8px 9px;
+  padding: var(--flow-tile-padding, 8px 9px);
   border: 1px solid color-mix(in srgb, var(--flow-color) 18%, #dfeaec);
   border-radius: 11px 11px 13px 6px;
   color: inherit;
@@ -600,6 +603,10 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
+  flex-wrap: wrap;
+  justify-content: var(--flow-label-alignment, start);
+  text-align: var(--flow-label-alignment, left);
+  overflow-wrap: anywhere;
   color: var(--team-ink);
   font-size: 12px;
   line-height: 1.35;
@@ -615,9 +622,23 @@
 .team-dash-flow-legend button > strong {
   flex: none;
   color: var(--team-navy);
-  font-size: 14px;
+  font-size: var(--flow-count-size, 14px);
+  line-height: 1;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+@container team-flow-overview (max-width: 420px) {
+  .team-dash-flow-legend {
+    --flow-columns: repeat(2, minmax(0, 1fr));
+    --flow-tile-ratio: 1;
+    --flow-tile-direction: column;
+    --flow-tile-alignment: center;
+    --flow-tile-gap: 12px;
+    --flow-tile-padding: 12px 8px;
+    --flow-label-alignment: center;
+    --flow-count-size: 28px;
+  }
 }
 
 .team-dash-week {
@@ -1225,6 +1246,7 @@
   .team-dash-flow > .team-dash-flow-overview {
     grid-column: 1;
     grid-row: 2;
+    align-self: start;
   }
 
   .team-dash-flow > .team-dash-week {
@@ -1241,6 +1263,17 @@
 }
 
 @container team-dashboard (max-width: 760px) {
+  .team-dash-flow-legend {
+    --flow-columns: repeat(2, minmax(0, 1fr));
+    --flow-tile-ratio: 1;
+    --flow-tile-direction: column;
+    --flow-tile-alignment: center;
+    --flow-tile-gap: 12px;
+    --flow-tile-padding: 12px 8px;
+    --flow-label-alignment: center;
+    --flow-count-size: 28px;
+  }
+
   .team-dash-hero {
     grid-template-columns: minmax(0, 1fr);
     gap: 18px;

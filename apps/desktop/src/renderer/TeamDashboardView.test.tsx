@@ -187,4 +187,18 @@ describe("TeamDashboardView", () => {
       expect(day.getAttribute("title")).toMatch(/сентября/);
     }
   });
+
+  it("keeps all four flow tiles labelled and selectable, including empty statuses", () => {
+    renderDashboard();
+    const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
+    expect(within(statuses).getAllByRole("button")).toHaveLength(4);
+    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Просрочены", 1]] as const) {
+      const tile = within(statuses).getByRole("button", { name: `${label} ${count}` });
+      fireEvent.click(tile);
+      expect(tile).toHaveAttribute("aria-pressed", "true");
+      expect(within(statuses).getAllByRole("button", { pressed: true })).toEqual([tile]);
+      const drawer = screen.getByRole("dialog", { name: label });
+      if (count === 0) expect(within(drawer).getByText("В этой категории задач нет")).toBeInTheDocument();
+    }
+  });
 });

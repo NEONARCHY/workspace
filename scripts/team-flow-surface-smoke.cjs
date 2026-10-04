@@ -49,13 +49,21 @@ async function main() {
   };
   const metrics = () => evaluate(`(()=>{const flow=document.querySelector('.team-dash-flow'),week=flow.querySelector('.team-dash-week'),d=document.querySelector('.team-dashboard'),rect=e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width,height:r.height}};return {
     viewport:[innerWidth,innerHeight],background:getComputedStyle(flow).backgroundColor,week:rect(week),overflow:d.scrollWidth>d.clientWidth,
-    legends:[...flow.querySelectorAll('.team-dash-flow-legend > button')].map(b=>({gradient:getComputedStyle(b).backgroundImage,pressed:b.getAttribute('aria-pressed'),label:rect(b.querySelector('span')),count:rect(b.querySelector('strong')),labelOverflow:b.querySelector('span').scrollWidth>b.querySelector('span').clientWidth})),
+    overview:rect(flow.querySelector('.team-dash-flow-overview')),legend:rect(flow.querySelector('.team-dash-flow-legend')),
+    overviewScale:flow.querySelector('.team-dash-flow-overview').getBoundingClientRect().width/flow.querySelector('.team-dash-flow-overview').offsetWidth,
+    legends:[...flow.querySelectorAll('.team-dash-flow-legend > button')].map(b=>({button:rect(b),square:getComputedStyle(b).aspectRatio==='1 / 1',gradient:getComputedStyle(b).backgroundImage,pressed:b.getAttribute('aria-pressed'),label:rect(b.querySelector('span')),count:rect(b.querySelector('strong')),labelOverflow:b.querySelector('span').scrollWidth>b.querySelector('span').clientWidth})),
     days:[...week.querySelectorAll('.team-dash-week-bars > button')].map(b=>({button:rect(b),bar:rect(b.querySelector(':scope > span')),count:rect(b.querySelector('strong')),label:rect(b.querySelector('small')),labelOverflow:b.querySelector('small').scrollWidth>b.querySelector('small').clientWidth,transform:getComputedStyle(b.querySelector('small')).transform,value:Number(b.querySelector('strong').textContent),fill:b.querySelector('i').getBoundingClientRect().height,title:b.title,name:b.getAttribute('aria-label')}))
   }})()`);
   const check = m => {
     assert.equal(m.days.length, 7); assert(!m.overflow, 'Dashboard horizontal overflow');
     assert.equal(m.background, 'rgb(255, 255, 255)'); assert(m.legends.every(b => b.gradient.includes('linear-gradient')));
-    assert(m.legends.every(b => b.label.right <= b.count.left - 3 && !b.labelOverflow), 'Status names and counts do not overlap');
+    assert.equal(m.legends.length, 4);
+    assert(m.legends.every(b => !b.labelOverflow && (b.square ? b.label.bottom <= b.count.top - 3 : b.label.right <= b.count.left - 3)), 'Status names and counts do not overlap');
+    if (m.legends[0].square) {
+      assert(m.legends.every(b => Math.abs(b.button.width - b.button.height) < 1), 'Four square tiles');
+      assert(Math.abs(m.legends[0].button.top - m.legends[1].button.top) < 1 && m.legends[2].button.top > m.legends[0].button.bottom, 'Two rows of two tiles');
+      assert(m.overview.bottom - m.legend.bottom < 17 * m.overviewScale, 'Only normal padding below tiles');
+    }
     for (const day of m.days) {
       assert(!day.labelOverflow, 'Caption fits its column'); assert.equal(day.transform, 'none');
       assert(day.label.left >= day.button.left - 1 && day.label.right <= day.button.right + 1, 'Caption inside button');
