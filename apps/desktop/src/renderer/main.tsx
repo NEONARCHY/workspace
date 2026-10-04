@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { ScrollbarEdges } from "./ScrollbarEdges";
+import { DialogResizeMotion } from "./DialogResizeMotion";
 import { InterfaceLocalization } from "./InterfaceLocalization";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
@@ -68,6 +69,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><InterfaceLocalization /><ScrollbarEdges /><App /></RecoveryBoundary>
+    <RecoveryBoundary><InterfaceLocalization /><ScrollbarEdges /><DialogResizeMotion /><App /></RecoveryBoundary>
   </StrictMode>,
 );
