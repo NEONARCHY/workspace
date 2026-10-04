@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, AssistantActionDraft, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Dialog, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Textarea } from "@fluentui/react-components";
@@ -29,6 +29,23 @@ function assistantInputDate(value: string | undefined, defaultTime: string): str
 }
 
 export function AbsencesView({ currentUserId, people, requests, summary, canAdmin, onCreate, onAction, onUploadDocument, assistantDraft }: Props) {
+  const frameRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => {
+      const style = getComputedStyle(frame);
+      const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
+      const inset = `${Math.max(0, frame.offsetWidth - frame.clientWidth - borders)}px`;
+      if (frame.style.getPropertyValue("--ws-absence-scrollbar-inset") !== inset) {
+        frame.style.setProperty("--ws-absence-scrollbar-inset", inset);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
   const [open, setOpen] = useState(assistantDraft?.kind === "absence");
   const [kind, setKind] = useState<AbsenceKind>(
     assistantDraft?.kind === "absence" ? (assistantDraft.fields.absenceKind || "personal_time") as AbsenceKind : "personal_time",
@@ -60,7 +77,7 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
     try { if (await onAction(decision.request, decision.action, comment)) { setDecision(undefined); setComment(""); } } finally { setBusy(false); }
   };
   const name = (id: string) => people.find(person => person.id === id)?.name ?? "Сотрудник";
-  return <section className="workspace-view absences-view" aria-label="Отсутствия">
+  return <section ref={frameRef} className="workspace-view absences-view" aria-label="Отсутствия">
     <header className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Заявите об отсутствии, опоздании или больничном — руководитель сразу получит уведомление.</p></div><Button appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></header>
     {canAdmin ? <section className="absence-summary" aria-label="Сводка присутствия">{Object.entries(statusLabels).map(([key, label]) => <div key={key} data-presence-status={key}><strong>{counts[key] ?? 0}</strong><span>{label}</span></div>)}</section> : null}
     <div className="absence-canvas"><section className="absence-column"><header><span>Личный контур</span><h2>Мои заявки</h2></header>{own.length ? own.map(item => <AbsenceCard key={item.id} item={item} personId={item.directManagerUserId} name={name(item.directManagerUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><CalendarLtr24Regular /><p>Заявок пока нет</p><span>Новое отсутствие появится здесь после отправки.</span></div>}</section>

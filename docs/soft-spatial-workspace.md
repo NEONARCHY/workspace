@@ -15,6 +15,13 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
   Absences also reserves a single 20 px outer right inset for its header action,
   summary tiles and all lower panels; inner trailing margins/padding do not add
   a second inset. Their existing left alignment and semantic washes are retained.
+  Presence counts are 36 px and labels 16 px (formerly 24/12), with a 4 px gap
+  and a vertically centered copy block. Tiles have a 96 px minimum height and
+  144 px minimum column width; compact layouts wrap tiles and labels by words
+  without shrinking the type or changing the 20 px outer edge.
+  Overflowing compact sections scroll internally so every summary tile and
+  lower panel remains reachable. A resize observer includes the actual native
+  scrollbar width in the 20 px edge (as in the calendar), and disconnects on unmount.
   Collapsed navigation measures the rendered action height and row gap before
   reserving More; the hidden profile label reserves no width or flex gap. No
   scrollbar is introduced into the collapsed rail. Calendar agenda clearance is

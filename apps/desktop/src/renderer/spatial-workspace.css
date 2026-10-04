@@ -578,8 +578,8 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 }
 
 .absences-view { display: grid; gap: 18px; align-content: start; }
-.absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px; }
-.absence-summary > div { --ws-presence-accent: var(--ws-turquoise); min-height: 82px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--ws-presence-accent) 22%, transparent), color-mix(in srgb, var(--ws-presence-accent) 9%, transparent) 48%, transparent), #fcfefe; box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
+.absence-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(144px, 1fr)); gap: 10px; }
+.absence-summary > div { --ws-presence-accent: var(--ws-turquoise); display: flex; flex-direction: column; justify-content: center; gap: 4px; min-height: 96px; padding: 14px 16px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 16px; background: linear-gradient(90deg, color-mix(in srgb, var(--ws-presence-accent) 22%, transparent), color-mix(in srgb, var(--ws-presence-accent) 9%, transparent) 48%, transparent), #fcfefe; box-shadow: 0 8px 22px rgb(41 58 85 / 7%); }
 .absence-summary > [data-presence-status="working"] { --ws-presence-accent: #69ae82; }
 .absence-summary > [data-presence-status="trip"] { --ws-presence-accent: var(--ws-turquoise); }
 .absence-summary > [data-presence-status="vacation"] { --ws-presence-accent: #e2b25d; }
@@ -590,9 +590,9 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 @media (forced-colors: active) {
   .absence-summary > div { background: Canvas; border-color: CanvasText; }
 }
-.absence-summary strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
-.absence-summary span { color: var(--ws-text, #293a55); font-size: 12px; }
-.absences-view { position: relative; display: flex; min-height: 0; flex-direction: column; gap: 14px; padding-right: 20px; }
+.absence-summary strong { display: block; font-size: 36px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--ws-navy, #293a55); }
+.absence-summary span { color: var(--ws-text, #293a55); font-size: 16px; font-weight: 500; line-height: 1.35; overflow-wrap: normal; }
+.absences-view { position: relative; display: flex; min-height: 0; flex-direction: column; gap: 14px; padding-right: max(0px, calc(20px - var(--ws-absence-scrollbar-inset, 0px))); overflow-y: auto; }
 .absences-view .record-header { display: flex; min-height: 0; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 16px; padding-right: 0; padding-bottom: 0; }
 .absences-view .record-header > div { flex: 1 1 280px; }
 .absences-view .record-header > button { flex: none; }

@@ -1,10 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 import { AbsencesView } from "./AbsencesView";
 import { workspaceTheme } from "./workspace-theme";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const view = (canAdmin: boolean) => render(<FluentProvider theme={workspaceTheme}><AbsencesView
   currentUserId="test" people={[]} requests={[]} summary={[]} canAdmin={canAdmin}
   onCreate={vi.fn()} onAction={vi.fn()} onUploadDocument={vi.fn()}
@@ -21,4 +21,27 @@ it("gives all seven summary tiles stable semantic status identities", () => {
 it("keeps the organization summary hidden without administration rights", () => {
   view(false);
   expect(screen.queryByRole("region", { name: "Сводка присутствия" })).not.toBeInTheDocument();
+});
+it("includes the actual scrollbar in the requested absence edge and releases its observer", () => {
+  let clientWidth = 996;
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(1000);
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => clientWidth);
+  let measure = () => {};
+  const disconnect = vi.fn();
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: () => void) { measure = callback; }
+    observe() {}
+    disconnect = disconnect;
+  });
+  const result = view(true);
+  const frame = screen.getByRole("region", { name: "Отсутствия" });
+  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("4px");
+  clientWidth = 992;
+  act(measure);
+  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("8px");
+  clientWidth = 1000;
+  act(measure);
+  expect(frame.style.getPropertyValue("--ws-absence-scrollbar-inset")).toBe("0px");
+  result.unmount();
+  expect(disconnect).toHaveBeenCalled();
 });

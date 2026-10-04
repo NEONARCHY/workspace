@@ -102,10 +102,16 @@ async function main(){
       })()`);
       for(const key of ['header','action','summary','panels'])assertEdge(absenceEdges[key],'Absences '+key);
       if(!before)assert(!absenceEdges.rootOverflow);
-      const presence=await evaluate(`Array.from(document.querySelectorAll('.absence-summary > div'),tile=>({status:tile.dataset.presenceStatus,gradient:getComputedStyle(tile).backgroundImage,accent:getComputedStyle(tile).getPropertyValue('--ws-presence-accent').trim(),color:getComputedStyle(tile.querySelector('span')).color}))`);
+      const presence=await evaluate(`Array.from(document.querySelectorAll('.absence-summary > div'),tile=>{
+        const label=tile.querySelector('span'),number=tile.querySelector('strong'),box=tile.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(label);const text=range.getBoundingClientRect();
+        return {status:tile.dataset.presenceStatus,gradient:getComputedStyle(tile).backgroundImage,accent:getComputedStyle(tile).getPropertyValue('--ws-presence-accent').trim(),color:getComputedStyle(label).color,
+          numberSize:parseFloat(getComputedStyle(number).fontSize),labelSize:parseFloat(getComputedStyle(label).fontSize),overflow:tile.scrollWidth>tile.clientWidth||tile.scrollHeight>tile.clientHeight,
+          labelClearance:[text.top-box.top,box.right-text.right,box.bottom-text.bottom,text.left-box.left]};
+      })`);
       if(!before){
         assert.equal(presence.length,7);assert.equal(new Set(presence.map(t=>t.gradient)).size,7);assert(presence.every(t=>t.gradient.startsWith('linear-gradient(90deg')));
         for(const tile of presence){
+          assert.equal(tile.numberSize,36);assert.equal(tile.labelSize,16);assert(!tile.overflow,'Presence text must fit: '+tile.status);assert(tile.labelClearance.every(c=>c>=12),'Presence label touches an edge: '+tile.status);
           const accent=tile.accent.replace('#','').match(/../g).map(c=>parseInt(c,16));
           const background=accent.map((c,i)=>c*.22+[252,254,254][i]*.78),text=tile.color.match(/[\d.]+/g).slice(0,3).map(Number);
           tile.labelContrast=(luminance(background)+.05)/(luminance(text)+.05);
@@ -113,6 +119,10 @@ async function main(){
         }
       }
       await screenshot(width+'x'+height+'-presence');results.push({width,height,navigation,messenger,calendar,presence,absenceEdges});
+      if(!before){
+        await evaluate("document.querySelector('.absence-presence').scrollIntoView({block:'end'})");await pause(150);
+        assert(await evaluate("(()=>{const v=document.querySelector('.absences-view').getBoundingClientRect(),p=document.querySelector('.absence-presence').getBoundingClientRect();return p.bottom<=v.bottom+1&&p.top>=v.top-1})()"),'Lower presence panel must remain reachable');
+      }
       console.log('PASS',width+'x'+height,before?'baseline captured':'centered rail, More reachable, 20px edges, seven washes');
     }
     if(!before){
