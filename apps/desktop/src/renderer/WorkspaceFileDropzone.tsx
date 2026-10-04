@@ -7,6 +7,7 @@ interface WorkspaceFileDropzoneProps {
   readonly hint: string;
   readonly actionLabel: string;
   readonly files?: readonly File[];
+  readonly showSelectedFiles?: boolean;
   readonly accept?: string;
   readonly multiple?: boolean;
   readonly disabled?: boolean;
@@ -21,6 +22,7 @@ export function WorkspaceFileDropzone({
   hint,
   actionLabel,
   files = [],
+  showSelectedFiles = true,
   accept,
   multiple = false,
   disabled = false,
@@ -32,6 +34,7 @@ export function WorkspaceFileDropzone({
   // Chromium treats a hidden file input as focus-visible even after a mouse
   // click. Track real keyboard traversal instead of showing a click halo.
   const [keyboardFocus, setKeyboardFocus] = useState(false);
+  const [dragging, setDragging] = useState(false);
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => { if (event.key === "Tab") setKeyboardFocus(true); };
     const pointer = () => setKeyboardFocus(false);
@@ -44,21 +47,23 @@ export function WorkspaceFileDropzone({
   }, []);
   const select = (selected: FileList | null) => {
     const next = Array.from(selected ?? []);
-    if (next.length) onFiles(multiple ? next : next.slice(0, 1));
+    if (!disabled && next.length) onFiles(multiple ? next : next.slice(0, 1));
   };
   const drop = (event: DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
+    setDragging(false);
     if (!disabled) select(event.dataTransfer.files);
   };
   return <label
-    className={`ws-file-dropzone${emphasized ? " is-emphasized" : ""}${disabled ? " is-disabled" : ""}`}
+    className={`ws-file-dropzone${emphasized ? " is-emphasized" : ""}${disabled ? " is-disabled" : ""}${dragging && !disabled ? " is-dragging" : ""}`}
     data-keyboard-focus={keyboardFocus || undefined}
-    onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = disabled ? "none" : "copy"; }}
+    onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = disabled ? "none" : "copy"; if (!disabled && Array.from(event.dataTransfer.types).includes("Files")) setDragging(true); }}
+    onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
     onDrop={drop}
   >
     <input className="ws-file-dropzone-input" type="file" accept={accept} multiple={multiple} disabled={disabled} aria-label={ariaLabel ?? label} onChange={(event) => { select(event.target.files); event.currentTarget.value = ""; }} />
     <span className="ws-file-dropzone-icon">{icon ?? <Attach20Regular aria-hidden="true" />}</span>
-    <span className="ws-file-dropzone-copy"><strong>{label}</strong><small>{hint}</small>{files.length ? <span className="ws-file-dropzone-selected">{files.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{files.length > 2 ? <em>+{files.length - 2}</em> : null}</span> : null}</span>
+    <span className="ws-file-dropzone-copy"><strong>{label}</strong><small>{hint}</small>{showSelectedFiles && files.length ? <span className="ws-file-dropzone-selected">{files.slice(0, 2).map((file, index) => <em key={`${file.name}-${index}`} title={file.name}>{file.name}</em>)}{files.length > 2 ? <em>+{files.length - 2}</em> : null}</span> : null}</span>
     <span className="ws-file-dropzone-action">{actionLabel}</span>
   </label>;
 }

@@ -56,6 +56,7 @@ import "./presence-summary-dialog.css";
 import "./assistant-chat.css";
 import "./account-settings.css";
 import "./profile-header.css";
+import "./project-workspace.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

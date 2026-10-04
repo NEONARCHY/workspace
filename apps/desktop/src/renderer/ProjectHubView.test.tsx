@@ -72,6 +72,27 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("offers a useful empty state without creating a project before confirmation", async () => {
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [], workstreams: [], items: [], requests: [] });
+    setup();
+    expect(await screen.findByRole("heading", { name: "Начните с проекта" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Создать проект" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+  });
+  it("names each selected document and removes only the chosen file", async () => {
+    setup("funding");
+    fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
+    const dialog = within(screen.getByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText("Файлы заявки"), { target: { files: [new File(["a"], "Смета.pdf"), new File(["b"], "Договор.pdf")] } });
+    expect(dialog.getAllByText("Смета.pdf")).toHaveLength(1);
+    expect(dialog.getAllByText("Договор.pdf")).toHaveLength(1);
+    fireEvent.click(dialog.getByRole("button", { name: "Убрать Смета.pdf" }));
+    expect(dialog.queryByText("Смета.pdf")).not.toBeInTheDocument();
+    expect(dialog.getByText("Договор.pdf")).toBeInTheDocument();
+    expect(uploadWorkspaceAttachment).not.toHaveBeenCalled();
+    expect(createProjectHubRequestDraft).not.toHaveBeenCalled();
+  });
   it("opens an editable assistant-prefilled project without saving it", async () => {
     render(<FluentProvider theme={workspaceTheme}><ProjectHubView
       mode="projects" token="test-token" people={people} currentUserId={people[0]!.id}
