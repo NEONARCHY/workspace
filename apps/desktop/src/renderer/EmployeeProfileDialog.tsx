@@ -396,6 +396,7 @@ export function EmployeeProfileDialog({
   const achievementsRef = useRef<HTMLElement>(null);
   const rewardsRef = useRef<HTMLElement>(null);
   const profileContentRef = useRef<HTMLDivElement>(null);
+  const profileHeaderRef = useRef<HTMLDivElement>(null);
   const profileScrollRef = useRef(0);
   const guideTriggerRef = useRef<HTMLButtonElement>(null);
   const rewardTriggerRef = useRef<HTMLButtonElement>(null);
@@ -435,6 +436,24 @@ export function EmployeeProfileDialog({
     ? profileState.profile
     : undefined;
   const error = errorState && errorState.userId === userId ? errorState.message : "";
+
+  useEffect(() => {
+    const content = profileContentRef.current;
+    const header = profileHeaderRef.current;
+    if (!open || !profile || !content || !header) return;
+    const measure = () => {
+      const inset = getComputedStyle(header).position === "sticky" ? header.offsetHeight + 16 : 16;
+      content.style.setProperty("--employee-profile-header-inset", `${inset}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
+    observer?.observe(header);
+    observer?.observe(content);
+    return () => {
+      observer?.disconnect();
+      content.style.removeProperty("--employee-profile-header-inset");
+    };
+  }, [open, profile]);
 
   useEffect(() => {
     if (!open || !userId) return;
@@ -591,14 +610,14 @@ export function EmployeeProfileDialog({
             {!profile && !error ? <div className="employee-profile-loading"><Spinner label="Загружаем профиль" /></div> : null}
             {error && !profile ? <div className="employee-profile-error" role="alert">{error}</div> : null}
             {profile ? <div className="employee-profile-shell">
-              <div className="employee-profile-sticky">
+              <div ref={profileHeaderRef} className="employee-profile-sticky">
                 <header className="employee-profile-hero">
                   <ProfileAvatar person={profile.person} token={token} size={72} />
-                  <div>
-                    <span>Рабочий профиль</span>
+                  <div className="employee-profile-identity">
+                    <span className="employee-profile-eyebrow">Рабочий профиль</span>
                     <h2>{profile.person.name}</h2>
                     <p>{profile.person.jobTitle ?? "Должность не указана"}</p>
-                    {profile.departmentName ? <small>{profile.departmentName}</small> : null}
+                    {profile.departmentName ? <small className="employee-profile-department">{profile.departmentName}</small> : null}
                     {onOpenChat && profile.person.id !== currentUserId ? <Button
                       className="employee-profile-chat-action"
                       size="small"

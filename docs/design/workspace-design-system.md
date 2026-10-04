@@ -62,6 +62,15 @@ Use axe-core on local authenticated screens with read-only test routes; save bef
 
 ## Boundaries
 
+### Profile identity contrast — 2026-10-04
+
+The employee profile hero uses a bounded white surface with a quiet turquoise
+wash and a visible neutral border. Its truthful reward summary and active
+navigation are navy with light readable text. Container queries preserve long
+identity copy at compact widths; measured header clearance keeps navigation
+targets unobscured. Recognition cards and their effects remain unchanged. See
+[profile-header-contrast.md](profile-header-contrast.md).
+
 ### Recognition card clearance — 2026-10-04
 
 The profile scroll viewport extends into the dialog's existing 24 px inset,
