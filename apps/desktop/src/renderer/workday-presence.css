@@ -19,7 +19,8 @@
 .team-presence-toolbar-meta { display: flex; align-items: center; gap: 7px; margin-left: auto; }
 .team-presence-toolbar-meta small { color: #718791; font-size: 11px; font-variant-numeric: tabular-nums; }
 .team-presence-toolbar-meta .fui-Button { min-width: 30px; min-height: 30px; border-radius: 9px; }
-.team-presence-people { display: grid; grid-template-columns: 36px minmax(0, 1fr) 164px 112px 112px 72px; column-gap: 12px; max-height: 330px; padding-inline: 8px; overflow: auto; scrollbar-width: thin; }
+.team-presence-viewport { overflow: clip; }
+.team-presence-people { display: grid; align-content: start; grid-template-columns: 36px minmax(0, 1fr) 164px 112px 112px 72px; column-gap: 12px; max-height: 330px; padding-inline: 8px; overflow: auto; scrollbar-gutter: stable; scrollbar-width: thin; }
 .team-presence-person { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; column-gap: 12px; row-gap: 8px; padding-block: 14px; border-bottom: 1px solid #e6eeee; border-radius: 10px; transition: background-color var(--ws-motion-micro) var(--ws-ease); }
 .team-presence-person:hover { background: #f1f8f6; }
 .team-presence-person:last-child { border-bottom: 0; }

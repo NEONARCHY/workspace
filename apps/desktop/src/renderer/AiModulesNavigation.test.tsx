@@ -15,6 +15,23 @@ const items = [
 describe("AI module sidebar group", () => {
   afterEach(cleanup);
 
+  it("retains an inert clipped inline list for reversible opening and closing", () => {
+    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} onCloseOverflow={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "ИИ-модули" });
+    const panel = view.container.querySelector(".rail-ai-disclosure")!;
+    expect(panel).toHaveAttribute("inert");
+    expect(screen.queryByRole("button", { name: "AI Referent" })).toBeNull();
+    fireEvent.click(trigger);
+    expect(panel).toHaveClass("is-open"); expect(panel).not.toHaveAttribute("inert");
+    const link = screen.getByRole("button", { name: "AI Referent" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(panel).not.toHaveClass("is-open"); expect(panel).toHaveAttribute("inert");
+    expect(trigger).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "AI Referent" })).toBeNull();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("button", { name: "AI Referent" })).toBe(link);
+  });
+
   it("moves both AI modules as one block without losing other identities", () => {
     expect(moveAiNavigationGroup(["tasks", "ai_referent", "feed", "ai_hisobot"], "ai_modules", "tasks"))
       .toEqual(["ai_referent", "ai_hisobot", "tasks", "feed"]);

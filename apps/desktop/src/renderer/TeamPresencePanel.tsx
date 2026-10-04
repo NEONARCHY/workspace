@@ -44,7 +44,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const peopleMotion = useContextMotion(`${Boolean(data)}:${onlyWorking}`, {
-    resize: true, enter: true, rows: ":scope > .team-presence-person, :scope > .team-presence-empty",
+    resize: true, duration: 360, fade: false,
   });
 
   useEffect(() => {
@@ -126,7 +126,8 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>
     </div>
     {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
-    <div className="team-presence-people" ref={peopleMotion}>
+    <div className="team-presence-viewport" ref={peopleMotion}>
+    <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
         <EmployeeProfileLink userId={person.userId} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /></EmployeeProfileLink>
         <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
@@ -140,6 +141,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>)}
       {!data && !error ? <p className="team-presence-empty">Загружаем отметки команды…</p> : null}
       {data && !members.length ? <p className="team-presence-empty">{onlyWorking ? "Сейчас никто не начал рабочий день." : "Сотрудников пока нет."}</p> : null}
+    </div>
     </div>
     <Dialog open={Boolean(editing)} onOpenChange={(_event, next) => { if (!next.open && !saving) setEditing(undefined); }}>
       <DialogSurface className="workday-schedule-dialog" aria-label="График сотрудника">

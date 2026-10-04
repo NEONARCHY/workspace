@@ -97,6 +97,18 @@ it("ignores page cards and allows specialized dialogs to opt out", () => {
   stop = observeDialogResizeMotion(document.body); card.dataset.height = "400"; node.dataset.height = "400"; notify(card); notify(node); flush();
   expect(animate).not.toHaveBeenCalled();
 });
+it("excludes focus-trapping popovers even though they carry modal dialog semantics", () => {
+  const popover = dialog(170, "fui-PopoverSurface person-picker-surface");
+  popover.setAttribute("role", "dialog"); popover.setAttribute("aria-modal", "true");
+  const modal = dialog(200, "custom-dialog");
+  modal.setAttribute("role", "dialog"); modal.setAttribute("aria-modal", "true");
+  stop = observeDialogResizeMotion(document.body);
+  popover.dataset.height = "340"; modal.dataset.height = "320";
+  notify(popover); notify(modal); flush();
+  expect(observers.some(observer => observer.node === popover)).toBe(false);
+  expect(animate).toHaveBeenCalledOnce();
+  expect(animate.mock.calls[0]?.[0]).toEqual([{ height: "200px" }, { height: "320px" }]);
+});
 it("honours reduced/forced preferences and cancels immediately when settings change", () => {
   const node = dialog(); stop = observeDialogResizeMotion(document.body); reduced = true;
   node.dataset.height = "300"; notify(node); flush(); expect(animate).not.toHaveBeenCalled();

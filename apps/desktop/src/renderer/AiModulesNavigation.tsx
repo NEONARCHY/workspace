@@ -109,12 +109,13 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
   return <>
     <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " active" : ""}`} type="button"
       aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inlinePanel ? undefined : "dialog"}
-      aria-controls={open ? "rail-ai-modules" : undefined} onClick={toggle}>
+      aria-controls={inlinePanel || open ? "rail-ai-modules" : undefined} onClick={toggle}>
       <span className="rail-icon"><Sparkle24Regular /></span>
       <span className="rail-label">ИИ-модули</span>
       <ChevronRight20Regular className="rail-ai-chevron" aria-hidden="true" />
     </button>
-    {open && inlinePanel ? <div id="rail-ai-modules" className="rail-ai-inline" ref={panelRef}>{links}</div> : null}
+    {inlinePanel ? <div id="rail-ai-modules" className={`rail-ai-disclosure${open ? " is-open" : ""}`}
+      aria-hidden={!open} inert={!open} ref={panelRef}><div className="rail-ai-inline">{links}</div></div> : null}
     {open && !inlinePanel ? createPortal(<div id="rail-ai-modules" className="rail-ai-popover" role="dialog" aria-label="ИИ-модули"
       ref={panelRef} style={position} onPointerDown={(event) => event.stopPropagation()}>{links}</div>, document.body) : null}
   </>;

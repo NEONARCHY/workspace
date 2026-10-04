@@ -21,6 +21,11 @@ custom modal `dialog` / `alertdialog` с `aria-modal=true`.
   содержимого. Канбан, workflow canvas, обычные страницы, меню и popover не
   включены в этот механизм. Их собственные анимации сохранены.
 
+Уточнение 4 октября: focus-trapping Fluent PopoverSurface также имеет
+`role=dialog` и `aria-modal=true`, но теперь явно исключён из селектора.
+Смена размеров people picker управляется только его внутренней рамкой списка;
+общий observer не создаёт вторую анимацию поверхности и временный scrollbar.
+
 ## Ограничения
 
 Это прямое исключение владельца из правила «только transform/opacity»:

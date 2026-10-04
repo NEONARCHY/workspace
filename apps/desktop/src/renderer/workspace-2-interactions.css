@@ -478,7 +478,11 @@
   .account-scrim.account-profile-anchor,
   .account-profile-anchor .account-panel { animation: none !important; }
 }
-.fui-PopoverSurface.person-picker-surface { padding: 12px; border-radius: 20px; }
+.fui-PopoverSurface.person-picker-surface { padding: 12px; border-radius: 20px; overflow: clip; }
+/* Reveal a stable, naturally laid-out list; never squeeze its rows or header.
+   Only the inner list owns scrolling, including short windows and large directories. */
+.person-picker-list-viewport { overflow: clip; }
+.person-picker-list-viewport > .person-picker-list { max-height: inherit; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; }
 .person-picker-list > button { border-radius: 11px; transition: background-color 160ms var(--ws-ease), border-color 160ms var(--ws-ease); }
 .person-picker-surface .person-picker-list small { color: #4d6372; }
 .person-picker-surface .fui-Avatar__initials { color: #293a55; }

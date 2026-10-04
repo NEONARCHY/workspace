@@ -56,4 +56,23 @@ describe("Contextual person selection", () => {
     expect(within(list).queryByText("Азиза Каримова")).toBeNull();
     expect(within(list).getByText("Дилшод Рахимов")).toBeInTheDocument();
   });
+  it("keeps selection, search and scope controls outside the independently revealing list", () => {
+    const onChange = vi.fn();
+    const departments = [{ id: "central", code: "central", name: "ЦА", scope: "central" as const, assignedUsersCount: 2 }];
+    render(<FluentProvider theme={workspaceTheme}><PersonPicker people={people} departments={departments} value="aziza" label="Ответственный" onChange={onChange} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Ответственный" }));
+    const search = screen.getByRole("textbox", { name: "Поиск: Ответственный" });
+    const list = screen.getByLabelText("Доступные сотрудники");
+    expect(list.parentElement).toHaveClass("person-picker-list-viewport");
+    expect(list.parentElement).not.toContainElement(search);
+    fireEvent.click(screen.getByRole("button", { name: "Регионы" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Сотрудники не найдены");
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("textbox", { name: "Поиск: Ответственный" })).toBe(search);
+    fireEvent.click(screen.getByRole("button", { name: "Центральный аппарат" }));
+    expect(within(list).getByRole("button", { name: /Азиза Каримова/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(search, { target: { value: "специалист" } });
+    expect(within(list).queryByText("Азиза Каримова")).toBeNull();
+    expect(within(list).getByText("Дилшод Рахимов")).toBeInTheDocument();
+  });
 });

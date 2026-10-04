@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 
-const dialogSelector = '.fui-DialogSurface, [role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]';
+// Focus-trapping Fluent popovers also expose role=dialog/aria-modal=true.
+// Their anchored positioning and inner scroll viewport must not be resized here.
+const dialogSelector = '.fui-DialogSurface, [role="dialog"][aria-modal="true"]:not(.fui-PopoverSurface), [role="alertdialog"][aria-modal="true"]:not(.fui-PopoverSurface)';
 const preferenceQuery = "(prefers-reduced-motion: reduce), (forced-colors: active)";
 interface Size { readonly width: number; readonly height: number }
 interface TrackedDialog {

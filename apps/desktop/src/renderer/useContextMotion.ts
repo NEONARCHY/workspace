@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 /** Explicit context changes only: typing, polling and ordinary rerenders stay still. */
-export function useContextMotion(key: string, { resize = false, enter = false, rows }: {
+export function useContextMotion(key: string, { resize = false, enter = false, rows, duration: resizeDuration, fade = true }: {
   readonly resize?: boolean; readonly enter?: boolean; readonly rows?: string;
+  readonly duration?: number; readonly fade?: boolean;
 } = {}) {
   const ref = useRef<HTMLDivElement>(null);
   const previous = useRef<{ key: string; height: number }>(undefined);
@@ -10,7 +11,12 @@ export function useContextMotion(key: string, { resize = false, enter = false, r
 
   useLayoutEffect(() => {
     const node = ref.current;
-    if (!node) return;
+    if (!node) {
+      animations.current.forEach(animation => animation.cancel());
+      animations.current = [];
+      previous.current = undefined;
+      return;
+    }
     const old = previous.current;
     const changed = old ? old.key !== key : enter;
     const visibleHeight = node.getBoundingClientRect().height;
@@ -26,7 +32,7 @@ export function useContextMotion(key: string, { resize = false, enter = false, r
       || window.matchMedia?.("(prefers-reduced-motion: reduce), (forced-colors: active)").matches
       || document.activeElement?.matches(":focus-visible")) return;
     const style = getComputedStyle(node);
-    const duration = parseFloat(style.getPropertyValue("--ws-motion-normal")) || 220;
+    const duration = resizeDuration ?? (parseFloat(style.getPropertyValue("--ws-motion-normal")) || 220);
     const easing = style.getPropertyValue("--ws-ease").trim() || "cubic-bezier(.2, 0, 0, 1)";
     // A deliberate, bounded exception for the requested auto-sizing presence
     // list. Text is never scaled, and layout is not driven by React per frame.
@@ -35,6 +41,7 @@ export function useContextMotion(key: string, { resize = false, enter = false, r
         { height: `${fromHeight}px` }, { height: `${height}px` },
       ], { duration, easing }));
     }
+    if (!fade) return;
     const targets = rows ? [...node.querySelectorAll<HTMLElement>(rows)].slice(0, 8) : [node];
     targets.forEach((target, index) => {
       animations.current.push(target.animate([
