@@ -50,3 +50,23 @@ it("preserves caller-specific action labels", () => {
   view(false, "Удалить публикацию");
   expect(screen.getByRole("button", { name: "Удалить публикацию" })).toBeInTheDocument();
 });
+it("restores the action and cancellation immediately after a failed pending request", () => {
+  const onCancel = vi.fn(), onConfirm = vi.fn();
+  const dialog = (busy: boolean, message: string) => <FluentProvider theme={workspaceTheme}>
+    <ConfirmActionDialog open title="Очистить текущий чат?" message={message}
+      confirmLabel="Очистить чат" busyLabel="Очищаем…" busy={busy}
+      onCancel={onCancel} onConfirm={onConfirm} />
+  </FluentProvider>;
+  const { rerender } = render(dialog(false, "Переписка будет удалена."));
+  rerender(dialog(true, "Переписка будет удалена."));
+  expect(screen.getByRole("button", { name: "Очищаем…" })).toBeDisabled();
+  rerender(dialog(false, "Сбой очистки"));
+  const confirmation = screen.getByRole("dialog", { name: "Очистить текущий чат?" });
+  expect(confirmation).toHaveAccessibleDescription("Сбой очистки");
+  expect(confirmation).toHaveAttribute("aria-busy", "false");
+  expect(within(confirmation).getByRole("button", { name: "Отмена" })).toBeEnabled();
+  const retry = within(confirmation).getByRole("button", { name: "Очистить чат" });
+  expect(retry).toBeEnabled();
+  fireEvent.click(retry);
+  expect(onConfirm).toHaveBeenCalledTimes(1);
+});

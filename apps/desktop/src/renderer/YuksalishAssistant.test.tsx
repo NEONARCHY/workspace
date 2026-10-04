@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
@@ -90,7 +90,10 @@ describe("YuksalishAssistant", () => {
   it("confirms clearing only the current chat and keeps its content on failure", async () => {
     vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "saved", role: "assistant", model: "flash-lite",
       content: "Переписка для очистки", createdAt: "2026-10-04T09:00:00Z" }]);
-    vi.mocked(clearAssistantChat).mockRejectedValueOnce(new Error("Сбой очистки")).mockResolvedValue(undefined);
+    let rejectClear!: (reason: Error) => void;
+    vi.mocked(clearAssistantChat).mockImplementationOnce(() => new Promise<void>((_, reject) => {
+      rejectClear = reject;
+    })).mockResolvedValue(undefined);
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("Переписка для очистки");
@@ -103,10 +106,16 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
     fireEvent.click(await screen.findByRole("button", { name: "Очистить чат" }));
-    await screen.findByText("Сбой очистки");
+    const confirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
+    expect(within(confirmation).getByRole("button", { name: "Очищаем…" })).toBeDisabled();
+    expect(within(confirmation).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    expect(confirmation).toHaveAttribute("aria-busy", "true");
+    await act(async () => rejectClear(new Error("Сбой очистки")));
+    expect(within(confirmation).getByText("Сбой очистки")).toBeInTheDocument();
+    expect(confirmation).toHaveAttribute("aria-busy", "false");
     expect(clearAssistantChat).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Переписка для очистки")).toBeInTheDocument();
-    const retryButton = await screen.findByRole("button", { name: "Очистить чат" });
+    const retryButton = await within(confirmation).findByRole("button", { name: "Очистить чат" });
     await waitFor(() => expect(retryButton).toBeEnabled());
     fireEvent.click(retryButton);
     await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
