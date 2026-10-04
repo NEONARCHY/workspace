@@ -83,6 +83,22 @@ it("does not invent missing approval history or unavailable people", () => {
   expect(screen.getByText("В истории заявки нет сведений о согласующем.")).toBeInTheDocument();
 });
 
+it("keeps a long list in one keyboard-focusable scroll region with closing actions outside", () => {
+  const members: WorkspacePerson[] = Array.from({ length: 100 }, (_, index) => ({ ...people[0]!, id: `person-${index}`, name: `Сотрудник ${index + 1}` }));
+  const onClose = vi.fn();
+  render(<FluentProvider theme={workspaceTheme}><PresenceSummaryDialog status="working" summary={members.map(person => ({ userId: person.id, status: "working" }))} requests={[]} people={members} onClose={onClose} /></FluentProvider>);
+  const popup = screen.getByRole("dialog");
+  const region = within(popup).getByLabelText("Список сотрудников");
+  expect(region).toHaveAttribute("tabindex", "0");
+  expect(within(region).getAllByRole("listitem")).toHaveLength(100);
+  expect(within(region).getByText("Сотрудник 100")).toBeInTheDocument();
+  expect(region).not.toContainElement(within(popup).getByRole("heading", { name: "На работе" }));
+  const close = within(popup).getByRole("button", { name: /^Закрыть$/ });
+  expect(region).not.toContainElement(close);
+  fireEvent.click(close);
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
 it("correlates only one exact confirmed interval, accounting for timezone representation", () => {
   expect(findPresenceRequest(item, [request])).toBe(request);
   expect(findPresenceRequest({ ...item, startsAt: "2026-10-04T09:00:00+05:00" }, [request])).toBe(request);

@@ -2,9 +2,12 @@
 .fui-DialogSurface.presence-summary-dialog {
   --ws-presence-accent: var(--ws-turquoise, #0091a8);
   box-sizing: border-box;
-  width: min(760px, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100% - 32px));
+  max-width: calc(100% - 32px);
+  max-height: min(640px, calc(100% - 32px));
+  container: presence-summary / inline-size;
   padding: 24px;
   overflow: hidden;
   border: 1px solid var(--ws-border, #dce4ed);
@@ -18,25 +21,25 @@
 .presence-summary-dialog[data-presence-status="late_arrival"] { --ws-presence-accent: #a292c9; }
 .presence-summary-dialog[data-presence-status="sick_leave"] { --ws-presence-accent: #c97a88; }
 .presence-summary-dialog[data-presence-status="business_event"] { --ws-presence-accent: #6793b5; }
-.presence-summary-dialog > .fui-DialogBody { display: flex; flex-direction: column; gap: 16px; min-height: 0; max-height: calc(100dvh - 82px); }
+.presence-summary-dialog > .fui-DialogBody { display: flex; flex: 1 1 auto; flex-direction: column; gap: 14px; min-height: 0; }
 .presence-summary-heading { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 12px; }
 .presence-summary-dialog .fui-DialogTitle { flex: 1 1 auto; min-width: 0; margin: 0; padding: 0; color: var(--ws-navy); font-size: 26px; line-height: 1.3; overflow-wrap: anywhere; }
 .presence-summary-heading > button { flex: none; min-width: 40px; min-height: 40px; }
 .presence-summary-dialog .presence-summary-description { flex: none; margin: 0; padding-right: 12px; color: var(--ws-text-secondary, #61778b); font-size: 14px; line-height: 1.5; }
-.presence-summary-dialog .presence-summary-content { flex: 1 1 auto; min-height: 0; padding: 2px 8px 2px 2px; overflow: auto; scrollbar-width: thin; }
+.presence-summary-dialog .presence-summary-content { flex: 1 1 auto; min-height: 0; max-height: 400px; padding: 2px; overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-gutter: stable; }
 .presence-summary-content:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -2px; border-radius: 12px; }
-.presence-summary-people { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
-.presence-summary-person { min-width: 0; padding: 18px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 18px; background: #fff; }
+.presence-summary-people { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.presence-summary-person { min-width: 0; padding: 10px 14px; border: 1px solid var(--ws-border, #dce4ed); border-radius: 14px; background: #fff; }
 .presence-summary-person > header { display: flex; align-items: flex-start; gap: 12px; }
 .presence-summary-person .fui-Avatar { flex: none; }
 .presence-summary-person header > div { min-width: 0; }
-.presence-summary-person h3 { margin: 0; font-size: 17px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
-.presence-summary-person header p { margin: 3px 0 0; color: var(--ws-text-secondary, #61778b); font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
-.presence-summary-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; padding: 12px 0; border-block: 1px solid var(--ws-border, #dce4ed); }
+.presence-summary-person h3 { margin: 0; font-size: 14px; line-height: 1.4; font-weight: 600; overflow-wrap: anywhere; }
+.presence-summary-person header p { margin: 2px 0 0; color: var(--ws-muted, #53677b); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.presence-summary-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0; padding: 8px 0; border-block: 1px solid var(--ws-border, #dce4ed); }
 .presence-summary-period dt, .presence-summary-reason > span, .presence-summary-approval span { color: var(--ws-text-secondary, #61778b); font-size: 12px; line-height: 1.5; }
 .presence-summary-period dd { margin: 4px 0 0; font-size: 14px; line-height: 1.5; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .presence-summary-reason p { margin: 4px 0 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-.presence-summary-approval { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--ws-border, #dce4ed); }
+.presence-summary-approval { display: flex; align-items: flex-start; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--ws-border, #dce4ed); }
 .presence-summary-approval > div { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .presence-summary-approval strong { font-size: 14px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
 .presence-summary-approval time, .presence-summary-approval > p, .presence-summary-unavailable { margin: 0; color: var(--ws-text-secondary, #61778b); font-size: 13px; line-height: 1.5; }
@@ -48,11 +51,18 @@
 .presence-summary-dialog .fui-DialogActions button { min-width: 120px; min-height: 44px; }
 @media (max-width: 480px) {
   .fui-DialogSurface.presence-summary-dialog { padding: 18px; border-radius: 20px; }
-  .presence-summary-dialog > .fui-DialogBody { max-height: calc(100dvh - 70px); gap: 12px; }
+  .presence-summary-dialog > .fui-DialogBody { gap: 12px; }
   .presence-summary-dialog .fui-DialogTitle { font-size: 23px; }
   .presence-summary-period { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .presence-summary-person { padding: 14px; }
+  .presence-summary-person { padding: 10px 12px; }
   .presence-summary-dialog .fui-DialogActions button { width: 100%; }
+}
+@container presence-summary (max-width: 400px) {
+  .presence-summary-dialog > .fui-DialogBody { gap: 10px; }
+  .presence-summary-dialog .fui-DialogTitle { font-size: 22px; }
+  .presence-summary-dialog .presence-summary-description { padding-right: 0; font-size: 12px; line-height: 1.4; }
+  .presence-summary-person { padding: 10px 12px; }
+  .presence-summary-period { grid-template-columns: minmax(0, 1fr); gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) { .absence-summary > button { transition: none; } }
 @media (forced-colors: active) {

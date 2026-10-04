@@ -442,7 +442,11 @@ export function EmployeeProfileDialog({
     const header = profileHeaderRef.current;
     if (!open || !profile || !content || !header) return;
     const measure = () => {
-      const inset = getComputedStyle(header).position === "sticky" ? header.offsetHeight + 16 : 16;
+      // Measure layout space, not viewport units: CSS zoom and long identity
+      // copy can leave no room below a pinned hero even on a tall screen.
+      const unpin = content.clientHeight > 0 && header.offsetHeight + 120 > content.clientHeight;
+      header.classList.toggle("is-unpinned", unpin);
+      const inset = !unpin && getComputedStyle(header).position === "sticky" ? header.offsetHeight + 16 : 16;
       content.style.setProperty("--employee-profile-header-inset", `${inset}px`);
     };
     measure();
@@ -452,6 +456,7 @@ export function EmployeeProfileDialog({
     return () => {
       observer?.disconnect();
       content.style.removeProperty("--employee-profile-header-inset");
+      header.classList.remove("is-unpinned");
     };
   }, [open, profile]);
 

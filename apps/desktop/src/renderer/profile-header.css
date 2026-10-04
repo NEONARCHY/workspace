@@ -1,4 +1,4 @@
-/* Profile identity and navigation only; recognition cards keep their own surfaces. */
+/* Profile identity and overview; recognition/rarity cards keep their own surfaces. */
 .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog {
   max-width: 100%;
   max-height: 100%;
@@ -12,13 +12,14 @@
   scroll-margin-top: 0;
 }
 .employee-profile-dialog .employee-profile-sticky { gap: 12px; }
+.employee-profile-dialog .employee-profile-sticky.is-unpinned { position: static; }
 .employee-profile-dialog .employee-profile-hero {
   grid-template-columns: auto minmax(0, 1fr) 172px;
   gap: 20px;
   min-height: 144px;
   padding: 20px 24px;
   border: 1px solid color-mix(in srgb, var(--ws-navy) 20%, var(--ws-surface));
-  background: linear-gradient(100deg, var(--ws-selected), var(--ws-surface) 65%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ws-turquoise) 20%, var(--ws-surface)), color-mix(in srgb, var(--ws-turquoise) 8%, var(--ws-surface)) 55%, color-mix(in srgb, var(--ws-navy) 7%, var(--ws-surface)));
   box-shadow: 0 4px 16px rgb(41 58 85 / 6%);
 }
 .employee-profile-dialog .employee-profile-identity { min-width: 0; }
@@ -57,19 +58,19 @@
   min-width: 0;
   padding: 16px;
   gap: 4px;
-  border: 1px solid var(--ws-navy);
+  border: 1px solid color-mix(in srgb, var(--ws-turquoise) 22%, var(--ws-surface));
   border-radius: 16px;
-  background: var(--ws-navy);
+  background: linear-gradient(110deg, var(--ws-selected), color-mix(in srgb, var(--ws-navy) 8%, var(--ws-surface)));
   box-shadow: none;
 }
 .employee-profile-dialog .employee-profile-hero-stat strong {
-  color: var(--ws-surface);
+  color: var(--ws-text);
   font-size: 30px;
   line-height: 1.1;
 }
 .employee-profile-dialog .employee-profile-hero-stat span,
 .employee-profile-dialog .employee-profile-hero-stat small {
-  color: var(--ws-surface);
+  color: var(--ws-text);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
@@ -79,15 +80,15 @@
 .employee-profile-dialog .employee-profile-hero-stat small {
   margin-top: 4px;
   padding-top: 8px;
-  border-top: 1px solid rgb(255 255 255 / 30%);
+  border-top: 1px solid color-mix(in srgb, var(--ws-navy) 16%, transparent);
 }
 .employee-profile-dialog .employee-profile-tabs {
-  --sliding-indicator-background: var(--ws-navy);
+  --sliding-indicator-background: linear-gradient(90deg, var(--ws-selected), color-mix(in srgb, var(--ws-turquoise) 18%, var(--ws-surface)));
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 4px;
   padding: 5px;
-  border-color: color-mix(in srgb, var(--ws-navy) 20%, var(--ws-surface));
-  background: color-mix(in srgb, var(--ws-navy) 10%, var(--ws-surface));
+  border-color: color-mix(in srgb, var(--ws-navy) 12%, var(--ws-surface));
+  background: color-mix(in srgb, var(--ws-navy) 5%, var(--ws-surface));
   backdrop-filter: none;
 }
 .employee-profile-dialog .employee-profile-tabs > button {
@@ -102,13 +103,28 @@
 }
 .employee-profile-dialog .employee-profile-tabs > button:hover { color: var(--ws-link); }
 .employee-profile-dialog .employee-profile-tabs > button.is-active {
-  color: var(--ws-surface);
+  color: var(--ws-link);
   font-weight: 700;
 }
 .employee-profile-dialog .employee-profile-tabs > button:focus-visible {
   outline: 2px solid var(--ws-link);
   outline-offset: 3px;
 }
+
+/* Shared brand-derived washes fade left-to-right, independent of avatar color. */
+.employee-profile-dialog .employee-profile-overview > article {
+  --profile-card-accent: var(--ws-turquoise);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--profile-card-accent) 18%, transparent), color-mix(in srgb, var(--profile-card-accent) 7%, transparent) 48%, transparent 100%) var(--ws-surface);
+}
+.employee-profile-dialog .employee-profile-overview > article:nth-of-type(1) { --profile-card-accent: var(--ws-accent-neutral, #8ca5b7); }
+.employee-profile-dialog .employee-profile-overview > article:nth-of-type(3) { --profile-card-accent: var(--ws-accent-violet, #a292c9); }
+.employee-profile-dialog .reward-heading-actions > .fui-Button {
+  border-color: color-mix(in srgb, var(--ws-turquoise) 25%, var(--ws-surface));
+  background: var(--ws-selected);
+  color: var(--ws-link);
+}
+.employee-profile-dialog .reward-heading-actions > .fui-Button:hover { background: color-mix(in srgb, var(--ws-turquoise) 18%, var(--ws-surface)); }
+.employee-profile-dialog .reward-heading-actions > .fui-Button:disabled { color: var(--ws-muted); background: var(--ws-muted-surface); }
 
 @container employee-profile (max-width: 680px) {
   .employee-profile-dialog .employee-profile-hero {
@@ -128,7 +144,7 @@
     margin: 0;
     padding: 0 0 0 12px;
     border-top: 0;
-    border-left: 1px solid rgb(255 255 255 / 30%);
+    border-left: 1px solid color-mix(in srgb, var(--ws-navy) 16%, transparent);
   }
   .employee-profile-dialog .employee-profile-hero h2 { font-size: 22px; }
 }
@@ -145,7 +161,7 @@
     grid-column: 1 / -1;
     padding: 8px 0 0;
     border-left: 0;
-    border-top: 1px solid rgb(255 255 255 / 30%);
+    border-top: 1px solid color-mix(in srgb, var(--ws-navy) 16%, transparent);
   }
   .employee-profile-dialog .employee-profile-hero-stat strong { font-size: 24px; }
   .employee-profile-dialog .employee-profile-tabs > button { padding-inline: 2px; font-size: 12px; }
@@ -160,13 +176,16 @@
 @media (forced-colors: active) {
   .employee-profile-dialog .employee-profile-hero,
   .employee-profile-dialog .employee-profile-hero-stat,
-  .employee-profile-dialog .employee-profile-tabs {
+  .employee-profile-dialog .employee-profile-tabs,
+  .employee-profile-dialog .employee-profile-overview > article,
+  .employee-profile-dialog .reward-heading-actions > .fui-Button {
     border-color: CanvasText;
     background: Canvas;
     box-shadow: none;
   }
   .employee-profile-dialog .employee-profile-hero-stat :is(strong, span, small),
   .employee-profile-dialog .employee-profile-tabs > button.is-active { color: CanvasText; }
+  .employee-profile-dialog .reward-heading-actions > .fui-Button { color: ButtonText; }
   .employee-profile-dialog .employee-profile-hero-stat small { border-color: CanvasText; }
   .employee-profile-dialog .employee-profile-tabs > .sliding-segmented-indicator {
     border-color: Highlight;

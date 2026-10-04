@@ -130,12 +130,21 @@ describe("EmployeeProfileDialog", () => {
       Object.defineProperty(header, "offsetHeight", { value: 244, configurable: true });
       act(() => measured.callback([], measured.observer));
       expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("260px");
+      Object.defineProperty(content, "clientHeight", { value: 300, configurable: true });
+      act(() => measured.callback([], measured.observer));
+      expect(header).toHaveClass("is-unpinned");
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("16px");
+      Object.defineProperty(content, "clientHeight", { value: 620, configurable: true });
+      act(() => measured.callback([], measured.observer));
+      expect(header).not.toHaveClass("is-unpinned");
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("260px");
       header.style.position = "static";
       act(() => measured.callback([], measured.observer));
       expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("16px");
       cleanup();
       expect(measured.observer.disconnect).toHaveBeenCalled();
       expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("");
+      expect(header).not.toHaveClass("is-unpinned");
     } finally {
       cleanup();
       vi.unstubAllGlobals();
