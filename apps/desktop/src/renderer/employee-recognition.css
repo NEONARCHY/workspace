@@ -28,11 +28,7 @@
 .employee-profile-chat-action.fui-Button span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: normal; text-transform: none; }
 .employee-profile-chat-action.fui-Button:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
 .employee-profile-chat-error { margin: 0 0 8px; padding: 8px 12px; border-radius: 9px; color: #9c3749; background: #fff1f2; font-size: 12px; }
-.employee-profile-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: rgb(236 245 246 / 94%); backdrop-filter: blur(14px); }
-.employee-profile-tabs button { min-height: 34px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
-.employee-profile-tabs button:hover { color: var(--ws-navy); }
-.employee-profile-tabs button.is-active { color: var(--ws-navy); background: rgb(255 255 255 / 92%); box-shadow: 0 6px 18px rgb(41 58 85 / 10%), inset 0 0 0 1px rgb(255 255 255 / 88%); }
-.employee-profile-tabs button:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 1px; }
+.employee-profile-tabs.employee-scope-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .employee-profile-overview, .employee-achievements-section, .employee-rewards-section { scroll-margin-top: 222px; }
 .employee-profile-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .employee-profile-overview > article { display: grid; min-height: 88px; align-content: start; gap: 5px; padding: 14px 16px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 16px; background: rgb(255 255 255 / 72%); box-shadow: inset 0 1px 0 #fff; }

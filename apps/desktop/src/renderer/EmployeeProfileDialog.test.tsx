@@ -161,6 +161,8 @@ describe("EmployeeProfileDialog", () => {
     expect(hero?.querySelector(".employee-profile-hero-stat strong")).toHaveTextContent("0");
     expect(hero?.querySelector(".employee-profile-hero-stat small")).toHaveTextContent("1 достижение");
     const navigation = screen.getByRole("navigation", { name: "Навигация по профилю" });
+    expect(navigation).toHaveClass("employee-scope-switch", "sliding-segmented");
+    expect(navigation.querySelector(".sliding-segmented-indicator")).toHaveAttribute("aria-hidden", "true");
     for (const label of ["Награды", "Достижения", "Обзор"]) {
       const button = within(navigation).getByRole("button", { name: label });
       fireEvent.click(button);

@@ -648,7 +648,7 @@ export function EmployeeProfileDialog({
                 </header>
                 {chatError?.userId === profile.person.id ? <p className="employee-profile-chat-error" role="alert">{chatError.message}</p> : null}
 
-                <SlidingSegmented as="nav" className="employee-profile-tabs" aria-label="Навигация по профилю">
+                <SlidingSegmented as="nav" className="employee-profile-tabs employee-scope-switch" aria-label="Навигация по профилю">
                   {(["overview", "rewards", "achievements"] as const).map((key) => <button
                     type="button"
                     key={key}

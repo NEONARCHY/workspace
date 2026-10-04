@@ -14,13 +14,22 @@ Name 26 px, job title 14 px and supporting labels
 12 px establish hierarchy without decorative extra elements.
 
 The actual reward counter uses a pastel turquoise/blue-neutral surface and dark
-text. The active navigation surface uses a pastel turquoise gradient, accessible
-turquoise text and the existing aria-pressed state. Inactive buttons remain
-readable against a cool neutral rail; reward-section actions are also pastel.
+text. Per the latest owner refinement, profile navigation reuses the exact
+EmployeeScopeSwitch appearance: a white moving active surface, navy selected
+text, 11 px neutral rail, 3 px inset/gap, and 34 px controls. The profile retains
+three equal columns and the existing aria-pressed/aria-controls state. Inactive
+buttons use the shared muted foreground; reward-section actions remain pastel.
 The four overview cards fade their semantic accent from 18% on the left through
 7% at 48% to white on the right, without adding accent strips. Existing
 SlidingSegmented transform motion and reduced-motion behavior are retained;
 no new animation or dependency is introduced.
+
+The profile adds the shared `employee-scope-switch` visual class rather than
+duplicating its palette and button rules. Legacy profile-specific backgrounds,
+active gradients and typography overrides are removed. SlidingSegmented still
+owns the single interruptible 260 ms transform indicator; reduced motion and
+forced-colors remain intact. Guidance: [Emil Design Engineering](https://github.com/emilkowalski/skills/blob/main/skills/emil-design-eng/SKILL.md),
+read through Lazyweb; cohesion and reuse take precedence over a new visual variant.
 
 Container queries adapt to available dialog width, including CSS zoom. Below
 680 px the recognition summary sits under identity; below 400 px achievements
@@ -52,6 +61,18 @@ fetched through Lazyweb. Product brand and owner brief take precedence.
 Automated checks are not full screen-reader certification or packaged Electron
 testing. Frontend-only release: update TEST LAN `web` only; do not recreate API,
 database or background services. Installed Electron remains unchanged.
+
+## Scope-switch parity refinement — 2026-10-04
+
+- 12 profile and sliding-navigation tests passed, including shared visual-class
+  membership, decorative indicator and all three reachable section targets.
+- TypeScript, scoped ESLint and release-note validation passed.
+- Actual computed rail/background/border/radius, button colors/font/padding and
+  white indicator matched EmployeeScopeSwitch in the synthetic rendered fixture.
+- Desktop, 640×480 and 1024×768 at 200% checked: internal scrolling kept the
+  navigation reachable, no horizontal page overflow; a settled axe scan returned
+  zero automated violations. Existing motion remained 260 ms transform-only.
+- Hero, overview washes, recognition cards and business actions were not changed.
 
 ## Pastel revision verification — 2026-10-04
 
