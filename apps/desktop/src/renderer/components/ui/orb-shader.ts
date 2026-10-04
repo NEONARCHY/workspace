@@ -18,14 +18,14 @@ export const orbFragmentShader = /* glsl */ `
       float q = dot(c, vec3(0.211, -0.523, 0.312));
       return vec3(y, i, q);
     }
-    
+
     vec3 yiq2rgb(vec3 c) {
       float r = c.x + 0.956 * c.y + 0.621 * c.z;
       float g = c.x - 0.272 * c.y - 0.647 * c.z;
       float b = c.x - 1.106 * c.y + 1.703 * c.z;
       return vec3(r, g, b);
     }
-    
+
     vec3 adjustHue(vec3 color, float hueDeg) {
       float hueRad = hueDeg * 3.14159265 / 180.0;
       vec3 yiq = rgb2yiq(color);
@@ -97,13 +97,13 @@ export const orbFragmentShader = /* glsl */ `
       vec3 color1 = adjustHue(baseColor1, hue);
       vec3 color2 = adjustHue(baseColor2, hue);
       vec3 color3 = adjustHue(baseColor3, hue);
-      
+
       float ang = atan(uv.y, uv.x);
       float len = length(uv);
       float invLen = len > 0.0 ? 1.0 / len : 0.0;
 
       float bgLuminance = dot(backgroundColor, vec3(0.299, 0.587, 0.114));
-      
+
       float n0 = snoise3(vec3(uv * noiseScale, iTime * 0.5)) * 0.5 + 0.5;
       float r0 = mix(mix(innerRadius, 1.0, 0.4), mix(innerRadius, 1.0, 0.6), n0);
       float d0 = distance(uv, (r0 * invLen) * uv);
@@ -113,30 +113,30 @@ export const orbFragmentShader = /* glsl */ `
       float innerFade = smoothstep(r0 * 0.8, r0 * 0.95, len);
       v0 *= mix(innerFade, 1.0, bgLuminance * 0.7);
       float cl = cos(ang + iTime * 0.9) * 0.5 + 0.5;
-      
+
       float a = -iTime;
       vec2 pos = vec2(cos(a), sin(a)) * r0;
       float d = distance(uv, pos);
       float v1 = light2(1.5, 5.0, d);
       v1 *= light1(1.0, 50.0, d0);
-      
+
       float v2 = (1.0 - smoothstep(mix(innerRadius, 1.0, n0 * 0.5), 1.0, len));
       float v3 = smoothstep(innerRadius, mix(innerRadius, 1.0, 0.5), len);
-      
+
       vec3 colBase = mix(color1, color3, smoothstep(0.0, 0.5, cl));
       colBase = mix(colBase, color2, smoothstep(0.5, 1.0, cl));
       float fadeAmount = mix(1.0, 0.1, bgLuminance);
-      
+
       vec3 darkCol = mix(adjustHue(shadeColor, hue) * 0.55, colBase, v0);
       darkCol = (darkCol + colBase * v1 * (0.5 + hover * hoverIntensity)) * v2 * v3;
       darkCol = clamp(darkCol, 0.0, 1.0);
-      
+
       vec3 lightCol = (colBase + v1) * mix(1.0, v2 * v3, fadeAmount);
       lightCol = mix(backgroundColor, lightCol, v0);
       lightCol = clamp(lightCol, 0.0, 1.0);
-      
+
       vec3 finalCol = mix(darkCol, lightCol, bgLuminance);
-      
+
       return extractAlpha(finalCol);
     }
 
@@ -144,7 +144,7 @@ export const orbFragmentShader = /* glsl */ `
       vec2 center = iResolution.xy * 0.5;
       float size = min(iResolution.x, iResolution.y);
       vec2 uv = (fragCoord - center) / size * 2.0;
-      
+
       // Owner-supplied React Bits interaction. hover and rot arrive eased;
       // rotate/warp the ring texture, never scale or move the launcher itself.
       float s = sin(rot);
