@@ -10,39 +10,38 @@
   overflow-x: hidden;
   overflow-y: auto;
   container: project-space / inline-size;
-  background: color-mix(in srgb, var(--ws-navy) 8%, var(--ws-surface));
+  background: var(--ws-muted-surface, #f2f6f6);
 }
 .project-hub-view.workspace-view > .project-hub-header {
   flex: 0 0 auto;
   min-height: 100px;
   gap: 20px;
   padding: 18px 20px;
-  border: 1px solid var(--ws-navy);
+  border: 1px solid var(--ws-line);
   border-radius: 18px;
-  color: var(--ws-surface);
-  background: linear-gradient(105deg, var(--ws-navy), #204f65);
-  box-shadow: 0 8px 20px -14px rgb(41 58 85 / 42%);
+  color: var(--ws-text);
+  background: linear-gradient(100deg, #e4f4f3, #fff 72%);
+  box-shadow: none;
 }
 .project-hub-view .project-hub-header::after { content: none; }
-.project-hub-view .project-hub-header h1 { margin: 0 0 6px; color: var(--ws-surface); font-size: 28px; font-weight: 700; }
-.project-hub-view .project-hub-header p { margin: 0; color: #dce9f0; font-size: 14px; }
+.project-hub-view .project-hub-header h1 { margin: 0 0 6px; color: var(--ws-text); font-size: 28px; }
+.project-hub-view .project-hub-header p { margin: 0; color: var(--project-muted); font-size: 14px; }
 .project-hub-view .project-hub-header-side { gap: 16px; }
 .project-hub-view .project-hub-hero-summary {
   min-width: 0;
   padding: 0 16px 0 0;
   border: 0;
-  border-right: 1px solid rgb(255 255 255 / 30%);
+  border-right: 1px solid var(--ws-control-line);
   border-radius: 0;
   background: none;
 }
-.project-hub-view .project-hub-hero-summary strong { color: #fff; font-size: 28px; }
-.project-hub-view .project-hub-hero-summary span { color: #dce9f0; }
-.project-hub-view .project-hub-header-actions .fui-Button { min-height: 40px; color: #fff; border-color: rgb(255 255 255 / 45%); background: rgb(255 255 255 / 8%); }
-.project-hub-view .project-hub-header-actions .fui-Button:hover { color: #fff; border-color: #fff; background: rgb(255 255 255 / 16%); }
-.project-hub-view .project-hub-header-actions .project-hub-primary-action { color: var(--ws-navy); border-color: #fff; background: #fff; }
-.project-hub-view .project-hub-header-actions .project-hub-primary-action:hover { color: var(--ws-navy); border-color: #fff; background: #e0f2f5; }
+.project-hub-view .project-hub-hero-summary strong { color: var(--ws-text); font-size: 26px; }
+.project-hub-view .project-hub-hero-summary span { color: var(--project-muted); }
+.project-hub-view .project-hub-header-actions .fui-Button { min-height: 38px; color: var(--ws-text); border-color: var(--ws-control-line); background: #fff; }
+.project-hub-view .project-hub-header-actions .fui-Button:hover { color: var(--ws-text); border-color: var(--ws-link); background: var(--ws-muted-surface); }
+.project-hub-view .project-hub-header-actions .project-hub-primary-action { color: #fff; border-color: var(--ws-text); background: var(--ws-text); }
+.project-hub-view .project-hub-header-actions .project-hub-primary-action:hover { color: #fff; border-color: var(--ws-link); background: var(--ws-link); }
 .project-hub-view .project-hub-header-actions .fui-Button:disabled { opacity: .55; cursor: not-allowed; }
-.project-hub-view .project-hub-header-actions .fui-Button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 .project-hub-view .project-hub-layout {
   flex: 1 1 0;
   min-height: 0;
@@ -54,15 +53,15 @@
   min-height: 0;
   max-height: none;
   align-self: stretch;
-  border: 1px solid var(--ws-control-line);
+  border: 1px solid var(--ws-line);
   border-radius: 18px;
   background: #fff;
   box-shadow: none;
 }
 .project-hub-view .project-hub-index { display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
-.project-hub-view .project-hub-index-top { flex: 0 0 auto; display: grid; gap: 14px; margin: -12px -12px 12px; padding: 18px 16px; border-bottom: 1px solid var(--ws-control-line); background: color-mix(in srgb, var(--ws-navy) 10%, #fff); }
+.project-hub-view .project-hub-index-top { flex: 0 0 auto; display: grid; gap: 14px; padding: 8px 4px 16px; }
 .project-hub-view .project-hub-index-top .view-kicker { display: none; }
-.project-hub-view .project-hub-index-top > div { grid-template-columns: 1fr; align-items: center; gap: 4px; }
+.project-hub-view .project-hub-index-top > div { grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
 .project-hub-view .project-hub-index-top strong { font-size: 17px; }
 .project-hub-view .project-hub-index-top small { font-size: 12px; }
 .project-hub-view .project-hub-index-top select, .project-hub-view .project-hub-index-top .workspace-select { width: 100%; max-width: none; }
@@ -70,7 +69,7 @@
 .project-hub-view .project-hub-project { width: 100%; border-radius: 12px; }
 .project-hub-view .project-hub-canvas { padding: 24px; overflow: auto; }
 .project-hub-view .project-hub-workstream-grid { grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); }
-.project-hub-view .project-hub-canvas.is-empty { display: grid; place-items: center; background: linear-gradient(145deg, #f5f8fa, #edf4f5); }
+.project-hub-view .project-hub-canvas.is-empty { display: grid; place-items: center; }
 .project-hub-empty-state { max-width: 420px; padding: 24px 0; text-align: center; }
 .project-hub-empty-state h2 { margin: 0 0 10px; font-size: 24px; color: var(--ws-text); }
 .project-hub-empty-state p { margin: 0 0 20px; color: var(--project-muted); font-size: 14px; line-height: 1.6; }
@@ -81,30 +80,10 @@
   align-items: stretch;
 }
 .project-hub-view .project-hub-funding-board.project-request-kanban { min-height: 0; padding: 0 0 8px; }
-.project-hub-view .project-hub-funding-board:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .project-hub-view .project-hub-funding-lane.approval-column { height: 100%; min-height: 0; max-height: none; border-radius: 18px; }
 .project-hub-view .project-hub-funding-lane .approval-column-total > span,
 .project-hub-view .project-hub-funding-lane .approval-column-empty { font-size: 12px; color: var(--project-muted); }
 .project-hub-view .project-hub-funding-detail { position: static; min-height: 0; max-height: 100%; border: 1px solid var(--ws-line); background: #fff; box-shadow: none; }
-
-/* Saturated headings carry status; quiet lane bodies keep document cards readable. */
-.project-hub-view .project-hub-funding-lane.approval-column { --project-stage-ink: var(--ws-navy); border-color: color-mix(in srgb, var(--project-stage-ink) 35%, #fff); background: color-mix(in srgb, var(--project-stage-ink) 5%, #fff); box-shadow: none; }
-.project-hub-view .project-hub-funding-lane.pending { --project-stage-ink: var(--ws-link); }
-.project-hub-view .project-hub-funding-lane.approved { --project-stage-ink: #306447; }
-.project-hub-view .project-hub-funding-lane.rejected { --project-stage-ink: #95434d; }
-.project-hub-view .project-hub-funding-lane.approval-column > header { padding: 16px 16px 8px; min-height: 54px; background: var(--project-stage-ink); }
-.project-hub-view .project-hub-funding-lane.approval-column > header::before { background: #fff; box-shadow: none; }
-.project-hub-view .project-hub-funding-lane.approval-column > header strong { color: #fff; font-size: 15px; font-weight: 700; }
-.project-hub-view .project-hub-funding-lane .approval-column-count { min-width: 26px; min-height: 26px; color: #fff; background: rgb(255 255 255 / 15%); border: 1px solid rgb(255 255 255 / 35%); font-size: 13px; }
-.project-hub-view .project-hub-funding-lane .approval-column-total { padding: 0 16px 14px 33px; background: var(--project-stage-ink); border-bottom: 0; }
-.project-hub-view .project-hub-funding-lane .approval-column-total > span { color: #fff; font-size: 12px; }
-.project-hub-view .project-hub-funding-lane .approval-column-total > strong { color: #fff; font-size: 18px; }
-.project-hub-view .project-hub-funding-lane .approval-column-empty { margin: 2px; border: 1px dashed var(--ws-control-line); color: var(--ws-muted); background: #fff; font-size: 13px; }
-.project-hub-view .project-hub-funding-stat { border-color: var(--ws-control-line); border-radius: 16px; box-shadow: none; }
-.project-hub-view .project-hub-funding-stat span { color: var(--ws-navy); font-size: 14px; font-weight: 700; }
-.project-hub-view .project-hub-funding-stat small { color: var(--ws-muted); font-size: 12px; }
-.project-hub-view .project-hub-title { border-bottom-color: var(--ws-control-line); }
-.project-hub-view .project-hub-title h2 { color: var(--ws-navy); font-weight: 700; }
 .fui-DialogSurface.project-hub-dialog { max-width: 100%; max-height: 100%; container: project-dialog / inline-size; }
 .project-hub-dialog .scoped-people-checkboxes > .employee-scope-switch { display: flex; width: 100%; box-sizing: border-box; margin-bottom: 12px; }
 .project-hub-dialog .employee-scope-switch > button { white-space: nowrap; min-height: 38px; padding-inline: 8px; }
@@ -168,10 +147,4 @@
   .project-hub-dialog .project-hub-request-files .ws-file-dropzone,
   .project-hub-dialog .project-hub-request-files > .project-hub-file-row { border-color: CanvasText; }
   .project-hub-dialog .project-hub-request-files .ws-file-dropzone.is-dragging { outline: 2px solid Highlight; }
-  .project-hub-view.workspace-view > .project-hub-header,
-  .project-hub-view .project-hub-funding-lane.approval-column > header,
-  .project-hub-view .project-hub-funding-lane .approval-column-total { background: Canvas; color: CanvasText; }
-  .project-hub-view .project-hub-header :is(h1, p, strong, span),
-  .project-hub-view .project-hub-funding-lane.approval-column > header strong,
-  .project-hub-view .project-hub-funding-lane .approval-column-total > :is(span, strong) { color: CanvasText; }
 }
