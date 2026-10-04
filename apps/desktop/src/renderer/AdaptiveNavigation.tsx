@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { MoreHorizontal24Regular } from "@fluentui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 export interface AdaptiveNavigationItem {
   readonly key: string;
@@ -80,7 +81,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   const visible = items.slice(0, visibleCount);
   const overflow = items.slice(visibleCount);
   const drawerOpen = open && overflow.length > 0;
-  return <nav ref={containerRef} className="rail-nav personal-rail-nav adaptive-rail-nav"
+  return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active, :scope > button.rail-action.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
     onClickCapture={(event) => {
       if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
         setOpen(false);
@@ -111,5 +112,5 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         </motion.aside> : null}
       </AnimatePresence>
     </div> : null}
-  </nav>;
+  </SlidingSegmented>;
 }

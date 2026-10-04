@@ -1,11 +1,68 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 
 describe("workspace date and file inputs", () => {
-  afterEach(cleanup);
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("routes a latched wheel event by cursor position and preserves the other value", () => {
+    function Controlled() {
+      const [value, setValue] = useState("14:10");
+      return <WorkspaceDateTimePicker ariaLabel="Время" mode="time" value={value} onChange={setValue} />;
+    }
+    render(<Controlled />);
+    fireEvent.click(screen.getByRole("button", { name: "Время: открыть выбор" }));
+    const hours = screen.getByRole("listbox", { name: "Часы" });
+    const minutes = screen.getByRole("listbox", { name: "Минуты" });
+    const hourScroll = vi.fn(), minuteScroll = vi.fn();
+    Object.defineProperty(hours, "scrollTo", { configurable: true, value: hourScroll });
+    Object.defineProperty(minutes, "scrollTo", { configurable: true, value: minuteScroll });
+    const originalHitTest = document.elementFromPoint;
+    const hitTest = vi.fn().mockReturnValue(minutes);
+    Object.defineProperty(document, "elementFromPoint", { configurable: true, value: hitTest });
+    try {
+      fireEvent.wheel(minutes, { deltaY: 34 });
+      expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("14:11");
+      expect(minuteScroll).toHaveBeenCalledWith({ top: 374, behavior: "smooth" });
+      expect(hourScroll).not.toHaveBeenCalled();
+      // Chromium still dispatches to minutes while the cursor is over hours.
+      hitTest.mockReturnValue(hours);
+      fireEvent.wheel(minutes, { deltaY: 34, clientX: 10, clientY: 10 });
+      expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("15:11");
+      expect(hourScroll).toHaveBeenCalledWith({ top: 510, behavior: "smooth" });
+      expect(minuteScroll).toHaveBeenCalledTimes(1);
+      hitTest.mockReturnValue(minutes);
+      fireEvent.wheel(hours, { deltaY: -34 });
+      expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("15:10");
+      hitTest.mockReturnValue(hours);
+      fireEvent.wheel(minutes, { deltaY: -34 });
+      expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("14:10");
+      fireEvent.wheel(hours, { deltaY: -34, ctrlKey: true });
+      expect(screen.getByRole("button", { name: "Время: открыть выбор" })).toHaveTextContent("14:10");
+      vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
+      fireEvent.wheel(hours, { deltaY: 34 });
+      expect(hourScroll).toHaveBeenLastCalledWith({ top: 510, behavior: "instant" });
+    } finally {
+      Object.defineProperty(document, "elementFromPoint", { configurable: true, value: originalHitTest });
+    }
+  });
+
+  it("accumulates fine wheel deltas, respects bounds and retains PM in 12-hour mode", () => {
+    const change = vi.fn();
+    render(<WorkspaceDateTimePicker ariaLabel="Время" mode="time" value="23:59" onChange={change} />);
+    fireEvent.click(screen.getByRole("button", { name: "Время: открыть выбор" }));
+    const hours = screen.getByRole("listbox", { name: "Часы" });
+    fireEvent.wheel(hours, { deltaY: 34 });
+    expect(change).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "12" }));
+    fireEvent.wheel(hours, { deltaY: -17 });
+    expect(change).not.toHaveBeenCalled();
+    fireEvent.wheel(hours, { deltaY: -17 });
+    expect(change).toHaveBeenCalledWith("22:59");
+  });
 
   it("opens the shared calendar and uses 24-hour time by default", () => {
     const change = vi.fn();

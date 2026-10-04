@@ -95,18 +95,60 @@ export function WorkspaceDateTimePicker({
   const minute = Number(minuteText || 0);
   const hourWheel = useRef<HTMLDivElement>(null);
   const minuteWheel = useRef<HTMLDivElement>(null);
+  const dialsRef = useRef<HTMLDivElement>(null);
+  const wheelDelta = useRef({ hour: 0, minute: 0 });
+  const wheelPlacement = useRef<{ clockMode: number; hour: number; minute: number } | null>(null);
   const wheelDrag = useRef<{ pointerId: number; startY: number; lastY: number; moved: boolean } | null>(null);
   const suppressWheelClick = useRef(false);
   const days = useMemo(() => calendarDays(month), [month]);
   const minimumDate = datePart(min ?? "");
 
   useEffect(() => {
-    if (!open || mode === "date") return;
-    requestAnimationFrame(() => {
-      hourWheel.current?.querySelector<HTMLElement>("[aria-selected='true']")?.scrollIntoView({ block: "center" });
-      minuteWheel.current?.querySelector<HTMLElement>("[aria-selected='true']")?.scrollIntoView({ block: "center" });
-    });
+    if (!open || mode === "date") { wheelPlacement.current = null; return; }
+    const hourIndex = clockMode === 24 ? hour : (hour % 12 || 12) - 1;
+    const previous = wheelPlacement.current;
+    const initial = !previous || previous.clockMode !== clockMode;
+    if (initial) wheelDelta.current = { hour: 0, minute: 0 };
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+    const place = (wheel: HTMLDivElement | null, index: number) => {
+      if (!wheel) return;
+      if (typeof wheel.scrollTo === "function") wheel.scrollTo({ top: index * 34, behavior: initial || reduced ? "instant" : "smooth" });
+      else wheel.scrollTop = index * 34;
+    };
+    if (initial || previous.hour !== hourIndex) place(hourWheel.current, hourIndex);
+    if (initial || previous.minute !== minute) place(minuteWheel.current, minute);
+    wheelPlacement.current = { clockMode, hour: hourIndex, minute };
   }, [open, mode, clockMode, hour, minute]);
+
+  useEffect(() => {
+    const dials = dialsRef.current;
+    if (!open || mode === "date" || !dials) return;
+    // Cancel native scroll latching before it starts. During an existing wheel
+    // transaction Chromium may retain the old event target; hit-test the cursor
+    // instead. This listener is local and never hijacks page scrolling/zoom.
+    const wheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey || !event.deltaY || Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      const hit = typeof document.elementFromPoint === "function" ? document.elementFromPoint(event.clientX, event.clientY) : event.target;
+      const target = hit instanceof Element ? hit.closest<HTMLDivElement>(".ws-time-wheel") : null;
+      if (!target || target !== hourWheel.current && target !== minuteWheel.current) return;
+      event.preventDefault();
+      const kind = target === hourWheel.current ? "hour" : "minute";
+      const delta = event.deltaY * (event.deltaMode === 1 ? 34 : event.deltaMode === 2 ? 168 : 1);
+      if (Math.sign(wheelDelta.current[kind]) !== Math.sign(delta)) wheelDelta.current[kind] = 0;
+      wheelDelta.current[kind] += delta;
+      const steps = Math.trunc(wheelDelta.current[kind] / 34);
+      if (!steps) return;
+      wheelDelta.current[kind] -= steps * 34;
+      const current = kind === "minute" ? minute : clockMode === 24 ? hour : (hour % 12 || 12) - 1;
+      const index = Math.max(0, Math.min(kind === "minute" ? 59 : clockMode === 24 ? 23 : 11, current + steps));
+      if (index === current) return;
+      const nextHour = kind === "minute" ? hour : clockMode === 24 ? index : ((index + 1) % 12) + (hour >= 12 ? 12 : 0);
+      const next = `${two(nextHour)}:${two(kind === "minute" ? index : minute)}`;
+      onChange(mode === "time" ? next : `${selectedDate || dateKey(new Date())}T${next}`);
+    };
+    dials.addEventListener("wheel", wheel, { capture: true, passive: false });
+    return () => dials.removeEventListener("wheel", wheel, { capture: true });
+  }, [open, mode, clockMode, hour, minute, selectedDate, onChange]);
 
   const updateDate = (nextDate: string) => {
     if (mode === "date") {
@@ -122,6 +164,7 @@ export function WorkspaceDateTimePicker({
   };
   const handleWheelPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
+    event.currentTarget.scrollTo?.({ top: event.currentTarget.scrollTop, behavior: "instant" });
     wheelDrag.current = { pointerId: event.pointerId, startY: event.clientY, lastY: event.clientY, moved: false };
     event.currentTarget.classList.add("is-dragging");
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -231,7 +274,7 @@ export function WorkspaceDateTimePicker({
       {mode !== "date" ? <div className="ws-time-panel">
         <header><span><Clock20Regular aria-hidden="true" /> Время</span><SlidingSegmented as="span" className="ws-clock-mode" role="group" aria-label="Формат времени"><button type="button" aria-pressed={clockMode === 24} onClick={() => setClockMode(24)}>24</button><button type="button" aria-pressed={clockMode === 12} onClick={() => setClockMode(12)}>12</button></SlidingSegmented></header>
         <div className="ws-time-wheels">
-          <div className="ws-time-dials">
+          <div className="ws-time-dials" ref={dialsRef}>
           <div className="ws-time-wheel" ref={hourWheel} role="listbox" aria-label="Часы" data-wheel="hour" onPointerDown={handleWheelPointerDown} onPointerMove={handleWheelPointerMove} onPointerUp={handleWheelPointerUp} onPointerCancel={handleWheelPointerCancel} onClickCapture={handleWheelClickCapture}>{visibleHours.map((item) => {
             const selected = clockMode === 24 ? item === hour : item === twelveHour;
             const nextHour = clockMode === 24 ? item : (item % 12) + (period === "PM" ? 12 : 0);

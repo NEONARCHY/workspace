@@ -27,6 +27,16 @@ function Example({ initial = "central" }: { readonly initial?: string }) {
 }
 
 describe("SlidingSegmented", () => {
+  it("positions nested navigation buttons in the shared container's coordinates", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
+      return this.tagName === "BUTTON" ? this.parentElement : this.parentElement?.closest("nav") ?? null;
+    });
+    const view = render(<SlidingSegmented as="nav" activeSelector=':scope > div > button[aria-pressed="true"]'>
+      <div><button aria-pressed="true">Личные данные</button></div>
+      <div><button aria-pressed="false">Звук</button></div>
+    </SlidingSegmented>);
+    expect(view.container.querySelector(".sliding-segmented-indicator")).toHaveStyle({ transform: "translate(10px, 8px)", transition: "none" });
+  });
   it("moves the shared indicator to the newly selected button", () => {
     const view = render(<Example />);
     const indicator = view.container.querySelector<HTMLElement>(".sliding-segmented-indicator");

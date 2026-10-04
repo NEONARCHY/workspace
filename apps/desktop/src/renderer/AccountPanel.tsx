@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
   DirectoryEmployee,
@@ -373,7 +374,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
         <div className={`account-settings-layout${initialSection === "invite" ? " is-invite" : ""}`}>
         {initialSection !== "invite" && <>
-          <nav className="account-section-nav" aria-label="Разделы настроек">
+          <SlidingSegmented as="nav" className="account-section-nav navigation-sliding" activeSelector=':scope > div > button[aria-pressed="true"]' aria-label="Разделы настроек">
             <span className="account-nav-group">Ваш аккаунт</span>
             {navigationItems.map((item, index) => <div key={item.key}>
               {item.admin && !navigationItems[index - 1]?.admin && <span className="account-nav-group">Администрирование</span>}
@@ -385,7 +386,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               aria-controls={`account-page-${item.key}`}
               onClick={() => jumpToSection(item.key)}
             ><span aria-hidden="true">{item.icon}</span>{item.label}</button></div>)}
-          </nav>
+          </SlidingSegmented>
           <div className="account-compact-navigation">
             <Field label="Раздел настроек"><Select value={activeSection} onChange={event => jumpToSection(event.target.value as AccountSectionKey)}>
               {navigationItems.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
