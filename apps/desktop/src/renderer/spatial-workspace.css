@@ -445,10 +445,18 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .team-focus-strip > button { display: flex; flex: none; align-items: center; gap: 8px; min-height: 48px; padding: 5px 12px 5px 6px; border: 1px solid transparent; border-radius: 28px; background: #f7faf9; font-size: 12px; color: var(--ws-muted); cursor: pointer; }
 .team-focus-strip > button[aria-pressed=true] { border-color: #9dc8be; color: var(--ws-text); background: #fff; box-shadow: var(--ws-shadow-card); }
 .team-focus-strip > button > span:not(.fui-Avatar) { max-width: 130px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.team-dash-metric { text-align: left; cursor: pointer; border: 1px solid transparent; border-radius: 22px; box-shadow: var(--ws-shadow-card); background: #fcfdfd; }
-.team-dash-metric[aria-pressed=true] { border-color: #89bdb3; background: #f5fbf8; }
-.team-dash-metric.tone-brand { background: #293a55; color: #fff; }
-.team-dash-metric.tone-brand :is(strong,span,small) { color: #fff; }
+.team-dash-metric { text-align: left; cursor: pointer; border: 1px solid transparent; border-radius: 22px; box-shadow: var(--ws-shadow-card); color: var(--ws-text); background: linear-gradient(90deg, color-mix(in srgb, var(--metric-color) 18%, transparent), color-mix(in srgb, var(--metric-color) 7%, transparent) 48%, transparent), #fcfdfd; }
+.team-dash-metric.tone-brand { --metric-color: var(--ws-turquoise); }
+.team-dash-metric[aria-pressed=true] { border-color: color-mix(in srgb, var(--metric-color) 65%, white); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--metric-color) 30%, transparent), var(--ws-shadow-card); }
+.team-dash-metric:hover { border-color: color-mix(in srgb, var(--metric-color) 60%, white); }
+.team-dash-metric:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 3px; }
+.team-dash-metric :is(span,small) { color: var(--ws-text); font-size: 12px; }
+.team-dash-metric strong { color: var(--ws-text); }
+@media (forced-colors: active) {
+  .team-dash-metric { background: Canvas; border-color: CanvasText; box-shadow: none; }
+  .team-dash-metric[aria-pressed=true] { border-color: Highlight; outline: 2px solid Highlight; outline-offset: -2px; box-shadow: none; }
+  .team-dash-metric :is(strong,span,small) { color: CanvasText; }
+}
 .team-dash-metric strong { font-size: 36px; font-weight: 600; text-shadow: none; }
 .team-dash-metric-icon { box-shadow: none; }
 .team-dash-panel { border: 0; border-radius: 24px; box-shadow: var(--ws-shadow-card); }

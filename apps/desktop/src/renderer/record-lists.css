@@ -21,7 +21,15 @@
 .record-table th button > span { flex: none; font-size: 15px; }
 .record-table td { padding: 17px 14px; border-bottom: 1px solid var(--ws-line); line-height: 1.45; vertical-align: middle; overflow-wrap: anywhere; background: white; transition: background-color var(--ws-motion-fast) var(--ws-ease); }
 .record-table tbody tr:last-child td { border-bottom: 0; }
-.record-table .fui-Badge { max-width: 100%; height: auto; min-height: 20px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+.app-provider .record-table .fui-Badge { box-sizing: border-box; max-width: 100%; height: auto; min-height: 26px; padding: 5px 9px; border-radius: 8px; font-size: 12px; font-weight: 600; line-height: 1.35; white-space: normal; overflow-wrap: normal; word-break: normal; text-align: left; justify-content: flex-start; }
+.record-table .record-status-badge { color: var(--ws-link); background: #e8f4f5; border: 1px solid #cce5e8; }
+.record-table .record-status-badge[data-status="awaiting_review"] { color: #765718; background: #fff5df; border-color: #efdfba; }
+.record-table .record-status-badge[data-status="overdue"] { color: #a02939; background: #fcecef; border-color: #edcdd3; }
+.record-table .record-status-badge[data-status="completed"] { color: #2f6947; background: #eaf5ee; border-color: #cce3d5; }
+.record-table .record-status-badge[data-status="cancelled"] { color: var(--ws-text); background: #f0f3f5; border-color: #dce4e9; }
+@media (forced-colors: active) {
+  .record-table .record-status-badge[data-status] { color: CanvasText; background: Canvas; border-color: CanvasText; }
+}
 .record-table .record-row { display: table-row; width: auto; margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; cursor: pointer; }
 .record-table .record-row > :last-child { justify-self: auto; }
 .record-table .record-row:hover td, .record-table .record-row:focus-within td, .record-table .record-row.selected td { background: #eef7f9; }

@@ -77,6 +77,12 @@ describe("Corporate record tables", () => {
     render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId={task.authorId} filterKey="review" onSelect={vi.fn()} />));
     expect(screen.getByText("Ждёт вашей проверки")).toBeInTheDocument();
   });
+  it("retains the full observer review label in a semantic status badge", () => {
+    const task = { ...initialTasks[0]!, status: "awaiting_review" as const };
+    render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId="observer" filterKey="review" onSelect={vi.fn()} />));
+    expect(screen.getByText("Ждёт проверки постановщиком")).toHaveClass("record-status-badge");
+    expect(screen.getByText("Ждёт проверки постановщиком")).toHaveAttribute("data-status", "awaiting_review");
+  });
   it("paginates and clamps the current page when records disappear", () => {
     const view = render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));
     fireEvent.click(screen.getByRole("button", { name: "Следующая страница: задачи" }));

@@ -1136,6 +1136,21 @@ describe("corporate workspace authentication alpha", () => {
     ));
   });
 
+  it("updates the read percentage after confirmation without resolving actions", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/read-all"),
+      expect.objectContaining({ method: "POST" }),
+    ));
+    await waitFor(() => expect(screen.getByRole("progressbar", { name: "Доля прочитанных уведомлений" })).toHaveAttribute("aria-valuenow", "100"));
+    expect(screen.getByRole("button", { name: /Нужно решить/ })).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: "Прочитать все" })).toBeDisabled();
+  });
+
   it("filters the notification queue by its source without losing history", async () => {
     mockServer();
     render(<App />);

@@ -124,9 +124,11 @@ export function NotificationCenter({
     () => [...new Set(notifications.map((item) => item.kind))],
     [notifications],
   );
-  const completionPercent = notifications.length === 0
-    ? 100
-    : Math.round(((notifications.length - attentionCount) / notifications.length) * 100);
+  const readCount = notifications.length - unreadCount;
+  // Reading and completing a working action are independent. Never round an
+  // outstanding unread item up to 100%, even in a large loaded history.
+  const readPercent = notifications.length === 0 ? 0 : unreadCount === 0 ? 100
+    : Math.min(99, Math.round(readCount / notifications.length * 100));
 
   const updatePreference = async (
     key: keyof NotificationPreferences,
@@ -214,10 +216,10 @@ export function NotificationCenter({
           <strong>{notifications.length}</strong>
           <span><b>Вся история</b><small>Доступные события</small></span>
         </button>
-        <div className="notification-progress-card" aria-label={`Обработано ${completionPercent}% уведомлений`}>
-          <span><b>Обработано уведомлений</b><small>Не требуют вашего решения</small></span>
-          <strong>{completionPercent}%</strong>
-          <i><span style={{ width: `${completionPercent}%` }} /></i>
+        <div className="notification-progress-card" role="group" aria-label="Прочтение уведомлений">
+          <span><b>Прочитано уведомлений</b><small>{notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} просмотрены`}</small></span>
+          <strong>{notifications.length === 0 ? "—" : `${readPercent}%`}</strong>
+          <i role="progressbar" aria-label="Доля прочитанных уведомлений" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readPercent} aria-valuetext={notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} прочитаны`}><span style={{ width: `${readPercent}%` }} /></i>
         </div>
       </div>
 
