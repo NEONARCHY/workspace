@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
+from .sidebar_visibility import hidden_keys_for_user
 from .tables import chat_members, personal_preferences
 from .workspace_schemas import (
     DEFAULT_NAVIGATION,
@@ -20,6 +21,7 @@ async def get_preferences(
     *,
     lock: bool = False,
 ) -> PersonalPreferencesResponse:
+    hidden_keys = await hidden_keys_for_user(connection, user.id)
     if lock:
         await connection.execute(
             pg_insert(personal_preferences)
@@ -31,7 +33,7 @@ async def get_preferences(
         statement = statement.with_for_update()
     row = (await connection.execute(statement)).mappings().first()
     if row is None:
-        return PersonalPreferencesResponse()
+        return PersonalPreferencesResponse(hidden_navigation_keys=hidden_keys)
     accessible = {
         str(chat_id)
         for chat_id in (
@@ -55,6 +57,7 @@ async def get_preferences(
         navigation_order=navigation,
         locale=row["locale"],
         revision=row["revision"],
+        hidden_navigation_keys=hidden_keys,
     )
 
 
@@ -67,7 +70,7 @@ async def save_preferences(
     await connection.execute(
         update(personal_preferences)
         .where(personal_preferences.c.user_id == user.id)
-        .values(**value.model_dump())
+        .values(**value.model_dump(exclude={"hidden_navigation_keys"}))
     )
     return value
 

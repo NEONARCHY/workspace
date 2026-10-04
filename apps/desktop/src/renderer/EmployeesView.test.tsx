@@ -110,6 +110,7 @@ describe("Employee list and retained access controls", () => {
   it("does not expose invitations or editable permissions to a regular employee", async () => {
     mount({ ...user, role: "employee" }); await screen.findByRole("table");
     expect(screen.queryByRole("button", { name: "Пригласить сотрудника" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Меню сотрудника" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
     expect(screen.getByLabelText("Должность")).toBeDisabled();

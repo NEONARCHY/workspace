@@ -336,7 +336,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
       </main>
     </div> : <div className={`project-hub-funding-layout ${selectedRequest ? "has-selection" : ""}`}>
       <div className="project-hub-funding-overview" aria-label="Сводка проектных заявок">{(["draft", "pending", "approved", "rejected"] as const).map((status) => <div className={`project-hub-funding-stat ${status}`} key={status}><span>{requestStatus[status]}</span><strong>{requests.filter((request) => request.status === status).length}</strong><small>{status === "draft" ? "Личные черновики" : status === "pending" ? "Ожидают решения" : status === "approved" ? "Маршрут завершён" : "Сохранены в истории"}</small></div>)}</div>
-      <div className="project-hub-funding-board project-request-kanban" role="region" aria-label="Канбан проектных заявок">
+      <div className="project-hub-funding-board project-request-kanban" role="region" aria-label="Канбан проектных заявок" tabIndex={0}>
         {(["draft", "pending", "approved", "rejected"] as const).map((status) => {
           const columnRequests = requests.filter((request) => request.status === status);
           return <section className={`project-hub-funding-lane approval-column ${status}`} key={status} aria-label={requestStatus[status]}>

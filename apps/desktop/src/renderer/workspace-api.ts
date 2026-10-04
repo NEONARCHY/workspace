@@ -34,6 +34,7 @@ import type {
   AdministrativeChatInspection,
   PersonalChatAction,
   PersonalPreferences,
+  SidebarVisibility,
   InterfaceLocale,
   ApprovalRequestSummary,
   AttachmentOwnerType,
@@ -538,6 +539,16 @@ export function reorderPinnedChats(token: string, chatIds: readonly string[], re
 export function reorderNavigation(token: string, order: readonly NavigationKey[], revision: number) {
   return apiRequest<PersonalPreferences>("/personal-preferences/navigation", {
     method: "PUT", body: JSON.stringify({ order, revision }),
+  }, token);
+}
+
+export function loadSidebarVisibility(token: string, userId: string) {
+  return apiRequest<SidebarVisibility>(`/directory/employees/${encodeURIComponent(userId)}/sidebar`, {}, token);
+}
+
+export function saveSidebarVisibility(token: string, userId: string, hiddenKeys: readonly NavigationKey[], revision: number) {
+  return apiRequest<SidebarVisibility>(`/directory/employees/${encodeURIComponent(userId)}/sidebar`, {
+    method: "PUT", body: JSON.stringify({ hiddenKeys, revision }),
   }, token);
 }
 

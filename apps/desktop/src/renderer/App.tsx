@@ -84,7 +84,7 @@ import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { CompanyLogo } from "./CompanyLogo";
 import { NavigationEditor } from "./NavigationEditor";
-import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
+import { defaultPersonalPreferences, latestPreferences, visibleNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
 import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
@@ -1783,8 +1783,7 @@ export function App() {
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
-  const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
-    .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
+  const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, workspace.personalPreferences.hiddenNavigationKeys, canView)
     .map((key) => navItems.find((item) => item.key === key)!);
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
@@ -1856,7 +1855,7 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
-            hiddenKeys={["projects", "payment_requests"]}
+            hiddenKeys={["projects", ...(workspace.personalPreferences.hiddenNavigationKeys ?? []), ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
             icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}

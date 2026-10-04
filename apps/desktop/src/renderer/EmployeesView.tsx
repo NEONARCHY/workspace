@@ -20,6 +20,7 @@ import { EmployeeRecords, employeeRoleLabels, employeeStatusLabel } from "./Empl
 import { DepartmentManagement } from "./DepartmentManagement";
 import { DepartmentIcon } from "./DepartmentIcon";
 import { ModuleAccessManagement } from "./ModuleAccessManagement";
+import { SidebarVisibilityManagement } from "./SidebarVisibilityManagement";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { AdministrativeChatInspectionView } from "./AdministrativeChatInspection";
@@ -122,6 +123,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [chatControlOpen, setChatControlOpen] = useState(false);
   const [employeeStatusAction, setEmployeeStatusAction] = useState<ManagedEmployeeStatus>();
   const [employeeStatusReason, setEmployeeStatusReason] = useState("");
@@ -135,6 +137,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [recognitionSettings, setRecognitionSettings] = useState<RecognitionSettings>();
   const [recognitionSettingsBusy, setRecognitionSettingsBusy] = useState(false);
   const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
+  const canManageSidebar = canManage && ["admin", "superadmin"].includes(currentUser.role);
   const canManageDepartments = canManage
     || currentUser.role === "manager"
     || (currentUser.jobTitle ?? "").toLocaleLowerCase("uz").includes("kadr")
@@ -455,6 +458,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           /> : null}
           {canManageDepartments ? <Button onClick={() => setDepartmentsOpen(true)}>Отделы и подразделения</Button> : null}
           {canManage ? <Button onClick={() => setAccessOpen(true)}>Права модулей</Button> : null}
+          {canManageSidebar ? <Button onClick={() => setSidebarOpen(true)}>Меню сотрудника</Button> : null}
           {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
           <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
           {canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
@@ -732,6 +736,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           <ModuleAccessManagement token={token} directory={directory} onRuleChanged={mergeAccessRule} onRuleDeleted={removeAccessRule} />
         </DialogSurface>
       </Dialog> : null}
+      {sidebarOpen && canManageSidebar ? <SidebarVisibilityManagement token={token} directory={directory} currentUser={currentUser} initialUserId={selectedEmployeeId} onClose={() => setSidebarOpen(false)} /> : null}
       {chatControlOpen ? <Dialog open onOpenChange={(_, data) => { if (!data.open && data.type === "escapeKeyDown") setChatControlOpen(false); }}>
         <DialogSurface className="admin-chat-dialog" aria-label="Контроль чатов">
           <AdministrativeChatInspectionView token={token} onClose={() => setChatControlOpen(false)} />

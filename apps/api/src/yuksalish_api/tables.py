@@ -14,6 +14,15 @@ personal_preferences = sa.Table(
     sa.Column("revision", sa.Integer()),
 )
 
+sidebar_visibility = sa.Table(
+    "workspace_sidebar_visibility", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("hidden_keys", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 departments = sa.Table(
     "core_departments",
     metadata,

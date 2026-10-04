@@ -36,6 +36,13 @@ export interface PersonalPreferences {
   readonly navigationOrder: readonly NavigationKey[];
   readonly locale: InterfaceLocale;
   readonly revision: number;
+  /** Administrator-managed menu presentation; not a module permission. */
+  readonly hiddenNavigationKeys?: readonly NavigationKey[];
+}
+export interface SidebarVisibility {
+  readonly userId: string;
+  readonly hiddenKeys: readonly NavigationKey[];
+  readonly revision: number;
 }
 export type ModuleStatus = "placeholder" | "available";
 

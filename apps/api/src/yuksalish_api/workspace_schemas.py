@@ -1316,6 +1316,28 @@ class PersonalPreferencesResponse(ApiModel):
     navigation_order: list[NavigationKey] = Field(default_factory=lambda: list(DEFAULT_NAVIGATION))
     locale: Literal["ru", "uz_cyrl", "uz_latn"] = "ru"
     revision: int = 0
+    hidden_navigation_keys: list[NavigationKey] = Field(default_factory=list)
+
+
+class SidebarVisibilityResponse(ApiModel):
+    user_id: str
+    hidden_keys: list[NavigationKey] = Field(default_factory=list)
+    revision: int = 0
+
+
+class SidebarVisibilityUpdate(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    hidden_keys: list[NavigationKey] = Field(max_length=len(DEFAULT_NAVIGATION))
+    revision: int = Field(ge=0)
+
+    @field_validator("hidden_keys")
+    @classmethod
+    def unique_keys(cls, value: list[NavigationKey]) -> list[NavigationKey]:
+        if len(value) != len(set(value)):
+            raise ValueError("Разделы не должны повторяться")
+        if "settings" in value:
+            raise ValueError("Настройки профиля должны оставаться доступными")
+        return value
 
 
 class InterfaceLocaleUpdate(ApiModel):
