@@ -1136,6 +1136,21 @@ describe("corporate workspace authentication alpha", () => {
     ));
   });
 
+  it("updates the read percentage after confirmation without resolving actions", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/notifications/read-all"),
+      expect.objectContaining({ method: "POST" }),
+    ));
+    await waitFor(() => expect(screen.getByRole("progressbar", { name: "Доля прочитанных уведомлений" })).toHaveAttribute("aria-valuenow", "100"));
+    expect(screen.getByRole("button", { name: /Нужно решить/ })).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: "Прочитать все" })).toBeDisabled();
+  });
+
   it("filters the notification queue by its source without losing history", async () => {
     mockServer();
     render(<App />);
@@ -1317,6 +1332,22 @@ describe("corporate workspace authentication alpha", () => {
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
   });
 
+  it("keeps the same task navigation header mounted across all four views", async () => {
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
+    const navigation = await screen.findByRole("group", { name: "Представление задач" });
+    const header = navigation.closest(".section-toolbar");
+    expect(header).not.toBeNull();
+    for (const name of ["Kanban", "Календарь", "Эффективность", "Список"]) {
+      fireEvent.click(within(navigation).getByRole("button", { name }));
+      expect(screen.getByRole("group", { name: "Представление задач" })).toBe(navigation);
+      expect(navigation.closest(".section-toolbar")).toBe(header);
+      expect(within(header as HTMLElement).getByRole("button", { name: "Новая задача" })).toBeInTheDocument();
+    }
+  });
+
   it("shows filtered tasks in the calendar with their automatic chat beside the details", async () => {
     mockServer();
     render(<App />);
@@ -1325,8 +1356,12 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     await waitFor(() => expect(document.querySelector(".view-switch")).not.toBeNull());
     fireEvent.click(within(document.querySelector(".view-switch")!).getByRole("button", { name: "Календарь" }));
-    expect(screen.getByRole("heading", { name: "Календарь задач" })).toBeInTheDocument();
-    expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar")).toBeNull();
+    expect(screen.queryByText("Рабочий календарь")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Календарь задач" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Предыдущий месяц задач" }).closest(".task-calendar-navigation-slot")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Сегодня" }).closest(".section-toolbar")).not.toBeNull();
+    expect(document.querySelector(".tasks-view.calendar-mode > .tasks-main > .section-toolbar .view-switch")).not.toBeNull();
+    expect(document.querySelector(".task-calendar-embedded .view-switch")).toBeNull();
     expect(screen.getByRole("grid", { name: /Календарь задач:/ })).toBeInTheDocument();
     const taskMonth = new Date(initialTasks[0]!.dueAt!);
     const today = new Date();
@@ -1397,7 +1432,7 @@ describe("corporate workspace authentication alpha", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
-    const board = screen.getByLabelText("Kanban задач");
+    const board = screen.getByLabelText("Kanban задач: горизонтальная прокрутка");
     expect(board).toBeInTheDocument();
     expect(board.querySelectorAll(".kanban-column")).toHaveLength(5);
     expect(screen.getByLabelText("Новые: задачи")).toHaveAttribute("tabindex", "0");
@@ -1875,19 +1910,19 @@ describe("corporate workspace authentication alpha", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the new project sections while hiding legacy projects and payments", async () => {
+  it("shows project sections and payments while hiding legacy projects and collapsed AI links", async () => {
     mockServer();
     render(<App />);
     await loginToWorkspace();
 
     const navigation = screen.getByRole("navigation");
-    const labels = Array.from(navigation.querySelectorAll("button")).map((button) =>
+    const labels = within(navigation).getAllByRole("button").map((button) =>
       button.getAttribute("aria-label"),
     );
     expect(labels).toEqual([
       "Задачи",
-      "AI Referent",
-      "AI Hisobot",
+      "Заявки на оплату",
+      "ИИ-модули",
       "Лента",
       "Проекты",
       "Проектные заявки",
@@ -1902,6 +1937,10 @@ describe("corporate workspace authentication alpha", () => {
       "Уведомления",
       "Настройки",
     ]);
+    fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
+    const aiModules = await screen.findByRole("navigation", { name: "Выбор ИИ-модуля" });
+    expect(within(aiModules).getByRole("button", { name: "AI Referent" })).toBeInTheDocument();
+    expect(within(aiModules).getByRole("button", { name: "AI Hisobot" })).toBeInTheDocument();
   });
 
   it("keeps the sidebar editor open after clicking the pencil", async () => {

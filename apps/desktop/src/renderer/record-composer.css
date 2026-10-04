@@ -24,6 +24,17 @@
 .record-field-grid :is(input, select, textarea) { width: 100%; min-width: 0; }
 .record-field-grid select { min-height: 36px; padding: 7px 10px; color: var(--ws-text); background: white; border: 1px solid var(--ws-control-line); border-radius: 10px; }
 .record-field-grid .fui-Textarea textarea { min-height: 100px; }
+.task-composer .record-field-grid > label > :is(.fui-Input, .workspace-select, .person-picker-trigger, .ws-date-time-trigger) {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 12px;
+}
+.task-composer .record-field-grid .workspace-select > .fui-Dropdown__button {
+  height: 38px;
+  min-height: 38px;
+}
 .record-field-grid label small { color: var(--ws-muted); font-size: 12px; font-weight: 400; }
 .record-field-grid output { display: block; min-height: 36px; padding: 7px 10px; background: var(--ws-muted-surface); border-radius: 10px; font-variant-numeric: tabular-nums; }
 .record-summary-title { margin: 16px 0 0; color: var(--ws-navy); font-size: 21px; line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }

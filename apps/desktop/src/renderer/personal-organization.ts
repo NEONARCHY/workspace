@@ -20,6 +20,11 @@ export function normalizeNavigation(order: readonly NavigationKey[]): Navigation
   return [...known, ...missing];
 }
 
+/** Hiding menu entries never changes module permissions or direct object links. */
+export function visibleNavigation(order: readonly NavigationKey[], hidden: readonly NavigationKey[] = [], canView: (key: NavigationKey) => boolean = () => true): NavigationKey[] {
+  return normalizeNavigation(order).filter((key) => key !== "projects" && !hidden.includes(key) && canView(key));
+}
+
 /** Move only known identities. Unknown or same-item drops are no-ops. */
 export function moveBefore<T extends string>(order: readonly T[], source: T, target: T): T[] {
   const from = order.indexOf(source), to = order.indexOf(target);

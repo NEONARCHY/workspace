@@ -14,6 +14,15 @@ personal_preferences = sa.Table(
     sa.Column("revision", sa.Integer()),
 )
 
+sidebar_visibility = sa.Table(
+    "workspace_sidebar_visibility", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("hidden_keys", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 departments = sa.Table(
     "core_departments",
     metadata,
@@ -78,6 +87,16 @@ users = sa.Table(
     sa.Column("birthday_day", sa.SmallInteger()),
 )
 
+assistant_chats = sa.Table(
+    "assistant_chats", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type),
+    sa.Column("title", sa.String(100)),
+    sa.Column("is_default", sa.Boolean()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 assistant_messages = sa.Table(
     "assistant_messages", metadata,
     sa.Column("id", uuid_type, primary_key=True),
@@ -88,6 +107,8 @@ assistant_messages = sa.Table(
     sa.Column("source_labels", postgresql.JSONB()),
     sa.Column("references", postgresql.JSONB()),
     sa.Column("action_draft", postgresql.JSONB()),
+    sa.Column("chat_id", uuid_type),
+    sa.Column("cleared_at", sa.DateTime(timezone=True)),
     sa.Column("created_at", sa.DateTime(timezone=True)),
 )
 
@@ -220,6 +241,7 @@ chats = sa.Table(
     sa.Column("kind", sa.String(24)),
     sa.Column("direct_key", sa.String(73)),
     sa.Column("description", sa.Text()),
+    sa.Column("avatar_icon_key", sa.String(24)),
     sa.Column("title", sa.String(240)),
     sa.Column("context_type", sa.String(32)),
     sa.Column("context_id", uuid_type),

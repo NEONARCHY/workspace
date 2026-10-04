@@ -1,0 +1,24 @@
+/* One selection surface travels beneath stationary labels in both menus. */
+.navigation-sliding.sliding-segmented { position: relative; inset: auto; isolation: isolate; }
+.navigation-sliding > .sliding-segmented-indicator {
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 14px;
+  background: radial-gradient(circle at 12% 50%, rgb(0 145 168 / 10%), transparent 42%), linear-gradient(100deg, #e1f1ee, #eaf3f2);
+  box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(255 255 255 / 82%);
+  box-sizing: border-box;
+  transition: transform 260ms var(--ws-ease-physical);
+}
+.navigation-sliding > :is(div, button) { position: relative; z-index: 1; }
+.account-settings-redesigned .navigation-sliding button { background: transparent; border-radius: 14px; }
+.account-settings-redesigned .navigation-sliding button.is-active { color: var(--ws-text); background: transparent; border-color: transparent; }
+.account-settings-redesigned .navigation-sliding button.is-active svg { color: var(--ws-link); }
+body .app-rail .navigation-sliding > .rail-slot > .rail-action.active::before,
+body .app-rail .navigation-sliding > .rail-slot .rail-ai-trigger.active::before { opacity: 0; }
+body .app-rail .navigation-sliding > .rail-slot > .rail-action.active { transform: none; }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .navigation-sliding > .sliding-segmented-indicator { transition: none; }
+}
+@media (forced-colors: active) {
+  .navigation-sliding > .sliding-segmented-indicator { border-color: Highlight; background: Canvas; box-shadow: none; }
+  .account-settings-redesigned .navigation-sliding button.is-active { color: Highlight; outline: 2px solid Highlight; outline-offset: -2px; }
+}

@@ -1,0 +1,118 @@
+/* A short, reversible left-to-right wash. Only this decorative layer moves. */
+body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item),
+body .app-provider .record-table .record-row {
+  position: relative;
+  isolation: isolate;
+  --row-hover-accent: var(--ws-turquoise, #0091a8);
+  --row-wash-start: 18%;
+  --row-wash-end: 5%;
+}
+body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+body .app-provider .record-table .list-row-hover-wash {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), transparent),
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), transparent));
+  content: "";
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left center;
+  pointer-events: none;
+  transition: transform 180ms cubic-bezier(.2, 0, 0, 1), opacity 150ms ease;
+}
+/* One layer across the whole row, not one repeating band per cell. */
+body .app-provider .record-table .record-row { background-color: white; }
+body .app-provider .record-table .record-row > td { position: static; background-color: transparent; }
+body .app-provider .record-table .record-row.selected > td:first-child:not(.record-title) { background-image: none; }
+/* Resting priority tint ends with the title; hover always starts at the row's
+   left edge, including normal and low-priority tasks. */
+body .app-provider .task-record-table .record-row:has(.task-record-signal) .list-row-hover-wash { left: 0; }
+body .app-provider .task-record-table .record-row:has(.task-record-signal) {
+  --row-priority-strength: 13%;
+  --row-priority-accent: var(--ws-accent-neutral);
+  background-image: linear-gradient(90deg,
+    color-mix(in srgb, var(--row-priority-accent) var(--row-priority-strength), transparent),
+    transparent 28%);
+}
+/* Priority colours remain semantic at rest and during the animated hover. */
+body .app-provider .task-record-table .record-row:has(.task-record-signal:is(.priority-high, .priority-urgent)) {
+  --row-priority-strength: 18%;
+  --row-priority-accent: var(--row-hover-accent);
+  --row-wash-start: 24%;
+  --row-wash-end: 6%;
+}
+body .app-provider .task-record-table .record-row:has(.task-record-signal.priority-high) {
+  --row-hover-accent: var(--ws-accent-warning);
+}
+body .app-provider .task-record-table .record-row:has(.task-record-signal.priority-urgent) {
+  --row-hover-accent: var(--ws-accent-danger);
+}
+/* Legacy td:hover background shorthands otherwise erase the priority image. */
+body .app-provider .task-record-table .record-title:has(.task-record-signal) {
+  background-color: transparent;
+  background-image: none;
+}
+/* Crossfade from the resting tint, rather than stacking translucent tints or
+   starting a second gradient abruptly at the first column's edge. */
+body .app-provider .task-record-table .record-row:where(:not(.selected)):has(.task-record-signal) .list-row-hover-wash {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), white),
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), white));
+}
+
+/* Existing selection/priority washes remain the only gradient in their area.
+   A travelling underline provides hover feedback without additive tinting. */
+body .app-provider :is(.team-dash-person, .trip-list-item).selected::before,
+body .app-provider .record-table .record-row.selected .list-row-hover-wash {
+  background: none;
+  box-shadow: inset 0 -2px color-mix(in srgb, var(--row-hover-accent) 55%, transparent);
+}
+body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):is(:hover, :active, :focus-visible),
+body .app-provider .record-table .record-row:is(:hover, :focus-within) {
+  transform: none;
+  box-shadow: none;
+}
+body .app-provider .team-dash-person.selected { transform: none; }
+body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):not(.selected):hover {
+  background-color: #f5f9fa;
+}
+@media (hover: hover) and (pointer: fine) {
+  body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):hover::before,
+  body .app-provider .record-table .record-row:hover .list-row-hover-wash {
+    opacity: 1;
+    transform: scaleX(1);
+    transition-duration: 220ms, 180ms;
+  }
+}
+/* Keyboard feedback is immediate; existing focus outlines stay visible. */
+body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):focus-visible::before,
+body .app-provider .record-table .record-row:focus-within .list-row-hover-wash {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+  body .app-provider .record-table .list-row-hover-wash {
+    transform: none;
+    transition: none;
+  }
+}
+@media (forced-colors: active) {
+  body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+  body .app-provider .record-table .list-row-hover-wash { display: none; }
+  body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):is(:hover, :focus-visible),
+  body .app-provider .record-table .record-row:is(:hover, :focus-within) > td {
+    /* The product's normal-focus reset is important; forced colours must win. */
+    outline: 1px solid Highlight !important;
+    outline-offset: -1px;
+    background-color: Canvas;
+  }
+  body .app-provider .record-table .record-row { background-color: Canvas; }
+  body .app-provider .task-record-table .record-row:has(.task-record-signal) { background-image: none; }
+  body .app-provider .record-table .record-row.selected > td { background-color: Highlight; color: HighlightText; }
+  body .app-provider .task-record-table .record-title:has(.task-record-signal) { background-image: none; }
+}

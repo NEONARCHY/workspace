@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .workspace_schemas import AttachmentResponse
+from .workspace_schemas import AttachmentResponse, ChatAvatarIconKey
 
 
 class HubModel(BaseModel):
@@ -19,6 +19,7 @@ class HubModel(BaseModel):
 
 
 class ProjectHubWrite(HubModel):
+    chat_icon_key: ChatAvatarIconKey | None = None
     code: str = Field(min_length=1, max_length=48)
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
@@ -49,6 +50,7 @@ class ProjectHubWrite(HubModel):
 
 class ProjectHubResponse(ProjectHubWrite):
     id: str
+    chat_id: str | None = None
     created_by_user_id: str
     created_at: datetime
     updated_at: datetime

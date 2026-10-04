@@ -9,6 +9,7 @@ import type {
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { useContextMotion } from "./useContextMotion";
 import { Button, Input, Switch } from "@fluentui/react-components";
 import {
   AlertOn24Regular,
@@ -92,6 +93,7 @@ export function NotificationCenter({
   const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "attention");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
+  const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [testingNotification, setTestingNotification] = useState(false);
   const [testStatus, setTestStatus] = useState<{ readonly message: string; readonly error: boolean }>();
@@ -124,9 +126,11 @@ export function NotificationCenter({
     () => [...new Set(notifications.map((item) => item.kind))],
     [notifications],
   );
-  const completionPercent = notifications.length === 0
-    ? 100
-    : Math.round(((notifications.length - attentionCount) / notifications.length) * 100);
+  const readCount = notifications.length - unreadCount;
+  // Reading and completing a working action are independent. Never round an
+  // outstanding unread item up to 100%, even in a large loaded history.
+  const readPercent = notifications.length === 0 ? 0 : unreadCount === 0 ? 100
+    : Math.min(99, Math.round(readCount / notifications.length * 100));
 
   const updatePreference = async (
     key: keyof NotificationPreferences,
@@ -214,10 +218,10 @@ export function NotificationCenter({
           <strong>{notifications.length}</strong>
           <span><b>Вся история</b><small>Доступные события</small></span>
         </button>
-        <div className="notification-progress-card" aria-label={`Обработано ${completionPercent}% уведомлений`}>
-          <span><b>Обработано уведомлений</b><small>Не требуют вашего решения</small></span>
-          <strong>{completionPercent}%</strong>
-          <i><span style={{ width: `${completionPercent}%` }} /></i>
+        <div className="notification-progress-card" role="group" aria-label="Прочтение уведомлений">
+          <span><b>Прочитано уведомлений</b><small>{notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} просмотрены`}</small></span>
+          <strong>{notifications.length === 0 ? "—" : `${readPercent}%`}</strong>
+          <i role="progressbar" aria-label="Доля прочитанных уведомлений" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readPercent} aria-valuetext={notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} прочитаны`}><span style={{ width: `${readPercent}%` }} /></i>
         </div>
       </div>
 
@@ -238,7 +242,7 @@ export function NotificationCenter({
               ))}
             </SlidingSegmented>
           </div>
-          <div className="notification-stream" aria-live="polite">
+          <div className="notification-stream" aria-live="polite" ref={streamMotion}>
           {visible.length === 0 ? (
             <div className="notification-empty">
               <CheckmarkCircle24Regular />

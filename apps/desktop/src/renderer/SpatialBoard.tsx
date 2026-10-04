@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, pointerWithin, rectIntersection, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent, type KeyboardCoordinateGetter, type DropAnimation } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ReOrderDotsVertical20Regular } from "@fluentui/react-icons";
+import { useCardTilt } from "./useCardTilt";
 
 interface CardRecord { node: HTMLElement; content: ReactNode; className: string; label: string; lane: string }
 interface DropTransaction {
@@ -285,6 +286,7 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
   const node = useRef<HTMLElement | null>(null);
   const movement = useRef<Animation | undefined>(undefined);
   const hoverSuppressed = board.hoverSuppressedId === id;
+  useCardTilt(node, !board.active && !board.pending && !hoverSuppressed);
   useLayoutEffect(() => {
     const element = node.current;
     if (!element) return;

@@ -26,6 +26,7 @@ vi.mock("./workspace-api", async (importOriginal) => ({
 function actions(): ChatActions {
   return {
     create: vi.fn(),
+    setAvatar: vi.fn(),
     update: vi.fn(),
     add: vi.fn(),
     setMember: vi.fn(),
@@ -80,6 +81,42 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("saves a shared icon only on confirmation and keeps a failed choice for retry", async () => {
+    const chatActions = actions();
+    vi.mocked(chatActions.setAvatar!).mockRejectedValueOnce(new Error("Не удалось сохранить иконку"))
+      .mockResolvedValue({ ...initialChats[0]!, avatarIconKey: "star" });
+    renderMessenger({ chats: [{ ...initialChats[0]!, canEditAvatar: true }], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Изменить иконку чата" }));
+    fireEvent.click(screen.getByRole("button", { name: "Иконка: Звезда" }));
+    expect(chatActions.setAvatar).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить иконку" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось сохранить иконку"));
+    expect(screen.getByRole("button", { name: "Иконка: Звезда" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить иконку" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Сохранить иконку" })).not.toBeInTheDocument());
+    expect(chatActions.setAvatar).toHaveBeenNthCalledWith(1, "finance", "star");
+    expect(chatActions.setAvatar).toHaveBeenNthCalledWith(2, "finance", "star");
+  });
+
+  it("resets a managed trip icon to its semantic default and prevents unauthorized editing", async () => {
+    const chatActions = actions();
+    const tripChat = { ...initialChats[0]!, contextType: "trip", contextId: "trip-1", avatarIconKey: "star" as const, canEditAvatar: true };
+    vi.mocked(chatActions.setAvatar!).mockResolvedValue({ ...tripChat, avatarIconKey: null });
+    const view = renderMessenger({ chats: [tripChat], chatActions });
+    fireEvent.click(screen.getByRole("button", { name: "Изменить иконку чата" }));
+    fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
+    await waitFor(() => expect(chatActions.setAvatar).toHaveBeenCalledWith("finance", null));
+    view.unmount();
+    renderMessenger({ chats: [{ ...tripChat, canEditAvatar: false }], chatActions });
+    expect(screen.queryByRole("button", { name: "Изменить иконку чата" })).not.toBeInTheDocument();
+  });
+
+  it("opens the current Projects module from its managed conversation", () => {
+    const onOpenContext = vi.fn();
+    renderMessenger({ chats: [{ ...initialChats[0]!, kind: "project", contextType: "project_hub", contextId: "hub-1" }], onOpenContext });
+    fireEvent.click(screen.getByRole("button", { name: "Открыть проект" }));
+    expect(onOpenContext).toHaveBeenCalledWith("project_hub", "hub-1");
+  });
   it("reviews an assistant message before creating a direct chat, then keeps it unsent", async () => {
     const chatActions = actions();
     const newChat: ChatSummary = {
@@ -194,11 +231,20 @@ describe("Private messenger", () => {
     const reaction = within(dialog).getByRole("button", { name: /👍: Бахтиёр Самугов/ });
     fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
     const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu");
-    expect(quick?.parentElement).toBe(dialog.parentElement);
+    expect(quick?.parentElement?.parentElement).toBe(dialog.parentElement);
+    expect(quick?.parentElement).toHaveClass("fui-FluentProvider");
+    expect(quick?.querySelector(".message-reaction-people .fui-Avatar")).not.toBeNull();
+
+    fireEvent.keyDown(quick!, { key: "Tab" });
+    expect(screen.getByRole("dialog", { name: "Кто поставил реакцию" })).toBeInTheDocument();
+    fireEvent.keyDown(quick!, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Кто поставил реакцию" })).not.toBeInTheDocument();
+    expect(dialog).toBeInTheDocument();
+    expect(reaction).toHaveFocus();
 
     fireEvent.pointerDown(document.body);
     fireEvent.contextMenu(within(dialog).getByText(message.body).closest(".message")!, { clientX: 90, clientY: 90 });
-    expect(screen.getByRole("menu").parentElement).toBe(dialog.parentElement);
+    expect(screen.getByRole("menu").parentElement?.parentElement).toBe(dialog.parentElement);
   });
 
   it("sends an executor's deadline request from the task chat and lets its author decide", async () => {
@@ -343,6 +389,7 @@ describe("Private messenger", () => {
         title: "Проектная команда",
         description: "",
         memberIds: ["baxtiyor"],
+        avatarIconKey: "team",
       }),
     );
     await waitFor(() =>
@@ -472,6 +519,41 @@ describe("Private messenger", () => {
       conversation.textContent!.indexOf(laterMessage.body),
     );
     expect(notes[0]).toHaveClass("message-system");
+    expect(notes[0]).toHaveTextContent(leftNotice.body);
+    expect(notes[1]).toHaveTextContent(ownerNotice.body);
+    expect(notes[0]!.querySelector("svg, strong")).toBeNull();
+    expect(notes[1]!.querySelector("svg, strong")).toBeNull();
+    expect(notes[0]!.querySelector("time")).toHaveTextContent(leftNotice.time);
+    expect(notes[1]!.querySelector("time")).toHaveTextContent(ownerNotice.time);
+  });
+
+  it("groups nearby bubbles by author without merging across system notices or long pauses", () => {
+    const makeMessage = (id: string, authorId: string, time: string): ChatMessage => ({
+      ...initialMessages[0]!, id, chatId: "finance", authorId, body: `Текст ${id}`,
+      createdAt: `2026-09-27T${time}:00Z`, time,
+    });
+    const messages: ChatMessage[] = [
+      makeMessage("first", "baxtiyor", "09:00"),
+      makeMessage("second", "baxtiyor", "09:01"),
+      { ...makeMessage("notice", "baxtiyor", "09:02"), systemKind: "member_left", body: "Бахтиёр вышел из группы" },
+      makeMessage("after-notice", "baxtiyor", "09:03"),
+      makeMessage("own-first", "aziza", "09:04"),
+      { ...makeMessage("own-last", "aziza", "09:05"), reactions: [
+        { emoji: "👍", count: 1, reactedByCurrentUser: false, reactorUserIds: ["baxtiyor"] },
+      ] },
+      makeMessage("late", "aziza", "09:20"),
+    ];
+    renderMessenger({ messages });
+    const row = (id: string) => document.querySelector<HTMLElement>(`.message-row:has([data-message-id="${id}"])`);
+    expect(row("first")).toHaveClass("is-group-first");
+    expect(row("second")).toHaveClass("is-group-last");
+    expect(row("second")?.querySelector(".message-avatar-spacer")).toBeInTheDocument();
+    expect(row("second")).toHaveTextContent("Текст second");
+    expect(row("after-notice")?.className).not.toMatch(/is-group-/);
+    expect(row("own-first")).toHaveClass("is-group-first");
+    expect(row("own-last")).toHaveClass("is-group-last");
+    expect(row("own-last")?.querySelector(".message-reactions")).toHaveTextContent("👍");
+    expect(row("late")?.className).not.toMatch(/is-group-/);
   });
 
   it("sends a reply and mentions, then resets the composer when changing chats", async () => {
@@ -764,8 +846,9 @@ describe("Private messenger", () => {
   it("saves each employee's chat background without changing messages", async () => {
     localStorage.removeItem("yuksalish:chat-background:aziza");
     renderMessenger();
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
-    fireEvent.click(screen.getByRole("button", { name: /Тихий рассвет/ }));
+    fireEvent.click(screen.getByLabelText("Выбрать фон переписки"));
+    const picker = within(screen.getByLabelText("Фон переписки"));
+    fireEvent.click(picker.getByRole("button", { name: /Тихий рассвет/ }));
     expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "dawn");
     expect(localStorage.getItem("yuksalish:chat-background:aziza")).toBe("dawn");
     expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
@@ -776,10 +859,11 @@ describe("Private messenger", () => {
     localStorage.setItem("yuksalish:chat-background:aziza", "paper");
     renderMessenger();
     expect(document.querySelector(".message-scroll")).toHaveAttribute("data-chat-background", "lagoon");
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать фон переписки" }));
-    expect(screen.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Выбрать фон переписки"));
+    const picker = within(screen.getByLabelText("Фон переписки"));
+    expect(picker.getByRole("button", { name: /Лагуна/ })).toBeInTheDocument();
+    expect(picker.getByRole("button", { name: /Закат/ })).toBeInTheDocument();
+    expect(picker.queryByRole("button", { name: /Узор|Сюзане|Мозаика|Облака/ })).not.toBeInTheDocument();
     localStorage.removeItem("yuksalish:chat-background:aziza");
   });
 
@@ -846,6 +930,8 @@ describe("Private messenger", () => {
     expect(quick).toHaveTextContent("Бахтиёр Самугов");
     expect(quick).toHaveTextContent("Азиза Каримова");
     expect(quick).toHaveTextContent("Малика Нурова");
+    expect(quick.parentElement).toHaveClass("fui-FluentProvider");
+    expect(quick.querySelectorAll(".message-reaction-people .fui-Avatar")).toHaveLength(3);
     fireEvent.click(within(quick as HTMLElement).getByRole("button", { name: /Азиза Каримова/ }));
     expect(onOpenPersonProfile).toHaveBeenCalledWith("aziza");
     fireEvent.click(reaction);
@@ -980,6 +1066,7 @@ describe("Private messenger", () => {
     fireEvent.change(dialog.getByRole("textbox", { name: /Название группы/ }), {
       target: { value: "Команда запуска" },
     });
+    fireEvent.click(dialog.getByRole("button", { name: "Иконка: Звезда" }));
     fireEvent.click(dialog.getByRole("button", { name: "Бахтиёр Самугов" }));
     fireEvent.click(dialog.getByRole("button", { name: "Малика Нурова" }));
     fireEvent.click(dialog.getByRole("button", { name: "Создать группу" }));
@@ -993,7 +1080,9 @@ describe("Private messenger", () => {
       title: "Команда запуска",
       description: "",
       memberIds: ["baxtiyor", "malika"],
+      avatarIconKey: "star",
     });
+    expect(dialog.getByRole("button", { name: "Иконка: Звезда" })).toHaveAttribute("aria-pressed", "true");
     expect(
       dialog.getByRole("button", { name: "Малика Нурова" }),
     ).toHaveAttribute("aria-pressed", "true");

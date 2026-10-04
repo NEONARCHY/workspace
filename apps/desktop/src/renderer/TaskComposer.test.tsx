@@ -28,6 +28,31 @@ it("prefills a suggested task but never submits without the user", () => {
   expect(onSubmit).not.toHaveBeenCalled();
 });
 
+it("requires a manual assignee choice for an unknown assistant-suggested colleague", () => {
+  const onSubmit = vi.fn();
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} tasks={[]} currentUserId="aziza"
+      initialTitle="Проверить отчёт" initialAssigneeName="Неизвестный коллега"
+      onClose={vi.fn()} onSubmit={onSubmit} />
+  </FluentProvider>);
+  expect(screen.getByText(/Не удалось однозначно определить/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Добавить задачу" })).toBeDisabled();
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it("prefills a uniquely named colleague from the assistant without submitting", () => {
+  const onSubmit = vi.fn();
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} tasks={[]} currentUserId="aziza"
+      initialTitle="Проверить отчёт" initialAssigneeName={people[1]!.name.split(" ")[0]}
+      onClose={vi.fn()} onSubmit={onSubmit} />
+  </FluentProvider>);
+  expect(screen.queryByText(/Не удалось однозначно определить/)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Добавить задачу" })).not.toBeDisabled();
+  expect(screen.getAllByText(people[1]!.name).length).toBeGreaterThan(0);
+  expect(onSubmit).not.toHaveBeenCalled();
+});
+
 it("restores a task draft, then deletes the local copy", async () => {
   const loadDraft = vi.fn().mockResolvedValue(JSON.stringify({
     title: "Продолжить задачу", description: "Результат", project: "Команда",

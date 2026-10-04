@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { assertAppendedNoteNames } from "./lib/release-note-order.mjs";
 
 const notesPath = "apps/desktop/release-notes.json";
 const pendingPath = "apps/desktop/release-notes/pending";
@@ -42,6 +43,13 @@ for (const [index, entry] of entries.entries()) {
 const itemCount = entries.reduce((total, entry) => total + entry.items.length, 0);
 
 const [base, head = "HEAD"] = process.argv.slice(2);
+const baseline = base && !/^0+$/.test(base) ? base : "HEAD";
+const historicalNames = execFileSync("git", ["ls-tree", "-r", "--name-only", baseline, "--",
+  pendingPath, "apps/desktop/release-notes/released"], { encoding: "utf8" })
+  .split(/\r?\n/u).map((name) => name.split("/").at(-1))
+  .filter((name) => /^\d{8}-.*\.json$/u.test(name ?? ""));
+try { assertAppendedNoteNames(historicalNames, entryFiles); }
+catch (error) { fail(error.message); }
 if (base && !/^0+$/.test(base)) {
   const changed = execFileSync("git", ["diff", "--name-only", base, head], { encoding: "utf8" })
     .split(/\r?\n/u).filter(Boolean);

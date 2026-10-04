@@ -6,7 +6,9 @@
 .fui-DialogSurface.employee-profile-dialog.employee-profile-dialog { width: min(1220px, calc(100vw - 48px)); max-width: none; height: min(860px, calc(100vh - 40px)); max-height: none; overflow: hidden; border: 1px solid rgb(255 255 255 / 72%); border-radius: 26px; background: linear-gradient(145deg, rgb(251 254 254 / 99%), rgb(234 245 248 / 99%)); box-shadow: 0 30px 80px rgb(27 46 66 / 28%); }
 .employee-profile-dialog .fui-DialogBody { height: 100%; min-height: 0; grid-template-rows: auto minmax(0, 1fr); }
 .employee-profile-dialog .fui-DialogTitle { padding: 2px 6px 10px; color: var(--ws-navy); font-size: 18px; font-weight: 600; }
-.employee-profile-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; padding: 0 6px 10px; scroll-padding-top: 222px; scrollbar-width: thin; }
+/* Expand the scroll viewport into the dialog's existing inset, preserving
+   the content alignment while giving tilted cards and shadows room to paint. */
+.employee-profile-dialog .fui-DialogContent { min-height: 0; overflow-y: auto; margin-inline: -24px; padding: 0 30px 40px; scroll-padding-top: 222px; scrollbar-width: thin; }
 .employee-profile-loading { display: grid; min-height: 420px; place-items: center; }
 .employee-profile-error { padding: 14px 16px; border: 1px solid #e9b9bf; border-radius: 14px; color: #8a2430; background: #fff2f3; }
 .employee-profile-shell { display: grid; gap: 18px; }
@@ -26,11 +28,7 @@
 .employee-profile-chat-action.fui-Button span { color: inherit; font-size: inherit; font-weight: inherit; letter-spacing: normal; text-transform: none; }
 .employee-profile-chat-action.fui-Button:focus-visible { outline: 2px solid #006779; outline-offset: 2px; }
 .employee-profile-chat-error { margin: 0 0 8px; padding: 8px 12px; border-radius: 9px; color: #9c3749; background: #fff1f2; font-size: 12px; }
-.employee-profile-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 15px; background: rgb(236 245 246 / 94%); backdrop-filter: blur(14px); }
-.employee-profile-tabs button { min-height: 34px; border: 0; border-radius: 11px; color: var(--ws-muted); background: transparent; font: inherit; font-size: 13px; cursor: pointer; transition: color 150ms var(--ws-ease), background-color 180ms var(--ws-ease), box-shadow 180ms var(--ws-ease); }
-.employee-profile-tabs button:hover { color: var(--ws-navy); }
-.employee-profile-tabs button.is-active { color: var(--ws-navy); background: rgb(255 255 255 / 92%); box-shadow: 0 6px 18px rgb(41 58 85 / 10%), inset 0 0 0 1px rgb(255 255 255 / 88%); }
-.employee-profile-tabs button:focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: 1px; }
+.employee-profile-tabs.employee-scope-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .employee-profile-overview, .employee-achievements-section, .employee-rewards-section { scroll-margin-top: 222px; }
 .employee-profile-overview { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .employee-profile-overview > article { display: grid; min-height: 88px; align-content: start; gap: 5px; padding: 14px 16px; border: 1px solid rgb(41 58 85 / 8%); border-radius: 16px; background: rgb(255 255 255 / 72%); box-shadow: inset 0 1px 0 #fff; }
@@ -44,9 +42,15 @@
 .employee-achievements-section, .employee-rewards-section { display: grid; gap: 12px; }
 .employee-achievements-section > header, .employee-rewards-section > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 2px 0; }
 .employee-achievements-section h4 { margin: 8px 2px -4px; color: var(--ws-navy); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
-.achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 30px 30px; }
+.achievement-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 12px 0 30px; }
 .achievement-card { min-height: 136px; border: 0; border-radius: 20px; background: transparent; opacity: 1; transition: filter 220ms var(--ws-ease), opacity 220ms var(--ws-ease); }
 .achievement-card.is-locked { filter: saturate(.72); opacity: .76; }
+/* Do not create offscreen 3D layers during the dialog entrance. The card's
+   surface, copy and emblem footprint remain unchanged; full effects are
+   restored before the card enters the viewport. No paint containment clips
+   the existing hover shadows or tilted edges. */
+.recognition-holographic-card.recognition-is-preparing { transform: none; perspective: none; transform-style: flat; }
+.recognition-is-preparing .recognition-card-content { transform: none; }
 .recognition-holographic-card { --tier-accent: #006779; --recognition-holo-a: rgb(255 205 112 / 30%); --recognition-holo-b: rgb(111 229 255 / 42%); --recognition-holo-c: rgb(195 146 255 / 34%); --recognition-glow: rgb(0 145 168 / 12%); position: relative; isolation: isolate; perspective: 1200px; transform: perspective(1200px) rotateX(var(--recognition-rx, 0deg)) rotateY(var(--recognition-ry, 0deg)); transform-style: preserve-3d; transition: box-shadow 400ms var(--ws-ease); }
 .recognition-card-surface { position: absolute; z-index: 0; inset: 0; overflow: hidden; border: 1px solid rgb(226 232 240 / 82%); border-radius: inherit; background: var(--recognition-card-base, linear-gradient(145deg, #fff, #eef8f7)); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 2%), 0 10px 25px -5px rgb(30 41 59 / 5%); transform: translateZ(0); transition: border-color 220ms var(--ws-ease), box-shadow 400ms var(--ws-ease); }
 .recognition-card-foil { position: absolute; z-index: 2; inset: -50%; pointer-events: none; background: var(--recognition-card-foil, linear-gradient(115deg, transparent 10%, var(--recognition-holo-a) 28%, rgb(255 255 255 / 78%) 45%, var(--recognition-holo-b) 58%, var(--recognition-holo-c) 72%, transparent 90%)); mix-blend-mode: color-dodge; opacity: calc(.12 + var(--recognition-active, 0) * .72); transform: translate(var(--recognition-foil-x, 0%), var(--recognition-foil-y, 0%)) rotate(var(--recognition-foil-angle, 0deg)); }

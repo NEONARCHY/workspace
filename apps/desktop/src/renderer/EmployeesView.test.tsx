@@ -5,7 +5,7 @@ import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalis
 import { EmployeesView } from "./EmployeesView";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { workspaceTheme } from "./workspace-theme";
-import { loadDirectory, loadRecognitionSettings, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition } from "./workspace-api";
+import { loadDirectory, loadRecognitionSettings, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition, updateRecognitionSettings } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadDirectory: vi.fn(),
@@ -45,6 +45,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
+  it("saves active task visibility in both directions", async () => {
+    vi.mocked(updateRecognitionSettings).mockImplementation(async (_, visible) => ({ activeTaskCountVisible: visible }));
+    mount();
+    const toggle = await screen.findByRole("switch", { name: "Активные задачи в профилях" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    expect(updateRecognitionSettings).toHaveBeenLastCalledWith("test-token", false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(updateRecognitionSettings).toHaveBeenLastCalledWith("test-token", true);
+  });
+  it("retains saved visibility and allows retry after a failed save", async () => {
+    vi.mocked(updateRecognitionSettings).mockRejectedValueOnce(new Error("Не удалось сохранить"))
+      .mockResolvedValueOnce({ activeTaskCountVisible: false });
+    mount();
+    const toggle = await screen.findByRole("switch", { name: "Активные задачи в профилях" });
+    fireEvent.click(toggle);
+    expect(await screen.findByText("Не удалось сохранить")).toBeInTheDocument();
+    expect(toggle).toBeChecked();
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(toggle).not.toBeChecked());
+  });
   it("shows central and regional employees separately", async () => {
     vi.mocked(loadDirectory).mockResolvedValue({
       ...data,
@@ -86,6 +110,7 @@ describe("Employee list and retained access controls", () => {
   it("does not expose invitations or editable permissions to a regular employee", async () => {
     mount({ ...user, role: "employee" }); await screen.findByRole("table");
     expect(screen.queryByRole("button", { name: "Пригласить сотрудника" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Меню сотрудника" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
     expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
     expect(screen.getByLabelText("Должность")).toBeDisabled();

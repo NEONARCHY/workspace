@@ -1,0 +1,34 @@
+.fui-DialogSurface.sidebar-visibility-dialog { width: min(700px, calc(100vw - 32px)); max-width: 100%; max-height: min(820px, calc(100dvh - 32px)); padding: 0; overflow: hidden; background: var(--ws-surface); container: sidebar-settings / inline-size; }
+.sidebar-visibility-management { display: flex; flex-direction: column; min-height: 0; max-height: inherit; color: var(--ws-text); }
+.sidebar-visibility-management > header { display: flex; align-items: center; gap: 14px; padding: 24px; border-bottom: 1px solid var(--ws-line); background: var(--ws-navy); color: #fff; }
+.sidebar-visibility-management > header > div { flex: 1; min-width: 0; }
+.sidebar-visibility-management h2 { margin: 0 0 5px; color: #fff; font-size: 24px; }
+.sidebar-visibility-management header p { margin: 0; color: #dce9f0; font-size: 14px; }
+.sidebar-visibility-management header .fui-Button { flex: none; color: #fff; border-color: rgb(255 255 255 / 40%); background: rgb(255 255 255 / 12%); }
+.sidebar-visibility-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 12px; background: rgb(255 255 255 / 14%); }
+.sidebar-visibility-scroll { min-height: 0; overflow-y: auto; padding: 24px; scrollbar-gutter: stable; }
+.sidebar-visibility-explanation { margin: 16px 0; padding: 14px 16px; border: 1px solid var(--ws-line); border-radius: 12px; color: var(--ws-muted); background: var(--ws-muted-surface); font-size: 14px; line-height: 1.5; }
+.sidebar-visibility-list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.sidebar-visibility-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.sidebar-visibility-list > .fui-Checkbox { min-width: 0; width: 100%; max-width: none; box-sizing: border-box; align-items: center; border: 1px solid var(--ws-control-line); border-radius: 12px; background: var(--ws-muted-surface); }
+.sidebar-visibility-management header .fui-Button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.sidebar-visibility-list > .fui-Checkbox:has(input:checked) { border-color: color-mix(in srgb, var(--ws-link) 50%, #fff); background: var(--ws-selected); }
+.sidebar-visibility-list .fui-Checkbox__label { padding-block: 12px; font-size: 14px; font-weight: 600; }
+.sidebar-visibility-management > footer { display: flex; flex: none; align-items: center; gap: 10px; padding: 16px 24px; border-top: 1px solid var(--ws-line); background: var(--ws-muted-surface); }
+.sidebar-visibility-management > footer > span { flex: 1; color: var(--ws-muted); font-size: 12px; }
+.sidebar-visibility-error { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 16px; color: #95434d; font-size: 14px; }
+.sidebar-visibility-notice { margin: 16px 0 0; color: var(--ws-link); font-size: 14px; }
+.sidebar-visibility-loading { padding: 28px 0; }
+@container sidebar-settings (max-width: 480px) {
+  .sidebar-visibility-management > header { padding: 18px 16px; }
+  .sidebar-visibility-icon { display: none; }
+  .sidebar-visibility-scroll { padding: 16px; }
+  .sidebar-visibility-list { grid-template-columns: minmax(0, 1fr); }
+  .sidebar-visibility-management > footer { flex-wrap: wrap; padding: 12px 16px; }
+  .sidebar-visibility-management > footer > span { flex-basis: 100%; }
+}
+@media (forced-colors: active) {
+  .sidebar-visibility-list > .fui-Checkbox:has(input:checked) { border-color: Highlight; }
+  .sidebar-visibility-management > header { color: CanvasText; background: Canvas; }
+  .sidebar-visibility-management header :is(h2, p, .fui-Button) { color: CanvasText; }
+}

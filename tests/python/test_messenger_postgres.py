@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr, ValidationError
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -25,12 +25,14 @@ from yuksalish_api.repository import (
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.settings import Settings
 from yuksalish_api.tables import (
+    chat_members,
     chats,
     message_reactions,
     message_receipts,
     message_versions,
     messages,
     pinned_messages,
+    project_hub_projects,
     workspace_notifications,
 )
 from yuksalish_api.workspace_schemas import (
@@ -669,12 +671,74 @@ async def exercise_http(url: str) -> None:
         created = await client.post(
             "/api/v1/chats",
             headers=headers,
-            json={"kind": "group", "title": "HTTP private group", "memberIds": [peer_id]},
+            json={
+                "kind": "group",
+                "title": "HTTP private group",
+                "memberIds": [peer_id],
+                "avatarIconKey": "star",
+            },
         )
         assert created.status_code == 201, created.text
         chat_id = created.json()["id"]
         assert created.json()["ownerId"] == owner["user"]["id"]
+        assert created.json()["avatarIconKey"] == "star" and created.json()["canEditAvatar"]
         base = f"/api/v1/chats/{chat_id}"
+        for icon in ("invalid", "https://example.com/icon.svg"):
+            assert (
+                await client.put(
+                    f"{base}/avatar-icon", headers=headers, json={"avatarIconKey": icon}
+                )
+            ).status_code == 422
+        assert (
+            await client.put(f"{base}/avatar-icon", headers=headers, json={})
+        ).status_code == 422
+        assert (
+            await client.put(
+                f"{base}/avatar-icon", headers=outsider, json={"avatarIconKey": "plane"}
+            )
+        ).status_code == 404
+        icon_response = await client.put(
+            f"{base}/avatar-icon", headers=headers, json={"avatarIconKey": "compass"}
+        )
+        assert (
+            icon_response.status_code == 200 and icon_response.json()["avatarIconKey"] == "compass"
+        )
+        default_icon = await client.put(
+            f"{base}/avatar-icon", headers=headers, json={"avatarIconKey": None}
+        )
+        assert default_icon.status_code == 200 and default_icon.json()["avatarIconKey"] is None
+        hub_payload = {
+            "code": f"CHAT-{uuid4().hex[:12]}",
+            "title": "HTTP current project",
+            "managerUserId": sessions["malika"]["user"]["id"],
+            "responsibleUserIds": [third_id],
+            "chatIconKey": "compass",
+        }
+        admin_headers = {"Authorization": f"Bearer {sessions['malika']['accessToken']}"}
+        hub_created = await client.post(
+            "/api/v1/project-hub/projects", headers=admin_headers, json=hub_payload
+        )
+        assert hub_created.status_code == 201, hub_created.text
+        assert hub_created.json()["chatId"]
+        try:
+            peer_hub = await client.get("/api/v1/project-hub", headers=outsider)
+            assert peer_hub.status_code == 200
+            peer_project = next(
+                p for p in peer_hub.json()["projects"] if p["id"] == hub_created.json()["id"]
+            )
+            assert peer_project["chatId"] == hub_created.json()["chatId"]
+        finally:
+            async with app.state.database_engine.begin() as connection:
+                hub_chat_id = UUID(hub_created.json()["chatId"])
+                await connection.execute(
+                    delete(chat_members).where(chat_members.c.chat_id == hub_chat_id)
+                )
+                await connection.execute(delete(chats).where(chats.c.id == hub_chat_id))
+                await connection.execute(
+                    delete(project_hub_projects).where(
+                        project_hub_projects.c.id == UUID(hub_created.json()["id"])
+                    )
+                )
         assert (
             await client.patch(base, headers=headers, json={"title": "HTTP renamed"})
         ).status_code == 200

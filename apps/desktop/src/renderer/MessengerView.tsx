@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
 import type {
   AssistantActionDraft,
   ChatMessage,
   ChatSummary,
+  ChatAvatarIconKey,
   MessageReaction,
   MessageReactionEmoji,
   PersonalPreferences,
@@ -21,10 +21,12 @@ import {
   Avatar,
   Button,
   Dialog,
+  DialogActions,
   DialogBody,
   DialogContent,
   DialogSurface,
   DialogTitle,
+  DialogTrigger,
   Input,
   Textarea,
   Popover,
@@ -54,6 +56,8 @@ import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { MessageContextMenu, menuPortalContainerFor } from "./MessageContextMenu";
+import { ReactionPeople, ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -62,6 +66,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { chatBackgrounds, readChatBackground, saveChatBackground } from "./chat-backgrounds";
+import { ChatAvatar, ChatIconPicker, defaultChatIcon } from "./ChatAvatar";
 import {
   MessageRevealOverlay,
   MessageVanishOverlay,
@@ -74,6 +79,18 @@ interface OutgoingMessageReveal {
   readonly request: MessageRevealRequest;
   readonly composerFinished: boolean;
   readonly phase: "waiting" | "revealing";
+}
+
+function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): boolean {
+  if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
+    || first.authorId !== second.authorId || !first.createdAt || !second.createdAt
+    || first.replyToMessageId || second.replyToMessageId || first.isPinned || second.isPinned
+    || first.reactions?.length || first.deletedAt || second.deletedAt) return false;
+  const firstAt = Date.parse(first.createdAt);
+  const secondAt = Date.parse(second.createdAt);
+  return Number.isFinite(firstAt) && Number.isFinite(secondAt)
+    && secondAt >= firstAt && secondAt - firstAt <= 5 * 60_000
+    && new Date(firstAt).toDateString() === new Date(secondAt).toDateString();
 }
 
 export interface MessengerViewProps {
@@ -126,55 +143,8 @@ export interface MessengerViewProps {
   ) => void | Promise<void>;
   readonly onLoadAttachment: (attachment: WorkspaceAttachment) => Promise<Blob>;
   readonly onMarkRead: (chatId: string) => void | Promise<void>;
-  readonly onOpenContext?: (contextType: "task" | "project" | "trip", contextId: string) => void;
+  readonly onOpenContext?: (contextType: "task" | "project" | "project_hub" | "trip", contextId: string) => void;
   readonly onOpenPersonProfile?: (userId: string) => void;
-}
-
-function MessageContextMenu({
-  x,
-  y,
-  children,
-  onPointerDown,
-  portalContainer,
-}: {
-  readonly x: number;
-  readonly y: number;
-  readonly children: React.ReactNode;
-  readonly onPointerDown: React.PointerEventHandler<HTMLDivElement>;
-  readonly portalContainer: HTMLElement;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x, y });
-
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-    if (!menu) return;
-    const margin = 8;
-    const rect = menu.getBoundingClientRect();
-    setPosition({
-      x: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
-      y: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin)),
-    });
-  }, [x, y]);
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="message-context-menu"
-      role="menu"
-      style={{ left: position.x, top: position.y }}
-      onPointerDown={onPointerDown}
-    >
-      {children}
-    </div>,
-    portalContainer,
-  );
-}
-
-function menuPortalContainerFor(target: Element): HTMLElement {
-  // A dialog's Fluent portal sits above the page, so its menus must be siblings
-  // of that dialog rather than children of document.body.
-  return target.closest<HTMLElement>(".fui-DialogSurface")?.parentElement ?? document.body;
 }
 
 function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenDetails }: {
@@ -183,7 +153,7 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
   readonly token: string;
   readonly disabled: boolean;
   readonly onToggle: () => void;
-  readonly onOpenDetails: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  readonly onOpenDetails: (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   const reactors = (reaction.reactorUserIds ?? [])
     .map((userId) => people.find((person) => person.id === userId))
@@ -203,6 +173,10 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
       aria-label={`${reaction.emoji}: ${names.join(", ")}`}
       aria-haspopup="dialog"
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onOpenDetails(event); }}
+      onKeyDown={(event) => {
+        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+        event.preventDefault(); event.stopPropagation(); onOpenDetails(event);
+      }}
       onClick={onToggle}
     >
       <span className="message-reaction-emoji" aria-hidden="true">{reaction.emoji}</span>
@@ -211,24 +185,6 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
       </span> : null}
     </Button>
   </span>;
-}
-
-function ReactionPeople({ reactions, people, token, onOpenPersonProfile }: {
-  readonly reactions: readonly MessageReaction[];
-  readonly people: readonly WorkspacePerson[];
-  readonly token: string;
-  readonly onOpenPersonProfile?: (userId: string) => void;
-}) {
-  const entries = reactions.flatMap((reaction) => (reaction.reactorUserIds ?? []).map((userId) => ({ userId, emoji: reaction.emoji })));
-  return <div className="message-reaction-people">
-    {entries.length ? entries.map(({ userId, emoji }) => {
-      const person = people.find((item) => item.id === userId);
-      return <button key={`${userId}-${emoji}`} type="button" disabled={!person || !onOpenPersonProfile} onClick={() => person && onOpenPersonProfile?.(person.id)}>
-        {person ? <ProfileAvatar person={person} token={token} size={28} /> : <span className="message-reaction-person-fallback" aria-hidden="true">?</span>}
-        <span>{person?.name ?? "Сотрудник"}</span><span aria-label={`Реакция ${emoji}`}>{emoji}</span>
-      </button>;
-    }) : <p>{reactions.reduce((total, reaction) => total + reaction.count, 0)} реакций · список сотрудников недоступен</p>}
-  </div>;
 }
 
 function Conversation({
@@ -242,6 +198,7 @@ function Conversation({
   tasks,
   currentUserId,
   currentUserRole,
+  chatActions,
   onSendMessage,
   onSendVoiceMessage,
   onReactMessage,
@@ -263,7 +220,7 @@ function Conversation({
   embedded = false,
   assistantDraft,
   canUseAssistant = false,
-}: Omit<MessengerViewProps, "chats" | "chatActions" | "onMarkRead"> & {
+}: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
@@ -290,11 +247,13 @@ function Conversation({
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement }>();
-  const [reactionQuick, setReactionQuick] = useState<{ message: ChatMessage; emoji: MessageReactionEmoji; x: number; y: number; portalContainer: HTMLElement }>();
+  const [reactionQuick, setReactionQuick] = useState<ReactionDetailsTarget & { message: ChatMessage }>();
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
   const [chatBackground, setChatBackground] = useState(() => readChatBackground(currentUserId));
+  const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
+  const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -321,6 +280,7 @@ function Conversation({
   const wasEditing = useRef(false);
   const focusAfterSend = useRef(false);
   const restoreFocusTarget = useRestoreFocusTarget();
+  const avatarRestoreFocusTarget = useRestoreFocusTarget();
   const scrollRef = useRef<HTMLDivElement>(null);
   const followLatest = useRef(true);
   const scrollInitialized = useRef(false);
@@ -476,14 +436,6 @@ function Conversation({
     window.addEventListener("blur", close);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
   }, [contextMenu]);
-  useEffect(() => {
-    if (!reactionQuick) return;
-    const close = () => setReactionQuick(undefined);
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("blur", close);
-    window.addEventListener("keydown", close);
-    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); window.removeEventListener("keydown", close); };
-  }, [reactionQuick]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     vanishSequence.current += 1;
@@ -631,7 +583,25 @@ function Conversation({
       <header className="conversation-header">
         {!embedded ? <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
-          <Avatar name={chat.title} size={40} color="colorful" />
+          {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
+            onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>
+            <DialogTrigger disableButtonEnhancement><button {...avatarRestoreFocusTarget} type="button" className="chat-avatar-edit-trigger" aria-label="Изменить иконку чата" title="Изменить иконку чата">
+              <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />
+            </button></DialogTrigger>
+            <DialogSurface className="chat-avatar-picker" aria-label="Иконка чата"><DialogBody>
+              <DialogTitle>Иконка чата</DialogTitle>
+              <DialogContent>
+              <ChatIconPicker value={avatarDraft} onChange={setAvatarDraft} disabled={busy} />
+              <p>Иконку увидят все участники чата.</p>
+              {error ? <p className="messenger-error" role="alert">{error}</p> : null}
+              </DialogContent>
+              <DialogActions className="chat-dialog-actions">
+                <Button onClick={() => setAvatarPickerOpen(false)}>Отмена</Button>
+                <Button aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, null); setAvatarPickerOpen(false); }); }}>По умолчанию</Button>
+                <Button appearance="primary" aria-disabled={busy} onClick={() => { if (!busy) void run(async () => { await chatActions.setAvatar!(chat.id, avatarDraft); setAvatarPickerOpen(false); }); }}>{busy ? "Сохраняем…" : "Сохранить иконку"}</Button>
+              </DialogActions>
+            </DialogBody></DialogSurface>
+          </Dialog> : <ChatAvatar chat={chat} currentUserId={currentUserId} people={people} token={token} size={56} />}
           <div>
           <h2>{chat.title}</h2>
           <p>
@@ -664,8 +634,8 @@ function Conversation({
             </PopoverSurface>
           </Popover>
           {!embedded ? <>
-          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "trip", chat.contextId!)}>
-            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "project" ? "Открыть проект" : "Открыть поездку"}
+          {chat.contextId && (chat.contextType === "task" || chat.contextType === "project" || chat.contextType === "project_hub" || chat.contextType === "trip") ? <Button appearance="secondary" onClick={() => onOpenContext?.(chat.contextType as "task" | "project" | "project_hub" | "trip", chat.contextId!)}>
+            {chat.contextType === "task" ? "Открыть задачу" : chat.contextType === "trip" ? "Открыть поездку" : "Открыть проект"}
           </Button> : null}
           {onCreateCalendarEventFromChat ? <Button
             className="conversation-calendar-action"
@@ -770,6 +740,11 @@ function Conversation({
             </div>}
           </div>;
           const own = message.authorId === currentUserId;
+          const groupedWithPrevious = !query && messagesShareBubbleGroup(renderedMessages[index - 1], message);
+          const groupedWithNext = !query && messagesShareBubbleGroup(message, renderedMessages[index + 1]);
+          const groupPosition = groupedWithPrevious
+            ? groupedWithNext ? "is-group-middle" : "is-group-last"
+            : groupedWithNext ? "is-group-first" : "";
           const messageAttachments = attachments.filter(
             (attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id,
           );
@@ -783,7 +758,7 @@ function Conversation({
               ? " message-particle-revealing"
               : "";
           return (
-            <div key={message.id} className={`message-row${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
+            <div key={message.id} className={`message-row ${groupPosition}${removingMessage?.message.id === message.id ? ` is-removing is-${removingMessage.phase}` : ""}`} style={removingMessage?.message.id === message.id ? { height: removingMessage.phase === "exiting" ? 0 : removingMessage.height } : undefined} hidden={revealPhase === "waiting"}>
               {(index === 0 || date !== previousDate) && (
                 <div className="date-separator">{date}</div>
               )}
@@ -812,14 +787,16 @@ function Conversation({
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
-                {!own && (
+                {!own && (groupedWithPrevious ? <span className="message-avatar-spacer" aria-hidden="true" /> :
                   <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>
                     {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
                   <div className="message-body">
-                    {!own && <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>}
+                    {!own && (groupedWithPrevious
+                      ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
+                      : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
                     {parent && (
                       <blockquote className="message-quote">
                         <EmployeeProfileLink userId={parent.authorId} personName={personName(parent.authorId)}><strong>{personName(parent.authorId)}</strong></EmployeeProfileLink>
@@ -878,7 +855,11 @@ function Conversation({
                           people={people}
                           token={token}
                           disabled={!canSend || busy}
-                          onOpenDetails={(event) => { setContextMenu(undefined); setReactionQuick({ message, emoji: reaction.emoji, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) }); }}
+                          onOpenDetails={(event) => {
+                            setContextMenu(undefined);
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setReactionQuick({ message, emoji: reaction.emoji, x: "clientX" in event ? event.clientX : rect.left, y: "clientY" in event ? event.clientY : rect.bottom, anchor: event.currentTarget });
+                          }}
                           onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
                         />
                       ))}
@@ -910,17 +891,15 @@ function Conversation({
           </div> : null}
         </MessageContextMenu>;
       })() : null}
-      {reactionQuick ? <MessageContextMenu x={reactionQuick.x} y={reactionQuick.y} portalContainer={reactionQuick.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
-        <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
-        <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
-      </MessageContextMenu> : null}
+      {reactionQuick ? <ReactionDetailsMenu target={reactionQuick} reactions={reactionQuick.message.reactions ?? []}
+        people={people} token={token} onClose={() => setReactionQuick(undefined)} onOpenPersonProfile={onOpenPersonProfile} /> : null}
       {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
         <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
           <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>
           <ReactionPeople reactions={reactionDialog?.reactions ?? []} people={people} token={token} onOpenPersonProfile={(id) => { setReactionDialog(undefined); onOpenPersonProfile?.(id); }} />
         </DialogContent></DialogBody>
       </DialogSurface></Dialog>}
-      {error && (
+      {error && !avatarPickerOpen && (
         <div className="messenger-error" role="alert">
           {error}
         </div>

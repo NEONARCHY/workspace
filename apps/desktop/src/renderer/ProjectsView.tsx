@@ -3,6 +3,8 @@ import { useModalFocus } from "./useModalFocus";
 import { DecisionReason } from "./DecisionReason";
 import { ProcessWorkflowDesigner } from "./ProcessWorkflowDesigner";
 import { RecordComposer, RecordSection, RecordSummary } from "./RecordComposer";
+import { ChatIconPicker } from "./ChatAvatar";
+import type { ChatAvatarIconKey } from "@yuksalish/contracts";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
@@ -80,6 +82,7 @@ interface ProjectsViewProps {
 }
 
 interface ProjectFormState {
+  chatIconKey?: ChatAvatarIconKey;
   code: string;
   title: string;
   description: string;
@@ -127,6 +130,7 @@ function payloadFromForm(form: ProjectFormState): ProjectInput | undefined {
   if (budget < 0 || spentBudget < 0 || spentBudget > budget) return undefined;
   return {
     code: form.code.trim(),
+    ...(form.chatIconKey ? { chatIconKey: form.chatIconKey } : {}),
     title: form.title.trim(),
     description: form.description.trim(),
     managerUserId: form.managerUserId,
@@ -422,6 +426,7 @@ export function ProjectsView({ projects, people, departments, currentUser, onCre
                   <label>Статус проекта<output>{projectStageLabels[formStage]}</output><small>Стадия изменяется отдельно от полей.</small></label>
                 </div>
               </RecordSection>
+              {formMode === "create" && <RecordSection title="Иконка чата проекта" description="Иконку увидит команда проекта. Позже её можно изменить в чате."><ChatIconPicker value={form.chatIconKey ?? "project"} onChange={(chatIconKey) => setForm({ ...form, chatIconKey })} disabled={saving} /></RecordSection>}
               <RecordSection title="Сроки и ответственность"><div className="record-field-grid">
                 <div className="record-field-wide scoped-person-field"><span>Руководитель</span><PersonPicker label="Руководитель проекта" people={people} departments={departments} value={form.managerUserId} onChange={(managerUserId) => setForm({ ...form, managerUserId })} /></div>
                 <label>Начало<WorkspaceDateTimePicker mode="date" ariaLabel="Начало проекта" value={form.startDate} onChange={(value) => setForm({ ...form, startDate: value })} /></label>

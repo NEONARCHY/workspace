@@ -4,7 +4,7 @@ from __future__ import annotations
 import calendar
 from datetime import UTC, date, datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, insert, select
@@ -52,6 +52,8 @@ from .tables import (
 )
 
 TZ = ZoneInfo("Asia/Tashkent")
+# The singleton has an integer primary key; audit targets require a stable UUID.
+_SETTINGS_AUDIT_ID = uuid5(NAMESPACE_URL, "urn:workspace:recognition:settings:1")
 REWARD_CATALOG: dict[RewardIcon, tuple[str, str]] = {
     "appreciation": ("Благодарность", "За помощь и человеческую поддержку."),
     "leadership": ("Лидерство", "За ясное направление и ответственность."),
@@ -605,7 +607,7 @@ async def save_settings(
             actor_user_id=actor.id,
             action="recognition.settings.updated",
             target_type="recognition_settings",
-            target_id=None,
+            target_id=_SETTINGS_AUDIT_ID,
             details={"activeTaskCountVisible": payload.active_task_count_visible},
             created_at=now,
         )

@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
-import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea } from "@fluentui/react-components";
+import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   Comment24Regular,
   Pin24Filled,
@@ -15,6 +15,7 @@ import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { generateBirthdayGreeting } from "./workspace-api";
 
@@ -55,16 +56,28 @@ function commentThreadRootId(comment: FeedComment, comments: readonly FeedCommen
   return rootId;
 }
 
-export function FeedReactions({ reactions, disabled, currentUserId, onToggle }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void }) {
+export function FeedReactions({ reactions, disabled, currentUserId, onToggle, people = [], token = "" }: { readonly reactions: readonly MessageReaction[]; readonly disabled: boolean; readonly currentUserId: string; readonly onToggle: (emoji: string, reacted: boolean) => void; readonly people?: readonly WorkspacePerson[]; readonly token?: string }) {
+  const [details, setDetails] = useState<ReactionDetailsTarget>();
   return <div className="feed-reactions" aria-label="Реакции">
-    {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled} onClick={() => onToggle(reaction.emoji, !reaction.reactedByCurrentUser)}>{reaction.emoji} {reaction.count}</Button>)}
+    {reactions.map((reaction) => <Button key={reaction.emoji} size="small" appearance={reaction.reactedByCurrentUser ? "primary" : "subtle"} disabled={disabled}
+      aria-haspopup="dialog" onContextMenu={(event) => {
+        event.preventDefault(); event.stopPropagation();
+        setDetails({ emoji: reaction.emoji, x: event.clientX, y: event.clientY, anchor: event.currentTarget });
+      }} onKeyDown={(event) => {
+        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+        event.preventDefault(); event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        setDetails({ emoji: reaction.emoji, x: rect.left, y: rect.bottom, anchor: event.currentTarget });
+      }} onClick={() => { setDetails(undefined); onToggle(reaction.emoji, !reaction.reactedByCurrentUser); }}>{reaction.emoji} {reaction.count}</Button>)}
     <ReactionPicker userId={currentUserId} disabled={disabled} className="feed-reaction-trigger"
       active={reactions.filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
       onSelect={(emoji) => onToggle(emoji, !reactions.some((item) => item.emoji === emoji && item.reactedByCurrentUser))} />
+    {details && reactions.some((reaction) => reaction.emoji === details.emoji) ? <ReactionDetailsMenu target={details} reactions={reactions} people={people} token={token} onClose={() => setDetails(undefined)} /> : null}
   </div>;
 }
 
 export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false }: FeedViewProps) {
+  const deleteFocusTarget = useRestoreFocusTarget();
   const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
   const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -189,6 +202,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                   ) : null}
                   {post.canDelete ? (
                     <Button
+                      {...deleteFocusTarget}
                       appearance="subtle"
                       size="small"
                       icon={<Delete24Regular />}
@@ -201,7 +215,7 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 <h2>{post.title}</h2>
                 <p className="feed-copy">{post.body}</p>
                 <div className="feed-actions">
-                  <FeedReactions reactions={post.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
+                  <FeedReactions reactions={post.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
                 {canUseAssistant && post.systemKind === "birthday" && post.birthdayUserId !== currentUserId && <div className="feed-birthday-greeting">
@@ -245,8 +259,8 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                             <span className="feed-comment-meta">
                               <small>{dateLabel(item.createdAt)}</small>
                               <Button size="small" appearance="subtle" icon={<ArrowReply24Regular />} onClick={() => beginReply(post.id, item)}>Ответить</Button>
-                              <FeedReactions reactions={item.reactions ?? []} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
-                              {item.canDelete ? <Button className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
+                              <FeedReactions reactions={item.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted, item.id)} />
+                              {item.canDelete ? <Button {...deleteFocusTarget} className="feed-comment-delete" size="small" appearance="subtle" icon={<Delete24Regular />} aria-label="Удалить комментарий" disabled={busy} onClick={() => setPendingDelete({ post, commentId: item.id })} /> : null}
                             </span>
                           </span>
                         </div>

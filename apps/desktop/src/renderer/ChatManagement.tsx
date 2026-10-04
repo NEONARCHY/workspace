@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type {
   ChatMember,
+  ChatAvatarIconKey,
   ChatPermissions,
   ChatSummary,
   CreateChatInput,
@@ -26,8 +27,10 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { ChatIconPicker } from "./ChatAvatar";
 
 export interface ChatActions {
+  readonly setAvatar?: (id: string, key: ChatAvatarIconKey | null) => Promise<ChatSummary>;
   readonly create: (input: CreateChatInput) => Promise<ChatSummary>;
   readonly update: (
     id: string,
@@ -244,6 +247,7 @@ export function ChatManagement({
 }) {
   const [title, setTitle] = useState(chat?.title ?? "");
   const [description, setDescription] = useState(chat?.description ?? "");
+  const [avatarIconKey, setAvatarIconKey] = useState<ChatAvatarIconKey>("team");
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [editing, setEditing] = useState<string>();
@@ -317,6 +321,7 @@ export function ChatManagement({
             )}
             {(isGroup || !chat) && (
               <>
+                {!chat && <Field label="Иконка группы"><ChatIconPicker value={avatarIconKey} onChange={setAvatarIconKey} disabled={busy} /></Field>}
                 <Field label="Название группы" required>
                   <Input
                     maxLength={240}
@@ -531,6 +536,7 @@ export function ChatManagement({
                     void run(async () => {
                       const created = await actions.create({
                         kind: "group",
+                        avatarIconKey,
                         title: title.trim(),
                         description,
                         memberIds: selected,

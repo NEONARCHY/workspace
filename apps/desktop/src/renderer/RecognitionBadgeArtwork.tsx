@@ -16,6 +16,7 @@ import sphereArtwork from "./assets/recognition/sphere.png";
 import starArtwork from "./assets/recognition/star.png";
 import targetArtwork from "./assets/recognition/target.png";
 import videoCameraArtwork from "./assets/recognition/video-camera.png";
+import { scheduleProfileWork } from "./profile-idle";
 
 const artworkByIconKey: Readonly<Record<string, string>> = {
   appreciation: heartArtwork,
@@ -42,6 +43,31 @@ const artworkByIconKey: Readonly<Record<string, string>> = {
   teamwork: chatArtwork,
 };
 
+const decoded = new Map<string, Promise<void>>();
+export function prewarmRecognitionArtwork(iconKeys: readonly string[]): () => void {
+  const sources = [...new Set(iconKeys.map((key) => artworkByIconKey[key] ?? starArtwork))].filter((source) => !decoded.has(source));
+  let stopped = false;
+  let cancel = () => undefined as void;
+  const next = () => {
+    if (stopped || document.visibilityState === "hidden") return;
+    const source = sources.shift();
+    if (!source) return;
+    cancel = scheduleProfileWork(() => {
+      let pending = decoded.get(source);
+      if (!pending) {
+        const image = new Image();
+        image.src = source;
+        pending = typeof image.decode === "function" ? image.decode() : Promise.resolve();
+        pending = pending.catch(() => { decoded.delete(source); });
+        decoded.set(source, pending);
+      }
+      void pending.then(next);
+    });
+  };
+  next();
+  return () => { stopped = true; cancel(); };
+}
+
 export function RecognitionBadgeArtwork({ iconKey }: { readonly iconKey: string }) {
   const artwork = artworkByIconKey[iconKey] ?? starArtwork;
   return <img
@@ -50,6 +76,7 @@ export function RecognitionBadgeArtwork({ iconKey }: { readonly iconKey: string 
     className="recognition-badge-artwork"
     data-recognition-icon={iconKey}
     decoding="async"
+    loading="lazy"
     draggable={false}
     src={artwork}
   />;

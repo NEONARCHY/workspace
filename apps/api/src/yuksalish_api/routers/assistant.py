@@ -11,7 +11,16 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from yuksalish_api.assistant_chats import (
+    AssistantChatRecord,
+    chat_message_scope,
+    clear_chat,
+    create_chat,
+    list_chats,
+    touch_chat,
+)
 from yuksalish_api.assistant_service import (
+    MAX_ASSISTANT_FILE_BASE64_CHARS,
     AssistantMessageRecord,
     AssistantModel,
     ask_assistant,
@@ -35,6 +44,7 @@ class AskRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     attachment: "AskAttachment | None" = None
     continue_draft: bool = False
+    chat_id: UUID | None = None
 
     @field_validator("message")
     @classmethod
@@ -47,10 +57,14 @@ class AskRequest(BaseModel):
 class AskAttachment(BaseModel):
     name: str = Field(min_length=1, max_length=160)
     mime_type: Literal[
-        "application/pdf", "image/png", "image/jpeg", "image/webp", "text/plain",
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "text/plain",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]
-    data_base64: str = Field(min_length=1, max_length=7_000_000)
+    data_base64: str = Field(min_length=1, max_length=MAX_ASSISTANT_FILE_BASE64_CHARS)
 
     @field_validator("name")
     @classmethod
@@ -105,8 +119,28 @@ class RewriteRequest(BaseModel):
 
 
 @router.get("/messages")
-async def get_messages(user: User, connection: Connection) -> list[AssistantMessageRecord]:
-    return await message_history(connection, user.id)
+async def get_messages(
+    user: User,
+    connection: Connection,
+    chat_id: UUID | None = None,
+) -> list[AssistantMessageRecord]:
+    scope = await chat_message_scope(connection, user.id, chat_id) if chat_id is not None else None
+    return await message_history(connection, user.id, scope)
+
+
+@router.get("/chats")
+async def get_chats(user: User, connection: Connection) -> list[AssistantChatRecord]:
+    return await list_chats(connection, user.id)
+
+
+@router.post("/chats")
+async def new_chat(user: User, connection: Connection) -> AssistantChatRecord:
+    return await create_chat(connection, user.id)
+
+
+@router.delete("/chats/{chat_id}/messages", status_code=204)
+async def erase_chat(chat_id: UUID, user: User, connection: Connection) -> None:
+    await clear_chat(connection, user.id, chat_id)
 
 
 @router.post("/messages")
@@ -117,6 +151,11 @@ async def post_message(
     request: Request,
 ) -> AssistantMessageRecord:
     key = request.app.state.settings.gemini_api_key.get_secret_value()
+    scope = (
+        await chat_message_scope(connection, user.id, payload.chat_id, lock=True)
+        if payload.chat_id is not None
+        else None
+    )
     attachment = None
     if payload.attachment is not None:
         try:
@@ -128,10 +167,19 @@ async def post_message(
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
     try:
-        return await ask_assistant(
-            connection, user, key, payload.model, payload.message.strip(), attachment,
+        result = await ask_assistant(
+            connection,
+            user,
+            key,
+            payload.model,
+            payload.message.strip(),
+            attachment,
             payload.continue_draft,
+            scope,
         )
+        if payload.chat_id is not None:
+            await touch_chat(connection, user.id, payload.chat_id, payload.message)
+        return result
     except OverflowError as error:
         raise HTTPException(429, str(error)) from error
     except ValueError as error:

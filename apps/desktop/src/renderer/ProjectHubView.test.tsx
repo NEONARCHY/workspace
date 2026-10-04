@@ -24,7 +24,7 @@ vi.mock("./workspace-api", () => ({
 }));
 
 const project: ProjectHubOverview["projects"][number] = {
-  id: "project-1", code: "REG-26", title: "Региональная программа", description: "Развитие сети",
+  id: "project-1", chatId: "project-chat", code: "REG-26", title: "Региональная программа", description: "Развитие сети",
   managerUserId: people[0]!.id, responsibleUserIds: [people[1]!.id],
   approverUserIds: [people[1]!.id, people[2]!.id], startDate: null, endDate: "2030-12-31",
   budget: 1000, currency: "UZS", accessStatus: "open", lifecycleStatus: "active",
@@ -72,6 +72,75 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("standalone project hub", () => {
+  it("offers a useful empty state without creating a project before confirmation", async () => {
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [], workstreams: [], items: [], requests: [] });
+    setup();
+    expect(await screen.findByRole("heading", { name: "Начните с проекта" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Создать проект" }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+  });
+  it("names each selected document and removes only the chosen file", async () => {
+    setup("funding");
+    fireEvent.click(await screen.findByRole("button", { name: "Новая проектная заявка" }));
+    const dialog = within(screen.getByRole("dialog"));
+    fireEvent.change(dialog.getByLabelText("Файлы заявки"), { target: { files: [new File(["a"], "Смета.pdf"), new File(["b"], "Договор.pdf")] } });
+    expect(dialog.getAllByText("Смета.pdf")).toHaveLength(1);
+    expect(dialog.getAllByText("Договор.pdf")).toHaveLength(1);
+    fireEvent.click(dialog.getByRole("button", { name: "Убрать Смета.pdf" }));
+    expect(dialog.queryByText("Смета.pdf")).not.toBeInTheDocument();
+    expect(dialog.getByText("Договор.pdf")).toBeInTheDocument();
+    expect(uploadWorkspaceAttachment).not.toHaveBeenCalled();
+    expect(createProjectHubRequestDraft).not.toHaveBeenCalled();
+  });
+  it("opens an editable assistant-prefilled project without saving it", async () => {
+    render(<FluentProvider theme={workspaceTheme}><ProjectHubView
+      mode="projects" token="test-token" people={people} currentUserId={people[0]!.id}
+      canCreateProject canCreateRequest canViewFunding
+      assistantDraft={{ kind: "project", ready: true, fields: {
+        title: "Проект команды", code: "TEAM-30", description: "План действий",
+        startDate: "2030-10-01", endDate: "2030-10-31",
+      } }}
+    /></FluentProvider>);
+    expect(await screen.findByRole("textbox", { name: "Название проекта" })).toHaveValue("Проект команды");
+    expect(screen.getByRole("textbox", { name: "Код проекта" })).toHaveValue("TEAM-30");
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+  });
+  it("opens the managed project chat and does not offer one to unrelated readers", async () => {
+    const onOpenChat = vi.fn();
+    const props = { mode: "projects" as const, token: "test-token", people, currentUserId: people[0]!.id,
+      canCreateProject: true, canCreateRequest: true, canViewFunding: true, onOpenChat };
+    const view = render(<FluentProvider theme={workspaceTheme}><ProjectHubView {...props} /></FluentProvider>);
+    fireEvent.click(await screen.findByRole("button", { name: "Открыть чат проекта" }));
+    expect(onOpenChat).toHaveBeenCalledWith("project-chat");
+    view.unmount();
+    vi.mocked(loadProjectHub).mockResolvedValue({ projects: [{ ...project, chatId: null }], workstreams: [], items: [], requests: [] });
+    render(<FluentProvider theme={workspaceTheme}><ProjectHubView {...props} /></FluentProvider>);
+    await screen.findByRole("heading", { name: project.title });
+    expect(screen.queryByRole("button", { name: "Открыть чат проекта" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the chosen chat icon after a project creation error, then saves it on retry", async () => {
+    vi.mocked(saveProjectHubProject).mockRejectedValueOnce(new Error("Сохранение не удалось")).mockResolvedValue(project);
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: /Новый проект/ }));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByRole("button", { name: "Иконка: Проект" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(dialog.getByRole("textbox", { name: "Название проекта" }), { target: { value: "Иконка проекта" } });
+    fireEvent.change(dialog.getByRole("textbox", { name: "Код проекта" }), { target: { value: "ICON-QA" } });
+    fireEvent.click(dialog.getByRole("button", { name: "Иконка: Направление" }));
+    expect(saveProjectHubProject).not.toHaveBeenCalled();
+    fireEvent.click(dialog.getByRole("button", { name: "Сохранить проект" }));
+    await waitFor(() => expect(dialog.getByRole("alert")).toHaveTextContent("Сохранение не удалось"));
+    expect(dialog.getByRole("button", { name: "Иконка: Направление" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(dialog.getByRole("button", { name: "Сохранить проект" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(saveProjectHubProject).toHaveBeenLastCalledWith("test-token", {
+      code: "ICON-QA", title: "Иконка проекта", description: "", managerUserId: people[0]!.id,
+      responsibleUserIds: [], approverUserIds: [], startDate: null, endDate: null,
+      budget: 0, currency: "UZS", accessStatus: "open", lifecycleStatus: "active", chatIconKey: "compass",
+    }, undefined);
+  });
   it("opens a prefilled new project without saving it", async () => {
     render(<FluentProvider theme={workspaceTheme}><ProjectHubView mode="projects" token="test-token"
       people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding

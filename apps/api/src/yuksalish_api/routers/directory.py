@@ -38,9 +38,42 @@ from yuksalish_api.directory_service import (
     update_employee_status,
     update_position,
 )
+from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.sidebar_visibility import get_visibility, set_visibility
+from yuksalish_api.workspace_schemas import SidebarVisibilityResponse, SidebarVisibilityUpdate
 
 router = APIRouter(prefix="/directory", tags=["directory"])
+
+
+@router.get("/employees/{user_id}/sidebar", response_model=SidebarVisibilityResponse)
+async def get_employee_sidebar(
+    user_id: UUID,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> SidebarVisibilityResponse:
+    try:
+        return await get_visibility(connection, current_user, user_id)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+
+
+@router.put("/employees/{user_id}/sidebar", response_model=SidebarVisibilityResponse)
+async def put_employee_sidebar(
+    user_id: UUID, payload: SidebarVisibilityUpdate, request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> SidebarVisibilityResponse:
+    try:
+        result = await set_visibility(connection, current_user, user_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await connection.commit()
+    bus: WorkspaceEventBus = request.app.state.event_bus
+    await bus.publish(
+        {"type": "personal.preferences", "userId": str(user_id)}, recipient_id=user_id,
+    )
+    return result
 
 
 class RegionalAssistantAccessRequest(BaseModel):

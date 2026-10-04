@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AIReferentPacketFile, AIReferentPacketKind } from "@yuksalish/contracts";
-import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Spinner } from "@fluentui/react-components";
+import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, DialogTrigger, Spinner } from "@fluentui/react-components";
 import { ArrowDownload20Regular, Dismiss20Regular, Document20Regular, FolderOpen20Regular } from "@fluentui/react-icons";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { downloadAIReferentPacket, loadAIReferentPacket } from "./workspace-api";
@@ -20,10 +20,11 @@ export function saveReferentBlob(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function AIReferentFiles({ token, kind, ownerId, letterLabel, details }: {
+export function AIReferentFiles({ token, kind, ownerId, letterLabel, details, triggerLabel }: {
   readonly token: string; readonly kind: AIReferentPacketKind; readonly ownerId: string;
   readonly letterLabel?: string;
   readonly details?: readonly { readonly label: string; readonly value: string }[];
+  readonly triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState<readonly AIReferentPacketFile[]>([]);
@@ -52,9 +53,12 @@ export function AIReferentFiles({ token, kind, ownerId, letterLabel, details }: 
     catch (reason) { setError(reason instanceof Error ? reason.message : "Не удалось скачать файл."); }
     finally { setBusy(false); }
   };
-  return <>
-    <Button className="ai-referent-packet-trigger" icon={<FolderOpen20Regular />} onClick={() => setOpen(true)}>Пакет документов</Button>
-    <WorkspaceDialog open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
+  return <WorkspaceDialog open={open} onOpenChange={(_event, data) => setOpen(data.open)}>
+      <DialogTrigger disableButtonEnhancement>
+        <Button className="ai-referent-packet-trigger" aria-label={triggerLabel ? "Пакет документов" : undefined}
+          title={triggerLabel ? "Открыть письмо и вложения" : undefined}
+          icon={<FolderOpen20Regular />}>{triggerLabel ?? "Пакет документов"}</Button>
+      </DialogTrigger>
       <DialogSurface className="ai-referent-detail-dialog ai-referent-packet-dialog" aria-label="Пакет документов">
         <DialogBody>
           <DialogTitle action={<Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть пакет" onClick={() => setOpen(false)} />}>Пакет документов</DialogTitle>
@@ -77,6 +81,5 @@ export function AIReferentFiles({ token, kind, ownerId, letterLabel, details }: 
           </DialogContent>
         </DialogBody>
       </DialogSurface>
-    </WorkspaceDialog>
-  </>;
+    </WorkspaceDialog>;
 }

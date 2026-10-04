@@ -2,6 +2,8 @@ import { SpatialSort, SpatialSortItem } from "./SpatialSort";
 import { useState, type ReactNode } from "react";
 import { navigationKeys, type NavigationKey } from "@yuksalish/contracts";
 import { moveBefore, normalizeNavigation } from "./personal-organization";
+import { Sparkle24Regular } from "@fluentui/react-icons";
+import { groupAiNavigation, moveAiNavigationGroup } from "./AiModulesNavigation";
 
 export function NavigationEditor({ order, revision, labels, hiddenKeys = [], icons, badges, onSave, onClose }: {
   readonly order: readonly NavigationKey[];
@@ -18,10 +20,12 @@ export function NavigationEditor({ order, revision, labels, hiddenKeys = [], ico
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const move = (source: NavigationKey, target: NavigationKey) => {
-    const next = moveBefore(draft, source, target);
+  const groups = groupAiNavigation(draft.map((key) => ({ key, label: labels[key], icon: icons?.[key] })));
+  const move = (source: string, target: string) => {
+    const keys = moveBefore(groups.map((item) => item.key), source, target);
+    const next = moveAiNavigationGroup(draft, source, target);
     setDraft(next);
-    setAnnouncement(`${labels[source]}: позиция ${next.indexOf(source) + 1} из ${next.length}`);
+    setAnnouncement(`${groups.find((item) => item.key === source)?.label}: позиция ${keys.indexOf(source) + 1} из ${keys.length}`);
   };
   const save = () => {
     if (busy) return;
@@ -32,13 +36,13 @@ export function NavigationEditor({ order, revision, labels, hiddenKeys = [], ico
   };
   return <form id="navigation-editor-form" className="navigation-editor" aria-label="Порядок главного меню" aria-busy={busy}
     onSubmit={(event) => { event.preventDefault(); save(); }}>
-    <SpatialSort ids={draft} onMove={(source, target) => move(source as NavigationKey, target as NavigationKey)}>
+    <SpatialSort ids={groups.map((item) => item.key)} onMove={move}>
     <div role="list" aria-label="Разделы меню">
-      {draft.map((key) => <SpatialSortItem id={key} label={labels[key]} disabled={busy} key={key} role="listitem" className="navigation-edit-row"
-        data-navigation-key={key}>
-        {icons?.[key] ? <span className="rail-icon">{icons[key]}</span> : null}
-        <span className="rail-label">{labels[key]}</span>
-        {badges?.[key] ? <span className="rail-badge">{badges[key]! > 99 ? "99+" : badges[key]}</span> : null}
+      {groups.map((item) => <SpatialSortItem id={item.key} label={item.label} disabled={busy} key={item.key} role="listitem" className="navigation-edit-row"
+        data-navigation-key={item.key}>
+        {item.key === "ai_modules" ? <span className="rail-icon"><Sparkle24Regular /></span> : item.icon ? <span className="rail-icon">{item.icon}</span> : null}
+        <span className="rail-label">{item.label}</span>
+        {item.key !== "ai_modules" && badges?.[item.key] ? <span className="rail-badge">{badges[item.key]! > 99 ? "99+" : badges[item.key]}</span> : null}
       </SpatialSortItem>)}
     </div>
     </SpatialSort>

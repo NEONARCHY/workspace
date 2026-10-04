@@ -57,7 +57,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
             onToggle(employee.id, !selectedIds.has(employee.id));
           }}
         >
-          <td className="record-selection-cell"><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
+          <td className="record-selection-cell"><span className="list-row-hover-wash" aria-hidden="true" /><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
           <td><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><Avatar name={employee.name} size={36} color="colorful" aria-hidden="true" /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
           <td className="employee-position">
             {employee.jobTitle ? employee.jobTitle : (

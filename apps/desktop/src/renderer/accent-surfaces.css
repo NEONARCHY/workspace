@@ -1,0 +1,141 @@
+/* Semantic left-edge accents only: dividers, thread connectors and progress
+   tracks are deliberately excluded. The wash never changes card geometry. */
+:root {
+  --ws-accent-danger: #b94f4a;
+  --ws-accent-warning: #d39b2c;
+  --ws-accent-neutral: #8ca5b7;
+  --ws-accent-success: #4f9f6f;
+}
+
+/* No fixed hover rotation: the cursor controls both axes with a damped return.
+   The class is removed before drag/drop, so existing FLIP/landing wins. */
+body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) {
+  transform: perspective(1200px) rotateX(var(--ws-card-tilt-x, 0deg)) rotateY(var(--ws-card-tilt-y, 0deg));
+  /* RAF already smooths the transform; a second CSS transition adds lag. */
+  transition-property: box-shadow, border-color;
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  body .app-provider .spatial-card.has-pointer-tilt:not(.is-lifted, .is-committing, .is-hover-suppressed) { transform: none; }
+}
+
+body :is(
+  .kanban-card.priority-urgent, .kanban-card.priority-high,
+  .calendar-event-pill, .calendar-agenda-card,
+  .approval-deadline-control, .approval-amount-block,
+  .task-return-note, .eff-inline-error, .eff-sample-note, .eff-history-note,
+  .calendar-past-note, .notification-settings-note, .team-dash-data-note,
+  .record-summary-note, .task-team-lead, .task-composer-dependencies > div,
+  .trip-purpose, .feed-reply-context,
+  .message-quote, .assistant-message-quote, .assistant-reply-target,
+  .zoom-notice, :where(.account-profile-anchor:not(.account-settings-redesigned)) .account-section,
+  .notifications-view .notification-row,
+  :where(.notifications-view .notification-metrics > button.active),
+  .project-hub-project.selected, .project-hub-funding-card.selected,
+  .project-hub-task-card.selected, .team-dash-person.selected, .task-row.selected,
+  .workflow-process-view .workflow-hero-header,
+  .chat-list-item .chat-row.selected,
+  .department-tree-list button.selected, .task-team-option[aria-pressed="true"],
+  .trip-list-item.selected, :where(.record-table .record-row.selected td:first-child),
+  :where(.eff-table tbody tr.selected)
+) {
+  --ws-surface-accent: var(--ws-turquoise);
+  background-color: #fcfefe;
+  background-image: linear-gradient(90deg,
+    color-mix(in srgb, var(--ws-surface-accent) 15%, transparent),
+    color-mix(in srgb, var(--ws-surface-accent) 7%, transparent) 42%,
+    transparent 100%);
+}
+
+/* The rail already owns one animated active surface. Do not paint a second
+   surface behind its inset pseudo-element. Feed comments stay flat/neutral. */
+body .app-rail .rail-action.active { background: transparent; }
+body .feed-card.pinned { background-image: none; }
+body .feed-comment { background: #f1f6f4; }
+body .feed-comment.is-reply { background: #f7faf9; }
+
+html body .app-provider :is(.kanban-card.priority-urgent, .notification-row.priority-urgent,
+  .approval-deadline-control.deadline-urgent, .calendar-event-pill.deadline,
+  .calendar-agenda-card.deadline) { --ws-surface-accent: var(--ws-accent-danger); }
+html body .app-provider :is(.kanban-card.priority-high, .notification-row.priority-attention,
+  .approval-deadline-control.deadline-attention, .task-return-note,
+  .eff-inline-error, .eff-sample-note, .team-dash-data-note,
+  .calendar-event-pill.task, .calendar-agenda-card.task) { --ws-surface-accent: var(--ws-accent-warning); }
+html body .app-provider :is(.approval-deadline-control.deadline-success) { --ws-surface-accent: var(--ws-accent-success); }
+html body .app-provider :is(.approval-deadline-control:not(.deadline-attention, .deadline-urgent, .deadline-success),
+  .calendar-past-note, .notification-row:not(.priority-attention, .priority-urgent)) { --ws-surface-accent: var(--ws-accent-neutral); }
+html body .app-provider :is(.eff-history-note, .notification-settings-note, .calendar-event-pill.general,
+  .calendar-agenda-card.general) { --ws-surface-accent: #6793b5; }
+html body .app-provider :is(.calendar-event-pill.trip, .calendar-agenda-card.trip) { --ws-surface-accent: #8178bb; }
+html body .app-provider .account-profile-anchor:not(.account-settings-redesigned) .account-section { --ws-surface-accent: var(--account-section-accent, #82bec4); }
+html body .app-provider .feed-card.pinned { --ws-surface-accent: #74b5af; }
+
+/* Priority is a surface wash, never an inset shadow: hover, selection and
+   drag elevation stay independent of the semantic colour. */
+body .kanban-card:is(.priority-high, .priority-urgent) {
+  background-image: linear-gradient(90deg,
+      color-mix(in srgb, var(--ws-surface-accent) 15%, transparent),
+      color-mix(in srgb, var(--ws-surface-accent) 7%, transparent) 42%, transparent);
+}
+
+/* Transparent borders retain existing alignment/padding but no visible rail.
+   Ordinary separators and timeline/thread connectors are not accent strips. */
+html body .app-provider :is(.calendar-event-pill, .calendar-agenda-card,
+  .approval-deadline-control, .approval-amount-block, .task-return-note,
+  .eff-inline-error, .eff-sample-note, .eff-history-note, .calendar-past-note,
+  .notification-settings-note, .team-dash-data-note, .record-summary-note,
+  .task-team-lead, .task-composer-dependencies > div, .trip-purpose,
+  .feed-reply-context, .feed-card.pinned, .message-quote, .assistant-message-quote,
+  .zoom-notice, :where(.account-profile-anchor:not(.account-settings-redesigned)) .account-section) {
+  border-left-color: transparent;
+}
+body .tasks-view .task-record-signal { visibility: hidden; }
+body .notifications-view .notification-row::before,
+body .messenger-view .chat-row.selected::before,
+body .project-hub-project.selected::before,
+body .workflow-process-view .workflow-hero-header::before { display: none; }
+body .project-hub-project.selected,
+body .project-hub-task-card.selected,
+body .task-row.selected { box-shadow: none; }
+body .project-hub-funding-card.selected,
+body .team-dash-person.selected { box-shadow: 0 8px 19px rgb(31 92 104 / 8%); }
+body .notifications-view .notification-metrics > button.active {
+  background-image: linear-gradient(90deg, rgb(0 145 168 / 15%), rgb(0 145 168 / 7%) 42%, transparent);
+  background-color: #fcfefe;
+  box-shadow: 0 12px 30px rgb(41 58 85 / 9%);
+}
+body .department-tree-list button.selected,
+body .task-team-option[aria-pressed="true"],
+body .trip-list-item.selected,
+body .record-table tbody tr:is([aria-selected="true"], .selected),
+body .record-table .record-row.selected td:first-child,
+body .eff-table tbody tr.selected { box-shadow: none; }
+
+/* Priority bars in the list tint only the title cell, not unrelated columns. */
+body .task-record-table .record-title:has(.task-record-signal) {
+  --ws-surface-accent: var(--ws-accent-neutral);
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--ws-surface-accent) 13%, transparent), transparent);
+}
+body .task-record-table .record-title:has(.task-record-signal.priority-high) { --ws-surface-accent: var(--ws-accent-warning); }
+body .task-record-table .record-title:has(.task-record-signal.priority-urgent) { --ws-surface-accent: var(--ws-accent-danger); }
+
+@media (forced-colors: active) {
+  body :is(.kanban-card, .calendar-event-pill, .calendar-agenda-card,
+    .approval-deadline-control, .approval-amount-block, .task-return-note,
+    .eff-inline-error, .eff-sample-note, .eff-history-note, .calendar-past-note,
+    .notification-settings-note, .team-dash-data-note, .record-summary-note,
+    .task-team-lead, .task-composer-dependencies > div, .trip-purpose,
+    .feed-reply-context, .feed-card.pinned, .message-quote, .assistant-message-quote,
+    .assistant-reply-target, .zoom-notice, .account-section, .notification-row,
+    .rail-action.active, .chat-list-item .chat-row.selected, .department-tree-list button.selected,
+    .task-team-option[aria-pressed="true"], .trip-list-item.selected,
+    .project-hub-project.selected, .project-hub-funding-card.selected,
+    .project-hub-task-card.selected, .team-dash-person.selected, .task-row.selected,
+    .workflow-process-view .workflow-hero-header,
+    .record-row.selected td:first-child, .eff-table tbody tr.selected,
+    .task-record-table .record-title:has(.task-record-signal)) {
+    background-image: none;
+    background-color: Canvas;
+  }
+  body .kanban-card:is(.priority-high, .priority-urgent) { outline: 1px solid CanvasText; outline-offset: -1px; }
+  body .notifications-view .notification-metrics > button.active { background-image: none; background-color: Canvas; }
+}

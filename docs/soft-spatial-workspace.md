@@ -8,6 +8,25 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
 
 ## Composition map
 
+- Refinement 2026-10-04: presence summary tiles use seven semantic pastel washes
+  fading left-to-right (22% → 9% at 48% → transparent), with unchanged counts and
+  permissions. Labels use navy ink to retain AA contrast at the strongest tint;
+  forced colors removes the wash. Messenger's outer right edge is 20 px at desktop/compact widths.
+  Absences also reserves a single 20 px outer right inset for its header action,
+  summary tiles and all lower panels; inner trailing margins/padding do not add
+  a second inset. Their existing left alignment and semantic washes are retained.
+  Presence counts are 36 px and labels 16 px (formerly 24/12), with a 4 px gap
+  and a vertically centered copy block. Tiles have a 96 px minimum height and
+  144 px minimum column width; compact layouts wrap tiles and labels by words
+  without shrinking the type or changing the 20 px outer edge.
+  Overflowing compact sections scroll internally so every summary tile and
+  lower panel remains reachable. A resize observer includes the actual native
+  scrollbar width in the 20 px edge (as in the calendar), and disconnects on unmount.
+  Collapsed navigation measures the rendered action height and row gap before
+  reserving More; the hidden profile label reserves no width or flex gap. No
+  scrollbar is introduced into the collapsed rail. Calendar agenda clearance is
+  documented in `docs/design/workspace-calendar.md`. Responsive sizing and
+  breakpoint checks follow [responsive-design](https://github.com/wshobson/agents/blob/main/plugins/ui-design/skills/responsive-design/SKILL.md), routed by Lazyweb.
 - Shell: floating labelled navigation island, canvas header, command entry, compact identity and connection inspector.
 - Objects: shared pointer/keyboard drag overlay, source placeholder, eligible lanes, explicit server-confirmed actions. Dragging never substitutes for approval or a motivated rejection.
 - Tasks/projects/payments/trips: spatial stage lanes and tactile cards, contained scrolling, contextual inspectors.

@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 import type { WorkspaceTask } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -8,6 +9,7 @@ interface TaskCalendarViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly onSelect: (taskId: string) => void;
   readonly actions?: ReactNode;
+  readonly toolbarTarget?: HTMLElement | null;
 }
 
 const weekdayLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -22,7 +24,7 @@ function validDate(value?: string | null): Date | undefined {
   return Number.isFinite(date.getTime()) ? date : undefined;
 }
 
-export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewProps) {
+export function TaskCalendarView({ tasks, onSelect, actions, toolbarTarget }: TaskCalendarViewProps) {
   const [month, setMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -60,17 +62,7 @@ export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewP
   const selectedKey = localDateKey(selectedDay);
   const selectedTasks = tasksByDay.get(selectedKey) ?? [];
 
-  return (
-    <div className="task-calendar-shell calendar-view task-calendar-embedded">
-      <div className="calendar-main">
-      <header className="calendar-toolbar">
-        <div className="calendar-title">
-          <span>Рабочий календарь</span>
-          <h1>Календарь задач</h1>
-          <p>{monthLabel}</p>
-        </div>
-        <div className="calendar-toolbar-actions">
-          <div className="calendar-month-navigation" aria-label="Навигация по месяцам задач">
+  const monthNavigation = <div className="calendar-month-navigation" aria-label="Навигация по месяцам задач" title={monthLabel}>
           <Button
             appearance="subtle"
             icon={<ChevronLeft24Regular />}
@@ -93,10 +85,12 @@ export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewP
             aria-label="Следующий месяц задач"
             onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
           />
-          </div>
-          {actions}
-        </div>
-      </header>
+          </div>;
+
+  return (
+    <div className="task-calendar-shell calendar-view task-calendar-embedded">
+      {toolbarTarget ? createPortal(monthNavigation, toolbarTarget) : <div className="task-calendar-local-navigation">{monthNavigation}{actions}</div>}
+      <div className="calendar-main">
       <div className="calendar-board task-calendar-board">
         <div className="calendar-weekdays" aria-hidden="true">
           {weekdayLabels.map((label) => <span key={label}>{label}</span>)}
@@ -157,9 +151,6 @@ export function TaskCalendarView({ tasks, onSelect, actions }: TaskCalendarViewP
           <span>Выбранный день</span>
           <h2>{selectedDay.toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" })}</h2>
           <p>{selectedTasks.length ? `${selectedTasks.length} задач по сроку` : "На этот день задач нет"}</p>
-        </div>
-        <div className="calendar-day-summary">
-          <span>{selectedDay.getDate()}</span><p>{selectedDay.toLocaleDateString("ru-RU", { weekday: "long" })}</p><strong>{selectedTasks.length}</strong>
         </div>
         <div className="calendar-day-agenda">
           {selectedTasks.map((task) => <button className={`calendar-agenda-card task status-${task.status}`} type="button" key={task.id} onClick={() => onSelect(task.id)}>

@@ -10,6 +10,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .auth import AuthenticatedUser
+from .position_policy import is_executive_leader
 from .project_hub_schemas import (
     ProjectFundingAction,
     ProjectFundingActionResponse,
@@ -29,12 +30,15 @@ from .project_hub_schemas import (
 from .repository import (
     WorkspaceRepositoryError,
     _attachment,
+    _sync_context_chat,
     _upsert_notification,
     create_calendar_event,
 )
 from .tables import (
     attachments,
     calendar_events,
+    chat_members,
+    chats,
     project_hub_item_actions,
     project_hub_item_assignees,
     project_hub_items,
@@ -46,7 +50,7 @@ from .tables import (
     users,
     workspace_notifications,
 )
-from .workspace_schemas import CreateCalendarEventRequest
+from .workspace_schemas import ChatAvatarIconKey, CreateCalendarEventRequest
 
 TZ = ZoneInfo("Asia/Tashkent")
 
@@ -264,10 +268,40 @@ async def _replace_people(
         )
 
 
+async def _sync_project_chat(
+    connection: AsyncConnection, row: RowMapping,
+    avatar_icon_key: ChatAvatarIconKey | None = None,
+) -> UUID:
+    responsible, approvers = await _project_people(connection, row["id"])
+    assignees = (await connection.execute(
+        select(project_hub_item_assignees.c.user_id).select_from(
+            project_hub_item_assignees.join(
+                project_hub_items, project_hub_items.c.id == project_hub_item_assignees.c.item_id
+            )
+        ).where(project_hub_items.c.project_id == row["id"])
+    )).scalars().all()
+    return await _sync_context_chat(
+        connection, context_type="project_hub", context_id=row["id"],
+        title=row["title"], description=row["description"],
+        owner_user_id=row["created_by_user_id"],
+        member_user_ids=[row["manager_user_id"], *responsible, *approvers, *assignees],
+        avatar_icon_key=avatar_icon_key,
+    )
+
+
 async def _project_response(
     connection: AsyncConnection, user: AuthenticatedUser, row: RowMapping
 ) -> ProjectHubResponse:
     responsible, approvers = await _project_people(connection, row["id"])
+    chat_query = select(chats.c.id).where(
+        chats.c.context_type == "project_hub", chats.c.context_id == row["id"],
+        chats.c.deleted_at.is_(None),
+    )
+    if not (_admin(user) or is_executive_leader(user.job_title)):
+        chat_query = chat_query.where(chats.c.id.in_(
+            select(chat_members.c.chat_id).where(chat_members.c.user_id == user.id)
+        ))
+    chat_id = await connection.scalar(chat_query)
     approved = await connection.scalar(
         select(func.coalesce(func.sum(project_hub_requests.c.amount), 0)).where(
             project_hub_requests.c.project_id == row["id"],
@@ -276,6 +310,7 @@ async def _project_response(
     )
     return ProjectHubResponse(
         id=str(row["id"]),
+        chat_id=str(chat_id) if chat_id else None,
         code=row["code"],
         title=row["title"],
         description=row["description"],
@@ -357,7 +392,9 @@ async def save_project(
         )
     await _replace_people(connection, project_id, "responsible", responsible)
     await _replace_people(connection, project_id, "approver", approvers)
-    return await _project_response(connection, user, await _project_row(connection, project_id))
+    row = await _project_row(connection, project_id)
+    await _sync_project_chat(connection, row, payload.chat_icon_key if existing is None else None)
+    return await _project_response(connection, user, row)
 
 
 def _workstream_response(row: RowMapping) -> ProjectWorkstreamResponse:
@@ -621,6 +658,7 @@ async def save_item(
             insert(project_hub_item_assignees),
             [{"item_id": item_id, "user_id": value} for value in assignees],
         )
+    await _sync_project_chat(connection, project)
     row = (
         (
             await connection.execute(
