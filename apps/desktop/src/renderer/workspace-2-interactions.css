@@ -167,7 +167,7 @@
 /* Navigation behaves like one moving workspace object. The active surface grows
    into place; page content follows after a short, non-blocking delay. */
 .app-rail .rail-slot { position: relative; }
-.app-rail .rail-action {
+:is(.app-rail, .rail-more-drawer) .rail-action {
   position: relative;
   isolation: isolate;
   overflow: visible;
@@ -177,7 +177,7 @@
     color 190ms var(--ws-ease),
     transform 180ms var(--ws-ease);
 }
-.app-rail .rail-action::before {
+:is(.app-rail, .rail-more-drawer) .rail-action::before {
   position: absolute;
   z-index: -1;
   inset: 2px 0;
@@ -192,17 +192,17 @@
   transform: scale(.97);
   transition: opacity 180ms var(--ws-ease), transform 220ms var(--ws-ease);
 }
-.app-rail .rail-action:hover { background: transparent; transform: translateY(-1px); }
-.app-rail .rail-action:hover::before { opacity: .55; transform: scale(.99); }
-.app-rail .rail-action.active { color: var(--ws-text); background: transparent; box-shadow: none; }
-.app-rail .rail-action.active::before { opacity: 1; transform: scale(1); }
-.app-rail .rail-action .rail-icon,
-.app-rail .rail-action .rail-label,
-.app-rail .rail-action .rail-badge {
+:is(.app-rail, .rail-more-drawer) .rail-action:hover { background: transparent; transform: translateY(-1px); }
+:is(.app-rail, .rail-more-drawer) .rail-action:hover::before { opacity: .55; transform: scale(.99); }
+:is(.app-rail, .rail-more-drawer) .rail-action.active { color: var(--ws-text); background: transparent; box-shadow: none; }
+:is(.app-rail, .rail-more-drawer) .rail-action.active::before { opacity: 1; transform: scale(1); }
+:is(.app-rail, .rail-more-drawer) .rail-action .rail-icon,
+:is(.app-rail, .rail-more-drawer) .rail-action .rail-label,
+:is(.app-rail, .rail-more-drawer) .rail-action .rail-badge {
   transition: color 180ms var(--ws-ease), transform 220ms var(--ws-ease), opacity 180ms var(--ws-ease);
 }
-.app-rail .rail-action.active .rail-icon { color: #007d91; transform: scale(1.04); }
-.app-rail .rail-action:active { transform: scale(.985); }
+:is(.app-rail, .rail-more-drawer) .rail-action.active .rail-icon { color: #007d91; transform: scale(1.04); }
+:is(.app-rail, .rail-more-drawer) .rail-action:active { transform: scale(.985); }
 @media (min-width: 761px) {
   .app-rail .rail-label, .app-rail .rail-brand, .app-rail .rail-profile > span:last-child { transition: opacity 180ms var(--ws-ease), transform 300ms var(--ws-ease); }
   .rail-collapsed .app-rail .rail-label, .rail-collapsed .app-rail .rail-brand, .rail-collapsed .app-rail .rail-profile > span:last-child { display: block; opacity: 0; pointer-events: none; transform: translateX(-8px); }
@@ -213,16 +213,16 @@
   .rail-collapsed .app-rail .workspace-logo { gap: 0; }
   .rail-collapsed .app-rail .rail-brand { width: 0; overflow: hidden; }
 }
-.app-rail .rail-more-drawer .rail-action { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; justify-content: stretch; min-height: 42px; padding: 7px 10px; text-align: left; }
+.rail-more-drawer .rail-action { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; justify-content: stretch; min-height: 42px; padding: 7px 10px; text-align: left; }
 /* Invisible profile text must not reserve a flex gap beside the avatar. */
 .rail-collapsed .app-rail .rail-profile { justify-content: center; gap: 0; padding-inline: 0; }
 .rail-collapsed .app-rail .rail-profile > span:not(.fui-Avatar) { display: none; }
 @media (max-width: 760px) {
   .app-rail .rail-profile { justify-content: center; gap: 0; padding-inline: 0; }
 }
-.app-rail .rail-more-drawer .rail-label, .rail-collapsed .app-rail .rail-more-drawer .rail-label { display: block; width: auto; opacity: 1; transform: none; white-space: normal; line-height: 1.25; }
-.app-rail .rail-more-drawer .rail-badge { position: static; }
-@media (max-width: 760px) { .app-rail .rail-more-drawer .rail-action { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; } }
+.rail-more-drawer .rail-label { display: block; width: auto; opacity: 1; transform: none; white-space: normal; line-height: 1.25; font-size: 13px; font-weight: 500; }
+.rail-more-drawer .rail-action.active .rail-label { font-weight: 650; }
+.rail-more-drawer .rail-badge { position: static; min-width: 20px; height: 20px; line-height: 20px; color: #933e4e; background: #f7e4e7; font-size: 10px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .app-shell, .app-rail .rail-label, .app-rail .rail-brand, .app-rail .rail-profile > span:last-child { transition-duration: 0ms !important; } }
 
 /* Keep every single-line Fluent field on the same optical axis. Gilroy's

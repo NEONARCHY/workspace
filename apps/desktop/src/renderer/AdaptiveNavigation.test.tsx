@@ -31,6 +31,9 @@ describe("AdaptiveNavigation overflow", () => {
     const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
     fireEvent.click(more);
     expect(more).toHaveAttribute("aria-expanded", "true");
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    expect(drawer.closest(".rail-nav")).toBeNull();
+    expect(drawer.parentElement).toHaveAttribute("data-portal-node", "true");
 
     fireEvent.pointerDown(screen.getByRole("complementary", { name: "Другие разделы" }));
     expect(more).toHaveAttribute("aria-expanded", "true");
@@ -65,6 +68,18 @@ describe("AdaptiveNavigation overflow", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(more).toHaveAttribute("aria-expanded", "false");
     expect(more).toHaveFocus();
+  });
+  it("keeps portalled entries clickable and closes after selecting one", () => {
+    const select = vi.fn();
+    render(<AdaptiveNavigation items={items} renderItem={(item, overflow, close) => <button key={item.key} className="rail-action" onClick={() => { select(item.key, overflow); close(); }}>{item.label}</button>} />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    const entry = screen.getByRole("button", { name: "Второй" });
+    fireEvent.pointerDown(entry);
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(entry);
+    expect(select).toHaveBeenCalledWith("two", true);
+    expect(more).toHaveAttribute("aria-expanded", "false");
   });
   it("reserves More using the actual taller collapsed button height", () => {
     vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(48);

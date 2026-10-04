@@ -231,11 +231,20 @@ describe("Private messenger", () => {
     const reaction = within(dialog).getByRole("button", { name: /👍: Бахтиёр Самугов/ });
     fireEvent.contextMenu(reaction, { clientX: 80, clientY: 80 });
     const quick = screen.getByText(/Поставили реакцию/).closest(".message-context-menu");
-    expect(quick?.parentElement).toBe(dialog.parentElement);
+    expect(quick?.parentElement?.parentElement).toBe(dialog.parentElement);
+    expect(quick?.parentElement).toHaveClass("fui-FluentProvider");
+    expect(quick?.querySelector(".message-reaction-people .fui-Avatar")).not.toBeNull();
+
+    fireEvent.keyDown(quick!, { key: "Tab" });
+    expect(screen.getByRole("dialog", { name: "Кто поставил реакцию" })).toBeInTheDocument();
+    fireEvent.keyDown(quick!, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Кто поставил реакцию" })).not.toBeInTheDocument();
+    expect(dialog).toBeInTheDocument();
+    expect(reaction).toHaveFocus();
 
     fireEvent.pointerDown(document.body);
     fireEvent.contextMenu(within(dialog).getByText(message.body).closest(".message")!, { clientX: 90, clientY: 90 });
-    expect(screen.getByRole("menu").parentElement).toBe(dialog.parentElement);
+    expect(screen.getByRole("menu").parentElement?.parentElement).toBe(dialog.parentElement);
   });
 
   it("sends an executor's deadline request from the task chat and lets its author decide", async () => {
@@ -884,6 +893,8 @@ describe("Private messenger", () => {
     expect(quick).toHaveTextContent("Бахтиёр Самугов");
     expect(quick).toHaveTextContent("Азиза Каримова");
     expect(quick).toHaveTextContent("Малика Нурова");
+    expect(quick.parentElement).toHaveClass("fui-FluentProvider");
+    expect(quick.querySelectorAll(".message-reaction-people .fui-Avatar")).toHaveLength(3);
     fireEvent.click(within(quick as HTMLElement).getByRole("button", { name: /Азиза Каримова/ }));
     expect(onOpenPersonProfile).toHaveBeenCalledWith("aziza");
     fireEvent.click(reaction);

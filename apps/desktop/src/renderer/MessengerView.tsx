@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
 import type {
@@ -57,6 +56,8 @@ import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
 import { workspacePlatform } from "./platform-adapter";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
+import { MessageContextMenu, menuPortalContainerFor } from "./MessageContextMenu";
+import { ReactionPeople, ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -134,60 +135,13 @@ export interface MessengerViewProps {
   readonly onOpenPersonProfile?: (userId: string) => void;
 }
 
-function MessageContextMenu({
-  x,
-  y,
-  children,
-  onPointerDown,
-  portalContainer,
-}: {
-  readonly x: number;
-  readonly y: number;
-  readonly children: React.ReactNode;
-  readonly onPointerDown: React.PointerEventHandler<HTMLDivElement>;
-  readonly portalContainer: HTMLElement;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState({ x, y });
-
-  useLayoutEffect(() => {
-    const menu = menuRef.current;
-    if (!menu) return;
-    const margin = 8;
-    const rect = menu.getBoundingClientRect();
-    setPosition({
-      x: Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin)),
-      y: Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin)),
-    });
-  }, [x, y]);
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      className="message-context-menu"
-      role="menu"
-      style={{ left: position.x, top: position.y }}
-      onPointerDown={onPointerDown}
-    >
-      {children}
-    </div>,
-    portalContainer,
-  );
-}
-
-function menuPortalContainerFor(target: Element): HTMLElement {
-  // A dialog's Fluent portal sits above the page, so its menus must be siblings
-  // of that dialog rather than children of document.body.
-  return target.closest<HTMLElement>(".fui-DialogSurface")?.parentElement ?? document.body;
-}
-
 function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOpenDetails }: {
   readonly reaction: MessageReaction;
   readonly people: readonly WorkspacePerson[];
   readonly token: string;
   readonly disabled: boolean;
   readonly onToggle: () => void;
-  readonly onOpenDetails: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  readonly onOpenDetails: (event: React.MouseEvent<HTMLButtonElement> | React.KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   const reactors = (reaction.reactorUserIds ?? [])
     .map((userId) => people.find((person) => person.id === userId))
@@ -207,6 +161,10 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
       aria-label={`${reaction.emoji}: ${names.join(", ")}`}
       aria-haspopup="dialog"
       onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); onOpenDetails(event); }}
+      onKeyDown={(event) => {
+        if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+        event.preventDefault(); event.stopPropagation(); onOpenDetails(event);
+      }}
       onClick={onToggle}
     >
       <span className="message-reaction-emoji" aria-hidden="true">{reaction.emoji}</span>
@@ -215,24 +173,6 @@ function MessageReactionChip({ reaction, people, token, disabled, onToggle, onOp
       </span> : null}
     </Button>
   </span>;
-}
-
-function ReactionPeople({ reactions, people, token, onOpenPersonProfile }: {
-  readonly reactions: readonly MessageReaction[];
-  readonly people: readonly WorkspacePerson[];
-  readonly token: string;
-  readonly onOpenPersonProfile?: (userId: string) => void;
-}) {
-  const entries = reactions.flatMap((reaction) => (reaction.reactorUserIds ?? []).map((userId) => ({ userId, emoji: reaction.emoji })));
-  return <div className="message-reaction-people">
-    {entries.length ? entries.map(({ userId, emoji }) => {
-      const person = people.find((item) => item.id === userId);
-      return <button key={`${userId}-${emoji}`} type="button" disabled={!person || !onOpenPersonProfile} onClick={() => person && onOpenPersonProfile?.(person.id)}>
-        {person ? <ProfileAvatar person={person} token={token} size={28} /> : <span className="message-reaction-person-fallback" aria-hidden="true">?</span>}
-        <span>{person?.name ?? "Сотрудник"}</span><span aria-label={`Реакция ${emoji}`}>{emoji}</span>
-      </button>;
-    }) : <p>{reactions.reduce((total, reaction) => total + reaction.count, 0)} реакций · список сотрудников недоступен</p>}
-  </div>;
 }
 
 function Conversation({
@@ -295,7 +235,7 @@ function Conversation({
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
   const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement }>();
-  const [reactionQuick, setReactionQuick] = useState<{ message: ChatMessage; emoji: MessageReactionEmoji; x: number; y: number; portalContainer: HTMLElement }>();
+  const [reactionQuick, setReactionQuick] = useState<ReactionDetailsTarget & { message: ChatMessage }>();
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
   const [reactionTargetId, setReactionTargetId] = useState<string>();
@@ -484,14 +424,6 @@ function Conversation({
     window.addEventListener("blur", close);
     return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
   }, [contextMenu]);
-  useEffect(() => {
-    if (!reactionQuick) return;
-    const close = () => setReactionQuick(undefined);
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("blur", close);
-    window.addEventListener("keydown", close);
-    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); window.removeEventListener("keydown", close); };
-  }, [reactionQuick]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
     vanishSequence.current += 1;
@@ -904,7 +836,11 @@ function Conversation({
                           people={people}
                           token={token}
                           disabled={!canSend || busy}
-                          onOpenDetails={(event) => { setContextMenu(undefined); setReactionQuick({ message, emoji: reaction.emoji, x: event.clientX, y: event.clientY, portalContainer: menuPortalContainerFor(event.currentTarget) }); }}
+                          onOpenDetails={(event) => {
+                            setContextMenu(undefined);
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setReactionQuick({ message, emoji: reaction.emoji, x: "clientX" in event ? event.clientX : rect.left, y: "clientY" in event ? event.clientY : rect.bottom, anchor: event.currentTarget });
+                          }}
                           onToggle={() => void run(() => onReactMessage(message, reaction.emoji))}
                         />
                       ))}
@@ -936,10 +872,8 @@ function Conversation({
           </div> : null}
         </MessageContextMenu>;
       })() : null}
-      {reactionQuick ? <MessageContextMenu x={reactionQuick.x} y={reactionQuick.y} portalContainer={reactionQuick.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
-        <strong className="message-reaction-quick-title">{reactionQuick.emoji} · Поставили реакцию</strong>
-        <ReactionPeople reactions={(reactionQuick.message.reactions ?? []).filter((reaction) => reaction.emoji === reactionQuick.emoji)} people={people} token={token} onOpenPersonProfile={(id) => { setReactionQuick(undefined); onOpenPersonProfile?.(id); }} />
-      </MessageContextMenu> : null}
+      {reactionQuick ? <ReactionDetailsMenu target={reactionQuick} reactions={reactionQuick.message.reactions ?? []}
+        people={people} token={token} onClose={() => setReactionQuick(undefined)} onOpenPersonProfile={onOpenPersonProfile} /> : null}
       {reactionDialog && <Dialog open onOpenChange={(_, data) => { if (!data.open) setReactionDialog(undefined); }}><DialogSurface className="message-reaction-dialog" aria-label="Реакции на сообщение">
         <DialogBody><DialogTitle>Реакции</DialogTitle><DialogContent>
           <div className="message-reaction-summary">{reactionDialog?.reactions?.map((reaction) => <span key={reaction.emoji}>{reaction.emoji} {reaction.count}</span>)}</div>

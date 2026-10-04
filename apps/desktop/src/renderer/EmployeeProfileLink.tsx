@@ -10,6 +10,10 @@ type OpenEmployeeProfile = (userId: string) => void;
 
 const EmployeeProfileContext = createContext<OpenEmployeeProfile | undefined>(undefined);
 
+export function useOpenEmployeeProfile() {
+  return useContext(EmployeeProfileContext);
+}
+
 export function EmployeeProfileProvider({
   children,
   onOpenProfile,

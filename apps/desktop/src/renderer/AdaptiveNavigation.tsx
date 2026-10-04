@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Portal } from "@fluentui/react-components";
 import { MoreHorizontal24Regular } from "@fluentui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { SlidingSegmented } from "./SlidingSegmented";
@@ -19,6 +20,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
   const [visibleCount, setVisibleCount] = useState(items.length);
   const [open, setOpen] = useState(false);
   const reducedMotion = useReducedMotion();
@@ -66,7 +68,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
       }
     };
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !moreRef.current?.parentElement?.contains(event.target)) {
+      if (event.target instanceof Node && !moreRef.current?.contains(event.target) && !drawerRef.current?.contains(event.target)) {
         setOpen(false);
       }
     };
@@ -81,6 +83,28 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   const visible = items.slice(0, visibleCount);
   const overflow = items.slice(visibleCount);
   const drawerOpen = open && overflow.length > 0;
+  useLayoutEffect(() => {
+    const drawer = drawerRef.current;
+    const rail = moreRef.current?.closest<HTMLElement>(".app-rail") ?? containerRef.current;
+    if (!drawerOpen || !drawer || !rail) return;
+    const update = () => {
+      const railRect = rail.getBoundingClientRect();
+      const drawerRect = drawer.getBoundingClientRect();
+      const scale = drawer.offsetWidth && drawerRect.width ? drawerRect.width / drawer.offsetWidth : 1;
+      const viewportWidth = window.innerWidth / scale;
+      const viewportHeight = window.innerHeight / scale;
+      drawer.style.width = `${Math.min(284, Math.max(48, viewportWidth - 24))}px`;
+      drawer.style.maxHeight = `${Math.max(48, Math.min(520, viewportHeight - 24))}px`;
+      drawer.style.left = `${Math.max(12, Math.min(railRect.right / scale + 10, viewportWidth - drawer.offsetWidth - 12))}px`;
+      drawer.style.bottom = `${Math.min(82, Math.max(12, viewportHeight - drawer.offsetHeight - 12))}px`;
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(rail);
+    observer.observe(drawer);
+    window.addEventListener("resize", update);
+    return () => { observer.disconnect(); window.removeEventListener("resize", update); };
+  }, [drawerOpen]);
   return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active, :scope > button.rail-action.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
     onClickCapture={(event) => {
       if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
@@ -95,8 +119,8 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         <span className="rail-label">Ещё</span>
         <span className="rail-more-count">{overflow.length}</span>
       </button>
-      <AnimatePresence initial={false}>
-        {drawerOpen ? <motion.aside id="rail-more-drawer" className="rail-more-drawer" aria-label="Другие разделы"
+      <Portal><AnimatePresence initial={false}>
+        {drawerOpen ? <motion.aside ref={drawerRef} id="rail-more-drawer" className="rail-more-drawer" aria-label="Другие разделы"
           initial={reducedMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
@@ -110,7 +134,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
             ))}
           </div>
         </motion.aside> : null}
-      </AnimatePresence>
+      </AnimatePresence></Portal>
     </div> : null}
   </SlidingSegmented>;
 }
