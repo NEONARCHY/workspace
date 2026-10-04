@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -48,5 +48,22 @@ describe("birthday greeting access", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Отмена" }));
     expect(screen.getByText("Сохранить этот комментарий")).toBeInTheDocument();
     expect(onDeleteComment).not.toHaveBeenCalled();
+  });
+
+  it("confirms publication deletion once without invoking comment deletion", async () => {
+    const post: FeedPost = { ...birthday, systemKind: null, canDelete: true, title: "Новости команды" };
+    const onDelete = vi.fn().mockResolvedValue(true), onDeleteComment = vi.fn();
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[post]} people={[]} token="token" currentUserId="employee-1"
+      onCreate={vi.fn()} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={onDeleteComment} onPin={vi.fn()} onDelete={onDelete}
+    /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить публикацию" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить публикацию?" });
+    expect(dialog).toHaveAccessibleDescription("Публикация «Новости команды» и её обсуждение будут удалены без возможности восстановления.");
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Удалить" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
+    expect(onDelete).toHaveBeenCalledWith(post);
+    expect(onDeleteComment).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
