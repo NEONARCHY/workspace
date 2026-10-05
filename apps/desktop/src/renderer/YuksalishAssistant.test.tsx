@@ -109,7 +109,9 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
     const confirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
-    const confirmButton = within(confirmation).getByRole("button", { name: "Очистить чат" });
+    // Fluent's modalizer can briefly re-apply aria-hidden while its portal
+    // settles on slower Windows CI runners after the previous dialog exits.
+    const confirmButton = await within(confirmation).findByRole("button", { name: "Очистить чат" });
     // fireEvent.click alone does not focus like a browser's pointer click. Keep
     // Tabster's active modal on the confirmation, including the pending/error phase.
     act(() => confirmButton.focus());
