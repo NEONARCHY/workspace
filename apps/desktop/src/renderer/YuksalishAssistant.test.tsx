@@ -179,6 +179,7 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
+    expect(document.querySelector(".assistant-empty .assistant-empty-orb.gradient-orb-fallback")).toBeInTheDocument();
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
     expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();

@@ -17,12 +17,12 @@
 .assistant-panel .assistant-composer-inner { width: min(100%, 800px); }
 .assistant-panel .assistant-stream-inner { gap: 20px; }
 .assistant-panel .assistant-empty { padding: 20px 0; gap: 12px; max-width: 640px; }
-.assistant-panel .assistant-empty-mark { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: 18px; background: #fff; color: var(--ws-link); border: 1px solid #d9e9eb; }
+.assistant-panel .assistant-empty .assistant-empty-orb { width: 94px; height: 94px; margin-bottom: 4px; }
 .assistant-panel .assistant-empty h2 { font-size: 27px; letter-spacing: -.5px; }
 .assistant-panel .assistant-empty > p { max-width: 440px; font-size: 14px; line-height: 1.55; color: var(--assistant-quiet); }
 .assistant-panel .assistant-empty > small { color: var(--assistant-quiet); font-size: 12px; }
 .assistant-panel:not(.is-expanded) .assistant-empty { padding-block: 10px; gap: 9px; }
-.assistant-panel:not(.is-expanded) .assistant-empty-mark { display: none; }
+.assistant-panel:not(.is-expanded) .assistant-empty .assistant-empty-orb { width: 76px; height: 76px; }
 .assistant-panel:not(.is-expanded) .assistant-quick-prompts small { display: none; }
 .assistant-panel:not(.is-expanded) .assistant-quick-prompts button { align-items: center; min-height: 58px; }
 .assistant-panel .assistant-quick-prompts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; max-width: none; margin: 9px 0; }

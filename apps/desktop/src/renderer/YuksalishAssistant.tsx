@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Plus, Reply, Sparkles, Square, Trash2, Upload, X } from "lucide-react";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Plus, Reply, Square, Trash2, Upload, X } from "lucide-react";
 
 import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
@@ -546,7 +546,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         ref={streamRef} aria-live="polite" inert={chatBusy || confirmClear}>
           <div className="assistant-stream-inner">
             {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
-              <span className="assistant-empty-mark"><Sparkles size={25} aria-hidden="true" /></span>
+              <GradientOrb className="assistant-empty-orb" paused={blockingDialog} />
               <h2>С чего начнём?</h2>
               <p>Подготовим рабочие записи, разберём документ или просто обсудим ваш вопрос.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
