@@ -160,6 +160,10 @@ if ($NetworkMode -in @("lan", "lan-cloudflare") -and -not $AllowPlaceholders) {
             $origins -notcontains $PublicOrigin) {
             throw "PublicOrigin must be an exact HTTPS origin present in YUKSALISH_CORS_ORIGINS."
         }
+        if ($origins.Count -ne 3 -or
+            @($origins | Where-Object { $_ -notin @("null", $requiredWebOrigin, $PublicOrigin) }).Count -gt 0) {
+            throw "Remote Workspace may allow only the desktop, LAN and reviewed public origins."
+        }
         $deploymentId = [Guid]::Empty
         if (-not [Guid]::TryParse($values["YUKSALISH_DEPLOYMENT_ID"], [ref]$deploymentId) -or
             $deploymentId -eq [Guid]::Empty) {
