@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from PIL import Image, ImageChops
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright  # type: ignore[import-not-found]
 
 OUT = Path(__file__).resolve().parents[3] / "tmp" / "assistant-empty-orb"
 OUT.mkdir(parents=True, exist_ok=True)
