@@ -109,10 +109,11 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
     fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
     const confirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
-    const confirmButton = within(confirmation).getByRole("button", { name: "Очистить чат" });
+    const confirmButton = confirmation.querySelector<HTMLButtonElement>(".confirm-action-danger")!;
     // fireEvent.click alone does not focus like a browser's pointer click. Keep
     // Tabster's active modal on the confirmation, including the pending/error phase.
     act(() => confirmButton.focus());
+    await waitFor(() => expect(confirmation).not.toHaveAttribute("aria-hidden", "true"));
     expect(document.activeElement).toBe(confirmButton);
     fireEvent.click(confirmButton);
     expect(confirmation).toBeInTheDocument();
@@ -179,6 +180,7 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
+    expect(document.querySelector(".assistant-empty .assistant-empty-orb.gradient-orb-fallback")).toBeInTheDocument();
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
     expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();
