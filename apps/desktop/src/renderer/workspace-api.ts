@@ -120,12 +120,32 @@ import type {
   DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
+import { failoverApiOrigin, getApiBaseUrl, isRemoteApiOrigin, switchApiOrigin } from "./api-origin";
 
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
-  ?? (workspacePlatform.kind === "web" ? window.location.origin : "http://127.0.0.1:8080");
+export { apiConnectionLabel, getApiBaseUrl, initializeApiOrigin, subscribeToApiOrigin, supportsDualApiOrigins } from "./api-origin";
 
 let pendingMutations = 0;
 export const hasPendingMutation = () => pendingMutations > 0;
+
+export class ApiHttpError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message);
+    this.name = "ApiHttpError";
+  }
+}
+
+export async function switchWorkspaceOrigin(): Promise<string> {
+  if (hasPendingMutation()) {
+    throw new Error("Дождитесь завершения текущей операции перед сменой соединения.");
+  }
+  return await switchApiOrigin();
+}
+
+function checkRemoteUploadSize(file: Blob): void {
+  if (isRemoteApiOrigin() && file.size > 90_000_000) {
+    throw new Error("Удалённая загрузка ограничена 90 МБ. Для крупного файла подключитесь из офиса.");
+  }
+}
 
 export function loadDesktopUpdatePolicy(token: string): Promise<DesktopUpdatePolicy> {
   return apiRequest<DesktopUpdatePolicy>("/updates/policy", {}, token);
@@ -265,7 +285,7 @@ export function loadAIReferentIncomingRegistry(
 }
 
 export function downloadAIReferentJournal(token: string): Promise<Blob> {
-  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/journal/latest`, {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/journal/latest`, {
     headers: { Authorization: `Bearer ${token}` },
   }, (response) => response.blob(), 120_000);
 }
@@ -321,7 +341,8 @@ export function deleteAIReferentLetter(token: string, letter: Pick<AIReferentLet
 }
 
 export function checkAIReferentDocument(token: string, file: File, workflowKind: string) {
-  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/document-checks?${new URLSearchParams({ fileName: file.name, workflowKind })}`, {
+  checkRemoteUploadSize(file);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/document-checks?${new URLSearchParams({ fileName: file.name, workflowKind })}`, {
     method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream" }, body: file,
   }, (response) => response.json() as Promise<AIReferentDocumentCheck>, 120_000);
 }
@@ -331,13 +352,14 @@ export function loadAIReferentDocumentCheck(token: string, id: string) {
 }
 
 export function uploadAIReferentCommentAudio(token: string, letter: Pick<AIReferentLetter, "id" | "revision">, file: File, durationMs: number) {
-  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/letters/${letter.id}/comment-audio?${new URLSearchParams({ expectedRevision: String(letter.revision), durationMs: String(Math.round(durationMs)) })}`, {
+  checkRemoteUploadSize(file);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/letters/${letter.id}/comment-audio?${new URLSearchParams({ expectedRevision: String(letter.revision), durationMs: String(Math.round(durationMs)) })}`, {
     method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type }, body: file,
   }, (response) => response.json() as Promise<AIReferentCommentAudio>, 120_000);
 }
 
 export function downloadAIReferentCommentAudio(token: string, id: string) {
-  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/comment-audio/${id}`, {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/comment-audio/${id}`, {
     headers: { Authorization: `Bearer ${token}` },
   }, (response) => response.blob(), 120_000);
 }
@@ -348,7 +370,7 @@ export function loadAIReferentPacket(token: string, kind: AIReferentPacketKind, 
 
 export function downloadAIReferentPacket(token: string, kind: AIReferentPacketKind, owner: string, file?: AIReferentPacketFile) {
   const suffix = file ? `/files/${file.id}?source=${file.source}` : "/zip";
-  return boundedRequest(`${apiBaseUrl}/api/v1/ai-referent/packets/${kind}/${owner}${suffix}`, {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/ai-referent/packets/${kind}/${owner}${suffix}`, {
     headers: { Authorization: `Bearer ${token}` },
   }, (response) => response.blob(), 120_000);
 }
@@ -448,7 +470,7 @@ export function previewHrWorkbook(token: string, file: File): Promise<HrWorkbook
   });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
   return boundedRequest(
-    `${apiBaseUrl}/api/v1/hr/profiles/import/preview?filename=${encodeURIComponent(file.name)}`,
+    `${getApiBaseUrl()}/api/v1/hr/profiles/import/preview?filename=${encodeURIComponent(file.name)}`,
     { method: "POST", headers, body: file },
     async (response) => await response.json() as HrWorkbookPreview,
     120_000,
@@ -501,9 +523,10 @@ export function loadDesktopReleases(token: string): Promise<readonly DesktopRele
 }
 
 export function stageDesktopRelease(token: string, version: string, file: File, title: string, notes: readonly string[]): Promise<DesktopRelease> {
+  checkRemoteUploadSize(file);
   const query = new URLSearchParams({ title });
   notes.forEach((note) => query.append("notes", note));
-  return boundedRequest(`${apiBaseUrl}/api/v1/updates/releases?${query}`, {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/updates/releases?${query}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -561,11 +584,11 @@ export function changeInterfaceLocale(token: string, locale: InterfaceLocale, re
 }
 
 async function boundedRequest<T>(url: string, options: RequestInit, read: (response: Response) => Promise<T>, timeout = 30_000): Promise<T> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  options.signal?.addEventListener("abort", abort, { once: true });
-  if (options.signal?.aborted) controller.abort();
-  const timer = window.setTimeout(abort, timeout);
+  if (options.body instanceof Blob) checkRemoteUploadSize(options.body);
+  if (typeof options.body === "string" && isRemoteApiOrigin()
+    && new Blob([options.body]).size > 90_000_000) {
+    throw new Error("Удалённая загрузка ограничена 90 МБ. Для крупного файла подключитесь из офиса.");
+  }
   const method = (options.method ?? "GET").toUpperCase();
   const isMutation = !["GET", "HEAD", "OPTIONS"].includes(method);
   const headers = new Headers(options.headers);
@@ -575,24 +598,50 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
   }
   if (isMutation) pendingMutations += 1;
   try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: workspacePlatform.kind === "web" ? "same-origin" : "omit",
-      signal: controller.signal,
-    });
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
-      throw new Error(typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
+    let requestUrl = url;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      options.signal?.addEventListener("abort", abort, { once: true });
+      if (options.signal?.aborted) controller.abort();
+      const timer = window.setTimeout(abort, timeout);
+      let response: Response;
+      try {
+        response = await fetch(requestUrl, {
+          ...options,
+          headers,
+          credentials: workspacePlatform.kind === "web" ? "same-origin" : "omit",
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (options.signal?.aborted) throw error;
+        const failedOrigin = new URL(requestUrl).origin;
+        const replacement = requestUrl.startsWith(`${failedOrigin}/`)
+          ? await failoverApiOrigin(failedOrigin).catch(() => undefined) : undefined;
+        if (replacement && !isMutation && attempt === 0) {
+          requestUrl = replacement + requestUrl.slice(failedOrigin.length);
+          continue;
+        }
+        if (replacement && isMutation) {
+          throw new Error("Связь переключена. Запрос не повторён: сначала проверьте, сохранилось ли действие.", { cause: error });
+        }
+        if (controller.signal.aborted) {
+          throw new Error("Сервер не ответил вовремя. Обновите данные перед повтором операции: изменения могли сохраниться.", { cause: error });
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timer);
+        options.signal?.removeEventListener("abort", abort);
+      }
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
+        throw new ApiHttpError(response.status, typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
+      }
+      return await read(response);
     }
-    return await read(response);
-  } catch (error) {
-    if (controller.signal.aborted) throw new Error("Сервер не ответил вовремя. Обновите данные перед повтором операции: изменения могли сохраниться.", { cause: error });
-    throw error;
+    throw new Error("Не удалось подключиться к Workspace.");
   } finally {
     if (isMutation) pendingMutations = Math.max(0, pendingMutations - 1);
-    window.clearTimeout(timer);
-    options.signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -609,7 +658,7 @@ async function apiRequest<T>(
   }
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (token !== undefined) headers.set("Authorization", `Bearer ${token}`);
-  return boundedRequest(`${apiBaseUrl}/api/v1${path}`, { ...options, headers }, async (response) =>
+  return boundedRequest(`${getApiBaseUrl()}/api/v1${path}`, { ...options, headers }, async (response) =>
     response.status === 204 ? undefined as T : await response.json() as T, timeout);
 }
 
@@ -684,7 +733,8 @@ export function transcribeAssistantVoice(token: string, audio: Blob): Promise<{ 
   const headers = new Headers({ "Accept": "application/json", "Content-Type": "audio/webm",
     "Authorization": `Bearer ${token}` });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
-  return boundedRequest(`${apiBaseUrl}/api/v1/assistant/transcribe`, {
+  checkRemoteUploadSize(audio);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/assistant/transcribe`, {
     method: "POST", headers, body: audio,
   }, (response) => response.json() as Promise<{ readonly text: string }>, 75_000);
 }
@@ -1908,7 +1958,8 @@ export async function uploadWorkspaceAttachment(
     query.set("mediaDurationMs", String(media.mediaDurationMs));
     query.set("mediaCodec", media.mediaCodec);
   }
-  const url = `${apiBaseUrl}/api/v1/attachments/${ownerType}/${ownerId}?${query.toString()}`;
+  checkRemoteUploadSize(file);
+  const url = `${getApiBaseUrl()}/api/v1/attachments/${ownerType}/${ownerId}?${query.toString()}`;
   return boundedRequest(url, {
     method: "PUT",
     headers: {
@@ -1924,7 +1975,7 @@ export async function downloadWorkspaceAttachment(
   token: string,
   attachmentId: string,
 ): Promise<Blob> {
-  return boundedRequest(`${apiBaseUrl}/api/v1/attachments/${attachmentId}`, {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/attachments/${attachmentId}`, {
     headers: { Authorization: `Bearer ${token}` },
   }, (response) => response.blob(), 120_000);
 }
@@ -1940,7 +1991,8 @@ export async function uploadProfileAvatar(token: string, file: File): Promise<{ 
   const inferredType = file.type || ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", heif: "image/heif", svg: "image/svg+xml" } as const)[extension as "jpg" | "jpeg" | "png" | "heic" | "heif" | "svg"];
   const headers = new Headers({ "Content-Type": inferredType, Authorization: `Bearer ${token}` });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
-  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar`, { method: "PUT", headers, body: file },
+  checkRemoteUploadSize(file);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/profile/avatar`, { method: "PUT", headers, body: file },
     async (response) => await response.json() as { avatarVersion: string }, 120_000);
 }
 
@@ -1948,7 +2000,7 @@ export function loadProfileAvatar(token: string, userId: string, avatarVersion?:
   const headers = new Headers({ Authorization: `Bearer ${token}` });
   if (workspacePlatform.kind === "electron") headers.set("X-Desktop-Version", workspacePlatform.version);
   const version = avatarVersion ? `?version=${encodeURIComponent(avatarVersion)}` : "";
-  return boundedRequest(`${apiBaseUrl}/api/v1/profile/avatar/${userId}${version}`, { headers, cache: "no-store" },
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/profile/avatar/${userId}${version}`, { headers, cache: "no-store" },
     async (response) => await response.blob());
 }
 
@@ -1957,7 +2009,7 @@ export function subscribeToWorkspaceEvents(
   onEvent: () => void,
   onError: (error: unknown) => void = () => undefined,
 ): () => void {
-  const websocketUrl = new URL("/api/v1/events", apiBaseUrl);
+  const websocketUrl = new URL("/api/v1/events", getApiBaseUrl());
   websocketUrl.protocol = websocketUrl.protocol === "https:" ? "wss:" : "ws:";
   let socket: WebSocket;
   let stopped = false;

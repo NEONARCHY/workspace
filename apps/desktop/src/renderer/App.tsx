@@ -191,8 +191,14 @@ import {
   addWorkspaceFeedComment,
   deleteWorkspaceFeedComment,
   type PaymentRequestInput,
-  apiBaseUrl,
+  ApiHttpError,
+  apiConnectionLabel,
+  getApiBaseUrl,
+  initializeApiOrigin,
   loadDesktopUpdatePolicy,
+  subscribeToApiOrigin,
+  supportsDualApiOrigins,
+  switchWorkspaceOrigin,
 } from "./workspace-api";
 
 interface NavItem {
@@ -366,6 +372,9 @@ export function App() {
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
@@ -427,12 +436,14 @@ export function App() {
       ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
       : loaded.personalPreferences ?? defaultPersonalPreferences }));
     setBackgroundError("");
-    setConnectionDetail("Сервер подключён");
+    setConnectionDetail(apiConnectionLabel());
   }, () => activeToken.current));
 
   const persistRefreshSession = useCallback((refreshToken?: string) => {
     if (refreshToken) void workspacePlatform.saveRefreshSession(refreshToken).catch(() => undefined);
   }, []);
+
+  useEffect(() => subscribeToApiOrigin(setActiveApiOrigin), []);
 
   const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
     const [loaded, loadedSupport] = await Promise.all([
@@ -464,7 +475,7 @@ export function App() {
         setActiveSection(lastSection as WorkspaceSection);
       }
     } catch { /* local storage can be disabled */ }
-    setConnectionDetail("Сервер подключён");
+    setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
   }, [persistRefreshSession]);
@@ -531,6 +542,21 @@ export function App() {
     setBackgroundError(error instanceof Error ? error.message : "Ошибка операции");
   }, []);
 
+  const handleSwitchNetwork = async () => {
+    if (!session || switchingNetwork) return;
+    setSwitchingNetwork(true);
+    try {
+      await switchWorkspaceOrigin();
+      setConnectionDetail(apiConnectionLabel());
+      setBackgroundError("");
+      await refreshWorkspace(session.accessToken);
+    } catch (error) {
+      reportError(error);
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  };
+
   const refreshMembers = useCallback(async () => {
     if (!session || membersLoading) return;
     setMembersLoading(true);
@@ -581,7 +607,8 @@ export function App() {
       return;
     }
     let active = true;
-    void workspacePlatform.loadRefreshSession()
+    void initializeApiOrigin()
+      .then(() => workspacePlatform.loadRefreshSession())
       .then(async (refreshToken) => {
         if (!refreshToken) return;
         let renewedSession = false;
@@ -598,18 +625,21 @@ export function App() {
             await workspacePlatform.saveRefreshSession(renewed.refreshToken).catch(() => undefined);
           }
           if (active) await establishSession(renewed);
-        } catch {
+        } catch (error) {
           if (!active) return;
-          if (!renewedSession) {
+          if (!renewedSession && error instanceof ApiHttpError && [401, 403].includes(error.status)) {
             await workspacePlatform.clearRefreshSession().catch(() => undefined);
             return;
           }
-          setAuthError("Не удалось загрузить рабочее пространство. Повторите открытие приложения.");
+          setAuthError("Связь прервалась. Вход сохранён; повторите подключение.");
         }
+      })
+      .catch((error: unknown) => {
+        if (active) setAuthError(error instanceof Error ? error.message : "Не удалось найти рабочий сервер.");
       })
       .finally(() => { if (active) setSessionRestoring(false); });
     return () => { active = false; };
-  }, [establishSession]);
+  }, [establishSession, restoreAttempt]);
 
   useEffect(() => {
     if (!session) return;
@@ -622,12 +652,12 @@ export function App() {
     refreshPolicy();
     const timer = window.setInterval(refreshPolicy, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [session]);
+  }, [session, activeApiOrigin]);
 
   useEffect(() => {
     if (!session || !updatePolicy?.publishedVersion || !workspacePlatform.configureUpdates) return;
     let active = true;
-    void workspacePlatform.configureUpdates(apiBaseUrl, session.accessToken)
+    void workspacePlatform.configureUpdates(getApiBaseUrl(), session.accessToken)
       .then((status) => {
         if (!active) return;
         setUpdateStatus(status);
@@ -639,13 +669,14 @@ export function App() {
         if (active) setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось настроить обновление" });
       });
     return () => { active = false; };
-  }, [session, updatePolicy?.publishedVersion]);
+  }, [session, updatePolicy?.publishedVersion, activeApiOrigin]);
 
   useEffect(() => {
     if (session === undefined) return;
     let cancelled = false;
+    let timer: number;
     const refreshAfter = Math.max(60_000, (session.expiresIn - 60) * 1_000);
-    const timer = window.setTimeout(() => {
+    const renew = () => {
       void refreshAuthentication(session.refreshToken)
         .then(async (renewed) => {
           if (cancelled) return;
@@ -654,15 +685,21 @@ export function App() {
           persistRefreshSession(renewed.refreshToken);
           await refreshWorkspace(renewed.accessToken).catch(reportError);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (cancelled) return;
-          activeToken.current = undefined;
-          setSession(undefined);
-          setUpdatePolicy(undefined);
-          void workspacePlatform.clearRefreshSession().catch(() => undefined);
-          setAuthError("Сессия завершена. Войдите снова.");
+          if (error instanceof ApiHttpError && [401, 403].includes(error.status)) {
+            activeToken.current = undefined;
+            setSession(undefined);
+            setUpdatePolicy(undefined);
+            void workspacePlatform.clearRefreshSession().catch(() => undefined);
+            setAuthError("Сессия завершена. Войдите снова.");
+            return;
+          }
+          reportError(new Error("Связь прервалась. Сессия сохранена; повторяем подключение."));
+          timer = window.setTimeout(renew, 30_000);
         });
-    }, refreshAfter);
+    };
+    timer = window.setTimeout(renew, refreshAfter);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [persistRefreshSession, refreshWorkspace, reportError, session]);
 
@@ -737,7 +774,7 @@ export function App() {
         void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
       }
     }, reportError);
-  }, [refreshWorkspace, reportError, session]);
+  }, [refreshWorkspace, reportError, session, activeApiOrigin]);
 
   useEffect(() => {
     if (!session || workspacePlatform.kind !== "web") return;
@@ -1676,6 +1713,11 @@ export function App() {
           onLogin={handleLogin}
           onAcceptInvitation={handleAcceptInvitation}
           onCompletePasswordReset={handleCompletePasswordReset}
+          onRetryConnection={supportsDualApiOrigins() ? () => {
+            setAuthError(undefined);
+            setSessionRestoring(true);
+            setRestoreAttempt((current) => current + 1);
+          } : undefined}
         />
       </FluentProvider>
     );
@@ -1921,7 +1963,7 @@ export function App() {
               setPreparedAction(undefined);
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} />
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} /><WorkdayControl token={session.accessToken} />
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>

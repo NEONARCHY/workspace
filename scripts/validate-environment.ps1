@@ -7,8 +7,10 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$EnvFile,
 
-    [ValidateSet("cloudflare", "lan")]
+    [ValidateSet("cloudflare", "lan", "lan-cloudflare")]
     [string]$NetworkMode = "cloudflare",
+
+    [string]$PublicOrigin = "",
 
     [switch]$AllowPlaceholders
 )
@@ -58,11 +60,14 @@ $requiredKeys = @(
     "YUKSALISH_CORS_ORIGINS"
 )
 
-if ($NetworkMode -eq "cloudflare") {
+if ($NetworkMode -in @("cloudflare", "lan-cloudflare")) {
     $requiredKeys += @("CLOUDFLARED_IMAGE", "CLOUDFLARE_TUNNEL_TOKEN")
 }
-else {
+if ($NetworkMode -in @("lan", "lan-cloudflare")) {
     $requiredKeys += "YUKSALISH_LAN_IP"
+}
+if ($NetworkMode -eq "lan-cloudflare") {
+    $requiredKeys += "YUKSALISH_DEPLOYMENT_ID"
 }
 
 $missingKeys = @($requiredKeys | Where-Object {
@@ -103,11 +108,14 @@ if ($Environment -in @("staging", "production")) {
             "YUKSALISH_S3_SECRET_KEY",
             "YUKSALISH_CORS_ORIGINS"
         )
-        if ($NetworkMode -eq "cloudflare") {
+        if ($NetworkMode -in @("cloudflare", "lan-cloudflare")) {
             $protectedKeys += @("CLOUDFLARED_IMAGE", "CLOUDFLARE_TUNNEL_TOKEN")
         }
-        else {
+        if ($NetworkMode -in @("lan", "lan-cloudflare")) {
             $protectedKeys += "YUKSALISH_LAN_IP"
+        }
+        if ($NetworkMode -eq "lan-cloudflare") {
+            $protectedKeys += "YUKSALISH_DEPLOYMENT_ID"
         }
         foreach ($key in $protectedKeys) {
             $value = $values[$key]
@@ -120,7 +128,7 @@ if ($Environment -in @("staging", "production")) {
 
 }
 
-if ($NetworkMode -eq "lan" -and -not $AllowPlaceholders) {
+if ($NetworkMode -in @("lan", "lan-cloudflare") -and -not $AllowPlaceholders) {
     $address = $null
     if (-not [System.Net.IPAddress]::TryParse($values["YUKSALISH_LAN_IP"], [ref]$address) -or
         $address.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork) {
@@ -142,6 +150,28 @@ if ($NetworkMode -eq "lan" -and -not $AllowPlaceholders) {
     $requiredWebOrigin = "https://$($values['YUKSALISH_LAN_IP']):8443"
     if ($origins -notcontains "null" -or $origins -notcontains $requiredWebOrigin) {
         throw "YUKSALISH_CORS_ORIGINS must contain 'null' and '$requiredWebOrigin'."
+    }
+    if ($NetworkMode -eq "lan-cloudflare") {
+        $parsedPublicOrigin = $null
+        if ($PublicOrigin -ne "https://workspace.opinions.uz" -or
+            -not [Uri]::TryCreate($PublicOrigin, [UriKind]::Absolute, [ref]$parsedPublicOrigin) -or
+            $parsedPublicOrigin.Scheme -ne "https" -or
+            $parsedPublicOrigin.AbsoluteUri -ne "$($parsedPublicOrigin.GetLeftPart([UriPartial]::Authority))/" -or
+            $origins -notcontains $PublicOrigin) {
+            throw "PublicOrigin must be an exact HTTPS origin present in YUKSALISH_CORS_ORIGINS."
+        }
+        if ($origins.Count -ne 3 -or
+            @($origins | Where-Object { $_ -notin @("null", $requiredWebOrigin, $PublicOrigin) }).Count -gt 0) {
+            throw "Remote Workspace may allow only the desktop, LAN and reviewed public origins."
+        }
+        $deploymentId = [Guid]::Empty
+        if (-not [Guid]::TryParse($values["YUKSALISH_DEPLOYMENT_ID"], [ref]$deploymentId) -or
+            $deploymentId -eq [Guid]::Empty) {
+            throw "YUKSALISH_DEPLOYMENT_ID must be a stable non-empty UUID."
+        }
+        if ($values["CLOUDFLARED_IMAGE"] -match '(^|:)latest$') {
+            throw "CLOUDFLARED_IMAGE must use a reviewed pinned tag or digest."
+        }
     }
 }
 

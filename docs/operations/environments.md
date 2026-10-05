@@ -41,6 +41,10 @@ The separate local demo site may use `YUKSALISH_ENVIRONMENT=test`. `scripts/lan/
 reads the mode from `.env.lan`, validates the LAN origin, and deploys that same environment;
 it does not convert a test site into production.
 
+For the reviewed dual LAN/Cloudflare route on the existing office server, follow
+`docs/operations/remote-workspace.md`. Do not treat a Tunnel as a new Compose
+project or as independent 24/7 hosting.
+
 ## Start Compose with an explicit environment
 
 ```powershell
