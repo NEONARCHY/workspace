@@ -1,6 +1,7 @@
 /* Assistant-only polish. Loaded after the shared input/surface layers. */
 .assistant-panel { --assistant-quiet: #5f7487; background: #fff; border-color: #cddfe5; }
 .assistant-panel .assistant-header { min-height: 72px; padding: 12px 18px; gap: 10px; }
+.assistant-panel .assistant-header-icon { width: 46px; height: 46px; }
 .assistant-panel .assistant-header-title { gap: 4px; }
 .assistant-panel .assistant-header-title strong { font-size: 15px; line-height: 1.3; }
 .assistant-panel .assistant-header-title small { font-size: 12px; color: var(--assistant-quiet); }
@@ -105,7 +106,7 @@
   .assistant-panel .assistant-composer { padding: 12px; }
 }
 @media (max-width: 380px) {
-  .assistant-panel .assistant-header-icon { width: 26px; height: 26px; }
+  .assistant-panel .assistant-header-icon { width: 36px; height: 36px; }
   .assistant-panel .assistant-header { gap: 6px; }
   .assistant-panel .assistant-header-title strong { font-size: 13px; }
   .assistant-panel .assistant-header-title small { font-size: 12px; }

@@ -41,7 +41,7 @@ function OrbScene({ config, targetHover, paused }: {
   readonly targetHover: RefObject<number>;
   readonly paused: boolean;
 }) {
-  const { hue = 0, rotationSpeed = .3, noiseScale = .65, innerRadius = .58,
+  const { hue = 0, rotationSpeed = .3, noiseScale = .65, innerRadius = .56,
     hoverIntensity = .5, rotateOnHover = true, forceHoverState = false } = config;
   const motion = useRef({ hover: 0, rotation: 0 });
   const material = useRef<ShaderMaterial>(null);
