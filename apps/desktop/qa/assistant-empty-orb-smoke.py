@@ -9,6 +9,11 @@ OUT.mkdir(parents=True, exist_ok=True)
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 
 
+def verify(condition: object, message: object) -> None:
+    if not condition:
+        raise RuntimeError(message)
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(
         executable_path=EDGE,
@@ -24,9 +29,9 @@ with sync_playwright() as playwright:
     page.wait_for_timeout(250)
     launcher_orb = launcher.locator(".gradient-orb")
     launcher_shadow = launcher_orb.evaluate("element => getComputedStyle(element).filter")
-    assert "drop-shadow" in launcher_shadow, launcher_shadow
+    verify("drop-shadow" in launcher_shadow, launcher_shadow)
     launcher_box = launcher.bounding_box()
-    assert launcher_box
+    verify(launcher_box, "Launcher bounds are unavailable")
     page.screenshot(path=str(OUT / "header-launcher.png"), clip={
         "x": launcher_box["x"] - 20, "y": launcher_box["y"] - 12,
         "width": 120, "height": 78,
@@ -39,25 +44,25 @@ with sync_playwright() as playwright:
     page.wait_for_timeout(500)
     header_icon = panel.locator(".assistant-header-icon")
     header_size = header_icon.bounding_box()
-    assert header_size and header_size["width"] == 46, header_size
+    verify(header_size and header_size["width"] == 46, header_size)
     panel.locator(".assistant-header").screenshot(path=str(OUT / "panel-header.png"))
     mini_size = orb.bounding_box()
-    assert mini_size and 72 <= mini_size["width"] <= 80, mini_size
+    verify(mini_size and 72 <= mini_size["width"] <= 80, mini_size)
     mini_shadow = orb.evaluate("element => getComputedStyle(element).filter")
-    assert "drop-shadow" in mini_shadow, mini_shadow
+    verify("drop-shadow" in mini_shadow, mini_shadow)
     orb.screenshot(path=str(OUT / "frame-1.png"))
     page.wait_for_timeout(350)
     orb.screenshot(path=str(OUT / "frame-2.png"))
     with Image.open(OUT / "frame-1.png") as first, Image.open(OUT / "frame-2.png") as second:
         changed = ImageChops.difference(first.convert("RGB"), second.convert("RGB")).getbbox()
-        assert changed, "Orb animation is frozen"
+        verify(changed, "Orb animation is frozen")
     panel.screenshot(path=str(OUT / "mini.png"))
 
     page.get_by_role("button", name="Развернуть окно").click()
     page.wait_for_timeout(550)
     full_size = orb.bounding_box()
-    assert full_size and 90 <= full_size["width"] <= 98, full_size
-    assert orb.locator("canvas").count() == 1
+    verify(full_size and 90 <= full_size["width"] <= 98, full_size)
+    verify(orb.locator("canvas").count() == 1, "The orb canvas was replaced")
     panel.screenshot(path=str(OUT / "expanded.png"))
     page.screenshot(path=str(OUT / "detail.png"), clip={
         "x": full_size["x"] - 243, "y": full_size["y"] - 40,
@@ -67,13 +72,13 @@ with sync_playwright() as playwright:
     page.set_viewport_size({"width": 390, "height": 844})
     page.wait_for_timeout(350)
     mobile_size = orb.bounding_box()
-    assert mobile_size and mobile_size["width"] <= 94, mobile_size
+    verify(mobile_size and mobile_size["width"] <= 94, mobile_size)
     page.screenshot(path=str(OUT / "mobile.png"))
     page.set_viewport_size({"width": 360, "height": 760})
     narrow_header = header_icon.bounding_box()
-    assert narrow_header and narrow_header["width"] == 36, narrow_header
+    verify(narrow_header and narrow_header["width"] == 36, narrow_header)
     print({"header": header_size, "mini": mini_size, "expanded": full_size, "mobile": mobile_size,
            "shadow": mini_shadow, "header_shadow": launcher_shadow,
            "errors": errors, "screenshots": str(OUT)})
-    assert not errors, errors
+    verify(not errors, errors)
     browser.close()
