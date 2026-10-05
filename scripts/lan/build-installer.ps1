@@ -19,7 +19,7 @@ if (-not [System.Net.IPAddress]::TryParse($ServerIp, [ref]$address) -or
 $origin = "https://${ServerIp}:8443"
 $dualOrigin = -not [string]::IsNullOrWhiteSpace($PublicOrigin)
 if ($dualOrigin) {
-    if ($PublicOrigin -ne "https://workspace.yuksalish.org") {
+    if ($PublicOrigin -ne "https://workspace.opinions.uz") {
         throw "Only the reviewed public Workspace origin is supported."
     }
     $parsedDeploymentId = [Guid]::Empty

@@ -1,6 +1,6 @@
 # Удалённый доступ к тому же Workspace
 
-Публичный адрес первого выпуска — `https://workspace.yuksalish.org`. Текущий
+Публичный адрес первого выпуска — `https://workspace.opinions.uz`. Текущий
 офисный LAN-сервер, его PostgreSQL, MinIO, учётные записи и интеграции остаются
 единственным источником данных. Cloudflare Tunnel не делает систему независимой
 от питания и интернета в офисе. Боты AI Referent и AI Hisobot продолжают
@@ -17,13 +17,16 @@
    или удалённое хранилище. Проверить наличие и контрольные суммы. Восстановить
    копии в изолированном стеке с другими томами, без подключения к продуктивной
    сети, и проверить вход, письмо и файл. Если такой копии нет — остановиться.
-3. Экспортировать и сравнить все DNS-записи `yuksalish.org` до и после смены NS:
+3. Экспортировать и сравнить все DNS-записи `opinions.uz` до и после смены NS:
    сайт, MX, SPF, DKIM, DMARC, другие поддомены. Не менять NS, пока владелец
-   сайта и почты не подтвердит совпадение записей и срок переключения.
+   сайта и почты не подтвердит совпадение записей и срок переключения. До
+   настройки Tunnel отдельно убедиться, что `opinions.uz` и
+   `workspace.opinions.uz` отвечают без `SERVFAIL`; новый маршрут не исправит
+   неисправное делегирование родительского домена.
 
 ## Настройка маршрута
 
-- Создать один Tunnel и DNS-маршрут `workspace.yuksalish.org` в Cloudflare.
+- Создать один Tunnel и DNS-маршрут `workspace.opinions.uz` в Cloudflare.
   Его origin service — `http://gateway:8081` во внутренней Docker-сети `edge`.
   Никаких публичных портов для PostgreSQL, Redis, MinIO или gateway не открывать.
   Версию образа `cloudflared` закрепить проверенным тегом или digest.
@@ -31,14 +34,14 @@
   случайный UUID `YUKSALISH_DEPLOYMENT_ID`, закреплённый образ
   `CLOUDFLARED_IMAGE`, секрет `CLOUDFLARE_TUNNEL_TOKEN` и публичный origin в
   `YUKSALISH_CORS_ORIGINS`. Массив должен содержать `null`, точный LAN origin и
-  `https://workspace.yuksalish.org`. Tunnel token не помещать в Git, скриншоты,
+  `https://workspace.opinions.uz`. Tunnel token не помещать в Git, скриншоты,
   команды с видимым выводом или клиентский EXE. UUID не секретен и не меняется
   при следующих выпусках.
 - Проверить конфигурацию без показа секретов:
 
 ```powershell
 .\scripts\validate-environment.ps1 -Environment production -EnvFile .env.lan `
-  -NetworkMode lan-cloudflare -PublicOrigin https://workspace.yuksalish.org
+  -NetworkMode lan-cloudflare -PublicOrigin https://workspace.opinions.uz
 $env:YUKSALISH_ENV_FILE = '../.env.lan'
 docker compose --env-file .env.lan -p <существующее-имя-проекта> `
   -f infrastructure/compose.yaml -f infrastructure/compose.lan.yaml `
@@ -67,7 +70,7 @@ WebSocket. В gateway отдельный порт ограничивает те�
 
 ```powershell
 .\scripts\lan\build-installer.ps1 -ServerIp <LAN-IP> `
-  -PublicOrigin https://workspace.yuksalish.org `
+  -PublicOrigin https://workspace.opinions.uz `
   -DeploymentId <UUID-из-серверной-конфигурации>
 ```
 

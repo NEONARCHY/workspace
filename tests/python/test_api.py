@@ -48,7 +48,7 @@ async def test_ready_identifies_the_same_deployment_across_origins() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(
         transport=transport,
-        base_url="https://workspace.yuksalish.org",
+        base_url="https://workspace.opinions.uz",
     ) as client:
         response = await client.get("/api/v1/health/ready")
     assert response.status_code == 200

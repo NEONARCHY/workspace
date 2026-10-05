@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const lan = "https://192.168.0.119:8443";
-const remote = "https://workspace.yuksalish.org";
+const remote = "https://workspace.opinions.uz";
 const deploymentId = "35c08844-c7c6-4ba4-85e8-51c60926c60b";
 const originalBridge = window.yuksalish;
 

@@ -153,7 +153,7 @@ if ($NetworkMode -in @("lan", "lan-cloudflare") -and -not $AllowPlaceholders) {
     }
     if ($NetworkMode -eq "lan-cloudflare") {
         $parsedPublicOrigin = $null
-        if ($PublicOrigin -ne "https://workspace.yuksalish.org" -or
+        if ($PublicOrigin -ne "https://workspace.opinions.uz" -or
             -not [Uri]::TryCreate($PublicOrigin, [UriKind]::Absolute, [ref]$parsedPublicOrigin) -or
             $parsedPublicOrigin.Scheme -ne "https" -or
             $parsedPublicOrigin.AbsoluteUri -ne "$($parsedPublicOrigin.GetLeftPart([UriPartial]::Authority))/" -or
