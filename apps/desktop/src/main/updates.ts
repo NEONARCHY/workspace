@@ -49,21 +49,31 @@ export function registerDesktopUpdates(isTrustedPage: (url: string) => boolean):
       throw new Error("Неверная конфигурация обновлений");
     }
     const origin = normalizedApiBase(value.apiBaseUrl);
-    if (!origin || configuredOrigin && configuredOrigin !== origin) {
-      throw new Error("Для обновлений нужен постоянный адрес сервера HTTPS");
+    if (!origin) {
+      throw new Error("Для обновлений нужен адрес сервера HTTPS");
+    }
+    if (configuredOrigin && configuredOrigin !== origin) {
+      if (["checking", "available", "downloading", "ready"].includes(status.phase)) {
+        throw new Error("Дождитесь завершения проверки или загрузки обновления перед сменой её адреса");
+      }
+      updater?.removeAllListeners();
+      updater = undefined;
+      configuredOrigin = undefined;
+      broadcast({ phase: "idle" });
     }
     if (updater === undefined) {
       configuredOrigin = origin;
       updater = new NsisUpdater({ provider: "generic", url: `${origin}/api/v1/updates/feed/` });
+      const instance = updater;
       updater.autoDownload = true;
       updater.autoInstallOnAppQuit = false;
       updater.disableDifferentialDownload = true;
-      updater.on("checking-for-update", () => broadcast({ phase: "checking" }));
-      updater.on("update-available", (info) => broadcast({ phase: "available", version: info.version }));
-      updater.on("download-progress", (progress) => broadcast({ phase: "downloading", percent: progress.percent }));
-      updater.on("update-downloaded", (info) => broadcast({ phase: "ready", version: info.version }));
-      updater.on("update-not-available", () => broadcast({ phase: "current" }));
-      updater.on("error", (error) => broadcast({ phase: "error", message: error.message }));
+      updater.on("checking-for-update", () => { if (updater === instance) broadcast({ phase: "checking" }); });
+      updater.on("update-available", (info) => { if (updater === instance) broadcast({ phase: "available", version: info.version }); });
+      updater.on("download-progress", (progress) => { if (updater === instance) broadcast({ phase: "downloading", percent: progress.percent }); });
+      updater.on("update-downloaded", (info) => { if (updater === instance) broadcast({ phase: "ready", version: info.version }); });
+      updater.on("update-not-available", () => { if (updater === instance) broadcast({ phase: "current" }); });
+      updater.on("error", (error) => { if (updater === instance) broadcast({ phase: "error", message: error.message }); });
     }
     updater.addAuthHeader(`Bearer ${value.accessToken}`);
     return status;

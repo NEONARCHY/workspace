@@ -1,3 +1,5 @@
+from uuid import UUID
+
 import pytest
 from httpx import ASGITransport, AsyncClient, Response
 
@@ -37,6 +39,20 @@ async def test_ready_health() -> None:
     response = await get("/api/v1/health/ready")
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+
+
+@pytest.mark.anyio
+async def test_ready_identifies_the_same_deployment_across_origins() -> None:
+    deployment_id = UUID("e285a967-6e9a-4ba1-a2b6-5f3583395d95")
+    app = create_app(Settings(environment="test", deployment_id=deployment_id))
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="https://workspace.yuksalish.org",
+    ) as client:
+        response = await client.get("/api/v1/health/ready")
+    assert response.status_code == 200
+    assert response.json()["deployment_id"] == str(deployment_id)
 
 
 @pytest.mark.anyio

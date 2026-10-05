@@ -52,7 +52,13 @@ export function WorkspaceIdentity({ person, token, onProfile, onSupport, support
   </div>;
 }
 
-export function ConnectionIndicator({ detail, error, updateAvailable = false }: { detail: string; error: boolean; updateAvailable?: boolean }) {
+export function ConnectionIndicator({ detail, error, updateAvailable = false, onSwitchNetwork, switchingNetwork = false }: {
+  detail: string;
+  error: boolean;
+  updateAvailable?: boolean;
+  onSwitchNetwork?: () => void;
+  switchingNetwork?: boolean;
+}) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   return <>
@@ -61,6 +67,9 @@ export function ConnectionIndicator({ detail, error, updateAvailable = false }: 
       <PopoverSurface className="connection-popover">
         <strong>Связь с рабочим сервером</strong><p>{detail}</p>
         <small>Изменения появляются в рабочем пространстве после подтверждения сервером.</small>
+        {onSwitchNetwork ? <Button appearance="subtle" disabled={switchingNetwork} onClick={() => { setPopoverOpen(false); onSwitchNetwork(); }}>
+          {switchingNetwork ? "Проверяем другой канал…" : "Переключить сеть"}
+        </Button> : null}
         {updateAvailable ? <Button appearance="primary" onClick={() => { setPopoverOpen(false); window.dispatchEvent(new Event("yuksalish:show-web-update")); }}>Обновить</Button> : null}
         <Button appearance="subtle" onClick={() => { setPopoverOpen(false); setHistoryOpen(true); }}>Ранние обновления</Button>
       </PopoverSurface>

@@ -57,7 +57,7 @@ describe("web API addresses and session restore", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const api = await import("./workspace-api");
-    expect(api.apiBaseUrl).toBe(window.location.origin);
+    expect(api.getApiBaseUrl()).toBe(window.location.origin);
     await api.refreshAuthentication();
     expect(fetchMock).toHaveBeenCalledWith(
       `${window.location.origin}/api/v1/auth/web/refresh`,

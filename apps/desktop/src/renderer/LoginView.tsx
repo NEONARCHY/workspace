@@ -13,6 +13,7 @@ interface LoginViewProps {
   readonly onLogin: (username: string, password: string, totpCode?: string) => Promise<void>;
   readonly onAcceptInvitation: (inviteToken: string, password: string) => Promise<void>;
   readonly onCompletePasswordReset: (resetToken: string, password: string) => Promise<void>;
+  readonly onRetryConnection?: () => void;
 }
 
 export function LoginView({
@@ -22,6 +23,7 @@ export function LoginView({
   onLogin,
   onAcceptInvitation,
   onCompletePasswordReset,
+  onRetryConnection,
 }: LoginViewProps) {
   const [mode, setMode] = useState<"login" | "invitation" | "recovery">("login");
   const [username, setUsername] = useState("");
@@ -177,6 +179,9 @@ export function LoginView({
             </div>
           ) : null}
           {error ? <div className="auth-error" role="alert">{error}</div> : null}
+          {onRetryConnection && !restoring ? <Button type="button" appearance="subtle" onClick={onRetryConnection} disabled={busy}>
+            Проверить соединение
+          </Button> : null}
           <Button
             type="submit"
             appearance="primary"

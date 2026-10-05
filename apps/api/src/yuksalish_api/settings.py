@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from uuid import UUID
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,7 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["development", "test", "staging", "production"] = "development"
+    deployment_id: UUID | None = None
     api_prefix: str = "/api/v1"
     api_host: str = "127.0.0.1"
     api_port: int = 8000
