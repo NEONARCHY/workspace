@@ -21,8 +21,10 @@ import {
 } from "@fluentui/react-icons";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
+import { useContextMotion } from "./useContextMotion";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
+import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 interface TeamDashboardViewProps {
@@ -51,7 +53,7 @@ const activeStatuses = new Set<WorkspaceTask["status"]>([
   "overdue",
 ]);
 
-const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short", day: "numeric" });
+const shortDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "short" });
 const dateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
 const timeFormatter = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" });
 const fullDayFormatter = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -133,7 +135,8 @@ function MetricCard({ icon, label, value, note, tone, active, onSelect }: {
 }) {
   return <button type="button" onClick={onSelect} aria-pressed={active} className={`team-dash-metric tone-${tone}`}>
     <div className="team-dash-metric-icon" aria-hidden="true">{icon}</div>
-    <div><span>{label}</span><strong>{value.toLocaleString("ru-RU")}</strong><small>{note}</small></div>
+    <div className="team-dash-metric-copy"><span>{label}</span><small>{note}</small></div>
+    <strong>{value.toLocaleString("ru-RU")}</strong>
   </button>;
 }
 
@@ -154,6 +157,8 @@ export function TeamDashboardView({
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
   const [flowSelection, setFlowSelection] = useState<FlowSelection>();
   const [drawerTaskId, setDrawerTaskId] = useState<string>();
+  const attentionMotion = useContextMotion(`${scope}:${selectedPersonId}:${attentionFilter}`);
+  const workloadMotion = useContextMotion(`${scope}:${teamFilter}`);
   const now = new Date();
   const todayStart = startOfDay(now);
   const todayEnd = endOfDay(now);
@@ -296,7 +301,7 @@ export function TeamDashboardView({
           <div><span>Следующее действие</span><h3 id="attention-title">Требует внимания</h3></div>
           {selectedPersonId ? <Button appearance="subtle" onClick={() => setSelectedPersonId(undefined)}>Показать всю команду</Button> : <small>сначала самое срочное</small>}
         </header>
-        <div className="team-dash-attention-list">
+        <div className="team-dash-attention-list" ref={attentionMotion}>
           {attentionTasks.map(({ task, attention }) => {
             const assignee = personById.get(task.assigneeId);
             return <button className={`team-dash-task tone-${attention.tone}`} key={task.id} type="button" onClick={() => onSelectTask(task.id)}>
@@ -345,12 +350,17 @@ export function TeamDashboardView({
               key={day.date.toISOString()}
               className={index === 0 ? "is-today" : ""}
               aria-label={`Задачи со сроком ${index === 0 ? "сегодня" : fullDayFormatter.format(day.date)}: ${day.count}`}
+              title={fullDayFormatter.format(day.date)}
               aria-pressed={flowSelection?.kind === "day" && startOfDay(flowSelection.date).getTime() === day.date.getTime()}
               onClick={() => selectFlow({ kind: "day", date: day.date, label: index === 0 ? "Сегодня" : fullDayFormatter.format(day.date) })}
             >
-              <span><i style={{ height: `${Math.max(day.count ? 16 : 3, day.count / maximumDayCount * 100)}%` }} /></span>
+              <span aria-hidden="true"><i style={{ height: `${Math.max(day.count ? 16 : 3, day.count / maximumDayCount * 100)}%` }} /></span>
               <strong>{day.count}</strong>
-              <small>{index === 0 ? "сегодня" : shortDayFormatter.format(day.date)}</small>
+              <small aria-hidden="true">
+                {index === 0 ? <span><span className="team-dash-week-today-full">сегодня</span><span className="team-dash-week-today-short">сег.</span></span>
+                  : <span>{shortDayFormatter.format(day.date)}</span>}
+                <span>{day.date.getDate()}</span>
+              </small>
             </button>)}
           </div>
         </div>
@@ -399,12 +409,12 @@ export function TeamDashboardView({
     <section className="team-dash-panel team-dash-workload" aria-labelledby="workload-title">
       <header className="team-dash-panel-heading team-dash-workload-heading">
         <div><span>Без скрытых оценок</span><h3 id="workload-title">Текущая нагрузка</h3><p>Полоса показывает только количество активных задач относительно команды — не норму и не оценку сотрудника.</p></div>
-        <div className="team-dash-filters" aria-label="Фильтр нагрузки">
+        <SlidingSegmented className="team-dash-filters" role="group" aria-label="Фильтр нагрузки">
           {([ ["all", "Все"], ["risk", "С просрочкой"], ["review", "На проверке"] ] as const).map(([key, label]) => <button className={teamFilter === key ? "active" : ""} aria-pressed={teamFilter === key} key={key} onClick={() => setTeamFilter(key)} type="button">{label}</button>)}
-        </div>
+        </SlidingSegmented>
       </header>
       {efficiencyError ? <div className="team-dash-data-note" role="status">Показана нагрузка по задачам. Данные EFF‑1 временно недоступны: {efficiencyError}</div> : null}
-      <div className="team-dash-people">
+      <div className="team-dash-people" ref={workloadMotion}>
         {teamRows.map((row) => <button className={`team-dash-person ${selectedPersonId === row.person.id ? "selected" : ""}`} key={row.person.id} type="button" onClick={() => setSelectedPersonId((current) => current === row.person.id ? undefined : row.person.id)}>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name}><Avatar name={row.person.name} size={40} color="colorful" /></EmployeeProfileLink>
           <EmployeeProfileLink userId={row.person.id} personName={row.person.name} className="team-dash-person-name"><strong>{row.person.name}</strong><small>{row.person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>

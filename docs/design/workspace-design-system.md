@@ -22,6 +22,15 @@ Design read: light enterprise workspace for daily staff use, restrained Fluent U
 
 ## Tokens and components
 
+### Account settings — 2026-10-04
+
+Account settings deliberately opt out of the previous semantic section washes.
+White working forms, a quiet canvas and separate personal/administrative
+navigation establish hierarchy; accent is reserved for selection and truthful
+security statuses. Hidden pages preserve drafts. Container queries adapt the
+navigation to the real available width, including CSS zoom. See
+[account-settings-redesign.md](account-settings-redesign.md).
+
 - Palette: navy ink, cool neutral canvas, white surfaces, turquoise accent. Solid surfaces; no expensive backdrop filters over work areas.
 - Typography: **Gilroy** Regular (400), Medium (500), SemiBold (600) and Bold (700), bundled locally; Segoe UI is a fallback only during loading. 14 px body, 12 px supporting text, 24-28 px screen titles. Tabular digits for money, dates and counters. Original TTFs copied from the owner's installed Windows fonts, with no download or conversion. Font licensing is not independently certified by this UI audit; the organisation remains responsible for distribution rights.
 - Spacing: 4/8/12/16/24/32 px; desktop section gutters 24 px, compact 12-16 px.
@@ -34,11 +43,42 @@ Design read: light enterprise workspace for daily staff use, restrained Fluent U
 
 ## Accessibility and verification
 
+### Semantic accent surfaces — 2026-10-03
+
+Per the owner's refinement, existing left-edge semantic strips are replaced
+with a static horizontal pastel wash: 15% accent at the left, 7% at 42%,
+transparent at the right over an almost-white surface. Priority, calendar
+event type, warning/success and account-section colours retain their meanings.
+Kanban priority is independent of hover/selected/drag shadows; list title cells
+receive the same quieter treatment. Transparent borders preserve existing
+geometry, while marker pseudo-elements/inset-only strips are removed.
+Ordinary separators, progress tracks and thread/timeline connectors are excluded.
+Forced colours removes the wash and retains native focus/selection indicators.
+No new motion, dependencies, API changes or data mutations are introduced.
+
 Target: WCAG 2.2 AA for affected screens. Automated scans are evidence, not certification; full screen-reader certification is not claimed. Check contrast, labelled controls, keyboard access, visible unobscured focus, zoom/reflow, reduced motion, forced colours and dialog focus restoration. Criteria reference: [W3C WCAG quick reference](https://www.w3.org/WAI/WCAG22/quickref/).
 
 Use axe-core on local authenticated screens with read-only test routes; save before/after screenshots and reports. Run existing unit, responsive, workflows, messenger, personal-organization, payment/trip and branding regression scenarios. Verify the packaged Electron version with an isolated profile before delivering the installer. No test sends real messages or approval decisions.
 
 ## Boundaries
+
+### Profile identity contrast — 2026-10-04
+
+The employee profile hero uses a bounded white surface with a quiet turquoise
+wash and a visible neutral border. Its truthful reward summary and active
+navigation are navy with light readable text. Container queries preserve long
+identity copy at compact widths; measured header clearance keeps navigation
+targets unobscured. Recognition cards and their effects remain unchanged. See
+[profile-header-contrast.md](profile-header-contrast.md).
+
+### Recognition card clearance — 2026-10-04
+
+The profile scroll viewport extends into the dialog's existing 24 px inset,
+with 30 px inline padding preserving the content position and leaving room
+for hover shadows and tilted edges. Reward and achievement grids share the
+same inline alignment; achievement grids no longer add a separate 30 px inset.
+Recognition motion, rarity surfaces, focus outlines and reduced-motion behavior
+remain unchanged. Scrolling stays inside the profile, not the page.
 
 API and PostgreSQL remain at 0.14.0 / migration 0017. No backend rewrite, production import, public publishing, new business module implementation or real organisation data modification. Dark mode and a formal external accessibility certification are separate deliverables; this package implements the supplied light visual direction.
 

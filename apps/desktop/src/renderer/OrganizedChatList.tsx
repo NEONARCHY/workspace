@@ -7,11 +7,12 @@ import { moveBefore } from "./personal-organization";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { ChatIcon, defaultChatIcon } from "./ChatAvatar";
 
 type ChatBucket = "chats" | "task-chats" | "project-chats" | "trip-chats" | "archive";
 
 const isTaskChat = (chat: ChatSummary): boolean => chat.kind === "task";
-const isProjectChat = (chat: ChatSummary): boolean => chat.contextType === "project";
+const isProjectChat = (chat: ChatSummary): boolean => chat.contextType === "project" || chat.contextType === "project_hub";
 const isTripChat = (chat: ChatSummary): boolean => chat.contextType === "trip";
 const isContextChat = (chat: ChatSummary): boolean => isProjectChat(chat) || isTripChat(chat);
 
@@ -198,7 +199,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
             <Menu openOnContext>
               <MenuTrigger disableButtonEnhancement>
                 <button className={`chat-row ${chat.id === activeChatId ? "selected" : ""}`} type="button" onClick={() => onSelect(chat.id)}>
-                  {peer && token ? <ProfileAvatar person={peer} token={token} size={40} /> : <Avatar name={chat.title} size={40} color="colorful" />}
+                  {peer && token ? <ProfileAvatar person={peer} token={token} size={40} /> : chat.kind === "direct" ? <Avatar name={chat.title} size={40} color="colorful" /> : <ChatIcon iconKey={chat.avatarIconKey ?? defaultChatIcon(chat)} />}
                   <span className="chat-row-copy">
                     <span className="chat-row-line"><strong>{chat.title}</strong><span className="chat-row-meta">{pinned && <Pin16Filled aria-label="Закреплённый чат" className="chat-pin-indicator" />}<time>{chat.time}</time></span></span>
                     <span className="chat-row-line preview-line"><span>{chat.preview}</span>

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
   DirectoryEmployee,
@@ -14,7 +15,6 @@ import type {
 import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
 import {
   ArrowSync24Regular,
-  CalendarLtr24Regular,
   Camera24Regular,
   Desktop24Regular,
   Dismiss24Regular,
@@ -34,6 +34,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { useContextMotion } from "./useContextMotion";
 
 import {
   changeOwnPassword,
@@ -62,23 +63,13 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-type AccountSectionKey = "language" | "birthday" | "audio" | "security" | "password" | "sessions" | "invite" | "managed-password" | "updates";
+type AccountSectionKey = "profile" | "audio" | "security" | "sessions" | "invite" | "managed-password" | "recovery" | "updates";
 
 interface AccountNavigationItem {
   readonly key: AccountSectionKey;
   readonly label: string;
-  readonly selector: string;
   readonly icon: ReactNode;
-}
-
-export function scrollAccountNavigation(event: WheelEvent<HTMLElement>) {
-  const navigation = event.currentTarget;
-  if (navigation.scrollWidth <= navigation.clientWidth || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-  const maximum = navigation.scrollWidth - navigation.clientWidth;
-  const next = Math.max(0, Math.min(maximum, navigation.scrollLeft + event.deltaY));
-  if (next === navigation.scrollLeft) return;
-  event.preventDefault();
-  navigation.scrollLeft = next;
+  readonly admin?: boolean;
 }
 
 export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, initialSection, locale = "ru", onLocaleChange }: AccountPanelProps) {
@@ -119,38 +110,53 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   const [birthdayMonth, setBirthdayMonth] = useState("");
   const [birthdayDay, setBirthdayDay] = useState("");
   const [birthdayBusy, setBirthdayBusy] = useState(false);
-  const [activeSection, setActiveSection] = useState<AccountSectionKey>("language");
-  const jumpToSection = (sectionKey: AccountSectionKey, selector: string) => {
+  const [activeSection, setActiveSection] = useState<AccountSectionKey>(initialSection === "invite" ? "invite" : "profile");
+  const contentRef = useContextMotion(activeSection);
+  const [securityLoading, setSecurityLoading] = useState(true);
+  const [securityError, setSecurityError] = useState("");
+  const [operationBusy, setOperationBusy] = useState(false);
+  const [sessionToRevoke, setSessionToRevoke] = useState<SessionSummary>();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const jumpToSection = (sectionKey: AccountSectionKey) => {
     setActiveSection(sectionKey);
-    const section = panelRef.current?.querySelector<HTMLElement>(selector);
-    section?.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
-    const heading = section?.querySelector<HTMLElement>("h3");
-    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
   };
+  useEffect(() => {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [activeSection, contentRef]);
 
   const refreshSecurity = async () => {
-    const [totp, currentSessions] = await Promise.all([
-      getTotpStatus(token),
-      loadSessions(token),
-    ]);
-    setTotpActive(totp.enabled);
-    setSessions(currentSessions);
+    setSecurityLoading(true);
+    setSecurityError("");
+    try {
+      const [totp, currentSessions] = await Promise.all([getTotpStatus(token), loadSessions(token)]);
+      setTotpActive(totp.enabled);
+      setSessions(currentSessions);
+    } catch (error) {
+      setSecurityError(error instanceof Error ? error.message : "Не удалось загрузить защиту и устройства.");
+    } finally { setSecurityLoading(false); }
   };
 
   useEffect(() => {
     let active = true;
-    void Promise.all([getTotpStatus(token), loadSessions(token), loadDirectory(token)])
-      .then(([totp, currentSessions, directory]) => {
+    void Promise.all([getTotpStatus(token), loadSessions(token)])
+      .then(([totp, currentSessions]) => {
         if (!active) return;
         setTotpActive(totp.enabled);
         setSessions(currentSessions);
+      })
+      .catch((error: unknown) => {
+        if (active) setSecurityError(error instanceof Error ? error.message : "Не удалось загрузить защиту и устройства.");
+      })
+      .finally(() => { if (active) setSecurityLoading(false); });
+    void loadDirectory(token).then((directory) => {
+        if (!active) return;
         setPositions(directory.positions.filter((position) => position.isActive));
         setEmployees(directory.employees);
         setDepartments(directory.departments);
       })
       .catch((error: unknown) => {
         if (active) {
-          setFeedback(error instanceof Error ? error.message : "Не удалось загрузить безопасность");
+          setFeedback(error instanceof Error ? error.message : "Не удалось загрузить список сотрудников и должностей. Откройте настройки снова.");
         }
       });
     return () => {
@@ -188,15 +194,19 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
   };
 
   const startTotp = async () => {
+    if (operationBusy) return;
+    setOperationBusy(true);
     try {
       setTotpSetup(await setupTotp(token));
       setFeedback("Добавьте секрет в приложение-аутентификатор и подтвердите код.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось включить TOTP");
-    }
+    } finally { setOperationBusy(false); }
   };
 
   const finishTotp = async () => {
+    if (operationBusy) return;
+    setOperationBusy(true);
     try {
       await confirmTotp(token, totpCode);
       setTotpActive(true);
@@ -205,11 +215,13 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
       setFeedback("Двухфакторная защита включена.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Неверный код");
-    }
+    } finally { setOperationBusy(false); }
   };
 
   const submitInvitation = async (event: FormEvent) => {
     event.preventDefault();
+    if (operationBusy) return;
+    setOperationBusy(true);
     try {
       const created = await createInvitation(token, {
         username: inviteUsername,
@@ -221,27 +233,34 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
       setFeedback("Приглашение создано. Передайте код сотруднику безопасным каналом.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось создать приглашение");
-    }
+    } finally { setOperationBusy(false); }
   };
 
   const removeSession = async (session: SessionSummary) => {
-    await revokeSession(token, session.id);
-    if (session.current) {
-      onLogout();
-      return;
-    }
-    await refreshSecurity();
+    if (operationBusy) return;
+    setOperationBusy(true);
+    try {
+      await revokeSession(token, session.id);
+      setSessionToRevoke(undefined);
+      if (session.current) { onLogout(); return; }
+      setSessions(current => current.filter(item => item.id !== session.id));
+      setFeedback("Сеанс завершён. На этом устройстве потребуется войти снова.");
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Не удалось завершить сеанс. Попробуйте снова.");
+    } finally { setOperationBusy(false); }
   };
 
   const submitPasswordReset = async (event: FormEvent) => {
     event.preventDefault();
+    if (operationBusy) return;
+    setOperationBusy(true);
     try {
       const created = await createPasswordReset(token, resetUsername, resetTotp);
       setReset(created);
       setFeedback("Код сброса создан. Передайте его сотруднику безопасным каналом.");
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : "Не удалось создать код сброса");
-    }
+    } finally { setOperationBusy(false); }
   };
 
   const submitOwnPassword = async (event: FormEvent) => {
@@ -280,22 +299,30 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
     (user.role === "superadmin" || (user.role === "admin" && ["employee", "manager"].includes(employee.role))),
   );
 
+  const copyAccessCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setFeedback("Код скопирован. Передайте его сотруднику безопасным каналом.");
+    } catch {
+      setFeedback("Не удалось скопировать код. Выделите его и скопируйте вручную.");
+    }
+  };
+
   const navigationItems: readonly AccountNavigationItem[] = [
-    { key: "language", label: "Общее", selector: "[data-account-section=language]", icon: <LocalLanguage24Regular /> },
-    { key: "birthday", label: "День рождения", selector: "[data-account-section=birthday]", icon: <CalendarLtr24Regular /> },
-    { key: "audio", label: "Звук", selector: ".audio-device-settings", icon: <Speaker224Regular /> },
-    { key: "security", label: "Защита", selector: "[data-account-section=security]", icon: <ShieldLock24Regular /> },
-    { key: "password", label: "Пароль", selector: "[data-account-section=password]", icon: <Key24Regular /> },
-    { key: "sessions", label: "Устройства", selector: "[data-account-section=sessions]", icon: <Desktop24Regular /> },
+    { key: "profile", label: "Личные данные", icon: <LocalLanguage24Regular /> },
+    { key: "audio", label: "Звук", icon: <Speaker224Regular /> },
+    { key: "security", label: "Защита и пароль", icon: <ShieldLock24Regular /> },
+    { key: "sessions", label: "Устройства", icon: <Desktop24Regular /> },
     ...(["admin", "superadmin"].includes(user.role) ? [
-      { key: "invite" as const, label: "Доступ", selector: "[data-account-section=invite]", icon: <PersonAdd24Regular /> },
-      { key: "managed-password" as const, label: "Пароли", selector: "[data-account-section=managed-password]", icon: <PersonKey24Regular /> },
-      { key: "updates" as const, label: "Обновления", selector: "[data-account-section=updates]", icon: <ArrowSync24Regular /> },
+      { key: "invite" as const, label: "Приглашения", icon: <PersonAdd24Regular />, admin: true },
+      { key: "managed-password" as const, label: "Пароли сотрудников", icon: <PersonKey24Regular />, admin: true },
+      { key: "recovery" as const, label: "Восстановление доступа", icon: <Key24Regular />, admin: true },
+      { key: "updates" as const, label: "Обновления", icon: <ArrowSync24Regular />, admin: true },
     ] : []),
   ];
 
   return (
-    <div className="account-scrim account-profile-anchor" role="presentation" onMouseDown={onClose}>
+    <div className={`account-scrim account-profile-anchor account-settings-redesigned${initialSection === "invite" ? " account-invite-only" : ""}`} role="presentation" onMouseDown={onClose}>
       <aside
         className="account-panel"
         ref={panelRef}
@@ -305,36 +332,32 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         aria-label={initialSection === "invite" ? "Приглашение сотрудника" : "Настройки профиля"}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className="account-panel-scroll">
-        <header>
+        <header className="account-window-header">
           <div>
-            <span>Настройки</span>
             <h2>{initialSection === "invite" ? "Пригласить сотрудника" : "Настройки профиля"}</h2>
+            <p>{initialSection === "invite" ? "Создайте персональный доступ к Workspace" : "Личные данные, безопасность и ваши устройства"}</p>
           </div>
           <Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Закрыть" onClick={onClose} />
         </header>
 
-        {initialSection !== "invite" && <div className="account-settings-sticky">
+        {initialSection !== "invite" && <>
           <section className="account-profile">
             <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
-              <ProfileAvatar person={user} token={token} size={72} />
+              <ProfileAvatar person={user} token={token} size={48} />
             </EmployeeProfileLink>
             <EmployeeProfileLink as="div" userId={user.id} personName={user.name}>
               <div className="account-profile-copy">
-                <span>Личное пространство</span>
                 <strong>{user.name}</strong>
                 <p>{user.jobTitle ?? user.role}</p>
                 <small>@{user.username}</small>
               </div>
             </EmployeeProfileLink>
             <div className="account-profile-status" aria-label="Состояние аккаунта">
-              <span className={totpActive ? "is-secure" : "needs-attention"}><ShieldLock24Regular />{totpActive ? "Защита включена" : "Защита не включена"}</span>
-              <span><Desktop24Regular />Устройств: {sessions.length}</span>
+              <button type="button" onClick={() => jumpToSection("security")} className={totpActive ? "is-secure" : "needs-attention"}><ShieldLock24Regular />{securityLoading ? "Проверяем защиту…" : securityError ? "Защита: нет данных" : totpActive ? "Защита включена" : "Защита не включена"}</button>
+              <button type="button" onClick={() => jumpToSection("sessions")}><Desktop24Regular />{securityLoading ? "Загрузка устройств…" : securityError ? "Устройства: нет данных" : `Устройств: ${sessions.length}`}</button>
             </div>
-            <label className={`account-avatar-action fui-Button ${avatarBusy ? "is-busy" : ""}`}>
-              <Camera24Regular />
-              <span>{avatarBusy ? "Загрузка…" : "Сменить фото"}</span>
-              <input hidden type="file" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
+            <Button className="account-avatar-action" icon={<Camera24Regular />} disabled={avatarBusy} onClick={() => avatarInputRef.current?.click()}>{avatarBusy ? "Загрузка…" : "Сменить фото"}</Button>
+              <input ref={avatarInputRef} hidden type="file" aria-label="Фото профиля" accept=".jpg,.jpeg,.png,.heic,.heif,.svg,image/jpeg,image/png,image/heic,image/heif,image/svg+xml" disabled={avatarBusy}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
@@ -346,21 +369,36 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))
                     .finally(() => setAvatarBusy(false));
                 }} />
-            </label>
           </section>
-          <nav className="account-section-nav" aria-label="Разделы настроек" onWheel={scrollAccountNavigation}>
-            {navigationItems.map((item) => <button
+        </>}
+
+        <div className={`account-settings-layout${initialSection === "invite" ? " is-invite" : ""}`}>
+        {initialSection !== "invite" && <>
+          <SlidingSegmented as="nav" className="account-section-nav navigation-sliding" activeSelector=':scope > div > button[aria-pressed="true"]' aria-label="Разделы настроек">
+            <span className="account-nav-group">Ваш аккаунт</span>
+            {navigationItems.map((item, index) => <div key={item.key}>
+              {item.admin && !navigationItems[index - 1]?.admin && <span className="account-nav-group">Администрирование</span>}
+              <button
               key={item.key}
               type="button"
               className={activeSection === item.key ? "is-active" : ""}
               aria-pressed={activeSection === item.key}
-              onClick={() => jumpToSection(item.key, item.selector)}
-            ><span aria-hidden="true">{item.icon}</span>{item.label}</button>)}
-          </nav>
-        </div>}
+              aria-controls={`account-page-${item.key}`}
+              onClick={() => jumpToSection(item.key)}
+            ><span aria-hidden="true">{item.icon}</span>{item.label}</button></div>)}
+          </SlidingSegmented>
+          <div className="account-compact-navigation">
+            <Field label="Раздел настроек"><Select value={activeSection} onChange={event => jumpToSection(event.target.value as AccountSectionKey)}>
+              {navigationItems.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
+            </Select></Field>
+          </div>
+        </>}
 
-        <div className={`account-settings-grid${initialSection === "invite" ? " is-invite" : ""}`}>
+        <div className="account-settings-content" ref={contentRef}>
         {initialSection !== "invite" && <>
+
+        <div id="account-page-profile" className="account-settings-page" hidden={activeSection !== "profile"}>
+        <div className="account-page-heading"><LocalLanguage24Regular /><div><h3>Личные данные</h3><p>Настройте Workspace под себя.</p></div></div>
 
         <section className="account-section" data-account-section="language">
           <div className="account-section-title"><div>
@@ -392,7 +430,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <BirthdayDayPicker month={birthdayMonth} day={birthdayDay} disabled={birthdayBusy} onChange={(month, day) => { setBirthdayMonth(month); setBirthdayDay(day); }} />
             </Field>
             <Field label="Месяц">
-              <Select value={birthdayMonth} listboxClassName="birthday-month-list" onChange={(event) => { const next = event.target.value; setBirthdayMonth(next); if (birthdayDay && Number(birthdayDay) > birthdayMonthLength(Number(next))) setBirthdayDay(""); }}>
+              <Select value={birthdayMonth} disabled={birthdayBusy} listboxClassName="birthday-month-list" onChange={(event) => { const next = event.target.value; setBirthdayMonth(next); if (birthdayDay && Number(birthdayDay) > birthdayMonthLength(Number(next))) setBirthdayDay(""); }}>
                 <option value="">Выберите месяц</option>
                 {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>
                   {birthdayMonthName(index + 1)}
@@ -408,10 +446,12 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </div>
           <p className="account-birthday-note">29 февраля в невисокосный год отмечается 28 февраля.</p>
         </section>
+        </div>
 
-        <AudioDeviceSettings />
-        {["admin", "superadmin"].includes(user.role) && <DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} />}
+        <div id="account-page-audio" className="account-settings-page" hidden={activeSection !== "audio"}><AudioDeviceSettings /></div>
+        {["admin", "superadmin"].includes(user.role) && <div id="account-page-updates" className="account-settings-page" hidden={activeSection !== "updates"}><DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} /></div>}
 
+        <div id="account-page-security" className="account-settings-page" hidden={activeSection !== "security"}>
         <section className="account-section" data-account-section="password">
           <div className="account-section-title">
             <div>
@@ -421,7 +461,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
           </div>
           <form className="invite-form" onSubmit={(event) => void submitOwnPassword(event)}>
             <Field label="Новый пароль" required>
-              <Input type="password" autoComplete="new-password" value={ownPassword} onChange={(_, data) => setOwnPassword(data.value)} />
+              <Input type="password" autoComplete="new-password" disabled={passwordBusy} value={ownPassword} onChange={(_, data) => setOwnPassword(data.value)} />
             </Field>
             <Button type="submit" appearance="primary" disabled={passwordBusy || ownPassword.length < 12}>Сохранить новый пароль</Button>
           </form>
@@ -435,11 +475,11 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <p>Одноразовый шестизначный код при каждом новом входе.</p>
             </div>
             <span className={totpActive ? "security-ok" : "security-warning"}>
-              {totpActive ? "Включена" : "Не включена"}
+              {securityLoading ? "Загрузка…" : securityError ? "Нет данных" : totpActive ? "Включена" : "Не включена"}
             </span>
           </div>
           {!totpActive && !totpSetup ? (
-            <Button onClick={() => void startTotp()}>Настроить TOTP</Button>
+            <Button disabled={operationBusy || securityLoading || !!securityError} onClick={() => void startTotp()}>{operationBusy ? "Подготовка…" : "Настроить TOTP"}</Button>
           ) : null}
           {totpSetup ? (
             <div className="totp-setup">
@@ -449,22 +489,27 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                 <Input
                   inputMode="numeric"
                   maxLength={6}
+                  autoComplete="one-time-code"
+                  disabled={operationBusy}
                   value={totpCode}
                   onChange={(_, data) => setTotpCode(data.value.replace(/\D/g, ""))}
                 />
               </Field>
-              <Button appearance="primary" disabled={totpCode.length !== 6} onClick={() => void finishTotp()}>
-                Подтвердить
+              <Button appearance="primary" disabled={operationBusy || totpCode.length !== 6} onClick={() => void finishTotp()}>
+                {operationBusy ? "Проверяем…" : "Подтвердить"}
               </Button>
             </div>
           ) : null}
         </section>
+        {securityError && <div className="account-retry" role="alert"><p>{securityError}</p><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></div>}
+        </div>
 
+        <div id="account-page-sessions" className="account-settings-page" hidden={activeSection !== "sessions"}>
         <section className="account-section" data-account-section="sessions">
           <div className="account-section-title">
             <div>
               <h3>Активные устройства</h3>
-              <p>Можно завершить любую сессию, включая текущую.</p>
+              <p>Здесь устройства, на которых выполнен вход. Завершение сеанса потребует войти заново.</p>
             </div>
           </div>
           <div className="session-list">
@@ -474,33 +519,43 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   <strong>{session.deviceLabel}</strong>
                   <small>{session.current ? "Текущее устройство" : new Date(session.lastSeenAt).toLocaleString("ru-RU")}</small>
                 </span>
-                <Button size="small" onClick={() => void removeSession(session)}>
+                <Button size="small" disabled={operationBusy || securityLoading || !!securityError} onClick={() => setSessionToRevoke(session)}>
                   {session.current ? "Выйти" : "Завершить"}
                 </Button>
               </div>
             ))}
           </div>
+          {securityLoading && <p role="status">Загружаем активные устройства…</p>}
+          {!securityLoading && !securityError && sessions.length === 0 && <p className="account-empty-state">Нет доступных сведений об активных устройствах.</p>}
+          {securityError && <div className="account-retry" role="alert"><p>{securityError}</p><Button disabled={securityLoading} onClick={() => void refreshSecurity()}>Повторить загрузку</Button></div>}
+          {sessionToRevoke && <div className="account-session-confirm" role="group" aria-label="Подтверждение завершения сеанса">
+            <strong>{sessionToRevoke.current ? "Выйти на этом устройстве?" : `Завершить сеанс «${sessionToRevoke.deviceLabel}»?`}</strong>
+            <p>{sessionToRevoke.current ? "Вы вернётесь на экран входа." : "На выбранном устройстве потребуется войти снова. Остальные сеансы останутся открытыми."}</p>
+            <div><Button appearance="primary" disabled={operationBusy} onClick={() => void removeSession(sessionToRevoke)}>{operationBusy ? "Завершаем…" : "Завершить сеанс"}</Button><Button disabled={operationBusy} onClick={() => setSessionToRevoke(undefined)}>Отмена</Button></div>
+          </div>}
         </section>
+        </div>
 
         </>}
         {["admin", "superadmin"].includes(user.role) ? (
           <>
+            <div id="account-page-invite" className="account-settings-page" hidden={activeSection !== "invite"}>
             <section ref={inviteRef} className="account-section" data-account-section="invite">
             <div className="account-section-title">
               <div>
-                <h3>Пригласить сотрудника</h3>
+                {initialSection !== "invite" ? <h3>Пригласить сотрудника</h3> : null}
                 <p>Код действует 48 часов и принимается только один раз.</p>
               </div>
             </div>
             <form className="invite-form" onSubmit={submitInvitation}>
               <Field label="Имя сотрудника" required>
-                <Input value={inviteName} onChange={(_, data) => setInviteName(data.value)} />
+                <Input autoComplete="off" disabled={operationBusy} value={inviteName} onChange={(_, data) => setInviteName(data.value)} />
               </Field>
               <Field label="Логин" required>
-                <Input value={inviteUsername} onChange={(_, data) => setInviteUsername(data.value)} />
+                <Input autoComplete="off" disabled={operationBusy} value={inviteUsername} onChange={(_, data) => setInviteUsername(data.value)} />
               </Field>
               <Field label="Роль">
-                <Select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as typeof inviteRole)}>
+                <Select value={inviteRole} disabled={operationBusy} onChange={(event) => setInviteRole(event.target.value as typeof inviteRole)}>
                   <option value="employee">Сотрудник</option>
                   <option value="manager">Руководитель</option>
                   <option value="admin">Администратор</option>
@@ -509,6 +564,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <Field label="Должность">
                 <Select
                   value={invitePositionId}
+                  disabled={operationBusy}
                   onChange={(event) => setInvitePositionId(event.target.value)}
                 >
                   <option value="">Не назначена</option>
@@ -517,8 +573,8 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   ))}
                 </Select>
               </Field>
-              <Button type="submit" appearance="primary" disabled={!inviteName || !inviteUsername}>
-                Создать приглашение
+              <Button type="submit" appearance="primary" disabled={operationBusy || !inviteName.trim() || !inviteUsername.trim()}>
+                {operationBusy ? "Создаём…" : "Создать приглашение"}
               </Button>
             </form>
             {invite ? (
@@ -527,15 +583,16 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                 <code>{invite.inviteToken}</code>
                 <Button
                   size="small"
-                  onClick={() => void navigator.clipboard.writeText(invite.inviteToken)}
+                  onClick={() => void copyAccessCode(invite.inviteToken)}
                 >
                   Копировать
                 </Button>
               </div>
             ) : null}
             </section>
+            </div>
 
-            {initialSection !== "invite" && <section className="account-section" data-account-section="managed-password">
+            {initialSection !== "invite" && <div id="account-page-managed-password" className="account-settings-page" hidden={activeSection !== "managed-password"}><section className="account-section" data-account-section="managed-password">
               <div className="account-section-title">
                 <div>
                   <h3>Сменить пароль сотрудника</h3>
@@ -545,7 +602,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
               <form className="invite-form" onSubmit={(event) => void submitManagedPassword(event)}>
                 <EmployeeScopeSwitch value={managedScope} onChange={(next) => { setManagedScope(next); setManagedUserId(""); }} label="Группа сотрудников для смены пароля" disabled={passwordBusy} />
                 <Field label="Сотрудник" required>
-                  <Select value={managedUserId} onChange={(event) => setManagedUserId(event.target.value)}>
+                  <Select value={managedUserId} disabled={passwordBusy} onChange={(event) => setManagedUserId(event.target.value)}>
                     <option value="">Выберите сотрудника</option>
                     {manageableEmployees.map((employee) => (
                       <option key={employee.id} value={employee.id}>{employee.name} (@{employee.username})</option>
@@ -553,14 +610,14 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   </Select>
                 </Field>
                 <Field label="Новый пароль" required>
-                  <Input type="password" autoComplete="new-password" value={managedPassword} onChange={(_, data) => setManagedPassword(data.value)} />
+                  <Input type="password" autoComplete="new-password" disabled={passwordBusy} value={managedPassword} onChange={(_, data) => setManagedPassword(data.value)} />
                 </Field>
                 <Button type="submit" appearance="primary" disabled={passwordBusy || !managedUserId || managedPassword.length < 12}>Сменить пароль</Button>
               </form>
               <p className="account-password-hint">Администратор может менять пароли сотрудников и руководителей; суперадминистратор — всех.</p>
-            </section>}
+            </section></div>}
 
-            {initialSection !== "invite" && <section className="account-section">
+            {initialSection !== "invite" && <div id="account-page-recovery" className="account-settings-page" hidden={activeSection !== "recovery"}><section className="account-section" data-account-section="recovery">
               <div className="account-section-title">
                 <div>
                   <h3>Восстановить доступ</h3>
@@ -571,16 +628,19 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                 <Field label="Логин сотрудника" required>
                   <Input
                     value={resetUsername}
+                    disabled={operationBusy}
+                    autoComplete="off"
                     onChange={(_, data) => setResetUsername(data.value)}
                   />
                 </Field>
                 <Checkbox
                   checked={resetTotp}
+                  disabled={operationBusy}
                   label="Также сбросить двухфакторную защиту"
                   onChange={(_, data) => setResetTotp(data.checked === true)}
                 />
-                <Button type="submit" appearance="primary" disabled={!resetUsername}>
-                  Создать код сброса
+                <Button type="submit" appearance="primary" disabled={operationBusy || !resetUsername.trim()}>
+                  {operationBusy ? "Создаём…" : "Создать код сброса"}
                 </Button>
               </form>
               {reset ? (
@@ -589,19 +649,19 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   <code>{reset.resetToken}</code>
                   <Button
                     size="small"
-                    onClick={() => void navigator.clipboard.writeText(reset.resetToken)}
+                    onClick={() => void copyAccessCode(reset.resetToken)}
                   >
                     Копировать
                   </Button>
                 </div>
               ) : null}
-            </section>}
+            </section></div>}
           </>
         ) : null}
 
         </div>
-        {feedback ? <div className="account-feedback" role="status">{feedback}</div> : null}
         </div>
+        {feedback ? <div className="account-settings-feedback" role="status"><p>{feedback}</p><Button appearance="subtle" icon={<Dismiss24Regular />} aria-label="Скрыть сообщение" onClick={() => setFeedback("")} /></div> : null}
       </aside>
     </div>
   );

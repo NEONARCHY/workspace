@@ -19,6 +19,23 @@ const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
 afterEach(cleanup);
 
 describe("Corporate record tables", () => {
+  it("keeps each hover layer decorative and inside an existing cell", () => {
+    render(wrap(<>
+      <TaskRecords tasks={tasks.slice(0, 2)} people={people} filterKey="all" onSelect={vi.fn()} />
+      <EmployeeRecords employees={employees.slice(0, 2)} filterKey="all" {...employeeRecordProps()} />
+    </>));
+    const layers = document.querySelectorAll(".list-row-hover-wash");
+    expect(layers).toHaveLength(4);
+    layers.forEach(layer => {
+      expect(layer).toHaveAttribute("aria-hidden", "true");
+      expect(layer.parentElement?.tagName).toBe("TD");
+      expect(layer).not.toHaveAttribute("tabindex");
+    });
+    const taskRows = within(screen.getByRole("table", { name: "Задачи" })).getAllByRole("row").slice(1);
+    const employeeRows = within(screen.getByRole("table", { name: "Сотрудники" })).getAllByRole("row").slice(1);
+    taskRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(6));
+    employeeRows.forEach(row => expect(within(row).getAllByRole("cell")).toHaveLength(7));
+  });
   it("shows a semantic task table with real participants and no fictitious activity dates", () => {
     render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));
     const table = screen.getByRole("table", { name: "Задачи" });
@@ -27,10 +44,44 @@ describe("Corporate record tables", () => {
     expect(within(table).getByRole("columnheader", { name: /Постановщик/ })).toBeInTheDocument();
     expect(screen.queryByText("Активность")).not.toBeInTheDocument();
   });
+  it("shows every task role as an avatar and opens profiles from avatars and their popovers", async () => {
+    const onSelect = vi.fn(); const onOpenProfile = vi.fn();
+    const task = { ...initialTasks[0]!, participants: [
+      { userId: "aziza", role: "co_assignee" as const },
+      { userId: "malika", role: "observer" as const },
+    ] };
+    render(wrap(<TaskRecords tasks={[task]} people={people} filterKey="all" onSelect={onSelect} />, onOpenProfile));
+    const table = screen.getByRole("table", { name: "Задачи" });
+    expect(within(table).getByRole("columnheader", { name: /Участники/ })).toBeInTheDocument();
+    expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(4);
+    const assignee = within(table).getByRole("button", { name: "Открыть профиль: Дилшод Рахимов" });
+    fireEvent.pointerEnter(assignee);
+    const popup = await screen.findByLabelText("Исполнитель: Дилшод Рахимов");
+    expect(within(popup).getByText("Исполнитель")).toBeInTheDocument();
+    expect(within(popup).getByText("Дилшод Рахимов")).toBeInTheDocument();
+    expect(popup.querySelector(".fui-Avatar")).toBeNull();
+    fireEvent.click(within(popup).getByRole("button", { name: "Открыть профиль: Дилшод Рахимов" }));
+    expect(onOpenProfile).toHaveBeenCalledWith("dilshod");
+    const observer = within(table).getByRole("button", { name: "Открыть профиль: Малика Нурова" });
+    fireEvent.pointerEnter(observer);
+    expect(screen.queryByRole("dialog", { name: "Исполнитель: Дилшод Рахимов" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Наблюдатель: Малика Нурова" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Наблюдатель: Малика Нурова" })).not.toBeInTheDocument();
+    fireEvent.click(observer);
+    expect(onOpenProfile).toHaveBeenCalledWith("malika");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
   it("marks a submitted result as requiring the author's review", () => {
     const task = { ...initialTasks[0]!, status: "awaiting_review" as const };
     render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId={task.authorId} filterKey="review" onSelect={vi.fn()} />));
     expect(screen.getByText("Ждёт вашей проверки")).toBeInTheDocument();
+  });
+  it("retains the full observer review label in a semantic status badge", () => {
+    const task = { ...initialTasks[0]!, status: "awaiting_review" as const };
+    render(wrap(<TaskRecords tasks={[task]} people={people} currentUserId="observer" filterKey="review" onSelect={vi.fn()} />));
+    expect(screen.getByText("Ждёт проверки постановщиком")).toHaveClass("record-status-badge");
+    expect(screen.getByText("Ждёт проверки постановщиком")).toHaveAttribute("data-status", "awaiting_review");
   });
   it("paginates and clamps the current page when records disappear", () => {
     const view = render(wrap(<TaskRecords tasks={tasks} people={people} filterKey="all" onSelect={vi.fn()} />));

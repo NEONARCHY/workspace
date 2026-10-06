@@ -84,13 +84,14 @@ import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { CompanyLogo } from "./CompanyLogo";
 import { NavigationEditor } from "./NavigationEditor";
-import { defaultPersonalPreferences, latestPreferences, normalizeNavigation } from "./personal-organization";
+import { defaultPersonalPreferences, latestPreferences, visibleNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
 import { LoginView } from "./LoginView";
 import { EmbeddedConversation, MessengerView } from "./MessengerView";
 import { NotificationCenter } from "./NotificationCenter";
 import { WorkdayControl } from "./WorkdayControl";
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
+import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 import { RecoveryBoundary } from "./RecoveryBoundary";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
@@ -98,10 +99,11 @@ import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
-  MembersView, preloadWorkspaceModules, ProjectHubView, ProjectsView,
+  MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
+import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
 import { initialKnownNotificationIds } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
@@ -159,6 +161,7 @@ import {
   sendWorkspaceMessage,
   createWorkspaceChat,
   updateWorkspaceChat,
+  updateWorkspaceChatAvatar,
   deleteWorkspaceChat,
   addWorkspaceChatMembers,
   setWorkspaceChatMember,
@@ -188,8 +191,14 @@ import {
   addWorkspaceFeedComment,
   deleteWorkspaceFeedComment,
   type PaymentRequestInput,
-  apiBaseUrl,
+  ApiHttpError,
+  apiConnectionLabel,
+  getApiBaseUrl,
+  initializeApiOrigin,
   loadDesktopUpdatePolicy,
+  subscribeToApiOrigin,
+  supportsDualApiOrigins,
+  switchWorkspaceOrigin,
 } from "./workspace-api";
 
 interface NavItem {
@@ -363,6 +372,9 @@ export function App() {
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
+  const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
+  const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
@@ -379,6 +391,7 @@ export function App() {
   const [accountInvite, setAccountInvite] = useState(false);
   const closeAccount = () => { setAccountOpen(false); setAccountInvite(false); };
   const [navigationEditing, setNavigationEditing] = useState(false);
+  const [aiModulesOpen, setAiModulesOpen] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
   const railCollapsed = railPreference ?? compactWindow;
@@ -423,12 +436,14 @@ export function App() {
       ? latestPreferences(current.personalPreferences, loaded.personalPreferences ?? defaultPersonalPreferences)
       : loaded.personalPreferences ?? defaultPersonalPreferences }));
     setBackgroundError("");
-    setConnectionDetail("Сервер подключён");
+    setConnectionDetail(apiConnectionLabel());
   }, () => activeToken.current));
 
   const persistRefreshSession = useCallback((refreshToken?: string) => {
     if (refreshToken) void workspacePlatform.saveRefreshSession(refreshToken).catch(() => undefined);
   }, []);
+
+  useEffect(() => subscribeToApiOrigin(setActiveApiOrigin), []);
 
   const establishSession = useCallback(async (authenticated: AuthenticationSession) => {
     const [loaded, loadedSupport] = await Promise.all([
@@ -460,7 +475,7 @@ export function App() {
         setActiveSection(lastSection as WorkspaceSection);
       }
     } catch { /* local storage can be disabled */ }
-    setConnectionDetail("Сервер подключён");
+    setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
   }, [persistRefreshSession]);
@@ -527,6 +542,21 @@ export function App() {
     setBackgroundError(error instanceof Error ? error.message : "Ошибка операции");
   }, []);
 
+  const handleSwitchNetwork = async () => {
+    if (!session || switchingNetwork) return;
+    setSwitchingNetwork(true);
+    try {
+      await switchWorkspaceOrigin();
+      setConnectionDetail(apiConnectionLabel());
+      setBackgroundError("");
+      await refreshWorkspace(session.accessToken);
+    } catch (error) {
+      reportError(error);
+    } finally {
+      setSwitchingNetwork(false);
+    }
+  };
+
   const refreshMembers = useCallback(async () => {
     if (!session || membersLoading) return;
     setMembersLoading(true);
@@ -577,7 +607,8 @@ export function App() {
       return;
     }
     let active = true;
-    void workspacePlatform.loadRefreshSession()
+    void initializeApiOrigin()
+      .then(() => workspacePlatform.loadRefreshSession())
       .then(async (refreshToken) => {
         if (!refreshToken) return;
         let renewedSession = false;
@@ -594,18 +625,21 @@ export function App() {
             await workspacePlatform.saveRefreshSession(renewed.refreshToken).catch(() => undefined);
           }
           if (active) await establishSession(renewed);
-        } catch {
+        } catch (error) {
           if (!active) return;
-          if (!renewedSession) {
+          if (!renewedSession && error instanceof ApiHttpError && [401, 403].includes(error.status)) {
             await workspacePlatform.clearRefreshSession().catch(() => undefined);
             return;
           }
-          setAuthError("Не удалось загрузить рабочее пространство. Повторите открытие приложения.");
+          setAuthError("Связь прервалась. Вход сохранён; повторите подключение.");
         }
+      })
+      .catch((error: unknown) => {
+        if (active) setAuthError(error instanceof Error ? error.message : "Не удалось найти рабочий сервер.");
       })
       .finally(() => { if (active) setSessionRestoring(false); });
     return () => { active = false; };
-  }, [establishSession]);
+  }, [establishSession, restoreAttempt]);
 
   useEffect(() => {
     if (!session) return;
@@ -618,12 +652,12 @@ export function App() {
     refreshPolicy();
     const timer = window.setInterval(refreshPolicy, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [session]);
+  }, [session, activeApiOrigin]);
 
   useEffect(() => {
     if (!session || !updatePolicy?.publishedVersion || !workspacePlatform.configureUpdates) return;
     let active = true;
-    void workspacePlatform.configureUpdates(apiBaseUrl, session.accessToken)
+    void workspacePlatform.configureUpdates(getApiBaseUrl(), session.accessToken)
       .then((status) => {
         if (!active) return;
         setUpdateStatus(status);
@@ -635,13 +669,14 @@ export function App() {
         if (active) setUpdateStatus({ phase: "error", message: error instanceof Error ? error.message : "Не удалось настроить обновление" });
       });
     return () => { active = false; };
-  }, [session, updatePolicy?.publishedVersion]);
+  }, [session, updatePolicy?.publishedVersion, activeApiOrigin]);
 
   useEffect(() => {
     if (session === undefined) return;
     let cancelled = false;
+    let timer: number;
     const refreshAfter = Math.max(60_000, (session.expiresIn - 60) * 1_000);
-    const timer = window.setTimeout(() => {
+    const renew = () => {
       void refreshAuthentication(session.refreshToken)
         .then(async (renewed) => {
           if (cancelled) return;
@@ -650,15 +685,21 @@ export function App() {
           persistRefreshSession(renewed.refreshToken);
           await refreshWorkspace(renewed.accessToken).catch(reportError);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (cancelled) return;
-          activeToken.current = undefined;
-          setSession(undefined);
-          setUpdatePolicy(undefined);
-          void workspacePlatform.clearRefreshSession().catch(() => undefined);
-          setAuthError("Сессия завершена. Войдите снова.");
+          if (error instanceof ApiHttpError && [401, 403].includes(error.status)) {
+            activeToken.current = undefined;
+            setSession(undefined);
+            setUpdatePolicy(undefined);
+            void workspacePlatform.clearRefreshSession().catch(() => undefined);
+            setAuthError("Сессия завершена. Войдите снова.");
+            return;
+          }
+          reportError(new Error("Связь прервалась. Сессия сохранена; повторяем подключение."));
+          timer = window.setTimeout(renew, 30_000);
         });
-    }, refreshAfter);
+    };
+    timer = window.setTimeout(renew, refreshAfter);
     return () => { cancelled = true; window.clearTimeout(timer); };
   }, [persistRefreshSession, refreshWorkspace, reportError, session]);
 
@@ -733,7 +774,7 @@ export function App() {
         void loadDesktopUpdatePolicy(session.accessToken).then(setUpdatePolicy).catch(() => undefined);
       }
     }, reportError);
-  }, [refreshWorkspace, reportError, session]);
+  }, [refreshWorkspace, reportError, session, activeApiOrigin]);
 
   useEffect(() => {
     if (!session || workspacePlatform.kind !== "web") return;
@@ -901,6 +942,11 @@ export function App() {
     return result;
   };
   const chatActions: ChatActions = {
+    setAvatar: async (id, key) => {
+      const chat = await messengerMutation((token) => updateWorkspaceChatAvatar(token, id, key));
+      setWorkspace((current) => ({ ...current, chats: current.chats.map(item => item.id === chat.id ? chat : item) }));
+      return chat;
+    },
     create: async (input) => {
       const chat = await messengerMutation((token) => createWorkspaceChat(token, input));
       setWorkspace((current) => ({ ...current, chats: [chat, ...current.chats.filter((item) => item.id !== chat.id)] }));
@@ -1638,12 +1684,19 @@ export function App() {
     if (!preloadToken || workspace.currentUser.id !== preloadUserId) return;
     const allowed = new Set(preloadAllowedKeys.split("|"));
     if (["admin", "superadmin"].includes(workspace.currentUser.role)) allowed.add("telegram_access");
-    const stopPreloading = preloadWorkspaceModules(allowed);
+    let cancelled = false;
+    const artworkStops = new Set<() => void>();
+    const stopPreloading = preloadWorkspaceModules(allowed, () => prepareEmployeeProfile(preloadToken, preloadUserId).then((stop) => {
+      if (cancelled) stop(); else artworkStops.add(stop);
+    }));
     const assistantTimer = allowed.has("assistant")
       ? window.setTimeout(() => prewarmAssistantMessages(preloadToken), 700)
       : undefined;
     return () => {
       stopPreloading();
+      cancelled = true;
+      artworkStops.forEach((stop) => stop());
+      clearProfilePreload();
       if (assistantTimer !== undefined) window.clearTimeout(assistantTimer);
       clearAssistantPreload();
     };
@@ -1660,6 +1713,11 @@ export function App() {
           onLogin={handleLogin}
           onAcceptInvitation={handleAcceptInvitation}
           onCompletePasswordReset={handleCompletePasswordReset}
+          onRetryConnection={supportsDualApiOrigins() ? () => {
+            setAuthError(undefined);
+            setSessionRestoring(true);
+            setRestoreAttempt((current) => current + 1);
+          } : undefined}
         />
       </FluentProvider>
     );
@@ -1775,9 +1833,11 @@ export function App() {
     payment_requests: workspace.requests.filter((request) => request.status === "running").length,
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
-  const orderedNavItems = normalizeNavigation(workspace.personalPreferences.navigationOrder)
-    .filter((key) => key !== "projects" && key !== "payment_requests" && canView(key))
+  const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, workspace.personalPreferences.hiddenNavigationKeys, canView)
     .map((key) => navItems.find((item) => item.key === key)!);
+  const sidebarItems = groupAiNavigation(orderedNavItems);
+  const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
+  const aiModuleExpansionHeight = aiModuleGroup?.key === "ai_modules" ? aiModuleGroup.modules.length * 46 + 9 : 0;
   const activeSectionDenied = activeSection !== "notifications" &&
     !canView(activeSection);
   const fallbackSection = orderedNavItems.find((item) => item.key !== "settings")?.key ?? "notifications";
@@ -1821,7 +1881,9 @@ export function App() {
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
       <WorkspacePeopleProvider people={workspace.people}>
-      <EmployeeProfileProvider onOpenProfile={setProfileUserId}>
+      <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
+        void prepareEmployeeProfile(session.accessToken, userId).catch(() => undefined);
+      }}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
         <aside className="app-rail" aria-label="Основная навигация">
@@ -1845,12 +1907,16 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
-            hiddenKeys={["projects", "payment_requests"]}
+            hiddenKeys={["projects", ...(workspace.personalPreferences.hiddenNavigationKeys ?? []), ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
             icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation items={orderedNavItems} renderItem={(item) => {
+          /> : <AdaptiveNavigation items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow, closeOverflow) => {
+              if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
+                <AiModulesNavigation modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen} onCloseOverflow={closeOverflow}
+                  onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
+              </div>;
               const badge = badgeBySection[item.key];
               const icon = displayedSection === item.key && item.key === "messenger"
                 ? <Chat24Filled />
@@ -1879,7 +1945,7 @@ export function App() {
               );
             }} />}
           <div className="rail-bottom">
-            <button className="rail-profile" type="button" aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
+            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${workspace.currentUser.name}`} aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
               <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
               <span>{workspace.currentUser.name}</span>
             </button>
@@ -1897,7 +1963,10 @@ export function App() {
               setPreparedAction(undefined);
               setFocusTarget(undefined); setActiveSection(key);
             }} />
-            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} /><WorkdayControl token={session.accessToken} /><WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
+            <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} /><WorkdayControl token={session.accessToken} />
+              {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
+                onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
+              <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>
           </header>
 
           {backgroundError ? <div className="workspace-feedback" role="alert">
@@ -1995,7 +2064,7 @@ export function App() {
                 onLoadAttachment={handleLoadAttachment}
                 onMarkRead={handleMarkChatRead}
                 onOpenContext={(contextType, contextId) => {
-                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : "trip_approvals";
+                  const section = contextType === "task" ? "tasks" : contextType === "project" ? "projects" : contextType === "project_hub" ? "project_hub" : "trip_approvals";
                   setFocusTarget((current) => ({ section, entityId: contextId, revision: (current?.revision ?? 0) + 1 }));
                   setActiveSection(section);
                 }}
@@ -2006,6 +2075,7 @@ export function App() {
             {displayedSection === "tasks" ? (
               <TasksView
                 key={focusTarget?.revision}
+                token={session.accessToken}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "task" ? preparedAction : undefined}
                 tasks={workspace.tasks}
                 attachments={workspace.attachments}
@@ -2155,6 +2225,7 @@ export function App() {
                 canCreateProject={modulePermissions.project_hub?.create ?? false}
                 canCreateRequest={modulePermissions.project_funding?.create ?? false}
                 canViewFunding={modulePermissions.project_funding?.view ?? false}
+                onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
                 focusId={focusTarget?.section === displayedSection ? focusTarget.entityId : undefined}
                 onOpenCalendar={(eventId) => {
                   setFocusTarget((current) => ({ section: "calendar", entityId: eventId, revision: (current?.revision ?? 0) + 1 }));
@@ -2222,6 +2293,7 @@ export function App() {
                 people={workspace.people}
                 requests={workspace.absenceRequests}
                 summary={workspace.presenceSummary}
+                token={session.accessToken}
                 canAdmin={modulePermissions.absences?.admin === true}
                 onCreate={handleCreateAbsence}
                 onAction={handleAbsenceAction}
@@ -2311,6 +2383,10 @@ export function App() {
         open={profileUserId !== undefined}
         people={workspace.people}
         onOpenPersonProfile={setProfileUserId}
+        onOpenTask={canView("tasks") ? (taskId) => {
+          setFocusTarget((current) => ({ section: "tasks", entityId: taskId, revision: (current?.revision ?? 0) + 1 }));
+          setActiveSection("tasks");
+        } : undefined}
         onOpenChat={canView("messenger") ? async (recipientId) => {
           const existing = workspace.chats.find((chat) => chat.kind === "direct"
             && chat.members.some((member) => member.userId === recipientId)
@@ -2343,10 +2419,6 @@ export function App() {
         </Suspense>
       ) : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
-      {canUseAssistant ? (
-        <YuksalishAssistant token={session.accessToken} onOpenReference={openAssistantReference}
-          onPrepareAction={prepareAssistantAction} />
-      ) : null}
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
     </FluentProvider>

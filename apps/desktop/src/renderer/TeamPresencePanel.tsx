@@ -11,6 +11,7 @@ import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { useContextMotion } from "./useContextMotion";
 
 const absenceLabels: Record<string, string> = {
   vacation: "В отпуске",
@@ -42,6 +43,9 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
   const [end, setEnd] = useState("");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const peopleMotion = useContextMotion(`${Boolean(data)}:${onlyWorking}`, {
+    resize: true, duration: 360, fade: false,
+  });
 
   useEffect(() => {
     let active = true;
@@ -122,6 +126,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
       </div>
     </div>
     {error ? <div className="team-presence-error" role="alert">{error}</div> : null}
+    <div className="team-presence-viewport" ref={peopleMotion}>
     <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
         <EmployeeProfileLink userId={person.userId} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /></EmployeeProfileLink>
@@ -131,11 +136,12 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
           ? `${clockLabel(person.session.startedAt)}${person.session.endedAt ? `–${clockLabel(person.session.endedAt)}` : " · в работе"}`
           : "Без отметки"}</span>
         <span className="team-presence-schedule"><Clock20Regular aria-hidden="true" /> {person.schedule.startsAt.slice(0, 5)}–{person.schedule.endsAt.slice(0, 5)}</span>
-        {person.canEditSchedule ? <Button appearance="subtle" size="small" onClick={() => openSchedule(person)}>График</Button> : null}
+        <div className="team-presence-actions">{person.canEditSchedule ? <Button appearance="subtle" size="small" onClick={() => openSchedule(person)}>График</Button> : null}</div>
         {person.session?.isWeekend ? <small className="team-presence-weekend">Работа в выходной</small> : null}
       </div>)}
       {!data && !error ? <p className="team-presence-empty">Загружаем отметки команды…</p> : null}
       {data && !members.length ? <p className="team-presence-empty">{onlyWorking ? "Сейчас никто не начал рабочий день." : "Сотрудников пока нет."}</p> : null}
+    </div>
     </div>
     <Dialog open={Boolean(editing)} onOpenChange={(_event, next) => { if (!next.open && !saving) setEditing(undefined); }}>
       <DialogSurface className="workday-schedule-dialog" aria-label="График сотрудника">

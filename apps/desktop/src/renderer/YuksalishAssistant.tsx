@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, ArrowUpRight, Maximize2, Mic, Minimize2, Paperclip, Reply, Square, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Plus, Reply, Square, Trash2, Upload, X } from "lucide-react";
 
-import type { AssistantActionDraft, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
+import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
+import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocking-dialog";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
+import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
+import { ConfirmActionDialog } from "./ConfirmActionDialog";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -16,12 +18,17 @@ const modelOptions: readonly { value: AssistantModel; label: string; description
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
 const REPLY_EXCERPT_LENGTH = 280;
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 50_000_000;
 const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
   webp: "image/webp", txt: "text/plain",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
+
+function assistantViewport() {
+  const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
+  return { width: window.innerWidth / zoom, height: window.innerHeight / zoom, zoom };
+}
 
 function readFileAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,19 +42,53 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 const quickPrompts = [
-  "Что нового у меня за последнее время?",
-  "Какие мои задачи требуют внимания?",
-  "Расскажи о проектах движения «Юксалиш»",
+  { label: "Создать задачу", hint: "Название, исполнитель и срок", icon: ListTodo, prompt: "Создай задачу: " },
+  { label: "Начать проект", hint: "Идея, команда и даты", icon: FolderKanban, prompt: "Создай проект: " },
+  { label: "Спланировать поездку", hint: "Куда, зачем и когда", icon: Plane, prompt: "Подготовь командировку: " },
+  { label: "Оформить отсутствие", hint: "Отгул, отпуск или больничный", icon: CalendarDays, prompt: "Подготовь заявку на отсутствие: " },
 ] as const;
 const presets = [
+  ...quickPrompts,
   { label: "Мои дела", prompt: "Какие мои задачи и события сейчас требуют внимания?" },
   { label: "О сотруднике", prompt: "Расскажи о сотруднике [имя]: должность, стаж, достижения, награды и доступный показатель выполнения задач в срок." },
   { label: "Разобрать файл", prompt: "Кратко перескажи приложенный файл, выдели главные факты и необходимые действия." },
   { label: "Подготовить текст", prompt: "Помоги написать ясный рабочий текст на тему: " },
 ] as const;
 
-function GeneratedReply({ content, animate }: { readonly content: string; readonly animate: boolean }) {
-  const reducedMotion = useReducedMotion();
+const actionLabels: Record<AssistantActionDraft["kind"], string> = {
+  task: "Задача", project: "Проект", trip: "Поездка", absence: "Заявка на отсутствие",
+  feed: "Публикация", message: "Сообщение сотруднику",
+};
+const fieldLabels: Record<string, string> = {
+  title: "Название", description: "Описание", assignee: "Исполнитель", dueAt: "Срок",
+  code: "Код проекта", purpose: "Цель", destination: "Направление", startDate: "Начало",
+  endDate: "Окончание", reason: "Причина", absenceKind: "Вид отсутствия", recipient: "Получатель", body: "Текст",
+};
+const absenceLabels: Record<string, string> = {
+  vacation: "Отпуск", personal_time: "Личное время / отгул", sick_leave: "Больничный",
+  late_arrival: "Опоздание", business_event: "Мероприятие",
+};
+
+function useAssistantMotionDisabled() {
+  const [disabled, setDisabled] = useState(() => Boolean(
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    || window.matchMedia?.("(forced-colors: active)").matches,
+  ));
+  useEffect(() => {
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    const forced = window.matchMedia?.("(forced-colors: active)");
+    if (!reduced || !forced) return;
+    const update = () => setDisabled(reduced.matches || forced.matches);
+    reduced.addEventListener("change", update);
+    forced.addEventListener("change", update);
+    return () => { reduced.removeEventListener("change", update); forced.removeEventListener("change", update); };
+  }, []);
+  return disabled;
+}
+
+function GeneratedReply({ content, animate, reducedMotion }: {
+  readonly content: string; readonly animate: boolean; readonly reducedMotion: boolean;
+}) {
   const inline = (value: string) => value.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)]+\))/g)
     .filter(Boolean).map((part, index) => {
       if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
@@ -61,9 +102,9 @@ function GeneratedReply({ content, animate }: { readonly content: string; readon
     const heading = trimmed.match(/^#{1,3}\s+(.+)$/);
     const list = trimmed.match(/^(?:[-*]|\d+[.)])\s+(.+)$/);
     return <motion.p key={index} className={heading ? "is-heading" : list ? "is-list" : ""}
-      initial={animate && !reducedMotion ? { opacity: 0, y: 4 } : false}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: reducedMotion ? 0 : 0.22, delay: animate ? Math.min(index * 0.055, 0.6) : 0 }}>
+      initial={animate && !reducedMotion ? { opacity: 0 } : false}
+      animate={{ opacity: 1 }}
+      transition={{ duration: reducedMotion ? 0 : 0.18, delay: animate ? Math.min(index * 0.02, 0.12) : 0 }}>
       {list && <span className="assistant-list-marker" aria-hidden="true">•</span>}
       {inline(heading?.[1] ?? list?.[1] ?? trimmed)}
     </motion.p>;
@@ -76,9 +117,18 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   readonly onPrepareAction?: (draft: AssistantActionDraft) => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  const blockingDialog = useBlockingDialog();
   const [expanded, setExpanded] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [messages, setMessages] = useState<readonly AssistantMessage[]>([]);
+  const [chats, setChats] = useState<readonly AssistantChat[]>([]);
+  const [chatId, setChatId] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearError, setClearError] = useState("");
+  const chatOperationRef = useRef(false);
+  const chatDraftsRef = useRef(new Map<string, string>());
+  const mountedRef = useRef(true);
   const [model, setModel] = useState<AssistantModel>("flash-lite");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -89,10 +139,12 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [replyingTo, setReplyingTo] = useState<AssistantMessage | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [presetsOpen, setPresetsOpen] = useState(false);
+  const [draggingFile, setDraggingFile] = useState(false);
+  const [editingDraftId, setEditingDraftId] = useState<string>();
   const [replyMenu, setReplyMenu] = useState<{ message: AssistantMessage; x: number; y: number } | null>(null);
   const [dismissedDraftId, setDismissedDraftId] = useState<string>();
   const [preparingAction, setPreparingAction] = useState(false);
-  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+  const [viewport, setViewport] = useState(assistantViewport);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
@@ -101,7 +153,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
-  const reducedMotion = useReducedMotion();
+  const dragDepthRef = useRef(0);
+  const sizeFromRef = useRef<DOMRect | null>(null);
+  const sizeAnimationRef = useRef<Animation | null>(null);
+  const reducedMotion = useAssistantMotionDisabled();
   const close = useCallback(() => {
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
     const recorder = recorderRef.current;
@@ -113,38 +168,100 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     setOpen(false);
     setReplyMenu(null);
     setAnimatedReplyId(null);
+    setDraggingFile(false);
+    dragDepthRef.current = 0;
+    sizeFromRef.current = null;
+    sizeAnimationRef.current?.cancel();
   }, []);
   const resizeInput = useCallback(() => {
     const input = inputRef.current;
     if (!input) return;
+    const maxHeight = Math.min(MAX_COMPOSER_HEIGHT, Math.max(72, viewport.height / 4));
     input.style.height = "0px";
-    input.style.height = `${Math.min(Math.max(input.scrollHeight, 30), MAX_COMPOSER_HEIGHT)}px`;
-    input.style.overflowY = input.scrollHeight > MAX_COMPOSER_HEIGHT ? "auto" : "hidden";
-  }, []);
+    input.style.height = `${Math.min(Math.max(input.scrollHeight, 48), maxHeight)}px`;
+    input.style.overflowY = input.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, [viewport.height]);
 
   useEffect(() => {
-    const updateViewport = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    const updateViewport = () => {
+      const next = assistantViewport();
+      setViewport((current) => current.width === next.width && current.height === next.height
+        && current.zoom === next.zoom ? current : next);
+    };
     window.addEventListener("resize", updateViewport);
-    return () => window.removeEventListener("resize", updateViewport);
+    const observer = new MutationObserver(updateViewport);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
+    return () => { window.removeEventListener("resize", updateViewport); observer.disconnect(); };
   }, []);
 
-  useLayoutEffect(resizeInput, [draft, resizeInput]);
+  useLayoutEffect(resizeInput, [draft, resizeInput, expanded, viewport]);
+
+  useLayoutEffect(() => {
+    const from = sizeFromRef.current;
+    sizeFromRef.current = null;
+    const panel = panelRef.current;
+    sizeAnimationRef.current?.cancel();
+    if (!from || !panel || reducedMotion || !panel.animate) return;
+    const to = panel.getBoundingClientRect();
+    // Real bounds, not a scaled screenshot: text stays crisp and controls remain usable.
+    const animation = panel.animate([
+      { width: `${from.width / viewport.zoom}px`, height: `${from.height / viewport.zoom}px` },
+      { width: `${to.width / viewport.zoom}px`, height: `${to.height / viewport.zoom}px` },
+    ], { duration: 220, easing: "cubic-bezier(.2, 0, 0, 1)" });
+    sizeAnimationRef.current = animation;
+    return () => animation.cancel();
+  }, [expanded, viewport, reducedMotion]);
+
+  const acceptFiles = (files: readonly File[]) => {
+    if (!files.length) return;
+    if (busy || recording || transcribing || chatBusy) {
+      setError("Дождитесь окончания ответа или голосового ввода, затем прикрепите файл.");
+      return;
+    }
+    if (files.length > 1) {
+      setError("Прикрепляйте по одному файлу на сообщение. Несколько файлов не были добавлены.");
+      return;
+    }
+    const file = files[0]!;
+    const suffix = file.name.split(".").at(-1)?.toLowerCase() ?? "";
+    if (!fileTypes[suffix] || file.size > MAX_FILE_BYTES || file.size === 0 || file.name.length > 160) {
+      setError("Выберите непустой DOCX, PDF, PNG, JPEG, WebP или TXT до 50 МБ с именем до 160 символов.");
+      return;
+    }
+    setSelectedFile(file);
+    setError("");
+    inputRef.current?.focus();
+  };
+
+  const isFileDrag = (event: DragEvent<HTMLElement>) => Array.from(event.dataTransfer.types).includes("Files");
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const drafts = chatDraftsRef.current;
+    return () => { mountedRef.current = false; drafts.clear(); };
+  }, []);
 
   useEffect(() => {
     if (!open || loaded) return;
     let active = true;
-    void loadAssistantMessages(token)
-      .then((history) => { if (active) { setMessages(history); setLoaded(true); } })
+    void listAssistantChats(token)
+      .then(async (available) => {
+        const selected = available[0];
+        if (!selected) throw new Error("Чат не найден");
+        const history = await loadAssistantMessages(token, selected.id);
+        if (active) { setChats(available); setChatId(selected.id); setMessages(history); setLoaded(true); setError(""); }
+      })
       .catch(() => { if (active) setError("Не удалось загрузить историю. Закройте и откройте ассистента ещё раз."); });
     return () => { active = false; };
   }, [open, loaded, token]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    if (open && !blockingDialog) inputRef.current?.focus();
+  }, [open, blockingDialog]);
 
   useLayoutEffect(() => {
-    if (open && streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight;
+    if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || transcribing
+      ? streamRef.current.scrollHeight : 0;
   }, [messages, busy, open, recording, transcribing]);
 
   useEffect(() => {
@@ -152,12 +269,55 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         if (replyMenu) setReplyMenu(null);
-        else close();
+        else if (!confirmClear) close();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, open, replyMenu]);
+  }, [close, open, replyMenu, confirmClear]);
+
+  const chatControlsDisabled = !loaded || busy || recording || transcribing || preparingAction || chatBusy || confirmClear;
+  const changeChat = async (targetId?: string) => {
+    if (chatControlsDisabled || chatOperationRef.current || targetId === chatId) return;
+    chatOperationRef.current = true;
+    setChatBusy(true); setError("");
+    try {
+      const created = targetId ? null : await createAssistantChat(token);
+      const nextId = targetId ?? created!.id;
+      // A freshly created conversation is known to be empty; no second request can
+      // leave an unreachable chat after a history-loading failure.
+      const history = created ? [] : await loadAssistantMessages(token, nextId);
+      if (!mountedRef.current) return;
+      chatDraftsRef.current.set(chatId, draft);
+      if (created) setChats((current) => [created, ...current]);
+      setChatId(nextId); setMessages(history); setDraft(chatDraftsRef.current.get(nextId) ?? "");
+      setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
+      setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (failure) {
+      if (mountedRef.current) setError(failure instanceof Error ? failure.message : "Не удалось открыть чат.");
+    } finally {
+      chatOperationRef.current = false; setChatBusy(false); inputRef.current?.focus();
+    }
+  };
+
+  const clearCurrentChat = async () => {
+    if (chatOperationRef.current || !chatId) return;
+    chatOperationRef.current = true; setChatBusy(true); setClearError("");
+    try {
+      await clearAssistantChat(token, chatId);
+      if (!mountedRef.current) return;
+      setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
+      setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      chatDraftsRef.current.delete(chatId);
+      setChats((current) => current.map((chat) => chat.id === chatId
+        ? { ...chat, title: chat.isDefault ? "Первый чат" : "Новый чат" } : chat));
+      setConfirmClear(false); setError("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (failure) {
+      if (mountedRef.current) setClearError(failure instanceof Error ? failure.message : "Не удалось очистить чат.");
+    } finally { chatOperationRef.current = false; setChatBusy(false); }
+  };
 
   useEffect(() => {
     if (!replyMenu) return;
@@ -241,7 +401,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
-    if ((!value && !selectedFile) || busy) return;
+    if ((!value && !selectedFile) || busy || recording || transcribing || !loaded || chatBusy || confirmClear) return;
     const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
     const prompt = value || "Расскажи, что находится во вложении.";
     const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${prompt}` : prompt;
@@ -251,7 +411,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     }
     const file = selectedFile;
     const latestAnswer = [...messages].reverse().find((item) => item.role === "assistant");
-    const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId);
+    const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId
+      && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id));
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
@@ -269,13 +430,20 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
         name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
       } : undefined;
-      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft);
+      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId);
+      if (!mountedRef.current) return;
       setMessages((current) => [...current, response]);
+      setChats((current) => current.map((chat) => chat.id === chatId ? {
+        ...chat, updatedAt: response.createdAt,
+        title: ["Первый чат", "Новый чат"].includes(chat.title) ? content.slice(0, 100) : chat.title,
+      } : chat));
       setAnimatedReplyId(response.id);
       setDismissedDraftId(undefined);
+      setEditingDraftId(undefined);
       setReplyingTo(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
+      if (!mountedRef.current) return;
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
       setDraft((current) => current ? `${value}\n${current}` : value);
       setSelectedFile(file);
@@ -287,7 +455,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   };
 
   const chosen = modelOptions.find((option) => option.value === model)!;
-  const currentActionId = [...messages].reverse().find((item) => item.role === "assistant")?.id;
+  const currentAnswer = [...messages].reverse().find((item) => item.role === "assistant");
+  const currentActionId = currentAnswer?.id;
+  const activeDraft = currentAnswer?.actionDraft && currentAnswer.id !== dismissedDraftId
+    && (!currentAnswer.actionDraft.ready || editingDraftId === currentAnswer.id) ? currentAnswer : undefined;
   const openPreparedForm = async (action: AssistantActionDraft) => {
     if (!onPrepareAction || preparingAction) return;
     setPreparingAction(true);
@@ -307,49 +478,82 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
   const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(670, viewport.height - 36);
-  return <div className="yuksalish-assistant-root">
-    {!open && <button type="button" className="assistant-launcher" ref={launcherRef}
-      aria-label="Открыть ассистента Yuksalish" onClick={() => setOpen(true)}>
-      <GradientOrb />
-    </button>}
-    <AnimatePresence onExitComplete={() => launcherRef.current?.focus()}>
+  return <div className="yuksalish-assistant-root" data-blocking-dialog={blockingDialog || undefined}>
+    <button type="button" className="assistant-launcher" ref={launcherRef}
+      aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
+      aria-expanded={open} disabled={blockingDialog} onClick={() => open ? close() : setOpen(true)}>
+      <GradientOrb paused={open || blockingDialog} />
+    </button>
+    <AnimatePresence onExitComplete={() => {
+      if (!hasBlockingDialog()) launcherRef.current?.focus({ preventScroll: true });
+    }}>
       {open && <motion.section
-        initial={reducedMotion ? false : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        initial={reducedMotion ? false : { opacity: 0, transform: "translateY(12px)" }}
+        animate={{ opacity: 1, transform: "translateY(0px)" }}
+        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, transform: "translateY(8px)" }}
         transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
         style={{ width: panelWidth, height: panelHeight, right: edge, bottom: edge,
           borderRadius: expanded ? 22 : 26 }}
         ref={panelRef}
+        onDragEnter={(event) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault(); dragDepthRef.current += 1; setDraggingFile(true);
+        }}
+        onDragOver={(event) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault(); event.dataTransfer.dropEffect = busy || recording || transcribing ? "none" : "copy";
+        }}
+        onDragLeave={(event) => {
+          if (!isFileDrag(event)) return;
+          event.preventDefault(); dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setDraggingFile(false);
+        }}
+        onDrop={(event) => {
+          if (!isFileDrag(event) && !event.dataTransfer.files.length) return;
+          event.preventDefault(); event.stopPropagation(); dragDepthRef.current = 0; setDraggingFile(false);
+          acceptFiles(Array.from(event.dataTransfer.files));
+        }}
         className={`assistant-panel ${expanded ? "is-expanded" : ""}`}
         role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
-        <motion.div className="assistant-panel-content"
-          initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }} transition={{ duration: reducedMotion ? 0 : 0.18,
-            delay: reducedMotion ? 0 : 0.15 }}>
+        <div className="assistant-panel-content">
         <header className="assistant-header">
-          <span className="assistant-header-icon"><GradientOrb /></span>
-          <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Рабочие вопросы и тексты</small></span>
+          <span className="assistant-header-icon"><GradientOrb paused={blockingDialog} /></span>
+          <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
-            onClick={() => setExpanded((current) => !current)}>
+            onClick={() => { sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
             {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
           <button type="button" aria-label="Закрыть ассистента" title="Закрыть"
             onClick={close}><X size={19} /></button>
         </header>
+        <nav className="assistant-chat-controls" aria-label="Чаты ассистента">
+          <select aria-label="Чат ассистента" title={chats.find((chat) => chat.id === chatId)?.title}
+            value={chatId} disabled={chatControlsDisabled}
+            onChange={(event) => void changeChat(event.target.value)}>
+            {!chats.length && <option value="">Загрузка чатов…</option>}
+            {chats.map((chat) => <option key={chat.id} value={chat.id}>{chat.title}</option>)}
+          </select>
+          <button type="button" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
+            <Plus size={16} aria-hidden="true" /> Новый чат
+          </button>
+          <button type="button" aria-label="Очистить текущий чат" title="Очистить текущий чат"
+            disabled={chatControlsDisabled || !messages.length}
+            onClick={() => { setClearError(""); setConfirmClear(true); }}><Trash2 size={16} /></button>
+        </nav>
+        {chatBusy && <span className="assistant-chat-status" role="status">Обновляю чат…</span>}
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
-        ref={streamRef} aria-live="polite">
+        ref={streamRef} aria-live="polite" inert={chatBusy || confirmClear}>
           <div className="assistant-stream-inner">
             {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
-              <GradientOrb />
+              <GradientOrb className="assistant-empty-orb" paused={blockingDialog} />
               <h2>С чего начнём?</h2>
-              <p>Помогу разобраться в рабочих делах, найти сведения о движении или улучшить текст.</p>
+              <p>Подготовим рабочие записи, разберём документ или просто обсудим ваш вопрос.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
-                <button key={prompt} type="button" onClick={() => { setDraft(prompt); inputRef.current?.focus(); }}>
-                  {prompt}
+                <button key={prompt.label} type="button" onClick={() => { setDraft(prompt.prompt); setDismissedDraftId(currentActionId); inputRef.current?.focus(); }}>
+                  <prompt.icon size={19} aria-hidden="true" /><span><strong>{prompt.label}</strong><small>{prompt.hint}</small></span>
                 </button>)}</div>
-              <small>Рабочие данные — только в пределах ваших прав. Публичные материалы — с указанием источника.</small>
+              <small>Я подготовлю форму. Проверка и окончательное создание — за вами.</small>
             </div>}
             {!loaded && !error && <div className="assistant-loading"><ThinkingOrb state="searching" /> Загружаю историю…</div>}
             {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}
@@ -359,7 +563,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               <div className="assistant-message-meta"><span>{item.role === "user" ? "Вы" : "Yuksalish"}</span>
                 <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</time></div>
               {item.role === "assistant" ? <>
-                <GeneratedReply content={item.content} animate={item.id === animatedReplyId} />
+                <GeneratedReply content={item.content} animate={item.id === animatedReplyId} reducedMotion={reducedMotion} />
                 {item.references?.length ? <div className="assistant-references" aria-label="Открыть записи в Workspace">
                   {item.references.map((reference, index) => <button type="button"
                     key={`${reference.section}:${reference.entityId ?? "list"}:${index}`}
@@ -369,22 +573,22 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   </button>)}
                 </div> : null}
                 {item.actionDraft && item.id === currentActionId && item.id !== dismissedDraftId ? <div className="assistant-action-draft">
+                  <div className="assistant-draft-heading"><strong>{actionLabels[item.actionDraft.kind]}</strong>
+                    <span>{item.actionDraft.ready ? "Черновик готов" : "Уточняем детали"}</span></div>
+                  <dl>{Object.entries(item.actionDraft.fields).filter(([key, value]) => fieldLabels[key] && value).map(([key, value]) =>
+                    <div key={key}><dt>{fieldLabels[key]}</dt><dd>{key === "absenceKind" ? absenceLabels[value] ?? value : value}</dd></div>)}</dl>
+                  <small>Запись ещё не создана. Проверьте данные в форме.</small>
+                  <div className="assistant-draft-actions">
                   {item.actionDraft.ready ? <button type="button" disabled={!onPrepareAction || preparingAction}
                     onClick={() => { if (item.actionDraft) void openPreparedForm(item.actionDraft); }}>
                     {preparingAction ? "Открываю…" : "Открыть заполненную форму"}
                   </button> : null}
+                  {item.actionDraft.ready && <button type="button" className="assistant-action-cancel"
+                    onClick={() => { setEditingDraftId(item.id); inputRef.current?.focus(); }}>Уточнить черновик</button>}
                   <button type="button" className="assistant-action-cancel"
                     onClick={() => setDismissedDraftId(item.id)}>Отменить подготовку</button>
+                  </div>
                 </div> : null}
-                <details className="assistant-answer-context">
-                  <summary>Как подготовлен ответ</summary>
-                  <p>Это перечень проверенных источников, а не скрытые рассуждения модели.</p>
-                  {item.sourceLabels === undefined
-                    ? <p>Для этого старого ответа сведения об источниках не сохранены.</p>
-                    : item.sourceLabels.length
-                      ? <ul>{item.sourceLabels.map((label, index) => <li key={`${label}-${index}`}>{label}</li>)}</ul>
-                      : <p>Ответ подготовлен без дополнительного рабочего контекста.</p>}
-                </details>
               </> : item.content.startsWith("↳ Ответ на сообщение ассистента: ") && item.content.includes("\n\n")
                 ? <p><span className="assistant-message-quote">{item.content.split("\n\n", 1)[0]}</span>{item.content.slice(item.content.indexOf("\n\n") + 2)}</p>
                 : <p>{item.content}</p>}
@@ -403,17 +607,21 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <div className="assistant-composer-inner">
             <div className="assistant-presets">
               <button type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
-                aria-controls="assistant-presets-list" onClick={() => setPresetsOpen((current) => !current)}>
-                Шаблоны запросов <span aria-hidden="true">{presetsOpen ? "−" : "+"}</span>
+                aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear} onClick={() => setPresetsOpen((current) => !current)}>
+                Быстрые действия <ChevronDown size={14} aria-hidden="true" />
               </button>
               {presetsOpen && <div id="assistant-presets-list" className="assistant-presets-list">
-                {presets.map((preset) => <button key={preset.label} type="button"
-                  onClick={() => { setDraft(preset.prompt); setPresetsOpen(false); inputRef.current?.focus(); }}>
+                {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
+                  onClick={() => { setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
                   {preset.label}
                 </button>)}
               </div>}
             </div>
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
+              {activeDraft?.actionDraft && <div className="assistant-draft-context">
+                <span>Уточняем: {actionLabels[activeDraft.actionDraft.kind].toLocaleLowerCase("ru-RU")}</span>
+                <button type="button" aria-label="Завершить уточнение черновика" onClick={() => setDismissedDraftId(activeDraft.id)}><X size={15} /></button>
+              </div>}
               {replyingTo && <div className="assistant-reply-target"><Reply size={16} aria-hidden="true" />
                 <span><strong>Ответ на сообщение Yuksalish</strong><small>{replyingTo.content.replace(/\s+/g, " ").slice(0, REPLY_EXCERPT_LENGTH)}</small></span>
                 <button type="button" aria-label="Отменить ответ" onClick={() => setReplyingTo(null)}><X size={16} /></button>
@@ -425,8 +633,13 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   <X size={15} />
                 </button>
               </div>}
-              <textarea ref={inputRef} aria-label="Сообщение ассистенту" placeholder="Спросите о работе или движении «Юксалиш»…"
-                value={draft} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
+              <textarea ref={inputRef} className="assistant-editor" aria-label="Сообщение ассистенту" placeholder="Задайте вопрос или опишите, что нужно сделать…"
+                value={draft} disabled={chatBusy || confirmClear} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
+                onPaste={(event) => {
+                  const files = Array.from(event.clipboardData.files);
+                  if (!files.length) return;
+                  event.preventDefault(); acceptFiles(files);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault(); event.currentTarget.form?.requestSubmit();
@@ -441,45 +654,44 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                     {modelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 </div>
-                <span className="assistant-model-description">{chosen.description}</span>
                 <div className="assistant-composer-actions">
                   <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
                     accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt" aria-label="Выбрать вложение"
                     onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      const suffix = file.name.split(".").at(-1)?.toLowerCase() ?? "";
-                      if (!fileTypes[suffix] || file.size > MAX_FILE_BYTES || file.size === 0
-                        || file.name.length > 160) {
-                        setError("Выберите DOCX, PDF, изображение или TXT размером до 5 МБ.");
-                        event.target.value = "";
-                        return;
-                      }
-                      setSelectedFile(file); setError("");
+                      acceptFiles(Array.from(event.target.files ?? []));
+                      event.target.value = "";
                     }} />
                   <button type="button" className="assistant-attach-button" aria-label="Прикрепить файл"
-                    title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 5 МБ; файл передаётся ИИ, но не хранится в истории"
-                    disabled={busy || recording} onClick={() => fileInputRef.current?.click()}>
+                    title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 50 МБ; TXT и текст DOCX — до 50 000 символов. Файл не сохраняется в истории"
+                    disabled={busy || recording || transcribing || chatBusy || confirmClear} onClick={() => fileInputRef.current?.click()}>
                     <Paperclip size={18} />
                   </button>
                   <button type="button" className={`assistant-voice-button${recording ? " is-recording" : ""}`}
                     aria-label={recording ? "Остановить запись" : "Голосовой ввод"}
                     title={recording ? "Остановить запись" : "Голосовой ввод · до 1 минуты; аудио передаётся ИИ для расшифровки"}
-                    disabled={transcribing || busy} onClick={() => void (recording ? stopRecording() : startRecording())}>
+                    disabled={transcribing || busy || chatBusy || confirmClear || !loaded} onClick={() => void (recording ? stopRecording() : startRecording())}>
                     {recording ? <Square size={16} /> : <Mic size={19} />}
                   </button>
                   <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
-                    disabled={busy || recording || transcribing || (!draft.trim() && !selectedFile) || !loaded}>
+                    disabled={busy || recording || transcribing || chatBusy || confirmClear || (!draft.trim() && !selectedFile) || !loaded}>
                     <ArrowUp size={19} strokeWidth={2.4} />
                   </button>
                 </div>
               </div>
             </form>
             {error && <p className="assistant-error" role="alert">{error}</p>}
-            <small className="assistant-privacy">Проверяйте важные сведения и даты публикаций.</small>
+            {selectedFile && <small className="assistant-attachment-notice">Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов.</small>}
+            <small className="assistant-privacy">ИИ может ошибаться. Рабочие действия — после вашего подтверждения.</small>
           </div>
         </div>
-        </motion.div>
+        </div>
+        <AnimatePresence>{draggingFile && <motion.div className="assistant-drop-overlay" role="status"
+          initial={reducedMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 0.16 }}>
+          <Upload size={32} aria-hidden="true" /><strong>Отпустите файл здесь</strong>
+          <span>DOCX, PDF, PNG, JPEG, WebP или TXT · один файл до 50 МБ</span>
+          <small>Добавится к сообщению — отправка только по вашему нажатию.</small>
+        </motion.div>}</AnimatePresence>
         {replyMenu && <div className="assistant-context-menu" role="menu" style={{ left: replyMenu.x, top: replyMenu.y }}>
           <button ref={replyMenuButtonRef} type="button" role="menuitem" onClick={() => {
             setReplyingTo(replyMenu.message); setReplyMenu(null); inputRef.current?.focus();
@@ -487,5 +699,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         </div>}
       </motion.section>}
     </AnimatePresence>
+    <ConfirmActionDialog open={confirmClear} title="Очистить текущий чат?"
+      message={clearError || "Переписка этого чата будет удалена без восстановления. Остальные чаты сохранятся."}
+      confirmLabel="Очистить чат" busyLabel="Очищаем…" busy={chatBusy}
+      onCancel={() => setConfirmClear(false)} onConfirm={clearCurrentChat} />
   </div>;
 }

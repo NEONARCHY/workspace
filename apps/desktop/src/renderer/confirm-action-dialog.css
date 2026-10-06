@@ -1,0 +1,98 @@
+/* Shared destructive confirmation: centered copy, one icon, balanced actions. */
+.fui-DialogSurface.confirm-action-dialog {
+  width: min(440px, calc(100vw - 32px));
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  padding: 28px;
+  overflow-y: auto;
+  border: 1px solid var(--ws-line);
+  border-radius: 24px;
+  background: var(--ws-surface);
+  box-shadow: var(--ws-shadow-float);
+}
+.confirm-action-dialog .fui-DialogBody {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "title" "content" "actions";
+  gap: 12px;
+}
+.confirm-action-dialog .fui-DialogTitle {
+  grid-area: title;
+  margin: 0;
+  color: var(--ws-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.confirm-action-dialog .fui-DialogContent {
+  grid-area: content;
+  padding: 0;
+  color: var(--ws-muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.confirm-action-dialog .fui-DialogActions {
+  grid-area: actions;
+  width: 100%;
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.fui-DialogSurface.confirm-action-dialog .fui-DialogBody .fui-DialogActions > .fui-Button {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.confirm-action-dialog .fui-Button.confirm-action-cancel {
+  border-color: var(--ws-control-line);
+  color: var(--ws-text);
+  background: var(--ws-muted-surface);
+}
+.confirm-action-dialog .fui-Button.confirm-action-cancel:hover:not(:disabled) {
+  background: var(--ws-accent-wash);
+}
+.confirm-action-dialog .fui-Button.confirm-action-danger {
+  border-color: #a7434b;
+  color: #fff;
+  background: #a7434b;
+}
+.confirm-action-dialog .fui-Button.confirm-action-danger:hover:not(:disabled) {
+  border-color: #923740;
+  background: #923740;
+}
+.confirm-action-dialog .fui-Button:disabled {
+  border-color: var(--ws-line);
+  color: var(--ws-muted);
+  background: var(--ws-muted-surface);
+}
+.confirm-action-dialog .fui-Button:focus-visible {
+  outline: 2px solid var(--ws-link);
+  outline-offset: 3px;
+}
+@media (max-width: 420px) {
+  .fui-DialogSurface.confirm-action-dialog { padding: 24px 20px; }
+  .confirm-action-dialog .fui-DialogTitle { font-size: 22px; }
+}
+@media (forced-colors: active) {
+  .fui-DialogSurface.confirm-action-dialog { border-color: CanvasText; background: Canvas; box-shadow: none; }
+  .confirm-action-dialog :is(.fui-DialogTitle, .fui-DialogContent) { color: CanvasText; }
+  .confirm-action-dialog .fui-Button { border-color: ButtonText; color: ButtonText; background: ButtonFace; }
+  .confirm-action-dialog .fui-Button:disabled { border-color: GrayText; color: GrayText; }
+  .confirm-action-dialog .fui-Button:focus-visible { outline-color: Highlight; }
+}

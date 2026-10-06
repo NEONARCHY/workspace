@@ -92,4 +92,32 @@ describe("workday presence", () => {
     await waitFor(() => expect(screen.getByText("Малика Нурова")).toBeInTheDocument());
     expect(screen.getByText("На больничном")).toBeInTheDocument();
   });
+  it("keeps complete long roles and an action cell even without schedule permission", async () => {
+    vi.mocked(loadTeamWorkday).mockResolvedValue({ asOf: initial.asOf, workingCount: 0, members: [
+      { userId: "long", name: "Малика Нурова", jobTitle: "Председатель движения и руководитель региональных подразделений", status: "finished", schedule: initial.schedule,
+        session: { ...working.session!, endedAt: "2026-09-23T13:00:00Z", isWeekend: true }, absenceKind: null, canEditSchedule: false },
+      { userId: "short", name: "Азиза Каримова", jobTitle: "Бухгалтер", status: "weekend_off", schedule: initial.schedule, session: null, absenceKind: null, canEditSchedule: true },
+    ] });
+    const view = show(<TeamPresencePanel token="test-token" />);
+    await screen.findByText("Сейчас никто не начал рабочий день.");
+    fireEvent.click(screen.getByRole("button", { name: "Вся команда" }));
+    expect(screen.getByText("Председатель движения и руководитель региональных подразделений")).toBeInTheDocument();
+    expect(screen.getByText("Завершил работу")).toBeInTheDocument();
+    expect(screen.getByText("Работа в выходной")).toBeInTheDocument();
+    expect(view.container.querySelectorAll(".team-presence-actions")).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "График" })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Сейчас работают" }));
+    expect(screen.getByText("Сейчас никто не начал рабочий день.")).toBeInTheDocument();
+    expect(screen.queryByText("Малика Нурова")).not.toBeInTheDocument();
+  });
+  it("shows refresh failure without discarding the last successful team list", async () => {
+    vi.mocked(loadTeamWorkday).mockResolvedValueOnce({ asOf: initial.asOf, workingCount: 1, members: [
+      { userId: "employee", name: "Дилшод Рахимов", jobTitle: "Специалист", status: "working", schedule: initial.schedule, session: working.session, absenceKind: null, canEditSchedule: false },
+    ] }).mockRejectedValueOnce(new Error("Сервис временно недоступен"));
+    show(<TeamPresencePanel token="test-token" />);
+    await screen.findByText("Дилшод Рахимов");
+    fireEvent.click(screen.getByRole("button", { name: "Обновить отметки" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Сервис временно недоступен");
+    expect(screen.getByText("Дилшод Рахимов")).toBeInTheDocument();
+  });
 });

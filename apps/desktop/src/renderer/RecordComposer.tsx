@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode, type SyntheticEvent } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { Button } from "@fluentui/react-components";
 import { Dismiss20Regular } from "@fluentui/react-icons";
+import { useContextMotion } from "./useContextMotion";
 
 /** Shared presentation only: each host keeps its existing modal lifecycle and save contract. */
 export function RecordComposer({ title, titleId, eyebrow, children, aside, stages, busy = false, error,
@@ -37,6 +38,8 @@ export function RecordComposer({ title, titleId, eyebrow, children, aside, stage
 
 export function RecordSection({ title, description, children, collapsible = false, summary }: { readonly title: string; readonly description?: string; readonly children: ReactNode; readonly collapsible?: boolean; readonly summary?: string }) {
   const titleId = useId();
+  const [expanded, setExpanded] = useState(false);
+  const bodyMotion = useContextMotion(String(expanded));
   const revealExpandedContent = (event: SyntheticEvent<HTMLDetailsElement>) => {
     const section = event.currentTarget;
     if (!section.open) return;
@@ -53,9 +56,9 @@ export function RecordSection({ title, description, children, collapsible = fals
       scroller.scrollBy({ top: Math.min(neededShift, availableShift), behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
     });
   };
-  if (collapsible) return <details className="record-section record-disclosure" onToggle={revealExpandedContent} onChangeCapture={revealExpandedContent}>
+  if (collapsible) return <details className="record-section record-disclosure" onToggle={event => { setExpanded(event.currentTarget.open); revealExpandedContent(event); }} onChangeCapture={revealExpandedContent}>
     <summary><span><strong>{title}</strong><small>{summary || description}</small></span><span className="disclosure-plus" aria-hidden="true">+</span></summary>
-    <div className="record-disclosure-body">{children}</div>
+    <div className="record-disclosure-body" ref={bodyMotion}>{children}</div>
   </details>;
   return <section className="record-section" aria-labelledby={titleId}>
     <header><h3 id={titleId}>{title}</h3>{description ? <p>{description}</p> : null}</header>

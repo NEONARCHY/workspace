@@ -6,6 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { EmployeeProfileLink, EmployeeProfileProvider } from "./EmployeeProfileLink";
 
 describe("EmployeeProfileLink", () => {
+  it("prepares a profile on pointer intent and focus without opening it", () => {
+    const prepare = vi.fn(), open = vi.fn();
+    render(<EmployeeProfileProvider onOpenProfile={open} onPrepareProfile={prepare}><EmployeeProfileLink userId="prefetch-person" personName="Подготовка">Подготовка</EmployeeProfileLink></EmployeeProfileProvider>);
+    const link = screen.getByRole("button", { name: "Открыть профиль: Подготовка" });
+    fireEvent.pointerEnter(link); fireEvent.focus(link);
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(prepare).toHaveBeenCalledWith("prefetch-person");
+    expect(open).not.toHaveBeenCalled();
+  });
   it("opens the requested profile by mouse and keyboard without triggering the parent card", () => {
     const openProfile = vi.fn();
     const openCard = vi.fn();

@@ -75,11 +75,22 @@ class ChatMemberResponse(ApiModel):
     permissions: ChatPermissions
 
 
+ChatAvatarIconKey = Literal[
+    "team", "plane", "project", "briefcase", "building", "globe",
+    "calendar", "document", "target", "compass", "star", "sparkles",
+]
+
+
+class UpdateChatAvatarRequest(ApiModel):
+    avatar_icon_key: ChatAvatarIconKey | None
+
+
 class CreateChatRequest(ApiModel):
     kind: Literal["direct", "group"]
     title: str = Field(default="", max_length=240)
     description: str = Field(default="", max_length=4000)
     member_ids: list[UUID] = Field(min_length=1, max_length=200)
+    avatar_icon_key: ChatAvatarIconKey | None = None
 
     @model_validator(mode="after")
     def validate_chat(self) -> "CreateChatRequest":
@@ -90,6 +101,8 @@ class CreateChatRequest(ApiModel):
             raise ValueError("Group title is required")
         if self.kind == "direct" and len(self.member_ids) != 1:
             raise ValueError("Select exactly one colleague")
+        if self.kind == "direct" and self.avatar_icon_key is not None:
+            raise ValueError("Direct chats use the colleague's profile avatar")
         return self
 
 
@@ -131,6 +144,8 @@ class ChatSummaryResponse(ApiModel):
     description: str = ""
     owner_id: str | None = None
     can_delete: bool = False
+    avatar_icon_key: ChatAvatarIconKey | None = None
+    can_edit_avatar: bool = False
     members: list[ChatMemberResponse] = Field(default_factory=list)
     permissions: ChatPermissions = Field(default_factory=ChatPermissions)
 
@@ -553,6 +568,34 @@ class EfficiencyOverviewResponse(ApiModel):
     employees: list[EmployeeEfficiencyResponse]
 
 
+class PersonalEfficiencyTaskResponse(ApiModel):
+    id: str
+    title: str
+    status: str
+    due_at: datetime | None
+    updated_at: datetime
+    on_time_count: int
+    overdue_count: int
+    excluded_count: int
+    returned_for_revision_count: int
+
+
+class PersonalEfficiencyWorkloadResponse(ApiModel):
+    new: int
+    in_progress: int
+    awaiting_review: int
+    completed: int
+
+
+class PersonalEfficiencyResponse(ApiModel):
+    employee: EmployeeEfficiencyResponse
+    task_details_visible: bool
+    workload: PersonalEfficiencyWorkloadResponse
+    recent_tasks: list[PersonalEfficiencyTaskResponse]
+    impact_tasks: list[PersonalEfficiencyTaskResponse]
+    impact_task_count: int
+
+
 class TaskParticipantRequest(ApiModel):
     user_id: str
     role: TaskParticipantRole
@@ -909,7 +952,7 @@ class ProjectWriteRequest(ApiModel):
 
 
 class CreateProjectRequest(ProjectWriteRequest):
-    pass
+    chat_icon_key: ChatAvatarIconKey | None = None
 
 
 class UpdateProjectRequest(ProjectWriteRequest):
@@ -1045,7 +1088,7 @@ class TripWriteRequest(ApiModel):
 
 
 class CreateTripRequest(TripWriteRequest):
-    pass
+    chat_icon_key: ChatAvatarIconKey | None = None
 
 
 class UpdateTripRequest(TripWriteRequest):
@@ -1301,6 +1344,28 @@ class PersonalPreferencesResponse(ApiModel):
     navigation_order: list[NavigationKey] = Field(default_factory=lambda: list(DEFAULT_NAVIGATION))
     locale: Literal["ru", "uz_cyrl", "uz_latn"] = "ru"
     revision: int = 0
+    hidden_navigation_keys: list[NavigationKey] = Field(default_factory=list)
+
+
+class SidebarVisibilityResponse(ApiModel):
+    user_id: str
+    hidden_keys: list[NavigationKey] = Field(default_factory=list)
+    revision: int = 0
+
+
+class SidebarVisibilityUpdate(ApiModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
+    hidden_keys: list[NavigationKey] = Field(max_length=len(DEFAULT_NAVIGATION))
+    revision: int = Field(ge=0)
+
+    @field_validator("hidden_keys")
+    @classmethod
+    def unique_keys(cls, value: list[NavigationKey]) -> list[NavigationKey]:
+        if len(value) != len(set(value)):
+            raise ValueError("Разделы не должны повторяться")
+        if "settings" in value:
+            raise ValueError("Настройки профиля должны оставаться доступными")
+        return value
 
 
 class InterfaceLocaleUpdate(ApiModel):

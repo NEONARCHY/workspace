@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type {
   CalendarEvent,
@@ -200,6 +200,23 @@ export function CalendarView({
   const lastChatDraftKey = useRef<string | undefined>(undefined);
   const nextPreparedTaskKey = useRef(1);
   const sideRef = useRef<HTMLElement>(null);
+  const frameRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    const measure = () => {
+      const style = getComputedStyle(frame);
+      const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
+      const inset = `${Math.max(0, frame.offsetWidth - frame.clientWidth - borders)}px`;
+      if (frame.style.getPropertyValue("--ws-calendar-scrollbar-inset") !== inset) {
+        frame.style.setProperty("--ws-calendar-scrollbar-inset", inset);
+      }
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, []);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
   const selectedDayIsPast = isPastDay(selectedDay);
@@ -286,7 +303,10 @@ export function CalendarView({
   const visibleEventsPerDay = 2;
 
   useEffect(() => {
-    if (draft || selected?.id) sideRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+    if (draft || selected?.id) {
+      const pane = sideRef.current?.querySelector<HTMLElement>(".calendar-detail") ?? sideRef.current;
+      pane?.scrollTo?.({ top: 0 });
+    }
   }, [draft, selected?.id]);
 
   useEffect(() => {
@@ -555,7 +575,7 @@ export function CalendarView({
   };
 
   return (
-    <section className="workspace-view calendar-view" aria-label="Календарь">
+    <section ref={frameRef} className="workspace-view calendar-view" aria-label="Календарь">
       <div className="calendar-main">
         <header className="calendar-toolbar">
           <div className="calendar-title">
@@ -669,7 +689,13 @@ export function CalendarView({
         </div>
       </div>
 
-      <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня">
+      <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня"
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && !event.defaultPrevented && selected && !draft) {
+            event.stopPropagation();
+            setSelected(undefined);
+          }
+        }}>
         {error && (selected || !draft) ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
         {draft && selected ? (
           <div className="calendar-form">

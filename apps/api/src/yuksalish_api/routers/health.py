@@ -6,7 +6,7 @@ from yuksalish_api.schemas import HealthResponse
 router = APIRouter(prefix="/health", tags=["health"])
 
 
-@router.get("/live", response_model=HealthResponse)
+@router.get("/live", response_model=HealthResponse, response_model_exclude_none=True)
 async def live(request: Request) -> HealthResponse:
     settings = request.app.state.settings
     return HealthResponse(
@@ -14,10 +14,11 @@ async def live(request: Request) -> HealthResponse:
         service="yuksalish-api",
         version=__version__,
         environment=settings.environment,
+        deployment_id=settings.deployment_id,
     )
 
 
-@router.get("/ready", response_model=HealthResponse)
+@router.get("/ready", response_model=HealthResponse, response_model_exclude_none=True)
 async def ready(request: Request) -> HealthResponse:
     settings = request.app.state.settings
     return HealthResponse(
@@ -25,4 +26,5 @@ async def ready(request: Request) -> HealthResponse:
         service="yuksalish-api",
         version=__version__,
         environment=settings.environment,
+        deployment_id=settings.deployment_id,
     )

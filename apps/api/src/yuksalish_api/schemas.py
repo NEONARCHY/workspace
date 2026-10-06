@@ -1,4 +1,5 @@
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -10,6 +11,7 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     environment: str
+    deployment_id: UUID | None = None
 
 
 class LocalizedLabel(BaseModel):

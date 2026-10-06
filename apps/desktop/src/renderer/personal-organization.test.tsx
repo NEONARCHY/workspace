@@ -33,6 +33,9 @@ describe("Personal organization", () => {
     expect(screen.getByRole("button", { name: "Переставить: tasks" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /выше|ниже/i })).not.toBeInTheDocument();
     expect(save).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Переставить: ИИ-модули" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Переставить: ai_referent" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Переставить: ai_hisobot" })).not.toBeInTheDocument();
     view.rerender(<NavigationEditor order={navigationKeys} revision={8} labels={labels} onSave={save} onClose={close} />);
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 4));

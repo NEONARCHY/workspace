@@ -7,6 +7,39 @@ describe("web API addresses and session restore", () => {
     window.yuksalish = defaultBridge;
     if (cookieDescriptor) Object.defineProperty(document, "cookie", cookieDescriptor);
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps chat-specific history separate from the prewarmed legacy conversation", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("[]", { headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    api.clearAssistantPreload();
+    api.prewarmAssistantMessages("chat-token");
+    await api.loadAssistantMessages("chat-token", "second-chat");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/assistant/messages?chat_id=second-chat"), expect.anything(),
+    );
+    api.clearAssistantPreload();
+  });
+
+  it("creates and lists persistent chats and handles an empty clear response", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) =>
+      init.method === "DELETE" ? new Response(null, { status: 204 })
+        : new Response(JSON.stringify({ id: "chat" }), { headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await api.listAssistantChats("chat-token");
+    await api.createAssistantChat("chat-token");
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("/assistant/chats"), expect.objectContaining({ method: "POST" }));
+    await expect(api.clearAssistantChat("chat-token", "chat")).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("/assistant/chats/chat/messages"), expect.objectContaining({ method: "DELETE" }));
+    await api.sendAssistantMessage("chat-token", "flash-lite", "Hello", undefined, false, "chat");
+    const options = fetchMock.mock.calls.at(-1)?.[1] as RequestInit;
+    expect(JSON.parse(String(options.body))).toEqual({ model: "flash-lite", message: "Hello", continue_draft: false, chat_id: "chat" });
   });
 
   it("derives HTTPS and WebSocket endpoints from the browser origin", async () => {
@@ -24,7 +57,7 @@ describe("web API addresses and session restore", () => {
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
     const api = await import("./workspace-api");
-    expect(api.apiBaseUrl).toBe(window.location.origin);
+    expect(api.getApiBaseUrl()).toBe(window.location.origin);
     await api.refreshAuthentication();
     expect(fetchMock).toHaveBeenCalledWith(
       `${window.location.origin}/api/v1/auth/web/refresh`,

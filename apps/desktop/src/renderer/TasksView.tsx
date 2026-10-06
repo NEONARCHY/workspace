@@ -93,6 +93,7 @@ function cycleLabel(cycle: NonNullable<WorkspaceTask["cycle"]>): string {
 
 export function TaskHelp({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   const [open, setOpen] = useState(false);
+  const [portalContainer, setPortalContainer] = useState<Element | null>(null);
   const [position, setPosition] = useState<{ readonly top: number; readonly left: number } | null>(null);
   const surfaceId = useId();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -137,8 +138,8 @@ export function TaskHelp({ title, children }: { readonly title: string; readonly
     };
   }, [open]);
   return <>
-    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={() => setOpen((current) => !current)}>?</button>
-    {open ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, document.body) : null}
+    <button ref={buttonRef} className="task-section-help" type="button" aria-label={`Справка: ${title}`} aria-expanded={open} aria-controls={open ? surfaceId : undefined} title={`О разделе «${title}»`} onClick={(event) => { setPortalContainer(event.currentTarget.closest(".fui-DialogSurface") ?? document.body); setOpen((current) => !current); }}>?</button>
+    {open && portalContainer ? createPortal(<span id={surfaceId} ref={surfaceRef} className="task-section-help-surface" role="note" style={{ position: "fixed", top: position?.top ?? 0, left: position?.left ?? 0, visibility: position ? "visible" : "hidden" }}><strong>{title}</strong><span>{children}</span></span>, portalContainer) : null}
   </>;
 }
 
@@ -195,6 +196,7 @@ interface TasksViewProps {
   readonly tasks: readonly WorkspaceTask[];
   readonly attachments: readonly WorkspaceAttachment[];
   readonly people: readonly WorkspacePerson[];
+  readonly token?: string;
   readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly efficiency?: EfficiencyOverview;
@@ -330,7 +332,8 @@ export function TasksView(props: TasksViewProps) {
       const matchesRole = roleFilter === "all" || roleFilter === "author" && task.authorId === currentUserId
         || roleFilter === "assignee" && task.assigneeId === currentUserId
         || task.participants.some(item => item.userId === currentUserId && item.role === roleFilter);
-      return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""}`.toLocaleLowerCase("ru").includes(search));
+      const participantNames = task.participants.map((item) => names.get(item.userId) ?? "").join(" ");
+      return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""} ${participantNames}`.toLocaleLowerCase("ru").includes(search));
     });
   }, [currentUserId, filter, tasks, query, people, roleFilter]);
 
@@ -593,18 +596,20 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </SlidingSegmented>;
-  const newTaskButton = mode !== "efficiency" ? <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button> : null;
+  const newTaskButton = <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
+  const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
 
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
-        {mode !== "calendar" ? <header className="section-toolbar">
+        <header className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
+            <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
             {newTaskButton}
             {taskViewSwitch}
           </div>
-        </header> : null}
+        </header>
 
         {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>
@@ -612,17 +617,19 @@ export function TasksView(props: TasksViewProps) {
           <div className="task-focus-object overdue"><span>Риск срока</span><strong>{taskCounts.overdue}</strong><small>{taskCounts.overdue ? "нужно обратить внимание" : "всё идёт по плану"}</small></div>
         </div> : null}
 
-        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <SlidingSegmented className="task-filters" aria-label="Фильтры задач">
+        {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-filters">
+          <SlidingSegmented className="task-filter-tabs" role="group" aria-label="Фильтры задач">
           {(Object.keys(taskFilterLabels) as TaskFilter[]).map((key) => (
             <button className={filter === key ? "active" : ""} aria-label={taskFilterLabels[key]} aria-pressed={filter === key} key={key} onClick={() => setFilter(key)} type="button"><span>{taskFilterLabels[key]}</span><b aria-hidden="true">{taskCounts[key]}</b></button>
           ))}
+          </SlidingSegmented>
           <WorkspaceSelect className="task-role-filter" aria-label="Моя роль в задаче" value={roleFilter} onChange={event => setRoleFilter(event.target.value)}><option value="all">Все роли</option><option value="author">Я постановщик</option><option value="assignee">Я исполнитель</option><option value="co_assignee">Я соисполнитель</option><option value="observer">Я наблюдатель</option></WorkspaceSelect>
           <Input className="task-search" aria-label="Поиск задач" contentBefore={<Search20Regular />} placeholder="Название, проект, исполнитель" value={query} onChange={(_, data) => setQuery(data.value)} />
-        </SlidingSegmented> : null}
+        </div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} actions={<>{newTaskButton}{taskViewSwitch}</>} /> : (
+        {mode === "efficiency" ? <EfficiencyView overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
-          <div className="task-kanban" aria-label="Kanban задач">
+          <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
               const columnTasks = visibleTasks.filter((task) => task.status === status);
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>

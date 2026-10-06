@@ -36,9 +36,9 @@
   min-width: 0;
 }
 .sliding-segmented.notification-kind-filters {
-  --sliding-indicator-background: #e8f4f2;
-  border-radius: 12px;
-  background: #edf3f2;
+  --sliding-indicator-background: #fff;
+  border-radius: 15px;
+  background: #eaf1f1;
 }
 .sliding-segmented.notification-kind-filters > button:first-child {
   position: relative;
@@ -74,16 +74,17 @@
   border-radius: 8px;
 }
 .sliding-segmented.task-team-scopes {
-  --sliding-indicator-background: #e7f3f4;
+  --sliding-indicator-background: #fff;
   width: fit-content;
   padding: 3px;
-  border-radius: 10px;
-  background: #f1f6f6;
+  border-radius: 11px;
+  background: #edf4f3;
 }
-.sliding-segmented.task-filters {
-  --sliding-indicator-background: #e7f1fa;
+.sliding-segmented.task-team-scopes > button[aria-pressed="true"] { color: var(--ws-text); }
+.sliding-segmented.task-filter-tabs {
+  --sliding-indicator-background: #fff;
 }
-.sliding-segmented.task-filters > .task-search {
+.task-filters > .task-search {
   margin-left: auto;
 }
 .sliding-segmented.ws-time-period {

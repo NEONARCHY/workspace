@@ -36,6 +36,13 @@ export interface PersonalPreferences {
   readonly navigationOrder: readonly NavigationKey[];
   readonly locale: InterfaceLocale;
   readonly revision: number;
+  /** Administrator-managed menu presentation; not a module permission. */
+  readonly hiddenNavigationKeys?: readonly NavigationKey[];
+}
+export interface SidebarVisibility {
+  readonly userId: string;
+  readonly hiddenKeys: readonly NavigationKey[];
+  readonly revision: number;
 }
 export type ModuleStatus = "placeholder" | "available";
 
@@ -367,11 +374,15 @@ export interface ChatMember {
   readonly permissions: ChatPermissions;
 }
 
+export const chatAvatarIconKeys = ["team", "plane", "project", "briefcase", "building", "globe", "calendar", "document", "target", "compass", "star", "sparkles"] as const;
+export type ChatAvatarIconKey = (typeof chatAvatarIconKeys)[number];
+
 export interface CreateChatInput {
   readonly kind: "direct" | "group";
   readonly title: string;
   readonly description: string;
   readonly memberIds: readonly string[];
+  readonly avatarIconKey?: ChatAvatarIconKey | null;
 }
 
 export interface MessageOptions {
@@ -391,6 +402,8 @@ export interface ChatSummary {
   readonly description: string;
   readonly ownerId?: string | null;
   readonly canDelete?: boolean;
+  readonly avatarIconKey?: ChatAvatarIconKey | null;
+  readonly canEditAvatar?: boolean;
   readonly members: readonly ChatMember[];
   readonly permissions: ChatPermissions;
 }
@@ -480,6 +493,14 @@ export interface AssistantActionDraft {
   readonly kind: AssistantActionKind;
   readonly fields: Readonly<Record<string, string>>;
   readonly ready: boolean;
+}
+
+export interface AssistantChat {
+  readonly id: string;
+  readonly title: string;
+  readonly isDefault: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 export interface AssistantMessage {
@@ -1415,6 +1436,27 @@ export interface EfficiencyOverview {
   readonly employees: readonly EmployeeEfficiency[];
 }
 
+export interface PersonalEfficiencyTask {
+  readonly id: string;
+  readonly title: string;
+  readonly status: string;
+  readonly dueAt: string | null;
+  readonly updatedAt: string;
+  readonly onTimeCount: number;
+  readonly overdueCount: number;
+  readonly excludedCount: number;
+  readonly returnedForRevisionCount: number;
+}
+
+export interface PersonalEfficiency {
+  readonly employee: EmployeeEfficiency;
+  readonly taskDetailsVisible: boolean;
+  readonly workload: Readonly<Record<"new" | "inProgress" | "awaitingReview" | "completed", number>>;
+  readonly recentTasks: readonly PersonalEfficiencyTask[];
+  readonly impactTasks: readonly PersonalEfficiencyTask[];
+  readonly impactTaskCount: number;
+}
+
 export type TaskReturnReason =
   | "incomplete_result"
   | "requirements_not_met"
@@ -1465,6 +1507,7 @@ export interface WorkspaceProject {
 }
 
 export interface ProjectInput {
+  readonly chatIconKey?: ChatAvatarIconKey | null;
   readonly code: string;
   readonly title: string;
   readonly description: string;
@@ -1478,6 +1521,7 @@ export interface ProjectInput {
 
 export interface ProjectHubProject {
   readonly id: string;
+  readonly chatId?: string | null;
   readonly code: string;
   readonly title: string;
   readonly description: string;
@@ -1500,7 +1544,7 @@ export interface ProjectHubProject {
 export type ProjectHubProjectInput = Pick<ProjectHubProject,
   "code" | "title" | "description" | "managerUserId" | "responsibleUserIds" |
   "approverUserIds" | "startDate" | "endDate" | "budget" | "currency" |
-  "accessStatus" | "lifecycleStatus">;
+  "accessStatus" | "lifecycleStatus"> & { readonly chatIconKey?: ChatAvatarIconKey | null };
 
 export interface ProjectHubWorkstream {
   readonly id: string;
@@ -1623,6 +1667,7 @@ export interface TripRequest {
 }
 
 export interface TripRequestInput {
+  readonly chatIconKey?: ChatAvatarIconKey | null;
   readonly purpose: string;
   readonly destination: string;
   readonly startDate: string;

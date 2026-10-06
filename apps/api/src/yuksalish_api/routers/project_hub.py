@@ -3,7 +3,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from yuksalish_api.access_control import ensure_module_action
@@ -38,6 +38,7 @@ from yuksalish_api.project_hub_service import (
     submit_funding_request,
 )
 from yuksalish_api.repository import WorkspaceRepositoryError
+from yuksalish_api.routers.messenger import changed
 
 router = APIRouter(prefix="/project-hub", tags=["project-hub"])
 User = Annotated[AuthenticatedUser, Depends(require_user)]
@@ -68,13 +69,15 @@ async def get_request_targets(user: User, connection: Connection) -> ProjectHubO
 
 @router.post("/projects", response_model=ProjectHubResponse, status_code=201)
 async def post_project(
-    payload: ProjectHubWrite, user: User, connection: Connection
+    payload: ProjectHubWrite, user: User, connection: Connection, request: Request
 ) -> ProjectHubResponse:
     await ensure_module_action(connection, user, "project_hub", "create")
     try:
-        return await save_project(connection, user, payload)
+        result = await save_project(connection, user, payload)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
+    await changed(connection, request)
+    return result
 
 
 @router.put("/projects/{project_id}", response_model=ProjectHubResponse)
@@ -83,12 +86,15 @@ async def put_project(
     payload: ProjectHubWrite,
     user: User,
     connection: Connection,
+    request: Request,
 ) -> ProjectHubResponse:
     await ensure_module_action(connection, user, "project_hub", "edit")
     try:
-        return await save_project(connection, user, payload, project_id)
+        result = await save_project(connection, user, payload, project_id)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
+    await changed(connection, request)
+    return result
 
 
 @router.post(
@@ -99,12 +105,15 @@ async def post_item(
     payload: ProjectWorkItemWrite,
     user: User,
     connection: Connection,
+    request: Request,
 ) -> ProjectWorkItemResponse:
     await ensure_module_action(connection, user, "project_hub", "create")
     try:
-        return await save_item(connection, user, project_id, payload)
+        result = await save_item(connection, user, project_id, payload)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
+    await changed(connection, request)
+    return result
 
 
 @router.post(
@@ -147,12 +156,15 @@ async def put_item(
     payload: ProjectWorkItemWrite,
     user: User,
     connection: Connection,
+    request: Request,
 ) -> ProjectWorkItemResponse:
     await ensure_module_action(connection, user, "project_hub", "edit")
     try:
-        return await save_item(connection, user, project_id, payload, item_id)
+        result = await save_item(connection, user, project_id, payload, item_id)
     except WorkspaceRepositoryError as error:
         raise _error(error) from error
+    await changed(connection, request)
+    return result
 
 
 @router.patch(

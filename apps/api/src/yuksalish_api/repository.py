@@ -2482,7 +2482,7 @@ async def load_workspace(
     if current_user.role in {"admin", "superadmin"} or is_executive_leader(
         current_user.job_title
     ):
-        leadership_contexts = ["project", "trip", "task"]
+        leadership_contexts = ["project", "project_hub", "trip", "task"]
         accessible_chat_ids = select(chats.c.id).where(
             chats.c.id.in_(member_chat_ids)
             | chats.c.context_type.in_(leadership_contexts)
@@ -3679,13 +3679,14 @@ async def _active_user_id(connection: AsyncConnection, value: str) -> UUID:
 async def _sync_context_chat(
     connection: AsyncConnection,
     *,
-    context_type: Literal["project", "trip"],
+    context_type: Literal["project", "project_hub", "trip"],
     context_id: UUID,
     title: str,
     description: str,
     owner_user_id: UUID,
     member_user_ids: Sequence[UUID],
     occurred_at: datetime | None = None,
+    avatar_icon_key: str | None = None,
 ) -> UUID:
     """Create one managed object chat and reconcile its explicit participants."""
     now = occurred_at or datetime.now(UTC)
@@ -3693,10 +3694,10 @@ async def _sync_context_chat(
         select(chats.c.id).where(
             chats.c.context_type == context_type,
             chats.c.context_id == context_id,
-        )
+        ).with_for_update()
     )
-    kind = "project" if context_type == "project" else "approval"
-    label = "Проект" if context_type == "project" else "Поездка"
+    kind = "approval" if context_type == "trip" else "project"
+    label = "Поездка" if context_type == "trip" else "Проект"
     if chat_id is None:
         chat_id = await connection.scalar(
             pg_insert(chats)
@@ -3704,6 +3705,7 @@ async def _sync_context_chat(
                 id=uuid4(), kind=kind, title=f"{label} · {title}"[:240],
                 description=description[:4000], context_type=context_type,
                 context_id=context_id, direct_key=None, created_by_user_id=owner_user_id,
+                avatar_icon_key=avatar_icon_key,
                 created_at=now, updated_at=now,
             )
             .on_conflict_do_nothing(
@@ -3718,7 +3720,7 @@ async def _sync_context_chat(
         if chat_id is None:
             chat_id = await connection.scalar(select(chats.c.id).where(
                 chats.c.context_type == context_type, chats.c.context_id == context_id,
-            ))
+            ).with_for_update())
     if chat_id is None:
         raise WorkspaceRepositoryError(500, "Object chat could not be created")
     await connection.execute(update(chats).where(chats.c.id == chat_id).values(
@@ -6391,6 +6393,7 @@ async def create_project(
         owner_user_id=current_user.id,
         member_user_ids=[manager_id],
         occurred_at=now,
+        avatar_icon_key=payload.chat_icon_key,
     )
     return await _project_response(connection, current_user, project_id)
 
@@ -6607,6 +6610,7 @@ async def create_trip_request(
         owner_user_id=current_user.id,
         member_user_ids=employee_ids,
         occurred_at=now,
+        avatar_icon_key=payload.chat_icon_key,
     )
     return await _trip_response(connection, current_user, request_id)
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { EmployeeRecognitionProfile } from "@yuksalish/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,13 +8,16 @@ import {
   issueEmployeeReward,
   loadEmployeeRecognitionProfile,
   loadWorkspaceEfficiency,
+  loadPersonalEfficiency,
 } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
+import { clearProfilePreload, loadPreparedProfile } from "./profile-preload";
 
 vi.mock("./workspace-api", () => ({
   issueEmployeeReward: vi.fn(),
   loadEmployeeRecognitionProfile: vi.fn(),
   loadWorkspaceEfficiency: vi.fn(),
+  loadPersonalEfficiency: vi.fn(),
   loadProfileAvatar: vi.fn(),
 }));
 
@@ -88,6 +91,7 @@ const profile: EmployeeRecognitionProfile = {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  clearProfilePreload();
 });
 
 function renderProfile(value: EmployeeRecognitionProfile = profile, options: {
@@ -107,6 +111,95 @@ function renderProfile(value: EmployeeRecognitionProfile = profile, options: {
 }
 
 describe("EmployeeProfileDialog", () => {
+  it("offers personal efficiency only in the own profile and loads it on demand", async () => {
+    renderProfile(profile, { currentUserId: "baxtiyor" });
+    const button = await screen.findByRole("button", { name: "Моя эффективность" });
+    expect(loadPersonalEfficiency).not.toHaveBeenCalled();
+    vi.mocked(loadPersonalEfficiency).mockRejectedValue(new Error("Нет соединения"));
+    fireEvent.click(button);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет соединения");
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "К профилю" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Моя эффективность" })).toHaveFocus());
+    cleanup(); clearProfilePreload();
+    renderProfile(profile, { currentUserId: "manager" });
+    await screen.findByRole("heading", { name: "Бахтиёр Самугов" });
+    expect(screen.queryByRole("button", { name: "Моя эффективность" })).not.toBeInTheDocument();
+  });
+  it("measures pinned header clearance, adapts to unpinned layout and cleans up observers", async () => {
+    const observers: { callback: ResizeObserverCallback; observer: ResizeObserver; targets: Set<Element> }[] = [];
+    class HeaderResizeObserver extends ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        super(callback);
+        const targets = new Set<Element>();
+        this.observe = vi.fn((target: Element) => { targets.add(target); });
+        this.disconnect = vi.fn();
+        observers.push({ callback, observer: this, targets });
+      }
+    }
+    vi.stubGlobal("ResizeObserver", HeaderResizeObserver);
+    try {
+      // Exercise the actual warm-open path, where data precedes portal mounting.
+      vi.mocked(loadEmployeeRecognitionProfile).mockResolvedValue(profile);
+      await loadPreparedProfile("token", "baxtiyor");
+      renderProfile();
+      await screen.findByRole("heading", { name: profile.person.name });
+      const header = document.querySelector<HTMLElement>(".employee-profile-sticky")!;
+      const content = header.closest<HTMLElement>(".fui-DialogContent")!;
+      // The heading can be present before the passive layout observer attaches.
+      const measured = await waitFor(() => {
+        const entry = observers.find((candidate) => candidate.targets.has(header));
+        if (!entry) throw new Error("Profile header observer has not attached");
+        return entry;
+      });
+      expect(measured.targets.has(content)).toBe(true);
+      header.style.position = "sticky";
+      Object.defineProperty(header, "offsetHeight", { value: 244, configurable: true });
+      act(() => measured.callback([], measured.observer));
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("260px");
+      Object.defineProperty(content, "clientHeight", { value: 300, configurable: true });
+      act(() => measured.callback([], measured.observer));
+      expect(header).toHaveClass("is-unpinned");
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("16px");
+      Object.defineProperty(content, "clientHeight", { value: 620, configurable: true });
+      act(() => measured.callback([], measured.observer));
+      expect(header).not.toHaveClass("is-unpinned");
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("260px");
+      header.style.position = "static";
+      act(() => measured.callback([], measured.observer));
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("16px");
+      cleanup();
+      expect(measured.observer.disconnect).toHaveBeenCalled();
+      expect(content.style.getPropertyValue("--employee-profile-header-inset")).toBe("");
+      expect(header).not.toHaveClass("is-unpinned");
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves long identity copy, truthful recognition counts and each navigation target", async () => {
+    const jobTitle = "Руководитель направления координации региональных подразделений и международного сотрудничества";
+    renderProfile({ ...profile, person: { ...profile.person, jobTitle } });
+    expect(await screen.findByRole("heading", { name: profile.person.name })).toBeVisible();
+    const hero = document.querySelector(".employee-profile-hero");
+    expect(hero).toHaveTextContent(jobTitle);
+    expect(hero).toHaveTextContent("Проектный офис");
+    expect(hero?.querySelector(".employee-profile-hero-stat strong")).toHaveTextContent("0");
+    expect(hero?.querySelector(".employee-profile-hero-stat small")).toHaveTextContent("1 достижение");
+    const navigation = screen.getByRole("navigation", { name: "Навигация по профилю" });
+    expect(navigation).toHaveClass("employee-scope-switch", "sliding-segmented");
+    expect(navigation.querySelector(".sliding-segmented-indicator")).toHaveAttribute("aria-hidden", "true");
+    for (const label of ["Награды", "Достижения", "Обзор"]) {
+      const button = within(navigation).getByRole("button", { name: label });
+      fireEvent.click(button);
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(within(navigation).getAllByRole("button").filter((item) => item.getAttribute("aria-pressed") === "true")).toHaveLength(1);
+      expect(document.getElementById(button.getAttribute("aria-controls") ?? "")).toBeInTheDocument();
+    }
+    expect(issueEmployeeReward).not.toHaveBeenCalled();
+  });
+
   it("opens a direct chat from another employee's profile, but not from one's own", async () => {
     const onOpenChat = vi.fn().mockResolvedValue(undefined);
     renderProfile(profile, { currentUserId: "temur", onOpenChat });

@@ -1,0 +1,98 @@
+/* Standalone schedule only; the task calendar owns its separate layout. */
+.calendar-view:not(.task-calendar-embedded) {
+  /* Include an actual native scrollbar in the total visible edge clearance. */
+  padding-right: max(0px, calc(20px - var(--ws-calendar-scrollbar-inset, 0px)));
+  column-gap: 20px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-main {
+  padding-bottom: 0;
+  padding-right: 0;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-board {
+  row-gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-grid {
+  gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-day-summary {
+  align-items: center;
+  gap: 8px;
+  min-height: 68px;
+  margin-block: 14px 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fff;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-day-summary > p {
+  min-width: 0;
+  margin: 0;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-side {
+  padding: 0;
+  /* This transparent scroll viewport must not cut the first heading glyphs.
+     Its individual summary, empty-state and detail cards retain their radii. */
+  border-radius: 0;
+  scrollbar-gutter: auto;
+  background: transparent;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  border-radius: 20px;
+  background: #fff;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail .calendar-side-nav {
+  margin: -4px -4px 14px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail-list > div {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+}
+.calendar-view:not(.task-calendar-embedded) .calendar-detail .calendar-form-actions {
+  flex-wrap: wrap;
+}
+@container workspace (max-width: 1100px) {
+  .calendar-view:not(.task-calendar-embedded) {
+    /* Fill the visible workspace before the agenda continues below it.
+       Short windows still scroll rather than squeezing the day cells. */
+    grid-template-rows: max(720px, 100%) auto;
+    row-gap: 20px;
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-main {
+    height: 100%;
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
+    position: fixed;
+    z-index: 30;
+    top: 80px;
+    right: 20px;
+    bottom: 14px;
+    width: min(360px, calc(100vw - 40px));
+    height: auto;
+    margin: 0;
+    border: 0;
+    box-shadow: -14px 8px 40px -20px rgb(41 58 85 / 30%);
+  }
+  .calendar-view:not(.task-calendar-embedded):has(.calendar-detail) {
+    grid-template-rows: max(720px, 100%);
+  }
+  .calendar-view:not(.task-calendar-embedded) .calendar-main {
+    padding-right: 0;
+  }
+}
+@media (forced-colors: active) {
+  .calendar-view:not(.task-calendar-embedded) :is(.calendar-day-summary, .calendar-detail) {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+}

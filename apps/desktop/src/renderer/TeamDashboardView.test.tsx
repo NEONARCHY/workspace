@@ -102,6 +102,19 @@ describe("TeamDashboardView", () => {
     expect(onSelectTask).toHaveBeenCalledWith("overdue");
   });
 
+  it("keeps each metric label and note in one copy block, separate from its counter", () => {
+    renderDashboard();
+    for (const label of ["Активные задачи", "Нужна помощь", "Ждут решения", "Срок сегодня"]) {
+      const card = screen.getByText(label).closest("button")!;
+      const copy = card.querySelector(".team-dash-metric-copy");
+      expect(copy).toHaveTextContent(label);
+      expect(copy?.querySelector("small")).toBeInTheDocument();
+      expect(copy?.querySelector("strong")).toBeNull();
+      expect(card.querySelector(":scope > strong")).toBeInTheDocument();
+      expect(card.querySelector(".team-dash-metric-icon")).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("filters the attention queue by employee and exposes an explicit reset", () => {
     renderDashboard();
     fireEvent.click(screen.getByRole("button", { name: /Азиза Каримова.*1 активная задача/i }));
@@ -154,5 +167,38 @@ describe("TeamDashboardView", () => {
     drawer = screen.getByRole("dialog", { name: "пятница, 11 сентября" });
     expect(within(drawer).getByText("В этот день задач нет")).toBeInTheDocument();
     expect(drawer).not.toHaveTextContent(/drawer/i);
+  });
+
+  it("keeps seven dates, separate caption rows and full accessible day names", () => {
+    renderDashboard();
+    const flow = screen.getByRole("complementary", { name: "Работа команды" });
+    const days = flow.querySelectorAll(".team-dash-week-bars > button");
+    expect(days).toHaveLength(7);
+    expect([...days].map(day => day.querySelector("small > span:last-child")?.textContent)).toEqual(["9", "10", "11", "12", "13", "14", "15"]);
+    expect(days[0]).toHaveAccessibleName("Задачи со сроком сегодня: 1");
+    expect(days[1]).toHaveAccessibleName("Задачи со сроком четверг, 10 сентября: 1");
+    expect(days[0]?.querySelector(".team-dash-week-today-full")).toHaveTextContent("сегодня");
+    expect(days[0]?.querySelector(".team-dash-week-today-short")).toHaveTextContent("сег.");
+    for (const day of days) {
+      expect(day.querySelector("small")).toHaveAttribute("aria-hidden", "true");
+      expect(day.querySelector("small")?.children).toHaveLength(2);
+      expect(day.querySelector(":scope > span")).toHaveAttribute("aria-hidden", "true");
+      expect(day.querySelector(":scope > strong")).toBeInTheDocument();
+      expect(day.getAttribute("title")).toMatch(/сентября/);
+    }
+  });
+
+  it("keeps all four flow tiles labelled and selectable, including empty statuses", () => {
+    renderDashboard();
+    const statuses = screen.getByRole("group", { name: "Задачи по статусам" });
+    expect(within(statuses).getAllByRole("button")).toHaveLength(4);
+    for (const [label, count] of [["Новые", 1], ["В работе", 0], ["На проверке", 1], ["Просрочены", 1]] as const) {
+      const tile = within(statuses).getByRole("button", { name: `${label} ${count}` });
+      fireEvent.click(tile);
+      expect(tile).toHaveAttribute("aria-pressed", "true");
+      expect(within(statuses).getAllByRole("button", { pressed: true })).toEqual([tile]);
+      const drawer = screen.getByRole("dialog", { name: label });
+      if (count === 0) expect(within(drawer).getByText("В этой категории задач нет")).toBeInTheDocument();
+    }
   });
 });

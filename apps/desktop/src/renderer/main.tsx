@@ -2,6 +2,8 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { ScrollbarEdges } from "./ScrollbarEdges";
+import { DialogResizeMotion } from "./DialogResizeMotion";
 import { InterfaceLocalization } from "./InterfaceLocalization";
 import { RecoveryBoundary, reportDiagnostic } from "./RecoveryBoundary";
 import "./styles.css";
@@ -26,6 +28,7 @@ import "./workspace-2-workflow.css";
 import "./workspace-2-projects-trips.css";
 import "./workspace-2-tasks.css";
 import "./workspace-2-interactions.css";
+import "./ai-navigation.css";
 import "./workspace-2-auth.css";
 import "./workspace-2-messenger.css";
 import "./workspace-2-notifications.css";
@@ -43,6 +46,19 @@ import "./ai-hisobot.css";
 import "./telegram-access.css";
 import "./employee-scope.css";
 import "./sliding-segmented.css";
+import "./scrollbars.css";
+import "./accent-surfaces.css";
+import "./list-row-hover.css";
+import "./workspace-calendar.css";
+import "./confirm-action-dialog.css";
+import "./context-motion.css";
+import "./presence-summary-dialog.css";
+import "./assistant-chat.css";
+import "./account-settings.css";
+import "./profile-header.css";
+import "./project-workspace.css";
+import "./sidebar-visibility.css";
+import "./navigation-sliding.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {
@@ -59,6 +75,6 @@ if (root === null) {
 
 createRoot(root).render(
   <StrictMode>
-    <RecoveryBoundary><InterfaceLocalization /><App /></RecoveryBoundary>
+    <RecoveryBoundary><InterfaceLocalization /><ScrollbarEdges /><DialogResizeMotion /><App /></RecoveryBoundary>
   </StrictMode>,
 );
