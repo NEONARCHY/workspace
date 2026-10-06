@@ -5,7 +5,9 @@ import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
 import { workspaceTheme } from "../src/renderer/workspace-theme";
 import "../src/renderer/styles.css";
 import "../src/renderer/design-system.css";
+import "../src/renderer/motion.css";
 import "../src/renderer/yuksalish-assistant.css";
+import "../src/renderer/context-motion.css";
 import "../src/renderer/assistant-chat.css";
 
 document.body.style.minHeight = "100vh";
@@ -17,10 +19,24 @@ window.fetch = (resource, options) => {
     return Promise.resolve(new Response(JSON.stringify([{
       id: "qa-chat", title: "Новый чат", isDefault: true,
       createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
+    }, {
+      id: "qa-work", title: "План рабочей недели", isDefault: false,
+      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
+    }, {
+      id: "qa-text", title: "Подготовка текста", isDefault: false,
+      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
     }]), { status: 200, headers: { "Content-Type": "application/json" } }));
   }
   if (url.pathname === "/api/v1/assistant/messages" && (!options?.method || options.method === "GET")) {
-    return Promise.resolve(new Response("[]", { status: 200, headers: { "Content-Type": "application/json" } }));
+    const messages = url.searchParams.get("chat_id") === "qa-work" ? [{
+      id: "qa-question", role: "user", model: "flash-lite", content: "Помоги спланировать неделю.",
+      createdAt: "2026-10-05T10:00:00Z",
+    }, {
+      id: "qa-answer", role: "assistant", model: "flash-lite",
+      content: "Начнём с трёх приоритетов: важные задачи, встречи и время для спокойной работы. Какие задачи нужно завершить на этой неделе?",
+      createdAt: "2026-10-05T10:01:00Z",
+    }] : [];
+    return Promise.resolve(new Response(JSON.stringify(messages), { status: 200, headers: { "Content-Type": "application/json" } }));
   }
   if (url.pathname.startsWith("/api/")) {
     return Promise.resolve(new Response(JSON.stringify({ detail: "Только визуальный предпросмотр: данные не отправляются." }),
