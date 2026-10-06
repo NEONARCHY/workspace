@@ -14,6 +14,7 @@ from .errors import WorkspaceRepositoryError
 from .position_policy import is_executive_leader
 from .tables import (
     audit_events,
+    chat_dismissals,
     chat_members,
     chats,
     message_reactions,
@@ -21,8 +22,11 @@ from .tables import (
     message_versions,
     messages,
     pinned_messages,
+    project_hub_projects,
+    trip_requests,
     users,
     workspace_notifications,
+    workspace_projects,
 )
 from .workspace_schemas import (
     AddChatMembersRequest,
@@ -147,16 +151,77 @@ async def chat_access(
             "permissions": CONTEXT_LEADERSHIP_PERMISSIONS.model_dump(),
         })
     # Workspace-level admins are not implicitly members of a private conversation.
-    if chat is None or member is None:
+    left_context = (chat is not None and chat["context_type"] is not None
+                    and await connection.scalar(
+        select(chat_dismissals.c.chat_id).where(
+            chat_dismissals.c.chat_id == chat_id, chat_dismissals.c.user_id == user.id,
+        )
+    ) is not None)
+    if chat is None or member is None or left_context:
         raise WorkspaceRepositoryError(404, "Чат недоступен")
     return chat, member
 
 
 def require_group(chat: Record) -> None:
-    if chat["kind"] != "group":
+    if chat["kind"] != "group" or chat["context_type"] is not None:
         raise WorkspaceRepositoryError(
             403, "Состав этого служебного или личного чата не изменяется"
         )
+
+
+async def context_chat_finished(connection: AsyncConnection, chat: Record,
+                                *, lock: bool = False) -> bool:
+    """Approval finished_at is NOT the trip's actual end date."""
+    if chat["context_type"] == "project":
+        query = select(workspace_projects.c.status).where(
+            workspace_projects.c.id == chat["context_id"],
+        )
+        return await connection.scalar(query.with_for_update() if lock else query) == "completed"
+    if chat["context_type"] == "project_hub":
+        query = select(project_hub_projects.c.lifecycle_status).where(
+            project_hub_projects.c.id == chat["context_id"],
+        )
+        return await connection.scalar(query.with_for_update() if lock else query) == "completed"
+    if chat["context_type"] == "trip":
+        query = select(trip_requests).where(
+            trip_requests.c.id == chat["context_id"],
+        )
+        result = await connection.execute(query.with_for_update() if lock else query)
+        trip = result.mappings().first()
+        return trip is not None and (trip["status"] == "rejected" or (
+            trip["status"] == "approved"
+            and trip["end_date"] < datetime.now(ZoneInfo("Asia/Tashkent")).date()
+        ))
+    return False
+
+
+async def can_leave_chat(connection: AsyncConnection, chat: Record, user_id: UUID) -> bool:
+    membership = (await connection.execute(select(chat_members).where(
+        chat_members.c.chat_id == chat["id"], chat_members.c.user_id == user_id,
+    ))).mappings().first()
+    if membership is None:
+        return False
+    if chat["context_type"] is not None:
+        return await context_chat_finished(connection, chat)
+    if chat["kind"] != "group":
+        return False
+    if membership["member_role"] != "owner":
+        return True
+    return await connection.scalar(select(chat_members.c.user_id).join(
+        users, users.c.id == chat_members.c.user_id,
+    ).where(chat_members.c.chat_id == chat["id"], chat_members.c.user_id != user_id,
+            users.c.status == "active").limit(1)) is not None
+
+
+async def dismiss_direct_chat(connection: AsyncConnection, user: AuthenticatedUser,
+                              chat_id: UUID) -> None:
+    chat, _ = await chat_access(connection, user, chat_id, lock=True)
+    if chat["kind"] != "direct" or chat["context_type"] is not None:
+        raise WorkspaceRepositoryError(409, "Можно скрыть только личный диалог")
+    await connection.execute(pg_insert(chat_dismissals).values(
+        chat_id=chat_id, user_id=user.id, dismissed_at=datetime.now(UTC),
+    ).on_conflict_do_nothing())
+    await audit(connection, user, "chat.dismissed", chat_id, {})
 
 
 async def audit(
@@ -268,13 +333,12 @@ async def chat_summary(
         context_type=chat["context_type"],
         context_id=str(chat["context_id"]) if chat["context_id"] else None,
         owner_id=next((str(m["user_id"]) for m in members if m["member_role"] == "owner"), None),
+        can_leave=await can_leave_chat(connection, chat, user.id),
         can_delete=(
             chat["context_type"] is None
             and chat["kind"] in {"direct", "group"}
             and (chat["created_by_user_id"] == user.id if chat["kind"] == "group" else (
-                membership["member_role"] == "owner"
-                or chat["created_by_user_id"] == user.id
-                or user.role in {"admin", "superadmin"}
+                any(m["user_id"] == user.id for m in members)
             ))
         ),
         members=[
@@ -355,6 +419,9 @@ async def create_chat(
                     )
                     break
         if existing is not None:
+            await connection.execute(delete(chat_dismissals).where(
+                chat_dismissals.c.chat_id == existing, chat_dismissals.c.user_id == user.id,
+            ))
             return await chat_summary(connection, user, existing)
     now, chat_id = datetime.now(UTC), uuid4()
     await connection.execute(
@@ -437,15 +504,11 @@ async def delete_chat(
     chat, member = await chat_access(connection, user, chat_id, lock=True)
     if chat["context_type"] is not None or chat["kind"] not in {"direct", "group"}:
         raise WorkspaceRepositoryError(409, "Служебный чат нельзя удалить")
-    is_owner = member["member_role"] == "owner"
     is_creator = chat["created_by_user_id"] == user.id
-    is_workspace_admin = user.role in {"admin", "superadmin"}
-    if not (is_creator if chat["kind"] == "group" else (
-        is_owner or is_creator or is_workspace_admin
-    )):
+    if not (is_creator if chat["kind"] == "group" else member["user_id"] == user.id):
         raise WorkspaceRepositoryError(
             403, "Удалить группу может только её создатель" if chat["kind"] == "group"
-            else "Удалить чат может его создатель или администратор"  # noqa: RUF001
+            else "Удаление личного чата доступно только участникам диалога"
         )
     now = datetime.now(UTC)
     await connection.execute(
@@ -546,8 +609,25 @@ async def remove_chat_member(
     chat_id: UUID,
     member_id: UUID,
 ) -> None:
+    # Match object edits' lock order (object, then chat), including reopening a
+    # completed project concurrently with a queued leave.
+    preview, _ = await chat_access(connection, user, chat_id)
+    if preview["context_type"] is not None and (
+        member_id != user.id or not await context_chat_finished(connection, preview, lock=True)
+    ):
+        raise WorkspaceRepositoryError(
+            409, "Выйти можно только после завершения проекта или поездки",
+        )
     chat, actor = await chat_access(connection, user, chat_id, lock=True)
-    require_group(chat)
+    managed = chat["context_type"] is not None
+    if managed:
+        if not await can_leave_chat(connection, chat, user.id):
+            raise WorkspaceRepositoryError(409, "Выход из этого чата недоступен")
+        await connection.execute(pg_insert(chat_dismissals).values(
+            chat_id=chat_id, user_id=user.id, dismissed_at=datetime.now(UTC),
+        ).on_conflict_do_nothing())
+    else:
+        require_group(chat)
     target = (
         (
             await connection.execute(
@@ -563,7 +643,7 @@ async def remove_chat_member(
     if target is None:
         raise WorkspaceRepositoryError(404, "Участник не найден")
     next_owner_id: UUID | None = None
-    if target["member_role"] == "owner":
+    if target["member_role"] == "owner" and not managed:
         if member_id != user.id:
             raise WorkspaceRepositoryError(403, "Нельзя исключить владельца группы")
         next_owner_id = await connection.scalar(
@@ -976,6 +1056,10 @@ async def send_chat_message(
         ],
     )
     await connection.execute(update(chats).where(chats.c.id == chat_id).values(updated_at=now))
+    if chat["kind"] == "direct" and chat["context_type"] is None:
+        await connection.execute(delete(chat_dismissals).where(
+            chat_dismissals.c.chat_id == chat_id,
+        ))
     await notify_message(connection, chat, user, row, recipients)
     return await message_with_details(connection, user, row, chat, member)
 

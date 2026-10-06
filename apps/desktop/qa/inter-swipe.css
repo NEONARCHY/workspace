@@ -1,0 +1,10 @@
+html, body, #root { min-height: 100%; height: 100%; margin: 0; }
+.qa-swipe { height: 100%; display: flex; flex-direction: column; background: var(--ws-canvas); }
+.qa-swipe-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 16px 24px; border-bottom: 1px solid var(--ws-line); }
+.qa-swipe-toolbar > div { margin-right: auto; }
+.qa-swipe-toolbar strong, .qa-swipe-toolbar small { display: block; }
+.qa-swipe-toolbar small { margin-top: 4px; color: var(--ws-muted); font-size: 12px; }
+.qa-swipe > main { flex: 1; min-height: 0; overflow: auto; padding: 24px; }
+.qa-swipe .messenger-view { height: 100%; min-height: 500px; }
+.qa-swipe > footer { padding: 8px 24px; font-size: 12px; color: var(--ws-muted); }
+@media (max-width: 640px) { .qa-swipe > main { padding: 12px; } .qa-swipe-toolbar { padding: 12px; gap: 6px; } }

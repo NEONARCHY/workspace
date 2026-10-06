@@ -13,7 +13,7 @@ html.desktop-window-chrome #window-titlebar {
   border-bottom: 1px solid #e8edf1;
   background: #ffffff;
   color: #293a55;
-  font-family: Gilroy, sans-serif;
+  font-family: var(--ws-font, Inter, sans-serif);
   font-size: 12px;
   font-weight: 600;
   user-select: none;

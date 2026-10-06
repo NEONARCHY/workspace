@@ -1,6 +1,6 @@
 # Soft Spatial Workspace
 
-Renderer migration, desktop 0.29.0, September 2026. Existing React / Fluent / Electron stack, Gilroy, navy #293A55 and turquoise #0091A8. API remains 0.23.0 / migration 0024. No changes to backend security or business rules.
+Renderer migration, desktop 0.29.0, September 2026. Existing React / Fluent / Electron stack, navy #293A55 and turquoise #0091A8. The current UI font is Inter by the owner's explicit request of 2026-10-06; the original migration used Gilroy. API remained 0.23.0 / migration 0024 for that migration. No changes to backend security or business rules in that historical package.
 
 ## Reference audit
 

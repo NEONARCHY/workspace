@@ -225,8 +225,7 @@
 .rail-more-drawer .rail-badge { position: static; min-width: 20px; height: 20px; line-height: 20px; color: #933e4e; background: #f7e4e7; font-size: 10px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .app-shell, .app-rail .rail-label, .app-rail .rail-brand, .app-rail .rail-profile > span:last-child { transition-duration: 0ms !important; } }
 
-/* Keep every single-line Fluent field on the same optical axis. Gilroy's
-   metrics sit high when the input is stretched to the wrapper height; a real
+/* Keep every single-line Fluent field on the same optical axis. A real
    line box plus symmetric vertical padding keeps text, placeholder and the
    native caret centred in search, command and data-entry fields. */
 .app-provider .fui-Input { align-items: stretch; }

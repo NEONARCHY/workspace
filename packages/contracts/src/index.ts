@@ -402,6 +402,7 @@ export interface ChatSummary {
   readonly description: string;
   readonly ownerId?: string | null;
   readonly canDelete?: boolean;
+  readonly canLeave?: boolean;
   readonly avatarIconKey?: ChatAvatarIconKey | null;
   readonly canEditAvatar?: boolean;
   readonly members: readonly ChatMember[];

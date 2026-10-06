@@ -60,7 +60,7 @@ async function main() {
         font: getComputedStyle(form).fontFamily };
     });
     assert(geometry.fits && geometry.footerVisible && geometry.overflow <= 2, `${label}: ${JSON.stringify(geometry)}`);
-    assert(geometry.font.includes("Gilroy"));
+    assert(geometry.font.includes("Inter"));
     const footerBefore = await page.locator(".record-composer-footer").boundingBox();
     await page.locator(".record-composer-body").evaluate((node) => { node.scrollTop = node.scrollHeight; });
     const footerAfter = await page.locator(".record-composer-footer").boundingBox();

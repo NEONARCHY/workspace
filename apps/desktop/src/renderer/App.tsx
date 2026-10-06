@@ -1,4 +1,5 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { UndoActionsProvider } from "./UndoActions";
 
 import type {
   ApprovalRequestSummary,
@@ -149,6 +150,8 @@ import {
   markAllWorkspaceNotificationsRead,
   markWorkspaceNotificationDesktopDelivered,
   markWorkspaceNotificationRead,
+  deleteWorkspaceNotification,
+  dismissWorkspaceChat,
   markWorkspaceChatRead,
   pinWorkspaceFeedPost,
   refreshAuthentication,
@@ -931,9 +934,10 @@ export function App() {
     }
   };
 
-  const messengerMutation = async <T,>(operation: (token: string) => Promise<T>): Promise<T> => {
+  const messengerMutation = async <T,>(operation: (token: string) => Promise<T>, onCommitted?: () => void): Promise<T> => {
     if (!session) throw new Error("Войдите в Workspace");
     const result = await operation(session.accessToken);
+    onCommitted?.();
     try {
       await refreshWorkspace(session.accessToken);
     } catch {
@@ -955,9 +959,18 @@ export function App() {
     update: (id, title, description) => messengerMutation((token) => updateWorkspaceChat(token, id, title, description)),
     add: (id, ids, showHistory) => messengerMutation((token) => addWorkspaceChatMembers(token, id, ids, showHistory)),
     setMember: (id, member) => messengerMutation((token) => setWorkspaceChatMember(token, id, member)),
-    remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId)),
+    remove: (id, userId) => messengerMutation((token) => removeWorkspaceChatMember(token, id, userId), () => {
+      if (userId === workspace.currentUser.id) {
+        setWorkspace((current) => ({ ...current, chats: current.chats.filter((chat) => chat.id !== id) }));
+      }
+    }),
     transfer: (id, userId) => messengerMutation((token) => transferWorkspaceChatOwner(token, id, userId)),
-    delete: (id) => messengerMutation((token) => deleteWorkspaceChat(token, id)),
+    delete: (id) => messengerMutation((token) => deleteWorkspaceChat(token, id), () => {
+      setWorkspace((current) => ({ ...current, chats: current.chats.filter((chat) => chat.id !== id) }));
+    }),
+    dismiss: (id) => messengerMutation((token) => dismissWorkspaceChat(token, id), () => {
+      setWorkspace((current) => ({ ...current, chats: current.chats.filter((chat) => chat.id !== id) }));
+    }),
   };
 
   const handleCreateTask = async (payload: WorkspaceTaskCreateInput) => {
@@ -1880,6 +1893,7 @@ export function App() {
 
   return (
     <FluentProvider theme={workspaceTheme} className="app-provider">
+      <UndoActionsProvider key={workspace.currentUser.id}>
       <WorkspacePeopleProvider people={workspace.people}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
         void prepareEmployeeProfile(session.accessToken, userId).catch(() => undefined);
@@ -1987,6 +2001,10 @@ export function App() {
                 onOpen={openNotification}
                 onMarkRead={handleMarkNotificationRead}
                 onMarkAllRead={handleMarkAllNotificationsRead}
+                onDelete={async (notification) => {
+                  await deleteWorkspaceNotification(session.accessToken, notification.id);
+                  setWorkspace(current => ({ ...current, notifications: current.notifications.filter(item => item.id !== notification.id) }));
+                }}
                 onUpdatePreferences={handleNotificationPreferences}
                 onTestSystemNotification={async () => {
                   if (workspacePlatform.kind === "web" && !window.isSecureContext) {
@@ -2421,6 +2439,7 @@ export function App() {
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>
+      </UndoActionsProvider>
     </FluentProvider>
   );
 }

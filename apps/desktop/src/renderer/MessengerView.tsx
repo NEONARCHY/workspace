@@ -50,6 +50,8 @@ import {
 import { AttachmentChips } from "./AttachmentPanel";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
+import { UndoActionsToast, useUndoActions } from "./UndoActions";
+import { WorkspaceDialog } from "./WorkspaceDialog";
 import { defaultPersonalPreferences } from "./personal-organization";
 import { TaskComposer } from "./TaskComposer";
 import { VoiceMessagePlayer, VoiceRecorder } from "./VoiceMessage";
@@ -1304,12 +1306,10 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 export function MessengerView(props: MessengerViewProps) {
   const restoreFocusTarget = useRestoreFocusTarget();
   const { chats, messages, focusChatId, onMarkRead } = props;
-  const [pendingChatDeletion, setPendingChatDeletion] = useState<{ chat: ChatSummary; deadline: number }>();
-  const [chatDeleteSeconds, setChatDeleteSeconds] = useState(6);
-  const [chatDeletionError, setChatDeletionError] = useState("");
+  const undo = useUndoActions();
+  const [deletionChoice, setDeletionChoice] = useState<ChatSummary>();
   const [pendingLeave, setPendingLeave] = useState<ChatSummary>();
-  const [leaveBusy, setLeaveBusy] = useState(false);
-  const visibleChats = chats.filter((chat) => chat.id !== pendingChatDeletion?.chat.id);
+  const visibleChats = chats.filter((chat) => !undo.pending.some(item => item.scope === "chat" && item.id === chat.id));
   const preferences = props.personalPreferences ?? defaultPersonalPreferences;
   const firstActive = visibleChats.find((chat) => chat.id === preferences.pinnedChatIds[0]) ?? visibleChats.find((chat) => !preferences.archivedChatIds.includes(chat.id));
   const [activeChatId, setActiveChatId] = useState(
@@ -1353,11 +1353,20 @@ export function MessengerView(props: MessengerViewProps) {
   };
   const requestChatDeletion = (chat: ChatSummary) => {
     if (chat.contextType || (chat.kind !== "direct" && chat.kind !== "group")) return;
-    setChatDeletionError("");
-    setPendingChatDeletion({ chat, deadline: Date.now() + 6_000 });
-    setChatDeleteSeconds(6);
     setPanel(undefined);
-    setConversationOpen(false);
+    if (chat.kind === "direct") setDeletionChoice(chat);
+    else if (chat.canDelete) queueChatRemoval(chat, "both");
+  };
+  const queueChatRemoval = (chat: ChatSummary, mode: "self" | "both" | "leave") => {
+    const commit = mode === "self" ? props.chatActions.dismiss
+      ? () => props.chatActions.dismiss!(chat.id) : undefined
+      : mode === "leave" ? () => props.chatActions.remove(chat.id, props.currentUserId)
+      : () => props.chatActions.delete(chat.id);
+    if (!commit) return;
+    undo.enqueue({ id: chat.id, scope: "chat", label: mode === "leave" ? "Выход из группы" : mode === "self" ? "Чат удалён у вас" : chat.kind === "direct" ? "Чат удалён у обоих" : "Группа удалена", commit });
+    setDeletionChoice(undefined);
+    setPendingLeave(undefined);
+    if (activeChat?.id === chat.id) setConversationOpen(false);
   };
   const openDirectChat = async (person: WorkspacePerson) => {
     const chat = await props.chatActions.create({
@@ -1372,39 +1381,6 @@ export function MessengerView(props: MessengerViewProps) {
     setPanel(undefined);
     setListRevision((revision) => revision + 1);
   };
-  const leaveGroup = async () => {
-    if (!pendingLeave || leaveBusy) return;
-    setLeaveBusy(true);
-    setChatDeletionError("");
-    try {
-      await props.chatActions.remove(pendingLeave.id, props.currentUserId);
-      if (activeChatId === pendingLeave.id) setConversationOpen(false);
-      setPendingLeave(undefined);
-    } catch (cause) {
-      setChatDeletionError(cause instanceof Error ? cause.message : "Не удалось выйти из группы");
-    } finally {
-      setLeaveBusy(false);
-    }
-  };
-  useEffect(() => {
-    if (!pendingChatDeletion) return;
-    const tick = () => setChatDeleteSeconds(Math.max(0, Math.ceil((pendingChatDeletion.deadline - Date.now()) / 1_000)));
-    tick();
-    const interval = window.setInterval(tick, 200);
-    const timeout = window.setTimeout(() => {
-      void props.chatActions.delete(pendingChatDeletion.chat.id)
-        .then(() => {
-          setPendingChatDeletion(undefined);
-          setChatDeletionError("");
-        })
-        .catch((cause: unknown) => {
-          setPendingChatDeletion(undefined);
-          setConversationOpen(true);
-          setChatDeletionError(cause instanceof Error ? cause.message : "Не удалось удалить чат");
-        });
-    }, Math.max(0, pendingChatDeletion.deadline - Date.now()));
-    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
-  }, [pendingChatDeletion, props.chatActions]);
   useEffect(() => {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
@@ -1490,20 +1466,30 @@ export function MessengerView(props: MessengerViewProps) {
         message={pendingLeave ? `Группа «${pendingLeave.title}» исчезнет из вашего списка. История останется у других участников.` : ""}
         confirmLabel="Выйти"
         busyLabel="Выходим…"
-        busy={leaveBusy}
-        onCancel={() => { if (!leaveBusy) setPendingLeave(undefined); }}
-        onConfirm={() => void leaveGroup()}
+        onCancel={() => setPendingLeave(undefined)}
+        onConfirm={() => { if (pendingLeave) queueChatRemoval(pendingLeave, "leave"); }}
       />
-      {pendingChatDeletion ? <div className="messenger-undo" role="status">
-        <span>Чат будет удалён через {chatDeleteSeconds} сек.</span>
-        <Button size="small" appearance="primary" onClick={() => setPendingChatDeletion(undefined)}>Вернуть</Button>
-      </div> : null}
-      {chatDeletionError ? (
-        <div className="messenger-error messenger-chat-delete-error" role="alert">
-          <span>{chatDeletionError}</span>
-          <Button size="small" appearance="subtle" onClick={() => setChatDeletionError("")}>Закрыть</Button>
-        </div>
-      ) : null}
+      <WorkspaceDialog open={Boolean(deletionChoice)} onOpenChange={(_, data) => { if (!data.open) setDeletionChoice(undefined); }}>
+        <DialogSurface className="chat-deletion-choice">
+          <DialogBody>
+            <DialogTitle>Удалить личный чат?</DialogTitle>
+            <DialogContent>
+              <p>Выберите, что сделать с диалогом «{deletionChoice?.title}».</p>
+              <div className="chat-deletion-options">
+                <Button disabled={!props.chatActions.dismiss || !deletionChoice} onClick={() => { if (deletionChoice) queueChatRemoval(deletionChoice, "self"); }}>
+                  <span><strong>Удалить у меня</strong><small>У собеседника переписка останется. Новый диалог с ним вернёт вашу историю.</small></span>
+                </Button>
+                <Button disabled={!deletionChoice?.canDelete} onClick={() => { if (deletionChoice?.canDelete) queueChatRemoval(deletionChoice, "both"); }}>
+                  <span><strong>Удалить у обоих</strong><small>{deletionChoice?.canDelete ? "Диалог исчезнет у обоих участников. Историю нельзя будет вернуть после сохранения." : "Удаление для обоих недоступно в этом диалоге."}</small></span>
+                </Button>
+              </div>
+              <p className="chat-deletion-note">После выбора у вас будет 5 секунд на отмену.</p>
+            </DialogContent>
+            <DialogActions><Button onClick={() => setDeletionChoice(undefined)}>Отмена</Button></DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </WorkspaceDialog>
+      {!undo.isShared ? <UndoActionsToast manager={undo} /> : null}
     </section>
   );
 }

@@ -48,14 +48,15 @@ const { _electron } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
     });
     await page.locator(".auth-card").waitFor();
     report.fonts = await page.evaluate(async () => {
-      await Promise.all([400, 500, 600, 700].map(weight => document.fonts.load(`${weight} 16px Gilroy`)));
+      await Promise.all(["normal", "italic"].flatMap(style => [400, 500, 600, 700].map(weight => document.fonts.load(`${style} ${weight} 16px Inter`))));
       const bodyStyle = getComputedStyle(document.body);
       return { faces: [...document.fonts].map(f => ({ family: f.family, weight: f.weight, status: f.status })),
         preloads: [...document.querySelectorAll('link[rel="preload"][as="font"]')].map(link => link.getAttribute("href")),
         synthesis: bodyStyle.fontSynthesis, kerning: bodyStyle.fontKerning, textRendering: bodyStyle.textRendering };
     });
-    assert.equal(report.fonts.preloads.length, 4);
-    assert(report.fonts.faces.every(f => f.status === "loaded" && ["400", "500", "600", "700"].includes(f.weight)));
+    assert.equal(report.fonts.preloads.length, 1);
+    assert.equal(report.fonts.faces.filter(f => f.family === "Inter").length, 2);
+    assert(report.fonts.faces.filter(f => f.family === "Inter").every(f => f.status === "loaded" && f.weight === "100 900"));
     assert.equal(report.fonts.synthesis, "none");
     assert.equal(report.fonts.kerning, "normal");
     assert.equal(report.fonts.textRendering, "optimizelegibility");

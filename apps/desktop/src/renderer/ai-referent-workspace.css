@@ -111,7 +111,7 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   height: 38px;
   padding-inline: 14px;
   border-radius: 11px;
-  font-family: var(--ws-font, Gilroy, sans-serif);
+  font-family: var(--ws-font, Inter, sans-serif);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -293,7 +293,7 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   padding: 0 16px;
   overflow: hidden;
   cursor: text;
-  font: 400 13px/1 var(--ws-font, Gilroy, sans-serif);
+  font: 400 13px/1 var(--ws-font, Inter, sans-serif);
   text-align: left;
   white-space: nowrap;
   transition: opacity 150ms ease;
@@ -339,7 +339,7 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   background: transparent;
   box-shadow: none;
   color: #293a55;
-  font: 400 13px/1 var(--ws-font, Gilroy, sans-serif);
+  font: 400 13px/1 var(--ws-font, Inter, sans-serif);
 }
 .ai-gooey-search-input::placeholder { color: transparent; opacity: 0; }
 .ai-gooey-search-placeholder {
@@ -353,7 +353,7 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   height: 40px;
   overflow: hidden;
   color: #718397;
-  font: 400 13px/1 var(--ws-font, Gilroy, sans-serif);
+  font: 400 13px/1 var(--ws-font, Inter, sans-serif);
   text-overflow: ellipsis;
   white-space: nowrap;
   pointer-events: none;

@@ -5,8 +5,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
 
 /** Personal ordering only. Server-backed callers retain their save and conflict contract. */
-export function SpatialSort({ ids, children, onMove }: { ids: string[]; children: ReactNode; onMove: (source: string, target: string) => void }) {
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+export function SpatialSort({ ids, children, onMove, verticalIntent = false }: { ids: string[]; children: ReactNode; onMove: (source: string, target: string) => void; verticalIntent?: boolean }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: verticalIntent ? { distance: { y: 10 }, tolerance: { x: 8 } } : { distance: 7 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   return <DndContext sensors={sensors} collisionDetection={closestCenter}
     onDragEnd={({ active: item, over }) => { if (over && over.id !== item.id) onMove(String(item.id), String(over.id)); }}
     accessibility={{ screenReaderInstructions: { draggable: "Пробел — поднять. Стрелки вверх и вниз — выбрать место. Пробел — перенести. Escape — отменить." } }}>

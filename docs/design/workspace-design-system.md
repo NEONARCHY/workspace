@@ -32,7 +32,7 @@ navigation to the real available width, including CSS zoom. See
 [account-settings-redesign.md](account-settings-redesign.md).
 
 - Palette: navy ink, cool neutral canvas, white surfaces, turquoise accent. Solid surfaces; no expensive backdrop filters over work areas.
-- Typography: **Gilroy** Regular (400), Medium (500), SemiBold (600) and Bold (700), bundled locally; Segoe UI is a fallback only during loading. 14 px body, 12 px supporting text, 24-28 px screen titles. Tabular digits for money, dates and counters. Original TTFs copied from the owner's installed Windows fonts, with no download or conversion. Font licensing is not independently certified by this UI audit; the organisation remains responsible for distribution rights.
+- Typography: **Inter** 4.1, explicitly requested by the owner on 2026-10-06, replacing the original Gilroy UI policy. Unmodified local variable WOFF2 normal/italic, weights 100–900; Segoe UI is a loading fallback. 14 px body, 12 px supporting text, 24–28 px screen titles; tabular digits for money, dates and counters. Wordmark artwork remains unchanged. [Official release](https://rsms.me/inter/download/), [OFL](https://raw.githubusercontent.com/rsms/inter/v4.1/LICENSE.txt); the license ships in `public/licenses/Inter-OFL.txt`. No external font requests at runtime.
 - Spacing: 4/8/12/16/24/32 px; desktop section gutters 24 px, compact 12-16 px.
 - Shape: 8 px small controls, 12 px inputs/buttons and rows, 16 px cards, 20 px major surfaces. Pills reserved for compact statuses.
 - Elevation: restrained navy-tinted shadow for raised cards/dialogs; bounded context glow only on meaningful hover, focus and changed amount.

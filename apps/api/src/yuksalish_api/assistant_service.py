@@ -624,6 +624,7 @@ async def _visible_notification_rows(
             )
             .where(
                 workspace_notifications.c.user_id == user.id,
+                workspace_notifications.c.dismissed_at.is_(None),
                 or_(*visible_events),
             )
             .order_by(workspace_notifications.c.occurred_at.desc())

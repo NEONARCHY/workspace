@@ -1078,6 +1078,10 @@ export function loadWorkspace(token: string): Promise<WorkspaceBootstrap> {
   return apiRequest<WorkspaceBootstrap>("/workspace/bootstrap", {}, token);
 }
 
+export function deleteWorkspaceNotification(token: string, id: string): Promise<void> {
+  return apiRequest<void>(`/notifications/${encodeURIComponent(id)}`, { method: "DELETE" }, token);
+}
+
 export function markWorkspaceNotificationRead(
   token: string,
   notificationId: string,
@@ -1173,6 +1177,10 @@ export function updateWorkspaceChatAvatar(token: string, id: string, avatarIconK
 
 export function deleteWorkspaceChat(token: string, id: string): Promise<void> {
   return apiRequest(`/chats/${id}`, { method: "DELETE" }, token);
+}
+
+export function dismissWorkspaceChat(token: string, id: string): Promise<void> {
+  return apiRequest<void>(`/chats/${encodeURIComponent(id)}/visibility`, { method: "DELETE" }, token);
 }
 
 export function addWorkspaceChatMembers(token: string, id: string, memberIds: readonly string[], showHistory: boolean): Promise<ChatSummary> {
