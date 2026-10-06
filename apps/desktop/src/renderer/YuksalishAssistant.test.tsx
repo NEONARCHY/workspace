@@ -625,6 +625,34 @@ describe("YuksalishAssistant", () => {
     expect(screen.getByRole("dialog", { name: "Ассистент Yuksalish" })).toBeInTheDocument();
   });
 
+  it("keeps an agreed draft without opening a form until an explicit signal", async () => {
+    const actionDraft = { kind: "task" as const, fields: { title: "Отчёт", assignee: "я" }, ready: true };
+    const onPrepareAction = vi.fn();
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "prepared-agreement", role: "assistant", model: "flash-lite", content: "Черновик готов.",
+      createdAt: "2026-09-28T09:00:00Z", actionDraft,
+    }]);
+    vi.mocked(sendAssistantMessage).mockResolvedValue({
+      id: "agreed", role: "assistant", model: "flash-lite", content: "Данные согласованы.",
+      createdAt: "2026-09-28T09:01:00Z", actionDraft,
+    });
+    render(<YuksalishAssistant token="test-token" onPrepareAction={onPrepareAction} />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByRole("button", { name: "Открыть заполненную форму" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Да, всё верно" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
+      "test-token", "flash-lite", "Да, всё верно", undefined, true, "first",
+    ));
+    await screen.findByText("Данные согласованы.");
+    expect(screen.getByRole("button", { name: "Открыть заполненную форму" })).toBeEnabled();
+    expect(onPrepareAction).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Открывай форму" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(onPrepareAction).toHaveBeenCalledExactlyOnceWith(actionDraft));
+    expect(sendAssistantMessage).toHaveBeenCalledTimes(1);
+  });
+
   it("continues an unsent action draft and opens its form only after a click", async () => {
     const onPrepareAction = vi.fn();
     const draft = { kind: "task" as const, fields: { title: "Проверить отчёт" }, ready: true };

@@ -9,6 +9,12 @@ export function isDraftRevision(text: string): boolean {
   return /^(?:нет[, ]+|(?:(?:давай|а)\s+)?(?:поменяй|измени|исправь|уточни|перенеси|добавь|убери|замени|поставь|назначь)(?:\s|$)|(?:исполнитель|руководитель|срок|бюджет|участники|даты|приоритет|валюта|доступ|наблюдатели|соисполнители|согласующие|ответственные|чек-лист)\s*[:—-])/iu.test(text.trim());
 }
 
+export function isDraftContinuation(text: string): boolean {
+  return isDraftRevision(text)
+    || /^(?:да[,!]?\s*)?(?:всё верно|все верно|верно|согласен|согласна|согласовано|подтверждаю)[.!]?$/iu.test(text.trim())
+    || /^да[.!]?$/iu.test(text.trim());
+}
+
 export function assistantLines(value?: string): string[] {
   return (value ?? "").split(/\n|;/u).map((item) => item.trim()).filter(Boolean);
 }

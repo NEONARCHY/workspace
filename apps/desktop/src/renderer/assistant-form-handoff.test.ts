@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { people } from "./test-fixtures/demo-data";
-import { assistantPeopleIds, assistantResolvedIds, isDraftRevision, isFormOpenSignal, resolveAssistantForm, resolveAssistantPerson } from "./assistant-form-handoff";
+import { assistantPeopleIds, assistantResolvedIds, isDraftContinuation, isDraftRevision, isFormOpenSignal, resolveAssistantForm, resolveAssistantPerson } from "./assistant-form-handoff";
 
 describe("assistant form handoff", () => {
   it("requires an explicit form-opening signal, not a question, negation or save command", () => {
@@ -14,6 +14,9 @@ describe("assistant form handoff", () => {
     expect(isDraftRevision("Убери второй пункт чек-листа")).toBe(true);
     expect(isDraftRevision("Приоритет: высокий")).toBe(true);
     expect(isDraftRevision("Как работает бюджет проекта?")).toBe(false);
+    expect(isDraftContinuation("Да, всё верно")).toBe(true);
+    expect(isDraftContinuation("подтверждаю")).toBe(true);
+    expect(isDraftContinuation("Да, расскажи о бюджете")).toBe(false);
   });
   it("resolves exact names and self, never picks an ambiguous or inactive colleague", () => {
     expect(resolveAssistantPerson("я", people, people[0]!.id)).toBe(people[0]!.id);

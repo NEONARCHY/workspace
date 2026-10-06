@@ -9,7 +9,7 @@ import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocki
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
-import { isDraftRevision, isFormOpenSignal } from "./assistant-form-handoff";
+import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -455,7 +455,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     }
     const file = selectedFile;
     const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId
-      && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id || isDraftRevision(value)));
+      && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id || isDraftContinuation(value)));
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
