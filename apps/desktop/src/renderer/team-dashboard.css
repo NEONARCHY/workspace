@@ -619,6 +619,12 @@
   border-radius: 3px 3px 4px 2px;
 }
 
+.team-dash-flow-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .team-dash-flow-legend button > strong {
   flex: none;
   color: var(--team-navy);
