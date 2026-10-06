@@ -123,6 +123,7 @@
 .assistant-panel .assistant-error { padding: 9px 12px; border: 1px solid #f1d7dc; border-radius: 12px; background: #fff5f6; font-size: 13px; line-height: 1.5; }
 .assistant-panel .assistant-file-chip { align-self: stretch; background: #fff; animation: assistant-detail-enter 180ms ease; }
 .assistant-panel .assistant-file-chip > span { flex: 1; min-width: 0; max-width: none; }
+.assistant-panel .assistant-voice-preview { display: block; width: 100%; min-width: 0; height: 36px; border-radius: 12px; }
 .assistant-panel .assistant-references button span { white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .assistant-panel .assistant-references button svg { flex: none; }
 .assistant-panel .assistant-action-draft { display: grid; padding: 14px; gap: 12px; border: 1px solid #cde6e9; border-radius: 14px; background: linear-gradient(105deg, #edf8f8, #fafcfd); }

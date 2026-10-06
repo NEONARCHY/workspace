@@ -513,6 +513,8 @@ export interface AssistantMessage {
   readonly sourceLabels?: readonly string[];
   readonly references?: readonly AssistantReference[];
   readonly actionDraft?: AssistantActionDraft;
+  /** Spoken request, returned only with the live response to a voice command. */
+  readonly voicePrompt?: string;
 }
 
 export interface BirthdayPreference {

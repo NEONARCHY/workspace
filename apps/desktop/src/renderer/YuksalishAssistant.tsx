@@ -7,7 +7,7 @@ import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantMo
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocking-dialog";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
+import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 
@@ -21,10 +21,12 @@ const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
 const REPLY_EXCERPT_LENGTH = 280;
 const MAX_FILE_BYTES = 50_000_000;
+const MAX_VOICE_BYTES = 4 * 1024 * 1024;
 const CHAT_SIDEBAR_MIN_WIDTH = 760;
 const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
   webp: "image/webp", txt: "text/plain",
+  webm: "audio/webm",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
@@ -145,11 +147,12 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
+  const [preparingVoice, setPreparingVoice] = useState(false);
   const [error, setError] = useState("");
   const [animatedReplyId, setAnimatedReplyId] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<AssistantMessage | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const selectedAudio = selectedFile?.name.toLowerCase().endsWith(".webm") ?? false;
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [draggingFile, setDraggingFile] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState<string>();
@@ -161,6 +164,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [viewport, setViewport] = useState(assistantViewport);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const voicePreviewRef = useRef<HTMLAudioElement>(null);
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
@@ -169,18 +173,23 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
+  const voiceSessionRef = useRef(0);
+  const sendBusyRef = useRef(false);
   const dragDepthRef = useRef(0);
   const sizeFromRef = useRef<DOMRect | null>(null);
   const sizeAnimationRef = useRef<Animation | null>(null);
   const reducedMotion = useAssistantMotionDisabled();
   const close = useCallback(() => {
+    voiceSessionRef.current += 1;
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
     const recorder = recorderRef.current;
     if (recorder?.state === "recording") {
       recorder.onstop = () => recorder.stream.getTracks().forEach((track) => track.stop());
       recorder.stop();
     }
+    recorderRef.current = null;
     setRecording(false);
+    setPreparingVoice(false);
     setOpen(false);
     setReplyMenu(null);
     setChatPickerOpen(false);
@@ -234,7 +243,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
 
   const acceptFiles = (files: readonly File[]) => {
     if (!files.length) return;
-    if (busy || recording || transcribing || chatBusy) {
+    if (busy || recording || preparingVoice || chatBusy) {
       setError("Дождитесь окончания ответа или голосового ввода, затем прикрепите файл.");
       return;
     }
@@ -244,8 +253,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     }
     const file = files[0]!;
     const suffix = file.name.split(".").at(-1)?.toLowerCase() ?? "";
-    if (!fileTypes[suffix] || file.size > MAX_FILE_BYTES || file.size === 0 || file.name.length > 160) {
-      setError("Выберите непустой DOCX, PDF, PNG, JPEG, WebP или TXT до 50 МБ с именем до 160 символов.");
+    if (!fileTypes[suffix] || file.size > (suffix === "webm" ? MAX_VOICE_BYTES : MAX_FILE_BYTES) || file.size === 0 || file.name.length > 160) {
+      setError("Выберите непустой DOCX, PDF, PNG, JPEG, WebP или TXT до 50 МБ, либо запись WebM до 4 МБ. Имя — до 160 символов.");
       return;
     }
     setSelectedFile(file);
@@ -280,9 +289,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   }, [open, blockingDialog]);
 
   useLayoutEffect(() => {
-    if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || transcribing
+    if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || preparingVoice
       ? streamRef.current.scrollHeight : 0;
-  }, [messages, busy, open, recording, transcribing]);
+  }, [messages, busy, open, recording, preparingVoice]);
 
   useEffect(() => {
     if (!open) return;
@@ -299,7 +308,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     return () => window.removeEventListener("keydown", onKey);
   }, [close, open, replyMenu, chatPickerOpen, presetsOpen, confirmClear]);
 
-  const chatControlsDisabled = !loaded || busy || recording || transcribing || preparingAction || chatBusy || confirmClear;
+  const chatControlsDisabled = !loaded || busy || recording || preparingVoice || preparingAction || chatBusy || confirmClear;
   const changeChat = async (targetId?: string) => {
     setChatPickerOpen(false);
     setPresetsOpen(false);
@@ -388,57 +397,88 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   };
 
   useEffect(() => () => {
+    voiceSessionRef.current += 1;
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
     const recorder = recorderRef.current;
     if (recorder?.state === "recording") recorder.stop();
     recorder?.stream.getTracks().forEach((track) => track.stop());
   }, []);
 
+  useEffect(() => {
+    const preview = voicePreviewRef.current;
+    if (!open || !selectedAudio || !selectedFile || !preview || !URL.createObjectURL) return;
+    const url = URL.createObjectURL(selectedFile);
+    preview.src = url;
+    return () => {
+      if (!preview.paused) preview.pause();
+      preview.removeAttribute("src");
+      URL.revokeObjectURL(url);
+    };
+  }, [open, selectedAudio, selectedFile]);
+
   const stopRecording = () => {
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
     voiceTimerRef.current = null;
-    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    if (recorderRef.current?.state === "recording") {
+      setPreparingVoice(true);
+      recorderRef.current.stop();
+    }
     setRecording(false);
   };
 
   const startRecording = async () => {
+    if (recording || preparingVoice || busy || selectedFile || preparingActionRef.current) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined"
       || !MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
       setError("Голосовой ввод недоступен в этом браузере.");
       return;
     }
     setError("");
+    setPreparingVoice(true);
+    const session = ++voiceSessionRef.current;
     let stream: MediaStream | null = null;
     try {
       const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream = audioStream;
+      if (!mountedRef.current || session !== voiceSessionRef.current) {
+        audioStream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const recorder = new MediaRecorder(audioStream, { mimeType: "audio/webm;codecs=opus" });
       const chunks: Blob[] = [];
       recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
       recorder.onstop = () => {
         audioStream.getTracks().forEach((track) => track.stop());
+        if (!mountedRef.current || session !== voiceSessionRef.current) return;
         recorderRef.current = null;
-        if (!chunks.length) return;
-        setTranscribing(true);
-        void transcribeAssistantVoice(token, new Blob(chunks, { type: "audio/webm" }))
-          .then(({ text }) => setDraft((current) => current ? `${current.trimEnd()} ${text}` : text))
-          .catch((failure) => setError(failure instanceof Error ? failure.message : "Не удалось распознать речь."))
-          .finally(() => { setTranscribing(false); inputRef.current?.focus(); });
+        setPreparingVoice(false);
+        setRecording(false);
+        const file = new File(chunks, "Голосовое сообщение.webm", { type: "audio/webm" });
+        if (file.size === 0 || file.size > MAX_VOICE_BYTES) {
+          setError(file.size ? "Голосовая запись слишком большая: максимум 4 МБ." : "Запись пуста. Попробуйте ещё раз.");
+          return;
+        }
+        setSelectedFile(file);
+        inputRef.current?.focus();
       };
       recorderRef.current = recorder;
       recorder.start(250);
       setRecording(true);
+      setPreparingVoice(false);
       voiceTimerRef.current = window.setTimeout(stopRecording, VOICE_LIMIT_MS);
     } catch {
       stream?.getTracks().forEach((track) => track.stop());
-      setError("Не удалось получить доступ к микрофону. Проверьте разрешение в системе.");
+      if (mountedRef.current && session === voiceSessionRef.current) {
+        setPreparingVoice(false);
+        setError("Не удалось получить доступ к микрофону. Проверьте разрешение в системе.");
+      }
     }
   };
 
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
-    if ((!value && !selectedFile) || busy || preparingActionRef.current || recording || transcribing || !loaded || chatBusy || confirmClear) return;
+    if ((!value && !selectedFile) || sendBusyRef.current || preparingActionRef.current || recording || preparingVoice || !loaded || chatBusy || confirmClear) return;
     const latestAnswer = [...messages].reverse().find((item) => item.role === "assistant");
     if (!selectedFile && !replyingTo && isFormOpenSignal(value)) {
       if (latestAnswer?.actionDraft?.ready && latestAnswer.id !== dismissedDraftId) {
@@ -447,7 +487,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       return;
     }
     const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
-    const prompt = value || "Расскажи, что находится во вложении.";
+    const prompt = value || (selectedAudio ? "" : "Расскажи, что находится во вложении.");
     const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${prompt}` : prompt;
     if (content.length > 4000) {
       setError("Сократите ответ: вместе с цитатой он должен быть не длиннее 4000 символов.");
@@ -459,12 +499,13 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
-      content: file ? `${content}\n\n📎 ${file.name}` : content,
+      content: file ? `${content}${content ? "\n\n" : ""}${selectedAudio ? "🎙" : "📎"} ${file.name}` : content,
       createdAt: new Date().toISOString(),
     }]);
     setDraft("");
     setSelectedFile(null);
     setBusy(true);
+    sendBusyRef.current = true;
     setError("");
     try {
       const suffix = file?.name.split(".").at(-1)?.toLowerCase() ?? "";
@@ -472,6 +513,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       if (file && !mimeType) throw new Error("Неподдерживаемый формат вложения.");
       const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
         name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
+        ...(mimeType === "audio/webm" ? { as_prompt: !value } : {}),
       } : undefined;
       const response = selectedActionKind
         ? await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId, selectedActionKind)
@@ -480,7 +522,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setMessages((current) => [...current, response]);
       setChats((current) => current.map((chat) => chat.id === chatId ? {
         ...chat, updatedAt: response.createdAt,
-        title: ["Первый чат", "Новый чат"].includes(chat.title) ? content.slice(0, 100) : chat.title,
+        title: ["Первый чат", "Новый чат"].includes(chat.title) ? (response.voicePrompt || content || "Голосовое сообщение").slice(0, 100) : chat.title,
       } : chat));
       setAnimatedReplyId(response.id);
       setDismissedDraftId(undefined);
@@ -488,6 +530,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setReplyingTo(null);
       setSelectedActionKind(undefined);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (attachment?.as_prompt && response.voicePrompt && isFormOpenSignal(response.voicePrompt)) {
+        if (latestAnswer?.actionDraft?.ready && latestAnswer.id !== dismissedDraftId) {
+          await openPreparedForm(latestAnswer.actionDraft);
+        } else setError("Сначала согласуйте данные черновика в чате, затем попросите открыть форму.");
+      }
     } catch (failure) {
       if (!mountedRef.current) return;
       setMessages((current) => current.filter((item) => item.id !== temporaryId));
@@ -495,6 +542,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setSelectedFile(file);
       setError(failure instanceof Error ? failure.message : "Не удалось получить ответ. Попробуйте ещё раз.");
     } finally {
+      sendBusyRef.current = false;
       setBusy(false);
       inputRef.current?.focus();
     }
@@ -561,7 +609,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         }}
         onDragOver={(event) => {
           if (!isFileDrag(event)) return;
-          event.preventDefault(); event.dataTransfer.dropEffect = busy || recording || transcribing ? "none" : "copy";
+          event.preventDefault(); event.dataTransfer.dropEffect = busy || recording || preparingVoice ? "none" : "copy";
         }}
         onDragLeave={(event) => {
           if (!isFileDrag(event)) return;
@@ -698,9 +746,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               <span>{thinkingState === "searching" ? "Ищу источники…"
                 : thinkingState === "solving" ? "Разбираюсь в деталях…" : "Готовлю ответ…"}</span>
             </div>}
-            {(recording || transcribing) && <div className="assistant-working assistant-voice-status" role="status">
+            {(recording || preparingVoice) && <div className="assistant-working assistant-voice-status" role="status">
               <ThinkingOrb state="listening" size={20} />
-              <span>{recording ? "Слушаю… нажмите квадрат, чтобы закончить" : "Перевожу речь в текст…"}</span>
+              <span>{recording ? "Слушаю… нажмите квадрат, чтобы закончить" : "Готовим голосовую запись…"}</span>
             </div>}
           </div>
         </div>
@@ -743,13 +791,14 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 <span><strong>Ответ на сообщение Yuksalish</strong><small>{replyingTo.content.replace(/\s+/g, " ").slice(0, REPLY_EXCERPT_LENGTH)}</small></span>
                 <button type="button" aria-label="Отменить ответ" onClick={() => setReplyingTo(null)}><X size={16} /></button>
               </div>}
-              {selectedFile && <div className="assistant-file-chip"><Paperclip size={15} aria-hidden="true" />
+              {selectedFile && <div className="assistant-file-chip">{selectedAudio ? <Mic size={15} aria-hidden="true" /> : <Paperclip size={15} aria-hidden="true" />}
                 <span title={selectedFile.name}>{selectedFile.name}</span>
                 <button type="button" aria-label="Убрать вложение" disabled={busy}
                   onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}>
                   <X size={15} />
                 </button>
               </div>}
+              {selectedAudio && <audio ref={voicePreviewRef} className="assistant-voice-preview" controls preload="metadata" aria-label="Прослушать голосовое сообщение" />}
               <textarea ref={inputRef} className="assistant-editor" aria-label="Сообщение ассистенту" placeholder="Задайте вопрос или опишите, что нужно сделать…"
                 value={draft} disabled={chatBusy || confirmClear} maxLength={4000} onChange={(event) => setDraft(event.target.value)}
                 onPaste={(event) => {
@@ -773,31 +822,33 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 </div>
                 <div className="assistant-composer-actions">
                   <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
-                    accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt" aria-label="Выбрать вложение"
+                    accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt,.webm" aria-label="Выбрать вложение"
                     onChange={(event) => {
                       acceptFiles(Array.from(event.target.files ?? []));
                       event.target.value = "";
                     }} />
                   <button type="button" className="assistant-attach-button" aria-label="Прикрепить файл"
                     title="DOCX, PDF, PNG, JPEG, WebP или TXT · до 50 МБ; TXT и текст DOCX — до 50 000 символов. Файл не сохраняется в истории"
-                    disabled={busy || recording || transcribing || chatBusy || confirmClear} onClick={() => fileInputRef.current?.click()}>
+                    disabled={busy || recording || preparingVoice || chatBusy || confirmClear} onClick={() => fileInputRef.current?.click()}>
                     <Paperclip size={18} />
                   </button>
                   <button type="button" className={`assistant-voice-button${recording ? " is-recording" : ""}`}
                     aria-label={recording ? "Остановить запись" : "Голосовой ввод"}
-                    title={recording ? "Остановить запись" : "Голосовой ввод · до 1 минуты; аудио передаётся ИИ для расшифровки"}
-                    disabled={transcribing || busy || chatBusy || confirmClear || !loaded} onClick={() => void (recording ? stopRecording() : startRecording())}>
+                    title={recording ? "Остановить запись" : "Голосовое сообщение · до 1 минуты; без текста — запрос ИИ, с текстом — задание для записи"}
+                    disabled={preparingVoice || busy || chatBusy || confirmClear || !loaded || preparingAction || Boolean(selectedFile)} onClick={() => void (recording ? stopRecording() : startRecording())}>
                     {recording ? <Square size={16} /> : <Mic size={19} />}
                   </button>
                   <button type="submit" className="assistant-send-button" aria-label="Отправить сообщение"
-                    disabled={busy || recording || transcribing || chatBusy || confirmClear || (!draft.trim() && !selectedFile) || !loaded}>
+                    disabled={busy || recording || preparingVoice || chatBusy || confirmClear || (!draft.trim() && !selectedFile) || !loaded}>
                     <ArrowUp size={19} strokeWidth={2.4} />
                   </button>
                 </div>
               </div>
             </form>
             {error && <p className="assistant-error" role="alert">{error}</p>}
-            {selectedFile && <small className="assistant-attachment-notice">Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов.</small>}
+            {selectedFile && <small className="assistant-attachment-notice">{selectedAudio
+              ? "Без текста — голосовой запрос. С текстом — задание для записи. Аудио не сохраняется на сервере."
+              : "Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов."}</small>}
             <small className="assistant-privacy">ИИ может допускать ошибки, перепроверяйте ответы</small>
           </div>
         </div>

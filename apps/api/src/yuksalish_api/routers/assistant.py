@@ -42,7 +42,7 @@ Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 class AskRequest(BaseModel):
     model: AssistantModel = "flash-lite"
-    message: str = Field(min_length=1, max_length=4000)
+    message: str = Field(default="", max_length=4000)
     attachment: "AskAttachment | None" = None
     continue_draft: bool = False
     chat_id: UUID | None = None
@@ -50,10 +50,16 @@ class AskRequest(BaseModel):
 
     @field_validator("message")
     @classmethod
-    def nonblank_message(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Напишите сообщение")
+    def strip_message(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def require_prompt(self) -> "AskRequest":
+        if not self.message and (
+            self.attachment is None or self.attachment.mime_type != "audio/webm"
+        ):
+            raise ValueError("Напишите сообщение или добавьте голосовую запись")
+        return self
 
 
 class AskAttachment(BaseModel):
@@ -64,9 +70,17 @@ class AskAttachment(BaseModel):
         "image/jpeg",
         "image/webp",
         "text/plain",
+        "audio/webm",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ]
     data_base64: str = Field(min_length=1, max_length=MAX_ASSISTANT_FILE_BASE64_CHARS)
+    as_prompt: bool = False
+
+    @model_validator(mode="after")
+    def validate_audio_prompt(self) -> "AskAttachment":
+        if self.as_prompt and self.mime_type != "audio/webm":
+            raise ValueError("Голосовой командой может быть только аудиозапись WebM")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -165,6 +179,7 @@ async def post_message(
                 payload.attachment.name,
                 payload.attachment.mime_type,
                 payload.attachment.data_base64,
+                payload.attachment.as_prompt,
             )
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
@@ -181,7 +196,9 @@ async def post_message(
             requested_kind=payload.action_kind,
         )
         if payload.chat_id is not None:
-            await touch_chat(connection, user.id, payload.chat_id, payload.message)
+            await touch_chat(
+                connection, user.id, payload.chat_id, result.get("voicePrompt", payload.message)
+            )
         return result
     except OverflowError as error:
         raise HTTPException(429, str(error)) from error

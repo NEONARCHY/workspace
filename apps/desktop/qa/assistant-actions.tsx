@@ -55,7 +55,12 @@ window.fetch = (resource, options) => {
   if (url.pathname === "/api/v1/assistant/chats") return json([{ id: "qa-forms", title: "Проверка форм",
     isDefault: true, createdAt: "2030-01-01T00:00:00Z", updatedAt: "2030-01-01T00:00:00Z" }]);
   if (url.pathname === "/api/v1/assistant/messages" && options?.method === "POST") {
-    const request = JSON.parse(String(options.body)) as { action_kind?: string; message: string };
+    const request = JSON.parse(String(options.body)) as { action_kind?: string; message: string;
+      attachment?: { mime_type: string; as_prompt?: boolean } };
+    if (request.attachment?.mime_type === "audio/webm" && !request.attachment.as_prompt && request.message.trim()) {
+      return json({ id: `qa-${Date.now()}`, role: "assistant", model: "flash-lite", createdAt: new Date().toISOString(),
+        content: "Стенд: пример ответа на текстовое задание для аудио. Запись здесь не распознаётся, команды из неё не выполняются." });
+    }
     const kind = request.action_kind ?? (/проект/i.test(request.message) ? "project" : /поезд|командиров/i.test(request.message)
       ? "trip" : /отгул|отсутств/i.test(request.message) ? "absence" : "task");
     return json({ id: `qa-${Date.now()}`, role: "assistant", model: "flash-lite", createdAt: new Date().toISOString(),

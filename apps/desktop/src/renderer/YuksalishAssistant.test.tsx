@@ -535,7 +535,7 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith("test-token", "flash-lite", "Сколько будет 2 + 2?", undefined, false, "first"));
   });
 
-  it("puts a voice request in the composer before the user submits an action", async () => {
+  it.each(["", "Расшифруй эту запись"])("sends audio with the accompanying text %j, never a composer transcription", async (instruction) => {
     const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
     const stopTrack = vi.fn();
     const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
@@ -555,7 +555,6 @@ describe("YuksalishAssistant", () => {
     vi.stubGlobal("MediaRecorder", TestRecorder);
     Object.defineProperty(navigator, "mediaDevices", { configurable: true,
       value: { getUserMedia: vi.fn().mockResolvedValue(stream) } });
-    vi.mocked(transcribeAssistantVoice).mockResolvedValue({ text: "Создай задачу проверить отчёт" });
     vi.mocked(sendAssistantMessage).mockResolvedValue({
       id: "voice-action", role: "assistant", model: "flash-lite", content: "Черновик готов.",
       createdAt: "2026-09-28T10:00:00Z", actionDraft: {
@@ -566,19 +565,132 @@ describe("YuksalishAssistant", () => {
       render(<YuksalishAssistant token="test-token" onPrepareAction={vi.fn()} />);
       fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
       await screen.findByText("С чего начнём?");
+      const input = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" });
+      fireEvent.change(input, { target: { value: instruction } });
       fireEvent.click(screen.getByRole("button", { name: "Голосовой ввод" }));
       expect(await screen.findByRole("status")).toHaveTextContent("Слушаю");
       fireEvent.click(screen.getByRole("button", { name: "Остановить запись" }));
-      const input = screen.getByRole<HTMLTextAreaElement>("textbox", { name: "Сообщение ассистенту" });
-      await waitFor(() => expect(input.value).toBe("Создай задачу проверить отчёт"));
+      await screen.findByText("Голосовое сообщение.webm");
+      expect(input.value).toBe(instruction);
+      expect(transcribeAssistantVoice).not.toHaveBeenCalled();
       expect(sendAssistantMessage).not.toHaveBeenCalled();
       fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
       await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
-        "test-token", "flash-lite", "Создай задачу проверить отчёт", undefined, false, "first",
+        "test-token", "flash-lite", instruction, {
+          name: "Голосовое сообщение.webm", mime_type: "audio/webm",
+          data_base64: "dm9pY2U=", as_prompt: !instruction,
+        }, false, "first",
       ));
       expect(stopTrack).toHaveBeenCalled();
     } finally {
       if (originalMediaDevices) Object.defineProperty(navigator, "mediaDevices", originalMediaDevices);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    }
+  });
+
+  it("restores the unsent audio preview after closing and reopening the assistant", async () => {
+    const createUrl = vi.fn(() => "blob:voice-preview");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", class extends URL {
+      static override createObjectURL = createUrl;
+      static override revokeObjectURL = revokeUrl;
+    });
+    render(<YuksalishAssistant token="test-token" />);
+    const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+    fireEvent.click(launcher);
+    await screen.findByText("С чего начнём?");
+    fireEvent.change(screen.getByLabelText("Выбрать вложение"), { target: {
+      files: [new File(["voice"], "voice.webm", { type: "audio/webm" })],
+    } });
+    expect(screen.getByLabelText("Прослушать голосовое сообщение")).toHaveAttribute("src", "blob:voice-preview");
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ассистент Yuksalish" })).not.toBeInTheDocument());
+    expect(revokeUrl).toHaveBeenCalledWith("blob:voice-preview");
+    fireEvent.click(launcher);
+    expect(await screen.findByText("voice.webm")).toBeInTheDocument();
+    expect(screen.getByLabelText("Прослушать голосовое сообщение")).toHaveAttribute("src", "blob:voice-preview");
+    expect(createUrl).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Убрать вложение" }));
+    expect(revokeUrl).toHaveBeenCalledTimes(2);
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
+  it("keeps audio and text after a failure and prevents duplicate voice sends", async () => {
+    vi.mocked(sendAssistantMessage).mockRejectedValueOnce(new Error("Повторите позже"))
+      .mockResolvedValueOnce({ id: "voice-retry", role: "assistant", model: "flash-lite",
+        content: "Результат анализа", createdAt: "2030-01-01T00:00:00Z" });
+    render(<YuksalishAssistant token="test-token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    const input = screen.getByRole("textbox", { name: "Сообщение ассистенту" });
+    fireEvent.change(input, { target: { value: "Проанализируй запись" } });
+    fireEvent.change(screen.getByLabelText("Выбрать вложение"), { target: {
+      files: [new File(["voice"], "voice.webm", { type: "audio/webm" })],
+    } });
+    expect(screen.getByRole("button", { name: "Голосовой ввод" })).toBeDisabled();
+    const send = screen.getByRole("button", { name: "Отправить сообщение" });
+    fireEvent.click(send); fireEvent.click(send);
+    await screen.findByText("Повторите позже");
+    expect(sendAssistantMessage).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue("Проанализируй запись");
+    expect(screen.getByText("voice.webm")).toBeInTheDocument();
+    fireEvent.click(send);
+    await screen.findByText("Результат анализа");
+    expect(sendAssistantMessage).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("button", { name: "Убрать вложение" })).not.toBeInTheDocument();
+  });
+
+  it("opens an agreed form on a spoken signal but not on audio accompanied by text", async () => {
+    const action = { kind: "task", ready: true, fields: { title: "Отчёт", assignee: "я" } } as const;
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "voice-ready", role: "assistant", model: "flash-lite",
+      content: "Согласованный черновик", createdAt: "2030-01-01T00:00:00Z", actionDraft: action }]);
+    vi.mocked(sendAssistantMessage).mockResolvedValueOnce({ id: "voice-data", role: "assistant", model: "flash-lite",
+      content: "Расшифровка: Открывай форму", createdAt: "2030-01-01T00:00:00Z" })
+      .mockResolvedValueOnce({ id: "voice-open", role: "assistant", model: "flash-lite",
+        content: "Голосовой сигнал", voicePrompt: "Открывай форму", createdAt: "2030-01-01T00:00:00Z" });
+    const prepare = vi.fn(async () => undefined);
+    render(<YuksalishAssistant token="test-token" onPrepareAction={prepare} />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Согласованный черновик");
+    const attach = () => fireEvent.change(screen.getByLabelText("Выбрать вложение"), { target: {
+      files: [new File(["voice"], "voice.webm", { type: "audio/webm" })],
+    } });
+    attach();
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Расшифруй запись" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await screen.findByText("Расшифровка: Открывай форму");
+    expect(prepare).not.toHaveBeenCalled();
+    // Return to the saved, ready answer; a voice command must never open an unsaved draft.
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+    cleanup();
+    render(<YuksalishAssistant token="test-token" onPrepareAction={prepare} />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Согласованный черновик");
+    attach();
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith(action));
+  });
+
+  it("releases a late microphone stream after the assistant is closed", async () => {
+    const original = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+    let resolveStream!: (stream: MediaStream) => void;
+    const stop = vi.fn();
+    vi.stubGlobal("MediaRecorder", class { static isTypeSupported() { return true; } });
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: {
+      getUserMedia: () => new Promise<MediaStream>((resolve) => { resolveStream = resolve; }),
+    } });
+    try {
+      render(<YuksalishAssistant token="test-token" />);
+      fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+      await screen.findByText("С чего начнём?");
+      fireEvent.click(screen.getByRole("button", { name: "Голосовой ввод" }));
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+      await act(async () => resolveStream({ getTracks: () => [{ stop }] } as unknown as MediaStream));
+      expect(stop).toHaveBeenCalledOnce();
+      expect(sendAssistantMessage).not.toHaveBeenCalled();
+      expect(transcribeAssistantVoice).not.toHaveBeenCalled();
+    } finally {
+      if (original) Object.defineProperty(navigator, "mediaDevices", original);
       else Reflect.deleteProperty(navigator, "mediaDevices");
     }
   });
