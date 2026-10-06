@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
+import { injectDesktopConnectSources } from "./src/csp-connect-sources.mts";
 import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
 
 const tabsterEsmPath = fileURLToPath(
@@ -82,9 +83,18 @@ if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
+const cspConnectPlugin = (mode: string) => ({
+  name: "yuksalish-desktop-api-csp",
+  transformIndexHtml(html: string) {
+    return injectDesktopConnectSources(html, mode, {
+      lan: process.env.VITE_LAN_API_BASE_URL,
+      public: process.env.VITE_API_BASE_URL,
+    });
+  },
+});
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), cspConnectPlugin(mode)],
   root: ".",
   base: mode === "web" ? "/" : "./",
   define: {
@@ -140,7 +150,7 @@ export default defineConfig(({ mode }) => ({
   },
   // Emit a tiny non-cacheable manifest used by the running web client.
   ...(mode === "web" ? {
-    plugins: [react(), {
+    plugins: [react(), cspConnectPlugin(mode), {
       name: "yuksalish-version-manifest",
       generateBundle() {
         this.emitFile({

@@ -76,6 +76,17 @@ try {
     }
     & pnpm --filter @yuksalish/desktop dist:win
     if ($LASTEXITCODE -ne 0) { throw "Windows installer build failed." }
+    if ($dualOrigin) {
+        $rendererHtml = Get-Content -LiteralPath "apps/desktop/dist/index.html" -Raw
+        $connectSources = [regex]::Match($rendererHtml, 'connect-src ([^\"]+)').Groups[1].Value
+        foreach ($trustedOrigin in @($origin, $PublicOrigin)) {
+            $trustedWebSocket = $trustedOrigin -replace '^https:', 'wss:'
+            if (-not $connectSources.Contains($trustedOrigin) -or
+                -not $connectSources.Contains($trustedWebSocket)) {
+                throw "The packaged renderer does not permit its configured HTTPS and WSS API origins."
+            }
+        }
+    }
     $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
     $installer = Join-Path $projectRoot "apps\desktop\release\Yuksalish-Workspace-Setup-$version.exe"
     if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
