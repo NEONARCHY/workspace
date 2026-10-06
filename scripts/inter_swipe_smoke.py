@@ -62,7 +62,10 @@ async def check_touch(browser: Browser, output: Path) -> None:
         before = await row.evaluate(positions)
         await gesture(0, 90)
         after = await row.evaluate(positions)
-        assert any(end < start - 20 for start, end in zip(before, after, strict=True)), (before, after)
+        assert any(end < start - 20 for start, end in zip(before, after, strict=True)), (
+            before,
+            after,
+        )
         assert await page.get_by_role("button", name="Вернуть", exact=True).count() == 0
         assert await page.locator(".notification-swipe.is-open").count() == 0
         await page.screenshot(path=str(output / "touch-scroll.png"))
