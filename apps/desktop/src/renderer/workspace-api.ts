@@ -727,8 +727,9 @@ export function loadAssistantMessages(token: string, chatId?: string): Promise<r
 export interface AssistantAttachmentInput {
   readonly name: string;
   readonly mime_type: "application/pdf" | "image/png" | "image/jpeg" | "image/webp" | "text/plain"
-    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    | "application/vnd.openxmlformats-officedocument.wordprocessingml.document" | "audio/webm";
   readonly data_base64: string;
+  readonly as_prompt?: boolean;
 }
 
 export function sendAssistantMessage(
