@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Компактные статусы и переключатели · тестовый просмотр</title>
+    <style>
+      .layout-qa { height: 100dvh; overflow: auto; }
+      .layout-qa > header { padding: 16px; }
+      .layout-qa section.qa-section { min-width: 0; padding: 16px; }
+      .layout-qa .team-dashboard { height: auto; overflow: visible; }
+      .layout-qa .department-management { max-height: none; overflow: visible; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./team-layout.tsx"></script>
+  </body>
+</html>

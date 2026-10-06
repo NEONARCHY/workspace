@@ -10,6 +10,9 @@
   background: var(--ws-muted-surface);
 }
 .employee-scope-switch button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
   padding: 6px 11px;
   border: 0;
@@ -19,6 +22,7 @@
   font: inherit;
   font-size: 12px;
   font-weight: 600;
+  text-align: center;
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
 }
