@@ -159,7 +159,7 @@ body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 .assistant-composer .assistant-attach-button:not(:disabled):hover { background: #e8f4f2; color: var(--ws-link); }
 .assistant-composer .assistant-attach-button:focus-visible, .assistant-composer .assistant-file-chip button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
 .assistant-voice-status { align-self: flex-start; padding: 9px 12px; color: #315d69; }
-.assistant-context-menu { position: absolute; z-index: 2; min-width: 122px; padding: 5px; border: 1px solid #d7e7e9; border-radius: 11px; background: #fff; box-shadow: var(--ws-shadow-float); }
+.assistant-context-menu { position: absolute; z-index: 2; min-width: 148px; padding: 6px; border: 1px solid #d7e7e9; border-radius: 14px; background: rgb(255 255 255 / 97%); box-shadow: 0 16px 38px rgb(41 58 85 / 16%); backdrop-filter: blur(14px); }
 .assistant-context-menu button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 9px; border: 0; border-radius: 7px; background: transparent; color: var(--ws-navy); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .assistant-context-menu button:hover { background: #eef7f5; }
 .assistant-context-menu button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 1px; }

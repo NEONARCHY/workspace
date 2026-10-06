@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FolderKanban, ListTodo, Maximize2, Mic, Minimize2, Paperclip, Plane, Plus, Reply, Square, Trash2, Upload, X } from "lucide-react";
+import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, Paperclip, PenLine, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X } from "lucide-react";
 
 import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
@@ -19,6 +20,7 @@ const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
 const REPLY_EXCERPT_LENGTH = 280;
 const MAX_FILE_BYTES = 50_000_000;
+const CHAT_SIDEBAR_MIN_WIDTH = 760;
 const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
   webp: "image/webp", txt: "text/plain",
@@ -49,10 +51,10 @@ const quickPrompts = [
 ] as const;
 const presets = [
   ...quickPrompts,
-  { label: "Мои дела", prompt: "Какие мои задачи и события сейчас требуют внимания?" },
-  { label: "О сотруднике", prompt: "Расскажи о сотруднике [имя]: должность, стаж, достижения, награды и доступный показатель выполнения задач в срок." },
-  { label: "Разобрать файл", prompt: "Кратко перескажи приложенный файл, выдели главные факты и необходимые действия." },
-  { label: "Подготовить текст", prompt: "Помоги написать ясный рабочий текст на тему: " },
+  { label: "Мои дела", icon: ListChecks, prompt: "Какие мои задачи и события сейчас требуют внимания?" },
+  { label: "О сотруднике", icon: UserRound, prompt: "Расскажи о сотруднике [имя]: должность, стаж, достижения, награды и доступный показатель выполнения задач в срок." },
+  { label: "Разобрать файл", icon: FileText, prompt: "Кратко перескажи приложенный файл, выдели главные факты и необходимые действия." },
+  { label: "Подготовить текст", icon: PenLine, prompt: "Помоги написать ясный рабочий текст на тему: " },
 ] as const;
 
 const actionLabels: Record<AssistantActionDraft["kind"], string> = {
@@ -123,6 +125,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [messages, setMessages] = useState<readonly AssistantMessage[]>([]);
   const [chats, setChats] = useState<readonly AssistantChat[]>([]);
   const [chatId, setChatId] = useState("");
+  const [chatPickerOpen, setChatPickerOpen] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [clearError, setClearError] = useState("");
@@ -150,6 +153,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const chatPickerRef = useRef<HTMLDivElement>(null);
+  const presetsToggleRef = useRef<HTMLButtonElement>(null);
   const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const voiceTimerRef = useRef<number | null>(null);
@@ -167,6 +172,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     setRecording(false);
     setOpen(false);
     setReplyMenu(null);
+    setChatPickerOpen(false);
+    setPresetsOpen(false);
     setAnimatedReplyId(null);
     setDraggingFile(false);
     dragDepthRef.current = 0;
@@ -185,6 +192,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   useEffect(() => {
     const updateViewport = () => {
       const next = assistantViewport();
+      setChatPickerOpen(false);
+      setPresetsOpen(false);
       setViewport((current) => current.width === next.width && current.height === next.height
         && current.zoom === next.zoom ? current : next);
     };
@@ -267,18 +276,24 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         if (replyMenu) setReplyMenu(null);
+        else if (chatPickerOpen) setChatPickerOpen(false);
+        else if (presetsOpen) setPresetsOpen(false);
         else if (!confirmClear) close();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [close, open, replyMenu, confirmClear]);
+  }, [close, open, replyMenu, chatPickerOpen, presetsOpen, confirmClear]);
 
   const chatControlsDisabled = !loaded || busy || recording || transcribing || preparingAction || chatBusy || confirmClear;
   const changeChat = async (targetId?: string) => {
-    if (chatControlsDisabled || chatOperationRef.current || targetId === chatId) return;
+    setChatPickerOpen(false);
+    setPresetsOpen(false);
+    if (chatControlsDisabled || chatOperationRef.current) return;
+    if (targetId === chatId) { inputRef.current?.focus(); return; }
     chatOperationRef.current = true;
     setChatBusy(true); setError("");
     try {
@@ -329,12 +344,21 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     return () => window.removeEventListener("pointerdown", dismiss);
   }, [replyMenu]);
 
+  useEffect(() => {
+    if (!chatPickerOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !chatPickerRef.current?.contains(event.target)) setChatPickerOpen(false);
+    };
+    window.addEventListener("pointerdown", dismiss);
+    return () => window.removeEventListener("pointerdown", dismiss);
+  }, [chatPickerOpen]);
+
   const openReplyMenu = (item: AssistantMessage, clientX: number, clientY: number) => {
     const bounds = panelRef.current?.getBoundingClientRect();
     if (!bounds) return;
     setReplyMenu({ message: item,
-      x: Math.max(8, Math.min(clientX - bounds.left, bounds.width - 130)),
-      y: Math.max(8, Math.min(clientY - bounds.top, bounds.height - 48)) });
+      x: Math.max(8, Math.min(clientX - bounds.left, bounds.width - 156)),
+      y: Math.max(8, Math.min(clientY - bounds.top, bounds.height - 58)) });
   };
 
   const onMessageContextMenu = (event: ReactMouseEvent<HTMLElement>, item: AssistantMessage) => {
@@ -475,6 +499,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
       ? "solving" : "composing";
   const compact = viewport.width <= 600;
+  const showChatSidebar = expanded && viewport.width > CHAT_SIDEBAR_MIN_WIDTH;
+  const currentChat = chats.find((chat) => chat.id === chatId);
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
   const panelHeight = expanded || compact ? viewport.height - edge * 2 : Math.min(670, viewport.height - 36);
@@ -513,7 +539,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           event.preventDefault(); event.stopPropagation(); dragDepthRef.current = 0; setDraggingFile(false);
           acceptFiles(Array.from(event.dataTransfer.files));
         }}
-        className={`assistant-panel ${expanded ? "is-expanded" : ""}`}
+        className={`assistant-panel ${expanded ? "is-expanded" : ""} ${showChatSidebar ? "has-sidebar" : ""}`}
         role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
         <div className="assistant-panel-content">
         <header className="assistant-header">
@@ -521,20 +547,61 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
-            onClick={() => { sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
+            onClick={() => { setChatPickerOpen(false); setPresetsOpen(false); sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
             {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
           </button>
           <button type="button" aria-label="Закрыть ассистента" title="Закрыть"
             onClick={close}><X size={19} /></button>
         </header>
+        {showChatSidebar && <aside className="assistant-chat-sidebar" aria-label="Чаты ассистента">
+          <div className="assistant-sidebar-heading"><span>Ваши чаты</span><strong>{chats.length}</strong></div>
+          <button type="button" className="assistant-sidebar-new" disabled={chatControlsDisabled}
+            onClick={() => void changeChat()}><Plus size={17} aria-hidden="true" /> Новый чат</button>
+          <nav className="assistant-sidebar-list" aria-label="Список чатов ассистента">
+            {chats.map((chat) => <button type="button" key={chat.id} className="assistant-sidebar-chat"
+              aria-current={chat.id === chatId ? "true" : undefined} disabled={chatControlsDisabled}
+              onClick={() => void changeChat(chat.id)}>
+              {chat.id === chatId && <motion.span className="assistant-sidebar-active" layoutId="assistant-sidebar-active"
+                transition={{ duration: reducedMotion ? 0 : .26, ease: [0.2, 0, 0, 1] }} aria-hidden="true" />}
+              <MessageCircle size={18} aria-hidden="true" />
+              <span><strong title={chat.title}>{chat.title}</strong><small>{chat.isDefault ? "Основной чат" : "Диалог"}</small></span>
+            </button>)}
+          </nav>
+        </aside>}
         <nav className="assistant-chat-controls" aria-label="Чаты ассистента">
-          <select aria-label="Чат ассистента" title={chats.find((chat) => chat.id === chatId)?.title}
-            value={chatId} disabled={chatControlsDisabled}
-            onChange={(event) => void changeChat(event.target.value)}>
-            {!chats.length && <option value="">Загрузка чатов…</option>}
-            {chats.map((chat) => <option key={chat.id} value={chat.id}>{chat.title}</option>)}
-          </select>
-          <button type="button" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
+          <span className="assistant-current-chat"><MessageCircle size={18} aria-hidden="true" />
+            <span><strong title={currentChat?.title}>{currentChat?.title ?? "Новый чат"}</strong>
+              <small>Рабочий диалог</small></span></span>
+          <div className="assistant-chat-picker" ref={chatPickerRef}>
+            <button type="button" role="combobox" aria-label="Чат ассистента" aria-expanded={chatPickerOpen}
+              aria-controls="assistant-chat-options" aria-haspopup="listbox" data-chat-id={chatId}
+              disabled={chatControlsDisabled} onClick={() => setChatPickerOpen((current) => !current)}
+              onKeyDown={(event) => {
+                if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                event.preventDefault(); setChatPickerOpen(true);
+                requestAnimationFrame(() => chatPickerRef.current?.querySelector<HTMLButtonElement>("[role='option']")?.focus());
+              }}>
+              <MessageCircle size={17} aria-hidden="true" />
+              <span>{currentChat?.title ?? "Загрузка чатов…"}</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </button>
+            <AnimatePresence>{chatPickerOpen && <motion.div id="assistant-chat-options" role="listbox"
+              aria-label="Чаты ассистента" className="assistant-chat-options"
+              initial={reducedMotion ? false : { opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: reducedMotion ? 0 : .17, ease: [0.2, 0, 0, 1] }}>
+              {chats.map((chat) => <button type="button" role="option" tabIndex={-1} aria-selected={chat.id === chatId}
+                key={chat.id} onClick={() => void changeChat(chat.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setChatPickerOpen(false); chatPickerRef.current?.querySelector<HTMLElement>("[role='combobox']")?.focus(); }
+                  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+                  event.preventDefault();
+                  const items = Array.from(chatPickerRef.current?.querySelectorAll<HTMLButtonElement>("[role='option']") ?? []);
+                  items[(items.indexOf(event.currentTarget) + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+                }}><MessageCircle size={16} aria-hidden="true" /><span>{chat.title}</span></button>)}
+            </motion.div>}</AnimatePresence>
+          </div>
+          <button type="button" className="assistant-chat-new" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
             <Plus size={16} aria-hidden="true" /> Новый чат
           </button>
           <button type="button" aria-label="Очистить текущий чат" title="Очистить текущий чат"
@@ -606,16 +673,28 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         <div className="assistant-composer-area">
           <div className="assistant-composer-inner">
             <div className="assistant-presets">
-              <button type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
-                aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear} onClick={() => setPresetsOpen((current) => !current)}>
+              <Popover open={presetsOpen} onOpenChange={(_, data) => setPresetsOpen(data.open)}
+                positioning={{ position: "above", align: "start", offset: 8 }} mountNode={panelRef.current}>
+              <PopoverTrigger disableButtonEnhancement>
+              <button ref={presetsToggleRef} type="button" className="assistant-presets-toggle" aria-expanded={presetsOpen}
+                aria-controls="assistant-presets-list" disabled={chatBusy || confirmClear}>
                 Быстрые действия <ChevronDown size={14} aria-hidden="true" />
               </button>
-              {presetsOpen && <div id="assistant-presets-list" className="assistant-presets-list">
+              </PopoverTrigger>
+              <PopoverSurface role="group" aria-label="Быстрые действия" className="assistant-presets-surface"
+                onKeyDown={(event) => {
+                  if (event.key !== "Escape") return;
+                  event.preventDefault(); event.stopPropagation(); setPresetsOpen(false); presetsToggleRef.current?.focus();
+                }}
+                style={{ width: Math.min(800, Math.max(240, panelWidth - (showChatSidebar ? 258 : 0) - 36)) }}>
+              <div id="assistant-presets-list" className="assistant-presets-list">
                 {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
                   onClick={() => { setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
-                  {preset.label}
+                  <span className="assistant-preset-icon"><preset.icon size={17} aria-hidden="true" /></span><span>{preset.label}</span>
                 </button>)}
-              </div>}
+              </div>
+              </PopoverSurface>
+              </Popover>
             </div>
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
               {activeDraft?.actionDraft && <div className="assistant-draft-context">
@@ -681,7 +760,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
             </form>
             {error && <p className="assistant-error" role="alert">{error}</p>}
             {selectedFile && <small className="assistant-attachment-notice">Файл используется только для этого запроса и не сохраняется на сервере. TXT и текст DOCX — до 50 000 символов.</small>}
-            <small className="assistant-privacy">ИИ может ошибаться. Рабочие действия — после вашего подтверждения.</small>
+            <small className="assistant-privacy">ИИ может допускать ошибки, перепроверяйте ответы</small>
           </div>
         </div>
         </div>
@@ -692,7 +771,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <span>DOCX, PDF, PNG, JPEG, WebP или TXT · один файл до 50 МБ</span>
           <small>Добавится к сообщению — отправка только по вашему нажатию.</small>
         </motion.div>}</AnimatePresence>
-        {replyMenu && <div className="assistant-context-menu" role="menu" style={{ left: replyMenu.x, top: replyMenu.y }}>
+        {replyMenu && <div className="assistant-context-menu" role="menu" aria-label="Действия с ответом" style={{ left: replyMenu.x, top: replyMenu.y }}>
           <button ref={replyMenuButtonRef} type="button" role="menuitem" onClick={() => {
             setReplyingTo(replyMenu.message); setReplyMenu(null); inputRef.current?.focus();
           }}><Reply size={16} aria-hidden="true" /> Ответить</button>

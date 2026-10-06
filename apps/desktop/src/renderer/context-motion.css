@@ -19,3 +19,19 @@
   font-size: clamp(10px, 3.6cqi, 12px);
   white-space: nowrap;
 }
+
+/* Entry motion lives on the surface, leaving Popper's positioning transform untouched. */
+@keyframes ws-floating-menu-enter {
+  from { opacity: 0; translate: 0 -4px; }
+  to { opacity: 1; translate: 0 0; }
+}
+:is(.assistant-context-menu, .assistant-presets-surface, .message-context-menu, .fui-MenuPopover, .rail-ai-popover,
+  .task-participant-popover, .reward-history-popover, .media-volume-popover,
+  .identity-popover, .connection-popover) {
+  animation: ws-floating-menu-enter 190ms cubic-bezier(.2, 0, 0, 1);
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  :is(.assistant-context-menu, .assistant-presets-surface, .message-context-menu, .fui-MenuPopover, .rail-ai-popover,
+    .task-participant-popover, .reward-history-popover, .media-volume-popover,
+    .identity-popover, .connection-popover) { animation: none; }
+}
