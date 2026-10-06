@@ -334,7 +334,7 @@ export function TeamDashboardView({
               aria-pressed={flowSelection?.kind === "status" && flowSelection.key === part.key}
               key={part.key}
               onClick={() => selectFlow({ kind: "status", key: part.key, label: part.label })}
-            ><span><i className={`part-${part.key}`} />{part.label}</span><strong>{part.value}</strong></button>)}
+            ><span><i className={`part-${part.key}`} /><span className="team-dash-flow-label" title={part.label}>{part.label}</span></span><strong>{part.value}</strong></button>)}
           </div>
         </div>
         <div className={`team-dash-week ${dueThisWeek.length ? "" : "is-empty"}`}>

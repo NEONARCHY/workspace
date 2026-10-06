@@ -51,19 +51,18 @@ async function main() {
     viewport:[innerWidth,innerHeight],background:getComputedStyle(flow).backgroundColor,week:rect(week),overflow:d.scrollWidth>d.clientWidth,
     overview:rect(flow.querySelector('.team-dash-flow-overview')),legend:rect(flow.querySelector('.team-dash-flow-legend')),
     overviewScale:flow.querySelector('.team-dash-flow-overview').getBoundingClientRect().width/flow.querySelector('.team-dash-flow-overview').offsetWidth,
-    legends:[...flow.querySelectorAll('.team-dash-flow-legend > button')].map(b=>({button:rect(b),square:getComputedStyle(b).aspectRatio==='1 / 1',gradient:getComputedStyle(b).backgroundImage,pressed:b.getAttribute('aria-pressed'),label:rect(b.querySelector('span')),count:rect(b.querySelector('strong')),labelOverflow:b.querySelector('span').scrollWidth>b.querySelector('span').clientWidth})),
+    legends:[...flow.querySelectorAll('.team-dash-flow-legend > button')].map(b=>{const s=getComputedStyle(b),label=b.querySelector('span'),count=b.querySelector('strong');return {button:rect(b),layoutHeight:b.offsetHeight,needed:Math.max(34,Math.max(label.offsetHeight,count.offsetHeight)+parseFloat(s.paddingTop)+parseFloat(s.paddingBottom)+parseFloat(s.borderTopWidth)+parseFloat(s.borderBottomWidth)),direction:s.flexDirection,countSize:getComputedStyle(count).fontSize,gradient:s.backgroundImage,pressed:b.getAttribute('aria-pressed'),label:rect(label),count:rect(count),labelOverflow:label.scrollWidth>label.clientWidth}}),
     days:[...week.querySelectorAll('.team-dash-week-bars > button')].map(b=>({button:rect(b),bar:rect(b.querySelector(':scope > span')),count:rect(b.querySelector('strong')),label:rect(b.querySelector('small')),labelOverflow:b.querySelector('small').scrollWidth>b.querySelector('small').clientWidth,transform:getComputedStyle(b.querySelector('small')).transform,value:Number(b.querySelector('strong').textContent),fill:b.querySelector('i').getBoundingClientRect().height,title:b.title,name:b.getAttribute('aria-label')}))
   }})()`);
   const check = m => {
     assert.equal(m.days.length, 7); assert(!m.overflow, 'Dashboard horizontal overflow');
     assert.equal(m.background, 'rgb(255, 255, 255)'); assert(m.legends.every(b => b.gradient.includes('linear-gradient')));
     assert.equal(m.legends.length, 4);
-    assert(m.legends.every(b => !b.labelOverflow && (b.square ? b.label.bottom <= b.count.top - 3 : b.label.right <= b.count.left - 3)), 'Status names and counts do not overlap');
-    if (m.legends[0].square) {
-      assert(m.legends.every(b => Math.abs(b.button.width - b.button.height) < 1), 'Four square tiles');
-      assert(Math.abs(m.legends[0].button.top - m.legends[1].button.top) < 1 && m.legends[2].button.top > m.legends[0].button.bottom, 'Two rows of two tiles');
-      assert(m.overview.bottom - m.legend.bottom < 17 * m.overviewScale, 'Only normal padding below tiles');
-    }
+    assert(m.legends.every(b => !b.labelOverflow && b.label.right <= b.count.left - 3), 'Status names and counts do not overlap');
+    assert(m.legends.every((b,index) => b.direction === 'row' && b.countSize === '14px' && b.layoutHeight <= Math.max(...m.legends.slice(index-index%2,index-index%2+2).map(other=>other.needed))+1), 'Content-sized horizontal status buttons at every width');
+    assert(m.legends.every(b => Math.abs(b.button.width - m.legends[0].button.width) < 1), 'Equal status column widths');
+    assert(Math.abs(m.legends[0].button.top - m.legends[1].button.top) < 1 && Math.abs(m.legends[2].button.top - m.legends[3].button.top) < 1 && m.legends[2].button.top > m.legends[0].button.bottom, 'Two rows of two compact buttons');
+    assert(m.overview.bottom - m.legend.bottom < 17 * m.overviewScale, 'Only normal padding below statuses');
     for (const day of m.days) {
       assert(!day.labelOverflow, 'Caption fits its column'); assert.equal(day.transform, 'none');
       assert(day.label.left >= day.button.left - 1 && day.label.right <= day.button.right + 1, 'Caption inside button');
