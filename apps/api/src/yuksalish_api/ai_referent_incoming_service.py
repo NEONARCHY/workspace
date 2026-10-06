@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from .access_control import ensure_module_action
+from .ai_referent_incoming_access import incoming_scope, require_full_incoming_access
 from .ai_referent_schemas import (
     AIReferentIncomingLetterResponse,
     AIReferentIncomingRegistryResponse,
@@ -215,7 +215,7 @@ async def load_incoming_letters(
     limit: int = 100,
     category: str = "all",
 ) -> AIReferentIncomingRegistryResponse:
-    await ensure_module_action(connection, current_user, "ai_referent", "view")
+    mode, scope = await incoming_scope(connection, current_user)
     responsible = users.alias("ai_incoming_responsible")
     statement = select(
         ai_referent_incoming_letters,
@@ -227,8 +227,8 @@ async def load_incoming_letters(
             isouter=True,
         )
     )
-    conditions = []
-    summary_conditions = []
+    conditions = [scope] if scope is not None else []
+    summary_conditions = [scope] if scope is not None else []
     if status:
         conditions.append(ai_referent_incoming_letters.c.status == status)
         summary_conditions.append(ai_referent_incoming_letters.c.status == status)
@@ -285,7 +285,7 @@ async def load_incoming_letters(
         )
         .mappings()
         .one_or_none()
-    )
+    ) if mode == "all" else None
     latest_seen = await connection.scalar(
         select(ai_referent_agents.c.last_seen_at)
         .order_by(ai_referent_agents.c.last_seen_at.desc())
@@ -383,7 +383,7 @@ async def latest_journal(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
 ) -> RowMapping:
-    await ensure_module_action(connection, current_user, "ai_referent", "view")
+    await require_full_incoming_access(connection, current_user)
     row = (
         (
             await connection.execute(

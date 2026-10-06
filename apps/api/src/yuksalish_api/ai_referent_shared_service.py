@@ -164,6 +164,7 @@ async def telegram_actor(connection: AsyncConnection, telegram_id: str) -> Authe
         position_id=account["position_id"],
         department_id=account["department_id"],
         job_title=None,
+        client_kind="telegram",
     )
     await ensure_module_action(connection, actor, "ai_referent", "view")
     return actor

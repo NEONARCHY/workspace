@@ -410,7 +410,9 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             f"/api/v1/ai-referent/letters/{editable_letter['id']}",
             headers=administrator,
         )
-        assert admin_view.status_code == 404
+        assert admin_view.status_code == 200
+        assert admin_view.json()["canEdit"] is False
+        assert "approve" not in admin_view.json()["availableActions"]
 
         second_approved = await client.post(
             f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",

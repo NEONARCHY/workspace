@@ -67,6 +67,7 @@ async function main() {
   });
   await page.route("**/api/v1/**", route => {
     const url = route.request().url();
+    if (url.endsWith("/ai-referent/visibility")) return route.fulfill({ json: { incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 } });
     if (url.endsWith("/auth/web/login")) return route.fulfill({ json: { accessToken: "visual-token", tokenType: "bearer", expiresIn: 900, user: person } });
     if (url.endsWith("/workspace/bootstrap")) return route.fulfill({ json: { currentUser: person, canCreatePaymentRequests: true, people: [person], positions: [], chats: [], messages: [], tasks: [], requests: [], projects: [], tripRequests: [], feedPosts: [], calendarEvents: [], notifications: [], attachments: [], workflow: null, requestWorkflows: [], notificationPreferences: { desktopEnabled: false } } });
     if (url.endsWith("/directory")) return route.fulfill({ json: { people: [person], departments: [], positions: [] } });

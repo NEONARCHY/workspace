@@ -29,7 +29,8 @@ async function main() {
     const request = route.request(), url = new URL(request.url()), endpoint = url.pathname;
     if (request.method() !== "GET") writes.push({ endpoint, method: request.method() });
     let data;
-    if (endpoint.endsWith("/authority")) data = { writable: true, mode: "legacy" };
+    if (endpoint.endsWith("/visibility")) data = { incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 };
+    else if (endpoint.endsWith("/authority")) data = { writable: true, mode: "legacy" };
     else if (endpoint.endsWith("/reviewers")) {
       if (!reviewersAvailable) return route.fulfill({ status: 503, json: { detail: "Список временно недоступен" } });
       data = { revision: 1, runtimes: [], reviewers: [

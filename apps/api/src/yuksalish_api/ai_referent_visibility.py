@@ -20,9 +20,15 @@ PROGRESS_ONLY_STATUSES = frozenset(
 )
 
 
+def may_view_all_workspace_letters(user: AuthenticatedUser) -> bool:
+    return user.role in {"admin", "superadmin"} and user.client_kind != "telegram"
+
+
 def may_view_letter(
     row: RowMapping, user: AuthenticatedUser, *, may_operate: bool = False
 ) -> bool:
+    if may_view_all_workspace_letters(user):
+        return True
     if row["status"] == "sent":
         return bool(
             row["created_by_user_id"] == user.id

@@ -26,6 +26,15 @@ from yuksalish_api.ai_referent_configuration_service import (
     require_configuration_admin,
     save_configuration,
 )
+from yuksalish_api.ai_referent_incoming_access import (
+    IncomingAccessConfiguration,
+    IncomingAccessRule,
+    IncomingAccessUpdate,
+    IncomingVisibility,
+    incoming_visibility,
+    read_incoming_access,
+    save_incoming_access,
+)
 from yuksalish_api.ai_referent_incoming_service import (
     latest_journal,
     load_incoming_letters,
@@ -59,6 +68,33 @@ from yuksalish_api.database import get_connection
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 
 router = APIRouter(prefix="/ai-referent", tags=["ai-referent"])
+
+
+@router.get("/visibility", response_model=IncomingVisibility)
+async def get_visibility(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> IncomingVisibility:
+    return await incoming_visibility(connection, current_user)
+
+
+@router.get("/incoming-access", response_model=IncomingAccessConfiguration)
+async def get_incoming_access(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> IncomingAccessConfiguration:
+    return await read_incoming_access(connection, current_user)
+
+
+@router.put("/incoming-access/{user_id}", response_model=IncomingAccessRule)
+async def put_incoming_access(
+    user_id: UUID,
+    payload: IncomingAccessUpdate,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> IncomingAccessRule:
+    # Workspace-only viewing preference: no robot reconfiguration or mail mutation.
+    return await save_incoming_access(connection, current_user, user_id, payload)
 
 
 @router.get("/authority", response_model=OfflineAuthorityStatus)

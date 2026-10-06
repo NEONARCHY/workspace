@@ -81,7 +81,10 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
       const next = await loadAIReferentIncomingRegistry(token, { query: search, category: filter, offset: page * 100 });
       if (sequence === requestSequence.current) setRegistry(next);
     } catch (reason) {
-      if (sequence === requestSequence.current) setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
+      if (sequence === requestSequence.current) {
+        setRegistry(undefined);
+        setError(reason instanceof Error ? reason.message : "Не удалось загрузить входящие письма.");
+      }
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }

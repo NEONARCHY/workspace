@@ -1288,6 +1288,16 @@ ai_referent_incoming_letters = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+ai_referent_incoming_access = sa.Table(
+    "ai_referent_incoming_access", metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("mode", sa.String(16)),
+    sa.Column("responsibles", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", uuid_type),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 ai_referent_configuration = sa.Table(
     "ai_referent_configuration", metadata,
     sa.Column("id", sa.Integer(), primary_key=True),

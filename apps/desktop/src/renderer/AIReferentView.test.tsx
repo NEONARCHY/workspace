@@ -8,6 +8,7 @@ import { referentDownloadName } from "./AIReferentFiles";
 import { workspaceTheme } from "./workspace-theme";
 import { actOnAIReferentLetter, addAIReferentManualRecipient, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
+import { loadAIReferentVisibility } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("./workspace-api", () => ({
   downloadWorkspaceAttachment: vi.fn(),
   loadAIReferentRegistry: vi.fn(),
   loadAIReferentAuthority: vi.fn(),
+  loadAIReferentVisibility: vi.fn(),
   loadAIReferentLetter: vi.fn(),
   loadAIReferentPacket: vi.fn(),
   downloadAIReferentPacket: vi.fn(),
@@ -139,6 +141,7 @@ describe("AIReferentView", () => {
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(loadAIReferentVisibility).mockResolvedValue({ incomingMode: "all", canViewJournals: true, canManageVisibility: false, revision: 0 });
     vi.mocked(checkAIReferentDocument).mockReset();
     vi.mocked(loadAIReferentAuthority).mockResolvedValue({ writable: true, mode: "legacy", leaseUntil: null, detail: "" });
     vi.mocked(loadAIReferentRegistry).mockResolvedValue(registry);
@@ -164,6 +167,35 @@ describe("AIReferentView", () => {
     render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
     fireEvent.click(screen.getByRole("tab", { name: "Адресная книга" }));
     expect(await screen.findByText("Пока нет добавленных адресов. Справочник робота продолжает работать как прежде.")).toBeInTheDocument();
+  });
+
+  it("hides incoming and global journals for a denied employee without loading mail", async () => {
+    vi.mocked(loadAIReferentVisibility).mockResolvedValue({ incomingMode: "none", canViewJournals: false, canManageVisibility: false, revision: 0 });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await waitFor(() => expect(screen.getByRole("tab", { name: "Исходящие" })).toHaveAttribute("aria-selected", "true"));
+    expect(screen.queryByRole("tab", { name: "Входящие" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Архив и журналы" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Видимость писем" })).not.toBeInTheDocument();
+    expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
+  });
+
+  it("shows only a personal incoming register and no global journal for Exat assignments", async () => {
+    vi.mocked(loadAIReferentVisibility).mockResolvedValue({ incomingMode: "assigned", canViewJournals: false, canManageVisibility: false, revision: 2 });
+    vi.mocked(loadAIReferentIncomingRegistry).mockResolvedValue({ ...incomingRegistry, journal: { available: false } });
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    expect(await screen.findByRole("tab", { name: "Входящие" })).toBeInTheDocument();
+    expect(await screen.findByText(/Здесь только письма, назначенные вам/)).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Архив и журналы" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Excel-журнал" })).toBeDisabled();
+  });
+
+  it("does not assume incoming access when the visibility check fails", async () => {
+    vi.mocked(loadAIReferentVisibility).mockRejectedValue(new Error("Не удалось проверить права"));
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate canAdmin /></FluentProvider>);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось проверить права");
+    expect(screen.queryByRole("tab", { name: "Входящие" })).not.toBeInTheDocument();
+    expect(loadAIReferentIncomingRegistry).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Повторить проверку доступа" })).toBeInTheDocument();
   });
 
   it("searches the shared address book and fills the selected destination", async () => {

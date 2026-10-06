@@ -1,5 +1,6 @@
 """Deterministic service guard tests complement real PostgreSQL/HTTP integration."""
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -242,14 +243,16 @@ def test_sent_letter_visibility_is_owner_or_leadership(role):
         "sending", "awaiting_final_send", "failed", "cancelled", "signed",
     ],
 )
-def test_administrator_cannot_view_other_letters_before_operator_stage(role, status):
+@pytest.mark.parametrize("client_kind", ["desktop", "web", "telegram"])
+def test_administrator_workspace_read_access_keeps_telegram_private(role, status, client_kind):
     administrator = actor(role)
+    administrator = replace(administrator, client_kind=client_kind)
     row = {
         "status": status,
         "created_by_user_id": uuid4(),
         "reviewer_user_id": uuid4(),
     }
-    assert not letters._may_view(row, administrator, may_operate=True)
+    assert letters._may_view(row, administrator, may_operate=True) is (client_kind != "telegram")
 
 
 @pytest.mark.parametrize(
@@ -286,8 +289,8 @@ async def test_sent_letter_direct_open_denied_to_other_employee(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_administrator_cannot_open_other_pending_letter(monkeypatch):
-    administrator = actor("admin")
+async def test_telegram_administrator_cannot_open_other_pending_letter(monkeypatch):
+    administrator = replace(actor("admin"), client_kind="telegram")
     row = {
         "status": "pending_review",
         "created_by_user_id": uuid4(),
@@ -306,8 +309,8 @@ async def test_administrator_cannot_open_other_pending_letter(monkeypatch):
 
 
 @pytest.mark.anyio
-async def test_administrator_letter_list_is_limited_to_operator_stage_and_history(monkeypatch):
-    administrator = actor("admin")
+async def test_telegram_administrator_list_is_limited_to_operator_stage_and_history(monkeypatch):
+    administrator = replace(actor("admin"), client_kind="telegram")
     connection = SimpleNamespace(execute=AsyncMock(side_effect=[mapped([]), mapped([])]))
     monkeypatch.setattr(letters, "ensure_module_action", AsyncMock())
     monkeypatch.setattr(
@@ -369,9 +372,9 @@ async def test_progress_list_exposes_only_status_and_identity_to_operator(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("status,allowed", [("pending_review", False),
+@pytest.mark.parametrize("status,allowed", [("pending_review", True),
                                              ("referent_review_pending", True)])
-async def test_old_administrator_notification_does_not_expose_letter_cycle(
+async def test_workspace_administrator_can_open_letter_from_notification(
     monkeypatch, status, allowed
 ):
     administrator = actor("admin")

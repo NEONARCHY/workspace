@@ -16,6 +16,7 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action
+from .ai_referent_incoming_access import incoming_scope, require_full_incoming_access
 from .ai_referent_service import load_letter
 from .auth import AuthenticatedUser
 from .object_storage import ObjectStorage
@@ -64,6 +65,7 @@ async def require_packet_access(
         await load_letter(connection, user, owner_id)
         return
     if kind == "journal":
+        await require_full_incoming_access(connection, user)
         exists = await connection.scalar(
             select(ai_referent_files.c.id)
             .where(
@@ -72,9 +74,19 @@ async def require_packet_access(
             )
             .limit(1)
         )
-    elif kind in {"incoming", "archive"}:
-        table = ai_referent_incoming_letters if kind == "incoming" else ai_referent_archive
-        exists = await connection.scalar(select(table.c.id).where(table.c.id == owner_id))
+    elif kind == "incoming":
+        _mode, scope = await incoming_scope(connection, user)
+        statement = select(ai_referent_incoming_letters.c.id).where(
+            ai_referent_incoming_letters.c.id == owner_id
+        )
+        if scope is not None:
+            statement = statement.where(scope)
+        exists = await connection.scalar(statement)
+    elif kind == "archive":
+        await require_full_incoming_access(connection, user)
+        exists = await connection.scalar(select(ai_referent_archive.c.id).where(
+            ai_referent_archive.c.id == owner_id
+        ))
     else:
         exists = None
     if exists is None:
