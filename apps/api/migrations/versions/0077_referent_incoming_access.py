@@ -42,12 +42,12 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        "ix_ai_incoming_responsible",
+        "ix_ai_incoming_agent_responsible",
         "ai_referent_incoming_letters",
         ["agent_id", "responsible_external_id"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index("ix_ai_incoming_responsible", table_name="ai_referent_incoming_letters")
+    op.drop_index("ix_ai_incoming_agent_responsible", table_name="ai_referent_incoming_letters")
     op.drop_table("ai_referent_incoming_access")

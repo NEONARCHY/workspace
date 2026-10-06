@@ -1,5 +1,7 @@
 """Fail-closed incoming scopes and immutable administrator access."""
 
+import ast
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
@@ -11,6 +13,29 @@ from sqlalchemy.dialects import postgresql
 
 from yuksalish_api import ai_referent_incoming_access as access
 from yuksalish_api.auth import AuthenticatedUser
+
+
+def test_new_incoming_index_name_does_not_collide_with_existing_migrations():
+    versions = Path(__file__).resolve().parents[2] / "apps/api/migrations/versions"
+    own = versions / "0077_referent_incoming_access.py"
+
+    def indexes(path):
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+        return {
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "create_index"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+        }
+
+    new_names = indexes(own)
+    assert new_names == {"ix_ai_incoming_agent_responsible"}
+    for previous in versions.glob("*.py"):
+        if previous.name < own.name:
+            assert not new_names.intersection(indexes(previous)), previous.name
 
 
 @pytest.fixture
