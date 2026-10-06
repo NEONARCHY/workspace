@@ -55,6 +55,11 @@ window.fetch = async (url, options) => {
 """
 
 
+def check(condition: bool, message: str = "Voice QA check failed") -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
 with sync_playwright() as playwright:
     browser = playwright.chromium.launch(executable_path=EDGE, headless=True)
     page = browser.new_page(viewport={"width": 1440, "height": 900})
@@ -80,8 +85,15 @@ with sync_playwright() as playwright:
     open_preview()
     record()
     expect(page.get_by_role("textbox", name="Сообщение ассистенту")).to_have_value("")
-    assert page.evaluate("voiceRequests.length") == 0
+    check(page.evaluate("voiceRequests.length") == 0)
     player = page.get_by_label("Прослушать голосовое сообщение")
+    player.evaluate("audio => audio.play()")
+    page.wait_for_function("document.querySelector('.assistant-voice-preview').currentTime > 0")
+    player.evaluate("audio => audio.pause()")
+    page.get_by_role("button", name="Закрыть ассистента").click()
+    expect(player).to_have_count(0)
+    page.get_by_role("button", name="Открыть ассистента Yuksalish").click()
+    page.wait_for_function("document.querySelector('.assistant-voice-preview')?.src.startsWith('blob:')")
     player.evaluate("audio => audio.play()")
     page.wait_for_function("document.querySelector('.assistant-voice-preview').currentTime > 0")
     player.evaluate("audio => audio.pause()")
@@ -90,17 +102,17 @@ with sync_playwright() as playwright:
         page.evaluate("zoom => document.documentElement.style.zoom = zoom", zoom)
         page.get_by_role("button", name="Отправить сообщение").scroll_into_view_if_needed()
         expect(page.get_by_role("button", name="Отправить сообщение")).to_be_in_viewport()
-        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1")
+        check(page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"))
         page.screenshot(path=str(OUT / f"voice-{width}-zoom-{zoom}.png"))
     page.evaluate("document.documentElement.style.zoom = 1")
     page.set_viewport_size({"width": 1440, "height": 900})
     page.get_by_role("button", name="Отправить сообщение").click()
     expect(page.get_by_text("Стенд: голосовая команда обработана")).to_be_visible()
     body = page.evaluate("voiceRequests[0]")
-    assert body["message"] == "" and body["attachment"]["as_prompt"] is True
-    assert base64.b64decode(body["attachment"]["data_base64"]).startswith(b"\x1a\x45\xdf\xa3")
-    assert page.evaluate("voiceStopped") > 0
-    assert body["chat_id"] == "qa-forms"
+    check(body["message"] == "" and body["attachment"]["as_prompt"] is True)
+    check(base64.b64decode(body["attachment"]["data_base64"]).startswith(b"\x1a\x45\xdf\xa3"))
+    check(page.evaluate("voiceStopped") > 0)
+    check(body["chat_id"] == "qa-forms")
     page.evaluate("voicePrompt = 'Открывай форму'")
     record()
     page.get_by_role("button", name="Отправить сообщение").click()
@@ -119,9 +131,10 @@ with sync_playwright() as playwright:
     page.get_by_role("button", name="Отправить сообщение").click()
     expect(page.get_by_text("Стенд: выполнено текстовое задание")).to_be_visible()
     body = page.evaluate("voiceRequests[1]")
-    assert body["message"] == "Расшифруй эту запись"
-    assert body["attachment"]["as_prompt"] is False
-    assert page.get_by_label("Название задачи", exact=True).count() == 0
-    assert not errors, errors
-    print("PASS: voice request, explicit text, retry, form handoff, 3 sizes and 200% zoom")
+    check(body["message"] == "Расшифруй эту запись")
+    check(body["attachment"]["as_prompt"] is False)
+    check(page.get_by_label("Название задачи", exact=True).count() == 0)
+    check(not errors, str(errors))
+    print("PASS: voice request, explicit text, retry, reopened playback, "
+          "form handoff, 3 sizes and 200% zoom")
     browser.close()

@@ -588,6 +588,33 @@ describe("YuksalishAssistant", () => {
     }
   });
 
+  it("restores the unsent audio preview after closing and reopening the assistant", async () => {
+    const createUrl = vi.fn(() => "blob:voice-preview");
+    const revokeUrl = vi.fn();
+    vi.stubGlobal("URL", class extends URL {
+      static override createObjectURL = createUrl;
+      static override revokeObjectURL = revokeUrl;
+    });
+    render(<YuksalishAssistant token="test-token" />);
+    const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+    fireEvent.click(launcher);
+    await screen.findByText("С чего начнём?");
+    fireEvent.change(screen.getByLabelText("Выбрать вложение"), { target: {
+      files: [new File(["voice"], "voice.webm", { type: "audio/webm" })],
+    } });
+    expect(screen.getByLabelText("Прослушать голосовое сообщение")).toHaveAttribute("src", "blob:voice-preview");
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ассистент Yuksalish" })).not.toBeInTheDocument());
+    expect(revokeUrl).toHaveBeenCalledWith("blob:voice-preview");
+    fireEvent.click(launcher);
+    expect(await screen.findByText("voice.webm")).toBeInTheDocument();
+    expect(screen.getByLabelText("Прослушать голосовое сообщение")).toHaveAttribute("src", "blob:voice-preview");
+    expect(createUrl).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Убрать вложение" }));
+    expect(revokeUrl).toHaveBeenCalledTimes(2);
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
+
   it("keeps audio and text after a failure and prevents duplicate voice sends", async () => {
     vi.mocked(sendAssistantMessage).mockRejectedValueOnce(new Error("Повторите позже"))
       .mockResolvedValueOnce({ id: "voice-retry", role: "assistant", model: "flash-lite",

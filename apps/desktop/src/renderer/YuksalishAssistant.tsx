@@ -406,7 +406,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
 
   useEffect(() => {
     const preview = voicePreviewRef.current;
-    if (!selectedAudio || !selectedFile || !preview || !URL.createObjectURL) return;
+    if (!open || !selectedAudio || !selectedFile || !preview || !URL.createObjectURL) return;
     const url = URL.createObjectURL(selectedFile);
     preview.src = url;
     return () => {
@@ -414,7 +414,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       preview.removeAttribute("src");
       URL.revokeObjectURL(url);
     };
-  }, [selectedAudio, selectedFile]);
+  }, [open, selectedAudio, selectedFile]);
 
   const stopRecording = () => {
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
