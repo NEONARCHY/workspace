@@ -4,7 +4,70 @@ import asyncio
 import json
 from pathlib import Path
 
-from playwright.async_api import async_playwright
+from playwright.async_api import Browser, async_playwright
+
+
+async def check_touch(browser: Browser, output: Path) -> None:
+    context = await browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True)
+    try:
+        page = await context.new_page()
+        await page.route("**/api/**", lambda route: route.abort())
+        await page.goto("http://127.0.0.1:5177/qa/inter-swipe.html")
+        row = page.locator(".notification-row").first
+        await row.scroll_into_view_if_needed()
+        await page.wait_for_timeout(300)
+        cdp = await context.new_cdp_session(page)
+
+        async def gesture(dx: float, dy: float) -> None:
+            box = await row.bounding_box()
+            assert box
+            x, y = box["x"] + box["width"] * 0.85, box["y"] + box["height"] * 0.55
+            await cdp.send(
+                "Input.dispatchTouchEvent",
+                {
+                    "type": "touchStart",
+                    "touchPoints": [{"x": x, "y": y}],
+                },
+            )
+            for step in range(1, 13):
+                await cdp.send(
+                    "Input.dispatchTouchEvent",
+                    {
+                        "type": "touchMove",
+                        "touchPoints": [
+                            {
+                                "x": x + dx * step / 12,
+                                "y": y + dy * step / 12,
+                            }
+                        ],
+                    },
+                )
+                await page.wait_for_timeout(20)
+            await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+            await page.wait_for_timeout(300)
+
+        box = await row.bounding_box()
+        assert box
+        await gesture(-box["width"] * 0.8, 0)
+        assert await page.get_by_text("Согласовать документы поездки", exact=True).count() == 0
+        await page.get_by_role("button", name="Вернуть", exact=True).click()
+        await row.scroll_into_view_if_needed()
+        positions = """element => {
+            const result = [];
+            for (let current = element; current; current = current.parentElement) {
+                result.push(current.scrollTop);
+            }
+            return result;
+        }"""
+        before = await row.evaluate(positions)
+        await gesture(0, 90)
+        after = await row.evaluate(positions)
+        assert any(end < start - 20 for start, end in zip(before, after, strict=True)), (before, after)
+        assert await page.get_by_role("button", name="Вернуть", exact=True).count() == 0
+        assert await page.locator(".notification-swipe.is-open").count() == 0
+        await page.screenshot(path=str(output / "touch-scroll.png"))
+    finally:
+        await context.close()
 
 
 async def main() -> None:
@@ -52,6 +115,7 @@ async def main() -> None:
             await page.screenshot(path=str(output / "notifications-inter.png"))
 
             async def drag(selector: str, fraction: float) -> None:
+                await page.locator(selector).first.scroll_into_view_if_needed()
                 box = await page.locator(selector).first.bounding_box()
                 assert box
                 start = box["x"] + box["width"] * 0.85
@@ -141,6 +205,13 @@ async def main() -> None:
                 await page.screenshot(path=str(output / f"notifications-{width}.png"))
                 if width == 390:
                     await page.locator(".notification-row").first.scroll_into_view_if_needed()
+                    exposed = await page.locator(".notification-row").first.evaluate("""element => {
+                        const box = element.getBoundingClientRect();
+                        return element.contains(document.elementFromPoint(
+                            box.x + box.width / 2, box.y + box.height / 2
+                        ));
+                    }""")
+                    assert exposed, "Notification settings must not overlap swipe rows"
                     await page.screenshot(path=str(output / "notifications-390-rows.png"))
             await page.set_viewport_size({"width": 1024, "height": 768})
             await page.evaluate("document.documentElement.style.zoom = '2'")
@@ -151,8 +222,10 @@ async def main() -> None:
             await page.get_by_role("button", name="Вернуть", exact=True).click()
             await page.screenshot(path=str(output / "forced-colors.png"))
             report["pageErrors"] = errors
+            await check_touch(browser, output)
             report["checks"] = [
                 "real mouse swipe",
+                "native touch swipe/undo and vertical pan",
                 "full swipe",
                 "undo",
                 "cross-section undo",

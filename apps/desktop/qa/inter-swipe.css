@@ -1,5 +1,5 @@
 html, body, #root { min-height: 100%; height: 100%; margin: 0; }
-.qa-swipe { height: 100%; display: flex; flex-direction: column; background: var(--ws-canvas); }
+#root > .app-provider.qa-swipe { height: 100%; display: flex; flex-direction: column; background: var(--ws-canvas); }
 .qa-swipe-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 16px 24px; border-bottom: 1px solid var(--ws-line); }
 .qa-swipe-toolbar > div { margin-right: auto; }
 .qa-swipe-toolbar strong, .qa-swipe-toolbar small { display: block; }

@@ -68,7 +68,13 @@ export function SwipeRow({ children, label, onAction, disabled = false, classNam
         if (distance >= threshold) { settle(0); onAction(); }
       }}
       onPointerCancel={() => { gesture.current = null; settle(0); }}
-      onLostPointerCapture={() => { if (gesture.current?.axis === "x") { gesture.current = null; settle(0); } }}
+      onLostPointerCapture={event => {
+        // Touch starts with implicit capture on a child. Its bubbled loss when
+        // this surface takes capture is a transfer, not a cancelled gesture.
+        if (event.target === event.currentTarget && gesture.current?.id === event.pointerId && gesture.current.axis === "x") {
+          gesture.current = null; settle(0);
+        }
+      }}
       onClickCapture={event => {
         if (moved.current && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); }
         moved.current = false;

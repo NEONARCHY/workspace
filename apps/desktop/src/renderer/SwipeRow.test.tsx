@@ -52,6 +52,24 @@ it("does not swallow keyboard activation after a swipe", () => {
   fireEvent.click(screen.getByText("Открыть"), { detail: 0 });
   expect(open).toHaveBeenCalledOnce();
 });
+it("does not cancel a touch gesture when a child transfers implicit capture to the surface", () => {
+  const { surface, action } = setup();
+  const child = screen.getByText("Открыть");
+  fireEvent.pointerDown(child, { button: 0, clientX: 280, clientY: 50 });
+  fireEvent.pointerMove(child, { clientX: 250, clientY: 50 });
+  fireEvent.lostPointerCapture(child);
+  fireEvent.pointerMove(surface, { clientX: 40, clientY: 50 });
+  fireEvent.pointerUp(surface);
+  expect(action).toHaveBeenCalledOnce();
+});
+it("cancels a swipe when the surface itself loses capture", () => {
+  const { surface, action } = setup();
+  fireEvent.pointerDown(surface, { button: 0, clientX: 280, clientY: 50 });
+  fireEvent.pointerMove(surface, { clientX: 40, clientY: 50 });
+  fireEvent.lostPointerCapture(surface);
+  fireEvent.pointerUp(surface);
+  expect(action).not.toHaveBeenCalled();
+});
 it("never commits a cancelled full swipe", () => {
   const { surface, action } = setup();
   swipe(surface, -250, 0, true);
