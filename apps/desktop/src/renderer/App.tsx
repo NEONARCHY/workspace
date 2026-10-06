@@ -79,6 +79,7 @@ import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspacePlatform } from "./platform-adapter";
+import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
@@ -1770,9 +1771,10 @@ export function App() {
     } as const;
     const section = target[draft.kind];
     const requiredAction = draft.kind === "message" ? "edit" : "create";
-    if (!draft.ready || modulePermissions[section]?.[requiredAction] !== true) {
+    if (!draft.ready || modulePermissions[section]?.view !== true || modulePermissions[section]?.[requiredAction] !== true) {
       throw new Error("Недостаточно прав для подготовки формы в этом разделе.");
     }
+    const resolvedDraft = resolveAssistantForm(draft, workspace.people, workspace.currentUser.id);
     let entityId: string | undefined;
     let recipientId: string | undefined;
     if (draft.kind === "message") {
@@ -1803,7 +1805,7 @@ export function App() {
       entityId = existing?.id;
     }
     setAssistantRecipientId(recipientId);
-    setPreparedAction(draft);
+    setPreparedAction(resolvedDraft);
     setFocusTarget((current) => ({
       section, entityId, revision: (current?.revision ?? 0) + 1,
     }));

@@ -120,6 +120,7 @@ import type {
   DesktopUpdatePolicy,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
+import type { AssistantActionDraft } from "@yuksalish/contracts";
 import { failoverApiOrigin, getApiBaseUrl, isRemoteApiOrigin, switchApiOrigin } from "./api-origin";
 
 export { apiConnectionLabel, getApiBaseUrl, initializeApiOrigin, subscribeToApiOrigin, supportsDualApiOrigins } from "./api-origin";
@@ -711,11 +712,11 @@ export interface AssistantAttachmentInput {
 
 export function sendAssistantMessage(
   token: string, model: AssistantModel, message: string, attachment?: AssistantAttachmentInput,
-  continueDraft = false, chatId?: string,
+  continueDraft = false, chatId?: string, actionKind?: AssistantActionDraft["kind"],
 ): Promise<AssistantMessage> {
   clearAssistantPreload();
   return apiRequest<AssistantMessage>("/assistant/messages", {
-    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft, chat_id: chatId }),
+    method: "POST", body: JSON.stringify({ model, message, attachment, continue_draft: continueDraft, chat_id: chatId, action_kind: actionKind }),
   }, token, attachment ? 180_000 : 65_000);
 }
 

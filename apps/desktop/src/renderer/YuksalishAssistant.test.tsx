@@ -18,6 +18,34 @@ vi.mock("./workspace-api", () => ({
 }));
 
 describe("YuksalishAssistant", () => {
+  it("opens the agreed form on an explicit chat signal without a model call or saving", async () => {
+    const action = { kind: "task", ready: true, fields: { title: "Отчёт", assignee: "я" } } as const;
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "ready-form", role: "assistant", model: "flash-lite",
+      content: "Черновик готов", createdAt: "2030-01-01T00:00:00Z", actionDraft: action }]);
+    const prepare = vi.fn(async () => undefined);
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test" onPrepareAction={prepare} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Черновик готов", { selector: ".assistant-reply p" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Да, открывай форму" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(prepare).toHaveBeenCalledWith(action));
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ассистент Yuksalish" })).not.toBeInTheDocument());
+  });
+  it("keeps an agreed draft and the signal when opening a form fails", async () => {
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "failed-form", role: "assistant", model: "flash-lite",
+      content: "Можно открыть форму", createdAt: "2030-01-01T00:00:00Z",
+      actionDraft: { kind: "task", ready: true, fields: { title: "Отчёт", assignee: "Неизвестный" } } }]);
+    const prepare = vi.fn(async () => { throw new Error("Уточните исполнителя"); });
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test" onPrepareAction={prepare} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Можно открыть форму");
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Открывай форму" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await screen.findByText("Уточните исполнителя");
+    expect(screen.getByRole("textbox", { name: "Сообщение ассистенту" })).toHaveValue("Открывай форму");
+    expect(sendAssistantMessage).not.toHaveBeenCalled();
+  });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
   beforeEach(() => {
     vi.mocked(listAssistantChats).mockResolvedValue([{ id: "first", title: "Первый чат", isDefault: true,
@@ -595,6 +623,34 @@ describe("YuksalishAssistant", () => {
       label: "Задача: Подготовить отчёт", section: "tasks", entityId: "task-1",
     });
     expect(screen.getByRole("dialog", { name: "Ассистент Yuksalish" })).toBeInTheDocument();
+  });
+
+  it("keeps an agreed draft without opening a form until an explicit signal", async () => {
+    const actionDraft = { kind: "task" as const, fields: { title: "Отчёт", assignee: "я" }, ready: true };
+    const onPrepareAction = vi.fn();
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{
+      id: "prepared-agreement", role: "assistant", model: "flash-lite", content: "Черновик готов.",
+      createdAt: "2026-09-28T09:00:00Z", actionDraft,
+    }]);
+    vi.mocked(sendAssistantMessage).mockResolvedValue({
+      id: "agreed", role: "assistant", model: "flash-lite", content: "Данные согласованы.",
+      createdAt: "2026-09-28T09:01:00Z", actionDraft,
+    });
+    render(<YuksalishAssistant token="test-token" onPrepareAction={onPrepareAction} />);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByRole("button", { name: "Открыть заполненную форму" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Да, всё верно" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
+      "test-token", "flash-lite", "Да, всё верно", undefined, true, "first",
+    ));
+    await screen.findByText("Данные согласованы.");
+    expect(screen.getByRole("button", { name: "Открыть заполненную форму" })).toBeEnabled();
+    expect(onPrepareAction).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), { target: { value: "Открывай форму" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(onPrepareAction).toHaveBeenCalledExactlyOnceWith(actionDraft));
+    expect(sendAssistantMessage).toHaveBeenCalledTimes(1);
   });
 
   it("continues an unsent action draft and opens its form only after a click", async () => {

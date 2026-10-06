@@ -21,6 +21,7 @@ from yuksalish_api.assistant_chats import (
 )
 from yuksalish_api.assistant_service import (
     MAX_ASSISTANT_FILE_BASE64_CHARS,
+    AssistantActionKind,
     AssistantMessageRecord,
     AssistantModel,
     ask_assistant,
@@ -45,6 +46,7 @@ class AskRequest(BaseModel):
     attachment: "AskAttachment | None" = None
     continue_draft: bool = False
     chat_id: UUID | None = None
+    action_kind: AssistantActionKind | None = None
 
     @field_validator("message")
     @classmethod
@@ -176,6 +178,7 @@ async def post_message(
             attachment,
             payload.continue_draft,
             scope,
+            requested_kind=payload.action_kind,
         )
         if payload.chat_id is not None:
             await touch_chat(connection, user.id, payload.chat_id, payload.message)

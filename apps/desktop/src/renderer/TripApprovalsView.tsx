@@ -17,6 +17,7 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { assistantPeopleIds } from "./assistant-form-handoff";
 
 const actionLabels: Readonly<Record<TripAction, string>> = {
   submit: "Отправить руководителю", resubmit: "Отправить повторно", approve: "Согласовать",
@@ -72,7 +73,8 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       destination: assistantDraft.fields.destination ?? "",
       startDate: (assistantDraft.fields.startDate ?? "").slice(0, 10),
       endDate: (assistantDraft.fields.endDate ?? "").slice(0, 10),
-      employeeIds: [currentUser.id],
+      employeeIds: assistantDraft.fields.employees?.trim()
+        ? assistantPeopleIds(assistantDraft.fields, "employees", people, currentUser.id) : [currentUser.id],
     } : emptyForm(currentUser.id));
   const [employeeListScope, setEmployeeListScope] = useState<EmployeeScope>("central");
   const [view, setView] = useState<"kanban" | "list">("kanban");

@@ -55,6 +55,24 @@ function setup(mode: "projects" | "funding" = "projects") {
   /></FluentProvider>);
 }
 
+it("prefills and saves the agreed project budget, manager and ordered approval route", async () => {
+  render(<FluentProvider theme={workspaceTheme}><ProjectHubView mode="projects" token="test-token"
+    people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest={false} canViewFunding
+    assistantDraft={{ kind: "project", ready: true, fields: {
+      title: "Форум ассистента", code: "FORUM-AI", description: "Согласованный план",
+      manager: people[1]!.name, budget: "2500000", currency: "UZS", accessStatus: "closed",
+      responsibles: people[2]!.name, approvers: `${people[2]!.name}\n${people[1]!.name}`,
+    } }} /></FluentProvider>);
+  expect(saveProjectHubProject).not.toHaveBeenCalled();
+  expect(await screen.findByRole("spinbutton", { name: "Бюджет" })).toHaveValue(2500000);
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить проект" }));
+  await waitFor(() => expect(saveProjectHubProject).toHaveBeenCalledWith("test-token", expect.objectContaining({
+    title: "Форум ассистента", code: "FORUM-AI", managerUserId: people[1]!.id,
+    budget: 2500000, currency: "UZS", accessStatus: "closed",
+    responsibleUserIds: [people[2]!.id], approverUserIds: [people[2]!.id, people[1]!.id],
+  }), undefined));
+});
+
 beforeEach(() => {
   installSpatialGeometry();
   vi.mocked(loadProjectHub).mockResolvedValue({ projects: [project], workstreams: [{ id: "stream-1", projectId: project.id, title: "Проведение форума", description: "", sortOrder: 0, createdAt: project.createdAt, updatedAt: project.updatedAt }], items: [item], requests: [] });

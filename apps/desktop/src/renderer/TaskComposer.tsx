@@ -35,6 +35,7 @@ import { workspacePlatform } from "./platform-adapter";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { DepartmentIcon } from "./DepartmentIcon";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { assistantLines, assistantResolvedIds } from "./assistant-form-handoff";
 
 type DraftParticipant = NonNullable<WorkspaceTaskCreateInput["participants"]>[number];
 type DraftDependency = NonNullable<WorkspaceTaskCreateInput["dependencies"]>[number];
@@ -49,6 +50,7 @@ interface TaskComposerProps {
   readonly initialDescription?: string;
   readonly initialAssigneeName?: string;
   readonly initialDueAt?: string;
+  readonly assistantFields?: Readonly<Record<string, string>>;
   readonly sourceLabel?: string;
   readonly calendarEventId?: string;
   readonly onClose: () => void;
@@ -89,6 +91,7 @@ export function TaskComposer({
   initialDescription = "",
   initialAssigneeName,
   initialDueAt = "",
+  assistantFields = {},
   sourceLabel,
   calendarEventId,
   onClose,
@@ -96,8 +99,10 @@ export function TaskComposer({
 }: TaskComposerProps) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
-  const [project, setProject] = useState("");
+  const [project, setProject] = useState(assistantFields.project ?? "");
   const [assigneeId, setAssigneeId] = useState(() => {
+    if (assistantFields.assigneeId && people.some((person) => person.id === assistantFields.assigneeId
+      && (!person.status || person.status === "active"))) return assistantFields.assigneeId;
     if (!initialAssigneeName?.trim()) return currentUserId;
     const tokens = initialAssigneeName.toLocaleLowerCase("ru-RU").split(/[^\p{L}]+/u)
       .filter((word) => word && !["ака", "опа", "aka"].includes(word));
@@ -109,16 +114,23 @@ export function TaskComposer({
     // Never silently assign a request for an unknown/ambiguous colleague to the current user.
     return matches.length === 1 ? matches[0]!.id : "";
   });
-  const [priority, setPriority] = useState<WorkspaceTask["priority"]>("normal");
+  const [priority, setPriority] = useState<WorkspaceTask["priority"]>(() =>
+    ["low", "normal", "high", "urgent"].includes(assistantFields.priority ?? "")
+      ? assistantFields.priority as WorkspaceTask["priority"] : "normal");
   const [dueAt, setDueAt] = useState(initialDueAt);
-  const [participants, setParticipants] = useState<readonly DraftParticipant[]>([]);
+  const [participants, setParticipants] = useState<readonly DraftParticipant[]>(() => {
+    const co = assistantResolvedIds(assistantFields.coAssigneeIds, people).filter((id) => id !== assigneeId);
+    const observers = assistantResolvedIds(assistantFields.observerIds, people).filter((id) => id !== assigneeId && !co.includes(id));
+    return [...co.map((userId): DraftParticipant => ({ userId, role: "co_assignee" })),
+      ...observers.map((userId): DraftParticipant => ({ userId, role: "observer" }))];
+  });
   const [participantId, setParticipantId] = useState("");
   const [participantRole, setParticipantRole] = useState<TaskParticipantRole>("co_assignee");
   const [departmentId, setDepartmentId] = useState("");
   const [teamMode, setTeamMode] = useState<"people" | "departments">("people");
   const [teamScope, setTeamScope] = useState<EmployeeScope>("central");
   const [teamSearch, setTeamSearch] = useState("");
-  const [checklist, setChecklist] = useState<readonly string[]>([]);
+  const [checklist, setChecklist] = useState<readonly string[]>(assistantLines(assistantFields.checklist));
   const [checklistTitle, setChecklistTitle] = useState("");
   const [dependencies, setDependencies] = useState<readonly DraftDependency[]>([]);
   const [dependencyId, setDependencyId] = useState("");
@@ -133,7 +145,7 @@ export function TaskComposer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const draftKey = `task:${currentUserId}`;
-  const persistDraft = !initialTitle && !initialDescription && !sourceLabel;
+  const persistDraft = !initialTitle && !initialDescription && !sourceLabel && !Object.keys(assistantFields).length;
   const draftReady = useRef(false);
   const draftEdited = useRef(false);
 
