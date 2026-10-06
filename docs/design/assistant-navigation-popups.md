@@ -32,3 +32,12 @@ Reduced motion и forced colors отключают декоративное дв
 промежуточный кадр меню, ответ на сообщение и доступные режимы движения.
 Снимки сохраняются локально в игнорируемой папке `tmp/assistant-sidebar-popups`.
 Этот стенд не обращается к рабочему серверу и не изменяет настоящие записи.
+
+CI также выявил опубликованные 5 октября advisories GHSA-68fv-2mgg-jv7q
+(source-map-js), GHSA-wr44-6hxh-3jwq (Joi), GHSA-hp3w-g68c-fv3c (sprintf-js).
+Точечные overrides обновляют первые две зависимости до исправленных версий,
+а global-agent только внутри @electron/get 3.1.0 — до 4.1.3, который больше
+не зависит от sprintf-js. API bootstrap сохранён, минимальная версия Node
+не повышается. `scripts/build-dependencies-smoke.cjs` проверяет wait-on,
+инициализацию прокси Electron и NO_PROXY только на loopback; он включён в CI.
+Аудит остаётся включённым, исключения advisories не добавлялись.

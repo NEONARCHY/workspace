@@ -127,6 +127,8 @@ jobs:
             -f infrastructure/compose.yaml `
             -f infrastructure/compose.lan.yaml config --quiet
       - run: pnpm audit --audit-level low
+      - name: Check build dependency compatibility
+        run: node scripts/build-dependencies-smoke.cjs
 
   desktop-tests:
     runs-on: windows-latest
