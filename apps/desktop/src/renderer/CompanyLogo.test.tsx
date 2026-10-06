@@ -42,6 +42,22 @@ describe("Company branding", () => {
     expect(password).toHaveAttribute("type", "password");
   });
 
+  it("keeps one accessible form title and removes the team slogan in every sign-in mode", () => {
+    render(<LoginView busy={false} onLogin={vi.fn()} onAcceptInvitation={vi.fn()} onCompletePasswordReset={vi.fn()} />);
+    for (const [mode, title] of [
+      ["Вход", "Добро пожаловать"],
+      ["Активация приглашения", "Создание учётной записи"],
+      ["Сброс доступа", "Новый пароль"],
+    ]) {
+      fireEvent.click(screen.getByRole("button", { name: mode }));
+      expect(screen.queryByText("Рабочее пространство команды")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+      expect(screen.getByRole("heading", { name: title, level: 1 })).toHaveAttribute("id", "auth-form-heading");
+      expect(screen.getByRole("form", { name: title })).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "Yuksalish" })).toHaveClass("auth-brand");
+    }
+  });
+
   it("shows the real pending state while sign-in is being checked", () => {
     render(<LoginView busy onLogin={vi.fn()} onAcceptInvitation={vi.fn()} onCompletePasswordReset={vi.fn()} />);
 

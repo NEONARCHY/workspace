@@ -65,7 +65,6 @@ export function LoginView({
       <section className="auth-intro">
         <CompanyLogo tone="color" className="auth-brand" />
         <p className="auth-kicker">Workspace</p>
-        <h1>Рабочее пространство команды</h1>
       </section>
 
       <section className="auth-card" aria-label="Вход в Yuksalish Workspace">
@@ -98,13 +97,13 @@ export function LoginView({
 
         <form id="auth-form" aria-labelledby="auth-form-heading" onSubmit={submit}>
           <div>
-            <h2 id="auth-form-heading">
+            <h1 id="auth-form-heading">
               {mode === "login"
                 ? "Добро пожаловать"
                 : mode === "invitation"
                   ? "Создание учётной записи"
                   : "Новый пароль"}
-            </h2>
+            </h1>
             <p>
               {mode === "login"
                 ? "Введите корпоративные данные доступа."
