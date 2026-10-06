@@ -193,7 +193,10 @@ async def test_shared_reviewer_configuration_access_conflicts_reassignment_and_a
             )
             assert approved_row["reviewer_user_id"] is None
             assert approved_row["status"] == "queued"
-        assert (await client.get(base + f"/letters/{letter_id}", headers=admin)).status_code == 404
+        admin_view = await client.get(base + f"/letters/{letter_id}", headers=admin)
+        assert admin_view.status_code == 200, admin_view.text
+        assert admin_view.json()["canEdit"] is False
+        assert "approve" not in admin_view.json()["availableActions"]
         audit = (await client.get(base + f"/letters/{letter_id}", headers=new)).json()
         assert any(event["eventType"] == "letter.approve" for event in audit["events"])
         initial["expectedRevision"] = disabled.json()["revision"]

@@ -540,7 +540,9 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             params={"query": "Отменяемое", "status": "cancelled"},
         )
         assert filtered.status_code == 200
-        assert filtered.json()["totalCount"] == 0
+        assert filtered.json()["totalCount"] == 1
+        assert [row["id"] for row in filtered.json()["letters"]] == [cancelled_letter["id"]]
+        assert filtered.json()["letters"][0]["canEdit"] is False
 
         missing = await client.get(
             "/api/v1/ai-referent/letters/00000000-0000-0000-0000-000000000002",
