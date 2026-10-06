@@ -1114,6 +1114,40 @@ export interface AIReferentReviewerBinding {
   readonly canApprove: boolean;
 }
 
+export type AIReferentIncomingMode = "none" | "assigned" | "all";
+export type AIReferentIncomingRuleMode = "default" | AIReferentIncomingMode;
+
+export interface AIReferentIncomingResponsible {
+  readonly agentId: string;
+  readonly externalId: string;
+}
+
+export interface AIReferentIncomingAccessRule {
+  readonly userId: string;
+  readonly mode: AIReferentIncomingRuleMode;
+  readonly effectiveMode: AIReferentIncomingMode;
+  readonly responsibles: readonly AIReferentIncomingResponsible[];
+  readonly revision: number;
+}
+
+export interface AIReferentIncomingAccess {
+  readonly rules: readonly AIReferentIncomingAccessRule[];
+  readonly responsibles: readonly (AIReferentIncomingResponsible & { readonly displayName: string })[];
+}
+
+export interface AIReferentIncomingAccessUpdate {
+  readonly expectedRevision: number;
+  readonly mode: AIReferentIncomingRuleMode;
+  readonly responsibles: readonly AIReferentIncomingResponsible[];
+}
+
+export interface AIReferentVisibility {
+  readonly incomingMode: AIReferentIncomingMode;
+  readonly canViewJournals: boolean;
+  readonly canManageVisibility: boolean;
+  readonly revision: number;
+}
+
 export interface AIReferentConfiguration {
   readonly revision: number;
   readonly updatedAt: string;

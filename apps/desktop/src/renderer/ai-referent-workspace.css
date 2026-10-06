@@ -825,3 +825,25 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   background: color-mix(in srgb, var(--ws-accent, #0091a8) 12%, white);
   color: var(--ws-link, #006779);
 }
+.ai-referent-access-editor {
+  display: grid;
+  gap: 16px;
+  max-width: 720px;
+  padding-block: 20px;
+}
+
+.ai-referent-access-editor > label {
+  display: grid;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.ai-referent-access-bindings {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 16px;
+  min-width: 0;
+  border: 1px solid var(--ws-line);
+  border-radius: 16px;
+}

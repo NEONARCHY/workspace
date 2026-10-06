@@ -288,7 +288,13 @@ async def test_shared_workflow_round_trip_and_uncertain_delivery():
         assert "subject" not in stage and "events" not in stage and "attachments" not in stage
         await call("GET", "/agent/letters/progress/" + letter["id"], telegram("910003"),
                    expected=404)
-        await call("GET", path, admin, expected=404)
+        admin_view = await call("GET", path, admin)
+        assert admin_view["id"] == letter["id"]
+        assert admin_view["canEdit"] is False
+        assert "approve" not in admin_view["availableActions"]
+        await action("approve", admin, 403)
+        await action("return_for_revision", admin, 403, comment="Read access is not approval")
+        await action("cancel", admin, 403)
         await call("GET", "/agent" + path, telegram("910004"), expected=404)
         await call(
             "GET", f"/agent/packets/outgoing/{letter['id']}", telegram("910004"),

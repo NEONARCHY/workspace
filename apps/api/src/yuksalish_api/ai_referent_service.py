@@ -26,7 +26,11 @@ from .ai_referent_schemas import (
     delivery_route_error,
 )
 from .ai_referent_shared_service import notify_letter, operation_replay, remember_operation
-from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
+from .ai_referent_visibility import (
+    OPERATOR_VISIBLE_STATUSES,
+    may_view_all_workspace_letters,
+    may_view_letter,
+)
 from .auth import AuthenticatedUser
 from .tables import (
     ai_referent_comment_audio,
@@ -585,7 +589,7 @@ async def load_letters(
             statement = statement.where(
                 ai_referent_letters.c.created_by_user_id == current_user.id
             )
-    else:
+    elif not may_view_all_workspace_letters(current_user):
         participants = or_(
             ai_referent_letters.c.created_by_user_id == current_user.id,
             ai_referent_letters.c.reviewer_user_id == current_user.id,

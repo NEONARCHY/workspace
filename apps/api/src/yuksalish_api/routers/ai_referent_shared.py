@@ -39,6 +39,7 @@ from ..ai_referent_files_service import (
     require_packet_access,
     store_packet_file,
 )
+from ..ai_referent_incoming_access import require_full_incoming_access
 from ..ai_referent_offline_blobs import stage_offline_blob
 from ..ai_referent_offline_numbers import reserve_offline_numbers
 from ..ai_referent_offline_replay import replay_offline_operation
@@ -1154,7 +1155,7 @@ async def get_archive(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     query: Annotated[str, Query(max_length=200)] = "",
 ) -> dict[str, object]:
-    await ensure_module_action(connection, user, "ai_referent", "view")
+    await require_full_incoming_access(connection, user)
     statement = select(ai_referent_archive)
     if query.strip():
         statement = statement.where(
@@ -1248,7 +1249,7 @@ async def incoming_lookup(
 
 @router.get("/journals")
 async def journals(connection: Connection, user: User) -> dict[str, object]:
-    await ensure_module_action(connection, user, "ai_referent", "view")
+    await require_full_incoming_access(connection, user)
     rows = (
         (
             await connection.execute(

@@ -15,6 +15,10 @@ import type {
   AIReferentAuthorityStatus,
   AIReferentConfigurationUpdate,
   AIReferentIncomingRegistry,
+  AIReferentIncomingAccess,
+  AIReferentIncomingAccessRule,
+  AIReferentIncomingAccessUpdate,
+  AIReferentVisibility,
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
@@ -246,6 +250,23 @@ export function removeAIReferentManualRecipient(token: string, id: string): Prom
   return apiRequest<void>(`/ai-referent/recipients/manual/${encodeURIComponent(id)}`, {
     method: "DELETE",
   }, token);
+}
+
+export function loadAIReferentVisibility(token: string) {
+  return apiRequest<AIReferentVisibility>("/ai-referent/visibility", {}, token);
+}
+
+export function loadAIReferentIncomingAccess(token: string) {
+  return apiRequest<AIReferentIncomingAccess>("/ai-referent/incoming-access", {}, token);
+}
+
+export function saveAIReferentIncomingAccess(
+  token: string, userId: string, payload: AIReferentIncomingAccessUpdate,
+) {
+  return apiRequest<AIReferentIncomingAccessRule>(
+    `/ai-referent/incoming-access/${encodeURIComponent(userId)}`,
+    { method: "PUT", body: JSON.stringify(payload) }, token,
+  );
 }
 
 export function loadAIReferentConfiguration(token: string) {

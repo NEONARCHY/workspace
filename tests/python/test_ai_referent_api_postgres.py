@@ -410,7 +410,9 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             f"/api/v1/ai-referent/letters/{editable_letter['id']}",
             headers=administrator,
         )
-        assert admin_view.status_code == 404
+        assert admin_view.status_code == 200
+        assert admin_view.json()["canEdit"] is False
+        assert "approve" not in admin_view.json()["availableActions"]
 
         second_approved = await client.post(
             f"/api/v1/ai-referent/letters/{editable_letter['id']}/actions",
@@ -538,7 +540,9 @@ async def test_ai_referent_draft_review_number_and_delivery_queue() -> None:
             params={"query": "Отменяемое", "status": "cancelled"},
         )
         assert filtered.status_code == 200
-        assert filtered.json()["totalCount"] == 0
+        assert filtered.json()["totalCount"] == 1
+        assert [row["id"] for row in filtered.json()["letters"]] == [cancelled_letter["id"]]
+        assert filtered.json()["letters"][0]["canEdit"] is False
 
         missing = await client.get(
             "/api/v1/ai-referent/letters/00000000-0000-0000-0000-000000000002",
