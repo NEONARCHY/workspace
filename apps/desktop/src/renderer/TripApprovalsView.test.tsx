@@ -25,6 +25,22 @@ const card = () => document.querySelector(".trip-board-card")!;
 async function drop(target: string) { await dropSpatialCard(card(), column(target)); }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 describe("Trip approvals interaction", async () => {
+  it("preserves the agreed trip participants and creates only after saving the actual form", async () => {
+    const onCreate = vi.fn(async () => undefined);
+    render(<FluentProvider theme={webLightTheme}><TripApprovalsView
+      requests={[]} people={people} currentUser={people[0]!}
+      onCreate={onCreate} onUpdate={vi.fn()} onAction={vi.fn()}
+      assistantDraft={{ kind: "trip", ready: true, fields: {
+        purpose: "Рабочая встреча", destination: "Навои", startDate: "2030-10-01", endDate: "2030-10-02",
+        employees: `${people[1]!.name}\n${people[2]!.name}`,
+      } }} /></FluentProvider>);
+    expect(onCreate).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+      purpose: "Рабочая встреча", destination: "Навои", employeeIds: [people[1]!.id, people[2]!.id],
+      startDate: "2030-10-01", endDate: "2030-10-02",
+    })));
+  });
   it("opens an unsent prefilled trip when the assistant prepared it", () => {
     const onCreate = vi.fn();
     render(<FluentProvider theme={webLightTheme}><TripApprovalsView

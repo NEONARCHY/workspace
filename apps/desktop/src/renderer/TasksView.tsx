@@ -654,6 +654,8 @@ export function TasksView(props: TasksViewProps) {
         initialDescription={assistantTaskFields.description}
         initialAssigneeName={assistantTaskFields.assignee}
         initialDueAt={assistantTaskFields.dueAt}
+        assistantFields={assistantTaskFields}
+        sourceLabel={Object.keys(assistantTaskFields).length ? "Подготовлено ассистентом · проверьте перед созданием" : undefined}
         onClose={() => setCreating(false)}
         onSubmit={createTask}
       /> : null}

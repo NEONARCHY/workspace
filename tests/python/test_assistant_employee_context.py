@@ -145,7 +145,8 @@ def test_action_request_only_persists_chat_draft_and_respects_module_rights(
         connection, user, "key", "flash-lite", "Создай задачу: подготовить отчёт"
     ))
     assert result["actionDraft"]["fields"]["title"] == "Подготовить отчёт"
-    assert result["actionDraft"]["ready"] is True
+    assert result["actionDraft"]["ready"] is False
+    assert "Кто будет исполнителем" in result["content"]
     assert connection.execute.await_count == 2
     saved = connection.execute.await_args_list[-1].args[0].compile().params
     assert saved["action_draft"] == result["actionDraft"]

@@ -9,6 +9,7 @@ import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocki
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import { isDraftRevision, isFormOpenSignal } from "./assistant-form-handoff";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -44,10 +45,10 @@ function readFileAsBase64(file: File): Promise<string> {
   });
 }
 const quickPrompts = [
-  { label: "Создать задачу", hint: "Название, исполнитель и срок", icon: ListTodo, prompt: "Создай задачу: " },
-  { label: "Начать проект", hint: "Идея, команда и даты", icon: FolderKanban, prompt: "Создай проект: " },
-  { label: "Спланировать поездку", hint: "Куда, зачем и когда", icon: Plane, prompt: "Подготовь командировку: " },
-  { label: "Оформить отсутствие", hint: "Отгул, отпуск или больничный", icon: CalendarDays, prompt: "Подготовь заявку на отсутствие: " },
+  { kind: "task", label: "Создать задачу", hint: "Название, исполнитель и срок", icon: ListTodo, prompt: "Создай задачу: " },
+  { kind: "project", label: "Начать проект", hint: "Идея, команда и даты", icon: FolderKanban, prompt: "Создай проект: " },
+  { kind: "trip", label: "Спланировать поездку", hint: "Куда, зачем и когда", icon: Plane, prompt: "Подготовь командировку: " },
+  { kind: "absence", label: "Оформить отсутствие", hint: "Отгул, отпуск или больничный", icon: CalendarDays, prompt: "Подготовь заявку на отсутствие: " },
 ] as const;
 const presets = [
   ...quickPrompts,
@@ -65,6 +66,14 @@ const fieldLabels: Record<string, string> = {
   title: "Название", description: "Описание", assignee: "Исполнитель", dueAt: "Срок",
   code: "Код проекта", purpose: "Цель", destination: "Направление", startDate: "Начало",
   endDate: "Окончание", reason: "Причина", absenceKind: "Вид отсутствия", recipient: "Получатель", body: "Текст",
+  priority: "Приоритет", project: "Проект / направление", coAssignees: "Соисполнители",
+  observers: "Наблюдатели", checklist: "Чек-лист", manager: "Руководитель",
+  budget: "Бюджет", currency: "Валюта", accessStatus: "Доступ", responsibles: "Ответственные",
+  approvers: "Согласующие по порядку", employees: "Участники поездки",
+};
+const fieldValueLabels: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  priority: { low: "Низкий", normal: "Обычный", high: "Высокий", urgent: "Срочный" },
+  accessStatus: { open: "Открытый", closed: "Закрытый" },
 };
 const absenceLabels: Record<string, string> = {
   vacation: "Отпуск", personal_time: "Личное время / отгул", sick_leave: "Больничный",
@@ -147,6 +156,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [replyMenu, setReplyMenu] = useState<{ message: AssistantMessage; x: number; y: number } | null>(null);
   const [dismissedDraftId, setDismissedDraftId] = useState<string>();
   const [preparingAction, setPreparingAction] = useState(false);
+  const [selectedActionKind, setSelectedActionKind] = useState<AssistantActionDraft["kind"]>();
+  const preparingActionRef = useRef(false);
   const [viewport, setViewport] = useState(assistantViewport);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -308,6 +319,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setChatId(nextId); setMessages(history); setDraft(chatDraftsRef.current.get(nextId) ?? "");
       setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
       setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      setSelectedActionKind(undefined);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
       if (mountedRef.current) setError(failure instanceof Error ? failure.message : "Не удалось открыть чат.");
@@ -324,6 +336,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       if (!mountedRef.current) return;
       setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
       setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+      setSelectedActionKind(undefined);
       chatDraftsRef.current.delete(chatId);
       setChats((current) => current.map((chat) => chat.id === chatId
         ? { ...chat, title: chat.isDefault ? "Первый чат" : "Новый чат" } : chat));
@@ -425,7 +438,14 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const value = draft.trim();
-    if ((!value && !selectedFile) || busy || recording || transcribing || !loaded || chatBusy || confirmClear) return;
+    if ((!value && !selectedFile) || busy || preparingActionRef.current || recording || transcribing || !loaded || chatBusy || confirmClear) return;
+    const latestAnswer = [...messages].reverse().find((item) => item.role === "assistant");
+    if (!selectedFile && !replyingTo && isFormOpenSignal(value)) {
+      if (latestAnswer?.actionDraft?.ready && latestAnswer.id !== dismissedDraftId) {
+        if (await openPreparedForm(latestAnswer.actionDraft)) setDraft("");
+      } else setError("Сначала согласуйте данные черновика в чате. Готовую форму можно открыть по команде «Открывай форму».");
+      return;
+    }
     const quote = replyingTo?.content.replace(/\s+/g, " ").trim().slice(0, REPLY_EXCERPT_LENGTH);
     const prompt = value || "Расскажи, что находится во вложении.";
     const content = quote ? `↳ Ответ на сообщение ассистента: ${quote}\n\n${prompt}` : prompt;
@@ -434,9 +454,8 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       return;
     }
     const file = selectedFile;
-    const latestAnswer = [...messages].reverse().find((item) => item.role === "assistant");
     const continueDraft = Boolean(latestAnswer?.actionDraft && latestAnswer.id !== dismissedDraftId
-      && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id));
+      && (!latestAnswer.actionDraft.ready || editingDraftId === latestAnswer.id || isDraftRevision(value)));
     const temporaryId = `pending-${Date.now()}`;
     setMessages((current) => [...current, {
       id: temporaryId, role: "user", model,
@@ -454,7 +473,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       const attachment: AssistantAttachmentInput | undefined = file && mimeType ? {
         name: file.name, mime_type: mimeType, data_base64: await readFileAsBase64(file),
       } : undefined;
-      const response = await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId);
+      const response = selectedActionKind
+        ? await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId, selectedActionKind)
+        : await sendAssistantMessage(token, model, content, attachment, continueDraft, chatId);
       if (!mountedRef.current) return;
       setMessages((current) => [...current, response]);
       setChats((current) => current.map((chat) => chat.id === chatId ? {
@@ -465,6 +486,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setDismissedDraftId(undefined);
       setEditingDraftId(undefined);
       setReplyingTo(null);
+      setSelectedActionKind(undefined);
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (failure) {
       if (!mountedRef.current) return;
@@ -484,15 +506,27 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const activeDraft = currentAnswer?.actionDraft && currentAnswer.id !== dismissedDraftId
     && (!currentAnswer.actionDraft.ready || editingDraftId === currentAnswer.id) ? currentAnswer : undefined;
   const openPreparedForm = async (action: AssistantActionDraft) => {
-    if (!onPrepareAction || preparingAction) return;
+    if (preparingActionRef.current) return false;
+    if (!onPrepareAction) {
+      setError("Это только визуальный предпросмотр. Для открытия рабочей формы войдите в Workspace.");
+      return false;
+    }
+    preparingActionRef.current = true;
     setPreparingAction(true);
     setError("");
     try {
       await onPrepareAction(action);
+      if (!mountedRef.current) return false;
+      setOpen(false);
+      setPresetsOpen(false);
+      setSelectedActionKind(undefined);
+      return true;
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Не удалось открыть форму.");
+      return false;
     } finally {
       setPreparingAction(false);
+      preparingActionRef.current = false;
     }
   };
   const thinkingState = /юксалиш|yuksalish|источ|найди|поиск/i.test(messages.at(-1)?.content ?? "")
@@ -617,7 +651,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               <h2>С чего начнём?</h2>
               <p>Подготовим рабочие записи, разберём документ или просто обсудим ваш вопрос.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
-                <button key={prompt.label} type="button" onClick={() => { setDraft(prompt.prompt); setDismissedDraftId(currentActionId); inputRef.current?.focus(); }}>
+                <button key={prompt.label} type="button" onClick={() => { setSelectedActionKind(prompt.kind); setDraft(prompt.prompt); setDismissedDraftId(currentActionId); inputRef.current?.focus(); }}>
                   <prompt.icon size={19} aria-hidden="true" /><span><strong>{prompt.label}</strong><small>{prompt.hint}</small></span>
                 </button>)}</div>
               <small>Я подготовлю форму. Проверка и окончательное создание — за вами.</small>
@@ -643,7 +677,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   <div className="assistant-draft-heading"><strong>{actionLabels[item.actionDraft.kind]}</strong>
                     <span>{item.actionDraft.ready ? "Черновик готов" : "Уточняем детали"}</span></div>
                   <dl>{Object.entries(item.actionDraft.fields).filter(([key, value]) => fieldLabels[key] && value).map(([key, value]) =>
-                    <div key={key}><dt>{fieldLabels[key]}</dt><dd>{key === "absenceKind" ? absenceLabels[value] ?? value : value}</dd></div>)}</dl>
+                    <div key={key}><dt>{fieldLabels[key]}</dt><dd>{key === "absenceKind" ? absenceLabels[value] ?? value : fieldValueLabels[key]?.[value] ?? value}</dd></div>)}</dl>
                   <small>Запись ещё не создана. Проверьте данные в форме.</small>
                   <div className="assistant-draft-actions">
                   {item.actionDraft.ready ? <button type="button" disabled={!onPrepareAction || preparingAction}
@@ -689,7 +723,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                 style={{ width: Math.min(800, Math.max(240, panelWidth - (showChatSidebar ? 258 : 0) - 36)) }}>
               <div id="assistant-presets-list" className="assistant-presets-list">
                 {presets.map((preset) => <button key={preset.label} type="button" disabled={chatBusy || confirmClear}
-                  onClick={() => { setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
+                  onClick={() => { setSelectedActionKind("kind" in preset ? preset.kind : undefined); setDraft(preset.prompt); setDismissedDraftId(currentActionId); setPresetsOpen(false); inputRef.current?.focus(); }}>
                   <span className="assistant-preset-icon"><preset.icon size={17} aria-hidden="true" /></span><span>{preset.label}</span>
                 </button>)}
               </div>
@@ -697,6 +731,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               </Popover>
             </div>
             <form className="assistant-composer" onSubmit={(event) => void send(event)}>
+              {selectedActionKind && <div className="assistant-draft-context" role="status">
+                <span>Подготовка: {actionLabels[selectedActionKind]}. Обсудим детали, затем откроем форму.</span>
+                <button type="button" aria-label="Отменить выбранное действие" onClick={() => setSelectedActionKind(undefined)}><X size={15} /></button>
+              </div>}
               {activeDraft?.actionDraft && <div className="assistant-draft-context">
                 <span>Уточняем: {actionLabels[activeDraft.actionDraft.kind].toLocaleLowerCase("ru-RU")}</span>
                 <button type="button" aria-label="Завершить уточнение черновика" onClick={() => setDismissedDraftId(activeDraft.id)}><X size={15} /></button>

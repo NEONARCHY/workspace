@@ -22,6 +22,7 @@ import { PersonPicker } from "./PersonPicker";
 import { ChatIconPicker } from "./ChatAvatar";
 import { ScopedPeopleCheckboxes } from "./ScopedPeopleCheckboxes";
 import { approvalColumnTotals } from "./approval-board";
+import { assistantPeopleIds, resolveAssistantPerson } from "./assistant-form-handoff";
 
 type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
@@ -114,6 +115,14 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
       description: assistantDraft.fields.description ?? "",
       startDate: assistantDraft.fields.startDate || null,
       endDate: assistantDraft.fields.endDate || null,
+      managerUserId: assistantDraft.fields.manager?.trim()
+        ? resolveAssistantPerson(assistantDraft.fields.manager, people, currentUserId) : currentUserId,
+      budget: assistantDraft.fields.budget ? Number(assistantDraft.fields.budget) : 0,
+      currency: ["UZS", "USD", "EUR"].includes(assistantDraft.fields.currency ?? "")
+        ? assistantDraft.fields.currency as ProjectHubProjectInput["currency"] : "UZS",
+      accessStatus: assistantDraft.fields.accessStatus === "closed" ? "closed" : "open",
+      responsibleUserIds: assistantPeopleIds(assistantDraft.fields, "responsibles", people, currentUserId),
+      approverUserIds: assistantPeopleIds(assistantDraft.fields, "approvers", people, currentUserId),
     } : emptyProject(currentUserId));
   const [itemForm, setItemForm] = useState<ProjectHubItemInput>(emptyItem);
   const [requestForm, setRequestForm] = useState({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" });

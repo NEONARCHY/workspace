@@ -3,6 +3,7 @@ import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { TaskComposer } from "./TaskComposer";
+import { resolveAssistantForm } from "./assistant-form-handoff";
 import { people } from "./test-fixtures/demo-data";
 import type { WorkspaceDepartment } from "@yuksalish/contracts";
 
@@ -14,6 +15,26 @@ const taskDepartments: readonly WorkspaceDepartment[] = [{
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+});
+
+it("submits the complete assistant-prepared task only after the final form confirmation", async () => {
+  const onSubmit = vi.fn(async () => undefined);
+  const prepared = resolveAssistantForm({ kind: "task", ready: true, fields: {
+    title: "Проверить отчёт", description: "Проверить таблицу", assignee: people[1]!.name,
+    priority: "high", project: "Форум", checklist: "Проверить цифры\nПередать итог",
+    coAssignees: people[2]!.name, observers: people[0]!.name,
+  } }, people, people[0]!.id);
+  render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    currentUserId={people[0]!.id} initialTitle={prepared.fields.title}
+    initialDescription={prepared.fields.description} initialAssigneeName={prepared.fields.assignee}
+    assistantFields={prepared.fields} onClose={vi.fn()} onSubmit={onSubmit} /></FluentProvider>);
+  expect(onSubmit).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    title: "Проверить отчёт", assigneeId: people[1]!.id, priority: "high", project: "Форум",
+    participants: [{ userId: people[2]!.id, role: "co_assignee" }, { userId: people[0]!.id, role: "observer" }],
+    checklist: [{ title: "Проверить цифры" }, { title: "Передать итог" }],
+  })));
 });
 
 it("prefills a suggested task but never submits without the user", () => {
