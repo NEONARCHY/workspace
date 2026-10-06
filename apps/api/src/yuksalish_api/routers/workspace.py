@@ -68,6 +68,7 @@ from yuksalish_api.repository import (
     delete_feed_post,
     delete_task,
     delete_task_checklist_item,
+    dismiss_notification,
     extend_task_deadline,
     get_attachment,
     load_workspace,
@@ -280,6 +281,24 @@ async def patch_notification_read(
         {"type": "notification.read", "entityId": result.id, "userId": str(current_user.id)}
     )
     return result
+
+
+@router.delete("/notifications/{notification_id}", status_code=204)
+async def delete_notification(
+    notification_id: UUID, request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    try:
+        await dismiss_notification(connection, current_user, notification_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    await _event_bus(request).publish({
+        "type": "notification.dismissed", "entityId": str(notification_id),
+        "userId": str(current_user.id),
+    })
+    return Response(status_code=204)
 
 
 @router.post("/notifications/read-all", status_code=204)

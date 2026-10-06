@@ -1,0 +1,21 @@
+.swipe-row { position: relative; min-width: 0; overflow: hidden; border-radius: 16px; isolation: isolate; }
+.swipe-row-surface { position: relative; min-width: 0; touch-action: pan-y pinch-zoom; border-radius: inherit; background: var(--ws-surface, #fff); }
+.swipe-row-action { position: absolute; inset: 0 0 0 auto; width: 88px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; border: 1px solid var(--ws-danger, #bd2942); border-radius: inherit; background: var(--ws-danger, #bd2942); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.swipe-row-action span { max-width: 80px; text-align: center; overflow-wrap: anywhere; }
+.swipe-row-keyboard { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; padding: 5px; border: 1px solid var(--ws-control-line); border-radius: 9px; background: var(--ws-surface, #fff); color: var(--ws-text); opacity: 0; pointer-events: none; }
+.swipe-row-keyboard:focus-visible { opacity: 1; pointer-events: auto; }
+.swipe-row :is(.swipe-row-action, .swipe-row-keyboard):focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: -3px; }
+.notification-swipe { margin-bottom: 8px; }
+.notification-swipe:last-child { margin-bottom: 0; }
+.notifications-view .notification-swipe .notification-row { margin: 0; }
+.chat-list-item .swipe-row { width: 100%; border-radius: 12px; }
+.chat-list-item .swipe-row .chat-row { width: 100%; }
+.chat-deletion-choice { width: min(460px, calc(100vw - 32px)); }
+.chat-deletion-options { display: grid; gap: 10px; margin: 18px 0; }
+.chat-deletion-options .fui-Button { justify-content: start; height: auto; padding: 14px 16px; border-radius: 14px; text-align: left; white-space: normal; }
+.chat-deletion-options strong, .chat-deletion-options small { display: block; }
+.chat-deletion-options small { margin-top: 5px; color: var(--ws-muted); font-size: 12px; line-height: 1.5; font-weight: 400; }
+.chat-deletion-note { color: var(--ws-muted); font-size: 12px; }
+@media (forced-colors: active) {
+  .swipe-row-action, .swipe-row-keyboard { color: ButtonText; background: ButtonFace; border-color: ButtonText; }
+}

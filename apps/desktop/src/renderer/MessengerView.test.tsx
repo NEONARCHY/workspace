@@ -33,6 +33,7 @@ function actions(): ChatActions {
     remove: vi.fn(),
     transfer: vi.fn(),
     delete: vi.fn(),
+    dismiss: vi.fn(),
   };
 }
 function renderMessenger(
@@ -81,6 +82,38 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it.each(["self", "both"])("asks which participants should lose the direct chat (%s) and offers five-second undo", async mode => {
+    vi.useFakeTimers();
+    const chatActions = actions();
+    vi.mocked(chatActions.dismiss!).mockResolvedValue(undefined);
+    vi.mocked(chatActions.delete).mockResolvedValue(undefined);
+    renderMessenger({ chats: [{ ...initialChats[1]!, canDelete: true }], chatActions });
+    openChatMenu("baxtiyor");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    const dialog = screen.getByRole("dialog", { name: "Удалить личный чат?" });
+    expect(chatActions.delete).not.toHaveBeenCalled();
+    expect(chatActions.dismiss).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: mode === "self" ? /^Удалить у меня/ : /^Удалить у обоих/ }));
+    await act(() => vi.advanceTimersByTimeAsync(4_999));
+    expect(chatActions.delete).not.toHaveBeenCalled();
+    expect(chatActions.dismiss).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    expect(mode === "self" ? chatActions.dismiss : chatActions.delete).toHaveBeenCalledWith("baxtiyor");
+    expect(mode === "self" ? chatActions.delete : chatActions.dismiss).not.toHaveBeenCalled();
+  });
+  it("cancels direct deletion before sending either kind of request", async () => {
+    vi.useFakeTimers();
+    const chatActions = actions();
+    renderMessenger({ chats: [{ ...initialChats[1]!, canDelete: true }], chatActions });
+    openChatMenu("baxtiyor");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Удалить чат" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Удалить у меня/ }));
+    fireEvent.click(screen.getByText("Вернуть"));
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+    expect(chatActions.dismiss).not.toHaveBeenCalled();
+    expect(chatActions.delete).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-chat-id="baxtiyor"]')).toBeInTheDocument();
+  });
   it("saves a shared icon only on confirmation and keeps a failed choice for retry", async () => {
     const chatActions = actions();
     vi.mocked(chatActions.setAvatar!).mockRejectedValueOnce(new Error("Не удалось сохранить иконку"))
@@ -325,10 +358,10 @@ describe("Private messenger", () => {
 
     openChatMenu("finance");
     fireEvent.click(screen.getByRole("menuitem", { name: "Удалить группу" }));
-    expect(screen.getByText("Чат будет удалён через 6 сек.")).toBeVisible();
+    expect(screen.getByText("Можно отменить · 5 сек.")).toBeVisible();
     expect(chatActions.delete).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(6_000);
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
     expect(chatActions.delete).toHaveBeenCalledWith("finance");
   });
   it("removes an encrypted chat draft after restoring it into the composer", async () => {
@@ -1113,6 +1146,7 @@ describe("Private messenger", () => {
   });
 
   it("lets a member leave a regular group from the row menu", async () => {
+    vi.useFakeTimers();
     const chatActions = actions();
     vi.mocked(chatActions.remove).mockResolvedValue(undefined);
     const group = {
@@ -1130,10 +1164,13 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
 
-    await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
+    expect(chatActions.remove).not.toHaveBeenCalled();
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+    expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza");
   });
 
   it("lets an owner leave while keeping the group for remaining members", async () => {
+    vi.useFakeTimers();
     const chatActions = actions();
     vi.mocked(chatActions.remove).mockResolvedValue(undefined);
     renderMessenger({ chats: [{ ...initialChats[0]!, canDelete: true }], chatActions });
@@ -1142,7 +1179,8 @@ describe("Private messenger", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Выйти из группы" }));
     fireEvent.click(within(screen.getByRole("dialog", { name: "Выйти из группы?" })).getByRole("button", { name: "Выйти" }));
 
-    await waitFor(() => expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza"));
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+    expect(chatActions.remove).toHaveBeenCalledWith("finance", "aziza");
     expect(chatActions.delete).not.toHaveBeenCalled();
   });
 

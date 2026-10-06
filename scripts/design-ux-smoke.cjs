@@ -21,7 +21,7 @@ async function main() {
   const checks = [], errors = [], fontUrls = [];
   const check = (name, ok) => { assert(ok, name); checks.push(name); };
   page.on("pageerror", (error) => errors.push(error.message));
-  page.on("request", (request) => { if (/Gilroy.*\.ttf/.test(request.url())) fontUrls.push(request.url()); });
+  page.on("request", (request) => { if (/InterVariable.*\.woff2/.test(request.url())) fontUrls.push(request.url()); });
   await page.route("**/api/v1/chats/*/read", (route) => route.fulfill({ status: 204 }));
   const stable = () => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const open = (label) => page.locator(`.rail-action[aria-label="${label}"]`).click();
@@ -29,17 +29,17 @@ async function main() {
     if (!native) await page.goto("http://127.0.0.1:5173");
     await page.locator(".auth-card").waitFor();
     const fonts = await page.evaluate(async () => {
-      await Promise.all([400, 500, 600, 700].map((weight) => document.fonts.load(`${weight} 14px Gilroy`, "Yuksalish Согласование O‘zbekiston")));
+      await Promise.all(["normal", "italic"].flatMap((style) => [400, 500, 600, 700].map((weight) => document.fonts.load(`${style} ${weight} 14px Inter`, "Yuksalish Согласование O‘zbekiston"))));
       await document.fonts.ready;
-      return [...document.fonts].filter((font) => font.family === "Gilroy").map((font) => ({ weight: font.weight, status: font.status }));
+      return [...document.fonts].filter((font) => font.family === "Inter").map((font) => ({ weight: font.weight, status: font.status }));
     });
-    check("four bundled Gilroy weights load", fonts.length === 4 && fonts.every((font) => font.status === "loaded"));
+    check("bundled Inter variable normal and italic faces load", fonts.length === 2 && fonts.every((font) => font.weight === "100 900" && font.status === "loaded"));
     const cdp = await page.context().newCDPSession(page);
     await cdp.send("DOM.enable"); await cdp.send("CSS.enable");
     const { root } = await cdp.send("DOM.getDocument");
     const { nodeId } = await cdp.send("DOM.querySelector", { nodeId: root.nodeId, selector: ".auth-intro h1" });
     const actualFonts = await cdp.send("CSS.getPlatformFontsForNode", { nodeId });
-    check("Cyrillic heading really renders with embedded Gilroy", actualFonts.fonts.length > 0 && actualFonts.fonts.every((font) => font.isCustomFont && /Gilroy/i.test(font.familyName)));
+    check("Cyrillic heading really renders with embedded Inter", actualFonts.fonts.length > 0 && actualFonts.fonts.every((font) => font.isCustomFont && /Inter/i.test(font.familyName)));
     await cdp.detach();
     check("brandbook navy on login", await page.locator(".auth-intro").evaluate((el) => getComputedStyle(el).backgroundColor === "rgb(41, 58, 85)"));
     await page.getByRole("textbox", { name: /Логин/ }).fill("malika");
@@ -126,11 +126,11 @@ async function main() {
       const pixels = await app.evaluate(async ({ BrowserWindow }) => (await BrowserWindow.getAllWindows()[0].capturePage()).toPNG().toString("base64"));
       await fs.writeFile(path.join(output, "compact.png"), Buffer.from(pixels, "base64"));
     } else await page.screenshot({ path: path.join(output, "compact.png") });
-    fontUrls.push(...await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).filter((url) => /Gilroy.*\.ttf/.test(url))));
+    fontUrls.push(...await page.evaluate(() => performance.getEntriesByType("resource").map((entry) => entry.name).filter((url) => /InterVariable.*\.woff2/.test(url))));
     // file:// resource timing entries can be omitted by Electron. Inspect the
     // actual @font-face URLs too; glyph rendering/loaded status were checked above.
     fontUrls.push(...await page.evaluate(() => [...document.styleSheets].flatMap((sheet) => {
-      try { return [...sheet.cssRules].filter((rule) => rule instanceof CSSFontFaceRule && rule.style.fontFamily === "Gilroy").flatMap((rule) => {
+      try { return [...sheet.cssRules].filter((rule) => rule instanceof CSSFontFaceRule && rule.style.fontFamily === "Inter").flatMap((rule) => {
         const match = rule.style.getPropertyValue("src").match(/url\(["']?([^\)"']+)/);
         return match ? [new URL(match[1], sheet.href || document.baseURI).href] : [];
       }); } catch { return []; }

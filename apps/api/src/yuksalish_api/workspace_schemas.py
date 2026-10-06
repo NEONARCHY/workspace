@@ -144,6 +144,7 @@ class ChatSummaryResponse(ApiModel):
     description: str = ""
     owner_id: str | None = None
     can_delete: bool = False
+    can_leave: bool = False
     avatar_icon_key: ChatAvatarIconKey | None = None
     can_edit_avatar: bool = False
     members: list[ChatMemberResponse] = Field(default_factory=list)

@@ -8,7 +8,7 @@ export const workspaceBrand: BrandVariants = {
   90: "#26A0B4", 100: "#4AB0C0", 110: "#6ABFCD", 120: "#8ACED8",
   130: "#ABDEE5", 140: "#C7E9EE", 150: "#E0F2F5", 160: "#F2FAFB",
 };
-export const workspaceFont = '"Gilroy", "Segoe UI", sans-serif';
+export const workspaceFont = '"Inter", "Segoe UI", sans-serif';
 export const workspaceTheme: Theme = {
   ...createLightTheme(workspaceBrand),
   fontFamilyBase: workspaceFont,

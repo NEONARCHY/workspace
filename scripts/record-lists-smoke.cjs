@@ -67,7 +67,7 @@ const fs = require("node:fs/promises"), path = require("node:path"), assert = re
           return { fits: r.left >= 0 && r.right <= innerWidth + 1, globalOverflow: document.documentElement.scrollWidth - innerWidth,
             internalScroll: scroller.scrollWidth > scroller.clientWidth, font: getComputedStyle(frame).fontFamily };
         });
-        assert(geometry.fits && geometry.globalOverflow <= 1 && geometry.font.includes("Gilroy"), `${key}-${width}: ${JSON.stringify(geometry)}`);
+        assert(geometry.fits && geometry.globalOverflow <= 1 && geometry.font.includes("Inter"), `${key}-${width}: ${JSON.stringify(geometry)}`);
         await axeScan(); await capture(`${key}-${width}`); checks.push({ key, width, ...geometry });
       }
       if (native) {

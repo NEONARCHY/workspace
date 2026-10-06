@@ -33,6 +33,7 @@ from .tables import (
     audit_events,
     calendar_event_attendees,
     calendar_events,
+    chat_dismissals,
     chat_members,
     chats,
     departments,
@@ -1891,6 +1892,7 @@ async def _sync_notifications_for_user(
                 select(workspace_notifications)
                 .where(
                     workspace_notifications.c.user_id == current_user.id,
+                    workspace_notifications.c.dismissed_at.is_(None),
                     or_(
                         and_(
                             workspace_notifications.c.section == "messenger",
@@ -1970,6 +1972,18 @@ async def mark_notification_read(
     if row is None:
         raise WorkspaceRepositoryError(404, "Notification was not found")
     return _notification(row)
+
+
+async def dismiss_notification(
+    connection: AsyncConnection, current_user: AuthenticatedUser, notification_id: UUID,
+) -> None:
+    await _load_visible_notification_row(connection, current_user, notification_id)
+    await connection.execute(update(workspace_notifications).where(
+        workspace_notifications.c.id == notification_id,
+        workspace_notifications.c.user_id == current_user.id,
+    ).values(dismissed_at=func.coalesce(
+        workspace_notifications.c.dismissed_at, datetime.now(UTC),
+    )))
 
 
 async def _load_visible_notification_row(
@@ -2487,6 +2501,12 @@ async def load_workspace(
             chats.c.id.in_(member_chat_ids)
             | chats.c.context_type.in_(leadership_contexts)
         )
+    accessible_chat_ids = select(chats.c.id).where(
+        chats.c.id.in_(accessible_chat_ids),
+        chats.c.id.not_in(select(chat_dismissals.c.chat_id).where(
+            chat_dismissals.c.user_id == current_user.id,
+        )),
+    )
     chat_rows = (
         (
             await connection.execute(
@@ -3727,6 +3747,9 @@ async def _sync_context_chat(
         title=f"{label} · {title}"[:240], description=description[:4000], updated_at=now,
     ))
     desired_ids = set(member_user_ids) | {owner_user_id}
+    desired_ids -= set((await connection.execute(select(chat_dismissals.c.user_id).where(
+        chat_dismissals.c.chat_id == chat_id,
+    ))).scalars().all())
     await connection.execute(delete(chat_members).where(
         chat_members.c.chat_id == chat_id, chat_members.c.user_id.not_in(desired_ids),
     ))
@@ -3738,6 +3761,8 @@ async def _sync_context_chat(
         ).model_dump(),
         "joined_at": now, "muted_until": None,
     } for user_id in sorted(desired_ids)]
+    if not values:
+        return cast(UUID, chat_id)
     member_insert = pg_insert(chat_members).values(values)
     await connection.execute(member_insert.on_conflict_do_update(
         index_elements=[chat_members.c.chat_id, chat_members.c.user_id],

@@ -1,7 +1,7 @@
 :root {
   color: #242424;
   background: #f5f7fa;
-  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI", sans-serif;
   font-synthesis: none;
   font-kerning: normal;
   font-variant-ligatures: common-ligatures;
@@ -507,11 +507,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .eff-history-chart { height: 210px; margin-top: 10px; }
 .eff-history-chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .eff-chart-grid { stroke: #dfe7eb; stroke-width: 1; stroke-dasharray: 3 5; }
-.eff-chart-axis, .eff-chart-month { fill: #758997; font-family: var(--ws-font, Gilroy, sans-serif); font-size: 9px; text-transform: capitalize; }
+.eff-chart-axis, .eff-chart-month { fill: #758997; font-family: var(--ws-font, Inter, sans-serif); font-size: 9px; text-transform: capitalize; }
 .eff-chart-line { fill: none; stroke: #0b8fa2; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; filter: url(#eff-line-glow); }
 .eff-chart-dot-glow { fill: rgb(20 164 179 / 18%); }
 .eff-chart-dot { fill: #fff; stroke: #0b8fa2; stroke-width: 3; }
-.eff-chart-value { fill: #24526a; font-family: var(--ws-font, Gilroy, sans-serif); font-size: 10px; font-weight: 700; }
+.eff-chart-value { fill: #24526a; font-family: var(--ws-font, Inter, sans-serif); font-size: 10px; font-weight: 700; }
 .eff-history-text { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; margin: 13px 0 0; padding: 0; list-style: none; }
 .eff-history-text li { display: flex; justify-content: space-between; gap: 8px; color: #6e8090; font-size: 10px; }
 .eff-history-text strong { color: #38536a; font-variant-numeric: tabular-nums; }

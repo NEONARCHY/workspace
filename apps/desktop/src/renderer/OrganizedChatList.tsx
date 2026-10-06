@@ -8,6 +8,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { ChatIcon, defaultChatIcon } from "./ChatAvatar";
+import { SwipeRow } from "./SwipeRow";
 
 type ChatBucket = "chats" | "task-chats" | "project-chats" | "trip-chats" | "archive";
 
@@ -180,7 +181,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
     {error && <div className="organization-error" role="alert">{error}</div>}
     <span className="organization-live" role="status">{busy ? "Сохраняем настройки чатов…" : notice}</span>
     {bucket === "chats" && departments ? <EmployeeScopeSwitch value={peopleScope} onChange={setPeopleScope} label="Контакты" /> : null}
-    <SpatialSort ids={visibleChats.map(chat => chat.id)} onMove={move}>
+    <SpatialSort ids={visibleChats.map(chat => chat.id)} onMove={move} verticalIntent>
     <div className="chat-list" role="list" aria-label={bucketLabel(bucket)} aria-busy={busy}>
       {visibleChats.flatMap((chat, index): ReactNode[] => {
         const pinned = !archive && pinnedIds.includes(chat.id);
@@ -190,12 +191,17 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
           : undefined;
         const userManaged = !chat.contextType && (chat.kind === "direct" || chat.kind === "group");
         const currentMembership = chat.members.find((member) => member.userId === currentUserId);
+        const managedLeave = ["project", "project_hub", "trip"].includes(chat.contextType ?? "");
+        const canLeave = managedLeave ? chat.canLeave === true : userManaged && chat.kind === "group" && (chat.canLeave ?? (Boolean(currentMembership) && !(currentMembership?.role === "owner" && chat.members.length < 2)));
+        const canSwipe = chat.kind === "direct" && !chat.contextType ? Boolean(onDelete) : canLeave && Boolean(onLeave);
         const startGroup = hasPins && (index === 0 || (pinnedIds.includes(visibleChats[index - 1]!.id) && !pinned));
         const groupLabel = bucket === "task-chats" ? (pinned ? "Закреплённые чаты задач" : "Остальные чаты задач") : bucket === "project-chats" ? "Чаты проектов" : bucket === "trip-chats" ? "Чаты поездок" : (pinned ? "Закреплённые" : "Остальные чаты");
         return [
           startGroup ? <div key={`group:${groupLabel}`} className="chat-group-label">{groupLabel}</div> : null,
           <SpatialSortItem key={chat.id} id={chat.id} label={chat.title} activation="item" disabled={!pinned || busy || !!query.trim() || !onReorder} role="listitem" className={`chat-list-item ${pinned ? "pinned" : ""}`}
             data-chat-id={chat.id} data-pinned={pinned}>
+            <SwipeRow label={`${chat.kind === "direct" ? "Удалить" : "Выйти"}: ${chat.title}`} disabled={!canSwipe || busy}
+              onAction={() => { if (chat.kind === "direct") onDelete?.(chat); else if (canLeave) onLeave?.(chat); }}>
             <Menu openOnContext>
               <MenuTrigger disableButtonEnhancement>
                 <button className={`chat-row ${chat.id === activeChatId ? "selected" : ""}`} type="button" onClick={() => onSelect(chat.id)}>
@@ -213,10 +219,11 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
                 {pinned && <MenuItem icon={<ArrowUp20Regular />} disabled={!onReorder || pinIndex === 0 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex - 1]!)}>Переместить выше</MenuItem>}
                 {pinned && <MenuItem icon={<ArrowDown20Regular />} disabled={!onReorder || pinIndex === pinnedIds.length - 1 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex + 1]!)}>Переместить ниже</MenuItem>}
                 {onChange ? <MenuItem icon={<Archive20Regular />} onClick={() => void run(() => onChange(chat.id, archive ? "unarchive" : "archive"), archive ? "Чат возвращён из архива" : "Чат убран в архив; переписка сохранена")}>{archive ? "Вернуть из архива" : "В архив"}</MenuItem> : null}
-                {userManaged && chat.kind === "group" && currentMembership && onLeave ? <MenuItem icon={<SignOut20Regular />} disabled={currentMembership.role === "owner" && chat.members.length < 2} title={currentMembership.role === "owner" && chat.members.length < 2 ? "Сначала добавьте участника для передачи владения" : undefined} onClick={() => onLeave(chat)}>Выйти из группы</MenuItem> : null}
-                {userManaged && chat.canDelete && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>{chat.kind === "group" ? "Удалить группу" : "Удалить чат"}</MenuItem> : null}
+                {(chat.kind === "group" && userManaged || managedLeave && canLeave) && onLeave ? <MenuItem icon={<SignOut20Regular />} disabled={!canLeave} title={!canLeave ? "Сначала добавьте участника для передачи владения" : undefined} onClick={() => onLeave(chat)}>Выйти из группы</MenuItem> : null}
+                {userManaged && (chat.kind === "direct" || chat.canDelete) && onDelete ? <MenuItem icon={<Delete20Regular />} onClick={() => onDelete(chat)}>{chat.kind === "group" ? "Удалить группу" : "Удалить чат"}</MenuItem> : null}
               </MenuList></MenuPopover>
             </Menu>
+            </SwipeRow>
           </SpatialSortItem>,
         ];
       })}

@@ -1,10 +1,8 @@
 /* Yuksalish product theme. Brand source: brand_identity.pdf pp. 2-5.
    Layout behaviour remains in responsive.css; this is the shared visual layer.
    Never apply viewport dimensions to Fluent's out-of-root portal providers. */
-@font-face { font-family: Gilroy; src: url('./assets/fonts/Gilroy-Regular.ttf') format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: Gilroy; src: url('./assets/fonts/Gilroy-Medium.ttf') format('truetype'); font-weight: 500; font-style: normal; font-display: swap; }
-@font-face { font-family: Gilroy; src: url('./assets/fonts/Gilroy-SemiBold.ttf') format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: Gilroy; src: url('./assets/fonts/Gilroy-Bold.ttf') format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: Inter; src: url('./assets/fonts/InterVariable.woff2') format('woff2'); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: Inter; src: url('./assets/fonts/InterVariable-Italic.woff2') format('woff2'); font-weight: 100 900; font-style: italic; font-display: swap; }
 :root {
   --ws-navy: #293a55; --ws-turquoise: #0091a8; --ws-link: #006779;
   --ws-canvas: #f1f5f8; --ws-surface: #fff; --ws-muted-surface: #f5f8fa;
@@ -12,7 +10,7 @@
   --ws-line: #dfe7ed; --ws-control-line: #a6b6c4;
   --ws-radius: 16px; --ws-radius-control: 10px;
   --ws-shadow: 0 4px 20px rgb(41 58 85 / 5%);
-  --ws-font: 'Gilroy', 'Segoe UI', sans-serif;
+  --ws-font: 'Inter', 'Segoe UI', sans-serif;
   --context-brand: var(--ws-link);
   --context-halo: 0 0 0 1px color-mix(in srgb, var(--context-accent) 20%, transparent), 0 3px 12px color-mix(in srgb, var(--context-accent) 10%, transparent);
   font-family: var(--ws-font); color: var(--ws-text); background: var(--ws-canvas);

@@ -863,6 +863,13 @@ calendar_event_attendees = sa.Table(
     sa.Column("responded_at", sa.DateTime(timezone=True)),
 )
 
+chat_dismissals = sa.Table(
+    "messenger_chat_dismissals", metadata,
+    sa.Column("chat_id", uuid_type, primary_key=True),
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("dismissed_at", sa.DateTime(timezone=True)),
+)
+
 workspace_notifications = sa.Table(
     "workspace_notifications",
     metadata,
@@ -881,6 +888,7 @@ workspace_notifications = sa.Table(
     sa.Column("read_at", sa.DateTime(timezone=True)),
     sa.Column("resolved_at", sa.DateTime(timezone=True)),
     sa.Column("desktop_delivered_at", sa.DateTime(timezone=True)),
+    sa.Column("dismissed_at", sa.DateTime(timezone=True)),
 )
 
 workspace_notification_preferences = sa.Table(

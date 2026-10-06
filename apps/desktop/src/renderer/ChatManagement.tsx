@@ -42,6 +42,7 @@ export interface ChatActions {
   readonly remove: (id: string, userId: string) => Promise<void>;
   readonly transfer: (id: string, userId: string) => Promise<ChatSummary>;
   readonly delete: (id: string) => Promise<void>;
+  readonly dismiss?: (id: string) => Promise<void>;
 }
 
 const permissionLabels: Record<keyof ChatPermissions, string> = {

@@ -1,0 +1,13 @@
+.workspace-undo-stack { position: fixed; right: 24px; bottom: 24px; z-index: 1000; display: grid; gap: 10px; width: min(400px, calc(100vw - 32px)); max-height: min(420px, 50vh); overflow-y: auto; pointer-events: none; }
+.workspace-undo-stack:empty { display: none; }
+.workspace-undo-toast { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 14px 16px; border: 1px solid var(--ws-control-line); border-radius: 16px; color: var(--ws-text); background: var(--ws-surface, #fff); box-shadow: 0 12px 32px rgb(41 58 85 / 16%); pointer-events: auto; animation: undo-toast-in 220ms cubic-bezier(.2, 0, 0, 1); }
+.workspace-undo-toast > svg { flex: none; color: var(--ws-turquoise); }
+.workspace-undo-toast > div { flex: 1; min-width: 0; }
+.workspace-undo-toast strong { display: block; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.workspace-undo-toast small { display: block; margin-top: 4px; color: var(--ws-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.workspace-undo-toast .fui-Button { flex: none; }
+.workspace-undo-toast.is-error { border-color: var(--ws-danger, #bd2942); }
+@keyframes undo-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (max-width: 640px) { .workspace-undo-stack { right: 16px; bottom: 16px; } }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) { .workspace-undo-toast { animation: none; } }
+@media (forced-colors: active) { .workspace-undo-toast { color: CanvasText; background: Canvas; border-color: CanvasText; box-shadow: none; } }

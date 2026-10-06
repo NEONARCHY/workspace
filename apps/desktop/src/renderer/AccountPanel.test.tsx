@@ -273,7 +273,7 @@ it("retains explicit recovery and second-factor reset options", async () => {
   fireEvent.click(screen.getByRole("checkbox", { name: "Также сбросить двухфакторную защиту" }));
   fireEvent.click(screen.getByRole("button", { name: "Создать код сброса" }));
   await waitFor(() => expect(api.createPasswordReset).toHaveBeenCalledWith("test-token", "employee", true));
-  expect(screen.getByText("QA-RESET-ONLY")).toBeInTheDocument();
+  expect(await screen.findByText("QA-RESET-ONLY")).toBeInTheDocument();
 });
 
 it("does not sign out of the current session until confirmed and successfully revoked", async () => {

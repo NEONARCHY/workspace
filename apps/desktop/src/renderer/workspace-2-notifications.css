@@ -141,9 +141,11 @@
 }
 
 @media (max-width: 900px) {
-  .notifications-view { overflow-y: auto; padding-inline: 12px; }
+  .notifications-view { grid-template-rows: repeat(3, max-content); overflow-y: auto; padding-inline: 12px; }
   .notifications-view .notification-layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
   .notification-stream-shell, .notifications-view .notification-settings { overflow: visible; }
+  .notification-stream-shell { grid-template-rows: max-content max-content; }
+  .notifications-view .notification-stream { overflow: visible; }
   .notifications-view .notification-settings { min-height: auto; }
 }
 

@@ -10,6 +10,8 @@ import type {
 import { workspacePlatform } from "./platform-adapter";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { useContextMotion } from "./useContextMotion";
+import { SwipeRow } from "./SwipeRow";
+import { UndoActionsToast, useUndoActions } from "./UndoActions";
 import { Button, Input, Switch } from "@fluentui/react-components";
 import {
   AlertOn24Regular,
@@ -35,6 +37,7 @@ interface NotificationCenterProps {
   readonly onOpen: (notification: WorkspaceNotification) => void | Promise<void>;
   readonly onMarkRead: (notification: WorkspaceNotification) => void | Promise<void>;
   readonly onMarkAllRead: () => void | Promise<void>;
+  readonly onDelete?: (notification: WorkspaceNotification) => Promise<void>;
   readonly onUpdatePreferences: (
     preferences: NotificationPreferences,
   ) => void | Promise<void>;
@@ -85,11 +88,15 @@ export function NotificationCenter({
   onOpen,
   onMarkRead,
   onMarkAllRead,
+  onDelete,
   onUpdatePreferences,
   onTestSystemNotification,
   absenceRequests = [],
   onAbsenceAction,
 }: NotificationCenterProps) {
+  const undo = useUndoActions();
+  const pending = undo.pending;
+  const available = useMemo(() => notifications.filter(item => !pending.some(action => action.scope === "notification" && action.id === item.id)), [notifications, pending]);
   const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "attention");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
@@ -105,15 +112,15 @@ export function NotificationCenter({
     contextRef.current?.scrollIntoView?.({ block: "nearest" });
     contextRef.current?.focus({ preventScroll: true });
   }, [contextId]);
-  const context = notifications.find(item => item.id === contextId);
-  const unreadCount = notifications.filter((item) => !item.readAt).length;
-  const attentionCount = notifications.filter(
+  const context = available.find(item => item.id === contextId);
+  const unreadCount = available.filter((item) => !item.readAt).length;
+  const attentionCount = available.filter(
     (item) => item.requiresAction && !item.resolvedAt,
   ).length;
 
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ru-RU");
-    return notifications.filter((item) => {
+    return available.filter((item) => {
       if (filter === "attention" && (!item.requiresAction || item.resolvedAt)) return false;
       if (filter === "unread" && item.readAt) return false;
       if (kindFilter !== "all" && item.kind !== kindFilter) return false;
@@ -121,16 +128,16 @@ export function NotificationCenter({
         || item.title.toLocaleLowerCase("ru-RU").includes(normalized)
         || item.body.toLocaleLowerCase("ru-RU").includes(normalized);
     });
-  }, [filter, kindFilter, notifications, query]);
+  }, [filter, kindFilter, available, query]);
   const availableKinds = useMemo(
-    () => [...new Set(notifications.map((item) => item.kind))],
-    [notifications],
+    () => [...new Set(available.map((item) => item.kind))],
+    [available],
   );
-  const readCount = notifications.length - unreadCount;
+  const readCount = available.length - unreadCount;
   // Reading and completing a working action are independent. Never round an
   // outstanding unread item up to 100%, even in a large loaded history.
-  const readPercent = notifications.length === 0 ? 0 : unreadCount === 0 ? 100
-    : Math.min(99, Math.round(readCount / notifications.length * 100));
+  const readPercent = available.length === 0 ? 0 : unreadCount === 0 ? 100
+    : Math.min(99, Math.round(readCount / available.length * 100));
 
   const updatePreference = async (
     key: keyof NotificationPreferences,
@@ -215,13 +222,13 @@ export function NotificationCenter({
           type="button"
           onClick={() => setFilter("all")}
         >
-          <strong>{notifications.length}</strong>
+          <strong>{available.length}</strong>
           <span><b>Вся история</b><small>Доступные события</small></span>
         </button>
         <div className="notification-progress-card" role="group" aria-label="Прочтение уведомлений">
-          <span><b>Прочитано уведомлений</b><small>{notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} просмотрены`}</small></span>
-          <strong>{notifications.length === 0 ? "—" : `${readPercent}%`}</strong>
-          <i role="progressbar" aria-label="Доля прочитанных уведомлений" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readPercent} aria-valuetext={notifications.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${notifications.length} прочитаны`}><span style={{ width: `${readPercent}%` }} /></i>
+          <span><b>Прочитано уведомлений</b><small>{available.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${available.length} просмотрены`}</small></span>
+          <strong>{available.length === 0 ? "—" : `${readPercent}%`}</strong>
+          <i role="progressbar" aria-label="Доля прочитанных уведомлений" aria-valuemin={0} aria-valuemax={100} aria-valuenow={readPercent} aria-valuetext={available.length === 0 ? "Пока нет уведомлений" : `${readCount} из ${available.length} прочитаны`}><span style={{ width: `${readPercent}%` }} /></i>
         </div>
       </div>
 
@@ -250,6 +257,8 @@ export function NotificationCenter({
               <span>Новые события появятся здесь автоматически.</span>
             </div>
           ) : visible.map((notification) => (
+            <SwipeRow key={notification.id} className="notification-swipe" label={`Удалить: ${notification.title}`} disabled={!onDelete}
+              onAction={() => { if (onDelete) undo.enqueue({ id: notification.id, scope: "notification", label: "Уведомление удалено", commit: () => onDelete(notification) }); }}>
             <article
               className={`notification-row priority-${notification.priority} ${notification.readAt ? "read" : "unread"}`}
               key={notification.id}
@@ -294,6 +303,7 @@ export function NotificationCenter({
                 ) : null}
               </div>
             </article>
+            </SwipeRow>
           ))}
           </div>
         </div>
@@ -338,6 +348,7 @@ export function NotificationCenter({
           </p>
         </aside>
       </div>
+      {!undo.isShared ? <UndoActionsToast manager={undo} /> : null}
     </section>
   );
 }

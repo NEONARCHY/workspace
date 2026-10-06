@@ -110,6 +110,18 @@ async def delete_chat(
     return Response(status_code=204)
 
 
+@router.delete("/chats/{chat_id}/visibility", status_code=204)
+async def dismiss_direct_chat(
+    chat_id: UUID, user: User, connection: Connection, request: Request,
+) -> Response:
+    try:
+        await service.dismiss_direct_chat(connection, user, chat_id)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return Response(status_code=204)
+
+
 @router.post("/chats/{chat_id}/members", response_model=ChatSummaryResponse)
 async def add_members(
     chat_id: UUID,

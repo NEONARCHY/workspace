@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/contracts";
 import { afterEach, expect, it, vi } from "vitest";
@@ -12,7 +12,7 @@ const notifications = (unread = 0): WorkspaceNotification[] => Array.from({ leng
 }));
 const props = { preferences, onOpen: vi.fn(), onMarkRead: vi.fn(), onMarkAllRead: vi.fn(), onUpdatePreferences: vi.fn() };
 const center = (items: readonly WorkspaceNotification[]) => <FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={items} /></FluentProvider>;
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 
 it("shows 100% read while seven unresolved actions remain in the queue", () => {
   render(center(notifications()));
@@ -39,4 +39,31 @@ it("does not claim that an empty history is fully read", () => {
   const summary = screen.getByRole("group", { name: "Прочтение уведомлений" });
   expect(within(summary).getByText("—")).toBeInTheDocument();
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", "Пока нет уведомлений");
+});
+
+it("hides a notification, restores it with undo and sends no delete request", async () => {
+  vi.useFakeTimers();
+  const onDelete = vi.fn().mockResolvedValue(undefined);
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications(1).slice(0, 2)} onDelete={onDelete} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Показать действие: Удалить: Событие 0" }));
+  fireEvent.click(screen.getByRole("button", { name: "Удалить: Событие 0" }));
+  expect(screen.queryByText("Событие 0")).not.toBeInTheDocument();
+  expect(onDelete).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText("Вернуть"));
+  expect(screen.getByText("Событие 0")).toBeInTheDocument();
+  await act(() => vi.advanceTimersByTimeAsync(5_000));
+  expect(onDelete).not.toHaveBeenCalled();
+});
+it("restores the notification after a failed five-second delete", async () => {
+  vi.useFakeTimers();
+  const onDelete = vi.fn().mockRejectedValue(new Error("Не удалось удалить уведомление"));
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications(1).slice(0, 1)} onDelete={onDelete} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Показать действие: Удалить: Событие 0" }));
+  fireEvent.click(screen.getByRole("button", { name: "Удалить: Событие 0" }));
+  await act(() => vi.advanceTimersByTimeAsync(4_999));
+  expect(onDelete).not.toHaveBeenCalled();
+  await act(() => vi.advanceTimersByTimeAsync(1));
+  expect(onDelete).toHaveBeenCalledOnce();
+  expect(screen.getByText("Событие 0")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("Не удалось удалить уведомление");
 });
