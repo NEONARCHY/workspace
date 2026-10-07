@@ -2159,6 +2159,7 @@ export function App() {
               <ApprovalsView
                 key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
                 token={session.accessToken}
+                calendarEvents={workspace.calendarEvents}
                 createContext={paymentCreateContext}
                 onCreateContextConsumed={consumePaymentCreateContext}
                 canManage={
@@ -2296,6 +2297,8 @@ export function App() {
             {displayedSection === "calendar" ? (
               <CalendarView
                 key={focusTarget?.revision}
+                token={session.accessToken}
+                canLinkProjects={canView("project_hub")}
                 events={workspace.calendarEvents}
                 createFromChat={calendarChatDraft}
                 tasks={workspace.tasks}

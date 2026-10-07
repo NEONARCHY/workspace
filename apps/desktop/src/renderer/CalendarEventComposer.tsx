@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 
 import type {
   CalendarEventInput,
+  PaymentProjectTargets,
   WorkspaceDepartment,
   WorkspacePerson,
   WorkspaceTask,
@@ -17,6 +18,7 @@ import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { CalendarProjectLinkFields } from "./CalendarProjectLinkFields";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -41,6 +43,11 @@ interface CalendarEventComposerProps {
   readonly minimumStart: string;
   readonly tasks: readonly PreparedEventTask[];
   readonly payment?: PreparedEventPayment;
+  readonly projectTargets: PaymentProjectTargets;
+  readonly canLinkProjects: boolean;
+  readonly projectTargetsLoading: boolean;
+  readonly projectTargetsError: string;
+  readonly onRetryProjectTargets: () => void;
   readonly canCreateTask: boolean;
   readonly canCreatePayment: boolean;
   readonly busy: boolean;
@@ -77,6 +84,11 @@ export function CalendarEventComposer({
   minimumStart,
   tasks,
   payment,
+  projectTargets,
+  canLinkProjects,
+  projectTargetsLoading,
+  projectTargetsError,
+  onRetryProjectTargets,
   canCreateTask,
   canCreatePayment,
   busy,
@@ -182,6 +194,13 @@ export function CalendarEventComposer({
                 </label>
               </div>
             </RecordSection>
+
+            {canLinkProjects ? <RecordSection title="Связь с проектом"
+              description="При необходимости укажите проект, направление и работу. Это не создаёт новую проектную задачу.">
+              {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
+              {projectTargetsError ? <div role="alert">{projectTargetsError} <Button type="button" onClick={onRetryProjectTargets}>Повторить</Button></div> : null}
+              <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={onDraftChange} />
+            </RecordSection> : null}
 
             <RecordSection title="Участники" description="Занятого в это время коллегу пригласить нельзя.">
               {departments ? <EmployeeScopeSwitch value={attendeeScope} onChange={setAttendeeScope} label="Группа участников мероприятия" /> : null}

@@ -426,6 +426,12 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 ),
             )
             assert linked_task.calendar_event_id == calendar_event.id
+            with pytest.raises(ValueError, match="calendar meeting or event"):
+                CreateApprovalRequest(
+                    title="Event payment without calendar link",
+                    amount=200_000,
+                    payment_purpose="Мероприятия",
+                )
             linked_payment = await create_approval_request(
                 connection,
                 aziza,
@@ -433,9 +439,11 @@ async def _exercise_live_workspace(database_url: str) -> None:
                     title="Calendar venue payment",
                     amount=200_000,
                     calendar_event_id=calendar_event.id,
+                    payment_purpose="Мероприятия",
                 ),
             )
             assert linked_payment.calendar_event_id == calendar_event.id
+            assert linked_payment.details.calendar_event_id == calendar_event.id
             calendar_event = await update_calendar_event(
                 connection,
                 aziza,

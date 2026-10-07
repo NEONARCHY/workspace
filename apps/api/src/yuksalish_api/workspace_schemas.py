@@ -729,6 +729,7 @@ class PaymentRequestDetails(ApiModel):
     project_id: str | None = None
     workstream_id: str | None = None
     project_item_id: str | None = None
+    calendar_event_id: str | None = None
     source_account: str = Field(default="", max_length=500)
     destination_account: str = Field(default="", max_length=500)
     request_priority: Literal["normal", "urgent"] = "normal"
@@ -807,7 +808,6 @@ class CreateApprovalRequest(PaymentRequestDetails):
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     source_task_id: str | None = None
-    calendar_event_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -816,6 +816,12 @@ class CreateApprovalRequest(PaymentRequestDetails):
         if not stripped:
             raise ValueError("Title must not be blank")
         return stripped
+
+    @model_validator(mode="after")
+    def event_payment_needs_calendar_event(self) -> "CreateApprovalRequest":
+        if self.payment_purpose == "Мероприятия" and not self.calendar_event_id:
+            raise ValueError("Select a calendar meeting or event for event payments")
+        return self
 
 
 class UpdateApprovalRequest(PaymentRequestDetails):
@@ -1177,6 +1183,9 @@ class CalendarEventAttendeeResponse(ApiModel):
 class CalendarEventResponse(ApiModel):
     id: str
     organizer_user_id: str
+    project_id: str | None = None
+    workstream_id: str | None = None
+    project_item_id: str | None = None
     title: str
     description: str
     event_type: CalendarEventType
@@ -1203,6 +1212,9 @@ class CalendarEventWriteRequest(ApiModel):
     all_day: bool = False
     location: str = Field(default="", max_length=240)
     attendee_ids: list[str] = Field(default_factory=list, max_length=100)
+    project_id: str | None = None
+    workstream_id: str | None = None
+    project_item_id: str | None = None
 
     @field_validator("title")
     @classmethod
@@ -1218,6 +1230,12 @@ class CalendarEventWriteRequest(ApiModel):
             raise ValueError("Calendar event end must be after start")
         if len(set(self.attendee_ids)) != len(self.attendee_ids):
             raise ValueError("Calendar attendees must be unique")
+        if self.project_id and not self.workstream_id:
+            raise ValueError("A project direction is required for a linked event")
+        if not self.project_id and (self.workstream_id or self.project_item_id):
+            raise ValueError("A project is required for a linked event")
+        if self.project_id and self.event_type not in {"meeting", "general"}:
+            raise ValueError("Only meetings and events can be linked to a project")
         return self
 
 
