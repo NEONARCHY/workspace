@@ -303,6 +303,11 @@ interface PaymentFormState {
   readonly responsibleUserId: string;
 }
 
+function isSubsidyProjectSelection(projectId: string, targets: PaymentProjectTargets): boolean {
+  return !!projectId && targets.projects.some((project) =>
+    project.id === projectId && project.title.trim().toLocaleLowerCase("ru-RU") === "субсидия");
+}
+
 function emptyPaymentForm(currentUserId: string): PaymentFormState {
   return {
     transferType: "",
@@ -789,6 +794,9 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
             {targets.items.filter((row) => row.workstreamId === form.workstreamId).map((row) => <option value={row.id} key={row.id}>{row.kind === "task" ? "Задача" : "Мероприятие"} · {row.title}</option>)}
           </WorkspaceSelect></label>
         </div>
+        {isSubsidyProjectSelection(form.projectId, targets) ? (
+          <p className="payment-subsidy-route-hint">Для проекта «Субсидия» этап руководства согласует первый исполнительный директор Аскар Маматханов.</p>
+        ) : null}
       </section>
 
       {leadSection}
@@ -1731,7 +1739,7 @@ export function ApprovalsView({
                       return (
                         <SpatialCard id={request.id} lane={column.key} label={request.title} disabled={(!plan && !canManage && !request.activeStages.some((stage) => stage.canAct)) || movingRequestId === request.id}
                           key={request.id}
-                          className={`approval-board-card${plan || canManage || request.activeStages.some((stage) => stage.canAct) ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}${selectedRequestId === request.id ? " selected" : ""}`}
+                          className={`approval-board-card${request.routeVariant === "subsidy" ? " subsidy-route" : ""}${plan || canManage || request.activeStages.some((stage) => stage.canAct) ? " movable" : ""}${movingRequestId === request.id ? " moving" : ""}${selectedRequestId === request.id ? " selected" : ""}`}
                         >
                           <button
                             type="button"
@@ -1776,6 +1784,7 @@ export function ApprovalsView({
                                 <Attach16Regular /> {requestAttachments}
                               </span>
                             </span>
+                            {request.routeVariant === "subsidy" ? <span className="approval-card-route-note">Субсидия · первый исполнительный директор</span> : null}
                             <span className="approval-card-meta">
                               <span>#{request.number}</span>
                               <span>Версия {request.revision}{request.sourceTaskId ? " · создана из задачи" : ""}</span>
@@ -1857,7 +1866,12 @@ export function ApprovalsView({
               <form ref={createPanelRef} noValidate tabIndex={-1} className="approval-create-panel record-composer" role="dialog" aria-modal="true" aria-labelledby="approval-create-title" aria-busy={creatingBusy} onSubmit={(event) => { event.preventDefault(); void createRequest(); }}>
                 <RecordComposer title="Подготовить оплату" titleId="approval-create-title" eyebrow="Заявки на оплату" busy={creatingBusy} error={createError} submitLabel="Отправить по маршруту" onClose={closeCreate}
                   hint="После отправки заявку увидит исполнитель первой стадии."
-                  stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии процесса оплаты">{boardColumns.map((column) => <span key={column.key} style={{ "--record-stage-color": approvalStagePalette(column).background } as CSSProperties}>{column.label}</span>)}</div>}
+                  stages={<div className="record-stages" tabIndex={0} role="region" aria-label="Стадии процесса оплаты">{boardColumns.map((column) => {
+                    const subsidy = isSubsidyProjectSelection(requestDetails.projectId, paymentTargets);
+                    return <span key={column.key} style={{ "--record-stage-color": subsidy && column.key === "deputy_chair" ? "#b78a53" : approvalStagePalette(column).background } as CSSProperties}>
+                      {subsidy && column.key === "deputy_chair" ? "Утверждение первым исполнительным директором" : column.label}
+                    </span>;
+                  })}</div>}
                   aside={<>
                     <RecordSummary title="Сводка заявки"><div className="record-summary-title">{requestTitle.trim() || "Новая заявка"}</div>
                       <strong className="record-summary-amount">{requestAmount.trim() && Number.isFinite(Number(requestAmount.replace(/\s/g, ""))) && Number(requestAmount.replace(/\s/g, "")) > 0 ? `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(Number(requestAmount.replace(/\s/g, "")))} UZS` : "Укажите сумму"}</strong>
@@ -1991,7 +2005,7 @@ export function ApprovalsView({
                             : ""
                       }
                     >
-                      {column.label}
+                      {selectedRequest.routeVariant === "subsidy" && column.key === "deputy_chair" ? "Утверждение первым исполнительным директором" : column.label}
                     </span>
                   ))}
                 </div> : null}

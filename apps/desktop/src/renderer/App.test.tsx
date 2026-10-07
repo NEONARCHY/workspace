@@ -160,12 +160,26 @@ function mockServer(
     readonly restrictPaymentCreators?: boolean;
     readonly extraNotifications?: readonly WorkspaceNotification[];
     readonly failApprovalActionOnce?: boolean;
+    readonly withSubsidyRequest?: boolean;
   } = {},
 ) {
   let failApprovalActionOnce = serverOptions.failApprovalActionOnce ?? false;
   let currentUser = people[0]!;
   let tasks: WorkspaceTask[] = initialTasks.map((task) => ({ ...task }));
-  let requests: ApprovalRequestSummary[] = serverOptions.withReturnedRequest
+  let requests: ApprovalRequestSummary[] = serverOptions.withSubsidyRequest
+    ? [{
+        id: "subsidy-request", workflowId: workflow.id, number: "503",
+        title: "Оплата по субсидии", amount: 1000, currency: "UZS", purpose: "",
+        status: "running", statusLabel: "Ожидает решения",
+        routeVariant: "subsidy", activeNodeKeys: ["manager"],
+        activeStages: [{ key: "manager", label: "Согласование", kind: "approval", canAct: true }],
+        stageLabel: "Согласование", requesterId: people[0]!.id,
+        responsibleUserId: people[0]!.id,
+        details: { ...paymentDetails, projectName: "Субсидия", projectId: "hub-subsidy" },
+        createdAt: "2026-09-03T10:00:00Z", updatedAt: "2026-09-03T10:00:00Z",
+        revision: 1, versions: [], actions: [],
+      }]
+    : serverOptions.withReturnedRequest
     ? [
         {
           id: "returned-request",
@@ -882,8 +896,14 @@ function mockServer(
       return response(changed);
     }
     if (url.endsWith("/project-hub/payment-targets") || url.endsWith("/project-hub/calendar-targets")) {
-      return response({ projects: [{ id: "hub-project-1", code: "WS-26", title: "Workspace" }],
-        workstreams: [{ id: "hub-stream-1", projectId: "hub-project-1", title: "Проведение форума" }],
+      return response({ projects: [
+        { id: "hub-project-1", code: "WS-26", title: "Workspace" },
+        ...(serverOptions.withSubsidyRequest ? [{ id: "hub-subsidy", code: "SUB", title: "Субсидия" }] : []),
+      ],
+        workstreams: [
+          { id: "hub-stream-1", projectId: "hub-project-1", title: "Проведение форума" },
+          ...(serverOptions.withSubsidyRequest ? [{ id: "hub-subsidy-stream", projectId: "hub-subsidy", title: "Основное направление" }] : []),
+        ],
         items: [{ id: "hub-item-1", projectId: "hub-project-1", workstreamId: "hub-stream-1", kind: "event", title: "Форум" }] });
     }
     if (url.endsWith("/approval-requests") && options?.method === "POST") {
@@ -1775,6 +1795,24 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
     fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
+  });
+
+  it("marks only subsidy-route payment cards with the alternate approver", async () => {
+    mockServer({ withSubsidyRequest: true });
+    render(<App />);
+    await loginToWorkspace("aziza", "payment_requests");
+    const card = screen.getByRole("button", {
+      name: "Открыть заявку №503: Оплата по субсидии",
+    }).closest("article");
+    expect(card).toHaveClass("subsidy-route");
+    expect(card).toHaveTextContent("Субсидия · первый исполнительный директор");
+    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.click(screen.getByLabelText("проект"));
+    fireEvent.click(await screen.findByRole("option", { name: "SUB · Субсидия" }));
+    expect(screen.getByText(/этап руководства согласует первый исполнительный директор Аскар Маматханов/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("проект"));
+    fireEvent.click(screen.getByRole("option", { name: "WS-26 · Workspace" }));
+    expect(screen.queryByText(/этап руководства согласует первый исполнительный директор Аскар Маматханов/)).not.toBeInTheDocument();
   });
 
   it("keeps a payment card in place after a rejected board move and allows retry", async () => {

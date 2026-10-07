@@ -199,6 +199,11 @@
 }
 .approvals-view .spatial-drag-preview :is(.approval-card-quick-action, .spatial-grip) { display: none; }
 .approvals-view .approval-board-card.selected { border-color: #53a5a5; box-shadow: 0 0 0 2px rgb(0 145 168 / 12%), 0 14px 28px -20px rgb(31 62 72 / 38%); }
+.approvals-view .approval-board-card.subsidy-route { border-color: #dec7a5; background: #fffaf1; }
+.approvals-view .approval-board-card.subsidy-route:not(.is-hover-suppressed):hover,
+.approvals-view .approval-board-card.subsidy-route:not(.is-hover-suppressed):focus-within { border-color: #b78a53; }
+.approvals-view .approval-board-card.subsidy-route.selected { border-color: #9c713f; box-shadow: 0 0 0 2px rgb(156 113 63 / 17%), 0 14px 28px -20px rgb(31 62 72 / 38%); }
+.approvals-view .payment-subsidy-route-hint { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #dec7a5; border-radius: 10px; color: #684b2b; background: #fffaf1; font-size: 12px; line-height: 1.45; }
 .approvals-view .approval-card-open { position: relative; gap: 0; padding: 16px 15px 12px; }
 .approvals-view .approval-card-title {
   display: -webkit-box;
@@ -299,6 +304,7 @@
 .approvals-view .approval-card-deadline.deadline-success { color: #397154; }
 .approvals-view .approval-card-context { margin-top: 10px; color: #617683; font-size: 11px; }
 .approvals-view .approval-card-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.approvals-view .approval-card-route-note { display: block; margin-top: 6px; color: #775630; font-size: 11px; font-weight: 650; line-height: 1.35; }
 .approvals-view .approval-card-attachments { display: inline-flex; flex: none; align-items: center; gap: 3px; color: #6a7f88; font-variant-numeric: tabular-nums; }
 .approvals-view .approval-card-meta { margin-top: 6px; padding-top: 0; border: 0; color: #87969c; font-size: 10px; font-variant-numeric: tabular-nums; }
 .approvals-view .approval-card-meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -520,7 +526,9 @@
   .approvals-view .approval-detail-panel { animation: none; }
 }
 @media (forced-colors: active) {
-  .approvals-view .approval-column, .approvals-view .approval-board-card { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
+  .approvals-view .approval-column, .approvals-view .approval-board-card,
+  .approvals-view .approval-board-card.subsidy-route,
+  .approvals-view .approval-board-card.subsidy-route.selected { border: 1px solid CanvasText; background: Canvas; box-shadow: none; }
   .approvals-view .approval-column > header::before { background: Highlight; }
   .approvals-view :is(.approval-card-status, .approval-card-priority, .approval-card-quick-action) { border: 1px solid CanvasText; color: CanvasText; background: Canvas; }
   .approvals-view .approval-card-status > i { background: currentColor; }

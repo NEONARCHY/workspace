@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
 from .access_control import ModuleAction, module_permissions_for_user
+from .ai_referent_incoming_access import named_responsible
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
@@ -144,6 +145,9 @@ from .workspace_schemas import (
 )
 
 PERSON_COLORS = ("#0f6cbd", "#6b5b95", "#0e7a0d", "#9b3a4d", "#8a4f12")
+SUBSIDY_ROUTE_VARIANT: Literal["subsidy"] = "subsidy"
+SUBSIDY_APPROVAL_NODE = "deputy_chair"
+SUBSIDY_APPROVAL_LABEL = "Утверждение первым исполнительным директором"
 STATUS_LABELS = {
     "draft": "Черновик",
     "running": "Ожидает решения",
@@ -429,6 +433,10 @@ def _approval_request(
         currency=str(payload.get("currency", "UZS")),
         status=row["status"],
         status_label=STATUS_LABELS.get(status_value, status_value),
+        route_variant=(
+            SUBSIDY_ROUTE_VARIANT
+            if payload.get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT else None
+        ),
         active_node_keys=list(row["active_node_keys"] or []),
         active_stages=list(active_stages),
         stage_label=(
@@ -583,6 +591,11 @@ def _can_act_from_config(
     override = (request_row.get("actor_overrides") or {}).get(node_key)
     if override is not None:
         return str(current_user.id) == str(override)
+    request_payload = request_row.get("payload") or {}
+    if (node_key == SUBSIDY_APPROVAL_NODE
+            and request_payload.get("payment_route_variant") == SUBSIDY_ROUTE_VARIANT):
+        approver_id = request_payload.get("subsidy_approver_user_id")
+        return bool(approver_id) and str(current_user.id) == str(approver_id)
     approver_user_id = config.get("approverUserId")
     if approver_user_id:
         return str(current_user.id) == str(approver_user_id)
@@ -997,7 +1010,13 @@ async def _active_stages_for_requests(
             stages.append(
                 ApprovalStageResponse(
                     key=node["node_key"],
-                    label=node["title"],
+                    label=(
+                        SUBSIDY_APPROVAL_LABEL
+                        if key == SUBSIDY_APPROVAL_NODE
+                        and (request_row.get("payload") or {}).get("payment_route_variant")
+                        == SUBSIDY_ROUTE_VARIANT
+                        else node["title"]
+                    ),
                     kind=node["kind"],
                     can_act=_can_act_from_config(
                         current_user,
@@ -5797,6 +5816,46 @@ async def _validated_payment_project_names(
     )
 
 
+async def _payment_route_variant_payload(
+    connection: AsyncConnection,
+    template_id: UUID,
+    project_id: str | None,
+    project_name: str,
+) -> dict[str, str]:
+    if not project_id or project_name.strip().casefold() != "субсидия":
+        return {}
+    subsidy_node = await connection.scalar(
+        select(approval_nodes.c.node_key).where(
+            approval_nodes.c.template_id == template_id,
+            approval_nodes.c.node_key == SUBSIDY_APPROVAL_NODE,
+            approval_nodes.c.kind == "approval",
+        )
+    )
+    if subsidy_node is None:
+        raise WorkspaceRepositoryError(
+            409, "В опубликованном маршруте нет этапа для Субсидии"  # noqa: RUF001
+        )
+    candidates = (
+        (await connection.execute(
+            select(users.c.id, users.c.username, users.c.full_name)
+            .where(users.c.status == "active")
+        )).mappings().all()
+    )
+    askar_ids = {
+        row["id"] for row in candidates
+        if str(row["username"] or "").casefold() == "askar_mamatxanov"
+        or named_responsible(str(row["full_name"] or "")) == "askar"
+    }
+    if len(askar_ids) != 1:
+        raise WorkspaceRepositoryError(
+            409, "Нужен один активный аккаунт Аскара Маматханова для согласования Субсидии"
+        )
+    return {
+        "payment_route_variant": SUBSIDY_ROUTE_VARIANT,
+        "subsidy_approver_user_id": str(askar_ids.pop()),
+    }
+
+
 async def _validate_request_people(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -5919,6 +5978,9 @@ async def create_approval_request(
         connection, current_user, payload.project_id, payload.workstream_id,
         payload.project_item_id,
     )
+    route_variant_payload = await _payment_route_variant_payload(
+        connection, template["id"], payload.project_id, project_name,
+    )
     request_id = uuid4()
     now = datetime.now(UTC)
     number = str(int(now.timestamp() * 1000))[-6:]
@@ -5932,6 +5994,7 @@ async def create_approval_request(
         "number": number,
         "responsible_user_id": str(responsible_id),
         "employee_ids": employee_ids,
+        **route_variant_payload,
     }
     targets = await _resolve_workflow_targets(
         connection,
@@ -6090,6 +6153,18 @@ async def update_approval_request(
     )
     if project_id:
         submitted_details.update(project_name=project_name, project_code=project_code)
+    previous_route_payload = row["payload"] or {}
+    route_variant_payload = (
+        {
+            key: previous_route_payload[key]
+            for key in ("payment_route_variant", "subsidy_approver_user_id")
+            if key in previous_route_payload
+        }
+        if project_id and project_id == previous_route_payload.get("project_id")
+        else await _payment_route_variant_payload(
+            connection, row["template_id"], project_id, project_name,
+        )
+    )
     calendar_event_id = await _validated_payment_event_id(
         connection, current_user, submitted_details["calendar_event_id"],
         submitted_details["payment_purpose"], project_id,
@@ -6110,6 +6185,9 @@ async def update_approval_request(
         "responsible_user_id": str(responsible_id),
         "employee_ids": employee_ids,
     }
+    for key in ("payment_route_variant", "subsidy_approver_user_id"):
+        updated_payload.pop(key, None)
+    updated_payload.update(route_variant_payload)
     title = payload.title.strip()
     next_version = await _append_request_version(
         connection,

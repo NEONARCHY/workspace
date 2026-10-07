@@ -1829,6 +1829,7 @@ export interface ApprovalRequestSummary {
   readonly currency: string;
   readonly status: ApprovalStatus;
   readonly statusLabel: string;
+  readonly routeVariant?: "subsidy" | null;
   readonly activeNodeKeys: readonly string[];
   readonly activeStages: readonly ApprovalStage[];
   readonly stageLabel: string;
