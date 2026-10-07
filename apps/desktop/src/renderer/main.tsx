@@ -60,6 +60,7 @@ import "./project-workspace.css";
 import "./sidebar-visibility.css";
 import "./navigation-sliding.css";
 import "./section-headers.css";
+import "./sidebar-theme.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {

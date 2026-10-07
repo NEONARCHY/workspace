@@ -71,10 +71,12 @@ function OrbScene({ config, targetHover, paused }: {
   </mesh>;
 }
 
-export function GradientOrb({ config = {}, className = "", paused = false }: {
+export function GradientOrb({ config = {}, className = "", paused = false, interactive = true, interactionSurface }: {
   readonly config?: GradientOrbConfig;
   readonly className?: string;
   readonly paused?: boolean;
+  readonly interactive?: boolean;
+  readonly interactionSurface?: RefObject<HTMLElement | null>;
 }) {
   const container = useRef<HTMLSpanElement>(null);
   const targetHover = useRef(0);
@@ -85,10 +87,10 @@ export function GradientOrb({ config = {}, className = "", paused = false }: {
   useEffect(() => {
     const element = container.current;
     if (!element || staticOrb || !supportsWebGl) return;
-    const surface = element.closest("button") ?? element;
+    const surface = interactionSurface?.current ?? element.closest("button") ?? element;
     let intersecting = true;
     const updateActive = () => setActive(!paused && intersecting && document.visibilityState !== "hidden");
-    const detachInteraction = paused ? undefined : attachOrbInteraction(element, surface, targetHover);
+    const detachInteraction = paused || !interactive ? undefined : attachOrbInteraction(element, surface, targetHover);
     document.addEventListener("visibilitychange", updateActive);
     const observer = typeof IntersectionObserver === "undefined" ? undefined : new IntersectionObserver(([entry]) => {
       intersecting = entry?.isIntersecting ?? false;
@@ -102,10 +104,12 @@ export function GradientOrb({ config = {}, className = "", paused = false }: {
       detachInteraction?.();
       targetHover.current = 0;
     };
-  }, [staticOrb, supportsWebGl, paused]);
+  }, [staticOrb, supportsWebGl, paused, interactive, interactionSurface]);
   if (staticOrb || !supportsWebGl) return fallback;
   return <OrbBoundary fallback={fallback}><span ref={container} className={`gradient-orb ${className}`} aria-hidden="true">
     <Canvas orthographic camera={{ position: [0, 0, 1], zoom: 1 }}
+      style={{ pointerEvents: "none" }}
+      resize={{ offsetSize: true }}
       gl={{ alpha: true, antialias: true, premultipliedAlpha: true }}
       dpr={[1, 1.5]} frameloop={active ? "always" : "demand"} fallback={fallback}>
       <OrbScene config={config} targetHover={targetHover} paused={!active} />

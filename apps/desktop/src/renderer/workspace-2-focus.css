@@ -1,5 +1,6 @@
 /* Product choice: keyboard traversal remains functional, but clickable surfaces do not
-   draw an extra focus halo. Selected, active and validation states remain unchanged. */
+   draw an extra focus halo. Selected, active and validation states remain unchanged.
+   Palette navigation/choices retain their scoped keyboard focus indicators. */
 .app-provider :is(
   button,
   a,
@@ -7,7 +8,7 @@
   [role="menuitem"],
   [role="tab"],
   [tabindex="0"]
-):is(:focus, :focus-visible) {
+):not(.sidebar-palette *, .sidebar-theme-choice):is(:focus, :focus-visible) {
   outline: 0 !important;
   outline-offset: 0 !important;
 }

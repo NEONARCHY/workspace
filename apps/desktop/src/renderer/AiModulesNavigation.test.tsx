@@ -87,6 +87,16 @@ describe("AI module sidebar group", () => {
     expect(trigger).toHaveFocus();
   });
 
+  it("updates a collapsed-sidebar popover to the chosen palette", () => {
+    const props = { modules: [items[1]!, items[3]!], activeKey: "tasks" as const, onSelect: vi.fn(), onCloseOverflow: vi.fn() };
+    const view = render(<AiModulesNavigation {...props} sidebarTheme="navy" />);
+    fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
+    const popover = screen.getByRole("dialog", { name: "ИИ-модули" });
+    expect(popover).toHaveAttribute("data-sidebar-theme", "navy");
+    view.rerender(<AiModulesNavigation {...props} sidebarTheme="light" />);
+    expect(popover).toHaveAttribute("data-sidebar-theme", "light");
+  });
+
   it("expands inside the More drawer without closing it", () => {
     const onSelect = vi.fn();
     const onCloseOverflow = vi.fn();

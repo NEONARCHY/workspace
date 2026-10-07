@@ -85,6 +85,7 @@ import { workspaceTheme } from "./workspace-theme";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { CompanyLogo } from "./CompanyLogo";
+import { useSidebarTheme } from "./sidebar-theme";
 import { NavigationEditor } from "./NavigationEditor";
 import { defaultPersonalPreferences, latestPreferences, visibleNavigation } from "./personal-organization";
 import type { ChatActions } from "./ChatManagement";
@@ -399,6 +400,7 @@ export function App() {
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
   const railCollapsed = railPreference ?? compactWindow;
+  const { theme: sidebarTheme } = useSidebarTheme(session?.user.id);
   const [backgroundError, setBackgroundError] = useState("");
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
@@ -1905,10 +1907,10 @@ export function App() {
       }}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
       <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
-        <aside className="app-rail" aria-label="Основная навигация">
+        <aside className="app-rail sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
             <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
-            <CompanyLogo tone="color" className="rail-brand" />
+            <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
           </div>
           <div className="rail-customize">
             <span>Меню</span>
@@ -1931,9 +1933,9 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow, closeOverflow) => {
+          /> : <AdaptiveNavigation sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow, closeOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
-                <AiModulesNavigation modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen} onCloseOverflow={closeOverflow}
+                <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen} onCloseOverflow={closeOverflow}
                   onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];

@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { Button, Field, Input } from "@fluentui/react-components";
-import { Eye24Regular, EyeOff24Regular } from "@fluentui/react-icons";
+import { ChevronRight16Regular, Eye24Regular, EyeOff24Regular } from "@fluentui/react-icons";
 import { AuthWaves } from "./AuthWaves";
 import { CompanyLogo } from "./CompanyLogo";
 import { SlidingSegmented } from "./SlidingSegmented";
@@ -32,6 +32,20 @@ export function LoginView({
   const [inviteToken, setInviteToken] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const totpDisclosure = useRef<HTMLDetailsElement>(null);
+  const totpInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode !== "login" || !error || ![
+      "Введите шестизначный код приложения-аутентификатора.",
+      "Код неверный или уже использован.",
+      "TOTP code required",
+      "Invalid or already used TOTP code",
+    ].includes(error)) return;
+    // A server-required second factor stays discoverable even when initially collapsed.
+    if (totpDisclosure.current) totpDisclosure.current.open = true;
+    totpInput.current?.focus();
+  }, [error, mode]);
 
   const passwordVisibilityControl = (
     <Button
@@ -145,15 +159,24 @@ export function LoginView({
           </Field>
 
           {mode === "login" ? (
-            <Field label="Код приложения-аутентификатора" hint="Нужен только при включённом TOTP">
-              <Input
-                inputMode="numeric"
-                maxLength={6}
-                value={totpCode}
-                autoComplete="one-time-code"
-                onChange={(_, data) => setTotpCode(data.value.replace(/\D/g, ""))}
-              />
-            </Field>
+            <details className="auth-totp" ref={totpDisclosure}>
+              <summary>
+                <ChevronRight16Regular aria-hidden="true" />
+                Двухфакторная авторизация
+              </summary>
+              <div className="auth-totp-content">
+                <Field label="Код приложения-аутентификатора" hint="Нужен только при включённом TOTP">
+                  <Input
+                    ref={totpInput}
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={totpCode}
+                    autoComplete="one-time-code"
+                    onChange={(_, data) => setTotpCode(data.value.replace(/\D/g, ""))}
+                  />
+                </Field>
+              </div>
+            </details>
           ) : (
             <Field
               label="Повторите пароль"

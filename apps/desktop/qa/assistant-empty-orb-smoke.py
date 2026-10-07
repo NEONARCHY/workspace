@@ -23,11 +23,12 @@ with sync_playwright() as playwright:
     page = browser.new_page(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
-    page.goto("http://127.0.0.1:5174/qa/assistant-empty-orb.html")
+    page.goto("http://127.0.0.1:5175/qa/assistant-empty-orb.html")
     launcher = page.get_by_role("button", name="Открыть ассистента Yuksalish")
-    launcher.locator("canvas").wait_for()
+    traveller = page.locator(".assistant-travelling-orb")
+    traveller.locator("canvas").wait_for()
     page.wait_for_timeout(250)
-    launcher_orb = launcher.locator(".gradient-orb")
+    launcher_orb = traveller.locator(".gradient-orb")
     launcher_shadow = launcher_orb.evaluate("element => getComputedStyle(element).filter")
     verify("drop-shadow" in launcher_shadow, launcher_shadow)
     launcher_box = launcher.bounding_box()
@@ -38,17 +39,21 @@ with sync_playwright() as playwright:
     })
     launcher.click()
     page.locator(".assistant-empty h2").wait_for()
-    orb = page.locator(".assistant-empty > .gradient-orb.assistant-empty-orb")
+    orb = traveller
     orb.locator("canvas").wait_for()
     panel = page.get_by_role("dialog", name="Ассистент Yuksalish")
-    page.wait_for_timeout(500)
+    page.wait_for_function(
+        "document.querySelector('.assistant-travelling-orb').dataset.orbPhase === 'ready'"
+    )
     header_icon = panel.locator(".assistant-header-icon")
     header_size = header_icon.bounding_box()
     verify(header_size and header_size["width"] == 46, header_size)
     panel.locator(".assistant-header").screenshot(path=str(OUT / "panel-header.png"))
     mini_size = orb.bounding_box()
     verify(mini_size and 72 <= mini_size["width"] <= 80, mini_size)
-    mini_shadow = orb.evaluate("element => getComputedStyle(element).filter")
+    mini_shadow = orb.locator(".gradient-orb").evaluate(
+        "element => getComputedStyle(element).filter"
+    )
     verify("drop-shadow" in mini_shadow, mini_shadow)
     orb.screenshot(path=str(OUT / "frame-1.png"))
     page.wait_for_timeout(350)
