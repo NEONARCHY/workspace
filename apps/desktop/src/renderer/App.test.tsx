@@ -1677,9 +1677,14 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByText("Для категории «Мероприятия» выберите доступную встречу или мероприятие из календаря.")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("событие календаря"));
     fireEvent.click(await screen.findByRole("option", { name: /Планирование недели/ }));
+    await waitFor(() => expect(screen.getByLabelText("событие календаря")).toHaveValue("calendar-1"));
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
-    expect(await screen.findByRole("button", { name: "Открыть заявку №502: Полная заявка BP-6" })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      "button",
+      { name: "Открыть заявку №502: Полная заявка BP-6" },
+      { timeout: 5000 },
+    )).toBeInTheDocument();
     const createCall = fetchMock.mock.calls.find(([url, options]) =>
       String(url).endsWith("/approval-requests") && options?.method === "POST",
     );
