@@ -546,16 +546,16 @@ export function loadDesktopReleases(token: string): Promise<readonly DesktopRele
 
 export function stageDesktopRelease(token: string, version: string, file: File, title: string, notes: readonly string[]): Promise<DesktopRelease> {
   checkRemoteUploadSize(file);
-  const query = new URLSearchParams({ title });
-  notes.forEach((note) => query.append("notes", note));
-  return boundedRequest(`${getApiBaseUrl()}/api/v1/updates/releases?${query}`, {
+  const body = new FormData();
+  body.append("metadata", JSON.stringify({ title, notes }));
+  body.append("file", file, file.name);
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/updates/releases/upload`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/octet-stream",
       "X-Release-Version": version,
     },
-    body: file,
+    body,
   }, (response) => response.json() as Promise<DesktopRelease>, 20 * 60_000);
 }
 

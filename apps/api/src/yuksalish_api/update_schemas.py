@@ -1,6 +1,13 @@
 from datetime import datetime
 
+from pydantic import Field
+
 from .workspace_schemas import ApiModel
+
+
+class DesktopReleaseUploadMetadata(ApiModel):
+    title: str = Field(min_length=1, max_length=120)
+    notes: list[str] = Field(min_length=1, max_length=50)
 
 
 class DesktopReleaseResponse(ApiModel):
