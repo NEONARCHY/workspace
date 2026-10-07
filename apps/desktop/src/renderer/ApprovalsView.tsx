@@ -1361,8 +1361,9 @@ export function ApprovalsView({
     if (requestDetails.paymentPurpose === "Мероприятия" && !calendarEvents.some((event) =>
       event.id === requestDetails.calendarEventId && event.status === "scheduled"
       && ["meeting", "general"].includes(event.eventType) && event.canEdit
+      && Date.parse(event.endsAt) > Date.now()
     )) {
-      setCreateError("Для категории «Мероприятия» выберите доступную встречу или мероприятие из календаря.");
+      setCreateError("Для категории «Мероприятия» выберите встречу или мероприятие, которое ещё не завершилось.");
       return;
     }
     setCreateError(""); creatingBusyRef.current = true; setCreatingBusy(true);

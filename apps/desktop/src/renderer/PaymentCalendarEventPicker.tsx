@@ -4,6 +4,7 @@ import { Input } from "@fluentui/react-components";
 import type { CalendarEvent, PaymentProjectTargets } from "@yuksalish/contracts";
 
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { useCalendarEventClock } from "./useCalendarEventClock";
 
 interface PaymentCalendarEventPickerProps {
   readonly events: readonly CalendarEvent[];
@@ -45,11 +46,13 @@ export function PaymentCalendarEventPicker({
   const [dateTo, setDateTo] = useState("");
   const [eventType, setEventType] = useState("all");
   const [projectFilter, setProjectFilter] = useState("project");
+  const now = useCalendarEventClock(events);
   const prefix = revision ? "Исправленные " : "";
   const searchableEvents = events.filter((event) =>
     event.status === "scheduled"
     && (event.eventType === "meeting" || event.eventType === "general")
     && event.canEdit
+    && Date.parse(event.endsAt) > now
     && (!event.projectId || projects.some((project) => project.id === event.projectId))
   );
   const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
@@ -62,7 +65,7 @@ export function PaymentCalendarEventPicker({
       && (eventType === "all" || event.eventType === eventType)
       && (!projectId || projectFilter === "all" || event.projectId === projectId);
   }).sort((left, right) => left.startsAt.localeCompare(right.startsAt));
-  const selectedEvent = searchableEvents.find((event) => event.id === selectedEventId);
+  const selectedEvent = events.find((event) => event.id === selectedEventId);
   const selectedIsFilteredOut = selectedEventId && !filteredEvents.some((event) => event.id === selectedEventId);
   const datesReversed = !!dateFrom && !!dateTo && dateFrom > dateTo;
 
@@ -110,7 +113,9 @@ export function PaymentCalendarEventPicker({
         )}>
         <option value="">Выберите событие</option>
         {selectedIsFilteredOut ? <option value={selectedEventId}>
-          {selectedEvent ? `${eventLabel(selectedEvent, projects)} · вне текущего фильтра` : "Ранее выбранное событие"}
+          {selectedEvent
+            ? `${eventLabel(selectedEvent, projects)} · ${Date.parse(selectedEvent.endsAt) <= now ? "завершилось" : "вне текущего фильтра"}`
+            : "Ранее выбранное событие"}
         </option> : null}
         {filteredEvents.map((event) => <option key={event.id} value={event.id}>
           {eventLabel(event, projects)}
