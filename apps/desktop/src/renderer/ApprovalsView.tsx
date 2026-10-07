@@ -719,10 +719,11 @@ interface PaymentFieldsProps {
   readonly people: readonly WorkspacePerson[];
   readonly departments?: readonly WorkspaceDepartment[];
   readonly onChange: (form: PaymentFormState) => void;
+  readonly leadSection?: ReactNode;
   readonly revision?: boolean;
 }
 
-function PaymentFields({ form, targets, people, departments, onChange, revision = false }: PaymentFieldsProps) {
+function PaymentFields({ form, targets, people, departments, onChange, leadSection, revision = false }: PaymentFieldsProps) {
   const [tripScope, setTripScope] = useState<EmployeeScope>(() => employeeScope(
     people.find((person) => person.id === form.employeeIds[0])?.departmentId,
     departments ?? [],
@@ -739,7 +740,7 @@ function PaymentFields({ form, targets, people, departments, onChange, revision 
     <div className="payment-fields">
       <section className="payment-form-section">
         <header>
-          <span>01</span>
+          <span>{leadSection ? "00" : "01"}</span>
           <div>
             <strong>Проект и тип операции</strong>
             <small>Контекст, по которому бухгалтерия идентифицирует платёж</small>
@@ -793,6 +794,8 @@ function PaymentFields({ form, targets, people, departments, onChange, revision 
           </WorkspaceSelect></label>
         </div>
       </section>
+
+      {leadSection}
 
       <section className="payment-form-section">
         <header>
@@ -1835,47 +1838,6 @@ export function ApprovalsView({
                     </RecordSummary>
                     <section className="record-summary-card record-summary-note"><h3>Запуск согласования</h3><p>Проверьте реквизиты и приложите документы. Кнопка «Отправить по маршруту» создаст заявку и запустит действующий процесс согласования.</p><p>Условия и ответственных определяет маршрут. История появится после отправки.</p></section>
                   </>}>
-                  <section className="payment-form-section payment-form-lead">
-                    <header>
-                      <span>00</span>
-                      <div>
-                        <strong>Что оплачиваем</strong>
-                        <small>Название и сумма обязательны для запуска маршрута</small>
-                      </div>
-                    </header>
-                    <div className="payment-field-grid">
-                      <label>
-                        Название заявки <b>обязательно</b>
-                        <Input
-                          aria-label="Название заявки"
-                          aria-invalid={Boolean(createError && !requestTitle.trim())}
-                          placeholder="Например, оплата услуг подрядчика"
-                          value={requestTitle}
-                          onChange={(_event, data) => setRequestTitle(data.value)}
-                        />
-                      </label>
-                      <label>
-                        Сумма в UZS <b>обязательно</b>
-                        <Input
-                          aria-label="Сумма заявки"
-                          aria-invalid={Boolean(createError && Number(requestAmount.replace(/\s/g, "")) <= 0)}
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={requestAmount}
-                          onChange={(_event, data) => setRequestAmount(data.value)}
-                        />
-                      </label>
-                      <label className="payment-field-wide">
-                        Назначение платежа
-                        <Textarea
-                          aria-label="Назначение платежа"
-                          placeholder="Кому, за что и почему платим"
-                          value={requestPurpose}
-                          onChange={(_event, data) => setRequestPurpose(data.value)}
-                        />
-                      </label>
-                    </div>
-                  </section>
                   {paymentTargetsLoading ? <p role="status">Загружаем проекты и направления…</p> : null}
                   {paymentTargetsError ? <div role="alert">{paymentTargetsError} <Button type="button" disabled={paymentTargetsLoading} onClick={() => {
                     setPaymentTargetsLoading(true);
@@ -1883,7 +1845,48 @@ export function ApprovalsView({
                       .catch(() => setPaymentTargetsError("Не удалось загрузить проекты. Повторите попытку."))
                       .finally(() => setPaymentTargetsLoading(false));
                   }}>Повторить</Button></div> : null}
-                  <PaymentFields form={requestDetails} targets={paymentTargets} people={people} departments={departments} onChange={setRequestDetails} />
+                  <PaymentFields form={requestDetails} targets={paymentTargets} people={people} departments={departments} onChange={setRequestDetails}
+                    leadSection={<section className="payment-form-section payment-form-lead">
+                      <header>
+                        <span>01</span>
+                        <div>
+                          <strong>Что оплачиваем</strong>
+                          <small>Название и сумма обязательны для запуска маршрута</small>
+                        </div>
+                      </header>
+                      <div className="payment-field-grid">
+                        <label>
+                          Название заявки <b>обязательно</b>
+                          <Input
+                            aria-label="Название заявки"
+                            aria-invalid={Boolean(createError && !requestTitle.trim())}
+                            placeholder="Например, оплата услуг подрядчика"
+                            value={requestTitle}
+                            onChange={(_event, data) => setRequestTitle(data.value)}
+                          />
+                        </label>
+                        <label>
+                          Сумма в UZS <b>обязательно</b>
+                          <Input
+                            aria-label="Сумма заявки"
+                            aria-invalid={Boolean(createError && Number(requestAmount.replace(/\s/g, "")) <= 0)}
+                            inputMode="numeric"
+                            placeholder="0"
+                            value={requestAmount}
+                            onChange={(_event, data) => setRequestAmount(data.value)}
+                          />
+                        </label>
+                        <label className="payment-field-wide">
+                          Назначение платежа
+                          <Textarea
+                            aria-label="Назначение платежа"
+                            placeholder="Кому, за что и почему платим"
+                            value={requestPurpose}
+                            onChange={(_event, data) => setRequestPurpose(data.value)}
+                          />
+                        </label>
+                      </div>
+                    </section>} />
                   <section className="payment-form-section approval-documents-section">
                     <header>
                       <span>04</span>
