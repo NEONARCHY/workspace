@@ -272,6 +272,7 @@ function mockServer(
       updatedAt: "2026-09-03T09:00:00Z",
     },
   ];
+  const calendarMeetingStart = Date.now() + 7 * 24 * 60 * 60 * 1000;
   let calendarEvents: CalendarEvent[] = [
     {
       id: "calendar-1",
@@ -279,8 +280,8 @@ function mockServer(
       title: "Планирование недели",
       description: "Общий статус",
       eventType: "meeting",
-      startsAt: "2026-09-06T05:00:00Z",
-      endsAt: "2026-09-06T06:00:00Z",
+      startsAt: new Date(calendarMeetingStart).toISOString(),
+      endsAt: new Date(calendarMeetingStart + 60 * 60 * 1000).toISOString(),
       allDay: false,
       location: "Переговорная",
       status: "scheduled",
@@ -1674,7 +1675,7 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "Мероприятия" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
-    expect(screen.getByText("Для категории «Мероприятия» выберите доступную встречу или мероприятие из календаря.")).toBeInTheDocument();
+    expect(screen.getByText("Для категории «Мероприятия» выберите встречу или мероприятие, которое ещё не завершилось.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("фильтр событий по проекту"), { target: { value: "all" } });
     fireEvent.change(screen.getByLabelText("поиск события"), { target: { value: "Планирование" } });
     fireEvent.click(screen.getByLabelText("событие календаря"));

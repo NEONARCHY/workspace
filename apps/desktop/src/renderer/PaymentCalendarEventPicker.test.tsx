@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CalendarEvent, PaymentProjectTargets } from "@yuksalish/contracts";
 
@@ -42,7 +42,8 @@ const events = [
   calendarEvent("meeting-free", "Общая встреча", "meeting", "2026-10-15T10:00:00"),
 ];
 
-afterEach(cleanup);
+beforeEach(() => vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-07T12:00:00Z")));
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("PaymentCalendarEventPicker", () => {
   it("filters by selected project and type, while allowing all accessible events", () => {
@@ -82,5 +83,22 @@ describe("PaymentCalendarEventPicker", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Найдено событий: 1");
     fireEvent.change(screen.getByLabelText("дата события по"), { target: { value: "2026-10-19" } });
     expect(screen.getByRole("status")).toHaveTextContent("По фильтрам ничего не найдено");
+  });
+
+  it("hides finished events but keeps ongoing and future events", () => {
+    const recentEvents = [
+      { ...calendarEvent("expired", "Прошедшая встреча", "meeting", "2026-10-07T10:00:00Z"), endsAt: "2026-10-07T12:00:00Z" },
+      { ...calendarEvent("ongoing", "Текущая встреча", "meeting", "2026-10-07T11:00:00Z"), endsAt: "2026-10-07T13:00:00Z" },
+      { ...calendarEvent("upcoming", "Будущий форум", "general", "2026-10-08T11:00:00Z"), endsAt: "2026-10-08T13:00:00Z" },
+    ];
+    render(<PaymentCalendarEventPicker events={recentEvents} projects={projects} projectId=""
+      selectedEventId="expired" revision onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Найдено событий: 2");
+    expect(screen.getByLabelText("Исправленные событие календаря")).toHaveValue("expired");
+    fireEvent.click(screen.getByLabelText("Исправленные событие календаря"));
+    expect(screen.getByRole("option", { name: /Прошедшая встреча.*завершилось/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Текущая встреча/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Будущий форум/ })).toBeInTheDocument();
   });
 });
