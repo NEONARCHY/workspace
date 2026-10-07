@@ -9,6 +9,8 @@ const EASING = "cubic-bezier(.2, 0, 0, 1)";
 const OPEN_FLIGHT_DURATION = 300;
 const OPEN_REVEAL_DURATION = 220;
 const LAUNCHER_FADE_DURATION = 180;
+const WELCOME_FADE_OUT_DURATION = 100;
+const WELCOME_FADE_IN_DURATION = 140;
 const OPEN_FLIGHT_EASING = "cubic-bezier(.4, 0, .8, 1)";
 
 export function orbPose(rect: Pick<DOMRect, "left" | "top" | "width" | "height">, zoom: number): OrbPose {
@@ -34,10 +36,12 @@ export function orbStreamClip(bounds: DOMRect, stream: DOMRect) {
 }
 
 /** One persistent canvas, measured slots, and cancellable travel with orb-only motion blur. */
-export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight = false, reducedMotion, zoom, geometryKey,
+export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight = false, welcomeWithoutFlight = false,
+  reducedMotion, zoom, geometryKey,
   launcher, panel, header, welcome, visual }: {
   readonly open: boolean; readonly ready: boolean; readonly empty: boolean; readonly blocked: boolean;
   readonly returnWithoutFlight?: boolean;
+  readonly welcomeWithoutFlight?: boolean;
   readonly reducedMotion: boolean; readonly zoom: number; readonly geometryKey: string;
   readonly launcher: RefObject<HTMLElement | null>; readonly panel: RefObject<HTMLElement | null>;
   readonly header: RefObject<HTMLElement | null>; readonly welcome: RefObject<HTMLElement | null>;
@@ -88,8 +92,12 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
       element.style.opacity = "1";
       element.style.clipPath = "none";
       element.style.filter = "none";
-      if (reducedMotion || resized || !element.animate || !from.size
-        || Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) return;
+      if (reducedMotion || resized || !element.animate || !from.size) return;
+      if (Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) {
+        // A cancelled fade may already be at its destination; restore it without a brightness jump.
+        return Number(fromOpacity) < 1
+          ? animate(element, [{ opacity: fromOpacity }, { opacity: 1 }], { duration: WELCOME_FADE_IN_DURATION }) : undefined;
+      }
       // Enter/leave the header from below its icon slot, never fly across its copy.
       const docking = open && revealedRef.current;
       const middle = { x: docking ? (empty ? from.x : to.x) - 18
@@ -101,6 +109,23 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
         opacity: index === 0 ? fromOpacity : 1,
         transform: orbTransform(pose), filter: `blur(${index === 1 ? blur.toFixed(2) : "0"}px)`,
       })), { duration: opening ? OPEN_FLIGHT_DURATION : 420, easing: opening ? OPEN_FLIGHT_EASING : EASING });
+    };
+    const fadeToWelcome = async (to: OrbPose) => {
+      const from = orbPose(element.getBoundingClientRect(), zoom);
+      const isHidden = () => document.visibilityState === "hidden";
+      if (reducedMotion || resized || !element.animate || !from.size || isHidden()
+        || Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) { place(); return; }
+      const fromOpacity = getComputedStyle(element).opacity || "1";
+      element.style.clipPath = "none";
+      element.style.filter = "none";
+      element.style.opacity = "0";
+      await animate(element, [{ opacity: fromOpacity }, { opacity: 0 }], { duration: WELCOME_FADE_OUT_DURATION });
+      if (!active) return;
+      // Reposition the same canvas only while invisible; neither leg animates its geometry.
+      element.style.transform = orbTransform(to);
+      element.style.opacity = "1";
+      if (isHidden()) return;
+      await animate(element, [{ opacity: 0 }, { opacity: 1 }], { duration: WELCOME_FADE_IN_DURATION });
     };
     const finish = () => {
       set(open ? "ready" : "closed");
@@ -130,8 +155,9 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
         return;
       }
       const opening = !revealedRef.current;
+      const fadeWelcome = !opening && empty && welcomeWithoutFlight && phaseRef.current !== "waiting";
       set(opening ? "travelling" : "docking");
-      const flight = fly(to);
+      const flight = fadeWelcome ? fadeToWelcome(to) : fly(to);
       const surface = panel.current;
       let reveal: Promise<void> | undefined;
       if (opening && surface && !reducedMotion && !resized && typeof surface.animate === "function") {
@@ -176,6 +202,6 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
       observer?.disconnect(); panelElement?.removeEventListener("scroll", update, true);
       document.removeEventListener("visibilitychange", settleHidden);
     };
-  }, [open, ready, empty, blocked, returnWithoutFlight, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);
+  }, [open, ready, empty, blocked, returnWithoutFlight, welcomeWithoutFlight, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);
   return phase;
 }

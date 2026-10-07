@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { orbPose, orbReveal, orbStreamClip, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
 
 function Harness({ open = false, empty = true, reduced = false, geometry = "desktop", ready = true, blocked = false,
-  returnWithoutFlight = false }) {
+  returnWithoutFlight = false, welcomeWithoutFlight = false }) {
   const launcher = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const header = useRef<HTMLSpanElement>(null), welcome = useRef<HTMLSpanElement>(null), visual = useRef<HTMLSpanElement>(null);
-  const phase = useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight, reducedMotion: reduced,
+  const phase = useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight, welcomeWithoutFlight, reducedMotion: reduced,
     zoom: 1, geometryKey: geometry, launcher, panel, header, welcome, visual });
   return <><button ref={launcher} data-slot="launcher">Открыть</button>
     <section ref={panel} data-slot="panel"><span ref={header} data-slot="header" /><span ref={welcome} data-slot="welcome" /></section>
@@ -214,6 +214,131 @@ describe("assistant orb choreography", () => {
     await screen.findByText("ready");
     expect(orb.style.opacity).toBe("1");
     expect(orb.style.filter).toBe("none");
+  });
+  it("fades out in the header before appearing in an expanded empty chat without a flight or reveal", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={false} welcomeWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open empty={false} welcomeWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    const headerPose = orb.style.transform;
+    rerender(<Harness open welcomeWithoutFlight />);
+    await screen.findByText("docking");
+    expect(pending).toHaveLength(3);
+    expect(pending[2]!.frames).toEqual([{ opacity: "1" }, { opacity: 0 }]);
+    expect(pending[2]!.options.duration).toBe(100);
+    expect(orb.style.transform).toBe(headerPose);
+    await act(async () => pending[2]!.finish());
+    expect(pending).toHaveLength(4);
+    expect(orb.style.transform).toBe("translate(1070px, 430px) scale(0.7916666666666666)");
+    expect(pending[3]!.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(pending[3]!.options.duration).toBe(140);
+    expect(pending.slice(2).every(({ target }) => target === orb)).toBe(true);
+    expect(orb.style.filter).toBe("none");
+    await act(async () => pending[3]!.finish());
+    await screen.findByText("ready");
+    expect(orb.style.opacity).toBe("1");
+    expect(document.querySelectorAll("[data-slot='visual']")).toHaveLength(1);
+  });
+  it.each(["reduced", "resize", "no animation API"])("places the expanded welcome orb instantly with %s", async (mode) => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={false} welcomeWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open empty={false} welcomeWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    if (mode === "no animation API") Object.defineProperty(orb, "animate", { value: undefined });
+    rerender(<Harness open welcomeWithoutFlight reduced={mode === "reduced"} geometry={mode === "resize" ? "compact" : "desktop"} />);
+    await screen.findByText("ready");
+    expect(pending).toHaveLength(2);
+    expect(orb.style.transform).toBe("translate(1070px, 430px) scale(0.7916666666666666)");
+    expect(orb.style.opacity).toBe("1");
+  });
+  it.each([
+    { name: "mini-window welcome", empty: false, nextEmpty: true, welcomeWithoutFlight: false },
+    { name: "expanded first-message docking", empty: true, nextEmpty: false, welcomeWithoutFlight: true },
+  ])("keeps the flight for $name", async ({ empty, nextEmpty, welcomeWithoutFlight }) => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={empty} welcomeWithoutFlight={welcomeWithoutFlight} />);
+    await act(async () => {});
+    rerender(<Harness open empty={empty} welcomeWithoutFlight={welcomeWithoutFlight} />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness open empty={nextEmpty} welcomeWithoutFlight={welcomeWithoutFlight} />);
+    await screen.findByText("docking");
+    expect(pending).toHaveLength(3);
+    expect(pending[2]!.options.duration).toBe(420);
+    expect(pending[2]!.frames.every(({ transform }) => Boolean(transform))).toBe(true);
+    await act(async () => pending[2]!.finish());
+    await screen.findByText("ready");
+  });
+  it.each([false, true])("cancels either welcome fade when closing the expanded window (appearing=%s)", async (appearing) => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={false} welcomeWithoutFlight returnWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open empty={false} welcomeWithoutFlight returnWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness open welcomeWithoutFlight returnWithoutFlight />);
+    await screen.findByText("docking");
+    if (appearing) await act(async () => pending[2]!.finish());
+    const interrupted = pending.at(-1)!;
+    const count = pending.length;
+    rerender(<Harness welcomeWithoutFlight returnWithoutFlight />);
+    await screen.findByText("returning");
+    expect(interrupted.cancel).toHaveBeenCalledOnce();
+    expect(pending).toHaveLength(count + 1);
+    expect(pending.at(-1)!.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    await act(async () => pending.at(-1)!.finish());
+    await screen.findByText("closed");
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.transform).toBe("translate(1226px, 6px) scale(0.5)");
+  });
+  it("restores opacity in place when switching back to history during the header fade", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={false} welcomeWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open empty={false} welcomeWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    const headerPose = orb.style.transform;
+    rerender(<Harness open welcomeWithoutFlight />);
+    await screen.findByText("docking");
+    orb.style.opacity = "0.35";
+    rerender(<Harness open empty={false} welcomeWithoutFlight />);
+    await act(async () => {});
+    expect(pending[2]!.cancel).toHaveBeenCalledOnce();
+    expect(pending).toHaveLength(4);
+    expect(pending[3]!.frames).toEqual([{ opacity: "0.35" }, { opacity: 1 }]);
+    expect(orb.style.transform).toBe(headerPose);
+    await act(async () => pending[3]!.finish());
+    await screen.findByText("ready");
+    expect(orb.style.opacity).toBe("1");
+  });
+  it("settles both welcome fade stages when the tab becomes hidden", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={false} welcomeWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open empty={false} welcomeWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness open welcomeWithoutFlight />);
+    await screen.findByText("docking");
+    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => { document.dispatchEvent(new Event("visibilitychange")); });
+    await screen.findByText("ready");
+    expect(pending).toHaveLength(3);
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.opacity).toBe("1");
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.transform).toBe("translate(1070px, 430px) scale(0.7916666666666666)");
   });
   it("leaves room for the shadow and clips it at the stream rather than the orb's square", () => {
     const bounds = new DOMRect(100, 200, 96, 96);

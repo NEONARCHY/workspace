@@ -137,6 +137,33 @@ describe("YuksalishAssistant", () => {
     expect(loadAssistantMessages).toHaveBeenLastCalledWith("test-token", "first");
   });
 
+  it("uses a welcome fade for a new expanded chat while preserving the previous chat's draft", async () => {
+    const journey = vi.spyOn(orbJourney, "useAssistantOrbJourney");
+    const oldMessage = { id: "saved", role: "assistant" as const, model: "flash-lite" as const,
+      content: "Сохранённая переписка", createdAt: "2026-10-04T09:00:00Z" };
+    vi.mocked(loadAssistantMessages).mockResolvedValue([oldMessage]);
+    vi.mocked(createAssistantChat).mockResolvedValue({ id: "second", title: "Новый чат", isDefault: false,
+      createdAt: "2026-10-04T10:00:00Z", updatedAt: "2026-10-04T10:00:00Z" });
+    try {
+      render(<YuksalishAssistant token="test-token" />);
+      fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+      await screen.findByText("Сохранённая переписка");
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "Черновик первого чата" } });
+      fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+      fireEvent.click(within(screen.getByRole("complementary", { name: "Чаты ассистента" })).getByRole("button", { name: "Новый чат" }));
+      await screen.findByText("С чего начнём?");
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: true, empty: true, welcomeWithoutFlight: true }));
+      expect(document.querySelectorAll(".assistant-travelling-orb")).toHaveLength(1);
+      const sidebar = screen.getByRole("navigation", { name: "Список чатов ассистента" });
+      fireEvent.click(within(sidebar).getByRole("button", { name: /Первый чат/ }));
+      await screen.findByText("Сохранённая переписка");
+      expect(screen.getByRole("textbox")).toHaveValue("Черновик первого чата");
+      fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ welcomeWithoutFlight: false }));
+      expect(sendAssistantMessage).not.toHaveBeenCalled();
+    } finally { journey.mockRestore(); }
+  });
+
   it("supports keyboard chat selection and dismisses the picker without closing the assistant", async () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));

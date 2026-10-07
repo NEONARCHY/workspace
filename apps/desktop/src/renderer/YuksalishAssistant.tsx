@@ -186,7 +186,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const reducedMotion = useAssistantMotionDisabled();
   const welcomeVisible = loaded && messages.length === 0 && !busy;
   const orbPhase = useAssistantOrbJourney({ open, ready: loaded || Boolean(error), empty: welcomeVisible,
-    blocked: blockingDialog, returnWithoutFlight: expanded, reducedMotion, zoom: viewport.zoom,
+    blocked: blockingDialog, returnWithoutFlight: expanded, welcomeWithoutFlight: expanded, reducedMotion, zoom: viewport.zoom,
     geometryKey: `${viewport.width}:${viewport.height}:${viewport.zoom}:${expanded}`,
     launcher: launcherRef, panel: panelRef, header: headerOrbRef, welcome: welcomeOrbRef, visual: travellingOrbRef });
   const close = useCallback(() => {
