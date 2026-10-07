@@ -4,6 +4,7 @@ import { RecordComposer, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { PaymentCalendarEventPicker } from "./PaymentCalendarEventPicker";
 import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
 import { nextAvailableStageColor, workflowStageColor } from "./workflow-stage-colors";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
@@ -743,15 +744,6 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
     value: PaymentFormState[Key],
   ) => onChange({ ...form, [key]: value });
   const prefix = revision ? "Исправленные " : "";
-  const eligibleEvents = calendarEvents.filter((event) =>
-    event.status === "scheduled"
-    && ["meeting", "general"].includes(event.eventType)
-    && event.canEdit
-    && (!event.projectId || targets.projects.some((project) => project.id === event.projectId))
-    && (!form.projectId || !event.projectId || event.projectId === form.projectId)
-    && (!form.workstreamId || !event.workstreamId || event.workstreamId === form.workstreamId)
-  );
-
   return (
     <div className="payment-fields">
       <section className="payment-form-section">
@@ -805,7 +797,7 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
           <span>02</span>
           <div>
             <strong>Реквизиты платежа</strong>
-            <small>Откуда, куда и на каком основании перечисляются средства</small>
+            <small>Откуда, куда и для какой категории перечисляются средства</small>
           </div>
         </header>
         <div className="payment-field-grid">
@@ -837,33 +829,27 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
               <option value="Другие">Другие</option>
             </WorkspaceSelect>
           </label>
-          {form.paymentPurpose === "Мероприятия" ? <label className="payment-field-wide">
-            Встреча или мероприятие из календаря <b>обязательно</b>
-            <WorkspaceSelect aria-label={`${prefix}событие календаря`} required value={form.calendarEventId}
-              onChange={(event) => {
-                const selected = eligibleEvents.find((item) => item.id === event.target.value);
-                const project = targets.projects.find((item) => item.id === selected?.projectId);
-                onChange({
-                  ...form,
-                  calendarEventId: event.target.value,
-                  ...(project && selected?.workstreamId ? {
-                    projectId: project.id,
-                    workstreamId: selected.workstreamId,
-                    projectItemId: selected.projectItemId ?? "",
-                    projectName: project.title,
-                    projectCode: project.code,
-                  } : {}),
-                });
-              }}>
-              <option value="">Выберите событие</option>
-              {form.calendarEventId && !eligibleEvents.some((event) => event.id === form.calendarEventId)
-                ? <option value={form.calendarEventId}>Ранее выбранное событие</option> : null}
-              {eligibleEvents.map((event) => <option key={event.id} value={event.id}>
-                {event.eventType === "meeting" ? "Встреча" : "Мероприятие"} · {event.title} · {new Date(event.startsAt).toLocaleDateString("ru-RU")}
-              </option>)}
-            </WorkspaceSelect>
-            {!eligibleEvents.length ? <small>Нет доступных событий. Создайте встречу или мероприятие в календаре.</small> : null}
-          </label> : null}
+          {form.paymentPurpose === "Мероприятия" ? <PaymentCalendarEventPicker
+            events={calendarEvents}
+            projects={targets.projects}
+            projectId={form.projectId}
+            selectedEventId={form.calendarEventId}
+            revision={revision}
+            onSelect={(eventId, selected) => {
+              const project = targets.projects.find((item) => item.id === selected?.projectId);
+              onChange({
+                ...form,
+                calendarEventId: eventId,
+                ...(project && selected?.workstreamId ? {
+                  projectId: project.id,
+                  workstreamId: selected.workstreamId,
+                  projectItemId: selected.projectItemId ?? "",
+                  projectName: project.title,
+                  projectCode: project.code,
+                } : {}),
+              });
+            }}
+          /> : null}
         </div>
       </section>
 
