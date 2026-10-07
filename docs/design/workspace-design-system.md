@@ -93,3 +93,11 @@ API and PostgreSQL remain at 0.14.0 / migration 0017. No backend rewrite, produc
 - Before/after visual artifacts are local ignored files under `tmp/design-before`, `tmp/design-after`, `tmp/design-after-desktop`, `tmp/design-ux-desktop`; all section and form screenshots were inspected, plus the actual 200% native window.
 
 Installer: `apps/desktop/release/Yuksalish-Workspace-Setup-0.15.0.exe`, **145,046,301 bytes**. SHA-256: `84EC1F60B1B28CA878CD30FACF609C23861C6030D9A024E6FB24EE5D08280C02`. Build via `pnpm --filter @yuksalish/desktop dist:win`; packaged Electron reports 0.15.0. Authenticode: **NotSigned**, internal alpha. The existing executable icon was not replaced. Non-blocking build warning: the renderer bundle is about 986 kB minified (281 kB gzip); route-level code splitting is a separate performance follow-up, not a claim of a fully rearchitected backend or bundle.
+
+## Section identity banners — 2026-10-07
+
+At the owner's explicit request, main section headings now share the Projects
+blue/teal banner family with distinct restrained motifs. Working controls keep
+contrasting surfaces; dense employee administration tools remain in a separate
+light row. Dialog, record and account headings are not converted. See
+[section-gradient-headers.md](section-gradient-headers.md) for scope and checks.

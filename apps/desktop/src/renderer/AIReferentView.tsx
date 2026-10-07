@@ -547,7 +547,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     : selected?.attachments.length ?? 0;
   return (
     <section className="workspace-view ai-referent-view" aria-label="AI Referent">
-      <header className="ai-referent-header ws-illustrated-header">
+      <header className="ai-referent-header ws-illustrated-header ws-section-header">
         <div className="ws-illustrated-header-copy">
           <span className="view-kicker">Единая корреспонденция</span>
           <h1>AI Referent</h1>

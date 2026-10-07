@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { SlidingSegmented } from "./SlidingSegmented";
@@ -596,20 +597,20 @@ export function TasksView(props: TasksViewProps) {
     <button className={mode === "calendar" ? "active" : ""} aria-pressed={mode === "calendar"} onClick={() => setMode("calendar")} type="button">Календарь</button>
     <button className={mode === "efficiency" ? "active" : ""} aria-pressed={mode === "efficiency"} onClick={() => { setMode("efficiency"); if (efficiency === undefined && !efficiencyLoading) void onLoadEfficiency(); }} type="button">Эффективность</button>
   </SlidingSegmented>;
-  const newTaskButton = <Button {...newTaskFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
+  const newTaskButton = <Button {...newTaskFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => { setAssistantTaskFields({}); setCreating(true); }}>Новая задача</Button>;
   const [calendarToolbarTarget, setCalendarToolbarTarget] = useState<HTMLDivElement | null>(null);
 
   return (
     <section className={`workspace-view tasks-view bp5-tasks ${mode === "calendar" ? "calendar-mode" : ""} ${mode === "efficiency" ? "efficiency-mode" : ""} ${detailOpen && selectedTask && mode !== "efficiency" ? "detail-open" : ""}`} aria-label="Задачи">
       <div className="tasks-main">
-        <header className="section-toolbar">
+        <WorkspaceSectionHeader motif="tasks" className="section-toolbar">
           <div><h1>Задачи</h1><p>Карточки, команда, сроки и зависимости</p></div>
           <div className="task-toolbar-actions">
             <div className="task-calendar-navigation-slot" ref={setCalendarToolbarTarget} />
             {newTaskButton}
             {taskViewSwitch}
           </div>
-        </header>
+        </WorkspaceSectionHeader>
 
         {!(["calendar", "efficiency"] as TaskMode[]).includes(mode) ? <div className="task-workbench-summary" aria-label="Сводка задач">
           <div className="task-focus-object review"><span>Ждут решения</span><strong>{taskCounts.review}</strong><small>результатов на проверке</small></div>
