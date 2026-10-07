@@ -11,10 +11,11 @@ try {
     }
     $revision = [string](& git rev-parse HEAD)
     if ($LASTEXITCODE -ne 0 -or $revision.Trim() -notmatch '^[a-f0-9]{40}$') { throw "Cannot read Git revision." }
-    $branch = [string](& git branch --show-current)
+    # Actions checks out a detached HEAD; --show-current emits no pipeline value there.
+    $branch = [string](& git rev-parse --abbrev-ref HEAD)
     if ($LASTEXITCODE -ne 0) { throw "Cannot read Git branch." }
     $reference = "HEAD"
-    if ($branch.Trim() -and $branch.Trim() -ne "main") {
+    if ($branch.Trim() -notin @("main", "HEAD")) {
         $main = $null
         foreach ($candidate in @("refs/remotes/origin/main", "refs/heads/main")) {
             & git rev-parse --verify --quiet $candidate 2>$null | Out-Null
@@ -30,6 +31,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Cannot read release note history." }
     $fileNames = [System.Collections.Generic.List[string]]::new()
     foreach ($path in $paths) {
+        if ([string]::IsNullOrWhiteSpace($path)) { continue }
         $name = [System.IO.Path]::GetFileName($path)
         if ($name -match '^\d{8}-[a-z0-9-]+\.json$' -and -not $fileNames.Contains($name)) { $fileNames.Add($name) }
     }
