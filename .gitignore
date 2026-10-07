@@ -36,6 +36,7 @@ node_modules/
 **/dist-electron/
 **/release/
 *.tsbuildinfo
+/apps/desktop/release-notes/order.generated.json
 
 # Runtime and production data
 *.sqlite

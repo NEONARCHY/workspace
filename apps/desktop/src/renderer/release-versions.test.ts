@@ -45,4 +45,24 @@ describe("release version ordering", () => {
     const note = { id: "duplicate", fileName: "20260928-note.json" };
     expect(() => numberUpdateNotes([note, note], "1.0.17")).toThrow("must be unique");
   });
+
+  it("keeps existing numbers when an earlier-dated PR is merged later", () => {
+    const old = { id: "old", fileName: "20261005-old.json" };
+    const a = { id: "a", fileName: "20261002-a.json" };
+    const b = { id: "b", fileName: "20261007-b.json" };
+    const before = numberUpdateNotes([old, b], "1.0.17", [old.fileName, b.fileName]);
+    const after = numberUpdateNotes([a, b, old], "1.0.17", [old.fileName, b.fileName, a.fileName]);
+    expect(after.map(({ id, version }) => [id, version])).toEqual([
+      ["a", "1.0.20"], ["b", "1.0.19"], ["old", "1.0.18"],
+    ]);
+    expect(after.slice(1)).toEqual(before);
+    expect(numberUpdateNotes([b, a, old], "1.0.17", [old.fileName, a.fileName, b.fileName])[0]?.id).toBe("b");
+  });
+
+  it("rejects incomplete or ambiguous explicit ordering", () => {
+    const note = { id: "a", fileName: "a.json" };
+    expect(() => numberUpdateNotes([note], "1.0.17", [])).toThrow("complete and unique");
+    expect(() => numberUpdateNotes([note], "1.0.17", ["a.json", "a.json"])).toThrow("complete and unique");
+    expect(() => numberUpdateNotes([note, { ...note, id: "b" }], "1.0.17", ["a.json"])).toThrow("filenames must be unique");
+  });
 });

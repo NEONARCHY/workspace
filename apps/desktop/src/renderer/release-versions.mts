@@ -57,12 +57,22 @@ export function nextUpdateVersion(version: string): string {
 
 /** A note keeps its number when it moves from pending to a released folder. */
 export function numberUpdateNotes<T extends { readonly id: string; readonly fileName: string }>(
-  notes: readonly T[], lastGroupedVersion: string,
+  notes: readonly T[], lastGroupedVersion: string, fileOrder?: readonly string[],
 ): (T & { version: string })[] {
   const compareKeys = (left: string, right: string) => left < right ? -1 : left > right ? 1 : 0;
-  const sorted = [...notes].sort((left, right) => compareKeys(left.fileName, right.fileName) || compareKeys(left.id, right.id));
+  if (fileOrder && (new Set(fileOrder).size !== fileOrder.length
+    || notes.some((note) => !fileOrder.includes(note.fileName)))) {
+    throw new Error("Release note order must be complete and unique");
+  }
+  const positions = fileOrder ? new Map(fileOrder.map((name, index) => [name, index])) : undefined;
+  const sorted = [...notes].sort((left, right) => positions
+    ? positions.get(left.fileName)! - positions.get(right.fileName)!
+    : compareKeys(left.fileName, right.fileName) || compareKeys(left.id, right.id));
   if (new Set(sorted.map((note) => note.id)).size !== sorted.length) {
     throw new Error("Numbered release note IDs must be unique");
+  }
+  if (new Set(sorted.map((note) => note.fileName)).size !== sorted.length) {
+    throw new Error("Numbered release note filenames must be unique");
   }
   let version = lastGroupedVersion;
   return sorted.map((note) => {

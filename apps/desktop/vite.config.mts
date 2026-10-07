@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
+import { readReleaseNoteOrder } from "./release-note-order.mts";
 
 const tabsterEsmPath = fileURLToPath(
   new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
@@ -21,7 +22,10 @@ type ReleaseHistoryEntry = { version: string; date: string; title: string; items
 
 // Notes are retained after publication, so numbering from this fixed boundary
 // gives the web build and a future EXE the same retrospective update history.
-const lastGroupedVersion = "1.0.17";
+const numberingBaseline = JSON.parse(readFileSync(new URL("./release-notes/numbering-baseline.json", import.meta.url), "utf8")) as {
+  lastGroupedVersion: string; fileNames: string[];
+};
+const lastGroupedVersion = numberingBaseline.lastGroupedVersion;
 
 function noteDate(fileName: string): string {
   return `${fileName.slice(0, 4)}-${fileName.slice(4, 6)}-${fileName.slice(6, 8)}`;
@@ -56,13 +60,17 @@ const releaseHistory: ReleaseHistoryEntry[] = releasedVersions
       };
     }).filter((entry) => entry.items.length > 0);
 const pendingEntries = readNoteEntries(new URL("./release-notes/pending/", import.meta.url));
-const pendingItems = pendingEntries.flatMap((entry) => entry.items);
 const numberedNotes = [
   ...releasedVersions.filter((version) => compareReleaseVersions(version, lastGroupedVersion) > 0)
     .flatMap((version) => readNoteEntries(new URL(`${version}/`, releasedRoot))),
   ...pendingEntries,
 ];
-const versionedNotes = numberUpdateNotes(numberedNotes, lastGroupedVersion);
+const fileOrder = readReleaseNoteOrder(fileURLToPath(new URL("../../", import.meta.url)),
+  numberedNotes.map((entry) => entry.fileName), numberingBaseline.fileNames, process.env.YUKSALISH_WEB_BUILD_ID);
+const versionedNotes = numberUpdateNotes(numberedNotes, lastGroupedVersion, fileOrder);
+const pendingNames = new Set(pendingEntries.map((entry) => entry.fileName));
+const pendingItems = [...versionedNotes].reverse().filter((entry) => pendingNames.has(entry.fileName))
+  .flatMap((entry) => entry.items);
 const updateEntries = versionedNotes.map((entry) => ({
   id: entry.id, date: noteDate(entry.fileName), version: entry.version, items: entry.items,
 }));
