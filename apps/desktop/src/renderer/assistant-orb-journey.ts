@@ -4,6 +4,7 @@ import { hasBlockingDialog } from "./components/ui/use-blocking-dialog";
 export type OrbJourneyPhase = "closed" | "waiting" | "travelling" | "revealing" | "ready" | "docking" | "returning";
 export interface OrbPose { readonly x: number; readonly y: number; readonly size: number }
 const ORB_SIZE = 96;
+const SHADOW_BLEED = 50;
 const EASING = "cubic-bezier(.2, 0, 0, 1)";
 
 export function orbPose(rect: Pick<DOMRect, "left" | "top" | "width" | "height">, zoom: number): OrbPose {
@@ -19,7 +20,15 @@ export function orbReveal(pose: OrbPose, panel: DOMRect, zoom: number) {
   return [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`];
 }
 
-/** One persistent canvas, measured destination slots, and cancellable transform-only travel. */
+export function orbStreamClip(bounds: DOMRect, stream: DOMRect) {
+  if (!bounds.width || !bounds.height) return "none";
+  // Allow 48 local pixels for the existing drop shadow, clipping only at the stream edges.
+  const edges = [(stream.top - bounds.top) / bounds.height, (bounds.right - stream.right) / bounds.width,
+    (bounds.bottom - stream.bottom) / bounds.height, (stream.left - bounds.left) / bounds.width];
+  return `inset(${edges.map((edge) => `${Math.max(-SHADOW_BLEED, edge * 100)}%`).join(" ")})`;
+}
+
+/** One persistent canvas, measured slots, and cancellable travel with orb-only motion blur. */
 export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMotion, zoom, geometryKey,
   launcher, panel, header, welcome, visual }: {
   readonly open: boolean; readonly ready: boolean; readonly empty: boolean; readonly blocked: boolean;
@@ -54,9 +63,10 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
       element.style.transform = orbTransform(orbPose(bounds, zoom));
       element.style.opacity = "1";
       element.style.clipPath = "none";
+      element.style.filter = "none";
       if (open && empty && phaseRef.current === "ready") {
         const stream = panelElement?.querySelector(".assistant-stream")?.getBoundingClientRect();
-        if (stream) element.style.clipPath = `inset(${Math.max(0, stream.top - bounds.top) / bounds.height * 100}% 0 ${Math.max(0, bounds.bottom - stream.bottom) / bounds.height * 100}% 0)`;
+        if (stream) element.style.clipPath = orbStreamClip(bounds, stream);
       }
     };
     const animate = async (target: HTMLElement, keyframes: Keyframe[], duration: number) => {
@@ -70,6 +80,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
       element.style.transform = orbTransform(to);
       element.style.opacity = "1";
       element.style.clipPath = "none";
+      element.style.filter = "none";
       if (reducedMotion || resized || !element.animate || !from.size
         || Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) return;
       // Enter/leave the header from below its icon slot, never fly across its copy.
@@ -77,7 +88,10 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
       const middle = { x: docking ? (empty ? from.x : to.x) - 18
         : (from.x + to.x) / 2 + Math.sign(to.x - from.x) * 18,
         y: (from.y + to.y) / 2 - (docking ? 0 : 24), size: (from.size + to.size) / 2 };
-      await animate(element, [from, middle, to].map((pose) => ({ transform: orbTransform(pose) })), 420);
+      const blur = Math.min(2.4, Math.hypot(from.x - to.x, from.y - to.y) / 160);
+      await animate(element, [from, middle, to].map((pose, index) => ({
+        transform: orbTransform(pose), filter: `blur(${index === 1 ? blur.toFixed(2) : "0"}px)`,
+      })), 420);
     };
     const finish = () => {
       set(open ? "ready" : "closed");
@@ -129,6 +143,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
       // Pin the visible intermediate pose before cancelling, so rapid reversal never jumps.
       if (animations.size) element.style.transform = orbTransform(orbPose(element.getBoundingClientRect(), zoom));
       animations.forEach((animation) => animation.cancel());
+      element.style.filter = "none";
       observer?.disconnect(); panelElement?.removeEventListener("scroll", update, true);
       document.removeEventListener("visibilitychange", settleHidden);
     };

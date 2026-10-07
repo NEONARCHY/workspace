@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { orbPose, orbReveal, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
+import { orbPose, orbReveal, orbStreamClip, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
 
 function Harness({ open = false, empty = true, reduced = false, geometry = "desktop", ready = true, blocked = false }) {
   const launcher = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
@@ -51,15 +51,18 @@ describe("assistant orb choreography", () => {
     const pending = motionFixture();
     const { rerender } = render(<Harness />);
     await act(async () => {});
-    const orb = document.querySelector("[data-slot='visual']");
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']");
     rerender(<Harness open />);
     await screen.findByText("travelling");
     expect(pending).toHaveLength(1);
     expect(pending[0]!.target).toBe(orb);
+    expect(pending[0]!.frames.map(({ filter }) => filter)).toEqual(["blur(0px)", "blur(2.40px)", "blur(0px)"]);
     act(() => pending[0]!.finish());
     await screen.findByText("revealing");
     expect(pending[1]!.target).toBe(document.querySelector("[data-slot='panel']"));
     expect(pending[1]!.frames[0]!.clipPath).toMatch(/^circle\(0px/);
+    expect(pending[1]!.frames.every(({ filter }) => filter === undefined)).toBe(true);
+    expect(orb?.style.filter).toBe("none");
     act(() => pending[1]!.finish());
     await screen.findByText("ready");
     rerender(<Harness open empty={false} />);
@@ -69,6 +72,16 @@ describe("assistant orb choreography", () => {
     act(() => pending[2]!.finish());
     await screen.findByText("ready");
     expect(document.querySelector("[data-slot='visual']")).toBe(orb);
+    expect(orb?.style.filter).toBe("none");
+  });
+  it("leaves room for the shadow and clips it at the stream rather than the orb's square", () => {
+    const bounds = new DOMRect(100, 200, 96, 96);
+    expect(orbStreamClip(bounds, new DOMRect(0, 0, 600, 600))).toBe("inset(-50% -50% -50% -50%)");
+    expect(orbStreamClip(bounds, new DOMRect(0, 224, 600, 600))).toBe("inset(25% -50% -50% -50%)");
+    expect(orbStreamClip(bounds, new DOMRect(0, 0, 148, 248))).toBe("inset(-50% 50% 50% -50%)");
+    expect(orbStreamClip(new DOMRect(200, 400, 192, 192), new DOMRect(0, 448, 1200, 1200)))
+      .toBe("inset(25% -50% -50% -50%)");
+    expect(orbStreamClip(new DOMRect(), new DOMRect())).toBe("none");
   });
   it("cancels interrupted travel and snaps to the current destination on resize/reduced motion", async () => {
     const pending = motionFixture();
@@ -80,6 +93,7 @@ describe("assistant orb choreography", () => {
     await screen.findByText("ready");
     expect(pending[0]!.cancel).toHaveBeenCalledOnce();
     expect(pending).toHaveLength(1);
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.filter).toBe("none");
     expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.transform).toBe("translate(1070px, 430px) scale(0.7916666666666666)");
     rerender(<Harness reduced geometry="compact" />);
     await waitFor(() => expect(screen.getByText("closed")).toBeInTheDocument());
@@ -112,6 +126,7 @@ describe("assistant orb choreography", () => {
     await screen.findByText("closed");
     expect(pending[0]!.cancel).toHaveBeenCalledOnce();
     expect(pending.every(({ target }) => target.getAttribute("data-slot") === "visual")).toBe(true);
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.filter).toBe("none");
     expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.transform).toBe("translate(1226px, 6px) scale(0.5)");
   });
 });
