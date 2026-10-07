@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { assertAppendedNoteNames } from "./lib/release-note-order.mjs";
+import { assertRetainedNoteNames } from "./lib/release-note-order.mjs";
 
 const notesPath = "apps/desktop/release-notes.json";
 const pendingPath = "apps/desktop/release-notes/pending";
@@ -43,13 +43,46 @@ for (const [index, entry] of entries.entries()) {
 const itemCount = entries.reduce((total, entry) => total + entry.items.length, 0);
 
 const [base, head = "HEAD"] = process.argv.slice(2);
-const baseline = base && !/^0+$/.test(base) ? base : "HEAD";
+let baseline = base && !/^0+$/.test(base) ? base : "HEAD";
+if (!base) {
+  try { baseline = execFileSync("git", ["merge-base", "HEAD", "origin/main"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); }
+  catch { /* Initial local clones can validate against HEAD before fetching origin/main. */ }
+}
 const historicalNames = execFileSync("git", ["ls-tree", "-r", "--name-only", baseline, "--",
   pendingPath, "apps/desktop/release-notes/released"], { encoding: "utf8" })
   .split(/\r?\n/u).map((name) => name.split("/").at(-1))
   .filter((name) => /^\d{8}-.*\.json$/u.test(name ?? ""));
-try { assertAppendedNoteNames(historicalNames, entryFiles); }
+const releasedPath = "apps/desktop/release-notes/released";
+const releasedNames = readdirSync(releasedPath, { withFileTypes: true }).filter((entry) => entry.isDirectory())
+  .flatMap((entry) => readdirSync(join(releasedPath, entry.name)).filter((name) => name.endsWith(".json")));
+try { assertRetainedNoteNames(historicalNames, [...entryFiles, ...releasedNames]); }
 catch (error) { fail(error.message); }
+const orderPath = "apps/desktop/release-notes/numbering-baseline.json";
+const order = JSON.parse(readFileSync(orderPath, "utf8"));
+if (order.lastGroupedVersion !== "1.0.17" || !/^[a-f0-9]{40}$/u.test(order.frozenAt)
+  || !Array.isArray(order.fileNames) || new Set(order.fileNames).size !== order.fileNames.length) {
+  fail("the frozen numbering baseline is invalid");
+}
+const frozenFiles = execFileSync("git", ["ls-tree", "-r", "--name-only", order.frozenAt, "--", pendingPath, releasedPath], { encoding: "utf8" })
+  .split(/\r?\n/u).filter((path) => {
+    if (path.startsWith(`${pendingPath}/`)) return true;
+    const match = /\/released\/(\d+)\.(\d+)\.(\d+)\//u.exec(path);
+    return match && (Number(match[1]) > 1 || Number(match[2]) > 0 || Number(match[3]) > 17);
+  }).map((path) => path.split("/").at(-1)).sort();
+if (JSON.stringify(order.fileNames) !== JSON.stringify(frozenFiles)) fail("the original numbering snapshot must not change");
+const existingBaseline = execFileSync("git", ["ls-tree", "--name-only", baseline, "--", orderPath], { encoding: "utf8" }).trim();
+if (existingBaseline) {
+  const previous = JSON.parse(execFileSync("git", ["show", `${baseline}:${orderPath}`], { encoding: "utf8" }));
+  if (JSON.stringify(order) !== JSON.stringify(previous)) fail("do not rewrite the frozen numbering baseline");
+}
+const allNoteIds = [...entries, ...readdirSync(releasedPath, { withFileTypes: true }).filter((entry) => entry.isDirectory())
+  .filter((entry) => {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(entry.name);
+    return match && (Number(match[1]) > 1 || Number(match[2]) > 0 || Number(match[3]) > 17);
+  })
+  .flatMap((entry) => readdirSync(join(releasedPath, entry.name)).filter((name) => name.endsWith(".json"))
+    .map((name) => JSON.parse(readFileSync(join(releasedPath, entry.name, name), "utf8"))))].map((entry) => entry.id);
+if (new Set(allNoteIds).size !== allNoteIds.length) fail("numbered note IDs must remain unique across pending and released history");
 if (base && !/^0+$/.test(base)) {
   const changed = execFileSync("git", ["diff", "--name-only", base, head], { encoding: "utf8" })
     .split(/\r?\n/u).filter(Boolean);

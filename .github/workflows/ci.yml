@@ -24,6 +24,8 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/validate-release-notes.mjs "$BASE_SHA" "$GITHUB_SHA"
+      - name: Test independent notes and PR overlap reporting
+        run: node --test scripts/lib/release-note-order.test.mjs scripts/lib/pr-overlap.test.mjs
 
   python:
     runs-on: ubuntu-latest
@@ -93,6 +95,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Validate environment templates
         shell: pwsh
         run: |
@@ -114,6 +118,11 @@ jobs:
           node-version: "20.20.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prepare Docker release numbering metadata
+        shell: pwsh
+        run: |
+          try { .\scripts\lan\prepare-release-note-order.ps1 }
+          catch { Write-Host $_.ScriptStackTrace; throw }
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm build
@@ -138,6 +147,8 @@ jobs:
         shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
           version: 10.33.0
@@ -146,6 +157,11 @@ jobs:
           node-version: "20.20.0"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Prepare release numbering metadata for consistency tests
+        shell: pwsh
+        run: |
+          try { .\scripts\lan\prepare-release-note-order.ps1 }
+          catch { Write-Host $_.ScriptStackTrace; throw }
       # Each Windows runner has limited memory; parallel test workers can starve
       # jsdom timers and trigger false 10-second UI timeouts.
       - run: pnpm --filter @yuksalish/desktop exec vitest run --shard=${{ matrix.shard }}/2 --maxWorkers=1

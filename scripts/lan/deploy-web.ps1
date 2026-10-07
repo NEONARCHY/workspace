@@ -30,6 +30,7 @@ try {
     docker info --format '{{.ServerVersion}}' | Out-Null
     $env:YUKSALISH_ENV_FILE = $resolvedEnvFile
     $env:YUKSALISH_WEB_BUILD_ID = (git rev-parse HEAD).Trim()
+    & (Join-Path $PSScriptRoot "prepare-release-note-order.ps1")
     $composeFiles = @($composeBase, $composeLan)
     $baseCompose = @(
         "compose", "--env-file", $resolvedEnvFile,
