@@ -174,7 +174,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
   };
 
   return <section className="workspace-view ai-hisobot-view" aria-label="AI Hisobot">
-    <header className="ai-hisobot-header ws-illustrated-header">
+    <header className="ai-hisobot-header ws-illustrated-header ws-section-header">
       <div className="ai-hisobot-header-copy ws-illustrated-header-copy">
         <span className="view-kicker">Единая отчётность</span>
         <h1>AI Hisobot</h1>

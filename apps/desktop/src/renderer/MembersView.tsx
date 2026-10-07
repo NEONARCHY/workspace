@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemberDirectoryItem, MembersRegistry } from "@yuksalish/contracts";
@@ -116,11 +117,11 @@ export function MembersView({ registry, loading, error, onRefresh }: MembersView
   const clearFilters = () => { setQuery(""); setRegionId("all"); setSphereId("all"); setGender("all"); setCreatedFrom(""); setCreatedTo(""); };
 
   if (loading && !registry) return <section className="workspace-view members-view members-state"><Spinner label="Загружаем реестр членов…" /></section>;
-  if (error && !registry) return <section className="workspace-view members-view members-state"><h1>Работа с членами</h1><p>{error}</p><Button appearance="primary" icon={<ArrowClockwise20Regular />} onClick={onRefresh}>Повторить</Button></section>;
-  if (!registry?.configured) return <section className="workspace-view members-view members-state"><h1>Работа с членами</h1><p>Интеграция с реестром ещё не настроена. Администратор должен подключить защищённый read-only API на хостинге.</p></section>;
+  if (error && !registry) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p role="alert">{error}</p><Button appearance="primary" icon={<ArrowClockwise20Regular />} onClick={onRefresh}>Повторить</Button></section>;
+  if (!registry?.configured) return <section className="workspace-view members-view members-state"><WorkspaceSectionHeader motif="members"><div><h1>Работа с членами</h1><p>Реестр и региональный состав</p></div></WorkspaceSectionHeader><p>Интеграция с реестром ещё не настроена. Администратор должен подключить защищённый read-only API на хостинге.</p></section>;
 
   return <section className="workspace-view members-view" aria-label="Работа с членами">
-    <header className="section-toolbar members-toolbar"><div><h1>Работа с членами</h1><p>{registry.members.length.toLocaleString("ru-RU")} членов в реестре · данные обновляются безопасно с хостинга</p></div><div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={onRefresh}>{loading ? "Обновляем…" : "Обновить"}</Button></div></header>
+    <WorkspaceSectionHeader motif="members" className="section-toolbar members-toolbar"><div><h1>Работа с членами</h1><p>{registry.members.length.toLocaleString("ru-RU")} членов в реестре · данные обновляются безопасно с хостинга</p></div><div className="toolbar-actions"><Button icon={<ArrowClockwise20Regular />} disabled={loading} onClick={onRefresh}>{loading ? "Обновляем…" : "Обновить"}</Button></div></WorkspaceSectionHeader>
     <div className="members-summary" aria-label="Сводка текущей выборки"><div><strong>{visible.length.toLocaleString("ru-RU")}</strong><span>в текущей выборке</span></div><div><strong>{new Set(visible.map((member) => member.regionId).filter(Boolean)).size}</strong><span>регионов</span></div><div><strong>{visible.filter((member) => member.status === "active").length.toLocaleString("ru-RU")}</strong><span>активных</span></div></div>
     <section className="members-regional-ranking" aria-labelledby="members-regional-ranking-title">
       <div className="members-ranking-heading"><div><h2 id="members-regional-ranking-title">Рейтинг регионов</h2><p>Новые члены за последние 30 дней по текущим условиям отбора.</p></div><strong>{visible.length.toLocaleString("ru-RU")}</strong></div>

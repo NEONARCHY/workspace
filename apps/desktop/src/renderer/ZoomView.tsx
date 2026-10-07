@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -357,9 +358,10 @@ export function ZoomView({
   if (registry && !registry.configured) {
     return (
       <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
+        <WorkspaceSectionHeader motif="zoom" className="zoom-header"><div><h1>Zoom-конференции</h1><p>Встречи и видеосвязь команды</p></div></WorkspaceSectionHeader>
         <div className="zoom-placeholder zoom-unconfigured">
           <Video24Regular aria-hidden="true" />
-          <h1>Zoom ещё не подключён</h1>
+          <h2>Zoom ещё не подключён</h2>
           <p>
             Раздел заработает, когда администратор сервера укажет данные приложения Zoom
             Server-to-Server OAuth. До этого конференции создаются прежним способом.
@@ -371,7 +373,7 @@ export function ZoomView({
 
   return (
     <section className="workspace-view zoom-view" aria-label="Zoom-конференции">
-      <header className="zoom-header">
+      <WorkspaceSectionHeader motif="zoom" className="zoom-header">
         <div>
           <h1>Zoom-конференции</h1>
           <p>
@@ -389,6 +391,7 @@ export function ZoomView({
             Обновить
           </Button>
           <Button
+            className="ws-section-header-primary"
             appearance="primary"
             icon={<Add24Regular />}
             onClick={() => openComposer(emptyDraft(timeZone))}
@@ -396,7 +399,7 @@ export function ZoomView({
             Новая конференция
           </Button>
         </div>
-      </header>
+      </WorkspaceSectionHeader>
 
       {error || actionError ? (
         <div className="auth-error zoom-error" role="alert">{actionError || error}</div>

@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -615,8 +616,7 @@ export function CalendarView({
 
   return (
     <section ref={frameRef} className="workspace-view calendar-view" aria-label="Календарь">
-      <div className="calendar-main">
-        <header className="calendar-toolbar">
+        <WorkspaceSectionHeader motif="calendar" className="calendar-toolbar">
           <div className="calendar-title">
             <span>Рабочий календарь</span>
             <h1>Календарь</h1>
@@ -629,6 +629,7 @@ export function CalendarView({
               <Button appearance="subtle" icon={<ChevronRight24Regular />} aria-label="Следующий месяц" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
             </div>
             <Button
+              className="ws-section-header-primary"
               appearance="primary"
               icon={<Add24Regular />}
               onClick={() => {
@@ -640,8 +641,9 @@ export function CalendarView({
               Новое событие
             </Button>
           </div>
-        </header>
+        </WorkspaceSectionHeader>
 
+      <div className="calendar-main">
         <div className="calendar-board">
           <div className="calendar-weekdays" aria-hidden="true">
             {weekdayLabels.map((day) => <span key={day}>{day}</span>)}
