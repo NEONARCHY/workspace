@@ -391,6 +391,7 @@ def _payment_details(
         project_id=payload.get("project_id"),
         workstream_id=payload.get("workstream_id"),
         project_item_id=payload.get("project_item_id"),
+        calendar_event_id=payload.get("calendar_event_id"),
         source_account=str(payload.get("source_account", "")),
         destination_account=str(payload.get("destination_account", "")),
         request_priority=payload.get("request_priority", "normal"),
@@ -911,6 +912,9 @@ def _calendar_event(
     return CalendarEventResponse(
         id=str(row["id"]),
         organizer_user_id=str(row["organizer_user_id"]),
+        project_id=str(row["project_id"]) if row.get("project_id") else None,
+        workstream_id=str(row["workstream_id"]) if row.get("workstream_id") else None,
+        project_item_id=str(row["project_item_id"]) if row.get("project_item_id") else None,
         title=row["title"],
         description=row["description"] or "",
         event_type=row["event_type"],
@@ -3414,6 +3418,10 @@ async def create_calendar_event(
             422,
             "New calendar events cannot be created for a past date",
         )
+    await _validated_payment_project_names(
+        connection, current_user, payload.project_id, payload.workstream_id,
+        payload.project_item_id,
+    )
     attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
     participant_ids = _calendar_participant_ids(current_user.id, attendee_ids)
     await _ensure_calendar_participants_are_available(
@@ -3428,6 +3436,9 @@ async def create_calendar_event(
         insert(calendar_events).values(
             id=event_id,
             organizer_user_id=current_user.id,
+            project_id=UUID(payload.project_id) if payload.project_id else None,
+            workstream_id=UUID(payload.workstream_id) if payload.workstream_id else None,
+            project_item_id=UUID(payload.project_item_id) if payload.project_item_id else None,
             title=payload.title,
             description=payload.description,
             event_type=payload.event_type,
@@ -3471,6 +3482,46 @@ async def update_calendar_event(
         raise WorkspaceRepositoryError(403, "Calendar event cannot be changed by this user")
     if row["status"] == "cancelled":
         raise WorkspaceRepositoryError(409, "Cancelled calendar events cannot be edited")
+    project_ids = (
+        (
+            payload.project_id if "project_id" in payload.model_fields_set
+            else str(row["project_id"]) if row["project_id"] else None
+        ),
+        (
+            payload.workstream_id if "workstream_id" in payload.model_fields_set
+            else str(row["workstream_id"]) if row["workstream_id"] else None
+        ),
+        (
+            payload.project_item_id if "project_item_id" in payload.model_fields_set
+            else str(row["project_item_id"]) if row["project_item_id"] else None
+        ),
+    )
+    published_item = (
+        (
+            await connection.execute(
+                select(project_hub_items.c.id, project_hub_items.c.project_id,
+                       project_hub_items.c.workstream_id)
+                .where(project_hub_items.c.calendar_event_id == event_id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if published_item and project_ids != (
+        str(published_item["project_id"]),
+        str(published_item["workstream_id"]),
+        str(published_item["id"]),
+    ):
+        raise WorkspaceRepositoryError(
+            409, "A published project event cannot be moved to another project work"
+        )
+    retaining_project_link = project_ids == (
+        str(row["project_id"]) if row["project_id"] else None,
+        str(row["workstream_id"]) if row["workstream_id"] else None,
+        str(row["project_item_id"]) if row["project_item_id"] else None,
+    )
+    if not retaining_project_link:
+        await _validated_payment_project_names(connection, current_user, *project_ids)
     attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
     participant_ids = _calendar_participant_ids(row["organizer_user_id"], attendee_ids)
     await _ensure_calendar_participants_are_available(
@@ -3484,6 +3535,9 @@ async def update_calendar_event(
         update(calendar_events)
         .where(calendar_events.c.id == event_id)
         .values(
+            project_id=UUID(project_ids[0]) if project_ids[0] else None,
+            workstream_id=UUID(project_ids[1]) if project_ids[1] else None,
+            project_item_id=UUID(project_ids[2]) if project_ids[2] else None,
             title=payload.title,
             description=payload.description,
             event_type=payload.event_type,
@@ -5705,6 +5759,7 @@ PAYMENT_DETAIL_FIELDS = {
     "project_id",
     "workstream_id",
     "project_item_id",
+    "calendar_event_id",
     "source_account",
     "destination_account",
     "request_priority",
@@ -5779,6 +5834,57 @@ async def _can_create_payment_request(
     return position_id is not None and position_id in {str(value) for value in creator_position_ids}
 
 
+async def _validated_payment_event_id(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    event_id: str | None,
+    payment_purpose: str | None,
+    project_id: str | None,
+    workstream_id: str | None,
+    project_item_id: str | None,
+    *,
+    retaining_existing: bool = False,
+) -> UUID | None:
+    if payment_purpose == "Мероприятия" and not event_id:
+        raise WorkspaceRepositoryError(
+            422, "Select a calendar meeting or event for event payments"
+        )
+    if not event_id:
+        return None
+    try:
+        event_uuid = UUID(event_id)
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid calendar event identifier") from error
+    event = (
+        (
+            await connection.execute(
+                select(calendar_events).where(calendar_events.c.id == event_uuid)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if event is None:
+        raise WorkspaceRepositoryError(422, "Calendar event was not found")
+    if retaining_existing:
+        return event_uuid
+    if event["status"] != "scheduled":
+        raise WorkspaceRepositoryError(409, "A cancelled calendar event cannot receive a payment")
+    if payment_purpose == "Мероприятия" and event["event_type"] not in {"meeting", "general"}:
+        raise WorkspaceRepositoryError(422, "Select a meeting or event from the calendar")
+    if event["organizer_user_id"] != current_user.id and not _is_privileged(current_user):
+        raise WorkspaceRepositoryError(403, "Only the organiser can add payments to this event")
+    if event["project_id"] and (
+        project_id != str(event["project_id"])
+        or workstream_id != str(event["workstream_id"])
+        or (project_item_id and project_item_id != str(event["project_item_id"]))
+    ):
+        raise WorkspaceRepositoryError(
+            422, "Payment project link does not match the selected calendar event"
+        )
+    return event_uuid
+
+
 async def create_approval_request(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -5792,7 +5898,6 @@ async def create_approval_request(
         )
     try:
         source_task_id = UUID(payload.source_task_id) if payload.source_task_id else None
-        calendar_event_id = UUID(payload.calendar_event_id) if payload.calendar_event_id else None
     except ValueError as error:
         raise WorkspaceRepositoryError(422, "Invalid linked object identifier") from error
     if source_task_id is not None:
@@ -5800,27 +5905,10 @@ async def create_approval_request(
             await _task_access_row(connection, current_user, source_task_id)
         except WorkspaceRepositoryError as error:
             raise WorkspaceRepositoryError(422, "Source task is not accessible") from error
-    if calendar_event_id is not None:
-        calendar_event = (
-            (
-                await connection.execute(
-                    select(calendar_events).where(calendar_events.c.id == calendar_event_id)
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if calendar_event is None:
-            raise WorkspaceRepositoryError(422, "Calendar event was not found")
-        if calendar_event["status"] != "scheduled":
-            raise WorkspaceRepositoryError(
-                409, "A cancelled calendar event cannot receive a payment"
-            )
-        if (
-            calendar_event["organizer_user_id"] != current_user.id
-            and not _is_privileged(current_user)
-        ):
-            raise WorkspaceRepositoryError(403, "Only the organiser can add payments to this event")
+    calendar_event_id = await _validated_payment_event_id(
+        connection, current_user, payload.calendar_event_id, payload.payment_purpose,
+        payload.project_id, payload.workstream_id, payload.project_item_id,
+    )
     responsible_id, employee_ids = await _validate_request_people(
         connection,
         current_user,
@@ -5987,6 +6075,10 @@ async def update_approval_request(
             submitted_details[field] = (row["payload"] or {}).get(field)
     project_id = submitted_details["project_id"]
     previous_details = row["payload"] or {}
+    if "calendar_event_id" not in payload.model_fields_set:
+        submitted_details["calendar_event_id"] = (
+            str(row["calendar_event_id"]) if row["calendar_event_id"] else None
+        )
     retaining_link = all(
         submitted_details[field] == previous_details.get(field)
         for field in ("project_id", "workstream_id", "project_item_id")
@@ -5998,6 +6090,17 @@ async def update_approval_request(
     )
     if project_id:
         submitted_details.update(project_name=project_name, project_code=project_code)
+    calendar_event_id = await _validated_payment_event_id(
+        connection, current_user, submitted_details["calendar_event_id"],
+        submitted_details["payment_purpose"], project_id,
+        submitted_details["workstream_id"], submitted_details["project_item_id"],
+        retaining_existing=(
+            retaining_link
+            and submitted_details["calendar_event_id"]
+            == (str(row["calendar_event_id"]) if row["calendar_event_id"] else None)
+            and submitted_details["payment_purpose"] == previous_details.get("payment_purpose")
+        ),
+    )
     updated_payload = {
         **(row["payload"] or {}),
         **submitted_details,
@@ -6024,6 +6127,7 @@ async def update_approval_request(
             title=title,
             payload=updated_payload,
             responsible_user_id=responsible_id,
+            calendar_event_id=calendar_event_id,
             current_version=next_version,
         )
     )

@@ -536,6 +536,9 @@ export interface CalendarEventAttendee {
 export interface CalendarEvent {
   readonly id: string;
   readonly organizerUserId: string;
+  readonly projectId?: string | null;
+  readonly workstreamId?: string | null;
+  readonly projectItemId?: string | null;
   readonly title: string;
   readonly description: string;
   readonly eventType: CalendarEventType;
@@ -563,6 +566,9 @@ export interface CalendarEventInput {
   readonly allDay: boolean;
   readonly location: string;
   readonly attendeeIds: readonly string[];
+  readonly projectId?: string | null;
+  readonly workstreamId?: string | null;
+  readonly projectItemId?: string | null;
 }
 
 export type AbsenceKind = "vacation" | "personal_time" | "late_arrival" | "sick_leave" | "business_event";
@@ -1792,6 +1798,7 @@ export interface PaymentRequestDetails {
   readonly projectId?: string | null;
   readonly workstreamId?: string | null;
   readonly projectItemId?: string | null;
+  readonly calendarEventId?: string | null;
   readonly sourceAccount: string;
   readonly destinationAccount: string;
   readonly requestPriority: "normal" | "urgent";

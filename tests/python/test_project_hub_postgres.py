@@ -36,11 +36,15 @@ from yuksalish_api.project_hub_service import (
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
     cancel_calendar_event,
+    create_calendar_event,
     update_calendar_event,
     validate_attachment_owner,
 )
 from yuksalish_api.tables import attachments, users, workspace_notifications
-from yuksalish_api.workspace_schemas import UpdateCalendarEventRequest
+from yuksalish_api.workspace_schemas import (
+    CreateCalendarEventRequest,
+    UpdateCalendarEventRequest,
+)
 
 
 def actor(user_id: UUID, role: str) -> AuthenticatedUser:
@@ -448,6 +452,36 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     UUID(event.id),
                 )
                 assert repeated.calendar_event_id == published.calendar_event_id
+                linked_meeting = await create_calendar_event(
+                    connection,
+                    manager,
+                    CreateCalendarEventRequest(
+                        title="Планирование направления",
+                        event_type="meeting",
+                        starts_at=due + timedelta(hours=3),
+                        ends_at=due + timedelta(hours=4),
+                        project_id=project.id,
+                        workstream_id=workstream.id,
+                        project_item_id=item.id,
+                    ),
+                )
+                assert linked_meeting.project_id == project.id
+                assert linked_meeting.workstream_id == workstream.id
+                assert linked_meeting.project_item_id == item.id
+                with pytest.raises(WorkspaceRepositoryError) as hidden_project:
+                    await create_calendar_event(
+                        connection,
+                        outsider,
+                        CreateCalendarEventRequest(
+                            title="Недоступный проект",
+                            event_type="meeting",
+                            starts_at=due + timedelta(hours=5),
+                            ends_at=due + timedelta(hours=6),
+                            project_id=project.id,
+                            workstream_id=workstream.id,
+                        ),
+                    )
+                assert hidden_project.value.status_code == 403
                 changed = await update_calendar_event(
                     connection,
                     manager,
@@ -461,6 +495,9 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                     ),
                 )
                 assert changed.title == "Встреча по бюджету"
+                assert changed.project_id == project.id
+                assert changed.workstream_id == workstream.id
+                assert changed.project_item_id == event.id
                 refreshed_event = next(
                     candidate for candidate in (await load_hub(connection, manager)).items
                     if candidate.id == event.id
