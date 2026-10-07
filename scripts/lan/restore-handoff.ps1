@@ -69,6 +69,7 @@ try {
             throw "Destination volume '$volume' already exists. No data was overwritten."
         }
     }
+    & (Join-Path $PSScriptRoot "prepare-release-note-order.ps1")
     Write-Host "Preflight passed: all checksums match and the destination project is empty."
     if ($PreflightOnly) { return }
     if (-not $ConfirmEmptyTarget) { throw "Run with -ConfirmEmptyTarget after checking this is Bakhtiyor's empty server." }
@@ -128,7 +129,6 @@ try {
     if ($LASTEXITCODE -ne 0 -or [int]$restoredUsers -ne [int]$manifest.userCount) {
         throw "Restored user count does not match the backup."
     }
-    & (Join-Path $PSScriptRoot "prepare-release-note-order.ps1")
     & docker compose --env-file $envPath -f $baseCompose -f $lanCompose up -d --build --wait
     if ($LASTEXITCODE -ne 0) { throw "Application services did not become healthy." }
     Write-Host "LAN server restored. Check HTTPS, account login, attachments and updates before cutover."

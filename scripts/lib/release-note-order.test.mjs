@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { assertRetainedNoteNames, orderNoteNames } from "./release-note-order.mjs";
 
@@ -36,4 +37,13 @@ test("rejects missing frozen history and ambiguous filenames", () => {
   assert.throws(() => orderNoteNames([], ["old.json"], []), /cannot disappear/);
   assert.throws(() => orderNoteNames(["a.json", "a.json"], [], []), /must be unique/);
   assert.throws(() => orderNoteNames(["a.json"], ["a.json", "a.json"], []), /must be unique/);
+});
+
+test("restore validates numbering during preflight, before creating data volumes", () => {
+  const source = readFileSync(new URL("../lan/restore-handoff.ps1", import.meta.url), "utf8");
+  const prepare = source.indexOf("prepare-release-note-order.ps1");
+  const preflightReturn = source.indexOf("if ($PreflightOnly)");
+  const createVolume = source.indexOf("& docker volume create");
+  assert.ok(prepare >= 0 && preflightReturn > prepare && createVolume > prepare);
+  assert.equal(source.lastIndexOf("prepare-release-note-order.ps1"), prepare);
 });
