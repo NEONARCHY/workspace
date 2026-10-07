@@ -880,7 +880,7 @@ function mockServer(
       tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
       return response(changed);
     }
-    if (url.endsWith("/project-hub/payment-targets")) {
+    if (url.endsWith("/project-hub/payment-targets") || url.endsWith("/project-hub/calendar-targets")) {
       return response({ projects: [{ id: "hub-project-1", code: "WS-26", title: "Workspace" }],
         workstreams: [{ id: "hub-stream-1", projectId: "hub-project-1", title: "Проведение форума" }],
         items: [{ id: "hub-item-1", projectId: "hub-project-1", workstreamId: "hub-stream-1", kind: "event", title: "Форум" }] });
@@ -1642,7 +1642,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByLabelText("Сводка заявок")).toHaveTextContent("В работе");
     expect(screen.queryByLabelText("Сводка заявок на оплату")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
-    const projectSection = screen.getByText("Проект и тип операции").closest("section");
+    const projectSection = screen.getByText("Проект и контекст").closest("section");
     const paymentSection = screen.getByText("Что оплачиваем").closest("section");
     if (!projectSection || !paymentSection) throw new Error("Разделы формы не найдены");
     expect(projectSection.compareDocumentPosition(paymentSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -1657,9 +1657,8 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Назначение платежа" }), {
       target: { value: "Оплата подрядчику" },
     });
-    fireEvent.change(screen.getByLabelText("тип перевода"), {
-      target: { value: "Другие услуги" },
-    });
+    expect(screen.queryByLabelText("тип перевода")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("основание платежа")).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("проект"));
     fireEvent.click(await screen.findByRole("option", { name: "WS-26 · Workspace" }));
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
@@ -1672,11 +1671,12 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.queryByLabelText("название проекта")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("код проекта")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("категория платежа"), {
-      target: { value: "Оплата за услуги" },
+      target: { value: "Мероприятия" },
     });
-    fireEvent.change(screen.getByLabelText("основание платежа"), {
-      target: { value: "Договор 42" },
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+    expect(screen.getByText("Для категории «Мероприятия» выберите доступную встречу или мероприятие из календаря.")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("событие календаря"));
+    fireEvent.click(await screen.findByRole("option", { name: /Планирование недели/ }));
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     expect(await screen.findByRole("button", { name: "Открыть заявку №502: Полная заявка BP-6" })).toBeInTheDocument();
@@ -1685,14 +1685,15 @@ describe("corporate workspace authentication alpha", () => {
     );
     const payload = JSON.parse(String(createCall?.[1]?.body)) as Record<string, unknown>;
     expect(payload).toMatchObject({
-      transferType: "Другие услуги",
+      transferType: null,
       projectName: "Workspace",
       projectCode: "WS-26",
       projectId: "hub-project-1",
       workstreamId: "hub-stream-1",
       projectItemId: "hub-item-1",
-      paymentPurpose: "Оплата за услуги",
-      paymentReason: "Договор 42",
+      paymentPurpose: "Мероприятия",
+      paymentReason: "",
+      calendarEventId: "calendar-1",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Конструктор маршрутов" }));
@@ -2073,6 +2074,12 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },
     });
+    fireEvent.click(await screen.findByLabelText("Проект события"));
+    fireEvent.click(await screen.findByRole("option", { name: "WS-26 · Workspace" }));
+    fireEvent.click(screen.getByLabelText("Направление события"));
+    fireEvent.click(await screen.findByRole("option", { name: "Проведение форума" }));
+    fireEvent.click(screen.getByLabelText("Работа направления события"));
+    fireEvent.click(await screen.findByRole("option", { name: "Мероприятие · Форум" }));
     fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название внутренней задачи 1" }), {
       target: { value: "Подготовить материалы" },
@@ -2095,6 +2102,12 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/calendar/events"),
       expect.objectContaining({ method: "POST" }),
     );
+    const calendarRequest = fetchMock.mock.calls.find(([url, options]) =>
+      String(url).endsWith("/calendar/events") && options?.method === "POST",
+    );
+    expect(JSON.parse(String(calendarRequest?.[1]?.body))).toMatchObject({
+      projectId: "hub-project-1", workstreamId: "hub-stream-1", projectItemId: "hub-item-1",
+    });
     const taskRequest = fetchMock.mock.calls.find(([url, options]) => (
       String(url).endsWith("/tasks") && options?.method === "POST"
     ));
@@ -2112,6 +2125,9 @@ describe("corporate workspace authentication alpha", () => {
       title: "Оплата площадки",
       amount: 250000,
       calendarEventId: "calendar-created",
+      projectId: "hub-project-1",
+      workstreamId: "hub-stream-1",
+      projectItemId: "hub-item-1",
     });
     fireEvent.click(screen.getByRole("button", { name: "Отменить событие" }));
     expect(await screen.findByText("Событие отменено")).toBeInTheDocument();

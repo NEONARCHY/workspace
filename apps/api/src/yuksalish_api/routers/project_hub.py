@@ -63,6 +63,13 @@ async def get_payment_targets(user: User, connection: Connection) -> PaymentProj
     return await load_payment_project_targets(connection, user)
 
 
+@router.get("/calendar-targets", response_model=PaymentProjectTargets)
+async def get_calendar_targets(user: User, connection: Connection) -> PaymentProjectTargets:
+    await ensure_module_action(connection, user, "calendar", "view")
+    await ensure_module_action(connection, user, "project_hub", "view")
+    return await load_payment_project_targets(connection, user)
+
+
 @router.get("/requests", response_model=list[ProjectFundingResponse])
 async def get_requests(user: User, connection: Connection) -> list[ProjectFundingResponse]:
     await ensure_module_action(connection, user, "project_funding", "view")
