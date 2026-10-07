@@ -1642,6 +1642,12 @@ describe("corporate workspace authentication alpha", () => {
     expect(await screen.findByLabelText("Сводка заявок")).toHaveTextContent("В работе");
     expect(screen.queryByLabelText("Сводка заявок на оплату")).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
+    const projectSection = screen.getByText("Проект и тип операции").closest("section");
+    const paymentSection = screen.getByText("Что оплачиваем").closest("section");
+    if (!projectSection || !paymentSection) throw new Error("Разделы формы не найдены");
+    expect(projectSection.compareDocumentPosition(paymentSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(projectSection.querySelector("header span")).toHaveTextContent("00");
+    expect(paymentSection.querySelector("header span")).toHaveTextContent("01");
     fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Полная заявка BP-6" },
     });
