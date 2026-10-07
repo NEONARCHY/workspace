@@ -1675,6 +1675,8 @@ describe("corporate workspace authentication alpha", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
     expect(screen.getByText("Для категории «Мероприятия» выберите доступную встречу или мероприятие из календаря.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("фильтр событий по проекту"), { target: { value: "all" } });
+    fireEvent.change(screen.getByLabelText("поиск события"), { target: { value: "Планирование" } });
     fireEvent.click(screen.getByLabelText("событие календаря"));
     fireEvent.click(await screen.findByRole("option", { name: /Планирование недели/ }));
     await waitFor(() => expect(screen.getByLabelText("событие календаря")).toHaveValue("calendar-1"));
