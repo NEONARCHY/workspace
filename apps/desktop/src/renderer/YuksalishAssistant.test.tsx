@@ -216,7 +216,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(retryButton);
     await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
     expect(clearAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
-    expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Первый чат");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Первый чат"));
   });
 
   it("accepts the 50 MB boundary without sending automatically", async () => {
@@ -264,7 +264,9 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
-    expect(document.querySelector(".assistant-empty .assistant-empty-orb.gradient-orb-fallback")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-empty .assistant-empty-orb.assistant-orb-slot")).toBeInTheDocument();
+    expect(document.querySelectorAll(".assistant-travelling-orb .gradient-orb-fallback")).toHaveLength(1);
+    expect(document.querySelector(".assistant-header .gradient-orb-fallback")).toBeNull();
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
     expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();

@@ -51,9 +51,9 @@ async function main() {
   const state = () => evaluate(`(() => {
     const button=document.querySelector('.assistant-launcher'), rect=button.getBoundingClientRect();
     return {...window.__orbQA,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},
-      transform:getComputedStyle(button).transform,canvas:!!button.querySelector('canvas'),
+      transform:getComputedStyle(button).transform,canvas:!!document.querySelector('.assistant-travelling-orb canvas'),
       visibility:getComputedStyle(button).visibility,disabled:button.disabled,
-      fallback:!!button.querySelector('.gradient-orb-fallback')};
+      fallback:!!document.querySelector('.assistant-travelling-orb .gradient-orb-fallback')};
   })()`);
   const screenshot = async (name, rect) => {
     const clip = {x:Math.max(0,rect.x-16),y:Math.max(0,rect.y-8),width:rect.width+32,height:rect.height+24,scale:1};
@@ -73,7 +73,7 @@ async function main() {
         const proto=Type.prototype, locate=proto.getUniformLocation, uniform=proto.uniform1f, shader=proto.shaderSource;
         proto.getUniformLocation=function(program,name){const location=locate.call(this,program,name);if(location)names.set(location,name);return location;};
         proto.uniform1f=function(location,value){
-          if(this.canvas.closest('.assistant-launcher')) {
+          if(this.canvas.closest('.assistant-travelling-orb')) {
             const name=names.get(location);
             if(name==='hover'||name==='rot')window.__orbQA[name]=value;
             if(name==='iTime')window.__orbQA.frames++;
@@ -90,7 +90,7 @@ async function main() {
       }
     })();`})).identifier;
     await send('Page.reload',{ignoreCache:true}); await pause(1500);
-    for(let i=0;i<30&&!await evaluate("!!document.querySelector('.assistant-launcher canvas')");i++)await pause(200);
+    for(let i=0;i<30&&!await evaluate("!!document.querySelector('.assistant-travelling-orb canvas')");i++)await pause(200);
     for(const [width,height] of [[1440,900],[1024,768],[620,900]]) {
       await send('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
       await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:1,y:1}); await pause(1000);
@@ -131,17 +131,18 @@ async function main() {
       await send('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...rect});
     };
     const stationary=await state();
-    await click('.assistant-launcher'); await pause(600);
+    await click('.assistant-launcher'); await pause(1000);
     assert(await evaluate("!!document.querySelector('.assistant-panel')"));
     const opened=await state(); await pause(350);
-    assert.equal((await state()).frames,opened.frames,'Launcher must pause under its assistant');
+    assert((await state()).frames>opened.frames,'The same orb must keep animating after landing');
+    assert(await evaluate("document.querySelector('.assistant-travelling-orb').dataset.orbPhase==='ready'"));
     assert.deepEqual(opened.rect,stationary.rect); assert(opened.canvas);
     await click('button[aria-label="Закрыть ассистента"]'); await pause(1300);
     const closed=await state(); assert(closed.hover<.01,'Closing must release hover without another click');
     assert(await evaluate("document.activeElement.matches('.assistant-launcher')"),'Focus must return to launcher');
     assert(closed.frames>opened.frames,'Animation must resume after closing');
     await screenshot('assistant-closed-idle',closed.rect);
-    console.log('PASS actual assistant open/pause/close/focus restoration without sticky hover');
+    console.log('PASS actual assistant open/travel/close/focus restoration without sticky hover');
     // A temporary foreground dialog exercises the same observer without server writes.
     await evaluate(`(() => {
       const dialog=document.createElement('section');dialog.id='orb-qa-modal';dialog.setAttribute('role','dialog');
