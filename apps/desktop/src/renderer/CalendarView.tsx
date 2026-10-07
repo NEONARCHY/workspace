@@ -7,6 +7,7 @@ import type {
   CalendarEventInput,
   CalendarEventType,
   ApprovalRequestSummary,
+  PaymentProjectTargets,
   WorkspacePerson,
   WorkspaceDepartment,
   WorkspaceTask,
@@ -30,12 +31,15 @@ import {
   type PreparedEventTask,
 } from "./CalendarEventComposer";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
-import type { PaymentRequestInput } from "./workspace-api";
+import { loadCalendarProjectTargets, type PaymentRequestInput } from "./workspace-api";
+import { CalendarProjectLinkFields } from "./CalendarProjectLinkFields";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 
 interface CalendarViewProps {
+  readonly token?: string;
+  readonly canLinkProjects?: boolean;
   readonly focusEventId?: string;
   readonly createFromChat?: {
     readonly key: string;
@@ -157,10 +161,15 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
     allDay: event.allDay,
     location: event.location,
     attendeeIds: event.attendeeIds,
+    projectId: event.projectId ?? null,
+    workstreamId: event.workstreamId ?? null,
+    projectItemId: event.projectItemId ?? null,
   };
 }
 
 export function CalendarView({
+  token = "",
+  canLinkProjects = false,
   focusEventId,
   createFromChat,
   events,
@@ -190,6 +199,22 @@ export function CalendarView({
   const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [projectTargets, setProjectTargets] = useState<PaymentProjectTargets>({ projects: [], workstreams: [], items: [] });
+  const [projectTargetsLoading, setProjectTargetsLoading] = useState(false);
+  const [projectTargetsError, setProjectTargetsError] = useState("");
+  const [projectTargetsAttempt, setProjectTargetsAttempt] = useState(0);
+  useEffect(() => {
+    if (!canLinkProjects) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setProjectTargetsLoading(true);
+      void loadCalendarProjectTargets(token)
+        .then((targets) => { if (active) { setProjectTargets(targets); setProjectTargetsError(""); } })
+        .catch(() => { if (active) setProjectTargetsError("Не удалось загрузить доступные проекты."); })
+        .finally(() => { if (active) setProjectTargetsLoading(false); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [token, canLinkProjects, projectTargetsAttempt]);
   const [taskComposerEvent, setTaskComposerEvent] = useState<CalendarEvent>();
   const [paymentEvent, setPaymentEvent] = useState<CalendarEvent>();
   const [paymentTitle, setPaymentTitle] = useState("");
@@ -398,6 +423,14 @@ export function CalendarView({
       setError("Нельзя создавать новые события на прошедшие дни. Выберите сегодня или будущую дату.");
       return;
     }
+    if (draft.projectId && !draft.workstreamId) {
+      setError("Выберите направление связанного проекта.");
+      return;
+    }
+    if (!draft.projectId && (draft.workstreamId || draft.projectItemId)) {
+      setError("Сначала выберите проект для связи с направлением или работой.");
+      return;
+    }
     if (!selected && preparedTasks.some((task) => !task.title.trim())) {
       setError("Укажите название каждой подготовленной внутренней задачи или удалите пустую строку.");
       return;
@@ -476,8 +509,11 @@ export function CalendarView({
               comment: `Создано из мероприятия: ${saved.title}`,
               tripPurpose: "",
               employeeIds: saved.attendeeIds,
+              projectId: saved.projectId ?? null,
+              workstreamId: saved.workstreamId ?? null,
+              projectItemId: saved.projectItemId ?? null,
               paymentPurpose: "Мероприятия",
-              paymentReason: saved.title,
+              paymentReason: "",
               responsibleUserId: currentUserId,
             });
             if (!createdPayment) relatedCreationErrors.push("Заявка на оплату не создана.");
@@ -562,8 +598,11 @@ export function CalendarView({
         comment: `Создано из мероприятия: ${paymentEvent.title}`,
         tripPurpose: "",
         employeeIds: paymentEvent.attendeeIds,
+        projectId: paymentEvent.projectId ?? null,
+        workstreamId: paymentEvent.workstreamId ?? null,
+        projectItemId: paymentEvent.projectItemId ?? null,
         paymentPurpose: "Мероприятия",
-        paymentReason: paymentEvent.title,
+        paymentReason: "",
         responsibleUserId: currentUserId,
       });
       if (created) setPaymentEvent(undefined);
@@ -730,6 +769,12 @@ export function CalendarView({
             <Checkbox checked={draft.allDay} label="Событие на весь день" onChange={(_event, data) => setDraft({ ...draft, allDay: data.checked === true })} />
             <Input aria-label="Место" placeholder="Место или ссылка" value={draft.location} onChange={(_event, data) => setDraft({ ...draft, location: data.value })} />
             <Textarea aria-label="Описание события" placeholder="Описание и детали" value={draft.description} onChange={(_event, data) => setDraft({ ...draft, description: data.value })} />
+            {canLinkProjects ? <div>
+              <h3>Связь с проектом</h3>
+              {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
+              {projectTargetsError ? <div role="alert">{projectTargetsError} <Button onClick={() => setProjectTargetsAttempt((value) => value + 1)}>Повторить</Button></div> : null}
+              <CalendarProjectLinkFields value={draft} targets={projectTargets} onChange={setDraft} />
+            </div> : null}
             <fieldset>
               <legend>Участники</legend>
               {departments ? <EmployeeScopeSwitch value={editAttendeeScope} onChange={setEditAttendeeScope} label="Группа участников события" /> : null}
@@ -773,6 +818,9 @@ export function CalendarView({
             <dl className="calendar-detail-list">
               <div><dt>Дата</dt><dd>{dateLabel(new Date(selected.startsAt))}</dd></div>
               {selected.location ? <div><dt>Место</dt><dd>{selected.location}</dd></div> : null}
+              {selected.projectId && canLinkProjects ? <div><dt>Проект</dt><dd>{projectTargets.projects.find((project) => project.id === selected.projectId)?.title ?? "Связанный проект"}</dd></div> : null}
+              {selected.workstreamId && canLinkProjects ? <div><dt>Направление</dt><dd>{projectTargets.workstreams.find((row) => row.id === selected.workstreamId)?.title ?? "Связанное направление"}</dd></div> : null}
+              {selected.projectItemId && canLinkProjects ? <div><dt>Работа</dt><dd>{projectTargets.items.find((item) => item.id === selected.projectItemId)?.title ?? "Связанная работа"}</dd></div> : null}
               <div>
                 <dt>Участники</dt>
                 <dd className="calendar-attendee-list">
@@ -807,7 +855,9 @@ export function CalendarView({
             <div className="calendar-linked-records">
               <div className="calendar-linked-records-heading">
                 <span>Заявки на оплату</span>
-                {selected.canEdit && selected.status === "scheduled" && canCreatePaymentRequest && onCreatePayment ? (
+                {selected.canEdit && selected.status === "scheduled"
+                  && ["meeting", "general"].includes(selected.eventType)
+                  && canCreatePaymentRequest && onCreatePayment ? (
                   <Button appearance="secondary" size="small" onClick={() => openPaymentComposer(selected)}>+ Заявка на оплату</Button>
                 ) : null}
               </div>
@@ -884,6 +934,11 @@ export function CalendarView({
       </aside>
       {draft && !selected ? <CalendarEventComposer
         draft={draft}
+        projectTargets={projectTargets}
+        canLinkProjects={canLinkProjects}
+        projectTargetsLoading={projectTargetsLoading}
+        projectTargetsError={projectTargetsError}
+        onRetryProjectTargets={() => setProjectTargetsAttempt((value) => value + 1)}
         people={people}
         departments={departments}
         currentUserId={currentUserId}

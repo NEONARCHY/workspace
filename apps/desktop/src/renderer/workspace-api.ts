@@ -1730,7 +1730,7 @@ export interface PaymentRequestInput extends PaymentRequestDetails {
   readonly currency: string;
   readonly purpose: string;
   readonly sourceTaskId?: string;
-  readonly calendarEventId?: string;
+  readonly calendarEventId?: string | null;
   readonly changeComment?: string;
 }
 
@@ -1820,6 +1820,10 @@ export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
 
 export function loadPaymentProjectTargets(token: string): Promise<PaymentProjectTargets> {
   return apiRequest<PaymentProjectTargets>("/project-hub/payment-targets", {}, token);
+}
+
+export function loadCalendarProjectTargets(token: string): Promise<PaymentProjectTargets> {
+  return apiRequest<PaymentProjectTargets>("/project-hub/calendar-targets", {}, token);
 }
 
 export function loadProjectHubRequests(token: string): Promise<readonly ProjectHubRequest[]> {
