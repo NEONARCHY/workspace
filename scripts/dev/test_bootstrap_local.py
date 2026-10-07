@@ -6,7 +6,6 @@ from uuid import uuid4
 from pydantic import SecretStr
 
 from bootstrap_local import require_personal_database
-
 from yuksalish_api.settings import Settings
 
 
