@@ -35,6 +35,7 @@ import { CalendarProjectLinkFields } from "./CalendarProjectLinkFields";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { useCalendarEventClock } from "./useCalendarEventClock";
 
 interface CalendarViewProps {
   readonly token?: string;
@@ -188,6 +189,7 @@ export function CalendarView({
   onCreatePayment,
   onRespond,
 }: CalendarViewProps) {
+  const calendarNow = useCalendarEventClock(events);
   const focusedEvent = events.find((event) => event.id === focusEventId);
   const focusedDate = focusedEvent ? new Date(focusedEvent.startsAt) : new Date();
   const initialDate = Number.isFinite(focusedDate.getTime()) ? focusedDate : new Date();
@@ -575,6 +577,10 @@ export function CalendarView({
 
   const createPayment = async () => {
     if (!paymentEvent || !onCreatePayment) return;
+    if (Date.parse(paymentEvent.endsAt) <= Date.now()) {
+      setPaymentError("Это событие уже завершилось. Выберите актуальную встречу или мероприятие.");
+      return;
+    }
     const amount = Number(paymentAmount.replace(/\s/g, ""));
     if (!Number.isInteger(amount) || amount <= 0) {
       setPaymentError("Укажите сумму в сумах целым положительным числом.");
@@ -855,6 +861,7 @@ export function CalendarView({
                 <span>Заявки на оплату</span>
                 {selected.canEdit && selected.status === "scheduled"
                   && ["meeting", "general"].includes(selected.eventType)
+                  && Date.parse(selected.endsAt) > calendarNow
                   && canCreatePaymentRequest && onCreatePayment ? (
                   <Button appearance="secondary" size="small" onClick={() => openPaymentComposer(selected)}>+ Заявка на оплату</Button>
                 ) : null}
