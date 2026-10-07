@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
@@ -1387,7 +1388,7 @@ export function MessengerView(props: MessengerViewProps) {
   return (
     <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane">
-        <div className="pane-heading messenger-pane-heading">
+        <WorkspaceSectionHeader motif="messages" className="pane-heading messenger-pane-heading ws-section-header-compact">
           <div>
             <span className="messenger-eyebrow">Рабочее пространство</span>
             <h1>Сообщения</h1>
@@ -1402,7 +1403,7 @@ export function MessengerView(props: MessengerViewProps) {
               onClick={() => setPanel("create")}
             />
           </Tooltip>
-        </div>
+        </WorkspaceSectionHeader>
           <OrganizedChatList key={listRevision} token={props.token} chats={visibleChats} messages={messages} people={props.people} departments={props.departments} currentUserId={props.currentUserId} activeChatId={activeChat?.id} focusChatId={focusChatId}
           preferences={preferences} onChange={props.onPersonalChat} onReorder={props.onPinnedOrder}
           onDelete={requestChatDeletion} onLeave={setPendingLeave} onOpenDirect={openDirectChat}

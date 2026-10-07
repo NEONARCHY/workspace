@@ -1,0 +1,263 @@
+/* Page headers only. Keep record cards, dialog headings and portal controls untouched. */
+body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+  --ws-header-ink: #fff;
+  --ws-header-muted: #deeff0;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px 24px;
+  min-width: 0;
+  min-height: 148px;
+  margin: 0 0 14px;
+  padding: 24px clamp(20px, 3vw, 36px);
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 82%);
+  border-radius: 24px 24px 30px 16px;
+  color: var(--ws-header-ink);
+  background: radial-gradient(circle at 76% 10%, rgb(116 221 211 / 8%), transparent 19rem),
+    linear-gradient(112deg, #183c59, #12667b 65%, #10687d);
+  box-shadow: 0 14px 30px -12px rgb(34 76 96 / 22%);
+}
+.workspace-view .ws-section-header::before, .workspace-view .ws-section-header::after { content: none; }
+.ws-section-header > :not(.ws-section-header-art, .ws-illustrated-header-art) {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  max-width: 100%;
+}
+.ws-section-header > div:first-of-type { flex: 1 1 320px; }
+:is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(h1, h2) {
+  margin: 4px 0 8px;
+  color: var(--ws-header-ink);
+  font-size: clamp(26px, 2.4vw, 35px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+:is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header p {
+  max-width: 65ch;
+  margin: 0;
+  color: var(--ws-header-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+:is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(.view-kicker, .record-kicker, .hr-kicker, .notification-kicker, .telegram-access-eyebrow, .calendar-title > span, .team-dash-hero-copy > span, .messenger-eyebrow) {
+  display: block;
+  margin: 0 0 6px;
+  color: #c0f4ec;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .065em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+.ws-section-header > .ws-section-header-art {
+  position: absolute;
+  z-index: 0;
+  top: 50%;
+  right: 5%;
+  width: min(520px, 60%);
+  height: 220px;
+  transform: translateY(-50%);
+  color: #ccfff6;
+  pointer-events: none;
+}
+.ws-section-header-orbits { opacity: .09; }
+.ws-section-header-drawing { opacity: .17; }
+.ws-section-header :is(.toolbar-actions, .task-toolbar-actions, .calendar-toolbar-actions, .zoom-header-actions) {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.ws-section-header :is(.fui-Button, .telegram-access-secondary) {
+  min-height: 36px;
+  border-color: rgb(255 255 255 / 40%);
+  color: #fff;
+  background: rgb(9 43 63 / 28%);
+}
+.ws-section-header :is(.fui-Button, .telegram-access-secondary):not(:disabled):hover {
+  border-color: rgb(255 255 255 / 72%);
+  color: #fff;
+  background: rgb(9 43 63 / 46%);
+}
+.ws-section-header .ws-section-header-primary {
+  border-color: #fff;
+  color: var(--ws-navy, #293a55);
+  background: #fff;
+  box-shadow: 0 5px 12px rgb(6 38 56 / 15%);
+}
+.ws-section-header .ws-section-header-primary:not(:disabled):hover {
+  border-color: #eaf8f6;
+  color: var(--ws-navy, #293a55);
+  background: #eaf8f6;
+}
+.ws-section-header .fui-Button:disabled {
+  border-color: rgb(255 255 255 / 20%);
+  color: rgb(255 255 255 / 64%);
+  background: rgb(9 43 63 / 18%);
+}
+.ws-section-header :is(button, input):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+/* Segmented controls stay light: selected, idle and hover remain distinct. */
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .calendar-month-navigation) {
+  max-width: 100%;
+  border: 1px solid rgb(255 255 255 / 45%);
+  background: #edf5f6;
+  color: var(--ws-navy, #293a55);
+}
+.ws-section-header .calendar-month-navigation .fui-Button {
+  color: var(--ws-navy, #293a55);
+  background: transparent;
+  border-color: transparent;
+}
+.ws-section-header .calendar-month-navigation .fui-Button:hover { color: var(--ws-navy, #293a55); background: #dbeaed; }
+.ws-section-header .calendar-month-navigation button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
+.tasks-view .ws-section-header .view-switch { min-width: 0; max-width: 100%; overflow-x: auto; }
+.tasks-view .ws-section-header .task-calendar-navigation-slot:empty { display: none; }
+.ws-section-header :is(.view-switch, .approval-mode-switch, .process-view-tabs) button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
+
+/* The employee administration row is a separate working surface, not hero decoration. */
+.employees-header-tools {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--ws-line);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 80%);
+}
+.employees-header-tools .fui-Switch { margin-right: auto; }
+.workspace-view.employees-view > .ws-section-header {
+  min-height: 148px;
+  padding: 24px clamp(20px, 3vw, 36px);
+}
+.calendar-view:not(.task-calendar-embedded) > .ws-section-header {
+  grid-column: 1 / -1;
+  margin: 12px 0 0 4px;
+  min-height: 148px;
+  padding: 24px clamp(20px, 3vw, 36px);
+}
+.calendar-view:not(.task-calendar-embedded) { grid-template-rows: auto minmax(0, 1fr); row-gap: 14px; }
+.calendar-view:not(.task-calendar-embedded) .calendar-main { grid-template-rows: minmax(0, 1fr); padding-top: 0; }
+.feed-view > .ws-section-header { grid-column: 1 / -1; margin-bottom: 0; }
+.feed-view { align-content: start; }
+.members-view.members-state:has(> .ws-section-header) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+}
+.members-state > .ws-section-header { width: 100%; text-align: left; }
+.members-state > .ws-section-header + p { margin: 48px 24px 0; }
+.messenger-view .ws-section-header.ws-section-header-compact {
+  min-height: 116px;
+  margin: 0 0 12px;
+  padding: 16px;
+  gap: 10px;
+  border-radius: 18px 18px 24px 12px;
+}
+.messenger-view .ws-section-header-compact > div:first-of-type { flex: 1 1 170px; }
+.messenger-view .ws-section-header-compact h1 { font-size: 24px; }
+.messenger-view .ws-section-header-compact p { font-size: 12px; }
+.messenger-view .ws-section-header-compact > .ws-section-header-art { right: 0; width: 85%; opacity: .5; }
+.notifications-view .ws-section-header .notification-head-actions {
+  display: flex;
+  flex: 0 1 480px;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ws-section-header .notification-head-actions .fui-Input {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
+  min-height: 38px;
+  border-color: rgb(255 255 255 / 70%);
+  color: var(--ws-navy, #293a55);
+  background: #fff;
+}
+.team-dashboard .ws-section-header .team-dash-hero-summary {
+  flex: 0 1 auto;
+  padding: 14px 20px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  color: #fff;
+  background: rgb(9 43 63 / 26%);
+}
+.team-dashboard .ws-section-header .team-dash-hero-summary :is(strong, span, svg) { color: inherit; }
+
+/* AI modules retain their existing subject-specific illustrations, now inside the banner. */
+:is(.ai-referent-view, .ai-hisobot-view) .ws-section-header .ws-illustrated-header-copy { flex-basis: 50%; }
+.ws-section-header > .ws-illustrated-header-art {
+  top: 0;
+  right: 0;
+  width: 48%;
+  height: 100%;
+  opacity: .42;
+  mask-image: linear-gradient(to right, transparent, #000 25%);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 25%);
+}
+.ws-section-header > .ws-illustrated-header-art::before { content: none; }
+.ws-section-header .hisobot-help-button { position: absolute; top: 16px; right: 16px; z-index: 2; }
+
+@container workspace (max-width: 950px) {
+  body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+    min-height: 138px;
+    gap: 16px;
+    padding: 20px 24px;
+  }
+  .ws-section-header :is(.task-toolbar-actions, .calendar-toolbar-actions, .toolbar-actions) { justify-content: flex-start; }
+  .tasks-view .ws-section-header .task-toolbar-actions { flex-basis: 100%; justify-content: flex-start; }
+  .ws-section-header > .ws-illustrated-header-art { width: 38%; }
+  .ws-section-header > .ws-section-header-art { right: 0; opacity: .7; }
+}
+@container workspace (max-width: 1100px) {
+  .calendar-view:not(.task-calendar-embedded) { grid-template-rows: auto minmax(720px, 1fr) auto; }
+  .calendar-view:not(.task-calendar-embedded):has(.calendar-detail) { grid-template-rows: auto minmax(720px, 1fr); }
+}
+@container workspace (max-width: 600px) {
+  body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+    padding: 18px 16px;
+    border-radius: 20px 20px 24px 12px;
+  }
+  :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(h1, h2) { font-size: 26px; }
+  .ws-section-header > .ws-section-header-art { width: 80%; opacity: .45; }
+  .ws-section-header > .ws-illustrated-header-art { opacity: .12; }
+  .tasks-view .ws-section-header .view-switch { flex: 1 1 100%; }
+  .ws-section-header :is(.task-toolbar-actions, .calendar-toolbar-actions, .zoom-header-actions) { flex-basis: 100%; justify-content: flex-start; }
+  .ws-section-header .ws-illustrated-header-copy { padding-right: 36px; }
+  .employees-header-tools .fui-Switch { width: 100%; }
+}
+@media (forced-colors: active) {
+  body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header {
+    color: CanvasText;
+    background: Canvas;
+    border: 1px solid CanvasText;
+    box-shadow: none;
+    --ws-header-ink: CanvasText;
+    --ws-header-muted: CanvasText;
+  }
+  .ws-section-header > :is(.ws-section-header-art, .ws-illustrated-header-art) { display: none; }
+  :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(.view-kicker, .record-kicker, .hr-kicker, .notification-kicker, .telegram-access-eyebrow, .calendar-title > span, .team-dash-hero-copy > span, .messenger-eyebrow) { color: CanvasText; }
+  .ws-section-header :is(.fui-Button, .telegram-access-secondary, .hisobot-help-button) { border: 1px solid ButtonText; color: ButtonText; background: ButtonFace; box-shadow: none; }
+  .ws-section-header :is(button, input):focus-visible { outline-color: Highlight; }
+  .team-dashboard .ws-section-header .team-dash-hero-summary { color: CanvasText; background: Canvas; border-color: CanvasText; }
+}

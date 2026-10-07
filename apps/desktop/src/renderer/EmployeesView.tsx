@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
@@ -436,12 +437,14 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   return (
     <section className={`workspace-view employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
-      <header className="section-toolbar">
+      <WorkspaceSectionHeader motif="employees" className="section-toolbar">
         <div>
           <h1>Сотрудники</h1>
           <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
         </div>
-        <div className="toolbar-actions">
+        {canManage && onInvite && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
+      </WorkspaceSectionHeader>
+        <div className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
           {canManage && recognitionSettings ? <Switch
             checked={recognitionSettings.activeTaskCountVisible}
             disabled={recognitionSettingsBusy}
@@ -461,9 +464,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
           {canManageSidebar ? <Button onClick={() => setSidebarOpen(true)}>Меню сотрудника</Button> : null}
           {allowChatAdministration ? <Button onClick={() => setChatControlOpen(true)}>Контроль чатов</Button> : null}
           <Button {...positionFocusTarget} icon={<PeopleTeam24Regular />} onClick={() => setPanel("positions")}>Должности</Button>
-          {canManage && onInvite && <Button appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
         </div>
-      </header>
 
       <div className="record-list-controls">
         <EmployeeScopeSwitch value={employeeScopeFilter} onChange={setEmployeeScopeFilter} label="Показывать сотрудников" />

@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useState } from "react";
 
 import type {
@@ -210,7 +211,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
   const verified = registry?.people.filter((person) => person.verified).length ?? 0;
   const referentAccess = registry?.people.filter((person) => person.verified && person.botKeys.includes("ai_referent")).length ?? 0;
   return <section className="telegram-access-view" aria-labelledby="telegram-access-title">
-    <div className="telegram-access-header">
+    <WorkspaceSectionHeader motif="telegram" className="telegram-access-header">
       <div>
         <p className="telegram-access-eyebrow">Управление интеграциями</p>
         <h1 id="telegram-access-title">Доступ к Telegram-ботам</h1>
@@ -219,7 +220,7 @@ export function TelegramAccessView({ token, departments }: { readonly token: str
       <button type="button" className="telegram-access-secondary" onClick={() => void refresh()} disabled={loading}>
         Обновить список
       </button>
-    </div>
+    </WorkspaceSectionHeader>
     {registry ? <div className="telegram-access-overview" aria-label="Состояние привязок">
       <span><strong>{registry.people.length}</strong> действующих сотрудников</span>
       <span><strong>{verified}</strong> с действующим ID</span>
