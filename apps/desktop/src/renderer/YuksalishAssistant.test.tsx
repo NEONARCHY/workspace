@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
+import * as orbJourney from "./assistant-orb-journey";
 import { workspaceTheme } from "./workspace-theme";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
@@ -254,6 +255,33 @@ describe("YuksalishAssistant", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     await waitFor(() => expect(launcher).toHaveFocus());
+  });
+
+  it("closes an expanded window without a return flight and preserves its draft on reopening", async () => {
+    const journey = vi.spyOn(orbJourney, "useAssistantOrbJourney");
+    try {
+      render(<YuksalishAssistant token="test-token" />);
+      const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+      fireEvent.click(launcher);
+      await screen.findByText("С чего начнём?");
+      fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
+        target: { value: "Мой черновик" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+      await screen.findByRole("button", { name: "Свернуть окно" });
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+      await waitFor(() => expect(document.querySelector(".assistant-panel")).toBeNull());
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: false, returnWithoutFlight: true }));
+      await waitFor(() => expect(launcher).toHaveFocus());
+      fireEvent.click(launcher);
+      await screen.findByRole("button", { name: "Свернуть окно" });
+      expect(screen.getByRole("textbox", { name: "Сообщение ассистенту" })).toHaveValue("Мой черновик");
+      fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+      await waitFor(() => expect(document.querySelector(".assistant-panel")).toBeNull());
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: false, returnWithoutFlight: false }));
+      expect(sendAssistantMessage).not.toHaveBeenCalled();
+    } finally { journey.mockRestore(); }
   });
 
   it("opens globally, switches model and keeps a real answer in the stream", async () => {

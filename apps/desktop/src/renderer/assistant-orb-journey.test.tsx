@@ -3,10 +3,11 @@ import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { orbPose, orbReveal, orbStreamClip, orbTransform, useAssistantOrbJourney } from "./assistant-orb-journey";
 
-function Harness({ open = false, empty = true, reduced = false, geometry = "desktop", ready = true, blocked = false }) {
+function Harness({ open = false, empty = true, reduced = false, geometry = "desktop", ready = true, blocked = false,
+  returnWithoutFlight = false }) {
   const launcher = useRef<HTMLButtonElement>(null), panel = useRef<HTMLElement>(null);
   const header = useRef<HTMLSpanElement>(null), welcome = useRef<HTMLSpanElement>(null), visual = useRef<HTMLSpanElement>(null);
-  const phase = useAssistantOrbJourney({ open, ready, empty, blocked, reducedMotion: reduced,
+  const phase = useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight, reducedMotion: reduced,
     zoom: 1, geometryKey: geometry, launcher, panel, header, welcome, visual });
   return <><button ref={launcher} data-slot="launcher">Открыть</button>
     <section ref={panel} data-slot="panel"><span ref={header} data-slot="header" /><span ref={welcome} data-slot="welcome" /></section>
@@ -20,11 +21,19 @@ afterEach(() => {
   else Reflect.deleteProperty(Element.prototype, "animate");
 });
 
-function motionFixture() {
+function motionFixture({ followVisual = false } = {}) {
   const pending: { target: Element; frames: Keyframe[]; options: KeyframeAnimationOptions;
     finish: () => void; cancel: ReturnType<typeof vi.fn> }[] = [];
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const slot = this.getAttribute("data-slot");
+    if (slot === "visual" && followVisual) {
+      const match = (this as HTMLElement).style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/);
+      if (match) {
+        const scale = Number(match[3]);
+        return new DOMRect(Number(match[1]) + 48 - 48 * scale, Number(match[2]) + 48 - 48 * scale,
+          96 * scale, 96 * scale);
+      }
+    }
     const [x, y, size] = slot === "panel" ? [860, 220, 460]
       : slot === "header" ? [905, 255, 46] : slot === "welcome" ? [1080, 440, 76] : [1250, 30, 48];
     return new DOMRect(x, y, slot === "panel" ? 460 : size, slot === "panel" ? 670 : size);
@@ -133,6 +142,78 @@ describe("assistant orb choreography", () => {
     expect(pending[0]!.options.delay).toBe(0);
     await act(async () => pending[0]!.finish());
     expect(screen.getByText("ready")).toBeInTheDocument();
+  });
+  it.each([true, false])("fades into the launcher without flying when closing an expanded chat (empty=%s)", async (empty) => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness empty={empty} returnWithoutFlight />);
+    await act(async () => {});
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    rerender(<Harness open empty={empty} returnWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness empty={empty} returnWithoutFlight />);
+    await screen.findByText("returning");
+    expect(pending).toHaveLength(3);
+    expect(pending[2]!.target).toBe(orb);
+    expect(pending[2]!.frames).toEqual([{ opacity: 0 }, { opacity: 1 }]);
+    expect(pending[2]!.options.duration).toBe(180);
+    expect(orb.style.transform).toBe("translate(1226px, 6px) scale(0.5)");
+    expect(orb.style.filter).toBe("none");
+    expect(orb.style.clipPath).toBe("none");
+    await act(async () => pending[2]!.finish());
+    await screen.findByText("closed");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Открыть" }));
+    expect(document.querySelector("[data-slot='visual']")).toBe(orb);
+  });
+  it("keeps the mini-window's return flight", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness />);
+    await act(async () => {});
+    rerender(<Harness open />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness />);
+    await screen.findByText("returning");
+    expect(pending).toHaveLength(3);
+    expect(pending[2]!.options.duration).toBe(420);
+    expect(pending[2]!.frames.every(({ transform }) => Boolean(transform))).toBe(true);
+    await act(async () => pending[2]!.finish());
+    await screen.findByText("closed");
+  });
+  it("restores the expanded launcher instantly with reduced motion", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness reduced returnWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open reduced returnWithoutFlight />);
+    await screen.findByText("ready");
+    rerender(<Harness reduced returnWithoutFlight />);
+    await screen.findByText("closed");
+    expect(pending).toHaveLength(0);
+    expect(document.querySelector<HTMLElement>("[data-slot='visual']")?.style.opacity).toBe("1");
+  });
+  it("cancels the launcher's fade on a rapid reopening without an opacity jump", async () => {
+    const pending = motionFixture({ followVisual: true });
+    const { rerender } = render(<Harness returnWithoutFlight />);
+    await act(async () => {});
+    rerender(<Harness open returnWithoutFlight />);
+    await screen.findByText("travelling");
+    await act(async () => { pending[0]!.finish(); pending[1]!.finish(); });
+    await screen.findByText("ready");
+    rerender(<Harness returnWithoutFlight />);
+    await screen.findByText("returning");
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    // Simulate the browser's computed opacity while its WAAPI fade is in progress.
+    orb.style.opacity = "0.35";
+    rerender(<Harness open returnWithoutFlight />);
+    await screen.findByText("travelling");
+    expect(pending[2]!.cancel).toHaveBeenCalledOnce();
+    expect(pending[3]!.frames[0]!.opacity).toBe("0.35");
+    await act(async () => { pending[3]!.finish(); pending[4]!.finish(); });
+    await screen.findByText("ready");
+    expect(orb.style.opacity).toBe("1");
+    expect(orb.style.filter).toBe("none");
   });
   it("leaves room for the shadow and clips it at the stream rather than the orb's square", () => {
     const bounds = new DOMRect(100, 200, 96, 96);

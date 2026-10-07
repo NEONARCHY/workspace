@@ -8,6 +8,7 @@ const SHADOW_BLEED = 50;
 const EASING = "cubic-bezier(.2, 0, 0, 1)";
 const OPEN_FLIGHT_DURATION = 300;
 const OPEN_REVEAL_DURATION = 220;
+const LAUNCHER_FADE_DURATION = 180;
 const OPEN_FLIGHT_EASING = "cubic-bezier(.4, 0, .8, 1)";
 
 export function orbPose(rect: Pick<DOMRect, "left" | "top" | "width" | "height">, zoom: number): OrbPose {
@@ -33,9 +34,10 @@ export function orbStreamClip(bounds: DOMRect, stream: DOMRect) {
 }
 
 /** One persistent canvas, measured slots, and cancellable travel with orb-only motion blur. */
-export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMotion, zoom, geometryKey,
+export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight = false, reducedMotion, zoom, geometryKey,
   launcher, panel, header, welcome, visual }: {
   readonly open: boolean; readonly ready: boolean; readonly empty: boolean; readonly blocked: boolean;
+  readonly returnWithoutFlight?: boolean;
   readonly reducedMotion: boolean; readonly zoom: number; readonly geometryKey: string;
   readonly launcher: RefObject<HTMLElement | null>; readonly panel: RefObject<HTMLElement | null>;
   readonly header: RefObject<HTMLElement | null>; readonly welcome: RefObject<HTMLElement | null>;
@@ -81,6 +83,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
     };
     const fly = (to: OrbPose) => {
       const from = orbPose(element.getBoundingClientRect(), zoom);
+      const fromOpacity = getComputedStyle(element).opacity || "1";
       element.style.transform = orbTransform(to);
       element.style.opacity = "1";
       element.style.clipPath = "none";
@@ -95,6 +98,7 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
       const blur = Math.min(2.4, Math.hypot(from.x - to.x, from.y - to.y) / 160);
       const opening = open && !revealedRef.current;
       return animate(element, [from, middle, to].map((pose, index) => ({
+        opacity: index === 0 ? fromOpacity : 1,
         transform: orbTransform(pose), filter: `blur(${index === 1 ? blur.toFixed(2) : "0"}px)`,
       })), { duration: opening ? OPEN_FLIGHT_DURATION : 420, easing: opening ? OPEN_FLIGHT_EASING : EASING });
     };
@@ -114,7 +118,14 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
         const wasRevealed = revealedRef.current;
         revealedRef.current = false;
         if (!wasRevealed && phaseRef.current === "closed") { place(); return; }
-        set("returning"); await fly(to);
+        set("returning");
+        if (returnWithoutFlight) {
+          // Close the expanded surface in place; only fade the orb at its top-bar slot.
+          place();
+          if (!reducedMotion && !resized && typeof element.animate === "function" && document.visibilityState !== "hidden") {
+            await animate(element, [{ opacity: 0 }, { opacity: 1 }], { duration: LAUNCHER_FADE_DURATION });
+          }
+        } else await fly(to);
         if (active) finish();
         return;
       }
@@ -156,12 +167,15 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, reducedMot
     return () => {
       active = false;
       // Pin the visible intermediate pose before cancelling, so rapid reversal never jumps.
-      if (animations.size) element.style.transform = orbTransform(orbPose(element.getBoundingClientRect(), zoom));
+      if (animations.size) {
+        element.style.transform = orbTransform(orbPose(element.getBoundingClientRect(), zoom));
+        element.style.opacity = getComputedStyle(element).opacity || "1";
+      }
       animations.forEach((animation) => animation.cancel());
       element.style.filter = "none";
       observer?.disconnect(); panelElement?.removeEventListener("scroll", update, true);
       document.removeEventListener("visibilitychange", settleHidden);
     };
-  }, [open, ready, empty, blocked, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);
+  }, [open, ready, empty, blocked, returnWithoutFlight, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);
   return phase;
 }
