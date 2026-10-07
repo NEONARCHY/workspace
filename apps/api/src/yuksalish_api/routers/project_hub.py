@@ -10,6 +10,7 @@ from yuksalish_api.access_control import ensure_module_action
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.project_hub_schemas import (
+    PaymentProjectTargets,
     ProjectFundingAction,
     ProjectFundingResponse,
     ProjectFundingWrite,
@@ -29,6 +30,7 @@ from yuksalish_api.project_hub_service import (
     decide_funding_request,
     load_funding_requests,
     load_hub,
+    load_payment_project_targets,
     load_request_targets,
     publish_event,
     save_item,
@@ -53,6 +55,12 @@ def _error(error: WorkspaceRepositoryError) -> HTTPException:
 async def get_hub(user: User, connection: Connection) -> ProjectHubOverview:
     await ensure_module_action(connection, user, "project_hub", "view")
     return await load_hub(connection, user)
+
+
+@router.get("/payment-targets", response_model=PaymentProjectTargets)
+async def get_payment_targets(user: User, connection: Connection) -> PaymentProjectTargets:
+    await ensure_module_action(connection, user, "payment_requests", "create")
+    return await load_payment_project_targets(connection, user)
 
 
 @router.get("/requests", response_model=list[ProjectFundingResponse])

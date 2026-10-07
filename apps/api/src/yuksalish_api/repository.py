@@ -388,6 +388,9 @@ def _payment_details(
         transfer_type=payload.get("transfer_type"),
         project_name=str(payload.get("project_name", "")),
         project_code=str(payload.get("project_code", "")),
+        project_id=payload.get("project_id"),
+        workstream_id=payload.get("workstream_id"),
+        project_item_id=payload.get("project_item_id"),
         source_account=str(payload.get("source_account", "")),
         destination_account=str(payload.get("destination_account", "")),
         request_priority=payload.get("request_priority", "normal"),
@@ -5699,6 +5702,9 @@ PAYMENT_DETAIL_FIELDS = {
     "transfer_type",
     "project_name",
     "project_code",
+    "project_id",
+    "workstream_id",
+    "project_item_id",
     "source_account",
     "destination_account",
     "request_priority",
@@ -5716,6 +5722,24 @@ PAYMENT_DETAIL_FIELDS = {
 
 def _payment_payload(model: CreateApprovalRequest | UpdateApprovalRequest) -> dict[str, Any]:
     return model.model_dump(mode="json", include=PAYMENT_DETAIL_FIELDS)
+
+
+async def _validated_payment_project_names(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    project_id: str | None,
+    workstream_id: str | None,
+    item_id: str | None,
+    *,
+    allow_inactive: bool = False,
+) -> tuple[str, str]:
+    # Imported on demand: project_hub_service also uses the payment repository.
+    from .project_hub_service import validate_payment_project_link
+
+    return await validate_payment_project_link(
+        connection, current_user, project_id, workstream_id, item_id,
+        allow_inactive=allow_inactive,
+    )
 
 
 async def _validate_request_people(
@@ -5803,11 +5827,17 @@ async def create_approval_request(
         payload.responsible_user_id,
         payload.employee_ids,
     )
+    project_name, project_code = await _validated_payment_project_names(
+        connection, current_user, payload.project_id, payload.workstream_id,
+        payload.project_item_id,
+    )
     request_id = uuid4()
     now = datetime.now(UTC)
     number = str(int(now.timestamp() * 1000))[-6:]
     request_payload = {
         **_payment_payload(payload),
+        **({"project_name": project_name, "project_code": project_code}
+           if payload.project_id else {}),
         "amount": payload.amount,
         "currency": payload.currency.upper(),
         "purpose": payload.purpose,
@@ -5951,9 +5981,26 @@ async def update_approval_request(
         payload.responsible_user_id or str(row["responsible_user_id"]),
         payload.employee_ids,
     )
+    submitted_details = _payment_payload(payload)
+    if "project_id" not in payload.model_fields_set:
+        for field in ("project_id", "workstream_id", "project_item_id"):
+            submitted_details[field] = (row["payload"] or {}).get(field)
+    project_id = submitted_details["project_id"]
+    previous_details = row["payload"] or {}
+    retaining_link = all(
+        submitted_details[field] == previous_details.get(field)
+        for field in ("project_id", "workstream_id", "project_item_id")
+    )
+    project_name, project_code = await _validated_payment_project_names(
+        connection, current_user, project_id, submitted_details["workstream_id"],
+        submitted_details["project_item_id"],
+        allow_inactive=retaining_link,
+    )
+    if project_id:
+        submitted_details.update(project_name=project_name, project_code=project_code)
     updated_payload = {
         **(row["payload"] or {}),
-        **_payment_payload(payload),
+        **submitted_details,
         "amount": payload.amount,
         "currency": payload.currency.upper(),
         "purpose": payload.purpose,

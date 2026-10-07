@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
-import type { ProjectHubOverview, ProjectHubRequest } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, ProjectHubOverview, ProjectHubRequest } from "@yuksalish/contracts";
 import { workspaceTheme } from "./workspace-theme";
 import { ProjectHubView } from "./ProjectHubView";
 import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
@@ -49,9 +49,22 @@ const pending: ProjectHubRequest = { ...approved, id: "request-2", title: "Пе�
   amount: 100, status: "pending", currentStep: 0, canDecide: true };
 const draft: ProjectHubRequest = { ...pending, id: "draft-1", status: "draft", canDecide: false };
 
-function setup(mode: "projects" | "funding" = "projects") {
+const paymentRequest: ApprovalRequestSummary = {
+  id: "payment-1", number: "502", title: "Аренда зала", amount: 300, currency: "UZS",
+  status: "running", statusLabel: "На согласовании", activeNodeKeys: [], activeStages: [],
+  stageLabel: "Финансист", requesterId: people[0]!.id, responsibleUserId: people[0]!.id,
+  purpose: "Площадка", createdAt: project.createdAt, updatedAt: project.updatedAt,
+  revision: 1, versions: [], actions: [],
+  details: { projectName: project.title, projectCode: project.code, projectId: project.id,
+    workstreamId: "stream-1", projectItemId: item.id, sourceAccount: "", destinationAccount: "",
+    requestPriority: "normal", comment: "", tripPurpose: "", employeeIds: [], paymentReason: "" },
+};
+
+function setup(mode: "projects" | "funding" = "projects", onOpenPaymentRequest = vi.fn(), onCreatePaymentRequest = vi.fn()) {
   render(<FluentProvider theme={workspaceTheme}><ProjectHubView mode={mode} token="test-token"
     people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding
+    paymentRequests={[paymentRequest]} canCreatePaymentRequest onOpenPaymentRequest={onOpenPaymentRequest}
+    onCreatePaymentRequest={onCreatePaymentRequest}
   /></FluentProvider>);
 }
 
@@ -171,8 +184,9 @@ describe("standalone project hub", () => {
     expect(screen.getByRole("textbox", { name: "Код проекта" })).toHaveValue("REG-FORUM");
     expect(saveProjectHubProject).not.toHaveBeenCalled();
   });
-  it("shows the own project work and multiple requests without global task/payment data", async () => {
-    setup();
+  it("shows only accessible linked payment requests inside the selected direction", async () => {
+    const onOpenPaymentRequest = vi.fn();
+    setup("projects", onOpenPaymentRequest);
     expect(await screen.findByRole("heading", { name: project.title })).toBeInTheDocument();
     expect(screen.getByLabelText("Всего проектов: 1")).toHaveTextContent("1");
     const work = screen.getByRole("region", { name: "Направления и работы проекта" });
@@ -181,9 +195,11 @@ describe("standalone project hub", () => {
     fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
     expect(within(work).getByText("Форум")).toBeInTheDocument();
     fireEvent.click(within(work).getByRole("button", { name: /Мероприятие.*Форум/ }));
-    expect(within(work).getByText(/Аренда зала · Согласовано/)).toBeInTheDocument();
-    expect(within(work).getByText(/Печать баннеров · На согласовании/)).toBeInTheDocument();
-    expect(screen.getByLabelText("Обзор проекта")).toHaveTextContent("300");
+    expect(within(work).getAllByRole("button", { name: /Аренда зала · №502/ })).toHaveLength(2);
+    expect(within(work).queryByText("Печать баннеров")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Обзор проекта")).toHaveTextContent("Заявки на оплату");
+    fireEvent.click(within(work).getAllByRole("button", { name: /Аренда зала · №502/ })[0]!);
+    expect(onOpenPaymentRequest).toHaveBeenCalledWith("payment-1");
   });
 
   it("keeps the project approval order editable in its own card", async () => {
@@ -270,19 +286,14 @@ describe("standalone project hub", () => {
     expect(within(detail).getByText("Печать баннеров")).toBeInTheDocument();
   });
 
-  it("requires a final approval date when creating a project request", async () => {
-    setup();
+  it("opens the ordinary payment form from a direction", async () => {
+    const onCreatePaymentRequest = vi.fn();
+    setup("projects", vi.fn(), onCreatePaymentRequest);
     const work = await screen.findByRole("region", { name: "Направления и работы проекта" });
     fireEvent.click(within(work).getByRole("button", { name: /Открыть направление/ }));
-    fireEvent.click(within(work).getByRole("button", { name: /Мероприятие.*Форум/ }));
-    fireEvent.click(within(work).getByRole("button", { name: "Новая проектная заявка" }));
-    const dialog = screen.getByRole("dialog");
-    fireEvent.change(within(dialog).getByRole("spinbutton", { name: /Сумма/ }), { target: { value: "100" } });
-    fireEvent.change(within(dialog).getByLabelText("Крайний срок согласования"), { target: { value: "2030-09-30T17:00" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Отправить на согласование" }));
-    await waitFor(() => expect(createProjectHubRequest).toHaveBeenCalledWith(
-      "test-token", project.id, expect.objectContaining({ approvalDueAt: expect.any(String) }),
-    ));
+    fireEvent.click(within(work).getByRole("button", { name: "Создать заявку" }));
+    expect(onCreatePaymentRequest).toHaveBeenCalledWith(project.id, "stream-1");
+    expect(createProjectHubRequest).not.toHaveBeenCalled();
   });
 
   it("creates a request from the funding section with project and direction selected", async () => {

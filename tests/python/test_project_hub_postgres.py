@@ -22,6 +22,7 @@ from yuksalish_api.project_hub_service import (
     decide_funding_request,
     load_funding_requests,
     load_hub,
+    load_payment_project_targets,
     load_request_targets,
     materialize_project_reminders,
     publish_event,
@@ -30,6 +31,7 @@ from yuksalish_api.project_hub_service import (
     save_workstream,
     set_item_status,
     submit_funding_request,
+    validate_payment_project_link,
 )
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
@@ -156,6 +158,25 @@ async def test_project_hub_is_independent_and_snapshots_approval_route() -> None
                 assert [candidate.id for candidate in targets.items] == [item.id]
                 assert targets.items[0].actions == []
                 assert not (await load_request_targets(connection, outsider)).items
+                payment_targets = await load_payment_project_targets(connection, first)
+                assert [candidate.id for candidate in payment_targets.projects] == [project.id]
+                assert [candidate.id for candidate in payment_targets.workstreams] == [
+                    workstream.id
+                ]
+                assert [candidate.id for candidate in payment_targets.items] == [item.id]
+                assert await validate_payment_project_link(
+                    connection, first, project.id, workstream.id, item.id
+                ) == (project.title, project.code)
+                with pytest.raises(WorkspaceRepositoryError) as forbidden_link:
+                    await validate_payment_project_link(
+                        connection, outsider, project.id, workstream.id, item.id
+                    )
+                assert forbidden_link.value.status_code == 403
+                with pytest.raises(WorkspaceRepositoryError) as wrong_direction:
+                    await validate_payment_project_link(
+                        connection, first, project.id, str(uuid4()), item.id
+                    )
+                assert wrong_direction.value.status_code == 422
                 started = await set_item_status(
                     connection,
                     manager,

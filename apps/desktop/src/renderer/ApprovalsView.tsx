@@ -18,6 +18,7 @@ import type {
   ApprovalNodeKind,
   ApprovalRequestSummary,
   PaymentRequestDetails,
+  PaymentProjectTargets,
   WorkflowDefinition,
   WorkspaceAttachment,
   WorkspaceDepartment,
@@ -72,7 +73,7 @@ import {
 import "@xyflow/react/dist/style.css";
 
 import { AttachmentPanel, PendingFilePicker } from "./AttachmentPanel";
-import type { PaymentRequestInput } from "./workspace-api";
+import { loadPaymentProjectTargets, type PaymentRequestInput } from "./workspace-api";
 import {
   approvalCardStatusPresentation,
   approvalColumnTotals,
@@ -109,6 +110,9 @@ const workflowHistoryLimit = 100;
 
 interface ApprovalsViewProps {
   readonly focusRequestId?: string;
+  readonly token: string;
+  readonly createContext?: { readonly projectId: string; readonly workstreamId: string };
+  readonly onCreateContextConsumed?: () => void;
   readonly canManage: boolean;
   readonly canCreateRequest: boolean;
   readonly currentUserId: string;
@@ -277,6 +281,9 @@ interface PaymentFormState {
   readonly transferType: NonNullable<PaymentRequestDetails["transferType"]> | "";
   readonly projectName: string;
   readonly projectCode: string;
+  readonly projectId: string;
+  readonly workstreamId: string;
+  readonly projectItemId: string;
   readonly sourceAccount: string;
   readonly destinationAccount: string;
   readonly requestPriority: "normal" | "urgent";
@@ -296,6 +303,9 @@ function emptyPaymentForm(currentUserId: string): PaymentFormState {
     transferType: "",
     projectName: "",
     projectCode: "",
+    projectId: "",
+    workstreamId: "",
+    projectItemId: "",
     sourceAccount: "",
     destinationAccount: "",
     requestPriority: "normal",
@@ -319,6 +329,9 @@ function formFromDetails(
     transferType: details.transferType ?? "",
     projectName: details.projectName,
     projectCode: details.projectCode,
+    projectId: details.projectId ?? "",
+    workstreamId: details.workstreamId ?? "",
+    projectItemId: details.projectItemId ?? "",
     sourceAccount: details.sourceAccount,
     destinationAccount: details.destinationAccount,
     requestPriority: details.requestPriority,
@@ -348,6 +361,9 @@ function requestPayload(
     transferType: form.transferType || null,
     projectName: form.projectName,
     projectCode: form.projectCode,
+    projectId: form.projectId || null,
+    workstreamId: form.workstreamId || null,
+    projectItemId: form.projectItemId || null,
     sourceAccount: form.sourceAccount,
     destinationAccount: form.destinationAccount,
     requestPriority: form.requestPriority,
@@ -699,13 +715,14 @@ function formatDateTime(value: string | null | undefined): string {
 
 interface PaymentFieldsProps {
   readonly form: PaymentFormState;
+  readonly targets: PaymentProjectTargets;
   readonly people: readonly WorkspacePerson[];
   readonly departments?: readonly WorkspaceDepartment[];
   readonly onChange: (form: PaymentFormState) => void;
   readonly revision?: boolean;
 }
 
-function PaymentFields({ form, people, departments, onChange, revision = false }: PaymentFieldsProps) {
+function PaymentFields({ form, targets, people, departments, onChange, revision = false }: PaymentFieldsProps) {
   const [tripScope, setTripScope] = useState<EmployeeScope>(() => employeeScope(
     people.find((person) => person.id === form.employeeIds[0])?.departmentId,
     departments ?? [],
@@ -754,14 +771,26 @@ function PaymentFields({ form, people, departments, onChange, revision = false }
               <option value="urgent">Срочная</option>
             </WorkspaceSelect>
           </label>
-          <label>
-            Название проекта
-            <Input aria-label={`${prefix}название проекта`} value={form.projectName} onChange={(_event, data) => update("projectName", data.value)} />
-          </label>
-          <label>
-            Код проекта
-            <Input aria-label={`${prefix}код проекта`} value={form.projectCode} onChange={(_event, data) => update("projectCode", data.value)} />
-          </label>
+          <label>Проект · необязательно<WorkspaceSelect aria-label={`${prefix}проект`} value={form.projectId}
+            onChange={(event) => onChange({ ...form, projectId: event.target.value, workstreamId: "", projectItemId: "",
+              projectName: targets.projects.find((project) => project.id === event.target.value)?.title ?? "",
+              projectCode: targets.projects.find((project) => project.id === event.target.value)?.code ?? "" })}>
+            <option value="">Выберите проект</option>
+            {form.projectId && !targets.projects.some((project) => project.id === form.projectId) ? <option value={form.projectId}>{form.projectName || "Ранее выбранный проект"}</option> : null}
+            {targets.projects.map((project) => <option value={project.id} key={project.id}>{project.code} · {project.title}</option>)}
+          </WorkspaceSelect></label>
+          <label>Направление<WorkspaceSelect aria-label={`${prefix}направление`} required={!revision && !!form.projectId} disabled={!form.projectId} value={form.workstreamId}
+            onChange={(event) => onChange({ ...form, workstreamId: event.target.value, projectItemId: "" })}>
+            <option value="">Выберите направление</option>
+            {form.workstreamId && !targets.workstreams.some((row) => row.id === form.workstreamId) ? <option value={form.workstreamId}>Ранее выбранное направление</option> : null}
+            {targets.workstreams.filter((row) => row.projectId === form.projectId).map((row) => <option value={row.id} key={row.id}>{row.title}</option>)}
+          </WorkspaceSelect></label>
+          <label className="payment-field-wide">Задача или мероприятие · необязательно<WorkspaceSelect aria-label={`${prefix}задача или мероприятие`} disabled={!form.workstreamId} value={form.projectItemId}
+            onChange={(event) => update("projectItemId", event.target.value)}>
+            <option value="">Без привязки к работе</option>
+            {form.projectItemId && !targets.items.some((row) => row.id === form.projectItemId) ? <option value={form.projectItemId}>Ранее выбранная работа</option> : null}
+            {targets.items.filter((row) => row.workstreamId === form.workstreamId).map((row) => <option value={row.id} key={row.id}>{row.kind === "task" ? "Задача" : "Мероприятие"} · {row.title}</option>)}
+          </WorkspaceSelect></label>
         </div>
       </section>
 
@@ -863,6 +892,9 @@ function PaymentFields({ form, people, departments, onChange, revision = false }
 
 export function ApprovalsView({
   focusRequestId,
+  token,
+  createContext,
+  onCreateContextConsumed,
   canManage,
   canCreateRequest,
   currentUserId,
@@ -902,13 +934,30 @@ export function ApprovalsView({
   useEffect(() => {
     editorStateRef.current = { nodes, edges, selectedNodeId };
   }, [edges, nodes, selectedNodeId]);
-  const [creatingRequest, setCreatingRequest] = useState(false);
+  const [creatingRequest, setCreatingRequest] = useState(Boolean(createContext));
   const [requestTitle, setRequestTitle] = useState("");
   const [requestAmount, setRequestAmount] = useState("");
   const [requestPurpose, setRequestPurpose] = useState("");
   const [requestDetails, setRequestDetails] = useState<PaymentFormState>(
-    emptyPaymentForm(currentUserId),
+    { ...emptyPaymentForm(currentUserId), projectId: createContext?.projectId ?? "",
+      workstreamId: createContext?.workstreamId ?? "" },
   );
+  const [paymentTargets, setPaymentTargets] = useState<PaymentProjectTargets>({ projects: [], workstreams: [], items: [] });
+  const [paymentTargetsError, setPaymentTargetsError] = useState("");
+  const [paymentTargetsLoading, setPaymentTargetsLoading] = useState(false);
+  useEffect(() => { if (createContext) onCreateContextConsumed?.(); }, [createContext, onCreateContextConsumed]);
+  useEffect(() => {
+    if (!canCreateRequest) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setPaymentTargetsLoading(true);
+      void loadPaymentProjectTargets(token).then((targets) => {
+        if (active) { setPaymentTargets(targets); setPaymentTargetsError(""); }
+      }).catch(() => { if (active) setPaymentTargetsError("Не удалось загрузить проекты. Повторите попытку."); })
+        .finally(() => { if (active) setPaymentTargetsLoading(false); });
+    }, 0);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [canCreateRequest, token]);
   const [requestFiles, setRequestFiles] = useState<readonly File[]>([]);
   const [requestAdditionalFiles, setRequestAdditionalFiles] = useState<readonly File[]>([]);
   const [createError, setCreateError] = useState("");
@@ -1279,6 +1328,13 @@ export function ApprovalsView({
     const amount = Number(requestAmount.replace(/\s/g, ""));
     if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) {
       setCreateError("Укажите название и положительную сумму заявки");
+      return;
+    }
+    if ((requestDetails.projectId && !paymentTargets.projects.some((project) => project.id === requestDetails.projectId))
+      || (requestDetails.projectId && !paymentTargets.workstreams.some((row) => row.id === requestDetails.workstreamId && row.projectId === requestDetails.projectId))
+      || (!requestDetails.projectId && (requestDetails.workstreamId || requestDetails.projectItemId))
+      || (requestDetails.projectItemId && !paymentTargets.items.some((row) => row.id === requestDetails.projectItemId && row.workstreamId === requestDetails.workstreamId))) {
+      setCreateError("Выберите действующий проект, его направление и при необходимости работу.");
       return;
     }
     setCreateError(""); creatingBusyRef.current = true; setCreatingBusy(true);
@@ -1820,7 +1876,14 @@ export function ApprovalsView({
                       </label>
                     </div>
                   </section>
-                  <PaymentFields form={requestDetails} people={people} departments={departments} onChange={setRequestDetails} />
+                  {paymentTargetsLoading ? <p role="status">Загружаем проекты и направления…</p> : null}
+                  {paymentTargetsError ? <div role="alert">{paymentTargetsError} <Button type="button" disabled={paymentTargetsLoading} onClick={() => {
+                    setPaymentTargetsLoading(true);
+                    void loadPaymentProjectTargets(token).then((targets) => { setPaymentTargets(targets); setPaymentTargetsError(""); })
+                      .catch(() => setPaymentTargetsError("Не удалось загрузить проекты. Повторите попытку."))
+                      .finally(() => setPaymentTargetsLoading(false));
+                  }}>Повторить</Button></div> : null}
+                  <PaymentFields form={requestDetails} targets={paymentTargets} people={people} departments={departments} onChange={setRequestDetails} />
                   <section className="payment-form-section approval-documents-section">
                     <header>
                       <span>04</span>
@@ -1942,6 +2005,8 @@ export function ApprovalsView({
                         <div><dt>Тип перевода</dt><dd>{selectedRequest.details.transferType || "Не выбран"}</dd></div>
                         <div><dt>Проект</dt><dd>{selectedRequest.details.projectName || "Не указан"}</dd></div>
                         <div><dt>Код проекта</dt><dd>{selectedRequest.details.projectCode || "Не указан"}</dd></div>
+                        {selectedRequest.details.workstreamId ? <div><dt>Направление</dt><dd>{paymentTargets.workstreams.find((row) => row.id === selectedRequest.details.workstreamId)?.title || "Связанное направление"}</dd></div> : null}
+                        {selectedRequest.details.projectItemId ? <div><dt>Задача или мероприятие</dt><dd>{paymentTargets.items.find((row) => row.id === selectedRequest.details.projectItemId)?.title || "Связанная работа"}</dd></div> : null}
                         <div><dt>Категория</dt><dd>{selectedRequest.details.paymentPurpose || "Не выбрана"}</dd></div>
                         <div><dt>Основание</dt><dd>{selectedRequest.details.paymentReason || "Не указано"}</dd></div>
                         <div><dt>Со счёта</dt><dd>{selectedRequest.details.sourceAccount || "Не указан"}</dd></div>
@@ -2027,7 +2092,7 @@ export function ApprovalsView({
                         <label>Название<Input aria-label="Исправленное название заявки" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} /></label>
                         <label>Сумма<Input aria-label="Исправленная сумма заявки" inputMode="numeric" value={editAmount} onChange={(_event, data) => setEditAmount(data.value)} /></label>
                         <label>Назначение<Textarea aria-label="Исправленное назначение платежа" value={editPurpose} onChange={(_event, data) => setEditPurpose(data.value)} /></label>
-                        <PaymentFields form={editDetails} people={people} departments={departments} onChange={setEditDetails} revision />
+                        <PaymentFields form={editDetails} targets={paymentTargets} people={people} departments={departments} onChange={setEditDetails} revision />
                         <PendingFilePicker files={editFiles} onChange={setEditFiles} label="Добавить исправленные документы" />
                         <PendingFilePicker files={editAdditionalFiles} onChange={setEditAdditionalFiles} label="Добавить дополнительные документы" />
                         {editError ? <div className="approval-form-error" role="alert">{editError}</div> : null}

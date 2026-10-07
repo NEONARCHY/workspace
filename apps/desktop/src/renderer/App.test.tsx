@@ -880,6 +880,11 @@ function mockServer(
       tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
       return response(changed);
     }
+    if (url.endsWith("/project-hub/payment-targets")) {
+      return response({ projects: [{ id: "hub-project-1", code: "WS-26", title: "Workspace" }],
+        workstreams: [{ id: "hub-stream-1", projectId: "hub-project-1", title: "Проведение форума" }],
+        items: [{ id: "hub-item-1", projectId: "hub-project-1", workstreamId: "hub-stream-1", kind: "event", title: "Форум" }] });
+    }
     if (url.endsWith("/approval-requests") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as {
         title: string;
@@ -1010,6 +1015,13 @@ async function loginToWorkspace(username = "aziza", resumeSection?: "payment_req
   });
   fireEvent.click(screen.getByRole("button", { name: "Войти" }));
   await screen.findByText("Сервер подключён");
+}
+
+async function selectPaymentDirection() {
+  fireEvent.click(screen.getByLabelText("проект"));
+  fireEvent.click(await screen.findByRole("option", { name: "WS-26 · Workspace" }));
+  fireEvent.click(screen.getByLabelText("направление"));
+  fireEvent.click(await screen.findByRole("option", { name: "Проведение форума" }));
 }
 
 describe("corporate workspace authentication alpha", () => {
@@ -1627,9 +1639,9 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("malika", "payment_requests");
     expect(screen.getByRole("navigation").closest(".app-shell")).not.toHaveClass("approval-shell");
-    expect(screen.getByLabelText("Сводка заявок")).toHaveTextContent("В работе");
+    expect(await screen.findByLabelText("Сводка заявок")).toHaveTextContent("В работе");
     expect(screen.queryByLabelText("Сводка заявок на оплату")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Полная заявка BP-6" },
     });
@@ -1642,12 +1654,17 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByLabelText("тип перевода"), {
       target: { value: "Другие услуги" },
     });
-    fireEvent.change(screen.getByLabelText("название проекта"), {
-      target: { value: "Workspace" },
-    });
-    fireEvent.change(screen.getByLabelText("код проекта"), {
-      target: { value: "WS-26" },
-    });
+    fireEvent.click(screen.getByLabelText("проект"));
+    fireEvent.click(await screen.findByRole("option", { name: "WS-26 · Workspace" }));
+    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+    expect(screen.getByText("Выберите действующий проект, его направление и при необходимости работу.")).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url, options]) => String(url).endsWith("/approval-requests") && options?.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByLabelText("направление"));
+    fireEvent.click(await screen.findByRole("option", { name: "Проведение форума" }));
+    fireEvent.click(screen.getByLabelText("задача или мероприятие"));
+    fireEvent.click(await screen.findByRole("option", { name: "Мероприятие · Форум" }));
+    expect(screen.queryByLabelText("название проекта")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("код проекта")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("категория платежа"), {
       target: { value: "Оплата за услуги" },
     });
@@ -1665,6 +1682,9 @@ describe("corporate workspace authentication alpha", () => {
       transferType: "Другие услуги",
       projectName: "Workspace",
       projectCode: "WS-26",
+      projectId: "hub-project-1",
+      workstreamId: "hub-stream-1",
+      projectItemId: "hub-item-1",
       paymentPurpose: "Оплата за услуги",
       paymentReason: "Договор 42",
     });
@@ -1681,7 +1701,7 @@ describe("corporate workspace authentication alpha", () => {
     const fetchMock = mockServer();
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
-    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
     expect(screen.getByText("Что оплачиваем")).toBeInTheDocument();
     expect(screen.getByText("Реквизиты платежа")).toBeInTheDocument();
     expect(screen.getByText("Документы", { selector: "strong" })).toBeInTheDocument();
@@ -1691,6 +1711,7 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
       target: { value: "7350000" },
     });
+    await selectPaymentDirection();
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     const openCard = await screen.findByRole("button", {
@@ -1745,13 +1766,14 @@ describe("corporate workspace authentication alpha", () => {
     const fetchMock = mockServer({ failApprovalActionOnce: true });
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
-    fireEvent.click(screen.getByRole("button", { name: "Новая заявка" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Заявка с повтором" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Сумма заявки" }), {
       target: { value: "7350000" },
     });
+    await selectPaymentDirection();
     fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     const openCard = await screen.findByRole("button", { name: "Открыть заявку №502: Заявка с повтором" });
@@ -1925,7 +1947,6 @@ describe("corporate workspace authentication alpha", () => {
       "ИИ-модули",
       "Лента",
       "Проекты",
-      "Проектные заявки",
       "Согласование поездок",
       "Отсутствия",
       "Работа с членами",
