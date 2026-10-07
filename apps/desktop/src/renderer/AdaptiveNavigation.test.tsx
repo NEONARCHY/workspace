@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
@@ -56,6 +56,36 @@ describe("AdaptiveNavigation overflow", () => {
     expect(screen.queryByRole("button", { name: "Третий" })).not.toBeInTheDocument();
     view.rerender(<AdaptiveNavigation items={entries} renderItem={renderItem} />);
     expect(screen.getByRole("button", { name: "Пятый" })).toBeInTheDocument();
+  });
+
+  it("keeps live counters on their own overflow buttons, not on the drawer heading", () => {
+    const entries = [...items, { key: "four", label: "Четвёртый" }];
+    const renderItems = (badges: Record<string, number>) => <AdaptiveNavigation items={entries} renderItem={(item) => <button key={item.key} className="rail-action">
+      <span className="rail-label">{item.label}</span>
+      {badges[item.key] ? <span className="rail-badge">{badges[item.key]}</span> : null}
+    </button>} />;
+    const view = render(renderItems({ two: 6, three: 2 }));
+    fireEvent.click(screen.getByRole("button", { name: "Ещё, 3 разделов" }));
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    expect(drawer.querySelector("header")).toHaveTextContent(/^Другие разделы$/);
+    expect(drawer.querySelector("header small, header .rail-badge")).toBeNull();
+    expect(within(drawer).getByRole("button", { name: "Второй 6" }).querySelector(".rail-badge")).toHaveTextContent("6");
+    expect(within(drawer).getByRole("button", { name: "Третий 2" }).querySelector(".rail-badge")).toHaveTextContent("2");
+    expect(within(drawer).getByRole("button", { name: "Четвёртый" }).querySelector(".rail-badge")).toBeNull();
+
+    view.rerender(renderItems({ two: 5 }));
+    expect(within(drawer).getByRole("button", { name: "Второй 5" }).querySelector(".rail-badge")).toHaveTextContent("5");
+    expect(within(drawer).getByRole("button", { name: "Третий" }).querySelector(".rail-badge")).toBeNull();
+  });
+
+  it("does not move the page selection surface to the open More button", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(45);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(200);
+    render(<AdaptiveNavigation items={items} renderItem={(item) => <div key={item.key} className="rail-slot"><button className="rail-action">{item.label}</button></div>} />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    expect(more).toHaveClass("active");
+    expect(document.querySelector(".navigation-sliding > .sliding-segmented-indicator")).not.toHaveAttribute("style");
   });
 
   it("updates the open portalled drawer when the sidebar palette changes", () => {

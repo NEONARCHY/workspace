@@ -77,8 +77,7 @@
   color: var(--ws-rail-badge-ink);
   background: var(--ws-rail-badge);
 }
-.sidebar-palette .rail-more-count,
-.rail-more-drawer.sidebar-palette > header small {
+.sidebar-palette .rail-more-count {
   color: var(--ws-rail-count-ink);
   background: var(--ws-rail-count);
 }
