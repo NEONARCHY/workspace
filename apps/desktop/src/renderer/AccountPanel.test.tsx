@@ -99,6 +99,23 @@ it("uploads a profile avatar and reports the new server version", async () => {
   expect(onAvatarChanged).toHaveBeenCalledWith("2026-09-19T12:00:00Z");
 });
 
+it("offers appearance settings to ordinary employees and persists their sidebar choice", () => {
+  render(<FluentProvider theme={webLightTheme}>
+    <AccountPanel token="test-token"
+      user={{ id: "appearance-employee", username: "employee", name: "Сотрудник", initials: "С", role: "employee", color: "#0091a8" }}
+      onClose={vi.fn()} onLogout={vi.fn()} />
+  </FluentProvider>);
+  const navigation = screen.getByRole("navigation", { name: "Разделы настроек" });
+  fireEvent.click(within(navigation).getByRole("button", { name: "Оформление" }));
+  expect(document.getElementById("account-page-appearance")).not.toHaveAttribute("hidden");
+  fireEvent.click(screen.getByRole("button", { name: "Светлый" }));
+  expect(localStorage.getItem("yuksalish:sidebar-theme:appearance-employee")).toBe("light");
+  fireEvent.click(within(navigation).getByRole("button", { name: "Личные данные" }));
+  fireEvent.click(within(navigation).getByRole("button", { name: "Оформление" }));
+  expect(screen.getByRole("button", { name: "Светлый" })).toHaveAttribute("aria-pressed", "true");
+  localStorage.removeItem("yuksalish:sidebar-theme:appearance-employee");
+});
+
 function renderPanel(onLogout = vi.fn()) {
   render(
     <FluentProvider theme={webLightTheme}>

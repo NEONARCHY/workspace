@@ -1,0 +1,97 @@
+# Deliberately standalone: no office .env, ports, project name, or volumes are inherited.
+name: yuksalish-personal-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yuksalish_personal_dev
+      POSTGRES_USER: personal_dev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Use the local development launcher}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U personal_dev -d yuksalish_personal_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: personal_dev_storage
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Use the local development launcher}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [backend]
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.dev
+    env_file:
+      - ${YUKSALISH_LOCAL_ENV_FILE:?Use the local development launcher}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18080:8000"
+    volumes:
+      - ../apps/api:/workspace/apps/api:ro
+      - ../modules:/workspace/modules:ro
+      - ../scripts/dev:/workspace/scripts/dev:ro
+      - ${YUKSALISH_LOCAL_TLS_DIR:?Use the local development launcher}:/workspace/local-tls
+      - desktop-updates:/workspace/var/desktop-updates
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        alembic -c apps/api/alembic.ini upgrade head
+        && python scripts/dev/bootstrap_local.py
+        && uvicorn yuksalish_api.main:app --host 0.0.0.0 --port 8000
+        --reload --reload-dir apps/api/src --reload-dir modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+    networks: [backend, api-egress]
+
+networks:
+  backend:
+    internal: true
+  api-egress:
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  desktop-updates:

@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
 
 import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
@@ -90,6 +91,18 @@ if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
 }
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
+const localTlsDirectory = process.env.YUKSALISH_LOCAL_DEV_TLS_DIR;
+const webManifest = {
+  buildId,
+  version: currentWebVersion,
+  builtAt,
+  title: releaseNotes.title,
+  notes: webUpdateItems,
+  history: [
+    ...updateEntries.map((entry) => ({ ...entry, title: `Обновление ${entry.version}` })),
+    ...releaseHistory,
+  ],
+};
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
@@ -123,10 +136,15 @@ export default defineConfig(({ mode }) => ({
     host: "127.0.0.1",
     port: 5173,
     strictPort: true,
+    https: localTlsDirectory ? {
+      key: readFileSync(resolve(localTlsDirectory, "localhost.key")),
+      cert: readFileSync(resolve(localTlsDirectory, "localhost.crt")),
+    } : undefined,
     proxy: {
       "/api": {
         target: process.env.VITE_DEV_API_PROXY_TARGET ?? "http://127.0.0.1:8080",
-        changeOrigin: true,
+        // Secure web sessions validate Origin against Host, including the local HTTPS port.
+        changeOrigin: !localTlsDirectory,
         ws: true,
       },
     },
@@ -150,21 +168,30 @@ export default defineConfig(({ mode }) => ({
   ...(mode === "web" ? {
     plugins: [react(), {
       name: "yuksalish-version-manifest",
+      configureServer(server) {
+        server.middlewares.use((request, response, next) => {
+          const path = request.url?.split("?")[0];
+          if (path === "/version.json") {
+            response.setHeader("Content-Type", "application/json");
+            response.setHeader("Cache-Control", "no-store");
+            response.end(JSON.stringify(webManifest));
+          } else if (path === "/__local-dev.json" && localTlsDirectory) {
+            response.setHeader("Content-Type", "application/json");
+            response.setHeader("Cache-Control", "no-store");
+            response.end(JSON.stringify({
+              deploymentId: process.env.YUKSALISH_LOCAL_DEV_DEPLOYMENT_ID,
+              runnerPid: Number(process.env.YUKSALISH_LOCAL_DEV_RUNNER_PID),
+              devServerPid: process.pid,
+              workspaceRoot: fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]+$/, ""),
+            }));
+          } else next();
+        });
+      },
       generateBundle() {
         this.emitFile({
           type: "asset",
           fileName: "version.json",
-          source: JSON.stringify({
-            buildId,
-            version: currentWebVersion,
-            builtAt,
-            title: releaseNotes.title,
-            notes: webUpdateItems,
-            history: [
-              ...updateEntries.map((entry) => ({ ...entry, title: `Обновление ${entry.version}` })),
-              ...releaseHistory,
-            ],
-          }),
+          source: JSON.stringify(webManifest),
         });
       },
     }],

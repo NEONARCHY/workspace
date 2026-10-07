@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FluentProvider } from "@fluentui/react-components";
 
 import { YuksalishAssistant } from "./YuksalishAssistant";
+import * as orbJourney from "./assistant-orb-journey";
 import { workspaceTheme } from "./workspace-theme";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
@@ -136,6 +137,33 @@ describe("YuksalishAssistant", () => {
     expect(loadAssistantMessages).toHaveBeenLastCalledWith("test-token", "first");
   });
 
+  it("uses a welcome fade for a new expanded chat while preserving the previous chat's draft", async () => {
+    const journey = vi.spyOn(orbJourney, "useAssistantOrbJourney");
+    const oldMessage = { id: "saved", role: "assistant" as const, model: "flash-lite" as const,
+      content: "Сохранённая переписка", createdAt: "2026-10-04T09:00:00Z" };
+    vi.mocked(loadAssistantMessages).mockResolvedValue([oldMessage]);
+    vi.mocked(createAssistantChat).mockResolvedValue({ id: "second", title: "Новый чат", isDefault: false,
+      createdAt: "2026-10-04T10:00:00Z", updatedAt: "2026-10-04T10:00:00Z" });
+    try {
+      render(<YuksalishAssistant token="test-token" />);
+      fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+      await screen.findByText("Сохранённая переписка");
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "Черновик первого чата" } });
+      fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+      fireEvent.click(within(screen.getByRole("complementary", { name: "Чаты ассистента" })).getByRole("button", { name: "Новый чат" }));
+      await screen.findByText("С чего начнём?");
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: true, empty: true, welcomeWithoutFlight: true }));
+      expect(document.querySelectorAll(".assistant-travelling-orb")).toHaveLength(1);
+      const sidebar = screen.getByRole("navigation", { name: "Список чатов ассистента" });
+      fireEvent.click(within(sidebar).getByRole("button", { name: /Первый чат/ }));
+      await screen.findByText("Сохранённая переписка");
+      expect(screen.getByRole("textbox")).toHaveValue("Черновик первого чата");
+      fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ welcomeWithoutFlight: false }));
+      expect(sendAssistantMessage).not.toHaveBeenCalled();
+    } finally { journey.mockRestore(); }
+  });
+
   it("supports keyboard chat selection and dismisses the picker without closing the assistant", async () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
@@ -216,7 +244,7 @@ describe("YuksalishAssistant", () => {
     fireEvent.click(retryButton);
     await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
     expect(clearAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
-    expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Первый чат");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Первый чат"));
   });
 
   it("accepts the 50 MB boundary without sending automatically", async () => {
@@ -256,6 +284,33 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(launcher).toHaveFocus());
   });
 
+  it("closes an expanded window without a return flight and preserves its draft on reopening", async () => {
+    const journey = vi.spyOn(orbJourney, "useAssistantOrbJourney");
+    try {
+      render(<YuksalishAssistant token="test-token" />);
+      const launcher = screen.getByRole("button", { name: "Открыть ассистента Yuksalish" });
+      fireEvent.click(launcher);
+      await screen.findByText("С чего начнём?");
+      fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
+        target: { value: "Мой черновик" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+      await screen.findByRole("button", { name: "Свернуть окно" });
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+      await waitFor(() => expect(document.querySelector(".assistant-panel")).toBeNull());
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: false, returnWithoutFlight: true }));
+      await waitFor(() => expect(launcher).toHaveFocus());
+      fireEvent.click(launcher);
+      await screen.findByRole("button", { name: "Свернуть окно" });
+      expect(screen.getByRole("textbox", { name: "Сообщение ассистенту" })).toHaveValue("Мой черновик");
+      fireEvent.click(screen.getByRole("button", { name: "Свернуть окно" }));
+      fireEvent.click(screen.getByRole("button", { name: "Закрыть ассистента" }));
+      await waitFor(() => expect(document.querySelector(".assistant-panel")).toBeNull());
+      expect(journey).toHaveBeenLastCalledWith(expect.objectContaining({ open: false, returnWithoutFlight: false }));
+      expect(sendAssistantMessage).not.toHaveBeenCalled();
+    } finally { journey.mockRestore(); }
+  });
+
   it("opens globally, switches model and keeps a real answer in the stream", async () => {
     vi.mocked(sendAssistantMessage).mockResolvedValue({
       id: "reply-1", role: "assistant", model: "pro",
@@ -264,7 +319,9 @@ describe("YuksalishAssistant", () => {
     render(<YuksalishAssistant token="test-token" />);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("С чего начнём?");
-    expect(document.querySelector(".assistant-empty .assistant-empty-orb.gradient-orb-fallback")).toBeInTheDocument();
+    expect(document.querySelector(".assistant-empty .assistant-empty-orb.assistant-orb-slot")).toBeInTheDocument();
+    expect(document.querySelectorAll(".assistant-travelling-orb .gradient-orb-fallback")).toHaveLength(1);
+    expect(document.querySelector(".assistant-header .gradient-orb-fallback")).toBeNull();
     expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
     expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();

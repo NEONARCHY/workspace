@@ -146,6 +146,32 @@
   transition: background-color 9999s ease-out 0s;
 }
 
+/* Optional second factor: a quiet disclosure, not another prominent form block. */
+.auth-totp { min-width: 0; }
+.auth-totp > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 0;
+  border-radius: 4px;
+  color: var(--ws-muted);
+  font-family: var(--ws-font);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  list-style: none;
+  cursor: pointer;
+}
+.auth-totp > summary::-webkit-details-marker { display: none; }
+.auth-totp > summary:hover { color: var(--ws-text); }
+.auth-totp > summary:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 4px; }
+.auth-totp > summary svg { flex-shrink: 0; }
+.auth-totp[open] > summary svg { transform: rotate(90deg); }
+.auth-totp-content { margin-top: 10px; }
+
 .auth-submit {
   min-height: 46px;
   margin-top: 2px;

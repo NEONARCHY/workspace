@@ -16,6 +16,7 @@ import { Button, Checkbox, Field, Input } from "@fluentui/react-components";
 import {
   ArrowSync24Regular,
   Camera24Regular,
+  Color24Regular,
   Desktop24Regular,
   Dismiss24Regular,
   Key24Regular,
@@ -35,6 +36,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { useContextMotion } from "./useContextMotion";
+import { SidebarAppearanceSettings } from "./SidebarAppearanceSettings";
 
 import {
   changeOwnPassword,
@@ -63,7 +65,7 @@ interface AccountPanelProps {
   readonly onLocaleChange?: (locale: InterfaceLocale) => Promise<void>;
 }
 
-type AccountSectionKey = "profile" | "audio" | "security" | "sessions" | "invite" | "managed-password" | "recovery" | "updates";
+type AccountSectionKey = "profile" | "appearance" | "audio" | "security" | "sessions" | "invite" | "managed-password" | "recovery" | "updates";
 
 interface AccountNavigationItem {
   readonly key: AccountSectionKey;
@@ -310,6 +312,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
 
   const navigationItems: readonly AccountNavigationItem[] = [
     { key: "profile", label: "Личные данные", icon: <LocalLanguage24Regular /> },
+    { key: "appearance", label: "Оформление", icon: <Color24Regular /> },
     { key: "audio", label: "Звук", icon: <Speaker224Regular /> },
     { key: "security", label: "Защита и пароль", icon: <ShieldLock24Regular /> },
     { key: "sessions", label: "Устройства", icon: <Desktop24Regular /> },
@@ -448,6 +451,10 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         </section>
         </div>
 
+        <div id="account-page-appearance" className="account-settings-page" hidden={activeSection !== "appearance"}>
+          <div className="account-page-heading"><Color24Regular /><div><h3>Оформление</h3><p>Цвет меню под ваш вкус.</p></div></div>
+          <SidebarAppearanceSettings userId={user.id} />
+        </div>
         <div id="account-page-audio" className="account-settings-page" hidden={activeSection !== "audio"}><AudioDeviceSettings /></div>
         {["admin", "superadmin"].includes(user.role) && <div id="account-page-updates" className="account-settings-page" hidden={activeSection !== "updates"}><DesktopUpdateSettings token={token} canPublish={user.role === "superadmin"} /></div>}
 

@@ -3,6 +3,7 @@ import { Portal } from "@fluentui/react-components";
 import { MoreHorizontal24Regular } from "@fluentui/react-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { SlidingSegmented } from "./SlidingSegmented";
+import { defaultSidebarTheme, type SidebarTheme } from "./sidebar-theme";
 
 export interface AdaptiveNavigationItem {
   readonly key: string;
@@ -13,10 +14,12 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   items,
   renderItem,
   expandedItem,
+  sidebarTheme = defaultSidebarTheme,
 }: {
   readonly items: readonly T[];
   readonly renderItem: (item: T, inOverflow: boolean, closeOverflow: () => void) => ReactNode;
   readonly expandedItem?: { readonly key: string; readonly height: number };
+  readonly sidebarTheme?: SidebarTheme;
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -120,7 +123,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         <span className="rail-more-count">{overflow.length}</span>
       </button>
       <Portal><AnimatePresence initial={false}>
-        {drawerOpen ? <motion.aside ref={drawerRef} id="rail-more-drawer" className="rail-more-drawer" aria-label="Другие разделы"
+        {drawerOpen ? <motion.aside ref={drawerRef} id="rail-more-drawer" className="rail-more-drawer sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Другие разделы"
           initial={reducedMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}

@@ -1,0 +1,207 @@
+import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { hasBlockingDialog } from "./components/ui/use-blocking-dialog";
+
+export type OrbJourneyPhase = "closed" | "waiting" | "travelling" | "revealing" | "ready" | "docking" | "returning";
+export interface OrbPose { readonly x: number; readonly y: number; readonly size: number }
+const ORB_SIZE = 96;
+const SHADOW_BLEED = 50;
+const EASING = "cubic-bezier(.2, 0, 0, 1)";
+const OPEN_FLIGHT_DURATION = 300;
+const OPEN_REVEAL_DURATION = 220;
+const LAUNCHER_FADE_DURATION = 180;
+const WELCOME_FADE_OUT_DURATION = 100;
+const WELCOME_FADE_IN_DURATION = 140;
+const OPEN_FLIGHT_EASING = "cubic-bezier(.4, 0, .8, 1)";
+
+export function orbPose(rect: Pick<DOMRect, "left" | "top" | "width" | "height">, zoom: number): OrbPose {
+  return { x: (rect.left + rect.width / 2) / zoom, y: (rect.top + rect.height / 2) / zoom,
+    size: Math.min(rect.width, rect.height) / zoom };
+}
+export function orbTransform(pose: OrbPose) {
+  return `translate(${pose.x - ORB_SIZE / 2}px, ${pose.y - ORB_SIZE / 2}px) scale(${pose.size / ORB_SIZE})`;
+}
+export function orbReveal(pose: OrbPose, panel: DOMRect, zoom: number) {
+  const x = pose.x - panel.left / zoom, y = pose.y - panel.top / zoom;
+  const radius = Math.hypot(Math.max(x, panel.width / zoom - x), Math.max(y, panel.height / zoom - y));
+  // Begin at the landed orb's footprint, then uncover every corner from this same centre.
+  return [`circle(${Math.min(pose.size / 2, radius)}px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`];
+}
+
+export function orbStreamClip(bounds: DOMRect, stream: DOMRect) {
+  if (!bounds.width || !bounds.height) return "none";
+  // Allow 48 local pixels for the existing drop shadow, clipping only at the stream edges.
+  const edges = [(stream.top - bounds.top) / bounds.height, (bounds.right - stream.right) / bounds.width,
+    (bounds.bottom - stream.bottom) / bounds.height, (stream.left - bounds.left) / bounds.width];
+  return `inset(${edges.map((edge) => `${Math.max(-SHADOW_BLEED, edge * 100)}%`).join(" ")})`;
+}
+
+/** One persistent canvas, measured slots, and cancellable travel with orb-only motion blur. */
+export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight = false, welcomeWithoutFlight = false,
+  reducedMotion, zoom, geometryKey,
+  launcher, panel, header, welcome, visual }: {
+  readonly open: boolean; readonly ready: boolean; readonly empty: boolean; readonly blocked: boolean;
+  readonly returnWithoutFlight?: boolean;
+  readonly welcomeWithoutFlight?: boolean;
+  readonly reducedMotion: boolean; readonly zoom: number; readonly geometryKey: string;
+  readonly launcher: RefObject<HTMLElement | null>; readonly panel: RefObject<HTMLElement | null>;
+  readonly header: RefObject<HTMLElement | null>; readonly welcome: RefObject<HTMLElement | null>;
+  readonly visual: RefObject<HTMLElement | null>;
+}) {
+  const [phase, setPhase] = useState<OrbJourneyPhase>("closed");
+  const phaseRef = useRef<OrbJourneyPhase>("closed");
+  const revealedRef = useRef(false);
+  const geometryRef = useRef(geometryKey);
+  useLayoutEffect(() => {
+    let active = true;
+    const animations = new Set<Animation>();
+    const element = visual.current;
+    const panelElement = panel.current;
+    if (!element) return;
+    const resized = geometryRef.current !== geometryKey;
+    const returning = !open && phaseRef.current !== "closed";
+    geometryRef.current = geometryKey;
+    const set = (next: OrbJourneyPhase) => {
+      if (!active) return;
+      phaseRef.current = next; setPhase(next);
+    };
+    const slot = () => open && ready && !blocked ? empty ? welcome.current : header.current : launcher.current;
+    const place = () => {
+      const destination = slot();
+      if (!destination) return;
+      const bounds = destination.getBoundingClientRect();
+      if (!bounds.width) return;
+      element.style.transform = orbTransform(orbPose(bounds, zoom));
+      element.style.opacity = "1";
+      element.style.clipPath = "none";
+      element.style.filter = "none";
+      if (open && empty && phaseRef.current === "ready") {
+        const stream = panelElement?.querySelector(".assistant-stream")?.getBoundingClientRect();
+        if (stream) element.style.clipPath = orbStreamClip(bounds, stream);
+      }
+    };
+    const animate = async (target: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions) => {
+      const animation = target.animate(keyframes, { easing: EASING, ...options });
+      animations.add(animation);
+      try { await animation.finished; } catch { /* Cancellation owns the next destination. */ }
+      animations.delete(animation);
+    };
+    const fly = (to: OrbPose) => {
+      const from = orbPose(element.getBoundingClientRect(), zoom);
+      const fromOpacity = getComputedStyle(element).opacity || "1";
+      element.style.transform = orbTransform(to);
+      element.style.opacity = "1";
+      element.style.clipPath = "none";
+      element.style.filter = "none";
+      if (reducedMotion || resized || !element.animate || !from.size) return;
+      if (Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) {
+        // A cancelled fade may already be at its destination; restore it without a brightness jump.
+        return Number(fromOpacity) < 1
+          ? animate(element, [{ opacity: fromOpacity }, { opacity: 1 }], { duration: WELCOME_FADE_IN_DURATION }) : undefined;
+      }
+      // Enter/leave the header from below its icon slot, never fly across its copy.
+      const docking = open && revealedRef.current;
+      const middle = { x: docking ? (empty ? from.x : to.x) - 18
+        : (from.x + to.x) / 2 + Math.sign(to.x - from.x) * 18,
+        y: (from.y + to.y) / 2 - (docking ? 0 : 24), size: (from.size + to.size) / 2 };
+      const blur = Math.min(2.4, Math.hypot(from.x - to.x, from.y - to.y) / 160);
+      const opening = open && !revealedRef.current;
+      return animate(element, [from, middle, to].map((pose, index) => ({
+        opacity: index === 0 ? fromOpacity : 1,
+        transform: orbTransform(pose), filter: `blur(${index === 1 ? blur.toFixed(2) : "0"}px)`,
+      })), { duration: opening ? OPEN_FLIGHT_DURATION : 420, easing: opening ? OPEN_FLIGHT_EASING : EASING });
+    };
+    const fadeToWelcome = async (to: OrbPose) => {
+      const from = orbPose(element.getBoundingClientRect(), zoom);
+      const isHidden = () => document.visibilityState === "hidden";
+      if (reducedMotion || resized || !element.animate || !from.size || isHidden()
+        || Math.hypot(from.x - to.x, from.y - to.y) + Math.abs(from.size - to.size) < .5) { place(); return; }
+      const fromOpacity = getComputedStyle(element).opacity || "1";
+      element.style.clipPath = "none";
+      element.style.filter = "none";
+      element.style.opacity = "0";
+      await animate(element, [{ opacity: fromOpacity }, { opacity: 0 }], { duration: WELCOME_FADE_OUT_DURATION });
+      if (!active) return;
+      // Reposition the same canvas only while invisible; neither leg animates its geometry.
+      element.style.transform = orbTransform(to);
+      element.style.opacity = "1";
+      if (isHidden()) return;
+      await animate(element, [{ opacity: 0 }, { opacity: 1 }], { duration: WELCOME_FADE_IN_DURATION });
+    };
+    const finish = () => {
+      set(open ? "ready" : "closed");
+      place();
+      if (returning && !hasBlockingDialog() && document.visibilityState !== "hidden") launcher.current?.focus({ preventScroll: true });
+    };
+    const run = async () => {
+      if (!active) return;
+      if (blocked || (open && !ready)) { place(); set(open ? "waiting" : "closed"); return; }
+      const destination = slot();
+      const bounds = destination?.getBoundingClientRect();
+      if (!destination || !bounds?.width) { revealedRef.current = open; finish(); return; }
+      const to = orbPose(bounds, zoom);
+      if (!open) {
+        const wasRevealed = revealedRef.current;
+        revealedRef.current = false;
+        if (!wasRevealed && phaseRef.current === "closed") { place(); return; }
+        set("returning");
+        if (returnWithoutFlight) {
+          // Close the expanded surface in place; only fade the orb at its top-bar slot.
+          place();
+          if (!reducedMotion && !resized && typeof element.animate === "function" && document.visibilityState !== "hidden") {
+            await animate(element, [{ opacity: 0 }, { opacity: 1 }], { duration: LAUNCHER_FADE_DURATION });
+          }
+        } else await fly(to);
+        if (active) finish();
+        return;
+      }
+      const opening = !revealedRef.current;
+      const fadeWelcome = !opening && empty && welcomeWithoutFlight && phaseRef.current !== "waiting";
+      set(opening ? "travelling" : "docking");
+      const flight = fadeWelcome ? fadeToWelcome(to) : fly(to);
+      const surface = panel.current;
+      let reveal: Promise<void> | undefined;
+      if (opening && surface && !reducedMotion && !resized && typeof surface.animate === "function") {
+        const masks = orbReveal(to, surface.getBoundingClientRect(), zoom);
+        // Schedule both effects before painting: CSS stays hidden during flight, and WAAPI
+        // reveals the surface on the landing frame without waiting for a React phase commit.
+        reveal = animate(surface, [{ clipPath: masks[0], visibility: "visible" },
+          { clipPath: masks[1], visibility: "visible" }], {
+          duration: OPEN_REVEAL_DURATION, delay: flight ? OPEN_FLIGHT_DURATION : 0,
+        });
+      }
+      await flight;
+      if (!active) return;
+      if (reveal) {
+        set("revealing");
+        await reveal;
+        if (!active) return;
+      }
+      revealedRef.current = true;
+      finish();
+    };
+    // Measure after the DOM commit, before painting; never update React on animation frames.
+    queueMicrotask(() => { void run(); });
+    const update = () => {
+      if (phaseRef.current === "ready" || phaseRef.current === "closed") place();
+    };
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    [launcher.current, panelElement, panelElement?.querySelector(".assistant-stream"),
+      panelElement?.querySelector(".assistant-header")].forEach((target) => { if (target) observer?.observe(target); });
+    panelElement?.addEventListener("scroll", update, true);
+    const settleHidden = () => { if (document.visibilityState === "hidden") animations.forEach((animation) => animation.finish()); };
+    document.addEventListener("visibilitychange", settleHidden);
+    return () => {
+      active = false;
+      // Pin the visible intermediate pose before cancelling, so rapid reversal never jumps.
+      if (animations.size) {
+        element.style.transform = orbTransform(orbPose(element.getBoundingClientRect(), zoom));
+        element.style.opacity = getComputedStyle(element).opacity || "1";
+      }
+      animations.forEach((animation) => animation.cancel());
+      element.style.filter = "none";
+      observer?.disconnect(); panelElement?.removeEventListener("scroll", update, true);
+      document.removeEventListener("visibilitychange", settleHidden);
+    };
+  }, [open, ready, empty, blocked, returnWithoutFlight, welcomeWithoutFlight, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);
+  return phase;
+}

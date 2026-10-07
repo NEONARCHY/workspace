@@ -46,6 +46,16 @@ type Translation = Readonly<{ uz_cyrl: string; uz_latn: string }>;
  */
 export const productMessages: Readonly<Record<string, Translation>> = {
   "Настройки": { uz_cyrl: "Созламалар", uz_latn: "Sozlamalar" },
+  "Оформление": { uz_cyrl: "Кўриниш", uz_latn: "Ko‘rinish" },
+  "Двухфакторная авторизация": { uz_cyrl: "Икки босқичли аутентификация", uz_latn: "Ikki bosqichli autentifikatsiya" },
+  "Цвет меню под ваш вкус.": { uz_cyrl: "Меню рангини дидингизга мосланг.", uz_latn: "Menyu rangini didingizga moslang." },
+  "Цвет бокового меню": { uz_cyrl: "Ён меню ранги", uz_latn: "Yon menyu rangi" },
+  "Сине-бирюзовый": { uz_cyrl: "Кўк-мовий", uz_latn: "Ko‘k-moviy" },
+  "Тёмно-синий": { uz_cyrl: "Тўқ кўк", uz_latn: "To‘q ko‘k" },
+  "Светлый": { uz_cyrl: "Очиқ", uz_latn: "Ochiq" },
+  "По умолчанию": { uz_cyrl: "Стандарт", uz_latn: "Standart" },
+  "Применяется сразу. Ваш выбор сохраняется в этом браузере или приложении.": { uz_cyrl: "Дарҳол қўлланади. Танловингиз шу браузер ёки иловада сақланади.", uz_latn: "Darhol qo‘llanadi. Tanlovingiz shu brauzer yoki ilovada saqlanadi." },
+  "Цвет применён, но не удалось сохранить выбор. После перезапуска он может сброситься.": { uz_cyrl: "Ранг қўлланди, лекин танлов сақланмади. Қайта ишга туширилганда у ўзгариши мумкин.", uz_latn: "Rang qo‘llandi, lekin tanlov saqlanmadi. Qayta ishga tushirilganda u o‘zgarishi mumkin." },
   "Русский": { uz_cyrl: "Рус тили", uz_latn: "Rus tili" },
   "Ўзбекча": { uz_cyrl: "Ўзбекча", uz_latn: "O‘zbekcha" },
   "O‘zbekcha": { uz_cyrl: "Ўзбекча", uz_latn: "O‘zbekcha" },

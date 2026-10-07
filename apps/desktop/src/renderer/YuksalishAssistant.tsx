@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { createPortal } from "react-dom";
 import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
 import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, Paperclip, PenLine, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X } from "lucide-react";
 
@@ -9,6 +10,7 @@ import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocki
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
+import { useAssistantOrbJourney } from "./assistant-orb-journey";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
@@ -168,6 +170,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const launcherRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLElement>(null);
+  const headerOrbRef = useRef<HTMLSpanElement>(null);
+  const welcomeOrbRef = useRef<HTMLSpanElement>(null);
+  const travellingOrbRef = useRef<HTMLSpanElement>(null);
   const chatPickerRef = useRef<HTMLDivElement>(null);
   const presetsToggleRef = useRef<HTMLButtonElement>(null);
   const replyMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -179,6 +184,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const sizeFromRef = useRef<DOMRect | null>(null);
   const sizeAnimationRef = useRef<Animation | null>(null);
   const reducedMotion = useAssistantMotionDisabled();
+  const welcomeVisible = loaded && messages.length === 0 && !busy;
+  const orbPhase = useAssistantOrbJourney({ open, ready: loaded || Boolean(error), empty: welcomeVisible,
+    blocked: blockingDialog, returnWithoutFlight: expanded, welcomeWithoutFlight: expanded, reducedMotion, zoom: viewport.zoom,
+    geometryKey: `${viewport.width}:${viewport.height}:${viewport.zoom}:${expanded}`,
+    launcher: launcherRef, panel: panelRef, header: headerOrbRef, welcome: welcomeOrbRef, visual: travellingOrbRef });
   const close = useCallback(() => {
     voiceSessionRef.current += 1;
     if (voiceTimerRef.current !== null) window.clearTimeout(voiceTimerRef.current);
@@ -285,8 +295,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   }, [open, loaded, token]);
 
   useEffect(() => {
-    if (open && !blockingDialog) inputRef.current?.focus();
-  }, [open, blockingDialog]);
+    if (open && !blockingDialog && !hasBlockingDialog() && orbPhase === "ready"
+      && document.visibilityState !== "hidden") inputRef.current?.focus();
+  }, [open, blockingDialog, orbPhase]);
 
   useLayoutEffect(() => {
     if (open && streamRef.current) streamRef.current.scrollTop = messages.length || busy || recording || preparingVoice
@@ -589,17 +600,21 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   return <div className="yuksalish-assistant-root" data-blocking-dialog={blockingDialog || undefined}>
     <button type="button" className="assistant-launcher" ref={launcherRef}
       aria-label="Открыть ассистента Yuksalish" title="Ассистент Yuksalish"
+      aria-busy={open && ["waiting", "travelling", "revealing"].includes(orbPhase)}
       aria-expanded={open} disabled={blockingDialog} onClick={() => open ? close() : setOpen(true)}>
-      <GradientOrb paused={open || blockingDialog} />
+      <span className="assistant-launcher-slot" aria-hidden="true" />
     </button>
-    <AnimatePresence onExitComplete={() => {
-      if (!hasBlockingDialog()) launcherRef.current?.focus({ preventScroll: true });
-    }}>
+    {open && orbPhase === "waiting" && <span className="assistant-journey-status" role="status">Загружаю чат ассистента…</span>}
+    {createPortal(<span className="assistant-travelling-orb" ref={travellingOrbRef} aria-hidden="true"
+      data-orb-phase={orbPhase} data-blocking-dialog={blockingDialog || undefined}>
+      <GradientOrb paused={blockingDialog} interactive={!open && orbPhase === "closed"} interactionSurface={launcherRef} />
+    </span>, document.body)}
+    <AnimatePresence>
       {open && <motion.section
-        initial={reducedMotion ? false : { opacity: 0, transform: "translateY(12px)" }}
-        animate={{ opacity: 1, transform: "translateY(0px)" }}
-        exit={reducedMotion ? { opacity: 0 } : { opacity: 0, transform: "translateY(8px)" }}
-        transition={{ duration: reducedMotion ? 0 : 0.22, ease: [0.2, 0, 0, 1] }}
+        initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.2, 0, 0, 1] }}
+        data-orb-phase={orbPhase === "closed" ? "waiting" : orbPhase}
+        inert={!["ready", "docking"].includes(orbPhase)}
         style={{ width: panelWidth, height: panelHeight, right: edge, bottom: edge,
           borderRadius: expanded ? 22 : 26 }}
         ref={panelRef}
@@ -624,9 +639,11 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         className={`assistant-panel ${expanded ? "is-expanded" : ""} ${showChatSidebar ? "has-sidebar" : ""}`}
         role="dialog" aria-modal="false" aria-label="Ассистент Yuksalish">
         <div className="assistant-panel-content">
-        <header className="assistant-header">
-          <span className="assistant-header-icon"><GradientOrb paused={blockingDialog} /></span>
-          <span className="assistant-header-title"><strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></span>
+        <header className={`assistant-header ${welcomeVisible ? "has-welcome-orb" : "has-docked-orb"}`}>
+          <span className="assistant-header-icon assistant-orb-slot" ref={headerOrbRef} aria-hidden="true" />
+          <motion.span layout="position" className="assistant-header-title"
+            transition={{ duration: reducedMotion ? 0 : .42, ease: [0.2, 0, 0, 1] }}>
+            <strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></motion.span>
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
             onClick={() => { setChatPickerOpen(false); setPresetsOpen(false); sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
@@ -694,8 +711,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
         ref={streamRef} aria-live="polite" inert={chatBusy || confirmClear}>
           <div className="assistant-stream-inner">
-            {messages.length === 0 && loaded && !busy && <div className="assistant-empty">
-              <GradientOrb className="assistant-empty-orb" paused={blockingDialog} />
+            <AnimatePresence>{welcomeVisible && <motion.div key="welcome" className="assistant-empty"
+              initial={false} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: reducedMotion ? 0 : .18 }}>
+              <span className="assistant-empty-orb assistant-orb-slot" ref={welcomeOrbRef} aria-hidden="true" />
               <h2>С чего начнём?</h2>
               <p>Подготовим рабочие записи, разберём документ или просто обсудим ваш вопрос.</p>
               <div className="assistant-quick-prompts">{quickPrompts.map((prompt) =>
@@ -703,7 +722,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   <prompt.icon size={19} aria-hidden="true" /><span><strong>{prompt.label}</strong><small>{prompt.hint}</small></span>
                 </button>)}</div>
               <small>Я подготовлю форму. Проверка и окончательное создание — за вами.</small>
-            </div>}
+            </motion.div>}</AnimatePresence>
             {!loaded && !error && <div className="assistant-loading"><ThinkingOrb state="searching" /> Загружаю историю…</div>}
             {messages.map((item) => <article key={item.id} className={`assistant-message is-${item.role}`}
               tabIndex={item.role === "assistant" ? 0 : undefined}
