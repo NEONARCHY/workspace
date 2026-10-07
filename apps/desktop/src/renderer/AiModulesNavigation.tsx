@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ChevronRight20Regular, Sparkle24Regular } from "@fluentui/react-icons";
 import type { NavigationKey } from "@yuksalish/contracts";
 import { moveBefore } from "./personal-organization";
+import { defaultSidebarTheme, type SidebarTheme } from "./sidebar-theme";
 
 export interface AiModuleNavigationItem {
   readonly key: NavigationKey;
@@ -42,11 +43,12 @@ export function moveAiNavigationGroup(order: readonly NavigationKey[], source: s
   });
 }
 
-export function AiModulesNavigation({ modules, activeKey, inOverflow = false, inline = false, open: controlledOpen, onOpenChange, onSelect, onCloseOverflow }: {
+export function AiModulesNavigation({ modules, activeKey, inOverflow = false, inline = false, sidebarTheme = defaultSidebarTheme, open: controlledOpen, onOpenChange, onSelect, onCloseOverflow }: {
   readonly modules: readonly AiModuleNavigationItem[];
   readonly activeKey: NavigationKey;
   readonly inOverflow?: boolean;
   readonly inline?: boolean;
+  readonly sidebarTheme?: SidebarTheme;
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onSelect: (key: NavigationKey) => void;
@@ -116,7 +118,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
     </button>
     {inlinePanel ? <div id="rail-ai-modules" className={`rail-ai-disclosure${open ? " is-open" : ""}`}
       aria-hidden={!open} inert={!open} ref={panelRef}><div className="rail-ai-inline">{links}</div></div> : null}
-    {open && !inlinePanel ? createPortal(<div id="rail-ai-modules" className="rail-ai-popover" role="dialog" aria-label="ИИ-модули"
+    {open && !inlinePanel ? createPortal(<div id="rail-ai-modules" className="rail-ai-popover sidebar-palette" data-sidebar-theme={sidebarTheme} role="dialog" aria-label="ИИ-модули"
       ref={panelRef} style={position} onPointerDown={(event) => event.stopPropagation()}>{links}</div>, document.body) : null}
   </>;
 }

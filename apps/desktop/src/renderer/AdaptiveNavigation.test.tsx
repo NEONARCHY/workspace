@@ -34,6 +34,7 @@ describe("AdaptiveNavigation overflow", () => {
     const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
     expect(drawer.closest(".rail-nav")).toBeNull();
     expect(drawer.parentElement).toHaveAttribute("data-portal-node", "true");
+    expect(drawer).toHaveAttribute("data-sidebar-theme", "blue-teal");
 
     fireEvent.pointerDown(screen.getByRole("complementary", { name: "Другие разделы" }));
     expect(more).toHaveAttribute("aria-expanded", "true");
@@ -55,6 +56,16 @@ describe("AdaptiveNavigation overflow", () => {
     expect(screen.queryByRole("button", { name: "Третий" })).not.toBeInTheDocument();
     view.rerender(<AdaptiveNavigation items={entries} renderItem={renderItem} />);
     expect(screen.getByRole("button", { name: "Пятый" })).toBeInTheDocument();
+  });
+
+  it("updates the open portalled drawer when the sidebar palette changes", () => {
+    const renderItem = (item: typeof items[number]) => <button key={item.key} className="rail-action">{item.label}</button>;
+    const view = render(<AdaptiveNavigation items={items} sidebarTheme="navy" renderItem={renderItem} />);
+    fireEvent.click(screen.getByRole("button", { name: "Ещё, 2 разделов" }));
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    expect(drawer).toHaveAttribute("data-sidebar-theme", "navy");
+    view.rerender(<AdaptiveNavigation items={items} sidebarTheme="light" renderItem={renderItem} />);
+    expect(drawer).toHaveAttribute("data-sidebar-theme", "light");
   });
 
   it("closes on a visible section and Escape returns focus to More", () => {
