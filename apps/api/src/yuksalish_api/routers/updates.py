@@ -2,13 +2,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncConnection
+from starlette.datastructures import UploadFile
 
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.update_schemas import (
     DesktopReleaseResponse,
+    DesktopReleaseUploadMetadata,
     DesktopUpdatePolicyResponse,
     MandatoryUpdateRequest,
 )
@@ -17,6 +20,7 @@ from yuksalish_api.update_service import (
     policy_snapshot,
     publish_release,
     release_path,
+    require_superadmin,
     set_mandatory,
     stage_release,
     staged_releases,
@@ -59,6 +63,37 @@ async def upload_release(
         )
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+
+
+@router.post("/releases/upload", response_model=DesktopReleaseResponse, status_code=201)
+async def upload_release_multipart(
+    request: Request,
+    user: User,
+    connection: Connection,
+    version: Annotated[str, Header(alias="X-Release-Version")],
+) -> DesktopReleaseResponse:
+    try:
+        require_superadmin(user)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    async with request.form(max_files=1, max_fields=1, max_part_size=64 * 1024) as form:
+        raw_metadata = form.get("metadata")
+        upload = form.get("file")
+        if not isinstance(raw_metadata, str) or not isinstance(upload, UploadFile):
+            raise HTTPException(status_code=422, detail="Передайте описание и файл установщика")
+        try:
+            metadata = DesktopReleaseUploadMetadata.model_validate_json(raw_metadata)
+        except ValidationError as error:
+            raise HTTPException(
+                status_code=422, detail="Некорректное описание обновления"
+            ) from error
+        try:
+            return await stage_release(
+                connection, user, request, request.app.state.settings, version,
+                metadata.title, metadata.notes, upload=upload,
+            )
+        except WorkspaceRepositoryError as error:
+            raise _translate(error) from error
 
 
 @router.post("/releases/{version}/publish", response_model=DesktopUpdatePolicyResponse)

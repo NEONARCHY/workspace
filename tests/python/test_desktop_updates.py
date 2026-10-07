@@ -1,13 +1,17 @@
 import base64
 import json
 import os
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-from fastapi import Request
+from fastapi import HTTPException, Request
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine
+from starlette.datastructures import UploadFile
 
+import yuksalish_api.routers.updates as updates_router
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.repository import find_active_user_by_username
@@ -47,6 +51,66 @@ def _upload_request(data: bytes) -> Request:
         {"type": "http", "headers": [(b"content-type", b"application/octet-stream")]},
         receive,
     )
+
+
+def _multipart_request(notes: list[str], payload: bytes) -> Request:
+    boundary = "release-upload-boundary"
+    metadata = json.dumps({"title": "Проверенное обновление", "notes": notes}, ensure_ascii=False)
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="metadata"\r\n\r\n'
+        f"{metadata}\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="file"; '
+        'filename="Yuksalish-Workspace-Setup-1.0.18.exe"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode() + payload + f"\r\n--{boundary}--\r\n".encode()
+    sent = False
+
+    async def receive() -> dict[str, object]:
+        nonlocal sent
+        if sent:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        sent = True
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request({
+        "type": "http", "method": "POST",
+        "headers": [(b"content-type", f"multipart/form-data; boundary={boundary}".encode())],
+        "app": SimpleNamespace(state=SimpleNamespace(settings=object())),
+    }, receive)
+
+
+@pytest.mark.anyio
+async def test_multipart_upload_accepts_long_notes_and_checks_role_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    notes = [f"Изменение {index}: " + "Подробное описание " * 7 for index in range(50)]
+    payload = b"MZinstaller"
+    captured: dict[str, object] = {}
+    result = object()
+
+    async def fake_stage_release(*args: object, upload: UploadFile | None = None) -> object:
+        assert upload is not None
+        captured["title"] = args[5]
+        captured["notes"] = args[6]
+        captured["file"] = await upload.read()
+        return result
+
+    monkeypatch.setattr(updates_router, "stage_release", fake_stage_release)
+    with pytest.raises(HTTPException) as forbidden:
+        await updates_router.upload_release_multipart(
+            _multipart_request(notes, payload), SimpleNamespace(role="admin"), object(),
+            "1.0.18",
+        )
+    assert forbidden.value.status_code == 403
+
+    actual = await updates_router.upload_release_multipart(
+        _multipart_request(notes, payload), SimpleNamespace(role="superadmin"), object(),
+        "1.0.18",
+    )
+    assert actual is result
+    assert captured == {"title": "Проверенное обновление", "notes": notes, "file": payload}
 
 
 @pytest.mark.anyio
@@ -117,6 +181,16 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                 assert (await policy_snapshot(connection)).mandatory
                 disabled = await set_mandatory(connection, owner, settings, False)
                 assert not disabled.mandatory and disabled.minimum_version is None
+                upload = UploadFile(
+                    file=BytesIO(payload), filename="Yuksalish-Workspace-Setup-0.30.1.exe",
+                )
+                multipart_staged = await stage_release(
+                    connection, owner, _upload_request(payload), settings, "0.30.1",
+                    "Следующее обновление", ["Подготовили следующее обновление приложения."],
+                    upload=upload,
+                )
+                assert multipart_staged.size_bytes == len(payload)
+                assert (tmp_path / release_file_name("0.30.1")).read_bytes() == payload
                 audit_rows = (
                     await connection.execute(
                         select(audit_events.c.action, audit_events.c.target_id).where(
@@ -139,7 +213,7 @@ async def test_only_superadmin_can_publish_and_force_a_available_release(
                     row.target_id for row in audit_rows
                     if row.action in {"desktop_update.staged", "desktop_update.published"}
                 }
-                assert len(release_targets) == 1
+                assert len(release_targets) == 2
                 assert release_targets.isdisjoint({
                     row.target_id for row in audit_rows
                     if row.action == "desktop_update.mandatory_changed"

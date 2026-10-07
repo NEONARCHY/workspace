@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 from fastapi import Request
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncConnection
+from starlette.datastructures import UploadFile
 
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
@@ -127,6 +129,15 @@ async def _audit(
     )
 
 
+async def _upload_chunks(request: Request, upload: UploadFile | None) -> AsyncIterator[bytes]:
+    if upload is None:
+        async for chunk in request.stream():
+            yield chunk
+    else:
+        while chunk := await upload.read(1024 * 1024):
+            yield chunk
+
+
 async def stage_release(
     connection: AsyncConnection,
     actor: AuthenticatedUser,
@@ -135,6 +146,7 @@ async def stage_release(
     version: str,
     title: str,
     notes: list[str],
+    upload: UploadFile | None = None,
 ) -> DesktopReleaseResponse:
     require_superadmin(actor)
     file_name = release_file_name(version)
@@ -148,9 +160,12 @@ async def stage_release(
         len(item) < 12 or len(item) > 160 for item in clean_notes
     ):
         raise WorkspaceRepositoryError(422, "Укажите от 1 до 50 понятных пунктов обновления")
-    content_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0]
-    if content_type != "application/octet-stream":
-        raise WorkspaceRepositoryError(415, "Передайте установщик как application/octet-stream")
+    if upload is None:
+        content_type = request.headers.get("content-type", "").split(";", maxsplit=1)[0]
+        if content_type != "application/octet-stream":
+            raise WorkspaceRepositoryError(415, "Передайте установщик как application/octet-stream")
+    elif upload.filename != file_name:
+        raise WorkspaceRepositoryError(422, "Имя установщика не соответствует номеру версии")
     existing = await connection.scalar(
         select(update_releases.c.version).where(update_releases.c.version == version)
     )
@@ -170,7 +185,7 @@ async def stage_release(
     temporary = Path(temporary_name)
     try:
         with temporary.open("wb") as output:
-            async for chunk in request.stream():
+            async for chunk in _upload_chunks(request, upload):
                 total += len(chunk)
                 if total > settings.update_max_bytes:
                     raise WorkspaceRepositoryError(413, "Установщик превышает допустимый размер")

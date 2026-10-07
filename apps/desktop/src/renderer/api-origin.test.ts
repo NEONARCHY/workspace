@@ -28,6 +28,16 @@ afterEach(() => {
 });
 
 describe("dual-network desktop server selection", () => {
+  it("recognizes the public browser route as remote", async () => {
+    vi.resetModules();
+    const browserWindow = { ...window, location: { origin: remote }, yuksalish: undefined };
+    vi.stubGlobal("window", browserWindow);
+    const api = await import("./api-origin");
+    expect(api.isRemoteApiOrigin()).toBe(true);
+    browserWindow.location.origin = lan;
+    expect(api.isRemoteApiOrigin()).toBe(false);
+  });
+
   it("prefers the LAN server and does not send credentials while probing", async () => {
     const fetchMock = vi.fn().mockResolvedValue(ready());
     vi.stubGlobal("fetch", fetchMock);
@@ -97,5 +107,29 @@ describe("dual-network desktop server selection", () => {
     Object.defineProperty(file, "size", { value: 90_000_001 });
     expect(() => api.stageDesktopRelease("token", "1.0.0", file, "Update", [])).toThrow("90 МБ");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends long release notes in the upload body instead of the URL", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(ready()).mockResolvedValueOnce(
+      new Response(JSON.stringify({ version: "1.0.18" }), {
+        status: 201, headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await configuredModule();
+    const api = await import("./workspace-api");
+    await api.initializeApiOrigin();
+    const file = new File(["MZinstaller"], "Yuksalish-Workspace-Setup-1.0.18.exe");
+    const notes = Array.from({ length: 50 }, (_, index) => `Изменение ${index}: ${"Описание ".repeat(12)}`);
+
+    await api.stageDesktopRelease("token", "1.0.18", file, "Новое обновление", notes);
+
+    const [url, options] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe(`${lan}/api/v1/updates/releases/upload`);
+    expect(options.body).toBeInstanceOf(FormData);
+    const body = options.body as FormData;
+    expect(JSON.parse(body.get("metadata") as string)).toEqual({ title: "Новое обновление", notes });
+    expect(body.get("file")).toBeInstanceOf(File);
+    expect(new Headers(options.headers).has("Content-Type")).toBe(false);
   });
 });

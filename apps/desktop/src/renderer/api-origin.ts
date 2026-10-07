@@ -70,8 +70,7 @@ export function getApiBaseUrl(): string {
 }
 
 export function isRemoteApiOrigin(): boolean {
-  const origins = dualOrigins();
-  return !!origins && getApiBaseUrl() === origins.public;
+  return getApiBaseUrl() === "https://workspace.opinions.uz";
 }
 
 export function apiConnectionLabel(): string {
