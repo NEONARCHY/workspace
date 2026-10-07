@@ -13,10 +13,10 @@ export function SwipeRow({ children, label, onAction, disabled = false, classNam
 }) {
   const root = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
-  // Opposing transforms reveal only the uncovered strip while keeping the
-  // full-width gradient fixed. Translucent cards cannot expose it underneath.
-  const revealX = useTransform(x, offset => `calc(100% - ${-offset}px)`);
-  const actionX = useTransform(x, offset => `calc(-100% + ${-offset}px)`);
+  // Extend the reveal beneath the rounded trailing corners, not the card body.
+  // Opposing transforms keep the full-width gradient fixed in the row.
+  const revealX = useTransform(x, offset => `calc(100% - ${-offset}px - var(--swipe-row-radius))`);
+  const actionX = useTransform(x, offset => `calc(-100% + ${-offset}px + var(--swipe-row-radius))`);
   const actionVisibility = useTransform(x, offset => offset < 0 ? "visible" : "hidden");
   const animation = useRef<ReturnType<typeof animate> | null>(null);
   const gesture = useRef<{ id: number; startX: number; startY: number; origin: number; axis: "pending" | "x" | "y"; lastX: number; lastAt: number; velocity: number } | null>(null);

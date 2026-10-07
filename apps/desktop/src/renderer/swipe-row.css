@@ -1,18 +1,18 @@
-.swipe-row { --swipe-action-width: 88px; position: relative; min-width: 0; overflow: clip; border-radius: 16px; isolation: isolate; }
+.swipe-row { --swipe-action-width: 88px; --swipe-row-radius: 16px; position: relative; min-width: 0; overflow: clip; border-radius: var(--swipe-row-radius); isolation: isolate; }
 .swipe-row-reveal { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
 .swipe-row-surface { position: relative; z-index: 1; min-width: 0; touch-action: pan-y pinch-zoom; border-radius: inherit; background: var(--ws-surface, #fff); }
-.swipe-row-action { position: absolute; inset: 0; width: 100%; display: flex; justify-content: flex-end; align-items: stretch; padding: 0; border: 0; border-radius: inherit; background: linear-gradient(270deg, var(--ws-danger, #bd2942) 0, var(--ws-danger, #bd2942) var(--swipe-action-width), #e899a7 55%, #f9e9ee 100%); color: #fff; font-size: 11px; font-weight: 600; cursor: pointer; }
+.swipe-row-action { position: absolute; inset: 0; width: 100%; display: flex; justify-content: flex-end; align-items: stretch; padding: 0; border: 0; border-radius: inherit; background: linear-gradient(90deg, var(--ws-danger, #bd2942) 0, var(--ws-danger, #bd2942) var(--swipe-action-width), #e899a7 55%, #f9e9ee 100%); color: var(--ws-text, #293a55); font-size: 11px; font-weight: 600; cursor: pointer; }
 .swipe-row-action[aria-hidden="true"] { pointer-events: none; }
 .swipe-row-action-label { width: var(--swipe-action-width); flex: none; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; }
 .swipe-row-action-label > span { max-width: 80px; text-align: center; overflow-wrap: anywhere; }
 .swipe-row-keyboard { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; padding: 5px; border: 1px solid var(--ws-control-line); border-radius: 9px; background: var(--ws-surface, #fff); color: var(--ws-text); opacity: 0; pointer-events: none; }
 .swipe-row-keyboard:focus-visible { opacity: 1; pointer-events: auto; }
 .swipe-row :is(.swipe-row-action, .swipe-row-keyboard):focus-visible { outline: 2px solid var(--ws-turquoise); outline-offset: -3px; }
-.swipe-row .swipe-row-action:focus-visible { outline-color: #fff; }
+.swipe-row .swipe-row-action:focus-visible { outline-color: var(--ws-text, #293a55); }
 .notification-swipe { margin-bottom: 8px; }
 .notification-swipe:last-child { margin-bottom: 0; }
 .notifications-view .notification-swipe .notification-row { margin: 0; }
-.chat-list-item .swipe-row { width: 100%; border-radius: 12px; }
+.chat-list-item .swipe-row { --swipe-row-radius: 12px; width: 100%; }
 .chat-list-item .swipe-row .chat-row { width: 100%; }
 .chat-deletion-choice { width: min(460px, calc(100vw - 32px)); }
 .chat-deletion-options { display: grid; gap: 10px; margin: 18px 0; }

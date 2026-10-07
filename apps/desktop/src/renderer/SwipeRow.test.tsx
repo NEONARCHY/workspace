@@ -103,15 +103,15 @@ it("fully hides the destructive backdrop before any swipe", () => {
   expect(container.querySelector(".swipe-row-action")).toHaveAttribute("aria-hidden", "true");
   expect(container.querySelector(".swipe-row-action")).toHaveAttribute("tabindex", "-1");
 });
-it("reveals a fixed full-width backdrop only beyond the moving surface, including during a held swipe", async () => {
+it("extends the fixed backdrop under rounded trailing corners during a held swipe", async () => {
   const { container, surface, action } = setup();
   const reveal = container.querySelector(".swipe-row-reveal") as HTMLElement;
   const button = container.querySelector(".swipe-row-action") as HTMLElement;
   fireEvent.pointerDown(surface, { button: 0, clientX: 280, clientY: 50 });
   fireEvent.pointerMove(surface, { clientX: 100, clientY: 50 });
   await waitFor(() => {
-    expect(reveal).toHaveStyle({ visibility: "visible", transform: "translateX(calc(100% - 180px))" });
-    expect(button).toHaveStyle({ transform: "translateX(calc(-100% + 180px))" });
+    expect(reveal).toHaveStyle({ visibility: "visible", transform: "translateX(calc(100% - 180px - var(--swipe-row-radius)))" });
+    expect(button).toHaveStyle({ transform: "translateX(calc(-100% + 180px + var(--swipe-row-radius)))" });
     expect(surface).toHaveStyle({ transform: "translateX(-180px)" });
   });
   expect(action).not.toHaveBeenCalled();
