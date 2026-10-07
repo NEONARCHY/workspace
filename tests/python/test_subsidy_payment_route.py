@@ -193,7 +193,7 @@ async def test_subsidy_payment_uses_askar_and_other_projects_keep_deputy() -> No
                 assert legacy_text_only.route_variant is None
 
                 await connection.execute(update(users).where(users.c.id == askar_id).values(
-                    status="inactive",
+                    status="blocked",
                 ))
                 with pytest.raises(WorkspaceRepositoryError) as missing:
                     await make_request("Субсидия")
