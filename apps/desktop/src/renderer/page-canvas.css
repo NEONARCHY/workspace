@@ -1,0 +1,30 @@
+/* Owner refinement, 2026-10-07: plain white page canvas, one trailing gutter.
+   Only page roots are flattened; cards, banners, chat themes and portals keep their surfaces. */
+.app-shell {
+  --ws-page-canvas: #fff;
+  --ws-page-trailing-gutter: 20px;
+  padding-inline-end: 0;
+  background: var(--ws-page-canvas);
+}
+/* Older AI/directory shells reserved a second physical right inset. */
+body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view)) .app-shell {
+  padding-inline-end: 0;
+}
+.app-shell .app-content {
+  padding-inline-end: var(--ws-page-trailing-gutter);
+  background: var(--ws-page-canvas);
+}
+.app-shell .app-content > :is(.workspace-view, .team-dashboard, .telegram-access-view) {
+  min-width: 0;
+  width: auto;
+  margin-inline-end: 0;
+  padding-inline-end: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--ws-page-canvas);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+@media (forced-colors: active) {
+  .app-shell { --ws-page-canvas: Canvas; }
+}

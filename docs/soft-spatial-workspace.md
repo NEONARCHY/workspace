@@ -8,6 +8,14 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
 
 ## Composition map
 
+- Refinement 2026-10-07: the authenticated shell and immediate page roots now use
+  a plain white canvas without the old glass/gradient frame. One 20 px trailing
+  gutter is reserved by `.app-content`; page-local trailing padding and the
+  legacy directory/AI shell inset no longer accumulate with it. Inner surfaces,
+  banners, chat wallpapers and portal dialogs retain their own material.
+  Native vertical scrollbars may sit inside that gutter's content edge.
+  This supersedes the page-specific outer-right-inset implementation described
+  in the older refinement below. See `design/page-canvas-and-board-scroll.md`.
 - Refinement 2026-10-04: presence summary tiles use seven semantic pastel washes
   fading left-to-right (22% → 9% at 48% → transparent), with unchanged counts and
   permissions. Labels use navy ink to retain AA contrast at the strongest tint;
