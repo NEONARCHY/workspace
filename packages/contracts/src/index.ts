@@ -1789,6 +1789,9 @@ export interface PaymentRequestDetails {
   readonly transferType?: "Гонорар (с расчетом)" | "Конвертация" | "Другие услуги" | null;
   readonly projectName: string;
   readonly projectCode: string;
+  readonly projectId?: string | null;
+  readonly workstreamId?: string | null;
+  readonly projectItemId?: string | null;
   readonly sourceAccount: string;
   readonly destinationAccount: string;
   readonly requestPriority: "normal" | "urgent";
@@ -1801,6 +1804,13 @@ export interface PaymentRequestDetails {
   readonly paymentPurpose?: "Мероприятия" | "Гонорары" | "Зарплаты" | "Перелеты" | "Оплата за услуги" | "Другие" | null;
   readonly paymentReason: string;
   readonly responsibleUserId?: string | null;
+}
+
+export interface PaymentProjectTargets {
+  readonly projects: readonly { readonly id: string; readonly code: string; readonly title: string }[];
+  readonly workstreams: readonly { readonly id: string; readonly projectId: string; readonly title: string }[];
+  readonly items: readonly { readonly id: string; readonly projectId: string; readonly workstreamId: string;
+    readonly kind: "task" | "event"; readonly title: string }[];
 }
 
 export interface ApprovalRequestSummary {

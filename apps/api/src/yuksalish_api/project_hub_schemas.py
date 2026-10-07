@@ -18,6 +18,32 @@ class HubModel(BaseModel):
     )
 
 
+class PaymentProjectOption(HubModel):
+    id: str
+    code: str
+    title: str
+
+
+class PaymentWorkstreamOption(HubModel):
+    id: str
+    project_id: str
+    title: str
+
+
+class PaymentItemOption(HubModel):
+    id: str
+    project_id: str
+    workstream_id: str
+    kind: Literal["task", "event"]
+    title: str
+
+
+class PaymentProjectTargets(HubModel):
+    projects: list[PaymentProjectOption]
+    workstreams: list[PaymentWorkstreamOption]
+    items: list[PaymentItemOption]
+
+
 class ProjectHubWrite(HubModel):
     chat_icon_key: ChatAvatarIconKey | None = None
     code: str = Field(min_length=1, max_length=48)

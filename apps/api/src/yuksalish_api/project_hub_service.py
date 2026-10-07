@@ -12,6 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from .auth import AuthenticatedUser
 from .position_policy import is_executive_leader
 from .project_hub_schemas import (
+    PaymentItemOption,
+    PaymentProjectOption,
+    PaymentProjectTargets,
+    PaymentWorkstreamOption,
     ProjectFundingAction,
     ProjectFundingActionResponse,
     ProjectFundingResponse,
@@ -157,6 +161,86 @@ async def _can_view_project(
             .limit(1)
         )
     )
+
+
+async def load_payment_project_targets(
+    connection: AsyncConnection, user: AuthenticatedUser
+) -> PaymentProjectTargets:
+    """Only expose active, visible project choices to payment request creators."""
+    hub = await load_hub(connection, user)
+    projects = [project for project in hub.projects if project.lifecycle_status == "active"]
+    project_ids = {project.id for project in projects}
+    workstreams = [row for row in hub.workstreams if row.project_id in project_ids]
+    workstream_ids = {row.id for row in workstreams}
+    return PaymentProjectTargets(
+        projects=[
+            PaymentProjectOption(id=row.id, code=row.code, title=row.title)
+            for row in projects
+        ],
+        workstreams=[
+            PaymentWorkstreamOption(id=row.id, project_id=row.project_id, title=row.title)
+            for row in workstreams
+        ],
+        items=[
+            PaymentItemOption(
+                id=row.id, project_id=row.project_id,
+                workstream_id=row.workstream_id, kind=row.kind, title=row.title,
+            )
+            for row in hub.items
+            if row.project_id in project_ids
+            and row.workstream_id in workstream_ids
+            and row.status != "cancelled"
+        ],
+    )
+
+
+async def validate_payment_project_link(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    project_id: str | None,
+    workstream_id: str | None,
+    item_id: str | None,
+    *,
+    allow_inactive: bool = False,
+) -> tuple[str, str]:
+    """Validate the hierarchy and return authoritative project title and code."""
+    if not project_id:
+        if workstream_id or item_id:
+            raise WorkspaceRepositoryError(422, "A project is required for the selected direction")
+        return "", ""
+    if not workstream_id:
+        raise WorkspaceRepositoryError(422, "A direction is required for the selected project")
+    try:
+        project_uuid = UUID(project_id)
+        workstream_uuid = UUID(workstream_id)
+        item_uuid = UUID(item_id) if item_id else None
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid project link identifier") from error
+    project = await _project_row(connection, project_uuid)
+    if not await _can_view_project(connection, user, project):
+        raise WorkspaceRepositoryError(403, "Project is not accessible")
+    if project["lifecycle_status"] != "active" and not allow_inactive:
+        raise WorkspaceRepositoryError(409, "Project is no longer active")
+    workstream = await connection.scalar(
+        select(project_hub_workstreams.c.id).where(
+            project_hub_workstreams.c.id == workstream_uuid,
+            project_hub_workstreams.c.project_id == project_uuid,
+        )
+    )
+    if workstream is None:
+        raise WorkspaceRepositoryError(422, "Direction does not belong to the project")
+    if item_uuid is not None:
+        item_query = select(project_hub_items.c.id).where(
+            project_hub_items.c.id == item_uuid,
+            project_hub_items.c.project_id == project_uuid,
+            project_hub_items.c.workstream_id == workstream_uuid,
+        )
+        if not allow_inactive:
+            item_query = item_query.where(project_hub_items.c.status != "cancelled")
+        item = await connection.scalar(item_query)
+        if item is None:
+            raise WorkspaceRepositoryError(422, "Work does not belong to the direction")
+    return str(project["title"]), str(project["code"])
 
 
 async def visible_employee_project_summaries(

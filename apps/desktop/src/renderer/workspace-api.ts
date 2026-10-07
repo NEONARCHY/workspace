@@ -70,6 +70,7 @@ import type {
   NotificationPreferences,
   PasswordResetResult,
   PaymentRequestDetails,
+  PaymentProjectTargets,
   ProjectInput,
   ProjectHubOverview,
   ProjectHubProject,
@@ -1815,6 +1816,10 @@ export function changeWorkspaceProjectStage(
 
 export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
   return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadPaymentProjectTargets(token: string): Promise<PaymentProjectTargets> {
+  return apiRequest<PaymentProjectTargets>("/project-hub/payment-targets", {}, token);
 }
 
 export function loadProjectHubRequests(token: string): Promise<readonly ProjectHubRequest[]> {

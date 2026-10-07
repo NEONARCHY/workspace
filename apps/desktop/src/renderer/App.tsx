@@ -411,6 +411,8 @@ export function App() {
   const [focusTarget, setFocusTarget] = useState<{
     section: WorkspaceSection; entityId?: string; revision: number;
   }>();
+  const [paymentCreateContext, setPaymentCreateContext] = useState<{ projectId: string; workstreamId: string }>();
+  const consumePaymentCreateContext = useCallback(() => setPaymentCreateContext(undefined), []);
   const [focusNotification, setFocusNotification] = useState<{
     id: string; revision: number;
   }>();
@@ -476,7 +478,7 @@ export function App() {
       const lastSection = storage.getItem(key);
       if (!web) storage.removeItem(key);
       if (lastSection && navItems.some((item) => item.key === lastSection && item.key !== "settings")) {
-        setActiveSection(lastSection as WorkspaceSection);
+        setActiveSection(lastSection === "project_funding" ? "project_hub" : lastSection as WorkspaceSection);
       }
     } catch { /* local storage can be disabled */ }
     setConnectionDetail(apiConnectionLabel());
@@ -1849,6 +1851,7 @@ export function App() {
     notifications: workspace.notifications.filter((item) => !item.readAt).length,
   };
   const orderedNavItems = visibleNavigation(workspace.personalPreferences.navigationOrder, workspace.personalPreferences.hiddenNavigationKeys, canView)
+    .filter((key) => key !== "project_funding")
     .map((key) => navItems.find((item) => item.key === key)!);
   const sidebarItems = groupAiNavigation(orderedNavItems);
   const aiModuleGroup = sidebarItems.find((item) => item.key === "ai_modules");
@@ -1923,7 +1926,7 @@ export function App() {
           </div>
           {navigationEditing ? <NavigationEditor key={workspace.currentUser.id}
             order={workspace.personalPreferences.navigationOrder} revision={workspace.personalPreferences.revision} labels={navigationLabels}
-            hiddenKeys={["projects", ...(workspace.personalPreferences.hiddenNavigationKeys ?? []), ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
+            hiddenKeys={["projects", "project_funding", ...(workspace.personalPreferences.hiddenNavigationKeys ?? []), ...navItems.filter((item) => !canView(item.key)).map((item) => item.key)]}
             icons={Object.fromEntries(navItems.map((item) => [item.key, item.icon]))}
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
@@ -2155,6 +2158,9 @@ export function App() {
             {displayedSection === "payment_requests" && workspace.workflow ? (
               <ApprovalsView
                 key={JSON.stringify([workspace.workflow, focusTarget?.revision])}
+                token={session.accessToken}
+                createContext={paymentCreateContext}
+                onCreateContextConsumed={consumePaymentCreateContext}
                 canManage={
                   ["admin", "superadmin"].includes(workspace.currentUser.role)
                   && (modulePermissions.payment_requests?.admin ?? true)
@@ -2245,6 +2251,17 @@ export function App() {
                 canCreateProject={modulePermissions.project_hub?.create ?? false}
                 canCreateRequest={modulePermissions.project_funding?.create ?? false}
                 canViewFunding={modulePermissions.project_funding?.view ?? false}
+                paymentRequests={workspace.requests}
+                canCreatePaymentRequest={workspace.canCreatePaymentRequests}
+                onOpenPaymentRequest={(requestId) => {
+                  setFocusTarget((current) => ({ section: "payment_requests", entityId: requestId, revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("payment_requests");
+                }}
+                onCreatePaymentRequest={(projectId, workstreamId) => {
+                  setPaymentCreateContext({ projectId, workstreamId });
+                  setFocusTarget((current) => ({ section: "payment_requests", revision: (current?.revision ?? 0) + 1 }));
+                  setActiveSection("payment_requests");
+                }}
                 onOpenChat={canView("messenger") ? (chatId) => void handleOpenContextChat(chatId) : undefined}
                 focusId={focusTarget?.section === displayedSection ? focusTarget.entityId : undefined}
                 onOpenCalendar={(eventId) => {

@@ -111,6 +111,10 @@
 .project-hub-subproject-summary { display: flex; flex-wrap: wrap; gap: 10px 16px; padding: 14px 16px; border: 1px solid #dce7ec; border-radius: 14px; background: #f5fafb; font-size: 13px; }
 .project-hub-subproject-summary p { flex-basis: 100%; margin: 0 0 4px; }
 .project-hub-subproject-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.project-hub-payment-links { margin: 16px 0 20px; padding: 16px; border: 1px solid var(--ws-border, #dbe6eb); border-radius: 16px; background: var(--ws-surface, #fff); }
+.project-hub-payment-links h4 { margin: 4px 0; color: var(--ws-ink, #293a55); font-size: 16px; }
+.project-hub-payment-links .project-hub-linked { border-top: 0; padding-top: 0; }
+.project-hub-payment-links .project-hub-linked button { max-width: 100%; text-align: left; white-space: normal; }
 .project-hub-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 330px); gap: 12px; align-items: start; }
 .project-hub-task-board { display: grid; grid-template-columns: repeat(5, minmax(180px, 1fr)); gap: 10px; min-width: 0; overflow-x: auto; padding-bottom: 8px; }
 .project-hub-task-lane { min-width: 180px; min-height: 270px; padding: 10px; border: 1px solid #dce7ec; border-radius: 16px; background: #f5fafb; }
