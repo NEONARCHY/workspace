@@ -30,10 +30,33 @@ try {
     docker info --format '{{.ServerVersion}}' | Out-Null
     $env:YUKSALISH_ENV_FILE = $resolvedEnvFile
     $env:YUKSALISH_WEB_BUILD_ID = (git rev-parse HEAD).Trim()
-    $compose = @(
+    $composeFiles = @($composeBase, $composeLan)
+    $baseCompose = @(
         "compose", "--env-file", $resolvedEnvFile,
         "-f", $composeBase, "-f", $composeLan
     )
+    $gatewayId = [string](& docker @baseCompose ps -a -q gateway | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect the existing gateway container." }
+    if ($gatewayId.Trim()) {
+        $labelsJson = & docker inspect --format '{{json .Config.Labels}}' $gatewayId.Trim()
+        if ($LASTEXITCODE -ne 0) { throw "Could not inspect the gateway Compose configuration." }
+        $labels = $labelsJson | ConvertFrom-Json
+        $activeEnvFile = [string]$labels.'com.docker.compose.project.environment_file'
+        if ($activeEnvFile -ne $resolvedEnvFile) {
+            throw "The running gateway uses a different environment file. Stop before changing this stack."
+        }
+        $activeConfigFiles = [string]$labels.'com.docker.compose.project.config_files'
+        if (-not $activeConfigFiles) { throw "The running gateway has no Compose file list." }
+        $composeFiles = @($activeConfigFiles -split ',' | ForEach-Object {
+            (Resolve-Path -LiteralPath $_).Path
+        })
+        if ($composeFiles.Count -lt 2 -or $composeFiles[0] -ne $composeBase -or
+            $composeFiles[1] -ne $composeLan) {
+            throw "The running gateway uses a different base Compose configuration."
+        }
+    }
+    $compose = @("compose", "--env-file", $resolvedEnvFile)
+    foreach ($composeFile in $composeFiles) { $compose += @("-f", $composeFile) }
 
     & docker @compose config --quiet
     & docker @compose build web api

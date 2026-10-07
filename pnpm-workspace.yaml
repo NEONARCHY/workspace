@@ -15,6 +15,7 @@ overrides:
   "http-cache-semantics@<=4.2.0": 4.3.0
   "source-map-js@>=1 <1.2.2": 1.2.2
   "joi@>=18 <18.2.9": 18.2.9
+  "shell-quote@<1.11.0": 1.11.0
   # @electron/get only uses bootstrap(); v4 retains it and drops vulnerable sprintf-js.
   "@electron/get@3.1.0>global-agent": 4.1.3
 
