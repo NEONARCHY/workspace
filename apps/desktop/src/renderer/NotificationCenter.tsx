@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -175,7 +176,7 @@ export function NotificationCenter({
 
   return (
     <section className="workspace-view notifications-view" aria-label="Центр уведомлений">
-      <header className="notification-header">
+      <WorkspaceSectionHeader motif="notifications" className="notification-header">
         <div>
           <span className="notification-kicker">Центр внимания</span>
           <h1>Требует моего внимания</h1>
@@ -198,7 +199,7 @@ export function NotificationCenter({
             Прочитать все
           </Button>
         </div>
-      </header>
+      </WorkspaceSectionHeader>
 
       <div className="notification-metrics" aria-label="Сводка уведомлений">
         <button

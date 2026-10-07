@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useMiddleMousePan } from "./useMiddleMousePan";
@@ -159,10 +160,10 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
 
   return (
     <section className="workspace-view bp7-view trips-view trip-view workflow-process-view" aria-label="Согласование поездок">
-      <header className="bp7-header workflow-hero-header">
+      <WorkspaceSectionHeader motif="trips" className="bp7-header workflow-hero-header">
         <div><span className="view-kicker">Согласования · Командировки</span><h1>Согласование поездок</h1><p>Перетащите карточку на доступную стадию или откройте её для решения.</p>{canManageWorkflow && workflow ? <SlidingSegmented className="process-view-tabs" role="group" aria-label="Разделы поездок"><button type="button" className={section === "requests" ? "active" : ""} aria-pressed={section === "requests"} onClick={() => setSection("requests")}>Текущие поездки</button><button type="button" className={section === "designer" ? "active" : ""} aria-pressed={section === "designer"} onClick={() => setSection("designer")}>Конструктор маршрутов</button></SlidingSegmented> : null}</div>
-        <Button {...restoreFocusTarget} appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
-      </header>
+        <Button {...restoreFocusTarget} className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={create}>Новая командировка</Button>
+      </WorkspaceSectionHeader>
 
       {section === "designer" && workflow && onSaveWorkflow && onPublishWorkflow ? <ProcessWorkflowDesigner workflow={workflow} processName="Маршрут поездок" accent="trip" people={people} departments={departments} positions={positions} onSave={onSaveWorkflow} onPublish={onPublishWorkflow} /> : <>
       <section className="ws2-process-overview trip-overview" aria-label="Сводка по командировкам">

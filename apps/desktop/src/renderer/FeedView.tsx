@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useRef, useState } from "react";
 
 import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
@@ -171,13 +172,13 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
 
   return (
     <section className="workspace-view feed-view" aria-label="Лента">
-      <div className="feed-main">
-        <header className="section-heading">
+        <WorkspaceSectionHeader motif="feed" className="section-heading">
           <div>
             <h1>Лента</h1>
             <p>Новости, решения и обсуждения компании</p>
           </div>
-        </header>
+        </WorkspaceSectionHeader>
+      <div className="feed-main">
         <div className="feed-list">
           {posts.map((post) => {
             const author = person(post.authorUserId);

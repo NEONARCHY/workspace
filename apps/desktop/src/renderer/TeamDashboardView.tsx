@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -265,7 +266,7 @@ export function TeamDashboardView({
   }, [flowSelection]);
 
   return <div className="team-dashboard">
-    <section className="team-dash-hero" aria-labelledby="team-dashboard-title">
+    <WorkspaceSectionHeader motif="team" className="team-dash-hero" aria-labelledby="team-dashboard-title">
       <div className="team-dash-hero-copy">
         <span>Обзор команды · сегодня</span>
         <h2 id="team-dashboard-title">Добрый день, {firstName}</h2>
@@ -277,7 +278,7 @@ export function TeamDashboardView({
         <PeopleTeam24Regular aria-hidden="true" />
         <div><strong>{visiblePeople.length}</strong><span>сотрудников в обзоре</span></div>
       </div>
-    </section>
+    </WorkspaceSectionHeader>
 
     {["manager", "admin", "superadmin"].includes(currentUser?.role ?? "")
       ? <TeamPresencePanel token={token} /> : null}

@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
@@ -1528,7 +1529,7 @@ export function ApprovalsView({
 
   return (
     <section className="workspace-view approvals-view workflow-process-view" aria-label="Согласования">
-      <header className="section-toolbar approvals-toolbar workflow-hero-header">
+      <WorkspaceSectionHeader motif="payments" className="section-toolbar approvals-toolbar workflow-hero-header">
         <div>
           <span className="view-kicker">Финансовый маршрут · Рабочая очередь</span>
           <h1>{mode === "requests" ? "Заявки на оплату" : "Маршрут согласования"}</h1>
@@ -1563,6 +1564,7 @@ export function ApprovalsView({
         <div className="toolbar-actions">
           {mode === "requests" ? (
             <Button
+              className="ws-section-header-primary"
               appearance="primary"
               icon={<Add24Regular />}
               disabled={!canCreateRequest}
@@ -1624,7 +1626,7 @@ export function ApprovalsView({
             </>
           )}
         </div>
-      </header>
+      </WorkspaceSectionHeader>
 
       {mode === "requests" ? (
         <div className="approval-workspace">

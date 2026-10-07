@@ -1,3 +1,4 @@
+import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { AbsenceAction, AbsenceKind, AbsenceRequest, AbsenceRequestInput, AssistantActionDraft, PresenceSummaryItem, WorkspacePerson } from "@yuksalish/contracts";
@@ -82,7 +83,7 @@ export function AbsencesView({ currentUserId, people, requests, summary, canAdmi
   };
   const name = (id: string) => people.find(person => person.id === id)?.name ?? "Сотрудник";
   return <section ref={frameRef} className="workspace-view absences-view" aria-label="Отсутствия">
-    <header className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Заявите об отсутствии, опоздании или больничном — руководитель сразу получит уведомление.</p></div><Button appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></header>
+    <WorkspaceSectionHeader motif="absences" className="record-header"><div><span className="record-kicker">Рабочий статус</span><h1>Отсутствия</h1><p>Заявите об отсутствии, опоздании или больничном — руководитель сразу получит уведомление.</p></div><Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={() => setOpen(true)}>Сообщить об отсутствии</Button></WorkspaceSectionHeader>
     {canAdmin ? <section className="absence-summary" aria-label="Сводка присутствия">{(Object.keys(statusLabels) as PresenceSummaryItem["status"][]).map(key => <button type="button" key={key} {...summaryFocusTarget} data-presence-status={key} aria-label={`${statusLabels[key]}: ${counts[key] ?? 0}. Открыть список сотрудников`} aria-haspopup="dialog" aria-expanded={presenceOpen && presenceStatus === key} onClick={() => { setPresenceStatus(key); setPresenceOpen(true); }}><strong>{counts[key] ?? 0}</strong><span>{statusLabels[key]}</span></button>)}</section> : null}
     {canAdmin ? <PresenceSummaryDialog open={presenceOpen} status={presenceStatus} summary={summary} requests={requests} people={people} token={token} onClose={() => setPresenceOpen(false)} /> : null}
     <div className="absence-canvas"><section className="absence-column"><header><span>Личный контур</span><h2>Мои заявки</h2></header>{own.length ? own.map(item => <AbsenceCard key={item.id} item={item} personId={item.directManagerUserId} name={name(item.directManagerUserId)} onSelect={() => setSelected(item)} />) : <div className="absence-empty"><CalendarLtr24Regular /><p>Заявок пока нет</p><span>Новое отсутствие появится здесь после отправки.</span></div>}</section>
