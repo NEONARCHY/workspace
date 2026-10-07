@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { useState } from "react";
+import { Profiler, useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SlidingSegmented } from "./SlidingSegmented";
 
@@ -27,6 +27,43 @@ function Example({ initial = "central" }: { readonly initial?: string }) {
 }
 
 describe("SlidingSegmented", () => {
+  it("tracks an expanding slot without rerendering labels or changing the active page", () => {
+    let measure: (() => void) | undefined;
+    let followingTop = 45;
+    const observed = new Set<Element>();
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { measure = callback; }
+      observe(element: Element) { observed.add(element); }
+      disconnect = disconnect;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("following-slot") ? followingTop : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
+      return this.tagName === "BUTTON" ? this.parentElement : this.parentElement?.closest("nav") ?? null;
+    });
+    const renderCommits = vi.fn();
+    function Navigation() {
+      return <Profiler id="navigation" onRender={renderCommits}><SlidingSegmented as="nav" activeSelector=':scope > div > button[aria-pressed="true"]'>
+        <div data-testid="expanding-slot"><button aria-expanded="false">ИИ-модули</button></div>
+        <div className="following-slot"><button aria-pressed="true">Мессенджер</button></div>
+      </SlidingSegmented></Profiler>;
+    }
+    const view = render(<Navigation />);
+    const indicator = view.container.querySelector(".sliding-segmented-indicator");
+    expect(observed.has(screen.getByTestId("expanding-slot"))).toBe(true);
+    // Intermediate opening frames, reversal, closing and a second opening.
+    for (const y of [62, 98, 146, 106, 45, 146, 45]) {
+      followingTop = y;
+      act(() => measure?.());
+      expect(indicator).toHaveStyle({ transform: `translate(10px, ${y}px)`, transition: "none" });
+      expect(screen.getByRole("button", { name: "Мессенджер" })).toHaveAttribute("aria-pressed", "true");
+    }
+    expect(renderCommits).toHaveBeenCalledTimes(1);
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+  });
   it("positions nested navigation buttons in the shared container's coordinates", () => {
     vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockImplementation(function (this: HTMLElement) {
       return this.tagName === "BUTTON" ? this.parentElement : this.parentElement?.closest("nav") ?? null;

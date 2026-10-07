@@ -16,6 +16,10 @@ notification counts and navigation order are unchanged.
 - The More drawer, AI-module popover, inline AI links, collapsed rail and navigation
   editor use the same scoped `--ws-rail-*` tokens. Portals receive the selected palette
   explicitly; no global Fluent theme or business API is modified.
+- Opening or closing inline AI modules does not change the current page selection.
+  The shared indicator observes each navigation slot as well as button sizes,
+  following intermediate disclosure layout directly without React commits per frame.
+  Repeated toggles and reversals retain matching label/surface coordinates.
 
 ## Persistence and fallback
 

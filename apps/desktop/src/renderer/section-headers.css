@@ -110,12 +110,34 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 }
 .ws-section-header :is(button, input):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 /* Segmented controls stay light: selected, idle and hover remain distinct. */
-.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .calendar-month-navigation) {
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) {
   max-width: 100%;
-  border: 1px solid rgb(255 255 255 / 45%);
-  background: #edf5f6;
+  border: 1px solid var(--ws-control-line, #d5e3e8);
+  background: #e7eeee;
   color: var(--ws-navy, #293a55);
 }
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button {
+  min-height: 36px;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 10px;
+  color: #4e6775;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:not(:disabled):hover {
+  color: var(--ws-navy, #293a55);
+  background: rgb(255 255 255 / 56%);
+}
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:is(.active, [aria-pressed="true"], [aria-selected="true"]) {
+  color: var(--ws-navy, #293a55);
+  background: #fff;
+  font-weight: 700;
+}
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:disabled { color: var(--ws-muted); cursor: default; }
 .ws-section-header .calendar-month-navigation .fui-Button {
   color: var(--ws-navy, #293a55);
   background: transparent;
@@ -125,7 +147,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 .ws-section-header .calendar-month-navigation button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
 .tasks-view .ws-section-header .view-switch { min-width: 0; max-width: 100%; overflow-x: auto; }
 .tasks-view .ws-section-header .task-calendar-navigation-slot:empty { display: none; }
-.ws-section-header :is(.view-switch, .approval-mode-switch, .process-view-tabs) button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
 
 /* The employee administration row is a separate working surface, not hero decoration. */
 .employees-header-tools {
@@ -259,5 +281,9 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header :is(.view-kicker, .record-kicker, .hr-kicker, .notification-kicker, .telegram-access-eyebrow, .calendar-title > span, .team-dash-hero-copy > span, .messenger-eyebrow) { color: CanvasText; }
   .ws-section-header :is(.fui-Button, .telegram-access-secondary, .hisobot-help-button) { border: 1px solid ButtonText; color: ButtonText; background: ButtonFace; box-shadow: none; }
   .ws-section-header :is(button, input):focus-visible { outline-color: Highlight; }
+  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) { color: CanvasText; background: Canvas; border-color: CanvasText; }
+  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button { color: ButtonText; background: ButtonFace; }
+  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:is(.active, [aria-pressed="true"], [aria-selected="true"]) { color: HighlightText; background: Highlight; }
+  .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > .sliding-segmented-indicator { background: Highlight; border-color: Highlight; box-shadow: none; }
   .team-dashboard .ws-section-header .team-dash-hero-summary { color: CanvasText; background: Canvas; border-color: CanvasText; }
 }
