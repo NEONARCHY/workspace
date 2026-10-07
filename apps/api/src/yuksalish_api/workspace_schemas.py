@@ -771,6 +771,7 @@ class ApprovalRequestResponse(ApiModel):
     currency: str
     status: ApprovalStatus
     status_label: str
+    route_variant: Literal["subsidy"] | None = None
     active_node_keys: list[str]
     active_stages: list[ApprovalStageResponse] = Field(default_factory=list)
     stage_label: str
