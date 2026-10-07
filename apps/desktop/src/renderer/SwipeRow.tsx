@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { animate, motion, useMotionValue } from "framer-motion";
+import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { Delete20Regular } from "@fluentui/react-icons";
 import "./swipe-row.css";
 
@@ -13,6 +13,11 @@ export function SwipeRow({ children, label, onAction, disabled = false, classNam
 }) {
   const root = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
+  // Opposing transforms reveal only the uncovered strip while keeping the
+  // full-width gradient fixed. Translucent cards cannot expose it underneath.
+  const revealX = useTransform(x, offset => `calc(100% - ${-offset}px)`);
+  const actionX = useTransform(x, offset => `calc(-100% + ${-offset}px)`);
+  const actionVisibility = useTransform(x, offset => offset < 0 ? "visible" : "hidden");
   const animation = useRef<ReturnType<typeof animate> | null>(null);
   const gesture = useRef<{ id: number; startX: number; startY: number; origin: number; axis: "pending" | "x" | "y"; lastX: number; lastAt: number; velocity: number } | null>(null);
   const moved = useRef(false);
@@ -26,11 +31,21 @@ export function SwipeRow({ children, label, onAction, disabled = false, classNam
     setOpen(value < 0);
   };
   useEffect(() => () => animation.current?.stop(), []);
-  return <div ref={root} className={`swipe-row ${open ? "is-open" : ""} ${className}`}>
-    {!disabled ? <button type="button" className="swipe-row-action" aria-label={label}
-      tabIndex={open ? 0 : -1} aria-hidden={!open} onClick={() => { settle(0); onAction(); }}>
-      <Delete20Regular /><span>{label.split(":")[0]}</span>
-    </button> : null}
+  return <div ref={root} className={`swipe-row ${open ? "is-open" : ""} ${className}`}
+    onKeyDown={event => {
+      if (event.key === "Escape" && open) {
+        event.preventDefault(); event.stopPropagation();
+        if ((event.target as Element).closest(".swipe-row-action")) root.current?.querySelector<HTMLButtonElement>(".swipe-row-keyboard")?.focus({ preventScroll: true });
+        settle(0);
+      }
+    }}>
+    {!disabled ? <motion.div className="swipe-row-reveal" style={{ x: revealX, visibility: actionVisibility }}>
+      <motion.button type="button" className="swipe-row-action" style={{ x: actionX }} aria-label={label}
+        tabIndex={open ? 0 : -1} aria-hidden={!open} onClick={() => { settle(0); onAction(); }}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") event.stopPropagation(); }}>
+        <span className="swipe-row-action-label"><Delete20Regular /><span>{label.split(":")[0]}</span></span>
+      </motion.button>
+    </motion.div> : null}
     <motion.div className="swipe-row-surface" style={{ x }}
       onPointerDown={event => {
         if (disabled || event.button !== 0 || !event.isPrimary || (event.target as Element).closest("input, textarea, select, [data-no-swipe]")) return;
@@ -78,13 +93,11 @@ export function SwipeRow({ children, label, onAction, disabled = false, classNam
       onClickCapture={event => {
         if (moved.current && event.detail !== 0) { event.preventDefault(); event.stopPropagation(); }
         moved.current = false;
-      }}
-      onKeyDown={event => {
-        if (event.key === "Escape" && open) { event.preventDefault(); event.stopPropagation(); settle(0); }
       }}>
       {children}
       {!disabled ? <button type="button" className="swipe-row-keyboard" aria-label={`Показать действие: ${label}`} aria-expanded={open}
-        onClick={() => settle(open ? 0 : -railWidth)}><Delete20Regular /></button> : null}
+        onClick={() => settle(open ? 0 : -railWidth)}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") event.stopPropagation(); }}><Delete20Regular /></button> : null}
     </motion.div>
   </div>;
 }
