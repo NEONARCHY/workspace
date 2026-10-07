@@ -726,6 +726,9 @@ class PaymentRequestDetails(ApiModel):
     ) = None
     project_name: str = Field(default="", max_length=240)
     project_code: str = Field(default="", max_length=96)
+    project_id: str | None = None
+    workstream_id: str | None = None
+    project_item_id: str | None = None
     source_account: str = Field(default="", max_length=500)
     destination_account: str = Field(default="", max_length=500)
     request_priority: Literal["normal", "urgent"] = "normal"
