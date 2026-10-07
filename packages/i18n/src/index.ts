@@ -47,6 +47,7 @@ type Translation = Readonly<{ uz_cyrl: string; uz_latn: string }>;
 export const productMessages: Readonly<Record<string, Translation>> = {
   "Настройки": { uz_cyrl: "Созламалар", uz_latn: "Sozlamalar" },
   "Оформление": { uz_cyrl: "Кўриниш", uz_latn: "Ko‘rinish" },
+  "Двухфакторная авторизация": { uz_cyrl: "Икки босқичли аутентификация", uz_latn: "Ikki bosqichli autentifikatsiya" },
   "Цвет меню под ваш вкус.": { uz_cyrl: "Меню рангини дидингизга мосланг.", uz_latn: "Menyu rangini didingizga moslang." },
   "Цвет бокового меню": { uz_cyrl: "Ён меню ранги", uz_latn: "Yon menyu rangi" },
   "Сине-бирюзовый": { uz_cyrl: "Кўк-мовий", uz_latn: "Ko‘k-moviy" },

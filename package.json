@@ -10,6 +10,11 @@
   "scripts": {
     "build": "pnpm -r --if-present build",
     "dev:desktop": "pnpm --filter @yuksalish/desktop dev",
+    "dev:local": "node scripts/dev/local-workspace.mjs start --detach",
+    "dev:local:stop": "node scripts/dev/local-workspace.mjs stop",
+    "dev:local:status": "node scripts/dev/local-workspace.mjs status",
+    "test:local-dev": "node --test scripts/dev/local-config.test.mjs",
+    "check:local-dev": "node scripts/dev/smoke-local.mjs",
     "build:web": "pnpm --filter @yuksalish/desktop build:web",
     "lint": "pnpm -r --if-present lint",
     "test": "pnpm -r --if-present test",
