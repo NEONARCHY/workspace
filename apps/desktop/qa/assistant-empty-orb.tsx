@@ -1,11 +1,18 @@
 // Synthetic visual QA surface. It never connects to a Workspace API.
 import { createRoot } from "react-dom/client";
-import { FluentProvider } from "@fluentui/react-components";
+import { FluentProvider, Input, Button } from "@fluentui/react-components";
+import { useState } from "react";
+import { WorkdayControl } from "../src/renderer/WorkdayControl";
+import { WorkspaceIdentity } from "../src/renderer/WorkspaceIdentity";
 import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
 import { workspaceTheme } from "../src/renderer/workspace-theme";
-import type { AssistantMessage } from "@yuksalish/contracts";
+import type { AssistantMessage, WorkdayMe } from "@yuksalish/contracts";
 import "../src/renderer/styles.css";
 import "../src/renderer/design-system.css";
+import "../src/renderer/responsive.css";
+import "../src/renderer/spatial-workspace.css";
+import "../src/renderer/workday-presence.css";
+import "../src/renderer/zoom.css";
 import "../src/renderer/motion.css";
 import "../src/renderer/yuksalish-assistant.css";
 import "../src/renderer/context-motion.css";
@@ -14,6 +21,10 @@ import "../src/renderer/assistant-chat.css";
 document.body.style.minHeight = "100vh";
 document.body.style.background = "linear-gradient(135deg, #eaf4f3, #f9fbfb 64%, #dcecf0)";
 const networkFetch = window.fetch.bind(window);
+let workdayStatus: WorkdayMe["status"] = "not_started";
+const workday = (): WorkdayMe => ({ status: workdayStatus,
+  schedule: { userId: "qa-user", startsAt: "09:00:00", endsAt: "18:00:00" },
+  session: null, absenceKind: null, asOf: "2026-10-08T04:00:00Z" });
 const history = new Map<string, AssistantMessage[]>();
 const firstChat = new URLSearchParams(location.search).has("history") ? "qa-work" : "qa-chat";
 const json = (value: unknown) => new Response(JSON.stringify(value), {
@@ -21,6 +32,11 @@ const json = (value: unknown) => new Response(JSON.stringify(value), {
 });
 window.fetch = (resource, options) => {
   const url = new URL(resource instanceof Request ? resource.url : String(resource), location.href);
+  if (url.pathname === "/api/v1/workday/me") return Promise.resolve(json(workday()));
+  if (url.pathname === "/api/v1/workday/start" || url.pathname === "/api/v1/workday/finish") {
+    workdayStatus = url.pathname.endsWith("start") ? "working" : "finished";
+    return Promise.resolve(json(workday()));
+  }
   if (url.pathname === "/api/v1/assistant/chats" && (!options?.method || options.method === "GET")) {
     const chats = [{
       id: "qa-chat", title: "Новый чат", isDefault: true,
@@ -72,14 +88,28 @@ window.fetch = (resource, options) => {
   }
   return networkFetch(resource, options);
 };
-createRoot(document.getElementById("root")!).render(
-  <FluentProvider theme={workspaceTheme}>
+function TopbarStand() {
+  const [name, setName] = useState("Тестовый пользователь с длинным именем");
+  const [inset, setInset] = useState(false);
+  const [zoom, setZoom] = useState(false);
+  return <FluentProvider className="app-provider" theme={workspaceTheme} style={{ zoom: zoom ? 1.25 : 1 }}>
     <p style={{ padding: "8px 20px", fontSize: 12, color: "#52697b" }}>Локальный предпросмотр · сообщения остаются только в памяти этой страницы</p>
     <nav style={{ display: "flex", gap: 18, padding: "0 20px", fontSize: 13 }}>
       <a href="?">Пустой чат / повторить</a><a href="?history=1">Чат с историей</a>
     </nav>
-    <header className="global-bar" style={{ display: "flex", justifyContent: "flex-end", padding: 20 }}>
+    <header className="global-bar" style={{ marginInlineStart: inset ? 240 : 0, padding: 20 }}>
+      <span>Верхняя панель</span><div className="workspace-top-context">
+      <WorkdayControl token="qa-no-real-token" />
       <YuksalishAssistant token="qa-no-real-token" />
+      <WorkspaceIdentity token="qa-no-real-token" person={{ id: "qa-user", name, initials: "ТП", role: "Сотрудник", color: "#293a55" }}
+        onSupport={() => {}} onSettings={() => {}} onLogout={() => {}} supportMode="support" />
+      </div>
     </header>
-  </FluentProvider>,
-);
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, padding: 20 }}>
+      <Input aria-label="Тестовое имя пользователя" value={name} onChange={(_, data) => setName(data.value)} />
+      <Button onClick={() => setInset(value => !value)}>Изменить ширину панели</Button>
+      <Button onClick={() => setZoom(value => !value)}>Масштаб 125%</Button>
+    </div>
+  </FluentProvider>;
+}
+createRoot(document.getElementById("root")!).render(<TopbarStand />);
