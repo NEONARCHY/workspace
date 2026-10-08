@@ -54,6 +54,10 @@ body .app-content :is(
   box-shadow: none;
 }
 
+.notifications-view > .notification-layout > .notification-settings {
+  background: var(--ws-page-panel);
+}
+
 .project-hub-view {
   padding: 0;
   border: 0;

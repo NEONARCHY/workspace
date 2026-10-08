@@ -43,6 +43,10 @@ describe("Scoped work-panel surfaces", () => {
     expect(read("ai-referent-workspace.css")).toContain("border-radius: var(--ws-radius, 22px)");
     expect(read("ai-hisobot.css")).toContain("border-radius: var(--ws-radius, 22px)");
   });
+  it("makes delivery settings white without changing their geometry or controls", () => {
+    const panel = read("page-canvas.css").match(/^\.notifications-view > \.notification-layout > \.notification-settings \{([^}]+)\}/m)?.[1];
+    expect(panel?.trim()).toBe("background: var(--ws-page-panel);");
+  });
   it("limits the projects' replacement surface to the work area below the hero", () => {
     const css = read("page-canvas.css");
     const root = css.match(/^\.project-hub-view \{([^}]+)\}/m)?.[1];
