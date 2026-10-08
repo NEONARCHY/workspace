@@ -18,6 +18,10 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
   Calendar, messenger and absences do not reserve that same gutter twice;
   other local panel padding and margins remain intact. Banners, wallpapers,
   foreground glass controls and portal dialogs retain their own material.
+  Further clarification: gaps expose the continuous ambient shell, without
+  page-local messenger/payment/task canvases or broad exterior primary-panel
+  shadows that tint them like another backing sheet. Surface fills and geometry,
+  control/row interaction shadows, drag lift and portal elevation stay intact.
   See `design/page-canvas-and-board-scroll.md`.
 - Refinement 2026-10-04: presence summary tiles use seven semantic pastel washes
   fading left-to-right (22% → 9% at 48% → transparent), with unchanged counts and

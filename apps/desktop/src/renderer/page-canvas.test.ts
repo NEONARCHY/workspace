@@ -20,7 +20,7 @@ describe("Scoped work-panel surfaces", () => {
     expect(roots).toContain("width: auto");
     expect(roots).not.toMatch(/background|border|shadow|filter|margin|padding/);
     expect(css).toContain("body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view)) .app-shell");
-    expect(css).not.toMatch(/!important|\.notification-row|\.conversation|\.fui-Dialog|\.auth-screen/);
+    expect(css).not.toMatch(/!important|\.notification-row|\.conversation\s*\{|\.fui-Dialog|\.auth-screen/);
   });
   it("extends the existing notification list into the old frame with its rounded shape", () => {
     const css = read("page-canvas.css");
@@ -49,7 +49,8 @@ describe("Scoped work-panel surfaces", () => {
     expect(root).toContain("background: transparent");
     expect(root).not.toContain("border-radius");
     expect(css).toContain(".project-hub-view > :is(.project-hub-layout, .project-hub-funding-layout)");
-    expect(css).not.toContain(".project-hub-header");
+    const hero = css.match(/\.project-hub-header,([^]*?)\{([^}]+)\}/)?.[2];
+    expect(hero?.trim()).toBe("box-shadow: none;");
   });
   it("keeps high contrast and a thicker native payment scrollbar", () => {
     expect(read("page-canvas.css")).toContain("--ws-page-panel: Canvas");
@@ -65,6 +66,23 @@ describe("Scoped work-panel surfaces", () => {
     expect(shell).not.toMatch(/background(?:-color|-image)?\s*:/);
     expect(content).not.toMatch(/background(?:-color|-image)?\s*:/);
     expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, #dfedea 0, transparent 48%), var(--ws-canvas)");
+  });
+  it("lets the shell show through page-local washes without repainting work panels", () => {
+    const css = read("page-canvas.css");
+    const wash = css.match(/\/\* Gutters[^]*?\{([^}]+)\}/)?.[1];
+    expect(wash).toContain("background: transparent");
+    expect(wash).not.toMatch(/padding|margin|border|shadow|filter/);
+    expect(css).toContain(".app-content > :is(.approvals-view, .messenger-view)");
+    expect(css).toContain(".tasks-view.bp5-tasks:not(.dashboard-mode, .efficiency-mode) .tasks-main");
+  });
+  it("removes the exterior panel shadows that tint the otherwise transparent gutters", () => {
+    const css = read("page-canvas.css");
+    const shadows = css.match(/\/\* Exterior panel shadows[^]*?\{([^}]+)\}/)?.[1];
+    expect(shadows).toContain("box-shadow: none");
+    expect(shadows).not.toMatch(/background|border-radius|padding|margin|outline|filter/);
+    expect(css).toContain("body .app-content :is(");
+    for (const panel of [".ws-section-header", ".notification-progress-card", ".team-dash-panel", ".record-table-shell", ".calendar-board"]) expect(css).toContain(panel);
+    expect(css).not.toMatch(/--ws-shadow-(?:card|float|lift):|\.app-content \*/);
   });
   it("uses the new hook only for payments, leaving other boards' pan behavior unchanged", () => {
     const payments = read("ApprovalsView.tsx");

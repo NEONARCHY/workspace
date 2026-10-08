@@ -21,6 +21,25 @@ body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view
   padding-inline-end: 0;
 }
 
+/* Gutters show the ambient shell, not a second page-local canvas. */
+.app-content > :is(.approvals-view, .messenger-view),
+.tasks-view.bp5-tasks:not(.dashboard-mode, .efficiency-mode) .tasks-main {
+  background: transparent;
+}
+/* Exterior panel shadows used to tint transparent gaps like an extra backing
+   sheet. Keep foreground colours, rounding, hover/drag elevation and dialogs. */
+body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header,
+.app-content .project-hub-view > .project-hub-header,
+.app-content > :is(.ai-referent-view, .ai-hisobot-view),
+body .app-content :is(
+  .notifications-view .notification-metrics > button, .notification-progress-card,
+  .messenger-view > .list-pane, .messenger-view > .conversation-pane,
+  .calendar-board, .record-table-shell, .employee-records, .task-records, .eff-people,
+  .team-dash-metric, .team-dash-panel, .absence-summary > button, .telegram-access-overview
+) {
+  box-shadow: none;
+}
+
 .notifications-view {
   padding: 0;
   border: 0;
