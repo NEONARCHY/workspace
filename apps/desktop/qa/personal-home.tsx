@@ -38,7 +38,7 @@ function Demo() {
   const [restricted, setRestricted] = useState(false), [urgent, setUrgent] = useState(false);
   const base = homeFixture(userId);
   const workspace = urgent ? base : { ...base, tasks: [], notifications: [] };
-  return <FluentProvider theme={workspaceTheme} className="app-provider" style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
+  return <FluentProvider theme={workspaceTheme} className="app-provider" style={{ height: "100dvh", display: "flex", flexDirection: "column", background: "transparent" }}>
     <InterfaceLocalization /><ScrollbarEdges />
     <nav aria-label="Проверочные состояния Главной" style={{ display: "flex", flexWrap: "wrap", gap: 10, padding: "12px 20px", flex: "none" }}>
       <span style={{ alignSelf: "center", fontSize: 12 }}>Тестовые данные · записи в API отключены</span>
