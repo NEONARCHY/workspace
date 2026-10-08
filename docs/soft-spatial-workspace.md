@@ -8,15 +8,17 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
 
 ## Composition map
 
-- Refinement 2026-10-08: only immediate page roots use a plain white canvas
-  without the old glass/gradient frame. The shell keeps its original ambient
-  background; transparent `.app-content` exposes it in the 20 px trailing
-  gutter reserved by `.app-content`; page-local trailing padding and the
-  legacy directory/AI shell inset no longer accumulate with it. Inner surfaces,
-  banners, chat wallpapers and portal dialogs retain their own material.
-  Native vertical scrollbars may sit inside that gutter's content edge.
-  This supersedes the page-specific outer-right-inset implementation described
-  in the older refinement below. See `design/page-canvas-and-board-scroll.md`.
+- Refinement 2026-10-08: page roots are not white surfaces. Only the glass
+  frames behind existing white notification/project work panels are removed;
+  the panels expand into the released space and retain 22 px rounding.
+  Notification hero, metrics and work area share the same outer edges.
+  Calendar keeps its original separate rounded month/agenda panels on the
+  ambient mint canvas; already-white AI panels keep their own geometry.
+  `.app-content` reserves a 20 px trailing gutter without painting it.
+  Calendar, messenger and absences do not reserve that same gutter twice;
+  other local panel padding and margins remain intact. Banners, wallpapers,
+  foreground glass controls and portal dialogs retain their own material.
+  See `design/page-canvas-and-board-scroll.md`.
 - Refinement 2026-10-04: presence summary tiles use seven semantic pastel washes
   fading left-to-right (22% → 9% at 48% → transparent), with unchanged counts and
   permissions. Labels use navy ink to retain AA contrast at the strongest tint;

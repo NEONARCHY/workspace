@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
-import { Alert20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular } from "@fluentui/react-icons";
-import type { ApprovalRequestSummary, WorkspaceNotification } from "@yuksalish/contracts";
+import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular } from "@fluentui/react-icons";
+import type { ApprovalRequestSummary, CalendarEvent, WorkspaceNotification } from "@yuksalish/contracts";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
+import { CalendarView } from "../src/renderer/CalendarView";
 import { MessengerView } from "../src/renderer/MessengerView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
@@ -70,6 +71,18 @@ import "../src/renderer/page-canvas.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
+const calendarDay = new Date();
+calendarDay.setHours(10, 0, 0, 0);
+const calendarEvents: CalendarEvent[] = Array.from({ length: 3 }, (_, i) => ({
+  id: `canvas-event-${i}`, organizerUserId: people[0]!.id,
+  title: ["Планирование рабочей недели", "Встреча команды", "Отменённая встреча"][i]!,
+  description: "Локальный образец календаря, без серверных записей", eventType: "meeting",
+  startsAt: new Date(calendarDay.getTime() + i * 2 * 3600000).toISOString(),
+  endsAt: new Date(calendarDay.getTime() + (i * 2 + 1) * 3600000).toISOString(),
+  allDay: false, location: "Переговорная", status: i === 2 ? "cancelled" : "scheduled",
+  attendeeIds: [people[0]!.id], attendees: [], canRespond: false, canEdit: false,
+  createdAt: calendarDay.toISOString(), updatedAt: calendarDay.toISOString(),
+}));
 const notifications: WorkspaceNotification[] = Array.from({ length: 7 }, (_, i) => ({
   id: `canvas-notification-${i}`, title: i ? "Новое сообщение команды" : "Нужно решение по заявке",
   kind: i ? "message" : "approval", priority: i ? "normal" : "attention",
@@ -103,6 +116,7 @@ function Preview() {
   const [sample, setSample] = useState(0);
   const nav = [
     { id: "notifications", label: "Уведомления", icon: <Alert20Regular /> },
+    { id: "calendar", label: "Календарь", icon: <Calendar20Regular /> },
     { id: "payments", label: "Заявки на оплату", icon: <ReceiptMoney20Regular /> },
     { id: "messenger", label: "Мессенджер", icon: <Chat20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
@@ -116,18 +130,19 @@ function Preview() {
           <nav className="rail-nav" aria-label="Разделы стенда">{nav.map(item => <button key={item.id} aria-label={item.label} className={`rail-action ${section === item.id ? "active" : ""}`} onClick={() => setSection(item.id)}><span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span></button>)}</nav>
         </aside>
         <div className="app-stage">
-          <header className="global-bar qa-canvas-toolbar"><span>Проверка белого фона и отступов · без рабочих данных</span>
+          <header className="global-bar qa-canvas-toolbar"><span>Проверка подложек и отступов · без рабочих данных</span>
             {section === "samples" && <select aria-label="Макет раздела" value={sample} onChange={event => setSample(Number(event.target.value))}>{roots.map(([label], i) => <option key={label} value={i}>{label}</option>)}</select>}
           </header>
           <main className="app-content" id="workspace-content">
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
+            : section === "calendar" ? <CalendarView events={calendarEvents} people={people} currentUserId={people[0]!.id} onCreate={nothing} onUpdate={nothing} onCancel={nothing} />
             : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
             : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={initialMessages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
-              <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Белый фон заменяет только заднюю подложку. Палитра, шапки и внутренние поверхности не меняются.</p></div>
+              <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
             </section>}
           </main>
         </div>
