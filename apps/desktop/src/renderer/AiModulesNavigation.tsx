@@ -52,6 +52,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onSelect: (key: NavigationKey) => void;
+  readonly onCloseOverflow?: () => void;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -108,7 +109,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
   </nav>;
 
   return <>
-    <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " active" : ""}`} type="button"
+    <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " has-active-module" : ""}`} type="button"
       aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inlinePanel ? undefined : "dialog"}
       aria-controls={inlinePanel || open ? "rail-ai-modules" : undefined} onClick={toggle}>
       <span className="rail-icon"><Sparkle24Regular /></span>

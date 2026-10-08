@@ -182,13 +182,25 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
     // Measure after the DOM commit, before painting; never update React on animation frames.
     queueMicrotask(() => { void run(); });
     const update = () => {
-      if (phaseRef.current === "ready" || phaseRef.current === "closed") place();
+      if (active && (phaseRef.current === "ready" || phaseRef.current === "closed")) place();
     };
     const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    // A fixed-size launcher can move when its siblings, fonts or the sidebar change.
+    // Observe its layout chain, not just its own dimensions; the canvas stays persistent.
+    for (let ancestor = launcher.current?.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+      observer?.observe(ancestor);
+    }
     [launcher.current, panelElement, panelElement?.querySelector(".assistant-stream"),
       panelElement?.querySelector(".assistant-header")].forEach((target) => { if (target) observer?.observe(target); });
     panelElement?.addEventListener("scroll", update, true);
-    const settleHidden = () => { if (document.visibilityState === "hidden") animations.forEach((animation) => animation.finish()); };
+    window.addEventListener("resize", update);
+    document.addEventListener("scroll", update, true);
+    document.fonts?.addEventListener("loadingdone", update);
+    void document.fonts?.ready.then(update);
+    const settleHidden = () => {
+      if (document.visibilityState === "hidden") animations.forEach((animation) => animation.finish());
+      else update();
+    };
     document.addEventListener("visibilitychange", settleHidden);
     return () => {
       active = false;
@@ -200,6 +212,9 @@ export function useAssistantOrbJourney({ open, ready, empty, blocked, returnWith
       animations.forEach((animation) => animation.cancel());
       element.style.filter = "none";
       observer?.disconnect(); panelElement?.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+      document.removeEventListener("scroll", update, true);
+      document.fonts?.removeEventListener("loadingdone", update);
       document.removeEventListener("visibilitychange", settleHidden);
     };
   }, [open, ready, empty, blocked, returnWithoutFlight, welcomeWithoutFlight, reducedMotion, zoom, geometryKey, launcher, panel, header, welcome, visual]);

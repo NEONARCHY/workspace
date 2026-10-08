@@ -71,7 +71,8 @@ describe("AI module sidebar group", () => {
       onSelect={onSelect}
     /></FluentProvider>);
     const trigger = screen.getByRole("button", { name: "ИИ-модули" });
-    expect(trigger).toHaveClass("active");
+    expect(trigger).toHaveClass("has-active-module");
+    expect(trigger).not.toHaveClass("active");
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     const nav = await screen.findByRole("navigation", { name: "Выбор ИИ-модуля" }, { timeout: 2000 });

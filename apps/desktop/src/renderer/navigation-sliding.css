@@ -12,9 +12,9 @@
 .account-settings-redesigned .navigation-sliding button { background: transparent; border-radius: 14px; }
 .account-settings-redesigned .navigation-sliding button.is-active { color: var(--ws-text); background: transparent; border-color: transparent; }
 .account-settings-redesigned .navigation-sliding button.is-active svg { color: var(--ws-link); }
-/* More opens a drawer, not a page: keep its own surface beside the current page. */
-body .app-rail .navigation-sliding > .rail-slot > .rail-action.active:not(.rail-more-action)::before,
-body .app-rail .navigation-sliding > .rail-slot .rail-ai-trigger.active::before { opacity: 0; }
+body .app-rail .navigation-sliding > .rail-slot > .rail-action.active:not(.rail-more-action)::before { opacity: 0; }
+/* Inline modules share the travelling surface; their labels never paint a second one. */
+body .app-rail .navigation-sliding .rail-ai-disclosure.is-open .rail-ai-link.active { background: transparent; }
 body .app-rail .navigation-sliding > .rail-slot > .rail-action.active { transform: none; }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) {
   .navigation-sliding > .sliding-segmented-indicator { transition: none; }
