@@ -52,6 +52,7 @@ import type {
   ChatAvatarIconKey,
   CreateChatInput,
   MessageOptions,
+  ForwardSource,
   MessageReactionEmoji,
   LinkPreview,
   ModuleAccessRule,
@@ -1208,6 +1209,15 @@ export function sendWorkspaceMessage(
 
 export function createWorkspaceChat(token: string, payload: CreateChatInput): Promise<ChatSummary> {
   return apiRequest("/chats", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function forwardWorkspaceContent(token: string, chatId: string, source: ForwardSource, requestId: string): Promise<ChatMessage> {
+  return apiRequest(`/chats/${chatId}/forwards`, { method: "POST",
+    body: JSON.stringify({ kind: source.kind, sourceId: source.id, requestId }) }, token);
+}
+
+export function loadWorkspaceFeedPost(token: string, id: string): Promise<FeedPost> {
+  return apiRequest(`/feed/posts/${id}`, { method: "GET" }, token);
 }
 
 export function updateWorkspaceChat(token: string, id: string, title: string, description: string): Promise<ChatSummary> {

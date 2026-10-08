@@ -9,6 +9,7 @@ import type {
   WorkspaceNotification,
 } from "@yuksalish/contracts";
 import { workspacePlatform } from "./platform-adapter";
+import { workspaceSounds } from "./workspace-sounds";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { useContextMotion } from "./useContextMotion";
 import { SwipeRow } from "./SwipeRow";
@@ -26,6 +27,7 @@ import {
   Search24Regular,
   TaskListSquareLtr24Regular,
   Video24Regular,
+  News24Regular,
 } from "@fluentui/react-icons";
 
 type NotificationFilter = "attention" | "unread" | "all";
@@ -58,9 +60,11 @@ const kindLabels: Record<NotificationKind, string> = {
   hisobot: "AI Hisobot",
   support: "Поддержка",
   birthday: "Дни рождения",
+  feed: "Лента",
 };
 
 function NotificationIcon({ kind }: { readonly kind: NotificationKind }) {
+  if (kind === "feed") return <News24Regular />;
   if (kind === "message") return <Chat24Regular />;
   if (kind === "task") return <TaskListSquareLtr24Regular />;
   if (kind === "approval") return <ApprovalsApp24Regular />;
@@ -103,6 +107,9 @@ export function NotificationCenter({
   const [query, setQuery] = useState("");
   const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [volumeDraft, setVolumeDraft] = useState<{ base: number; value: number }>();
+  const volume = volumeDraft?.base === (preferences.soundVolume ?? 20) ? volumeDraft.value : preferences.soundVolume ?? 20;
+  const [soundStatus, setSoundStatus] = useState<{ message: string; error: boolean }>();
   const [testingNotification, setTestingNotification] = useState(false);
   const [testStatus, setTestStatus] = useState<{ readonly message: string; readonly error: boolean }>();
   const [contextId, setContextId] = useState<string | undefined>(focusNotification?.id);
@@ -141,19 +148,21 @@ export function NotificationCenter({
     : Math.min(99, Math.round(readCount / available.length * 100));
 
   const updatePreference = async (
-    key: keyof NotificationPreferences,
+    key: Exclude<keyof NotificationPreferences, "soundVolume">,
     checked: boolean,
   ) => {
     setSavingPreferences(true);
     try {
       await onUpdatePreferences({ ...preferences, [key]: checked });
+    } catch (failure) {
+      setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось сохранить настройки", error: true });
     } finally {
       setSavingPreferences(false);
     }
   };
 
   const preferenceRows: readonly [
-    keyof NotificationPreferences,
+    Exclude<keyof NotificationPreferences, "soundVolume" | "soundEnabled">,
     string,
     string,
   ][] = [
@@ -165,6 +174,7 @@ export function NotificationCenter({
         : "Показывать обычные события поверх окон; AI Hisobot остаётся обязательным",
     ],
     ["messagesEnabled", "Сообщения", "Новые сообщения в доступных чатах"],
+    ["feedEnabled", "Лента", "Объявления сотрудников; отключение не удаляет прежние уведомления"],
     ["tasksEnabled", "Задачи", "Назначения, возвраты и сроки"],
     ["approvalsEnabled", "Заявки", "Этапы, где требуется ваше решение"],
     ["tripsEnabled", "Командировки", "Согласование и возврат на доработку"],
@@ -325,12 +335,29 @@ export function NotificationCenter({
                 <span><strong>{label}</strong><small>{description}</small></span>
                 <Switch
                   aria-label={label}
-                  checked={preferences[key]}
-                  disabled={savingPreferences || (key !== "desktopEnabled" && !preferences.desktopEnabled)}
+                  checked={preferences[key] !== false}
+                  disabled={savingPreferences}
                   onChange={(_, data) => void updatePreference(key, data.checked)}
                 />
               </label>
             ))}
+          </div>
+          <div className="notification-sound-settings">
+            <Switch label="Звуки уведомлений" checked={preferences.soundEnabled !== false} disabled={savingPreferences}
+              onChange={(_, data) => void updatePreference("soundEnabled", data.checked)} />
+            <label><span>Громкость: {volume}%</span><input type="range" aria-label="Громкость уведомлений" min={0} max={100} step={5}
+              value={volume} onChange={event => setVolumeDraft({ base: preferences.soundVolume ?? 20, value: Number(event.target.value) })} /></label>
+            <div><Button size="small" disabled={savingPreferences || volume === (preferences.soundVolume ?? 20)} onClick={() => {
+              setSavingPreferences(true); setSoundStatus(undefined);
+            void Promise.resolve().then(() => onUpdatePreferences({ ...preferences, soundVolume: volume })).then(() => {
+                setSoundStatus({ message: "Громкость сохранена", error: false });
+              }).catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось сохранить громкость", error: true }))
+                .finally(() => setSavingPreferences(false));
+            }}>Сохранить громкость</Button> <Button size="small" onClick={() => {
+              void workspaceSounds.preview(volume).then(() => setSoundStatus({ message: "Звук воспроизведён", error: false }))
+                .catch((failure: unknown) => setSoundStatus({ message: failure instanceof Error ? failure.message : "Не удалось воспроизвести звук", error: true }));
+            }}>Проверить звук</Button></div>
+            {soundStatus && <p role={soundStatus.error ? "alert" : "status"}>{soundStatus.message}</p>}
           </div>
           {onTestSystemNotification ? <div className="notification-test">
             <Button size="small" disabled={testingNotification} onClick={() => {
@@ -345,7 +372,7 @@ export function NotificationCenter({
             {testStatus ? <p role={testStatus.error ? "alert" : "status"}>{testStatus.message}</p> : null}
           </div> : null}
           <p className="notification-settings-note">
-            Внутренний список сохраняется всегда. Системные уведомления приходят, пока сайт открыт; для веб-версии нужны HTTPS и разрешение браузера.
+            Отключение звука не удаляет события. Отключение канала ленты останавливает новые уведомления о публикациях. Системные уведомления приходят, пока сайт открыт; нужны HTTPS и разрешение браузера.
           </p>
         </aside>
       </div>

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FeedPost } from "@yuksalish/contracts";
 import { FeedView } from "./FeedView";
-import { people } from "./test-fixtures/demo-data";
+import { initialChats, people } from "./test-fixtures/demo-data";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 
 const birthday: FeedPost = {
@@ -24,6 +24,23 @@ function view(canUseAssistant: boolean) {
 
 describe("birthday greeting access", () => {
   afterEach(cleanup);
+
+  it("forwards a publication by its real ID instead of copying its text", async () => {
+    const forward = vi.fn().mockResolvedValue({ id: "sent" });
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[birthday]} people={[]} token="token" currentUserId="employee-1"
+      chats={initialChats} onForwardContent={forward} onCreate={vi.fn()} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={vi.fn()} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: `Переслать объявление: ${birthday.title}` }));
+    const dialog = screen.getByRole("dialog", { name: "Переслать объявление" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Бахтиёр Самугов/ }));
+    await waitFor(() => expect(forward).toHaveBeenCalledWith("baxtiyor", { kind: "feed", id: birthday.id }, expect.any(String)));
+  });
+  it("focuses the original publication and reports a missing original", () => {
+    const common = { people: [], token: "token", currentUserId: "employee-1", onCreate: vi.fn(), onComment: vi.fn(), onReact: vi.fn(), onDeleteComment: vi.fn(), onPin: vi.fn(), onDelete: vi.fn() };
+    const view = render(<FluentProvider theme={webLightTheme}><FeedView {...common} posts={[birthday]} focusPostId={birthday.id} /></FluentProvider>);
+    expect(screen.getByRole("article", { name: birthday.title })).toHaveFocus();
+    view.rerender(<FluentProvider theme={webLightTheme}><FeedView {...common} posts={[birthday]} focusPostId="missing" /></FluentProvider>);
+    expect(screen.getByRole("status")).toHaveTextContent("Объявление удалено или недоступно");
+  });
 
   it("hides AI greeting controls when the assistant is disabled", () => {
     view(false);

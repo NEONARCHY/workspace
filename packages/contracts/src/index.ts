@@ -414,6 +414,7 @@ export interface ChatMessage {
   readonly chatId: string;
   readonly authorId: string;
   readonly body: string;
+  readonly forwarded?: ForwardedContent | null;
   readonly systemKind?: "member_left" | "ownership_transferred" | "task_deadline_request" | null;
   readonly time: string;
   readonly createdAt?: string;
@@ -430,6 +431,21 @@ export interface ChatMessage {
   readonly pinnedAt?: string | null;
   readonly pinnedByUserId?: string | null;
   readonly canPin?: boolean;
+}
+
+/** Provenance is set by the server, never inferred from message text. */
+export interface ForwardedContent {
+  readonly kind: "message" | "feed";
+  readonly authorId: string | null;
+  readonly authorName: string;
+  readonly postId?: string | null;
+  readonly title?: string | null;
+  readonly available: boolean;
+}
+
+export interface ForwardSource {
+  readonly kind: "message" | "feed";
+  readonly id: string;
 }
 
 export interface LinkPreview {
@@ -708,7 +724,8 @@ export type NotificationKind =
   | "zoom"
   | "hisobot"
   | "support"
-  | "birthday";
+  | "birthday"
+  | "feed";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -744,6 +761,9 @@ export interface WorkspaceNotification {
 }
 
 export interface NotificationPreferences {
+  readonly feedEnabled?: boolean;
+  readonly soundEnabled?: boolean;
+  readonly soundVolume?: number;
   readonly desktopEnabled: boolean;
   readonly messagesEnabled: boolean;
   readonly tasksEnabled: boolean;

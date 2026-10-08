@@ -1024,7 +1024,8 @@ describe("Private messenger", () => {
 
   it("forwards a message to another writable chat", async () => {
     const onSendMessage = vi.fn().mockResolvedValue({ id: "forwarded" });
-    renderMessenger({ onSendMessage });
+    const onForwardContent = vi.fn().mockResolvedValue({ id: "forwarded" });
+    renderMessenger({ onSendMessage, onForwardContent });
     const source = initialMessages[0]!;
 
     openMessageMenu(source.body);
@@ -1032,12 +1033,12 @@ describe("Private messenger", () => {
     const drawer = screen.getByRole("dialog", { name: "Переслать сообщение" });
     fireEvent.click(within(drawer).getByRole("button", { name: /Бахтиёр Самугов/ }));
 
-    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(
+    await waitFor(() => expect(onForwardContent).toHaveBeenCalledWith(
       "baxtiyor",
-      `Переслано от Дилшод Рахимов:\n${source.body}`,
-      [],
-      { mentionUserIds: [] },
+      { kind: "message", id: source.id },
+      expect.any(String),
     ));
+    expect(onSendMessage).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
 

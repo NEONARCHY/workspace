@@ -158,11 +158,27 @@ class MessageReactionResponse(ApiModel):
     reactor_user_ids: list[str] = Field(default_factory=list)
 
 
+class ForwardedContentResponse(ApiModel):
+    kind: Literal["message", "feed"]
+    author_id: str | None
+    author_name: str
+    post_id: str | None = None
+    title: str | None = None
+    available: bool = True
+
+
+class ForwardMessageRequest(ApiModel):
+    request_id: UUID
+    kind: Literal["message", "feed"]
+    source_id: UUID
+
+
 class ChatMessageResponse(ApiModel):
     id: str
     chat_id: str
     author_id: str
     body: str
+    forwarded: ForwardedContentResponse | None = None
     system_kind: Literal[
         "member_left", "ownership_transferred", "task_deadline_request"
     ] | None = None
@@ -1263,7 +1279,7 @@ class RespondCalendarEventRequest(ApiModel):
 
 NotificationKind = Literal[
     "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot",
-    "support",
+    "support", "birthday", "feed",
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
@@ -1301,6 +1317,9 @@ class NotificationResponse(ApiModel):
 
 
 class NotificationPreferencesResponse(ApiModel):
+    feed_enabled: bool = True
+    sound_enabled: bool = True
+    sound_volume: int = Field(default=20, ge=0, le=100)
     desktop_enabled: bool = True
     messages_enabled: bool = True
     tasks_enabled: bool = True
@@ -1313,6 +1332,10 @@ class NotificationPreferencesResponse(ApiModel):
 
 
 class NotificationPreferencesUpdate(ApiModel):
+    # Older clients must not overwrite these new preferences.
+    feed_enabled: bool | None = None
+    sound_enabled: bool | None = None
+    sound_volume: int | None = Field(default=None, ge=0, le=100)
     desktop_enabled: bool
     messages_enabled: bool
     tasks_enabled: bool

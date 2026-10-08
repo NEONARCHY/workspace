@@ -158,7 +158,7 @@ void app.whenReady().then(() => {
     const notification = new Notification({
       title: payload.title.slice(0, 240),
       body: payload.body.slice(0, 500),
-      silent: false,
+    silent: true,
     });
     notification.on("click", () => {
       window.show();

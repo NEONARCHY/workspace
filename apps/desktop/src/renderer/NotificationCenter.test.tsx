@@ -1,9 +1,10 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/contracts";
 import { afterEach, expect, it, vi } from "vitest";
 import { NotificationCenter } from "./NotificationCenter";
 import { workspaceTheme } from "./workspace-theme";
+import { workspaceSounds } from "./workspace-sounds";
 
 const preferences: NotificationPreferences = { desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true };
 const notifications = (unread = 0): WorkspaceNotification[] => Array.from({ length: 300 }, (_, i) => ({
@@ -66,4 +67,32 @@ it("restores the notification after a failed five-second delete", async () => {
   expect(onDelete).toHaveBeenCalledOnce();
   expect(screen.getByText("Событие 0")).toBeInTheDocument();
   expect(screen.getByRole("alert")).toHaveTextContent("Не удалось удалить уведомление");
+});
+it("lets employees disable feed and sound without granting desktop notification permission", async () => {
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} preferences={{ ...preferences, desktopEnabled: false }} notifications={[]} /></FluentProvider>);
+  const feed = screen.getByRole("switch", { name: "Лента" });
+  expect(feed).toBeEnabled();
+  fireEvent.click(feed);
+  await waitFor(() => expect(props.onUpdatePreferences).toHaveBeenCalledWith(expect.objectContaining({ feedEnabled: false })));
+  await waitFor(() => expect(screen.getByRole("switch", { name: "Звуки уведомлений" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("switch", { name: "Звуки уведомлений" }));
+  await waitFor(() => expect(props.onUpdatePreferences).toHaveBeenCalledWith(expect.objectContaining({ soundEnabled: false })));
+});
+it("saves volume explicitly and reports failure without claiming success", async () => {
+  const update = vi.fn().mockRejectedValue(new Error("Не удалось сохранить"));
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} onUpdatePreferences={update} notifications={[]} /></FluentProvider>);
+  fireEvent.change(screen.getByRole("slider", { name: "Громкость уведомлений" }), { target: { value: "35" } });
+  expect(update).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить громкость" }));
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось сохранить"));
+  expect(update).toHaveBeenCalledWith(expect.objectContaining({ soundVolume: 35 }));
+  expect(screen.queryByText("Громкость сохранена")).not.toBeInTheDocument();
+});
+it("previews the selected sound volume from an explicit action", async () => {
+  const preview = vi.spyOn(workspaceSounds, "preview").mockResolvedValue();
+  render(center([]));
+  fireEvent.click(screen.getByRole("button", { name: "Проверить звук" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Звук воспроизведён"));
+  expect(preview).toHaveBeenCalledWith(20);
+  preview.mockRestore();
 });
