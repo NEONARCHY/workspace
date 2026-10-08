@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
@@ -65,6 +66,7 @@ async def unit_report(
 
 
 async def exercise_backlog(url: str) -> None:
+    assert (make_url(url).database or "").startswith("yuksalish_test")
     engine = create_async_engine(url)
     try:
         await seed_demo_data(engine)
@@ -142,6 +144,7 @@ async def exercise_backlog(url: str) -> None:
                 assert active[0]["read_at"] is None and active[0]["resolved_at"] is None
                 slots = (await connection.execute(select(workspace_notifications).where(
                     workspace_notifications.c.user_id == owner,
+                    workspace_notifications.c.kind == "hisobot",
                     workspace_notifications.c.is_reminder.is_(True),
                 ))).mappings().all()
                 # Archived in storage, not deleted or falsely read/delivered.
