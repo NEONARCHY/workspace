@@ -20,6 +20,10 @@ notification counts and navigation order are unchanged.
   sliding indicator. The drawer heading has no count. Existing live section counters
   stay at the right of their own buttons; sections without a count get no invented badge.
   The number on the More trigger still means hidden sections, not unread notifications.
+- Opening or closing inline AI modules does not change the current page selection.
+  The shared indicator observes each navigation slot as well as button sizes,
+  following intermediate disclosure layout directly without React commits per frame.
+  Repeated toggles and reversals retain matching label/surface coordinates.
 
 ## Persistence and fallback
 
