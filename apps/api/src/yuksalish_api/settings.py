@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     ai_referent_offline_authority_enabled: bool = False
     gemini_api_key: SecretStr = SecretStr("")
     hisobot_bridge_token: SecretStr = SecretStr("")
+    edo_api_url: str = ""
+    edo_service_credential: SecretStr = SecretStr("")
+    edo_assertion_key_base64: SecretStr = SecretStr("")
+    edo_workspace_id: str = "yuksalish-workspace"
+    edo_legacy_timezone: str = ""
+    edo_ca_bundle: Path | None = None
     ai_referent_journal_max_bytes: int = 25 * 1024 * 1024
     ai_referent_packet_max_bytes: int = 200 * 1024 * 1024
     zoom_account_id: str = ""

@@ -3,6 +3,7 @@ export const moduleKeys = [
   "team_overview",
   "payment_requests",
   "ai_referent",
+  "incoming_letters",
   "ai_hisobot",
   "assistant",
   "telegram_access",
@@ -1064,6 +1065,57 @@ export interface AIReferentJournalFile {
 }
 
 export type AIReferentIncomingSource = "exat" | "webmail" | "import";
+
+export type EdoIncomingStatus = null | 1 | 2 | 3;
+export type EdoIncomingFilter = "unread" | "in_progress" | "completed" | "confirmed";
+
+export interface EdoIncomingAssignment {
+  readonly user_id: number;
+  readonly employee_id: string | null;
+  readonly queue: number;
+  readonly assigned_at_legacy: string | null;
+  readonly viewed: boolean;
+}
+
+export interface EdoIncomingAttachment {
+  readonly id: string;
+  readonly name: string;
+  readonly size: number;
+}
+
+export interface EdoIncomingLetter {
+  readonly id: number;
+  readonly version: number;
+  readonly status: EdoIncomingStatus;
+  readonly in_num: string | null;
+  readonly in_date: string | null;
+  readonly out_num: string | null;
+  readonly out_date: string | null;
+  readonly organization: string | null;
+  readonly region: string | null;
+  readonly description: string | null;
+  readonly deadline: string | null;
+  readonly deadline2: string | null;
+  readonly type: string | null;
+  readonly comment: string | null;
+  readonly result: string | null;
+  readonly result_time: string | null;
+  readonly legacy_dates_timezone: string;
+  readonly assignments: readonly EdoIncomingAssignment[];
+  readonly attachments: readonly EdoIncomingAttachment[];
+  readonly overdue: boolean | null;
+}
+
+export interface EdoIncomingPage {
+  readonly data: readonly EdoIncomingLetter[];
+  readonly meta: { readonly page: number; readonly limit: number; readonly total: number };
+  readonly deadline_timezone_verified: boolean;
+}
+
+export interface EdoIncomingDetail {
+  readonly data: EdoIncomingLetter;
+  readonly deadline_timezone_verified: boolean;
+}
 
 export interface AIReferentIncomingLetter {
   readonly id: string;

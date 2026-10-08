@@ -19,6 +19,9 @@ import type {
   AIReferentIncomingAccessRule,
   AIReferentIncomingAccessUpdate,
   AIReferentVisibility,
+  EdoIncomingDetail,
+  EdoIncomingFilter,
+  EdoIncomingPage,
   AIReferentLetter,
   AIReferentLetterInput,
   AIReferentRegistry,
@@ -168,6 +171,48 @@ export function loadLinkPreview(token: string, url: string): Promise<LinkPreview
 
 export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
+}
+
+export function loadEdoIncomingLetters(
+  token: string,
+  options: { readonly page?: number; readonly q?: string; readonly status?: EdoIncomingFilter } = {},
+): Promise<EdoIncomingPage> {
+  const query = new URLSearchParams({ page: String(options.page ?? 1), limit: "20" });
+  if (options.q?.trim()) query.set("q", options.q.trim());
+  if (options.status) query.set("status", options.status);
+  return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, {}, token);
+}
+
+export function loadEdoIncomingLetter(token: string, id: number): Promise<EdoIncomingDetail> {
+  return apiRequest<EdoIncomingDetail>(`/incoming-letters/${id}`, {}, token);
+}
+
+export function addEdoIncomingAssignment(
+  token: string, id: number, expectedVersion: number, employeeId: string, operationKey: string,
+): Promise<EdoIncomingDetail> {
+  return apiRequest<EdoIncomingDetail>(`/incoming-letters/${id}/assignments`, {
+    method: "POST", headers: { "Idempotency-Key": operationKey },
+    body: JSON.stringify({ expected_version: expectedVersion, employee_id: employeeId }),
+  }, token);
+}
+
+export function completeEdoIncomingLetter(
+  token: string, id: number, expectedVersion: number, operationKey: string, result?: string,
+): Promise<EdoIncomingDetail> {
+  return apiRequest<EdoIncomingDetail>(`/incoming-letters/${id}/complete`, {
+    method: "POST", headers: { "Idempotency-Key": operationKey },
+    body: JSON.stringify(result === undefined ? { expected_version: expectedVersion } : {
+      expected_version: expectedVersion, result,
+    }),
+  }, token);
+}
+
+export function downloadEdoIncomingAttachment(
+  token: string, id: number, attachmentId: string,
+): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}`, {
+    headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+  }, (response) => response.blob(), 120_000);
 }
 
 export function loadEmployeeRecognitionProfile(
