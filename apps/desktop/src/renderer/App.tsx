@@ -21,6 +21,7 @@ import type {
   ZoomMeetingsRegistry,
   FeedPost,
   NotificationPreferences,
+  ForwardSource,
   NavigationKey,
   PersonalPreferences,
   ProjectInput,
@@ -79,6 +80,7 @@ import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspacePlatform } from "./platform-adapter";
+import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
@@ -108,7 +110,7 @@ import {
 } from "./workspace-module-preload";
 import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
-import { initialKnownNotificationIds } from "./notification-delivery";
+import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
@@ -164,6 +166,8 @@ import {
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
+  forwardWorkspaceContent,
+  loadWorkspaceFeedPost,
   createWorkspaceChat,
   updateWorkspaceChat,
   updateWorkspaceChatAvatar,
@@ -382,6 +386,8 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  useNotificationSounds(session && workspace.currentUser.id === session.user.id ? session.user.id : undefined,
+    workspace.notifications, workspace.notificationPreferences);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
   const [efficiencyError, setEfficiencyError] = useState<string>();
@@ -731,6 +737,7 @@ export function App() {
       hisobot: true,
       support: preferences.desktopEnabled,
       birthday: preferences.calendarEnabled,
+      feed: preferences.feedEnabled !== false,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -740,7 +747,7 @@ export function App() {
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
       ) continue;
       known.add(notification.id);
-      if (notification.desktopDeliveredAt || notification.readAt) continue;
+      if (notification.desktopDeliveredAt || notification.readAt || isObsoleteHisobotNotification(notification)) continue;
       void workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
@@ -881,6 +888,26 @@ export function App() {
       throw error;
     }
   };
+
+  const handleForwardContent = async (chatId: string, source: ForwardSource, requestId: string) => {
+    if (!session) return undefined;
+    const owner = session.user.id;
+    const message = await forwardWorkspaceContent(session.accessToken, chatId, source, requestId);
+    if (activeToken.current !== session.accessToken) return undefined;
+    if (workspace.currentUser.id === owner) storeMessage(message);
+    return message;
+  };
+
+  const openFeedPost = useCallback(async (id: string) => {
+    if (!session) return;
+    try {
+      const post = await loadWorkspaceFeedPost(session.accessToken, id);
+      if (activeToken.current !== session.accessToken) return;
+      setWorkspace(current => ({ ...current, feedPosts: [post, ...current.feedPosts.filter(item => item.id !== id)] }));
+      setFocusTarget(current => ({ section: "feed", entityId: id, revision: (current?.revision ?? 0) + 1 }));
+      setActiveSection("feed");
+    } catch (failure) { reportError(failure); }
+  }, [reportError, session]);
 
   const handleSendVoiceMessage = async (
     chatId: string,
@@ -1649,6 +1676,7 @@ export function App() {
 
   const openNotification = (notification: WorkspaceNotification) => {
     void handleMarkNotificationRead(notification);
+    if (notification.section === "feed" && notification.entityId) { void openFeedPost(notification.entityId); return; }
     if (notification.kind === "support") {
       setSupportFocusRequestId(notification.entityId ?? undefined);
       setSupportOpen(true);
@@ -1676,6 +1704,10 @@ export function App() {
           .then(mergeNotification)
           .catch(reportError);
       }
+      if (notification.section === "feed" && notification.entityId) {
+        void openFeedPost(notification.entityId);
+        return;
+      }
       if (notification.kind === "support") {
         setSupportFocusRequestId(notification.entityId ?? undefined);
         setSupportOpen(true);
@@ -1693,7 +1725,7 @@ export function App() {
       }));
       setActiveSection(section);
     });
-  }, [reportError, session, workspace.notifications]);
+  }, [openFeedPost, reportError, session, workspace.notifications]);
 
   const preloadToken = session?.accessToken;
   const preloadUserId = session?.user.id;
@@ -1879,6 +1911,8 @@ export function App() {
     attachments={workspace.attachments}
     people={workspace.people}
     onSendMessage={handleSendMessage}
+    onForwardContent={handleForwardContent}
+    onOpenFeedPost={openFeedPost}
     onSendVoiceMessage={handleSendVoiceMessage}
     onReactMessage={handleMessageReaction}
     onPinMessage={handleMessagePin}
@@ -2068,6 +2102,8 @@ export function App() {
                 people={workspace.people}
                 departments={workspace.departments}
                 onSendMessage={handleSendMessage}
+                onForwardContent={handleForwardContent}
+                onOpenFeedPost={openFeedPost}
                 onSendVoiceMessage={handleSendVoiceMessage}
                 onReactMessage={handleMessageReaction}
                 onPinMessage={handleMessagePin}
@@ -2219,6 +2255,9 @@ export function App() {
                 key={focusTarget?.section === "feed" ? focusTarget.revision : undefined}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "feed" ? preparedAction : undefined}
                 posts={workspace.feedPosts}
+                focusPostId={focusTarget?.section === "feed" ? focusTarget.entityId : undefined}
+                chats={workspace.chats}
+                onForwardContent={canView("messenger") ? handleForwardContent : undefined}
                 people={workspace.people}
                 token={session.accessToken}
                 currentUserId={workspace.currentUser.id}

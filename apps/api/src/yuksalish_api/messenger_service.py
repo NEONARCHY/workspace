@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 from sqlalchemy.sql.elements import ColumnElement
 
+from .access_control import module_permissions_for_user
 from .auth import AuthenticatedUser
 from .errors import WorkspaceRepositoryError
 from .position_policy import is_executive_leader
@@ -17,6 +18,7 @@ from .tables import (
     chat_dismissals,
     chat_members,
     chats,
+    feed_posts,
     message_reactions,
     message_receipts,
     message_versions,
@@ -37,6 +39,7 @@ from .workspace_schemas import (
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    ForwardedContentResponse,
     MessageReactionRequest,
     MessageReactionResponse,
     PinMessageRequest,
@@ -846,6 +849,53 @@ async def message_detail_maps(
     return reactions, {row["message_id"]: row for row in pin_rows}
 
 
+async def forward_detail_map(
+    connection: AsyncConnection, user: AuthenticatedUser, rows: list[Record],
+) -> dict[UUID, ForwardedContentResponse]:
+    forwarded = {row["id"]: row["forwarded"] for row in rows if row.get("forwarded")}
+    feed_ids = {UUID(value["post_id"]) for value in forwarded.values() if value["kind"] == "feed"}
+    available: set[UUID] = set()
+    if feed_ids and (await module_permissions_for_user(connection, user))["feed"]["view"]:
+        available = set((await connection.execute(select(feed_posts.c.id).where(
+            feed_posts.c.id.in_(feed_ids),
+        ))).scalars())
+    result: dict[UUID, ForwardedContentResponse] = {}
+    for message_id, value in forwarded.items():
+        content = ForwardedContentResponse.model_validate(value)
+        if content.kind == "feed" and UUID(value["post_id"]) not in available:
+            content = content.model_copy(update={
+                "available": False, "title": None, "author_id": None,
+                "author_name": "Объявление недоступно",
+            })
+        result[message_id] = content
+    return result
+
+
+async def read_message_ids(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    message_ids: list[UUID],
+) -> set[UUID]:
+    """Only an author's own messages reveal whether another recipient has read them."""
+    if not message_ids:
+        return set()
+    return set(
+        (
+            await connection.execute(
+                select(message_receipts.c.message_id)
+                .join(messages, messages.c.id == message_receipts.c.message_id)
+                .where(
+                    message_receipts.c.message_id.in_(message_ids),
+                    messages.c.author_user_id == user.id,
+                    message_receipts.c.user_id != user.id,
+                    message_receipts.c.read_at.is_not(None),
+                )
+                .distinct()
+            )
+        ).scalars().all()
+    )
+
+
 def message_response(
     row: Record,
     user: AuthenticatedUser,
@@ -854,6 +904,8 @@ def message_response(
     can_pin: bool = False,
     reactions: list[MessageReactionResponse] | None = None,
     pin: Record | None = None,
+    forwarded: ForwardedContentResponse | None = None,
+    read_by_recipient: bool = False,
 ) -> ChatMessageResponse:
     own = row["author_user_id"] == user.id
     deleted = row["deleted_at"] is not None
@@ -861,9 +913,14 @@ def message_response(
         id=str(row["id"]),
         chat_id=str(row["chat_id"]),
         author_id=str(row["author_user_id"]),
-        body="" if deleted else row["body"],
+        body=(
+            "" if deleted else "Объявление недоступно"
+            if forwarded and not forwarded.available else row["body"]
+        ),
+        forwarded=None if deleted else forwarded,
         system_kind=row["system_kind"],
         own=own,
+        read_by_recipient=own and read_by_recipient,
         time=row["created_at"].astimezone(ZoneInfo("Asia/Tashkent")).strftime("%H:%M"),
         created_at=row["created_at"],
         edited_at=row["edited_at"],
@@ -874,6 +931,7 @@ def message_response(
         can_edit=own
         and not deleted
         and row["system_kind"] is None
+        and not row.get("forwarded")
         and can_send
         and datetime.now(UTC) < row["created_at"] + timedelta(hours=24),
         can_delete=not deleted and row["system_kind"] is None and (
@@ -899,6 +957,8 @@ async def message_with_details(
     if not message_visible_to_member(row, member):
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     reactions, pins = await message_detail_maps(connection, user, [row["id"]])
+    forwards = await forward_detail_map(connection, user, [row])
+    read_ids = await read_message_ids(connection, user, [row["id"]])
     return message_response(
         row,
         user,
@@ -906,6 +966,8 @@ async def message_with_details(
         can_pin=can_manage_messages(chat, member),
         reactions=reactions.get(row["id"]),
         pin=pins.get(row["id"]),
+        forwarded=forwards.get(row["id"]),
+        read_by_recipient=row["id"] in read_ids,
     )
 
 
@@ -979,6 +1041,9 @@ async def send_chat_message(
     user: AuthenticatedUser,
     chat_id: UUID,
     payload: SendMessageRequest,
+    *,
+    message_id: UUID | None = None,
+    forwarded: dict[str, Any] | None = None,
 ) -> ChatMessageResponse:
     chat, member = await chat_access(connection, user, chat_id, lock=True)
     if not member_permissions(member).send_messages:
@@ -1002,10 +1067,11 @@ async def send_chat_message(
             await connection.execute(
                 insert(messages)
                 .values(
-                    id=uuid4(),
+                    id=message_id or uuid4(),
                     chat_id=chat_id,
                     author_user_id=user.id,
                     body=payload.body,
+                    forwarded=forwarded,
                     reply_to_message_id=payload.reply_to_message_id,
                     mention_user_ids=mentions,
                     created_at=now,

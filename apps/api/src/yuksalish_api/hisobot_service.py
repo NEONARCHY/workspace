@@ -618,41 +618,20 @@ async def resolve_reminders(connection: AsyncConnection, day: date, telegram_id:
         ).values(resolved_at=datetime.now(UTC)))
 
 
-async def materialize_hisobot_reminders(connection: AsyncConnection,
-                                       now: datetime | None = None) -> int:
-    current = local_now(now)
-    clock = current.time().replace(tzinfo=None)
-    today_start = datetime.combine(current.date(), time.min, tzinfo=TASHKENT).astimezone(UTC)
-    await connection.execute(update(workspace_notifications).where(
-        workspace_notifications.c.event_key.like("hisobot:%"),
-        workspace_notifications.c.occurred_at < today_start,
-        workspace_notifications.c.resolved_at.is_(None),
-    ).values(resolved_at=current.astimezone(UTC)))
-    if current.weekday() >= 5 or clock >= time(18, 30):
-        if clock >= time(18, 30):
-            await connection.execute(update(workspace_notifications).where(
-                workspace_notifications.c.event_key.like(
-                    f"hisobot:{current.date().isoformat()}:%"
-                ),
-                workspace_notifications.c.resolved_at.is_(None),
-            ).values(resolved_at=current.astimezone(UTC)))
-        return 0
-    due = [slot for slot in REMINDER_SLOTS if slot <= clock]
-    if not due:
-        return 0
-    slot = due[-1]
-    roster = await bridge_roster(connection)
-    today_rows = (await connection.execute(select(
+async def _unsubmitted_report_members(
+    connection: AsyncConnection, day: date, roster: list[BridgeRosterMember],
+) -> list[BridgeRosterMember]:
+    rows = (await connection.execute(select(
         hisobot_live_reports.c.telegram_id, hisobot_live_reports.c.report_scope,
         hisobot_live_reports.c.region_name
-    ).where(hisobot_live_reports.c.report_date == current.date()))).all()
-    submitted_ids = {row.telegram_id for row in today_rows}
-    submitted_regions = {row.region_name for row in today_rows
+    ).where(hisobot_live_reports.c.report_date == day))).all()
+    submitted_ids = {row.telegram_id for row in rows}
+    submitted_regions = {row.region_name for row in rows
                           if row.report_scope == "hudud" and row.region_name}
     unit_rows = (await connection.execute(select(
         hisobot_unit_reports.c.report_scope, hisobot_unit_reports.c.region_name,
         hisobot_unit_reports.c.covered_telegram_ids,
-    ).where(hisobot_unit_reports.c.report_date == current.date()))).all()
+    ).where(hisobot_unit_reports.c.report_date == day))).all()
     covered_central_ids = {
         telegram_id for row in unit_rows if row.report_scope == "central"
         for telegram_id in row.covered_telegram_ids
@@ -662,38 +641,130 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
         if row.report_scope == "hudud" and row.region_name
     )
     exemptions = {item.telegram_id for item in await report_exemptions(
-        connection, current.date(), current.date()
-    ) if item.starts_date <= current.date() <= item.through_date}
-    if exemptions:
-        exempt_users = (await connection.execute(select(telegram_identities.c.user_id).where(
-            telegram_identities.c.telegram_id.in_(exemptions)
-        ))).scalars().all()
-        await connection.execute(update(workspace_notifications).where(
-            workspace_notifications.c.user_id.in_(exempt_users),
-            workspace_notifications.c.event_key.like(f"hisobot:{current.date().isoformat()}:%"),
-            workspace_notifications.c.resolved_at.is_(None),
-        ).values(resolved_at=datetime.now(UTC)))
+        connection, day, day
+    ) if item.starts_date <= day <= item.through_date}
+    return [member for member in roster if (
+        member.report_required and member.telegram_id not in submitted_ids
+        and member.telegram_id not in covered_central_ids
+        and member.telegram_id not in exemptions
+        and not (member.report_scope == "hudud" and member.region_name in submitted_regions)
+    )]
+
+
+async def collapse_hisobot_notification_backlog(
+    connection: AsyncConnection, now: datetime | None = None, *, user_id: UUID | None = None,
+) -> int:
+    """Archive expired slots without fabricating read/delivery receipts; keep one dated notice."""
+    current = local_now(now)
+    cutoff = current if current.time().replace(tzinfo=None) >= time(18, 30) else (
+        datetime.combine(current.date(), time.min, tzinfo=TASHKENT)
+    )
+    query = select(workspace_notifications).where(
+        workspace_notifications.c.kind == "hisobot",
+        workspace_notifications.c.is_reminder.is_(True),
+        workspace_notifications.c.event_key.like("hisobot:%"),
+        workspace_notifications.c.occurred_at < cutoff.astimezone(UTC),
+        workspace_notifications.c.dismissed_at.is_(None),
+    )
+    if user_id is not None:
+        query = query.where(workspace_notifications.c.user_id == user_id)
+    rows = (await connection.execute(
+        query.order_by(workspace_notifications.c.id).with_for_update()
+    )).mappings().all()
+    if not rows:
+        return 0
+    utc_now = current.astimezone(UTC)
+    await connection.execute(update(workspace_notifications).where(
+        workspace_notifications.c.id.in_([row["id"] for row in rows]),
+    ).values(
+        resolved_at=func.coalesce(workspace_notifications.c.resolved_at, utc_now),
+        dismissed_at=utc_now,
+    ))
+    latest: dict[UUID, date] = {}
+    for row in rows:
+        day = row["occurred_at"].astimezone(TASHKENT).date()
+        if not row["read_at"] and not row["desktop_delivered_at"] and day.weekday() < 5:
+            latest[row["user_id"]] = max(latest.get(row["user_id"], day), day)
+    if not latest:
+        return len(rows)
+    roster = await bridge_roster(connection)
+    missing_by_day = {
+        day: {member.employee_key for member in await _unsubmitted_report_members(
+            connection, day, roster
+        )} for day in set(latest.values())
+    }
     from .repository import _upsert_notification
 
-    created = 0
-    for member in roster:
-        if (not member.report_required or member.telegram_id in submitted_ids
-                or member.telegram_id in covered_central_ids
-                or member.telegram_id in exemptions
-                or (member.report_scope == "hudud" and member.region_name in submitted_regions)):
+    changed = len(rows)
+    for recipient_id, day in latest.items():
+        if str(recipient_id) not in missing_by_day[day]:
             continue
-        user_query = select(telegram_identities.c.user_id).where(
-            telegram_identities.c.telegram_id == member.telegram_id
+        event_key = f"hisobot:{day.isoformat()}:missed"
+        # A late legacy slot must not resurrect an older warning after a newer one was read.
+        if await connection.scalar(select(workspace_notifications.c.id).where(
+            workspace_notifications.c.user_id == recipient_id,
+            workspace_notifications.c.kind == "hisobot",
+            workspace_notifications.c.event_key.like("hisobot:%:missed"),
+            workspace_notifications.c.event_key >= event_key,
+        )):
+            continue
+        await connection.execute(update(workspace_notifications).where(
+            workspace_notifications.c.user_id == recipient_id,
+            workspace_notifications.c.kind == "hisobot",
+            workspace_notifications.c.event_key.like("hisobot:%:missed"),
+            workspace_notifications.c.event_key < event_key,
+            workspace_notifications.c.read_at.is_(None),
+            workspace_notifications.c.dismissed_at.is_(None),
+        ).values(resolved_at=utc_now, dismissed_at=utc_now))
+        await _upsert_notification(
+            connection, user_id=recipient_id, event_key=event_key, kind="hisobot",
+            priority="attention", title="AI Hisobot · пропущен отчёт",
+            body=f"Отчёт за {day:%d.%m.%Y} не отправлен до 18:30. "
+                 "Пожалуйста, в следующий раз следите за напоминаниями системы.",
+            section="ai_hisobot", entity_id=None, requires_action=False,
+            occurred_at=current, is_reminder=False,
         )
-        user_id = cast(UUID | None, await connection.scalar(user_query))
-        if user_id is None:
-            continue
-        event_key = f"hisobot:{current.date().isoformat()}:{slot:%H%M}"
-        exists = await connection.scalar(select(workspace_notifications.c.id).where(
+        changed += 1
+    return changed
+
+
+async def materialize_hisobot_reminders(connection: AsyncConnection,
+                                       now: datetime | None = None) -> int:
+    current = local_now(now)
+    changed = await collapse_hisobot_notification_backlog(connection, current)
+    clock = current.time().replace(tzinfo=None)
+    due = [slot for slot in REMINDER_SLOTS if slot <= clock]
+    if current.weekday() >= 5 or clock >= time(18, 30) or not due:
+        return changed
+    slot = due[-1]
+    pending = await _unsubmitted_report_members(
+        connection, current.date(), await bridge_roster(connection)
+    )
+    event_key = f"hisobot:{current.date().isoformat()}:{slot:%H%M}"
+    # Older slots are superseded, not queued for the next launch. Keep history in storage.
+    retired = await connection.execute(update(workspace_notifications).where(
+        workspace_notifications.c.kind == "hisobot",
+        workspace_notifications.c.is_reminder.is_(True),
+        workspace_notifications.c.event_key.like(f"hisobot:{current.date().isoformat()}:%"),
+        workspace_notifications.c.dismissed_at.is_(None),
+        or_(
+            workspace_notifications.c.user_id.not_in([UUID(m.employee_key) for m in pending]),
+            and_(workspace_notifications.c.event_key != event_key,
+                 workspace_notifications.c.occurred_at <= current.astimezone(UTC)),
+        ),
+    ).values(
+        resolved_at=func.coalesce(workspace_notifications.c.resolved_at, current.astimezone(UTC)),
+        dismissed_at=current.astimezone(UTC),
+    ).returning(workspace_notifications.c.id))
+    changed += len(retired.scalars().all())
+    from .repository import _upsert_notification
+
+    for member in pending:
+        user_id = UUID(member.employee_key)
+        if await connection.scalar(select(workspace_notifications.c.id).where(
             workspace_notifications.c.user_id == user_id,
             workspace_notifications.c.event_key == event_key,
-        ))
-        if exists:
+        )):
             continue
         await _upsert_notification(
             connection, user_id=user_id, event_key=event_key, kind="hisobot",
@@ -702,5 +773,5 @@ async def materialize_hisobot_reminders(connection: AsyncConnection,
             section="ai_hisobot", entity_id=None, requires_action=True,
             occurred_at=current, is_reminder=True,
         )
-        created += 1
-    return created
+        changed += 1
+    return changed

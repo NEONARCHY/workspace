@@ -10,13 +10,18 @@ interface MediaVolumeControlProps {
 
 export function MediaVolumeControl({ mediaRef, disabled = false, className = "" }: MediaVolumeControlProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
+  const [pinnedOpen, setPinnedOpen] = useState(false);
+  const [hoverOpen, setHoverOpen] = useState(false);
+  const open = !disabled && (pinnedOpen || hoverOpen);
   const [volume, setVolume] = useState(1);
 
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setPinnedOpen(false);
+        setHoverOpen(false);
+      }
     };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
@@ -34,9 +39,23 @@ export function MediaVolumeControl({ mediaRef, disabled = false, className = "" 
     <div
       ref={rootRef}
       className={`media-volume-control${open ? " open" : ""}${className ? ` ${className}` : ""}`}
+      onPointerEnter={(event) => {
+        if (!disabled && event.pointerType !== "touch") setHoverOpen(true);
+      }}
+      onPointerLeave={(event) => {
+        setHoverOpen(false);
+        const focused = document.activeElement;
+        if (focused && event.currentTarget.contains(focused)
+          && focused.closest(".media-volume-popover")) setPinnedOpen(true);
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setPinnedOpen(false);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
-          setOpen(false);
+          event.stopPropagation();
+          setPinnedOpen(false);
+          setHoverOpen(false);
           rootRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
         }
       }}
@@ -48,7 +67,7 @@ export function MediaVolumeControl({ mediaRef, disabled = false, className = "" 
         aria-label="Громкость"
         aria-expanded={open}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setPinnedOpen((current) => !current)}
       />
       {open ? (
         <div className="media-volume-popover">

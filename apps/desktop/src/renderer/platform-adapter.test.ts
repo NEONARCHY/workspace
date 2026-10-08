@@ -74,6 +74,7 @@ describe("workspace platform adapter", () => {
     expect(NotificationMock).toHaveBeenCalledWith("Новая задача", {
       body: "Назначена задача",
       tag: "notification-1",
+      silent: true,
     });
   });
 });

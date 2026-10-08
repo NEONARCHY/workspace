@@ -216,7 +216,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .messenger-error, .chat-settings-content .inline-error { color: #9c1827; background: #fff0f1; padding: 12px; border-radius: 6px; }
 .chat-settings-dialog { width: min(720px, calc(100vw - 32px)); max-width: 720px; border: 1px solid rgb(255 255 255 / 88%); border-radius: 28px; background: linear-gradient(145deg, #fff 0%, #f8fcfb 58%, #f2f8fa 100%); box-shadow: 0 34px 90px -42px rgb(26 50 66 / 72%); }
 .chat-settings-dialog .fui-DialogTitle { color: #293a55; font-size: 22px; font-weight: 650; letter-spacing: -.025em; }
-.chat-settings-content { display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; max-height: 72vh; overflow-y: auto; padding-right: 6px; }
+.chat-settings-content { display: grid; grid-auto-rows: max-content; align-content: start; gap: 16px; max-height: 72vh; overflow-y: auto; margin-inline-end: -12px; padding-inline-end: 12px; scrollbar-gutter: stable; }
 .chat-settings-content > button { justify-self: start; min-height: 32px; }
 .chat-settings-content .muted { margin: 0; color: #5a6e80; font-size: 12px; line-height: 1.5; }
 .chat-settings-content h3 { margin: 0 0 10px; color: #24384b; font-size: 15px; }

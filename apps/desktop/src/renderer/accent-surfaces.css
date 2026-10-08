@@ -99,7 +99,7 @@ body .task-row.selected { box-shadow: none; }
 body .project-hub-funding-card.selected,
 body .team-dash-person.selected { box-shadow: 0 8px 19px rgb(31 92 104 / 8%); }
 body .notifications-view .notification-metrics > button.active {
-  background-image: linear-gradient(90deg, rgb(0 145 168 / 15%), rgb(0 145 168 / 7%) 42%, transparent);
+  background-image: linear-gradient(90deg, rgb(0 145 168 / 18%), rgb(0 145 168 / 9%) 42%, transparent);
   background-color: #fcfefe;
   box-shadow: 0 12px 30px rgb(41 58 85 / 9%);
 }

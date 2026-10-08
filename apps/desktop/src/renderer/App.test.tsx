@@ -492,6 +492,15 @@ function mockServer(
     if (url.includes("/chats/") && url.endsWith("/read") && options?.method === "POST") {
       return { ...response(undefined), status: 204, json: async () => undefined } as Response;
     }
+    if (url.includes("/chats/") && url.endsWith("/forwards") && options?.method === "POST") {
+      const payload = JSON.parse(String(options.body)) as { requestId: string; kind: "feed"; sourceId: string };
+      const post = feedPosts.find(item => item.id === payload.sourceId)!;
+      return response({ id: payload.requestId, chatId: url.match(/\/chats\/([^/]+)/)![1], authorId: currentUser.id, own: true,
+        body: post.body.slice(0, 240), time: "14:09", canEdit: false, forwarded: {
+          kind: payload.kind, authorId: post.authorUserId, authorName: currentUser.name,
+          postId: post.id, title: post.title, available: true,
+        } });
+    }
     if (url.endsWith("/feed/posts") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as { title: string; body: string };
       const created: FeedPost = {
@@ -512,6 +521,7 @@ function mockServer(
     }
     const feedMatch = url.match(/\/feed\/posts\/([^/?]+)/);
     const feedPost = feedPosts.find((item) => item.id === feedMatch?.[1]);
+    if (feedPost && url.endsWith(`/feed/posts/${feedPost.id}`) && (!options?.method || options.method === "GET")) return response(feedPost);
     if (feedPost && url.endsWith("/comments") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as { body: string };
       const changed: FeedPost = {
@@ -2127,6 +2137,27 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/feed/posts/feed-created/comments"),
       expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  it("forwards a feed post to a chat and loads the real original on activation", async () => {
+    const fetchMock = mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: "Лента" }));
+    await screen.findByText("Корпоративная лента подключена.");
+    fireEvent.click(await screen.findByRole("button", { name: "Переслать объявление: Новости Workspace" }));
+    const dialog = screen.getByRole("dialog", { name: "Переслать объявление" });
+    fireEvent.click(within(dialog).getByRole("button", { name: /Финансы и закупки/ }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать объявление" })).not.toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/chats/finance/forwards"), expect.objectContaining({
+      method: "POST", body: expect.stringContaining('"sourceId":"feed-1"'),
+    }));
+    fireEvent.click(screen.getByRole("button", { name: "Мессенджер" }));
+    const card = await screen.findByRole("button", { name: /Новости Workspace.*Открыть в ленте/ });
+    fireEvent.click(card);
+    const original = await screen.findByRole("article", { name: "Новости Workspace" });
+    await waitFor(() => expect(original).toHaveFocus());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/feed/posts/feed-1"), expect.anything());
   });
 
   it("creates an event in the shared calendar", async () => {

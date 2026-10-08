@@ -10,6 +10,7 @@ from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.forward_service import forward_message
 from yuksalish_api.link_preview import UnsafePreviewUrl, load_link_preview
 from yuksalish_api.workspace_schemas import (
     AddChatMembersRequest,
@@ -18,6 +19,7 @@ from yuksalish_api.workspace_schemas import (
     CreateChatRequest,
     DeleteMessageRequest,
     EditMessageRequest,
+    ForwardMessageRequest,
     LinkPreviewResponse,
     MessageReactionRequest,
     PinMessageRequest,
@@ -59,6 +61,19 @@ async def changed(connection: AsyncConnection, request: Request) -> None:
     await cast(WorkspaceEventBus, request.app.state.event_bus).publish(
         {"type": "messenger.changed"}
     )
+
+
+@router.post("/chats/{chat_id}/forwards", response_model=ChatMessageResponse, status_code=201)
+async def forward(
+    chat_id: UUID, payload: ForwardMessageRequest, user: User,
+    connection: Connection, request: Request,
+) -> ChatMessageResponse:
+    try:
+        result = await forward_message(connection, user, chat_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise HTTPException(error.status_code, error.detail) from error
+    await changed(connection, request)
+    return result
 
 
 @router.post("/chats", response_model=ChatSummaryResponse, status_code=201)

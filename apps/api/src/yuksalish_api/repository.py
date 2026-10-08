@@ -12,10 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from . import messenger_service
 from .absence_service import presence_summary, visible_absences
-from .access_control import ModuleAction, module_permissions_for_user
+from .access_control import ModuleAction, ensure_module_action, module_permissions_for_user
 from .ai_referent_incoming_access import named_responsible
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
-from .auth import AuthenticatedUser
+from .auth import AuthenticatedUser, load_authenticated_user
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
@@ -1649,6 +1649,9 @@ async def get_notification_preferences(
         .one()
     )
     return NotificationPreferencesResponse(
+        feed_enabled=bool(row["feed_enabled"]),
+        sound_enabled=bool(row["sound_enabled"]),
+        sound_volume=row["sound_volume"],
         desktop_enabled=bool(row["desktop_enabled"]),
         messages_enabled=bool(row["messages_enabled"]),
         tasks_enabled=bool(row["tasks_enabled"]),
@@ -1666,7 +1669,7 @@ async def update_notification_preferences(
     current_user: AuthenticatedUser,
     payload: NotificationPreferencesUpdate,
 ) -> NotificationPreferencesResponse:
-    values = payload.model_dump()
+    values = payload.model_dump(exclude_none=True)
     values["updated_at"] = datetime.now(UTC)
     await connection.execute(
         pg_insert(workspace_notification_preferences)
@@ -1916,6 +1919,9 @@ async def _sync_notifications_for_user(
     referent_letters = select(ai_referent_letters.c.id).where(
         or_(referent_sent, referent_non_sent)
     )
+    from .hisobot_service import collapse_hisobot_notification_backlog
+
+    await collapse_hisobot_notification_backlog(connection, now, user_id=current_user.id)
     rows = (
         (
             await connection.execute(
@@ -2590,6 +2596,12 @@ async def load_workspace(
     reaction_map, pin_map = await messenger_service.message_detail_maps(
         connection, current_user, [row["id"] for row in message_rows]
     )
+    forward_map = await messenger_service.forward_detail_map(
+        connection, current_user, list(message_rows)
+    )
+    read_ids = await messenger_service.read_message_ids(
+        connection, current_user, [row["id"] for row in message_rows]
+    )
     message_responses = [
         messenger_service.message_response(
             row,
@@ -2598,6 +2610,8 @@ async def load_workspace(
             can_pin=pin_permissions.get(str(row["chat_id"]), False),
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
+            forwarded=forward_map.get(row["id"]),
+            read_by_recipient=row["id"] in read_ids,
         )
         for row in message_rows
     ]
@@ -2921,16 +2935,29 @@ async def mark_chat_read(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     chat_id: UUID,
-) -> None:
-    membership = await connection.scalar(
-        select(func.count())
-        .select_from(chat_members)
-        .where(chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id)
-    )
-    if not membership:
+) -> bool:
+    membership = (
+        await connection.execute(
+            select(chat_members).where(
+                chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id
+            )
+        )
+    ).mappings().first()
+    if membership is None:
         raise WorkspaceRepositoryError(404, "Chat was not found")
-    chat_message_ids = select(messages.c.id).where(messages.c.chat_id == chat_id)
-    await connection.execute(
+    chat_message_ids = select(messages.c.id).where(
+        messages.c.chat_id == chat_id,
+        messages.c.deleted_at.is_(None),
+        or_(
+            messages.c.system_target_user_id.is_(None),
+            messages.c.system_target_user_id == current_user.id,
+        ),
+    )
+    if membership["history_visible_from"] is not None:
+        chat_message_ids = chat_message_ids.where(
+            messages.c.created_at >= membership["history_visible_from"]
+        )
+    changed = await connection.execute(
         update(message_receipts)
         .where(
             message_receipts.c.user_id == current_user.id,
@@ -2949,6 +2976,7 @@ async def mark_chat_read(
         )
         .values(read_at=datetime.now(UTC))
     )
+    return changed.rowcount > 0
 
 
 async def search_messages(
@@ -2998,6 +3026,10 @@ async def search_messages(
     reaction_map, pin_map = await messenger_service.message_detail_maps(
         connection, current_user, [row["id"] for row in rows]
     )
+    forward_map = await messenger_service.forward_detail_map(connection, current_user, list(rows))
+    read_ids = await messenger_service.read_message_ids(
+        connection, current_user, [row["id"] for row in rows]
+    )
     return [
         messenger_service.message_response(
             row,
@@ -3006,8 +3038,12 @@ async def search_messages(
             can_pin=messenger_service.can_manage_messages(row, row),
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
+            forwarded=forward_map.get(row["id"]),
+            read_by_recipient=row["id"] in read_ids,
         )
         for row in rows
+        # Unavailable excerpts must not be discoverable by probing search keywords.
+        if (origin := forward_map.get(row["id"])) is None or origin.available
     ]
 
 
@@ -3032,6 +3068,13 @@ async def _feed_post_response(
     )
 
 
+async def load_feed_post(
+    connection: AsyncConnection, current_user: AuthenticatedUser, post_id: UUID,
+) -> FeedPostResponse:
+    await ensure_module_action(connection, current_user, "feed", "view")
+    return await _feed_post_response(connection, current_user, post_id)
+
+
 async def create_feed_post(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -3050,7 +3093,31 @@ async def create_feed_post(
             updated_at=now,
         )
     )
+    await notify_feed_publication(connection, current_user, post_id, payload.title, now)
     return await _feed_post_response(connection, current_user, post_id)
+
+
+async def notify_feed_publication(
+    connection: AsyncConnection, author: AuthenticatedUser, post_id: UUID,
+    title: str, occurred_at: datetime,
+) -> None:
+    recipients = (await connection.execute(select(users.c.id).outerjoin(
+        workspace_notification_preferences,
+        workspace_notification_preferences.c.user_id == users.c.id,
+    ).where(users.c.status == "active", users.c.id != author.id,
+            func.coalesce(workspace_notification_preferences.c.feed_enabled, True)))).scalars()
+    for recipient_id in recipients:
+        recipient = await load_authenticated_user(connection, recipient_id)
+        if recipient is None:
+            continue
+        if not (await module_permissions_for_user(connection, recipient))["feed"]["view"]:
+            continue
+        await _upsert_notification(
+            connection, user_id=recipient_id, event_key=f"feed:{post_id}", kind="feed",
+            priority="normal", title="Новое объявление в ленте",
+            body=f"{author.full_name} · {title}",
+            section="feed", entity_id=post_id, requires_action=False, occurred_at=occurred_at,
+        )
 
 
 async def add_feed_comment(
@@ -3270,6 +3337,9 @@ async def delete_feed_post(
             "Only the author or an administrator can delete feed posts",
         )
     await connection.execute(delete(feed_posts).where(feed_posts.c.id == post_id))
+    await connection.execute(delete(workspace_notifications).where(
+        workspace_notifications.c.kind == "feed", workspace_notifications.c.entity_id == post_id,
+    ))
 
 
 async def _calendar_event_response(

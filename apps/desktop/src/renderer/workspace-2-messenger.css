@@ -402,7 +402,7 @@
 .messenger-view .message-body {
   position: relative;
   min-width: 90px;
-  padding: 10px 13px 7px;
+  padding: 8px 11px 6px;
   border: 1px solid rgb(41 58 85 / 6%);
   border-radius: 17px 17px 17px 5px;
   background: #fff;
@@ -423,7 +423,6 @@
 .messenger-view .message-row.is-group-last .message.own .message-body { border-top-right-radius: 8px; }
 
 .messenger-view .message-body > p { display: inline; margin: 1px 0; line-height: 1.48; }
-.messenger-view .message-body > time { display: inline; margin-left: 8px; opacity: .8; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .messenger-view .message-actions {
   position: absolute;
@@ -690,7 +689,8 @@
 }
 
 .messenger-view .voice-message {
-  min-width: min(330px, 62vw);
+  width: min(390px, 100%);
+  min-width: 0;
   padding: 5px 0 2px;
 }
 

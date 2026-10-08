@@ -1,5 +1,6 @@
 /* A short, reversible left-to-right wash. Only this decorative layer moves. */
 body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item),
+body .app-provider .notification-row,
 body .app-provider .record-table .record-row {
   position: relative;
   isolation: isolate;
@@ -8,6 +9,7 @@ body .app-provider .record-table .record-row {
   --row-wash-end: 5%;
 }
 body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+body .app-provider .notification-row > .list-row-hover-wash,
 body .app-provider .record-table .list-row-hover-wash {
   position: absolute;
   z-index: -1;
@@ -22,6 +24,17 @@ body .app-provider .record-table .list-row-hover-wash {
   transform-origin: left center;
   pointer-events: none;
   transition: transform 180ms cubic-bezier(.2, 0, 0, 1), opacity 150ms ease;
+}
+/* Notifications reuse the task-row wash, retaining their semantic priority. */
+body .app-provider .notification-row {
+  --row-hover-accent: var(--ws-surface-accent);
+  --row-wash-start: 24%;
+  --row-wash-end: 6%;
+}
+body .app-provider .notification-row > .list-row-hover-wash {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), white),
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), white));
 }
 /* One layer across the whole row, not one repeating band per cell. */
 body .app-provider .record-table .record-row { background-color: white; }
@@ -81,6 +94,7 @@ body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):not(
 }
 @media (hover: hover) and (pointer: fine) {
   body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):hover::before,
+  body .app-provider .notification-row:hover > .list-row-hover-wash,
   body .app-provider .record-table .record-row:hover .list-row-hover-wash {
     opacity: 1;
     transform: scaleX(1);
@@ -89,6 +103,7 @@ body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):not(
 }
 /* Keyboard feedback is immediate; existing focus outlines stay visible. */
 body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):focus-visible::before,
+body .app-provider .notification-row:focus-within > .list-row-hover-wash,
 body .app-provider .record-table .record-row:focus-within .list-row-hover-wash {
   opacity: 1;
   transform: none;
@@ -96,6 +111,7 @@ body .app-provider .record-table .record-row:focus-within .list-row-hover-wash {
 }
 @media (prefers-reduced-motion: reduce) {
   body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+  body .app-provider .notification-row > .list-row-hover-wash,
   body .app-provider .record-table .list-row-hover-wash {
     transform: none;
     transition: none;
@@ -103,7 +119,12 @@ body .app-provider .record-table .record-row:focus-within .list-row-hover-wash {
 }
 @media (forced-colors: active) {
   body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item)::before,
+  body .app-provider .notification-row > .list-row-hover-wash,
   body .app-provider .record-table .list-row-hover-wash { display: none; }
+  body .app-provider .notification-row:is(:hover, :focus-within) {
+    outline: 1px solid Highlight;
+    outline-offset: -1px;
+  }
   body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):is(:hover, :focus-visible),
   body .app-provider .record-table .record-row:is(:hover, :focus-within) > td {
     /* The product's normal-focus reset is important; forced colours must win. */
