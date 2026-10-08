@@ -1,0 +1,4 @@
+.qa-canvas-toolbar { align-items: center; color: var(--ws-muted); font-size: 12px; }
+.qa-canvas-toolbar select { max-width: 210px; padding: 6px 9px; border: 1px solid var(--ws-control-line); border-radius: 8px; color: var(--ws-text); background: #fff; }
+.qa-canvas-sample-card { padding: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-muted-surface); }
+@media (max-width: 760px) { .qa-canvas-toolbar > span { max-width: 45%; } }

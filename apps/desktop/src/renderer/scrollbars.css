@@ -48,6 +48,8 @@ html body :is(.app-provider, .fui-FluentProvider) * {
   }
   html body .app-provider.app-provider .task-kanban { scrollbar-width: none; }
   html body .app-provider .task-kanban::-webkit-scrollbar { height: 0; }
+  /* Payment board: easier to grab without widening vertical lane scrollbars. */
+  html body .app-provider.app-provider .approvals-view .approval-kanban::-webkit-scrollbar { height: 10px; }
   /* Pseudo-element tokens do not leak into nested fields or the chat pane. */
   html body :is(.app-provider, .fui-FluentProvider) .task-record-dialog .task-detail::-webkit-scrollbar-thumb {
     --ws-thumb-fade-quarter: min(48px, 11.25%);
@@ -57,10 +59,14 @@ html body :is(.app-provider, .fui-FluentProvider) * {
   }
 }
 
+.app-provider .approvals-view .approval-kanban { scrollbar-width: auto; }
+.app-provider .approvals-view .approval-kanban:focus-visible { box-shadow: inset 0 0 0 2px var(--ws-control-line); }
+
 @media (pointer: coarse) {
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar { width: 8px; height: 8px; }
 }
 @media (forced-colors: active) {
+  .app-provider .approvals-view .approval-kanban:focus-visible { border: 2px solid Highlight; }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) * { scrollbar-color: auto; }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:hover,
