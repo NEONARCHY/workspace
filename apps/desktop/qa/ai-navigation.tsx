@@ -17,6 +17,10 @@ import "../src/renderer/motion.css";
 import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/workspace-2-interactions.css";
 import "../src/renderer/ai-navigation.css";
+import "../src/renderer/workspace-2-focus.css";
+import "../src/renderer/sliding-segmented.css";
+import "../src/renderer/navigation-sliding.css";
+import "../src/renderer/sidebar-theme.css";
 
 const items = groupAiNavigation([
   { key: "messenger" as NavigationKey, label: "Мессенджер", icon: <Chat24Regular /> },
@@ -31,14 +35,15 @@ const items = groupAiNavigation([
 
 function Preview() {
   const [active, setActive] = useState<NavigationKey>("ai_referent");
+  const [aiOpen, setAiOpen] = useState(false);
   const collapsed = new URLSearchParams(window.location.search).has("collapsed");
   return <FluentProvider theme={workspaceTheme} className="app-provider">
     <div className={`app-shell${collapsed ? " rail-collapsed" : ""}`}>
-      <aside className="app-rail" aria-label="Основная навигация">
+      <aside className="app-rail sidebar-palette" aria-label="Основная навигация">
         <div className="workspace-logo"><span className="rail-toggle" aria-hidden="true">☰</span><CompanyLogo tone="color" className="rail-brand" /></div>
         <div className="rail-customize"><span>Меню</span></div>
-        <AdaptiveNavigation items={items} renderItem={(item, inOverflow, closeOverflow) => item.key === "ai_modules"
-          ? <div className="rail-slot" key={item.key}><AiModulesNavigation modules={item.modules} activeKey={active} inOverflow={inOverflow} onCloseOverflow={closeOverflow} onSelect={setActive} /></div>
+        <AdaptiveNavigation items={items} expandedItem={aiOpen && !collapsed ? { key: "ai_modules", height: 101 } : undefined} renderItem={(item, inOverflow, closeOverflow) => item.key === "ai_modules"
+          ? <div className="rail-slot" key={item.key}><AiModulesNavigation modules={item.modules} activeKey={active} inOverflow={inOverflow} inline={!collapsed} open={aiOpen} onOpenChange={setAiOpen} onCloseOverflow={closeOverflow} onSelect={setActive} /></div>
           : <div className="rail-slot" key={item.key}><button type="button" className={`rail-action${active === item.key ? " active" : ""}`} onClick={() => setActive(item.key)}>
             <span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span></button></div>}
         />

@@ -63,15 +63,16 @@ describe("AI module sidebar group", () => {
       onSelect={onSelect} onCloseOverflow={onCloseOverflow}
     /></FluentProvider>);
     const trigger = screen.getByRole("button", { name: "ИИ-модули" });
-    expect(trigger).toHaveClass("active");
+    expect(trigger).toHaveClass("has-active-module");
+    expect(trigger).not.toHaveClass("active");
     fireEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     const nav = await screen.findByRole("navigation", { name: "Выбор ИИ-модуля" }, { timeout: 2000 });
     expect(within(nav).getByRole("button", { name: "AI Hisobot" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "AI Referent" }));
     expect(onSelect).toHaveBeenCalledWith("ai_referent");
-    expect(onCloseOverflow).toHaveBeenCalledOnce();
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(onCloseOverflow).not.toHaveBeenCalled();
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
   });
 
   it("closes with Escape and returns focus to the group button", () => {
@@ -108,6 +109,7 @@ describe("AI module sidebar group", () => {
     expect(onCloseOverflow).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "AI Hisobot" }));
     expect(onSelect).toHaveBeenCalledWith("ai_hisobot");
-    expect(onCloseOverflow).toHaveBeenCalledOnce();
+    expect(onCloseOverflow).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "ИИ-модули" })).toHaveAttribute("aria-expanded", "true");
   });
 });

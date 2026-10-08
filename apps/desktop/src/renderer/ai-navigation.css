@@ -2,6 +2,7 @@
 .app-rail .rail-ai-trigger .rail-ai-chevron { width: 18px; height: 18px; color: var(--ws-muted); transition: transform 160ms var(--ws-ease); }
 .app-rail .rail-ai-trigger[aria-expanded="true"] .rail-ai-chevron { transform: rotate(90deg); }
 .app-rail .rail-ai-trigger[aria-expanded="true"]::before { opacity: 1; transform: scale(1); }
+.app-rail .rail-ai-trigger.has-active-module::before { opacity: 1; transform: scale(1); }
 .rail-ai-popover { position: fixed; z-index: 90; box-sizing: border-box; width: min(244px, calc(100vw - 24px)); max-height: min(360px, calc(100dvh - 24px)); padding: 10px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 18px; color: var(--ws-text); background: var(--ws-surface); box-shadow: var(--ws-shadow-float); }
 .rail-ai-disclosure { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 320ms var(--ws-ease); }
 .rail-ai-disclosure.is-open { grid-template-rows: 1fr; }

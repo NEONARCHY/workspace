@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 interface SlidingSegmentedProps extends Omit<HTMLAttributes<HTMLElement>, "children"> {
@@ -19,25 +19,30 @@ interface IndicatorPosition {
 /** A shared moving selection surface for button groups and tab lists. */
 export function SlidingSegmented({ children, className = "", as = "div", onContainer, activeSelector = ':scope > button[aria-pressed="true"], :scope > button[aria-selected="true"]', ...props }: SlidingSegmentedProps) {
   const containerRef = useRef<HTMLElement>(null);
+  const indicatorRef = useRef<HTMLSpanElement>(null);
   const selectedRef = useRef<HTMLButtonElement | null>(null);
-  const [position, setPosition] = useState<IndicatorPosition>();
+  const positionRef = useRef<IndicatorPosition | undefined>(undefined);
   const Element = as;
 
   useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    const indicator = indicatorRef.current;
+    if (!container || !indicator) return;
+    const hide = () => {
+      selectedRef.current = null;
+      positionRef.current = undefined;
+      indicator.style.opacity = "0";
+    };
     const measure = () => {
       const active = container.querySelector<HTMLButtonElement>(activeSelector);
       if (!active) {
-        selectedRef.current = null;
-        setPosition(undefined);
+        hide();
         return;
       }
       // Layout offsets share the indicator's padding-box origin. Screen rects
       // include the container border and temporary page-entry transforms.
       if (!active.offsetWidth || !active.offsetHeight) {
-        selectedRef.current = null;
-        setPosition(undefined);
+        hide();
         return;
       }
       let x = active.offsetLeft, y = active.offsetTop;
@@ -55,14 +60,25 @@ export function SlidingSegmented({ children, className = "", as = "div", onConta
         animate: selectedRef.current !== null && selectedRef.current !== active,
       };
       selectedRef.current = active;
-      setPosition((previous) => previous
-        && previous.x === next.x && previous.y === next.y
-        && previous.width === next.width && previous.height === next.height
-        ? previous : next);
+      const previous = positionRef.current;
+      if (previous && previous.x === next.x && previous.y === next.y
+        && previous.width === next.width && previous.height === next.height) return;
+      positionRef.current = next;
+      // Disclosure transitions move unchanged buttons each frame. Follow layout
+      // directly without rerendering the group or animating its labels.
+      Object.assign(indicator.style, {
+        width: `${next.width}px`, height: `${next.height}px`,
+        transform: `translate(${next.x}px, ${next.y}px)`, opacity: "1",
+        transition: next.animate ? "" : "none",
+      });
     };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measure);
     observer?.observe(container);
+    // Fixed-height menus can rearrange rows without resizing their buttons.
+    Array.from(container.children).forEach((child) => {
+      if (child !== indicator) observer?.observe(child);
+    });
     container.querySelectorAll("button").forEach((button) => observer?.observe(button));
     container.addEventListener("scroll", measure, { passive: true });
     return () => {
@@ -73,14 +89,6 @@ export function SlidingSegmented({ children, className = "", as = "div", onConta
 
   return <Element {...props} ref={(node) => { containerRef.current = node; onContainer?.(node); }} className={`sliding-segmented ${className}`.trim()}>
     {children}
-    <span className="sliding-segmented-indicator" aria-hidden="true" style={position ? {
-      width: position.width,
-      height: position.height,
-      transform: `translate(${position.x}px, ${position.y}px)`,
-      opacity: 1,
-      // Initial placement, font loading and resizing snap into place. Only a
-      // change of selection in this mounted group uses the shared transition.
-      transition: position.animate ? undefined : "none",
-    } : undefined} />
+    <span ref={indicatorRef} className="sliding-segmented-indicator" aria-hidden="true" />
   </Element>;
 }
