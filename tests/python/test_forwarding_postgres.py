@@ -285,7 +285,7 @@ async def exercise_forwarding(url: str) -> None:
                     connection,
                     owner,
                     target_id,
-                    AddChatMembersRequest(member_ids=[other.id]),
+                    AddChatMembersRequest(member_ids=[other.id], show_history=True),
                 )
                 row = (
                     (
@@ -301,10 +301,30 @@ async def exercise_forwarding(url: str) -> None:
                 assert (
                     not redacted.available and redacted.title is None and redacted.author_id is None
                 )
+                assert await search_messages(connection, other, "Full announcement") == []
+                with pytest.raises(WorkspaceRepositoryError) as no_feed_access:
+                    await forward_message(
+                        connection,
+                        other,
+                        target_id,
+                        feed_request.model_copy(
+                            update={"request_id": uuid4()},
+                        ),
+                    )
+                assert no_feed_access.value.status_code == 403
+                second_feed_copy = await forward_message(
+                    connection,
+                    owner,
+                    source_id,
+                    ForwardMessageRequest(
+                        request_id=uuid4(), kind="message", source_id=UUID(feed_copy.id)
+                    ),
+                )
+                assert second_feed_copy.forwarded is not None
+                assert second_feed_copy.forwarded.post_id == post.id
                 await delete_feed_post(connection, owner, post_id)
                 results = await search_messages(connection, owner, "Full announcement")
-                assert len(results) == 1 and results[0].body == "Объявление недоступно"
-                assert results[0].forwarded is not None and not results[0].forwarded.available
+                assert results == []
                 workspace = await load_workspace(connection, owner)
                 hidden = next(item for item in workspace.messages if item.id == feed_copy.id)
                 assert hidden.forwarded is not None and not hidden.forwarded.available

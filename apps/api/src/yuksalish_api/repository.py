@@ -3017,6 +3017,8 @@ async def search_messages(
             forwarded=forward_map.get(row["id"]),
         )
         for row in rows
+        # Unavailable excerpts must not be discoverable by probing search keywords.
+        if (origin := forward_map.get(row["id"])) is None or origin.available
     ]
 
 
