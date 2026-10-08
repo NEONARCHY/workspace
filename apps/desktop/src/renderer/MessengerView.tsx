@@ -66,6 +66,7 @@ import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-a
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
 import { ForwardedMessage } from "./ForwardedMessage";
+import { MessageMetadata } from "./MessageMetadata";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
@@ -803,7 +804,7 @@ function Conversation({
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
-                  <div className="message-body">
+                  <div className={`message-body${message.forwarded || messageAttachments.length ? " has-rich-content" : ""}`}>
                     {!own && (groupedWithPrevious
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
@@ -843,12 +844,7 @@ function Conversation({
                         />
                       </>
                     )}
-                    <time>
-                      {message.editedAt && !message.deletedAt
-                        ? "изменено · "
-                        : ""}
-                      {message.time}
-                    </time>
+                    <MessageMetadata message={message} own={own} />
                     {!message.deletedAt && (
                       <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
                         <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}

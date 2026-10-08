@@ -366,13 +366,17 @@ async def post_message(
 @router.post("/chats/{chat_id}/read", status_code=204)
 async def post_chat_read(
     chat_id: UUID,
+    request: Request,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> Response:
     try:
-        await mark_chat_read(connection, current_user, chat_id)
+        changed = await mark_chat_read(connection, current_user, chat_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+    await connection.commit()
+    if changed:
+        await _event_bus(request).publish({"type": "message.read", "entityId": str(chat_id)})
     return Response(status_code=204)
 
 

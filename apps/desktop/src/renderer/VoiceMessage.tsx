@@ -133,7 +133,7 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
       onEnded={() => { setPlaying(false); setCurrentTimeMs(0); }}
     />
     <div className={`voice-player${loading ? " loading" : ""}${playbackRateControl ? " has-speed" : ""}`}>
-      <Button className="voice-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={loading ? "Загрузка голосового сообщения" : playing ? "Пауза" : "Воспроизвести"} disabled={loading} onClick={() => void togglePlayback()} />
+      <Button className="voice-player-play media-player-play" appearance="subtle" icon={playing ? <Pause24Filled /> : <Play24Filled />} aria-label={loading ? "Загрузка голосового сообщения" : playing ? "Пауза" : "Воспроизвести"} disabled={loading} onClick={() => void togglePlayback()} />
       <div className="voice-player-track">
         <div className="voice-waveform" aria-hidden="true">
           {waveform.map((height, index) => <i key={index} className={index / waveform.length * 100 <= progress ? "played" : ""} style={{ height: `${height}%` }} />)}
@@ -165,7 +165,7 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
           setPlaybackRate(next);
         }}
       >{playbackRate}×</Button> : null}
-      <MediaVolumeControl mediaRef={audioRef} disabled={!url} className="voice-player-volume" />
+      <MediaVolumeControl mediaRef={audioRef} className="voice-player-volume" />
     </div>
     {error ? <span className="voice-message-error" role="status">{error}</span> : null}
   </>;

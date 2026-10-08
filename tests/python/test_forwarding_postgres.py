@@ -18,6 +18,7 @@ from yuksalish_api.repository import (
     get_notification_preferences,
     load_feed_post,
     load_workspace,
+    mark_chat_read,
     notify_feed_publication,
     search_messages,
     update_notification_preferences,
@@ -85,6 +86,20 @@ async def exercise_forwarding(url: str) -> None:
                 assert copied.forwarded.author_id == str(peer.id)
                 assert copied.forwarded.author_name == peer.full_name
                 assert copied.body == original.body and not copied.can_edit
+                assert not copied.read_by_recipient  # The author's receipt is not a reader.
+                await mark_chat_read(connection, owner, target_id)
+                assert UUID(copied.id) not in await service.read_message_ids(
+                    connection, owner, [UUID(copied.id)]
+                )
+                assert await mark_chat_read(connection, peer, target_id)
+                assert not await mark_chat_read(connection, peer, target_id)
+                copied_after_read = await forward_message(connection, owner, target_id, request)
+                assert copied_after_read.read_by_recipient
+                assert not await service.read_message_ids(connection, other, [UUID(copied.id)])
+                loaded = await load_workspace(connection, owner)
+                assert next(m for m in loaded.messages if m.id == copied.id).read_by_recipient
+                searched = await search_messages(connection, owner, "Original test text")
+                assert next(m for m in searched if m.id == copied.id).read_by_recipient
                 retry = await forward_message(connection, owner, target_id, request)
                 assert retry.id == copied.id
                 assert (
@@ -173,6 +188,10 @@ async def exercise_forwarding(url: str) -> None:
                         request.model_copy(update={"request_id": uuid4()}),
                     )
                 assert history.value.status_code == 404
+                await mark_chat_read(connection, owner, source_id)
+                assert UUID(original.id) not in await service.read_message_ids(
+                    connection, peer, [UUID(original.id)]
+                )
                 await connection.execute(
                     update(chat_members)
                     .where(

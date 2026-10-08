@@ -419,6 +419,8 @@ export interface ChatMessage {
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;
+  /** True only after a recipient other than the author opens the conversation. */
+  readonly readByRecipient?: boolean;
   readonly replyToMessageId?: string | null;
   readonly mentionUserIds?: readonly string[];
   readonly editedAt?: string | null;

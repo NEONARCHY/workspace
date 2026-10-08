@@ -871,6 +871,31 @@ async def forward_detail_map(
     return result
 
 
+async def read_message_ids(
+    connection: AsyncConnection,
+    user: AuthenticatedUser,
+    message_ids: list[UUID],
+) -> set[UUID]:
+    """Only an author's own messages reveal whether another recipient has read them."""
+    if not message_ids:
+        return set()
+    return set(
+        (
+            await connection.execute(
+                select(message_receipts.c.message_id)
+                .join(messages, messages.c.id == message_receipts.c.message_id)
+                .where(
+                    message_receipts.c.message_id.in_(message_ids),
+                    messages.c.author_user_id == user.id,
+                    message_receipts.c.user_id != user.id,
+                    message_receipts.c.read_at.is_not(None),
+                )
+                .distinct()
+            )
+        ).scalars().all()
+    )
+
+
 def message_response(
     row: Record,
     user: AuthenticatedUser,
@@ -880,6 +905,7 @@ def message_response(
     reactions: list[MessageReactionResponse] | None = None,
     pin: Record | None = None,
     forwarded: ForwardedContentResponse | None = None,
+    read_by_recipient: bool = False,
 ) -> ChatMessageResponse:
     own = row["author_user_id"] == user.id
     deleted = row["deleted_at"] is not None
@@ -894,6 +920,7 @@ def message_response(
         forwarded=None if deleted else forwarded,
         system_kind=row["system_kind"],
         own=own,
+        read_by_recipient=own and read_by_recipient,
         time=row["created_at"].astimezone(ZoneInfo("Asia/Tashkent")).strftime("%H:%M"),
         created_at=row["created_at"],
         edited_at=row["edited_at"],
@@ -931,6 +958,7 @@ async def message_with_details(
         raise WorkspaceRepositoryError(404, "Сообщение не найдено")
     reactions, pins = await message_detail_maps(connection, user, [row["id"]])
     forwards = await forward_detail_map(connection, user, [row])
+    read_ids = await read_message_ids(connection, user, [row["id"]])
     return message_response(
         row,
         user,
@@ -939,6 +967,7 @@ async def message_with_details(
         reactions=reactions.get(row["id"]),
         pin=pins.get(row["id"]),
         forwarded=forwards.get(row["id"]),
+        read_by_recipient=row["id"] in read_ids,
     )
 
 

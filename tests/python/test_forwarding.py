@@ -39,6 +39,9 @@ def test_forwarding_contract_is_server_owned() -> None:
         }
     )
     assert "forwarded" not in normal.model_dump()
+    assert "read_by_recipient" not in SendMessageRequest.model_validate(
+        {"body": "a", "readByRecipient": True}
+    ).model_dump()
     with pytest.raises(ValidationError):
         ForwardMessageRequest(request_id=request_id, source_id=source_id, kind="unknown")
     with pytest.raises(ValidationError):
@@ -73,6 +76,11 @@ def test_forwarded_message_cannot_be_edited_and_hidden_feed_is_redacted() -> Non
         row, actor, forwarded=ForwardedContentResponse.model_validate(origin)
     )
     assert not response.can_edit and response.can_delete
+    assert not response.read_by_recipient
+    assert message_response(row, actor, read_by_recipient=True).read_by_recipient
+    assert not message_response(
+        {**row, "author_user_id": uuid4()}, actor, read_by_recipient=True
+    ).read_by_recipient
     assert response.forwarded is not None and response.forwarded.author_name == "Original author"
     hidden = ForwardedContentResponse(
         kind="feed", author_id=None, author_name="Недоступно", available=False

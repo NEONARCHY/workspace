@@ -185,6 +185,7 @@ class ChatMessageResponse(ApiModel):
     time: str
     created_at: datetime
     own: bool
+    read_by_recipient: bool = False
     reply_to_message_id: str | None = None
     mention_user_ids: list[str] = Field(default_factory=list)
     edited_at: datetime | None = None

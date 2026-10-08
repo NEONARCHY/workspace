@@ -2596,6 +2596,9 @@ async def load_workspace(
     forward_map = await messenger_service.forward_detail_map(
         connection, current_user, list(message_rows)
     )
+    read_ids = await messenger_service.read_message_ids(
+        connection, current_user, [row["id"] for row in message_rows]
+    )
     message_responses = [
         messenger_service.message_response(
             row,
@@ -2605,6 +2608,7 @@ async def load_workspace(
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
+            read_by_recipient=row["id"] in read_ids,
         )
         for row in message_rows
     ]
@@ -2928,16 +2932,29 @@ async def mark_chat_read(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
     chat_id: UUID,
-) -> None:
-    membership = await connection.scalar(
-        select(func.count())
-        .select_from(chat_members)
-        .where(chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id)
-    )
-    if not membership:
+) -> bool:
+    membership = (
+        await connection.execute(
+            select(chat_members).where(
+                chat_members.c.chat_id == chat_id, chat_members.c.user_id == current_user.id
+            )
+        )
+    ).mappings().first()
+    if membership is None:
         raise WorkspaceRepositoryError(404, "Chat was not found")
-    chat_message_ids = select(messages.c.id).where(messages.c.chat_id == chat_id)
-    await connection.execute(
+    chat_message_ids = select(messages.c.id).where(
+        messages.c.chat_id == chat_id,
+        messages.c.deleted_at.is_(None),
+        or_(
+            messages.c.system_target_user_id.is_(None),
+            messages.c.system_target_user_id == current_user.id,
+        ),
+    )
+    if membership["history_visible_from"] is not None:
+        chat_message_ids = chat_message_ids.where(
+            messages.c.created_at >= membership["history_visible_from"]
+        )
+    changed = await connection.execute(
         update(message_receipts)
         .where(
             message_receipts.c.user_id == current_user.id,
@@ -2956,6 +2973,7 @@ async def mark_chat_read(
         )
         .values(read_at=datetime.now(UTC))
     )
+    return changed.rowcount > 0
 
 
 async def search_messages(
@@ -3006,6 +3024,9 @@ async def search_messages(
         connection, current_user, [row["id"] for row in rows]
     )
     forward_map = await messenger_service.forward_detail_map(connection, current_user, list(rows))
+    read_ids = await messenger_service.read_message_ids(
+        connection, current_user, [row["id"] for row in rows]
+    )
     return [
         messenger_service.message_response(
             row,
@@ -3015,6 +3036,7 @@ async def search_messages(
             reactions=reaction_map.get(row["id"]),
             pin=pin_map.get(row["id"]),
             forwarded=forward_map.get(row["id"]),
+            read_by_recipient=row["id"] in read_ids,
         )
         for row in rows
         # Unavailable excerpts must not be discoverable by probing search keywords.

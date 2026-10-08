@@ -4,8 +4,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "0079_feed_forwarding"
-down_revision = "0078_calendar_project_links"
+revision = "0080_feed_forwarding"
+down_revision = "0079_task_project_links"
 branch_labels = None
 depends_on = None
 

@@ -1042,6 +1042,23 @@ describe("Private messenger", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Переслать сообщение" })).not.toBeInTheDocument());
   });
 
+  it.each(["voice", "forwarded", "text"])("keeps the %s message timestamp in a separate footer", kind => {
+    renderMessenger({
+      messages: [{ id: "timestamp-example", chatId: "finance", authorId: "aziza", body: "Проверочное сообщение", time: "14:15",
+        editedAt: "2026-10-08T09:15:00Z",
+        forwarded: kind === "forwarded" ? { kind: "message", authorId: "dilshod", authorName: "Дилшод Рахимов", available: true } : undefined }],
+      attachments: kind === "voice" ? [{ id: "timestamp-audio", ownerType: "message", ownerId: "timestamp-example",
+        fileName: "voice.webm", contentType: "audio/webm", byteSize: 29000, sha256: "a".repeat(64), uploadedByUserId: "aziza",
+        documentRole: "general", mediaKind: "voice", mediaDurationMs: 7000, createdAt: "2026-10-08T09:15:00Z" }] : [],
+    });
+    const body = document.querySelector('[data-message-id="timestamp-example"] .message-body')!;
+    const footer = body.querySelector(":scope > .message-meta")!;
+    const timestamp = footer.querySelector("time.message-timestamp");
+    expect(timestamp).toHaveTextContent("изменено · 14:15");
+    expect(footer.previousElementSibling).toHaveClass(kind === "voice" ? "voice-message" : kind === "forwarded" ? "message-forwarded" : "message-text");
+    expect(body.querySelector(".message-text time, .voice-message time, .message-forwarded time")).toBeNull();
+  });
+
   it("loads compressed voice data only when playback is requested", async () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:voice");
@@ -1068,6 +1085,7 @@ describe("Private messenger", () => {
     });
     expect(screen.queryByText("Голосовое сообщение")).not.toBeInTheDocument();
     expect(onLoadAttachment).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Воспроизвести" })).toHaveClass("media-player-play", "voice-player-play");
     const speed = screen.getByRole("button", { name: "Скорость воспроизведения: 1×" });
     fireEvent.click(speed);
     expect(screen.getByRole("button", { name: "Скорость воспроизведения: 1.5×" })).toBeInTheDocument();
