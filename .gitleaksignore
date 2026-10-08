@@ -1,0 +1,6 @@
+# False positives: the literal, non-secret "operation-123" idempotency fixture.
+# Keep these tied to the original commit, file, rule, and exact line.
+682625f649704b2786e0ee6a2ae316985f3cc578:tests/python/test_edo_service.py:generic-api-key:128
+682625f649704b2786e0ee6a2ae316985f3cc578:tests/python/test_edo_service.py:generic-api-key:145
+682625f649704b2786e0ee6a2ae316985f3cc578:tests/python/test_edo_service.py:generic-api-key:228
+682625f649704b2786e0ee6a2ae316985f3cc578:tests/python/test_edo_service.py:generic-api-key:236
