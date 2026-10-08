@@ -1137,6 +1137,24 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.queryByText("Сервер подключён")).not.toBeInTheDocument();
   });
 
+  it("keeps actual section counters on the buttons inside More", async () => {
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("adaptive-rail-nav") ? 45 : 0;
+    });
+    mockServer();
+    render(<App />);
+    await loginToWorkspace();
+    fireEvent.click(screen.getByRole("button", { name: /Ещё, \d+ разделов/ }));
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    expect(drawer.querySelector("header")).toHaveTextContent(/^Другие разделы$/);
+    expect(within(drawer).getByRole("button", { name: "Уведомления" }).querySelector(".rail-badge")).toHaveTextContent("2");
+    expect(within(drawer).getByRole("button", { name: "Задачи" }).querySelector(".rail-badge")).toHaveTextContent(String(initialTasks.filter(task => !["completed", "cancelled"].includes(task.status)).length));
+    expect(within(drawer).getByRole("button", { name: "Календарь" }).querySelector(".rail-badge")).toBeNull();
+    fireEvent.click(within(drawer).getByRole("button", { name: "Уведомления" }));
+    expect(await screen.findByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ещё, \d+ разделов/ })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("opens the attention queue, marks an item read and follows its deep link", async () => {
     const fetchMock = mockServer();
     render(<App />);
