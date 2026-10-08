@@ -79,6 +79,16 @@ describe("Personal Home", () => {
     expect(screen.queryByText("Секретная награда прежнего аккаунта")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Дилшод Рахимов/ })).toBeInTheDocument();
   });
+  it("keeps loaded cards visible during credential renewal and shows a retry without erasing data", async () => {
+    const rendered = render(view("aziza", all, "first-token"));
+    await screen.findAllByText("80%");
+    vi.mocked(loadPersonalEfficiency).mockRejectedValue(new Error("Временная ошибка обновления"));
+    rendered.rerender(view("aziza", all, "renewed-token"));
+    expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
+    await screen.findByText("Временная ошибка обновления");
+    expect(screen.getAllByText("80%").length).toBeGreaterThan(0);
+    expect(loadPersonalEfficiency).toHaveBeenLastCalledWith("renewed-token", expect.any(String));
+  });
   it("keeps the existing layout during polling until the employee accepts the new priorities", async () => {
     const base = homeFixture(), calm = { ...base, tasks: [], notifications: [], chats: [], calendarEvents: [] };
     const props = { token: "aziza", workspace: calm, canView: all, onOpen, onOpenNotification: onNotification, onRefresh: async () => undefined };

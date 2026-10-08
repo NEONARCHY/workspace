@@ -32,7 +32,8 @@ function useResource<T>(identity: string, enabled: boolean, loader: () => Promis
     void Promise.resolve().then(loader).then(data => {
       if (active) setResource({ identity, data });
     }).catch((error: unknown) => {
-      if (active) setResource(current => ({ identity, data: current?.identity === identity ? current.data : undefined, error: error instanceof Error ? error.message : "Не удалось загрузить данные", unavailable: error instanceof ApiHttpError && error.status === 503 }));
+      const denied = error instanceof ApiHttpError && [401, 403].includes(error.status);
+      if (active) setResource(current => ({ identity, data: !denied && current?.identity === identity ? current.data : undefined, error: error instanceof Error ? error.message : "Не удалось загрузить данные", unavailable: error instanceof ApiHttpError && error.status === 503 }));
     });
     return () => { active = false; };
   }, [enabled, identity, loader, revision]);
@@ -58,7 +59,9 @@ function SignalNote({ note }: { readonly note: string }) {
 
 export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [], zoomError, onOpen, onOpenNotification, onRefresh }: Props) {
   const user = workspace.currentUser;
-  const identity = token + ":" + user.id;
+  // Credential renewal reloads the same employee's resources without clearing
+  // already visible cards. The loader cleanup still fences late token requests.
+  const identity = user.id;
   const [now, setNow] = useState(Date.now);
   const [revision, setRevision] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
