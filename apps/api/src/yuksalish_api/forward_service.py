@@ -105,7 +105,8 @@ async def forward_message(
             "author_name": name or "Сотрудник",
         }
     else:
-        assert source_chat_id is not None
+        if source_chat_id is None:
+            raise WorkspaceRepositoryError(404, "Сообщение для пересылки недоступно")
         _, source_member = await chat_access(connection, user, source_chat_id)
         source = (
             (
