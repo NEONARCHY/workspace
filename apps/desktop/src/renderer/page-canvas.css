@@ -1,0 +1,85 @@
+/* Page roots are layout, not a universal white surface. Keep the ambient shell,
+   original rounded panels and blue headers; replace only glass behind white work panels. */
+.app-shell {
+  --ws-page-panel: #fff;
+  --ws-page-trailing-gutter: 20px;
+  padding-inline-end: 0;
+}
+/* Older AI/directory shells reserved a second physical right inset. */
+body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view)) .app-shell {
+  padding-inline-end: 0;
+}
+.app-shell .app-content {
+  padding-inline-end: var(--ws-page-trailing-gutter);
+}
+.app-content > :is(.workspace-view, .team-dashboard, .telegram-access-view) {
+  min-width: 0;
+  width: auto;
+}
+/* These views already reserved the same outer gutter locally. */
+.app-content > :is(.calendar-view, .messenger-view, .absences-view) {
+  padding-inline-end: 0;
+}
+
+/* Gutters show the ambient shell, not a second page-local canvas. */
+.app-content > :is(.approvals-view, .messenger-view),
+.tasks-view.bp5-tasks:not(.dashboard-mode, .efficiency-mode) .tasks-main {
+  background: transparent;
+}
+/* Exterior panel shadows used to tint transparent gaps like an extra backing
+   sheet. Keep foreground colours, rounding, hover/drag elevation and dialogs. */
+body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) .ws-section-header,
+.app-content .project-hub-view > .project-hub-header,
+.app-content > :is(.ai-referent-view, .ai-hisobot-view),
+body .app-content :is(
+  .notifications-view .notification-metrics > button, .notification-progress-card,
+  .messenger-view > .list-pane, .messenger-view > .conversation-pane,
+  .calendar-board, .record-table-shell, .employee-records, .task-records, .eff-people,
+  .team-dash-metric, .team-dash-panel, .absence-summary > button, .telegram-access-overview
+) {
+  box-shadow: none;
+}
+
+.notifications-view {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.notifications-view > .notification-layout > .notification-stream-shell {
+  border: 0;
+  border-radius: var(--ws-radius, 22px);
+  background: var(--ws-page-panel);
+  box-shadow: none;
+}
+
+.notifications-view > .notification-layout > .notification-settings {
+  background: var(--ws-page-panel);
+}
+
+.project-hub-view {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+/* Extend the existing paired work panels, not the root underneath the hero. */
+.project-hub-view > :is(.project-hub-layout, .project-hub-funding-layout) {
+  border-radius: var(--ws-radius, 22px);
+  background: var(--ws-page-panel);
+}
+.project-hub-view > :is(.project-hub-layout, .project-hub-funding-layout) > :is(.project-hub-index, .project-hub-canvas, .project-hub-funding-list, .project-hub-funding-detail) {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (min-width: 901px) {
+  /* The earlier compact cascade uses max-content rows at 1100px. Constrain the
+     two-panel layout so its bottom rounding and both independent scrollbars stay visible. */
+  .notifications-view > .notification-layout { grid-template-rows: minmax(0, 1fr); }
+  .notifications-view :is(.notification-stream, .notification-settings) { overflow-y: auto; }
+}
+@media (forced-colors: active) {
+  .app-shell { --ws-page-panel: Canvas; }
+}
