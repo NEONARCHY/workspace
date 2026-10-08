@@ -39,6 +39,7 @@ import {
   updateRecognitionSettings,
   updateEmployeeAccess,
   updateEmployeeStatus,
+  updateOwnSuperadminOrganization,
   updatePosition,
 } from "./workspace-api";
 
@@ -168,8 +169,8 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         const firstEmployee = normalized.employees[0];
         const firstPosition = normalized.positions[0];
         setSelectedEmployeeId(firstEmployee?.id ?? "");
-        if (firstEmployee !== undefined && firstEmployee.role !== "superadmin") {
-          setEmployeeRole(firstEmployee.role);
+        if (firstEmployee !== undefined) {
+          if (firstEmployee.role !== "superadmin") setEmployeeRole(firstEmployee.role);
           setEmployeePositionId(firstEmployee.positionId ?? "");
           setEmployeeDepartmentId(firstEmployee.departmentId ?? "");
           setDirectManagerUserId(firstEmployee.directManagerUserId ?? "");
@@ -191,6 +192,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     () => directory?.employees.find((employee) => employee.id === selectedEmployeeId),
     [directory, selectedEmployeeId],
   );
+  const canEditOwnSuperadminOrganization = canManage
+    && currentUser.role === "superadmin"
+    && selectedEmployee?.role === "superadmin"
+    && selectedEmployee.id === currentUser.id;
   const selectedPosition = useMemo(
     () => directory?.positions.find((position) => position.id === selectedPositionId),
     [directory, selectedPositionId],
@@ -237,20 +242,27 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   };
 
   const saveEmployee = async () => {
-    if (busy || !canManage || directory === undefined || selectedEmployee === undefined || selectedEmployee.role === "superadmin") return;
+    if (busy || !canManage || directory === undefined || selectedEmployee === undefined
+      || (selectedEmployee.role === "superadmin" && !canEditOwnSuperadminOrganization)) return;
     setBusy(true);
     try {
-      const saved = await updateEmployeeAccess(
-        token,
-        selectedEmployee.id,
-        employeeRole,
-        employeePositionId || undefined,
-        employeeDepartmentId || undefined,
-        directManagerUserId || undefined,
-      );
+      const saved = canEditOwnSuperadminOrganization
+        ? await updateOwnSuperadminOrganization(
+          token, employeePositionId || undefined, employeeDepartmentId || undefined,
+        )
+        : await updateEmployeeAccess(
+          token,
+          selectedEmployee.id,
+          employeeRole,
+          employeePositionId || undefined,
+          employeeDepartmentId || undefined,
+          directManagerUserId || undefined,
+        );
       setDirectory(replaceEmployee(directory, saved));
       onEmployeeChanged?.(saved);
-      showFeedback("Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
+      showFeedback(canEditOwnSuperadminOrganization
+        ? "Ваша должность и подразделение сохранены. Роль суперадминистратора не изменилась."
+        : "Роль, подразделение и должность сотрудника сохранены. Изменение записано в аудит.");
     } catch (error) {
       showFeedback(error instanceof Error ? error.message : "Не удалось сохранить сотрудника", true);
     } finally {
@@ -569,7 +581,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 </EmployeeProfileLink>
               </div>
               <div className="directory-form-grid">
-                <Field label="Роль доступа" hint="Влияет на разрешённые действия в системе.">
+                <Field label="Роль доступа" hint={selectedEmployee.role === "superadmin"
+                  ? "Роль суперадминистратора защищена и не меняется."
+                  : "Влияет на разрешённые действия в системе."}>
                   <Select
                     disabled={busy || !canManage || selectedEmployee.role === "superadmin" || selectedEmployee.id === currentUser.id}
                     value={selectedEmployee.role === "superadmin" ? "superadmin" : employeeRole}
@@ -583,7 +597,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 </Field>
                 <Field label="Должность" hint="Выбирается из редактируемого справочника.">
                   <Select
-                    disabled={busy || !canManage || selectedEmployee.role === "superadmin"}
+                    disabled={busy || !canManage || (selectedEmployee.role === "superadmin" && !canEditOwnSuperadminOrganization)}
                     value={employeePositionId}
                     onChange={(event) => setEmployeePositionId(event.target.value)}
                   >
@@ -598,7 +612,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 <Field label="Подразделение" hint="Определяет структуру команды и наследуемые права.">
                   <Select
                     aria-label="Подразделение"
-                    disabled={busy || !canManage || selectedEmployee.role === "superadmin"}
+                    disabled={busy || !canManage || (selectedEmployee.role === "superadmin" && !canEditOwnSuperadminOrganization)}
                     value={employeeDepartmentId}
                     onChange={(event) => setEmployeeDepartmentId(event.target.value)}
                   >
@@ -620,10 +634,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                 <div className="employee-admin-actions">
                   <Button
                     appearance="primary"
-                    disabled={busy || selectedEmployee.role === "superadmin"}
+                    disabled={busy || (selectedEmployee.role === "superadmin" && !canEditOwnSuperadminOrganization)}
                     onClick={() => void saveEmployee()}
                   >
-                    Сохранить сотрудника
+                    {canEditOwnSuperadminOrganization ? "Сохранить должность и подразделение" : "Сохранить сотрудника"}
                   </Button>
                   {selectedEmployee.id !== currentUser.id
                     && (selectedEmployee.role !== "superadmin" || currentUser.role === "superadmin")

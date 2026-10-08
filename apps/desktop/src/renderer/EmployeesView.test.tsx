@@ -5,12 +5,13 @@ import type { ChatSummary, DirectoryBootstrap, WorkspacePerson } from "@yuksalis
 import { EmployeesView } from "./EmployeesView";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { workspaceTheme } from "./workspace-theme";
-import { loadDirectory, loadRecognitionSettings, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updatePosition, updateRecognitionSettings } from "./workspace-api";
+import { loadDirectory, loadRecognitionSettings, setModuleAccessRule, updateEmployeeAccess, updateEmployeeStatus, updateOwnSuperadminOrganization, updatePosition, updateRecognitionSettings } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   loadDirectory: vi.fn(),
   updateEmployeeAccess: vi.fn(),
   updateEmployeeStatus: vi.fn(),
+  updateOwnSuperadminOrganization: vi.fn(),
   updatePosition: vi.fn(),
   createPosition: vi.fn(),
   createDepartment: vi.fn(),
@@ -45,6 +46,50 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
+  it("lets a superadmin change only their own position and department", async () => {
+    const self = { ...data.employees[0]!, id: "me", username: "admin", name: "Администратор", role: "superadmin" as const };
+    const onEmployeeChanged = vi.fn();
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [self] });
+    vi.mocked(updateOwnSuperadminOrganization).mockResolvedValue({ ...self, positionId: null, jobTitle: null });
+    mount({ ...user, role: "superadmin" }, { onEmployeeChanged });
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Администратор" }));
+    expect(screen.getByLabelText("Роль доступа")).toBeDisabled();
+    expect(screen.getByLabelText("Должность")).toBeEnabled();
+    expect(screen.getByLabelText("Подразделение")).toBeEnabled();
+    expect(screen.getByLabelText("Непосредственный руководитель")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Должность"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить должность и подразделение" }));
+    await waitFor(() => expect(updateOwnSuperadminOrganization).toHaveBeenCalledWith("test-token", undefined, "d1"));
+    expect(updateEmployeeAccess).not.toHaveBeenCalled();
+    expect(onEmployeeChanged).toHaveBeenCalledWith(expect.objectContaining({ role: "superadmin", positionId: null }));
+  });
+
+  it("keeps another superadmin's organization locked", async () => {
+    const other = { ...data.employees[0]!, id: "other", role: "superadmin" as const };
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [other] });
+    mount({ ...user, role: "superadmin" });
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
+    expect(screen.getByLabelText("Должность")).toBeDisabled();
+    expect(screen.getByLabelText("Подразделение")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Сохранить сотрудника" })).toBeDisabled();
+  });
+
+  it("retains a superadmin's position draft after a server error", async () => {
+    const self = { ...data.employees[0]!, id: "me", name: "Администратор", role: "superadmin" as const };
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, employees: [self] });
+    vi.mocked(updateOwnSuperadminOrganization).mockRejectedValueOnce(new Error("Нет связи"));
+    mount({ ...user, role: "superadmin" });
+    await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Администратор" }));
+    fireEvent.change(screen.getByLabelText("Должность"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить должность и подразделение" }));
+    await screen.findByText("Нет связи");
+    expect(screen.getByLabelText("Должность")).toHaveValue("");
+    expect(screen.getByLabelText("Роль доступа")).toHaveValue("superadmin");
+  });
+
   it("saves active task visibility in both directions", async () => {
     vi.mocked(updateRecognitionSettings).mockImplementation(async (_, visible) => ({ activeTaskCountVisible: visible }));
     mount();
