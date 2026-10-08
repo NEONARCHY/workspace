@@ -1366,6 +1366,7 @@ export interface WorkspaceTask {
   readonly title: string;
   readonly description?: string;
   readonly project: string;
+  readonly projectId?: string | null;
   readonly authorId: string;
   readonly assigneeId: string;
   readonly dueLabel: string;
@@ -1420,6 +1421,7 @@ export interface WorkspaceTaskCreateInput {
   readonly title: string;
   readonly description?: string;
   readonly project?: string;
+  readonly projectId?: string | null;
   readonly assigneeId: string;
   readonly sourceMessageId?: string;
   readonly calendarEventId?: string;
@@ -1436,6 +1438,12 @@ export interface WorkspaceTaskCreateInput {
     readonly dependencyKind: "blocks" | "relates";
   }[];
   readonly cycle?: TaskCycleInput | null;
+}
+
+export interface TaskProjectOption {
+  readonly id: string;
+  readonly code: string;
+  readonly title: string;
 }
 
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";

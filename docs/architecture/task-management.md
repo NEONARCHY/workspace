@@ -13,6 +13,16 @@ module access rules. Selecting a task in
 any view opens the same full card; changing a Kanban column uses the normal status
 API, so server-side access and dependency rules cannot be bypassed by the UI.
 
+The project field is optional. New clients select an active project visible to the
+task author from the current project hub; the server validates its identity and
+access again when the task is saved. The task retains a nullable project ID and a
+readable label. Existing tasks and older clients with only the legacy free-text
+label remain valid. A linked ordinary task does not become a project-hub work item
+or automatically appear inside a project direction. Subtasks and recurring copies
+retain the parent/template link. Migration `0079_task_project_links` adds this
+nullable relation without backfilling ambiguous old labels. Deploy API and schema
+before installing a client that sends project IDs.
+
 The calendar shows tasks on their local due date, preserves the active state/role
 filters and text search, and keeps tasks without a deadline in a separate visible
 queue. Month navigation never changes task data.
