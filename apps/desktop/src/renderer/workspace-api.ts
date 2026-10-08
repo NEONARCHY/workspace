@@ -906,6 +906,24 @@ export function updateEmployeeAccess(
   );
 }
 
+export function updateOwnSuperadminOrganization(
+  token: string,
+  positionId?: string,
+  departmentId?: string,
+): Promise<DirectoryEmployee> {
+  return apiRequest<DirectoryEmployee>(
+    "/directory/employees/me/organization",
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        positionId: positionId || null,
+        departmentId: departmentId || null,
+      }),
+    },
+    token,
+  );
+}
+
 export function updateEmployeeStatus(
   token: string,
   employeeId: string,

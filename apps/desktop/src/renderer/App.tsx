@@ -2370,8 +2370,13 @@ export function App() {
                 onInvite={() => { setAccountInvite(true); setAccountOpen(true); }}
                 onEmployeeChanged={(employee) => setWorkspace((current) => ({
                   ...current,
+                  currentUser: current.currentUser.id === employee.id
+                    ? { ...current.currentUser, departmentId: employee.departmentId,
+                      positionId: employee.positionId, jobTitle: employee.jobTitle }
+                    : current.currentUser,
                   people: current.people.map((person) => person.id === employee.id
-                    ? { ...person, departmentId: employee.departmentId, jobTitle: employee.jobTitle }
+                    ? { ...person, departmentId: employee.departmentId,
+                      positionId: employee.positionId, jobTitle: employee.jobTitle }
                     : person),
                 }))}
                 onDepartmentChanged={(department) => setWorkspace((current) => ({
