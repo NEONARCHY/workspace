@@ -1085,6 +1085,7 @@ export function App() {
       readonly title: string;
       readonly description: string;
       readonly project: string;
+      readonly projectId?: string | null;
       readonly assigneeId: string;
       readonly priority: WorkspaceTask["priority"];
       readonly dueAt?: string | null;

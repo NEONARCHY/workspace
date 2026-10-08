@@ -71,6 +71,7 @@ from yuksalish_api.repository import (
     dismiss_notification,
     extend_task_deadline,
     get_attachment,
+    list_task_project_options,
     load_workspace,
     mark_all_notifications_read,
     mark_chat_read,
@@ -147,6 +148,7 @@ from yuksalish_api.workspace_schemas import (
     TaskDependencyRequest,
     TaskEfficiencyExclusionRequest,
     TaskParticipantRequest,
+    TaskProjectOption,
     TaskResponse,
     TripActionRequest,
     TripRequestResponse,
@@ -624,6 +626,15 @@ async def post_calendar_response(
         raise _translate(error) from error
     await _event_bus(request).publish({"type": "calendar.updated", "entityId": result.id})
     return result
+
+
+@router.get("/tasks/project-options", response_model=list[TaskProjectOption])
+async def get_task_project_options(
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> list[TaskProjectOption]:
+    await ensure_module_action(connection, current_user, "tasks", "create")
+    return await list_task_project_options(connection, current_user)
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
