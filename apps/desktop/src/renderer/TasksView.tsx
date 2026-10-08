@@ -10,6 +10,7 @@ import type {
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
   TaskStatus,
+  TaskProjectOption,
   WorkspaceAttachment,
   WorkspacePerson,
   WorkspaceDepartment,
@@ -52,6 +53,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { loadTaskProjectOptions } from "./workspace-api";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
@@ -175,6 +177,7 @@ interface TaskEditPayload {
   readonly title: string;
   readonly description: string;
   readonly project: string;
+  readonly projectId?: string | null;
   readonly assigneeId: string;
   readonly priority: WorkspaceTask["priority"];
   readonly dueAt?: string | null;
@@ -280,6 +283,13 @@ export function TasksView(props: TasksViewProps) {
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editProject, setEditProject] = useState("");
+  const [editProjectId, setEditProjectId] = useState("");
+  const [projectState, setProjectState] = useState<{
+    readonly key: string;
+    readonly options: readonly TaskProjectOption[];
+    readonly error: string;
+  }>({ key: "", options: [], error: "" });
+  const [projectsRevision, setProjectsRevision] = useState(0);
   const [editAssigneeId, setEditAssigneeId] = useState("");
   const [editAssigneeScope, setEditAssigneeScope] = useState<EmployeeScope>("central");
   const [editPriority, setEditPriority] = useState<WorkspaceTask["priority"]>("normal");
@@ -319,6 +329,23 @@ export function TasksView(props: TasksViewProps) {
   const newTaskFocusTarget = useRestoreFocusTarget();
   const inEmployeeScope = (person: WorkspacePerson, scope: EmployeeScope) =>
     !departments || employeeScope(person.departmentId, departments) === scope;
+
+  const projectRequestKey = `${props.token}:${projectsRevision}`;
+  const projectsLoading = Boolean(props.token) && projectState.key !== projectRequestKey;
+  const projectOptions = projectState.key === projectRequestKey ? projectState.options : [];
+  const projectsError = projectState.key === projectRequestKey ? projectState.error : "";
+  useEffect(() => {
+    if (!props.token) return;
+    let active = true;
+    void loadTaskProjectOptions(props.token).then((options) => {
+      if (active) setProjectState({ key: projectRequestKey, options, error: "" });
+    }).catch(() => {
+      if (active) setProjectState({
+        key: projectRequestKey, options: [], error: "Не удалось загрузить проекты.",
+      });
+    });
+    return () => { active = false; };
+  }, [props.token, projectRequestKey]);
 
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
@@ -399,6 +426,7 @@ export function TasksView(props: TasksViewProps) {
     setEditTitle(selectedTask.title);
     setEditDescription(selectedTask.description ?? "");
     setEditProject(selectedTask.project);
+    setEditProjectId(selectedTask.projectId || (selectedTask.project !== "Без проекта" ? "__legacy__" : ""));
     setEditAssigneeId(selectedTask.assigneeId);
     setEditAssigneeScope(employeeScope(people.find((person) => person.id === selectedTask.assigneeId)?.departmentId, departments ?? []));
     setEditPriority(selectedTask.priority);
@@ -412,6 +440,8 @@ export function TasksView(props: TasksViewProps) {
     setDateError("");
     const updated = await onUpdateTask(selectedTask, {
       title: editTitle.trim(), description: editDescription.trim(), project: editProject.trim() || "Без проекта",
+      ...(editProjectId !== "__legacy__" && editProjectId !== (selectedTask.projectId ?? "")
+        ? { projectId: editProjectId || null } : {}),
       assigneeId: editAssigneeId, priority: editPriority,
       dueAt: editDueAt ? new Date(editDueAt).toISOString() : null,
     });
@@ -650,6 +680,10 @@ export function TasksView(props: TasksViewProps) {
         people={people}
         departments={departments}
         tasks={tasks}
+        projectOptions={projectOptions}
+        projectsLoading={projectsLoading}
+        projectsError={projectsError}
+        onRetryProjects={() => setProjectsRevision((current) => current + 1)}
         currentUserId={currentUserId}
         initialTitle={assistantTaskFields.title}
         initialDescription={assistantTaskFields.description}
@@ -694,7 +728,16 @@ export function TasksView(props: TasksViewProps) {
         {editing ? <div className="task-card-editor" aria-label="Редактирование карточки задачи">
           <Input aria-label="Название в карточке" value={editTitle} onChange={(_event, data) => setEditTitle(data.value)} />
           <Textarea aria-label="Описание задачи" value={editDescription} onChange={(_event, data) => setEditDescription(data.value)} />
-          <Input aria-label="Проект задачи" value={editProject} onChange={(_event, data) => setEditProject(data.value)} />
+          <label><span>Проект · необязательно</span><WorkspaceSelect aria-label="Проект задачи" value={editProjectId} onChange={(event) => {
+            const id = event.target.value;
+            setEditProjectId(id);
+            setEditProject(projectOptions.find((option) => option.id === id)?.title ?? "Без проекта");
+          }}><option value="">Без проекта</option>
+            {editProjectId === "__legacy__" ? <option value="__legacy__">Ранее: {editProject}</option> : null}
+            {editProjectId && editProjectId !== "__legacy__" && !projectOptions.some((option) => option.id === editProjectId)
+              ? <option value={editProjectId}>{editProject} · недоступен для нового выбора</option> : null}
+            {projectOptions.map((option) => <option key={option.id} value={option.id}>{option.code} · {option.title}</option>)}
+          </WorkspaceSelect>{projectsError ? <small role="alert">{projectsError}</small> : null}</label>
           <div className="task-people-scope-field"><span>Ответственный</span>{departments ? <EmployeeScopeSwitch value={editAssigneeScope} onChange={(next) => { setEditAssigneeScope(next); setEditAssigneeId(""); }} label="Группа ответственных" /> : null}<WorkspaceSelect aria-label="Ответственный задачи" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, editAssigneeScope)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect></div>
           <label><span>Приоритет</span><WorkspaceSelect aria-label="Приоритет задачи" variant="priority" value={editPriority} onChange={(event) => setEditPriority(event.target.value as WorkspaceTask["priority"])}><option value="low">Низкий</option><option value="normal">Обычный</option><option value="high">Высокий</option><option value="urgent">Срочный</option></WorkspaceSelect></label>
           <label><span>Срок</span><WorkspaceDateTimePicker ariaLabel="Срок задачи" value={editDueAt} onChange={setEditDueAt} /></label>

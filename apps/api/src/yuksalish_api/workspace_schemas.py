@@ -329,6 +329,7 @@ class TaskResponse(ApiModel):
     title: str
     description: str
     project: str
+    project_id: str | None = None
     author_id: str
     assignee_id: str
     due_label: str
@@ -352,6 +353,12 @@ class TaskResponse(ApiModel):
     comments: list[TaskCommentResponse] = Field(default_factory=list)
     dependencies: list[TaskDependencyResponse] = Field(default_factory=list)
     cycle: TaskCycleResponse | None = None
+
+
+class TaskProjectOption(ApiModel):
+    id: str
+    code: str
+    title: str
 
 
 class TaskCreateParticipantRequest(ApiModel):
@@ -412,7 +419,8 @@ class TaskCreateCycleRequest(ApiModel):
 class CreateTaskRequest(ApiModel):
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
-    project: str = Field(default="Без проекта", max_length=96)
+    project: str = Field(default="Без проекта", max_length=240)
+    project_id: str | None = None
     assignee_id: str | None = None
     source_message_id: str | None = None
     calendar_event_id: str | None = None
@@ -436,7 +444,8 @@ class CreateTaskRequest(ApiModel):
 class UpdateTaskRequest(ApiModel):
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
-    project: str = Field(default="Без проекта", max_length=96)
+    project: str = Field(default="Без проекта", max_length=240)
+    project_id: str | None = None
     assignee_id: str
     priority: Literal["low", "normal", "high", "urgent"] = "normal"
     due_at: datetime | None = None

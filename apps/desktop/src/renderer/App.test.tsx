@@ -895,6 +895,9 @@ function mockServer(
       tripRequests = tripRequests.map((item) => item.id === changed.id ? changed : item);
       return response(changed);
     }
+    if (url.endsWith("/tasks/project-options")) {
+      return response([{ id: "hub-routes", code: "MR", title: "Маршруты" }]);
+    }
     if (url.endsWith("/project-hub/payment-targets") || url.endsWith("/project-hub/calendar-targets")) {
       return response({ projects: [
         { id: "hub-project-1", code: "WS-26", title: "Workspace" },
@@ -1283,16 +1286,19 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getByRole("button", { name: "Новая задача" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новая задача" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название задачи" }), {
       target: { value: "Проверить новый маршрут оплаты" },
     });
     fireEvent.change(screen.getByRole("textbox", { name: "Описание новой задачи" }), {
       target: { value: "Сверить роли и вернуть проверяемый результат" },
     });
-    fireEvent.change(screen.getByRole("textbox", { name: "Проект новой задачи" }), {
-      target: { value: "Маршруты" },
-    });
+    const projectSelect = await screen.findByRole("combobox", { name: "Проект новой задачи" });
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) =>
+      String(url).includes("/tasks/project-options"))).toBe(true));
+    await waitFor(() => expect(projectSelect).not.toBeDisabled());
+    fireEvent.click(projectSelect);
+    fireEvent.click(await screen.findByRole("option", { name: "MR · Маршруты" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Приоритет новой задачи" }), {
       target: { value: "high" },
     });
@@ -1321,6 +1327,7 @@ describe("corporate workspace authentication alpha", () => {
       title: "Проверить новый маршрут оплаты",
       description: "Сверить роли и вернуть проверяемый результат",
       project: "Маршруты",
+      projectId: "hub-routes",
       priority: "high",
       checklist: [{ title: "Проверить роли" }],
     });
