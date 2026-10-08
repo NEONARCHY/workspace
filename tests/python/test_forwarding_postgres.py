@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
@@ -291,7 +292,7 @@ async def exercise_forwarding(url: str) -> None:
                         workspace_notifications.c.event_key == f"feed:{post_id}",
                     )
                 ) == len(notices)
-                with pytest.raises(WorkspaceRepositoryError) as denied:
+                with pytest.raises(HTTPException) as denied:
                     await load_feed_post(connection, other, post_id)
                 assert denied.value.status_code == 403
                 feed_request = ForwardMessageRequest(
@@ -321,7 +322,7 @@ async def exercise_forwarding(url: str) -> None:
                     not redacted.available and redacted.title is None and redacted.author_id is None
                 )
                 assert await search_messages(connection, other, "Full announcement") == []
-                with pytest.raises(WorkspaceRepositoryError) as no_feed_access:
+                with pytest.raises(HTTPException) as no_feed_access:
                     await forward_message(
                         connection,
                         other,
