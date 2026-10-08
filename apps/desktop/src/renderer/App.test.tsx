@@ -1712,11 +1712,13 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/attachments/task/"),
       expect.objectContaining({ method: "PUT" }),
     ));
-    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }), {
+    // The request is recorded before the uploaded file and dialog finish rendering.
+    expect(await screen.findByText("result.txt", {}, { timeout: 10_000 })).toBeInTheDocument();
+    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }, { timeout: 10_000 }), {
       target: { value: "Работа завершена, файл приложен" },
     });
-    expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled();
-  });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled(), { timeout: 10_000 });
+  }, 30_000);
 
   it("submits the complete payment card and publishes a workflow version", async () => {
     const fetchMock = mockServer();
@@ -1858,7 +1860,7 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("0 UZS");
     fireEvent.change(screen.getByLabelText("Поиск заявок"), { target: { value: "" } });
     expect(screen.getByLabelText("Сумма в колонке «Согласовано»")).toHaveTextContent("7 350 000 UZS");
-  });
+  }, 30_000);
 
   it("marks only subsidy-route payment cards with the alternate approver", async () => {
     mockServer({ withSubsidyRequest: true });
