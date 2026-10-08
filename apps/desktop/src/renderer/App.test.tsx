@@ -18,6 +18,7 @@ import type {
 
 import { App } from "./App";
 import { initialChats, initialMessages, initialTasks, people } from "./test-fixtures/demo-data";
+import { homeEfficiency, homeRecognition } from "./test-fixtures/personal-home-fixture";
 
 const workflow = {
   id: "workflow",
@@ -145,10 +146,10 @@ const directory = {
   })),
 };
 
-function response(payload: unknown): Response {
+function response(payload: unknown, status = 200): Response {
   return {
-    ok: true,
-    status: 200,
+    ok: status >= 200 && status < 300,
+    status,
     json: async () => payload,
     blob: async () => new Blob(),
   } as Response;
@@ -234,7 +235,7 @@ function mockServer(
       description: "Единая корпоративная среда",
       managerUserId: people[0]!.id,
       startDate: "2026-08-01",
-      endDate: "2026-12-20",
+      endDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
       budget: 100_000_000,
       spentBudget: 20_000_000,
       remainingBudget: 80_000_000,
@@ -382,6 +383,7 @@ function mockServer(
         currentUser,
         canCreatePaymentRequests: !serverOptions.restrictPaymentCreators,
         people,
+        departments: [],
         positions: directory.positions.map(({ id, name }) => ({ id, name })),
         chats: initialChats,
         messages: initialMessages,
@@ -409,6 +411,17 @@ function mockServer(
     }
     if (url.endsWith("/workday/team") && options?.method === undefined) {
       return response({ asOf: "2026-09-23T09:00:00Z", workingCount: 0, members: [] });
+    }
+    if (url.includes("/profile/me/efficiency") && options?.method === undefined) {
+      return response(homeEfficiency(currentUser.id));
+    }
+    if (url.includes("/recognition/profiles/") && options?.method === undefined) {
+      return response(homeRecognition(currentUser.id));
+    }
+    if (url.endsWith("/home/reactions")) return response({ totalCount: 0, reactions: [] });
+    if (url.endsWith("/project-hub")) return response({ projects: [], workstreams: [], items: [], requests: [] });
+    if (url.includes("/ai-referent/incoming") || url.includes("/incoming-letters")) {
+      return response({ detail: "Интеграция не подключена" }, 503);
     }
     if (url.includes("/efficiency") && options?.method === undefined) {
       return response({
@@ -1035,11 +1048,7 @@ function mockServer(
   return fetchMock;
 }
 
-async function loginToWorkspace(username = "aziza", resumeSection?: "payment_requests" | "projects") {
-  if (resumeSection) {
-    sessionStorage.setItem("yuksalish:web:last-section", resumeSection);
-    for (const person of people) localStorage.setItem(`yuksalish:resume-section:${person.id}`, resumeSection);
-  }
+async function loginToWorkspace(username = "aziza", targetSection: "home" | "messenger" | "payment_requests" | "projects" = "messenger") {
   await screen.findByRole("button", { name: "Войти" });
   fireEvent.change(screen.getByLabelText(/^Логин/), {
     target: { value: username },
@@ -1049,6 +1058,16 @@ async function loginToWorkspace(username = "aziza", resumeSection?: "payment_req
   });
   fireEvent.click(screen.getByRole("button", { name: "Войти" }));
   await screen.findByText("Сервер подключён");
+  await screen.findByRole("heading", { name: /Добрый день/ });
+  if (targetSection === "home") return;
+  if (targetSection === "projects") {
+    fireEvent.click(screen.getByRole("button", { name: /Yuksalish Workspace.*Ближайший срок/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Закрыть карточку проекта" }, { timeout: 10_000 }));
+    return;
+  }
+  fireEvent.click(screen.getByRole("button", { name: targetSection === "messenger" ? /^Мессенджер/ : /^Заявки на оплату/ }));
+  if (targetSection === "messenger") await screen.findByRole("textbox", { name: "Новое сообщение" });
+  else await screen.findByRole("button", { name: "Новая заявка" });
 }
 
 async function selectPaymentDirection() {
@@ -1059,6 +1078,14 @@ async function selectPaymentDirection() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it("starts on personal Home after login, ignoring the previous web or desktop section", async () => {
+    sessionStorage.setItem("yuksalish:web:last-section", "messenger");
+    for (const person of people) localStorage.setItem(`yuksalish:resume-section:${person.id}`, "calendar");
+    mockServer(); render(<App />);
+    await loginToWorkspace("aziza", "home");
+    expect(screen.getByLabelText("Персональная Главная")).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Новое сообщение" })).not.toBeInTheDocument();
+  });
   afterEach(() => {
     cleanup();
     sessionStorage.clear();
@@ -1105,6 +1132,7 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
 
     await screen.findByText("Сервер подключён");
+    await screen.findByRole("heading", { name: /Добрый день/ });
     expect(screen.queryByRole("heading", { name: "Добро пожаловать" })).not.toBeInTheDocument();
     expect(loadSession).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -1153,7 +1181,7 @@ describe("corporate workspace authentication alpha", () => {
     });
     mockServer();
     render(<App />);
-    await loginToWorkspace();
+    await loginToWorkspace("aziza", "home");
     fireEvent.click(screen.getByRole("button", { name: /Ещё, \d+ разделов/ }));
     const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
     expect(drawer.querySelector("header")).toHaveTextContent(/^Другие разделы$/);
@@ -1441,7 +1469,7 @@ describe("corporate workspace authentication alpha", () => {
     for (let index = 0; index < Math.abs(monthOffset); index += 1) fireEvent.click(monthButton);
     expect(document.querySelectorAll(".task-calendar-item")).toHaveLength(initialTasks.length);
 
-    fireEvent.click(screen.getByRole("button", {
+    fireEvent.click(await screen.findByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     }));
     await waitFor(() => {
@@ -1654,7 +1682,7 @@ describe("corporate workspace authentication alpha", () => {
     await waitFor(() => expect(screen.getByText("Добавьте номер договора", { selector: "p" })).toBeInTheDocument());
     expect(screen.getByText("Нужны исправления")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
+    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }), {
       target: { value: "Номер договора добавлен" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Завершить и отправить на проверку" }));
@@ -1672,7 +1700,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("dilshod");
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getByRole("button", {
+    fireEvent.click(await screen.findByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     }));
     expect(screen.queryByRole("button", { name: "Создать заявку на оплату" })).not.toBeInTheDocument();
@@ -1684,7 +1712,7 @@ describe("corporate workspace authentication alpha", () => {
       expect.stringContaining("/attachments/task/"),
       expect.objectContaining({ method: "PUT" }),
     ));
-    fireEvent.change(screen.getByRole("textbox", { name: "Результат задачи" }), {
+    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }), {
       target: { value: "Работа завершена, файл приложен" },
     });
     expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled();
@@ -2030,6 +2058,7 @@ describe("corporate workspace authentication alpha", () => {
       button.getAttribute("aria-label"),
     );
     expect(labels).toEqual([
+      "Главная",
       "Задачи",
       "Заявки на оплату",
       "ИИ-модули",

@@ -1,4 +1,5 @@
 export const moduleKeys = [
+  "home",
   "tasks",
   "team_overview",
   "payment_requests",
@@ -39,6 +40,11 @@ export interface PersonalPreferences {
   readonly revision: number;
   /** Administrator-managed menu presentation; not a module permission. */
   readonly hiddenNavigationKeys?: readonly NavigationKey[];
+}
+
+export interface PersonalReactionSummary {
+  readonly totalCount: number;
+  readonly reactions: readonly { readonly emoji: string; readonly count: number }[];
 }
 export interface SidebarVisibility {
   readonly userId: string;

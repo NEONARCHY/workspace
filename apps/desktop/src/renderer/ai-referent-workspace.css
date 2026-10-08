@@ -847,3 +847,4 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
   border: 1px solid var(--ws-line);
   border-radius: 16px;
 }
+.ai-incoming-table tr.is-focused { outline: 2px solid var(--ws-link); outline-offset: -2px; }

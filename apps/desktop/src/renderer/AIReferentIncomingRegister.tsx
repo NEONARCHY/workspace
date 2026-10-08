@@ -22,6 +22,7 @@ import { AIReferentPagination } from "./AIReferentPagination";
 
 interface AIReferentIncomingRegisterProps {
   readonly token: string;
+  readonly focusLetterId?: string;
 }
 
 type IncomingFilter = "all" | "registered" | "attention" | "attachments";
@@ -63,7 +64,7 @@ function fileCountLabel(count: number): string {
   return `${count} ${!teen && end === 1 ? "файл" : !teen && end >= 2 && end <= 4 ? "файла" : "файлов"}`;
 }
 
-export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegisterProps) {
+export function AIReferentIncomingRegister({ token, focusLetterId }: AIReferentIncomingRegisterProps) {
   const [registry, setRegistry] = useState<AIReferentIncomingRegistry>();
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -72,6 +73,15 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
   const [filter, setFilter] = useState<IncomingFilter>("all");
   const [page, setPage] = useState(0);
   const requestSequence = useRef(0);
+  const focusedRow = useRef<HTMLTableRowElement>(null);
+  const hasFocused = useRef(false);
+  useEffect(() => {
+    if (!loading && focusedRow.current && !hasFocused.current) {
+      hasFocused.current = true;
+      focusedRow.current.scrollIntoView?.({ block: "center" });
+      focusedRow.current.focus({ preventScroll: true });
+    }
+  }, [loading, registry]);
   const selectFilter = (next: IncomingFilter) => { setPage(0); setFilter(next); };
 
   const refresh = useCallback(async (search = "", quiet = false) => {
@@ -196,7 +206,10 @@ export function AIReferentIncomingRegister({ token }: AIReferentIncomingRegister
             </thead>
             <tbody>
               {letters.map((letter) => (
-                <tr key={letter.id} className={isAttention(letter) ? "needs-attention" : ""}>
+                <tr key={letter.id} ref={letter.id === focusLetterId ? focusedRow : undefined}
+                  tabIndex={letter.id === focusLetterId ? -1 : undefined}
+                  aria-label={letter.id === focusLetterId ? "Выбранное входящее письмо" : undefined}
+                  className={`${isAttention(letter) ? "needs-attention" : ""} ${letter.id === focusLetterId ? "is-focused" : ""}`}>
                   <td>
                     <strong>{letter.platformIncomingNumber || `№ ${letter.sequenceNumber}`}</strong>
                     <small>{dateTime(letter.receivedAt)} · {letter.source === "webmail" ? "Webmail" : "E-XAT"}</small>

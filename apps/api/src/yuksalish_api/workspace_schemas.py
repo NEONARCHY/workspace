@@ -1349,6 +1349,7 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
+    "home",
     "tasks",
     "team_overview",
     "payment_requests",
@@ -1372,6 +1373,7 @@ NavigationKey = Literal[
     "settings",
 ]
 DEFAULT_NAVIGATION: list[NavigationKey] = [
+    "home",
     "tasks",
     "team_overview",
     "payment_requests",
@@ -1454,13 +1456,19 @@ class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
     # Derived from the catalog so adding a section never silently breaks reordering.
     order: list[NavigationKey] = Field(
-        min_length=len(DEFAULT_NAVIGATION), max_length=len(DEFAULT_NAVIGATION)
+        min_length=len(DEFAULT_NAVIGATION) - 1, max_length=len(DEFAULT_NAVIGATION)
     )
     revision: int = Field(ge=0)
 
     @field_validator("order")
     @classmethod
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
+        # A pre-Home client may save its complete former menu during rollout.
+        if (
+            len(value) == len(DEFAULT_NAVIGATION) - 1
+            and set(value) == set(DEFAULT_NAVIGATION) - {"home"}
+        ):
+            return ["home", *value]
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")
         return value

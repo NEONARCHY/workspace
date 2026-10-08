@@ -32,18 +32,20 @@ function safeFileName(name: string): string {
   ).join("").slice(0, 180) || "document";
 }
 
-export function IncomingLettersView({ token, people, currentUserId, canEdit }: {
+export function IncomingLettersView({ token, people, currentUserId, canEdit, focusLetterId }: {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
   readonly canEdit: boolean;
+  readonly focusLetterId?: number;
 }) {
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [registry, setRegistry] = useState<EdoIncomingPage>();
-  const [selectedId, setSelectedId] = useState<number>();
+  const [selectedId, setSelectedId] = useState<number | undefined>(() =>
+    focusLetterId && Number.isSafeInteger(focusLetterId) && focusLetterId > 0 ? focusLetterId : undefined);
   const [detail, setDetail] = useState<EdoIncomingDetail>();
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);

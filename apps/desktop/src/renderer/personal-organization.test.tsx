@@ -17,10 +17,10 @@ describe("Personal organization", () => {
     expect(moveBefore(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
     expect(moveBefore(["a", "b"], "foreign", "a")).toEqual(["a", "b"]);
     expect(moveBefore(["a", "b"], "a", "a")).toEqual(["a", "b"]);
-    expect(normalizeNavigation(["calendar", "calendar"])).toEqual(["calendar", ...navigationKeys.filter((key) => key !== "calendar")]);
+    expect(normalizeNavigation(["calendar", "calendar"])).toEqual(["home", "calendar", ...navigationKeys.filter((key) => key !== "calendar" && key !== "home")]);
     expect(normalizeNavigation(["tasks", "projects", "settings"])).toEqual([
-      "tasks", "projects", "project_hub", "project_funding", "settings",
-      ...navigationKeys.filter((key) => !["tasks", "projects", "project_hub", "project_funding", "settings"].includes(key)),
+      "home", "tasks", "projects", "project_hub", "project_funding", "settings",
+      ...navigationKeys.filter((key) => !["home", "tasks", "projects", "project_hub", "project_funding", "settings"].includes(key)),
     ]);
   });
   it("does not let an older bootstrap overwrite a just-saved preference response", () => {
@@ -41,7 +41,7 @@ describe("Personal organization", () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(navigationKeys, 4));
     await waitFor(() => expect(close).toHaveBeenCalled());
     fireEvent.click(screen.getByRole("button", { name: "По умолчанию" }));
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "home");
     fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
     expect(close).toHaveBeenCalledTimes(2);
   });
@@ -52,7 +52,7 @@ describe("Personal organization", () => {
     fireEvent.click(screen.getByRole("button", { name: "Сохранить" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Конфликт версий");
     expect(close).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "tasks");
+    expect(screen.getAllByRole("listitem")[0]).toHaveAttribute("data-navigation-key", "home");
   });
   it("hides legacy project and payment entries without deleting their saved positions", async () => {
     const save = vi.fn().mockResolvedValue(undefined);

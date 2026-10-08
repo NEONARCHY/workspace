@@ -1,4 +1,5 @@
 import type {
+  PersonalReactionSummary,
   AssistantChat,
   AssistantMessage,
   AssistantModel,
@@ -137,6 +138,10 @@ export { apiConnectionLabel, getApiBaseUrl, initializeApiOrigin, subscribeToApiO
 
 let pendingMutations = 0;
 export const hasPendingMutation = () => pendingMutations > 0;
+
+export function loadPersonalReactions(token: string): Promise<PersonalReactionSummary> {
+  return apiRequest("/home/reactions", {}, token);
+}
 
 export class ApiHttpError extends Error {
   constructor(readonly status: number, message: string) {

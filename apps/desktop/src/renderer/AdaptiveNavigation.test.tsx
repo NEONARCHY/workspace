@@ -105,7 +105,7 @@ describe("AdaptiveNavigation overflow", () => {
     const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
     fireEvent.click(more);
     expect(more).toHaveClass("active");
-    expect(document.querySelector(".navigation-sliding > .sliding-segmented-indicator")).not.toHaveAttribute("style");
+    expect(document.querySelector(".navigation-sliding > .sliding-segmented-indicator")).toHaveStyle({ opacity: "0" });
   });
 
   it("updates the open portalled drawer when the sidebar palette changes", () => {

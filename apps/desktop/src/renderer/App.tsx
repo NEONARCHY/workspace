@@ -57,6 +57,7 @@ import {
   Alert24Regular,
   ApprovalsApp24Regular,
   Board24Regular,
+  Home24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
   Chat24Regular,
@@ -103,7 +104,7 @@ import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
-  CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
+  CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
   TripApprovalsView, ZoomView,
@@ -308,6 +309,7 @@ const initialWorkspace: WorkspaceState = {
 };
 
 const navItems: readonly NavItem[] = [
+  { key: "home", label: "Главная", icon: <Home24Regular /> },
   {
     key: "tasks",
     label: "Задачи",
@@ -378,7 +380,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 }
 
 export function App() {
-  const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
+  const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
@@ -418,7 +420,7 @@ export function App() {
   const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
-    section: WorkspaceSection; entityId?: string; revision: number;
+    section: WorkspaceSection; entityId?: string; incomingReferent?: boolean; revision: number;
   }>();
   const [paymentCreateContext, setPaymentCreateContext] = useState<{ projectId: string; workstreamId: string }>();
   const consumePaymentCreateContext = useCallback(() => setPaymentCreateContext(undefined), []);
@@ -475,21 +477,14 @@ export function App() {
     setEfficiencyError(undefined);
     setMembersRegistry(undefined);
     setMembersError(undefined);
+    setZoomRegistry(undefined);
+    setZoomError(undefined);
     setNavigationEditing(false);
     setSession(authenticated);
     persistRefreshSession(authenticated.refreshToken);
-    try {
-      const web = workspacePlatform.kind === "web";
-      const key = web
-        ? "yuksalish:web:last-section"
-        : `yuksalish:resume-section:${authenticated.user.id}`;
-      const storage = web ? sessionStorage : localStorage;
-      const lastSection = storage.getItem(key);
-      if (!web) storage.removeItem(key);
-      if (lastSection && navItems.some((item) => item.key === lastSection && item.key !== "settings")) {
-        setActiveSection(lastSection === "project_funding" ? "project_hub" : lastSection as WorkspaceSection);
-      }
-    } catch { /* local storage can be disabled */ }
+    // Each authenticated session starts at the personal hub, never another
+    // employee's or the previous session's restored section.
+    setActiveSection("home");
     setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
@@ -587,14 +582,15 @@ export function App() {
 
   const refreshZoom = useCallback(async () => {
     if (!session) return;
+    const token = session.accessToken;
     setZoomLoading(true);
     try {
-      setZoomRegistry(await loadZoomMeetings(session.accessToken));
-      setZoomError(undefined);
+      const registry = await loadZoomMeetings(token);
+      if (activeToken.current === token) { setZoomRegistry(registry); setZoomError(undefined); }
     } catch (error) {
-      setZoomError(error instanceof Error ? error.message : "Не удалось загрузить конференции.");
+      if (activeToken.current === token) setZoomError(error instanceof Error ? error.message : "Не удалось загрузить конференции.");
     } finally {
-      setZoomLoading(false);
+      if (activeToken.current === token) setZoomLoading(false);
     }
   }, [session]);
 
@@ -604,11 +600,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // The calendar shows conferences too, so both sections need the schedule.
-    if (activeSection !== "zoom_meetings" && activeSection !== "calendar") return undefined;
+    if (!["home", "zoom_meetings", "calendar"].includes(activeSection)
+      || workspace.moduleAccess.find(item => item.moduleKey === "zoom_meetings")?.permissions.view !== true) return undefined;
     const timer = window.setTimeout(() => void refreshZoom(), 0);
     return () => window.clearTimeout(timer);
-  }, [activeSection, refreshZoom]);
+  }, [activeSection, refreshZoom, workspace.moduleAccess]);
 
   useEffect(() => {
     if (activeSection !== "members" || membersRegistry || membersError) return undefined;
@@ -791,12 +787,6 @@ export function App() {
       }
     }, reportError);
   }, [refreshWorkspace, reportError, session, activeApiOrigin]);
-
-  useEffect(() => {
-    if (!session || workspacePlatform.kind !== "web") return;
-    try { sessionStorage.setItem("yuksalish:web:last-section", activeSection); }
-    catch { /* session storage can be disabled */ }
-  }, [activeSection, session]);
 
   const personalMutation = async (operation: (token: string) => Promise<PersonalPreferences>) => {
     if (!session) throw new Error("Войдите снова");
@@ -2034,7 +2024,30 @@ export function App() {
 
           <main className="app-content" id="workspace-content" tabIndex={-1}>
             <Suspense fallback={<div className="workspace-module-loading" role="status">Открываем раздел…</div>}>
-            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("messenger")}>
+            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("home")}>
+            {displayedSection === "home" ? <PersonalHomeView
+              key={session.user.id}
+              token={session.accessToken}
+              workspace={workspace}
+              canView={canView}
+              zoomMeetings={zoomRegistry?.meetings}
+              zoomError={zoomError}
+              onOpenNotification={openNotification}
+              onRefresh={async () => {
+                await refreshWorkspace(session.accessToken);
+                if (canView("zoom_meetings")) await refreshZoom();
+              }}
+              onOpen={target => {
+                if (!canView(target.section)) return;
+                if (target.section === "settings") return;
+                if (target.section === "feed" && target.entityId) { void openFeedPost(target.entityId); return; }
+                setActiveSection(target.section);
+                if (target.section !== "notifications") {
+                  setFocusTarget({ section: target.section, entityId: target.entityId,
+                    incomingReferent: target.incomingReferent, revision: Date.now() });
+                }
+              }}
+            /> : null}
             {displayedSection === "notifications" ? (
               <NotificationCenter
                 key={focusNotification?.revision}
@@ -2231,12 +2244,15 @@ export function App() {
                 people={workspace.people}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
-                focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
+                focusRequestId={focusTarget?.section === "ai_referent" && !focusTarget.incomingReferent ? focusTarget.entityId : undefined}
+                focusIncomingId={focusTarget?.section === "ai_referent" && focusTarget.incomingReferent ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
               />
             ) : null}
             {displayedSection === "incoming_letters" ? (
               <IncomingLettersView
+                key={focusTarget?.revision}
+                focusLetterId={focusTarget?.section === "incoming_letters" ? Number(focusTarget.entityId) : undefined}
                 token={session.accessToken}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}

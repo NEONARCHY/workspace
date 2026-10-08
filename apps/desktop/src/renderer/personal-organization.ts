@@ -7,6 +7,10 @@ export const defaultPersonalPreferences: PersonalPreferences = {
 export function normalizeNavigation(order: readonly NavigationKey[]): NavigationKey[] {
   const known = [...new Set(order.filter((key) => navigationKeys.includes(key)))];
   const missing = navigationKeys.filter((key) => !known.includes(key));
+  if (missing.includes("home")) {
+    known.unshift("home");
+    missing.splice(missing.indexOf("home"), 1);
+  }
   if (known.includes("ai_referent") && missing.includes("incoming_letters")) {
     known.splice(known.indexOf("ai_referent") + 1, 0, "incoming_letters");
     missing.splice(missing.indexOf("incoming_letters"), 1);
