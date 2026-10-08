@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { DesktopRelease, DesktopUpdatePolicy } from "@yuksalish/contracts";
 import { Button } from "@fluentui/react-components";
@@ -25,6 +25,7 @@ export function DesktopUpdateSettings({ token, canPublish }: DesktopUpdateSettin
   const [policy, setPolicy] = useState<DesktopUpdatePolicy>();
   const [releases, setReleases] = useState<readonly DesktopRelease[]>([]);
   const [file, setFile] = useState<File>();
+  const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<"publish" | "mandatory" | "disable" | null>(null);
   const [selectedVersion, setSelectedVersion] = useState("");
@@ -84,7 +85,7 @@ export function DesktopUpdateSettings({ token, canPublish }: DesktopUpdateSettin
     {canPublish ? <><div className="desktop-update-step">
       <strong>1. Загрузить готовый установщик</strong>
       <p>Сначала проверьте сборку на тестовом ПК. Имя файла должно быть вида Yuksalish-Workspace-Setup-1.2.3.exe.</p>
-      <input type="file" accept=".exe" aria-label="Готовый установщик Yuksalish" disabled={busy}
+      <input ref={fileInput} type="file" accept=".exe" aria-label="Готовый установщик Yuksalish" disabled={busy}
         onChange={(event) => setFile(event.target.files?.[0])} />
       {file && !fileVersion ? <small role="alert">Имя файла не содержит корректный номер версии.</small> : null}
       {fileVersion ? <Button disabled={busy} onClick={() => void run(async () => {
@@ -93,6 +94,7 @@ export function DesktopUpdateSettings({ token, canPublish }: DesktopUpdateSettin
           __YUKSALISH_RELEASE_NOTES__.title, __YUKSALISH_RELEASE_NOTES__.items,
         );
         setFile(undefined);
+        if (fileInput.current) fileInput.current.value = "";
         setFeedback(`Версия ${fileVersion} загружена, но ещё не опубликована.`);
       })}>{busy ? "Загрузка…" : `Загрузить версию ${fileVersion}`}</Button> : null}
     </div>

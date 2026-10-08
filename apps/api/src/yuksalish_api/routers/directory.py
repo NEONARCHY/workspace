@@ -21,6 +21,7 @@ from yuksalish_api.directory_schemas import (
     PositionCreateRequest,
     PositionResponse,
     PositionUpdateRequest,
+    SelfSuperadminOrganizationUpdateRequest,
 )
 from yuksalish_api.directory_service import (
     DirectoryServiceError,
@@ -36,6 +37,7 @@ from yuksalish_api.directory_service import (
     update_department_members,
     update_employee_access,
     update_employee_status,
+    update_own_superadmin_organization,
     update_position,
 )
 from yuksalish_api.errors import WorkspaceRepositoryError
@@ -290,6 +292,22 @@ async def remove_position(
         {"type": "directory.position_deleted", "entityId": str(position_id)}
     )
     return Response(status_code=204)
+
+
+@router.patch("/employees/me/organization", response_model=DirectoryEmployeeResponse)
+async def patch_own_superadmin_organization(
+    payload: SelfSuperadminOrganizationUpdateRequest,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> DirectoryEmployeeResponse:
+    try:
+        result = await update_own_superadmin_organization(connection, current_user, payload)
+    except DirectoryServiceError as error:
+        raise _translate(error) from error
+    event_bus: WorkspaceEventBus = request.app.state.event_bus
+    await event_bus.publish({"type": "directory.employee_updated", "entityId": result.id})
+    return result
 
 
 @router.patch("/employees/{employee_id}", response_model=DirectoryEmployeeResponse)

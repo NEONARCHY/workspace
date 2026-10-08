@@ -7,6 +7,7 @@ import type {
   WorkspaceDepartment,
   WorkspaceTask,
   WorkspaceTaskCreateInput,
+  TaskProjectOption,
 } from "@yuksalish/contracts";
 import {
   Avatar,
@@ -45,6 +46,10 @@ interface TaskComposerProps {
   readonly people: readonly WorkspacePerson[];
   readonly departments?: readonly WorkspaceDepartment[];
   readonly tasks: readonly WorkspaceTask[];
+  readonly projectOptions?: readonly TaskProjectOption[];
+  readonly projectsLoading?: boolean;
+  readonly projectsError?: string;
+  readonly onRetryProjects?: () => void;
   readonly currentUserId: string;
   readonly initialTitle?: string;
   readonly initialDescription?: string;
@@ -86,6 +91,10 @@ export function TaskComposer({
   people,
   departments = [],
   tasks,
+  projectOptions = [],
+  projectsLoading = false,
+  projectsError = "",
+  onRetryProjects,
   currentUserId,
   initialTitle = "",
   initialDescription = "",
@@ -99,7 +108,9 @@ export function TaskComposer({
 }: TaskComposerProps) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
-  const [project, setProject] = useState(assistantFields.project ?? "");
+  const [projectId, setProjectId] = useState(assistantFields.projectId ?? "");
+  const [suggestedProject, setSuggestedProject] = useState(assistantFields.project ?? "");
+  const [projectTouched, setProjectTouched] = useState(false);
   const [assigneeId, setAssigneeId] = useState(() => {
     if (assistantFields.assigneeId && people.some((person) => person.id === assistantFields.assigneeId
       && (!person.status || person.status === "active"))) return assistantFields.assigneeId;
@@ -159,7 +170,9 @@ export function TaskComposer({
         const value = JSON.parse(saved) as Record<string, unknown>;
         if (typeof value.title === "string") setTitle(value.title);
         if (typeof value.description === "string") setDescription(value.description);
-        if (typeof value.project === "string") setProject(value.project);
+        if (typeof value.projectId === "string") setProjectId(value.projectId);
+        if (typeof value.project === "string") setSuggestedProject(value.project);
+        if (typeof value.projectTouched === "boolean") setProjectTouched(value.projectTouched);
         if (typeof value.assigneeId === "string") setAssigneeId(value.assigneeId);
         if (["low", "normal", "high", "urgent"].includes(String(value.priority))) setPriority(value.priority as WorkspaceTask["priority"]);
         if (typeof value.dueAt === "string") setDueAt(value.dueAt);
@@ -182,7 +195,8 @@ export function TaskComposer({
   useEffect(() => {
     if (!persistDraft || !draftReady.current || !draftEdited.current) return;
     const snapshot = JSON.stringify({
-      title, description, project, assigneeId, priority, dueAt, participants,
+      title, description, projectId, project: suggestedProject, projectTouched,
+      assigneeId, priority, dueAt, participants,
       checklist, dependencies, repeatEnabled, cycleKind, cycleInterval,
       cycleNextRun, cycleCalendarRule, cycleWeekdays, cycleMonthDays,
     });
@@ -195,7 +209,8 @@ export function TaskComposer({
       window.clearTimeout(timer);
       window.removeEventListener("yuksalish:prepare-web-update", save);
     };
-  }, [draftKey, persistDraft, title, description, project, assigneeId, priority, dueAt, participants,
+  }, [draftKey, persistDraft, title, description, projectId, suggestedProject, projectTouched,
+    assigneeId, priority, dueAt, participants,
     checklist, dependencies, repeatEnabled, cycleKind, cycleInterval, cycleNextRun,
     cycleCalendarRule, cycleWeekdays, cycleMonthDays]);
 
@@ -208,6 +223,13 @@ export function TaskComposer({
     [tasks],
   );
   const assignee = peopleById.get(assigneeId);
+  const suggestedMatches = suggestedProject && !projectTouched && !projectId
+    ? projectOptions.filter((option) => [option.title, option.code].some((value) =>
+      value.toLocaleLowerCase("ru") === suggestedProject.trim().toLocaleLowerCase("ru")))
+    : [];
+  const selectedProject = projectOptions.find((option) => option.id === projectId)
+    ?? (suggestedMatches.length === 1 ? suggestedMatches[0] : undefined);
+  const visibleProjectId = projectId || selectedProject?.id || "";
   const activePeople = people.filter((person) => !person.status || person.status === "active");
   const availableParticipants = activePeople.filter(
     (person) =>
@@ -350,10 +372,15 @@ export function TaskComposer({
     setBusy(true);
     setError("");
     try {
+      if (projectId && !selectedProject) {
+        setError("Выбранный проект больше недоступен. Обновите список или выберите «Без проекта».");
+        return;
+      }
       const created = await onSubmit({
         title: title.trim(),
         description: description.trim(),
-        project: project.trim() || "Без проекта",
+        project: selectedProject?.title ?? "Без проекта",
+        projectId: selectedProject?.id ?? null,
         assigneeId,
         calendarEventId,
         priority,
@@ -404,7 +431,7 @@ export function TaskComposer({
                     <p>{description.trim() || "Добавьте ожидаемый результат и важные детали."}</p>
                     <dl className="record-summary-facts">
                       <div><dt>Ответственный</dt><dd>{assignee ? <EmployeeProfileLink userId={assignee.id} personName={assignee.name}>{assignee.name}</EmployeeProfileLink> : "Не выбран"}</dd></div>
-                      <div><dt>Проект</dt><dd>{project.trim() || "Без проекта"}</dd></div>
+                      <div><dt>Проект</dt><dd>{selectedProject?.title ?? "Без проекта"}</dd></div>
                       <div><dt>Срок</dt><dd>{dateTimeLabel(dueAt)}</dd></div>
                     </dl>
                   </div>
@@ -444,14 +471,19 @@ export function TaskComposer({
                   />
                 </label>
                 <label>
-                  <span>Проект</span>
-                  <Input
+                  <span>Проект · необязательно</span>
+                  <WorkspaceSelect
                     aria-label="Проект новой задачи"
-                    maxLength={96}
-                    placeholder="Без проекта"
-                    value={project}
-                    onChange={(_, data) => setProject(data.value)}
-                  />
+                    value={visibleProjectId}
+                    disabled={projectsLoading}
+                    onChange={(event) => { setProjectTouched(true); setProjectId(event.target.value); }}
+                  ><option value="">{projectsLoading ? "Загрузка проектов…" : "Без проекта"}</option>
+                    {projectId && !selectedProject ? <option value={projectId}>Ранее выбранный проект · недоступен</option> : null}
+                    {projectOptions.map((option) => <option key={option.id} value={option.id}>{option.code} · {option.title}</option>)}
+                  </WorkspaceSelect>
+                  {suggestedProject && !selectedProject && !projectsLoading && !projectsError
+                    ? <small>Проект «{suggestedProject}» не найден в доступных. Выберите его вручную или оставьте задачу без проекта.</small> : null}
+                  {projectsError ? <small role="alert">{projectsError} {onRetryProjects ? <Button type="button" appearance="subtle" onClick={onRetryProjects}>Повторить</Button> : null}</small> : null}
                 </label>
                 <label>
                   <span>Ответственный <b aria-hidden="true">*</b></span>

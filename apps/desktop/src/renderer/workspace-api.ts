@@ -90,6 +90,7 @@ import type {
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
   TaskStatus,
+  TaskProjectOption,
   TripAction,
   TripStage,
   TripRequest,
@@ -905,6 +906,24 @@ export function updateEmployeeAccess(
   );
 }
 
+export function updateOwnSuperadminOrganization(
+  token: string,
+  positionId?: string,
+  departmentId?: string,
+): Promise<DirectoryEmployee> {
+  return apiRequest<DirectoryEmployee>(
+    "/directory/employees/me/organization",
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        positionId: positionId || null,
+        departmentId: departmentId || null,
+      }),
+    },
+    token,
+  );
+}
+
 export function updateEmployeeStatus(
   token: string,
   employeeId: string,
@@ -1414,6 +1433,10 @@ export function createWorkspaceTask(
   );
 }
 
+export function loadTaskProjectOptions(token: string): Promise<readonly TaskProjectOption[]> {
+  return apiRequest<readonly TaskProjectOption[]>("/tasks/project-options", {}, token);
+}
+
 export function updateWorkspaceTask(
   token: string,
   taskId: string,
@@ -1421,6 +1444,7 @@ export function updateWorkspaceTask(
     readonly title: string;
     readonly description: string;
     readonly project: string;
+    readonly projectId?: string | null;
     readonly assigneeId: string;
     readonly priority: WorkspaceTask["priority"];
     readonly dueAt?: string | null;
