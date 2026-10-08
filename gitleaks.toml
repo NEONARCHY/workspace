@@ -1,0 +1,11 @@
+title = "Yuksalish Workspace secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fixed, non-secret idempotency fixture in EDO bridge tests"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/python/test_edo_service\.py$''']
+regexes = ['''^operation-123$''']
