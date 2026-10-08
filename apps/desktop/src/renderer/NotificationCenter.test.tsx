@@ -46,6 +46,7 @@ it("hides a notification, restores it with undo and sends no delete request", as
   const onDelete = vi.fn().mockResolvedValue(undefined);
   render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications(1).slice(0, 2)} onDelete={onDelete} /></FluentProvider>);
   fireEvent.click(screen.getByRole("button", { name: "Показать действие: Удалить: Событие 0" }));
+  await act(() => vi.advanceTimersByTimeAsync(32));
   fireEvent.click(screen.getByRole("button", { name: "Удалить: Событие 0" }));
   expect(screen.queryByText("Событие 0")).not.toBeInTheDocument();
   expect(onDelete).not.toHaveBeenCalled();
@@ -59,6 +60,7 @@ it("restores the notification after a failed five-second delete", async () => {
   const onDelete = vi.fn().mockRejectedValue(new Error("Не удалось удалить уведомление"));
   render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications(1).slice(0, 1)} onDelete={onDelete} /></FluentProvider>);
   fireEvent.click(screen.getByRole("button", { name: "Показать действие: Удалить: Событие 0" }));
+  await act(() => vi.advanceTimersByTimeAsync(32));
   fireEvent.click(screen.getByRole("button", { name: "Удалить: Событие 0" }));
   await act(() => vi.advanceTimersByTimeAsync(4_999));
   expect(onDelete).not.toHaveBeenCalled();

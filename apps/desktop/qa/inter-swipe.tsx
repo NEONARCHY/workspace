@@ -18,6 +18,7 @@ import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/workspace-2-interactions.css";
 import "../src/renderer/workspace-2-messenger.css";
 import "../src/renderer/workspace-2-notifications.css";
+import "../src/renderer/section-headers.css";
 import "../src/renderer/employee-scope.css";
 import "../src/renderer/confirm-action-dialog.css";
 import "../src/renderer/sliding-segmented.css";
@@ -39,6 +40,7 @@ function Preview() {
   const [chats, setChats] = useState(fixtureChats);
   const [preferences, setPreferences] = useState({ ...defaultPersonalPreferences, pinnedChatIds: ["baxtiyor", "finance"] as readonly string[] });
   const [fail, setFail] = useState(false);
+  const [holdSwipe, setHoldSwipe] = useState(false);
   const [log, setLog] = useState("Серверные записи отключены; данные только в этом окне.");
   const remove = async (id: string, action: string) => {
     if (fail) throw new Error("Тестовый отказ сервера. Элемент возвращён.");
@@ -51,8 +53,12 @@ function Preview() {
       <header className="qa-swipe-toolbar"><div><strong>Inter · свайп · отмена</strong><small>Тестовый стенд, без подключения к рабочим данным</small></div>
         <Button onClick={() => setSection("notifications")}>Уведомления</Button><Button onClick={() => setSection("messenger")}>Мессенджер</Button>
         <Button aria-pressed={fail} onClick={() => setFail(value => !value)}>Ошибка сервера: {fail ? "вкл" : "выкл"}</Button>
+        <Button aria-pressed={holdSwipe} title="Только стенд: оставляет карточку в точке отпускания для осмотра градиента. Для сброса смените раздел."
+          onClick={() => setHoldSwipe(value => !value)}>Зафиксировать свайп: {holdSwipe ? "вкл" : "выкл"}</Button>
         <Button onClick={() => { setNotifications(fixtureNotifications); setChats(fixtureChats); }}>Сбросить</Button></header>
-      <main>{section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }}
+      <main onPointerUpCapture={event => { if (holdSwipe && (event.target as Element).closest(".swipe-row-surface")) event.stopPropagation(); }}
+        onLostPointerCaptureCapture={event => { if (holdSwipe && (event.target as Element).closest(".swipe-row-surface")) event.stopPropagation(); }}>
+        {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }}
         onOpen={nothing} onMarkRead={notification => setNotifications(items => items.map(item => item.id === notification.id ? { ...item, readAt: new Date().toISOString() } : item))}
         onMarkAllRead={() => setNotifications(items => items.map(item => ({ ...item, readAt: new Date().toISOString() })))} onUpdatePreferences={nothing}
         onDelete={async notification => { if (fail) throw new Error("Тестовый отказ сервера. Уведомление возвращено."); setNotifications(items => items.filter(item => item.id !== notification.id)); }} />

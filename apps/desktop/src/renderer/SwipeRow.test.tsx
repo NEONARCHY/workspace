@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SwipeRow } from "./SwipeRow";
 
@@ -24,13 +24,13 @@ function swipe(surface: Element, dx: number, dy = 0, cancel = false) {
   if (cancel) fireEvent.pointerCancel(surface);
   else fireEvent.pointerUp(surface, { clientX: 280 + dx, clientY: 50 + dy });
 }
-it("reveals the action on a short left swipe without deleting or opening the row", () => {
+it("reveals the action on a short left swipe without deleting or opening the row", async () => {
   const { surface, action, open } = setup();
   swipe(surface, -80);
   fireEvent.click(screen.getByText("Открыть"), { detail: 1 });
   expect(open).not.toHaveBeenCalled();
   expect(action).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Удалить: Диалог" })).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Удалить: Диалог" })).toBeVisible();
 });
 it("commits a full swipe exactly once after release", () => {
   const { surface, action } = setup();
@@ -39,11 +39,11 @@ it("commits a full swipe exactly once after release", () => {
   fireEvent.pointerUp(surface);
   expect(action).toHaveBeenCalledOnce();
 });
-it("keeps keyboard deletion usable without media-query support", () => {
+it("keeps keyboard deletion usable without media-query support", async () => {
   vi.stubGlobal("matchMedia", undefined);
   const { action } = setup();
   fireEvent.click(screen.getByRole("button", { name: "Показать действие: Удалить: Диалог" }));
-  fireEvent.click(screen.getByRole("button", { name: "Удалить: Диалог" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Удалить: Диалог" }));
   expect(action).toHaveBeenCalledOnce();
 });
 it("does not swallow keyboard activation after a swipe", () => {
@@ -96,4 +96,66 @@ it("does not expose or trigger protected actions", () => {
   swipe(surface, -250);
   expect(action).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "Показать действие: Удалить: Диалог" })).not.toBeInTheDocument();
+});
+it("fully hides the destructive backdrop before any swipe", () => {
+  const { container } = setup();
+  expect(container.querySelector(".swipe-row-reveal")).toHaveStyle({ visibility: "hidden" });
+  expect(container.querySelector(".swipe-row-action")).toHaveAttribute("aria-hidden", "true");
+  expect(container.querySelector(".swipe-row-action")).toHaveAttribute("tabindex", "-1");
+});
+it("extends the fixed backdrop under rounded trailing corners during a held swipe", async () => {
+  const { container, surface, action } = setup();
+  const reveal = container.querySelector(".swipe-row-reveal") as HTMLElement;
+  const button = container.querySelector(".swipe-row-action") as HTMLElement;
+  fireEvent.pointerDown(surface, { button: 0, clientX: 280, clientY: 50 });
+  fireEvent.pointerMove(surface, { clientX: 100, clientY: 50 });
+  await waitFor(() => {
+    expect(reveal).toHaveStyle({ visibility: "visible", transform: "translateX(calc(100% - 180px - var(--swipe-row-radius)))" });
+    expect(button).toHaveStyle({ transform: "translateX(calc(-100% + 180px + var(--swipe-row-radius)))" });
+    expect(surface).toHaveStyle({ transform: "translateX(-180px)" });
+  });
+  expect(action).not.toHaveBeenCalled();
+  expect(button).toHaveAttribute("aria-hidden", "true");
+  fireEvent.pointerMove(surface, { clientX: 280, clientY: 50 });
+  await waitFor(() => expect(reveal).toHaveStyle({ visibility: "hidden" }));
+  fireEvent.pointerCancel(surface);
+  expect(action).not.toHaveBeenCalled();
+});
+it("removes all backdrop paint after Escape or gesture cancellation", async () => {
+  const { container, surface, action } = setup();
+  const reveal = container.querySelector(".swipe-row-reveal");
+  swipe(surface, -80);
+  await waitFor(() => expect(reveal).toHaveStyle({ visibility: "visible" }));
+  fireEvent.keyDown(surface, { key: "Escape" });
+  await waitFor(() => expect(reveal).toHaveStyle({ visibility: "hidden" }));
+  fireEvent.pointerDown(surface, { button: 0, clientX: 280, clientY: 50 });
+  fireEvent.pointerMove(surface, { clientX: 30, clientY: 50 });
+  await waitFor(() => expect(reveal).toHaveStyle({ visibility: "visible" }));
+  fireEvent.pointerCancel(surface);
+  await waitFor(() => expect(reveal).toHaveStyle({ visibility: "hidden" }));
+  expect(action).not.toHaveBeenCalled();
+});
+it("keeps Enter/Space on swipe controls out of a parent sortable row", async () => {
+  const sortable = vi.fn();
+  render(<div onKeyDown={sortable}><SwipeRow label="Удалить: Диалог" onAction={vi.fn()}><button>Открыть</button></SwipeRow></div>);
+  const toggle = screen.getByRole("button", { name: "Показать действие: Удалить: Диалог" });
+  fireEvent.keyDown(toggle, { key: "Enter" });
+  fireEvent.keyDown(toggle, { key: " " });
+  expect(sortable).not.toHaveBeenCalled();
+  fireEvent.click(toggle);
+  const action = await screen.findByRole("button", { name: "Удалить: Диалог" });
+  fireEvent.keyDown(action, { key: "Enter" });
+  fireEvent.keyDown(action, { key: " " });
+  expect(sortable).not.toHaveBeenCalled();
+});
+it("closes from the focused destructive action and returns focus to the reveal control", async () => {
+  const { container, action } = setup();
+  const toggle = screen.getByRole("button", { name: "Показать действие: Удалить: Диалог" });
+  fireEvent.click(toggle);
+  const button = await screen.findByRole("button", { name: "Удалить: Диалог" });
+  button.focus();
+  fireEvent.keyDown(button, { key: "Escape" });
+  expect(toggle).toHaveFocus();
+  await waitFor(() => expect(container.querySelector(".swipe-row-reveal")).toHaveStyle({ visibility: "hidden" }));
+  expect(action).not.toHaveBeenCalled();
 });
