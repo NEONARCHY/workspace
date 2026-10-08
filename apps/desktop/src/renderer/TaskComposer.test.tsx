@@ -25,13 +25,15 @@ it("submits the complete assistant-prepared task only after the final form confi
     coAssignees: people[2]!.name, observers: people[0]!.name,
   } }, people, people[0]!.id);
   render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    projectOptions={[{ id: "forum-project", code: "FOR", title: "Форум" }]}
     currentUserId={people[0]!.id} initialTitle={prepared.fields.title}
     initialDescription={prepared.fields.description} initialAssigneeName={prepared.fields.assignee}
     assistantFields={prepared.fields} onClose={vi.fn()} onSubmit={onSubmit} /></FluentProvider>);
   expect(onSubmit).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
   await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
-    title: "Проверить отчёт", assigneeId: people[1]!.id, priority: "high", project: "Форум",
+    title: "Проверить отчёт", assigneeId: people[1]!.id, priority: "high",
+    project: "Форум", projectId: "forum-project",
     participants: [{ userId: people[2]!.id, role: "co_assignee" }, { userId: people[0]!.id, role: "observer" }],
     checklist: [{ title: "Проверить цифры" }, { title: "Передать итог" }],
   })));
@@ -47,6 +49,24 @@ it("prefills a suggested task but never submits without the user", () => {
   expect(screen.getByRole("textbox", { name: "Название задачи" })).toHaveValue("Проверить письмо");
   expect(screen.getByRole("textbox", { name: "Описание новой задачи" })).toHaveValue("До пятницы");
   expect(onSubmit).not.toHaveBeenCalled();
+});
+
+it("lets the author create a task without a project or choose one from the list", async () => {
+  const onSubmit = vi.fn().mockResolvedValue({ id: "created" });
+  render(<FluentProvider theme={webLightTheme}>
+    <TaskComposer open people={people} tasks={[]} currentUserId="aziza"
+      projectOptions={[{ id: "hub-1", code: "PR-1", title: "Проведение форума" }]}
+      initialTitle="Проверить план" onClose={vi.fn()} onSubmit={onSubmit} />
+  </FluentProvider>);
+
+  const project = screen.getByRole("combobox", { name: "Проект новой задачи" });
+  expect(project).toHaveValue("");
+  fireEvent.change(project, { target: { value: "hub-1" } });
+  expect(screen.getByText("Проведение форума", { selector: "dd" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({
+    project: "Проведение форума", projectId: "hub-1",
+  })));
 });
 
 it("requires a manual assignee choice for an unknown assistant-suggested colleague", () => {
