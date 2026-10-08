@@ -1,9 +1,42 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LoginView } from "./LoginView";
 
 afterEach(cleanup);
+
+describe("Login password visibility", () => {
+  it.each(["Вход", "Активация приглашения", "Сброс доступа"])("keeps one custom toggle per field in %s", (mode) => {
+    const props = loginProps();
+    render(<LoginView {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: mode }));
+    const inputs = [screen.getByLabelText(/^Пароль/),
+      ...(mode === "Вход" ? [] : [screen.getByLabelText(/^Повторите пароль/)])];
+    expect(screen.getAllByRole("button", { name: "Показать пароль" })).toHaveLength(inputs.length);
+    for (const input of inputs) {
+      expect(input.closest(".auth-password-input")).not.toBeNull();
+      expect(input).toHaveAttribute("type", "password");
+      expect(input).toHaveAttribute("autocomplete", mode === "Вход" ? "current-password" : "new-password");
+      fireEvent.change(input, { target: { value: "sample-password" } });
+    }
+    fireEvent.click(screen.getAllByRole("button", { name: "Показать пароль" })[0]!);
+    for (const input of inputs) { expect(input).toHaveAttribute("type", "text"); expect(input).toHaveValue("sample-password"); }
+    expect(screen.getAllByRole("button", { name: "Скрыть пароль" })[0]).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getAllByRole("button", { name: "Скрыть пароль" })[0]!);
+    for (const input of inputs) { expect(input).toHaveAttribute("type", "password"); expect(input).toHaveValue("sample-password"); }
+    expect(props.onLogin).not.toHaveBeenCalled();
+    expect(props.onAcceptInvitation).not.toHaveBeenCalled();
+    expect(props.onCompletePasswordReset).not.toHaveBeenCalled();
+  });
+
+  it("hides the native reveal only where a custom toggle exists", () => {
+    const css = readFileSync(resolve("src/renderer/workspace-2-auth.css"), "utf8");
+    expect(css).toMatch(/\.auth-card \.auth-password-input \.fui-Input__input::-ms-reveal\s*\{\s*display:\s*none;\s*\}/);
+    expect(css.match(/::-ms-reveal/g)).toHaveLength(1);
+  });
+});
 
 function loginProps() {
   return {

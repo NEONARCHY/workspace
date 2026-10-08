@@ -108,7 +108,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     window.addEventListener("resize", update);
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
   }, [drawerOpen]);
-  return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active, :scope > button.rail-action.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
+  return <SlidingSegmented as="nav" onContainer={(node) => { containerRef.current = node; }} activeSelector=":scope > .rail-slot .rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > button.rail-action.active:not(.rail-ai-trigger):not(.rail-more-action), :scope > .rail-slot .rail-ai-disclosure.is-open .rail-ai-link.active" className="rail-nav personal-rail-nav adaptive-rail-nav navigation-sliding"
     onClickCapture={(event) => {
       if (event.target instanceof Element && event.target.closest(".rail-action:not(.rail-more-action):not(.rail-ai-trigger)")) {
         setOpen(false);
@@ -120,7 +120,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
         aria-label={`Ещё, ${overflow.length} разделов`} aria-expanded={drawerOpen} aria-controls="rail-more-drawer" onClick={() => setOpen((current) => !current)}>
         <span className="rail-icon"><MoreHorizontal24Regular /></span>
         <span className="rail-label">Ещё</span>
-        <span className="rail-more-count">{overflow.length}</span>
+        <span className="rail-more-count" aria-hidden="true">{overflow.length}</span>
       </button>
       <Portal><AnimatePresence initial={false}>
         {drawerOpen ? <motion.aside ref={drawerRef} id="rail-more-drawer" className="rail-more-drawer sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Другие разделы"
@@ -128,7 +128,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
           animate={{ opacity: 1, y: 0 }}
           exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           transition={{ duration: reducedMotion ? 0 : 0.24, ease: [0.2, 0, 0, 1] }}>
-          <header><span>Другие разделы</span><small>{overflow.length}</small></header>
+          <header><span>Другие разделы</span></header>
           <div>
             {overflow.map((item) => (
               <div key={item.key} className="rail-more-entry">

@@ -173,6 +173,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
         return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
     prefixes = (
+        (("/home",), "home"),
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),
         (("/approval-templates",), "payment_requests"),

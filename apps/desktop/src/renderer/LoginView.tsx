@@ -150,6 +150,7 @@ export function LoginView({
 
           <Field label="Пароль" required>
             <Input
+              className="auth-password-input"
               type={passwordVisible ? "text" : "password"}
               value={password}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -186,6 +187,7 @@ export function LoginView({
               }
             >
               <Input
+                className="auth-password-input"
                 type={passwordVisible ? "text" : "password"}
                 value={confirmation}
                 autoComplete="new-password"

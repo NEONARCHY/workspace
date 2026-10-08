@@ -16,6 +16,14 @@ notification counts and navigation order are unchanged.
 - The More drawer, AI-module popover, inline AI links, collapsed rail and navigation
   editor use the same scoped `--ws-rail-*` tokens. Portals receive the selected palette
   explicitly; no global Fluent theme or business API is modified.
+- More has its own selected surface while open; it does not move the current page's
+  sliding indicator. The drawer heading has no count. Existing live section counters
+  stay at the right of their own buttons; sections without a count get no invented badge.
+  The number on the More trigger still means hidden sections, not unread notifications.
+- Opening or closing inline AI modules does not change the current page selection.
+  The shared indicator observes each navigation slot as well as button sizes,
+  following intermediate disclosure layout directly without React commits per frame.
+  Repeated toggles and reversals retain matching label/surface coordinates.
 
 ## Persistence and fallback
 
@@ -39,6 +47,14 @@ light selection retained after reload and login, keyboard Space/Escape, collapse
 popover, More drawer, desktop, 1024×768, 620×900 and a 956×454 reduced work area.
 The latter checks constrained reflow, not an assertion of a real browser 200% zoom
 test. No full screen-reader certification or packaged Electron verification is claimed.
+
+The More visibility follow-up passed 79 focused renderer tests (including actual
+App section counters), lint, typecheck, production renderer build and 15 workflow
+tests. The read-only `qa/ai-navigation.html?overflow&theme=navy` fixture verifies
+the shared production components/styles without API calls: all three palettes,
+page selection retained beside open More, right-aligned counters, Space/Escape,
+section selection, desktop, 1024×768 and 620×900. These are browser checks, not
+packaged Electron or full screen-reader certification.
 
 Shipping this renderer change requires updating the web client or rebuilding the
 desktop client. The API, database and Exat robot require no update.

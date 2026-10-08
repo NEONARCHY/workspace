@@ -9,16 +9,21 @@ function Harness({ open = false, empty = true, reduced = false, geometry = "desk
   const header = useRef<HTMLSpanElement>(null), welcome = useRef<HTMLSpanElement>(null), visual = useRef<HTMLSpanElement>(null);
   const phase = useAssistantOrbJourney({ open, ready, empty, blocked, returnWithoutFlight, welcomeWithoutFlight, reducedMotion: reduced,
     zoom: 1, geometryKey: geometry, launcher, panel, header, welcome, visual });
-  return <><button ref={launcher} data-slot="launcher">Открыть</button>
+  return <><header data-slot="topbar"><div data-slot="context">
+    <div data-slot="launcher-root" style={{ display: "contents" }}><button ref={launcher} data-slot="launcher">Открыть</button></div>
+    </div></header>
     <section ref={panel} data-slot="panel"><span ref={header} data-slot="header" /><span ref={welcome} data-slot="welcome" /></section>
     <span ref={visual} data-slot="visual" /><output>{phase}</output></>;
 }
 
 const originalAnimate = Object.getOwnPropertyDescriptor(Element.prototype, "animate");
+const originalFonts = Object.getOwnPropertyDescriptor(document, "fonts");
 afterEach(() => {
-  cleanup(); vi.restoreAllMocks();
+  cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals();
   if (originalAnimate) Object.defineProperty(Element.prototype, "animate", originalAnimate);
   else Reflect.deleteProperty(Element.prototype, "animate");
+  if (originalFonts) Object.defineProperty(document, "fonts", originalFonts);
+  else Reflect.deleteProperty(document, "fonts");
 });
 
 function motionFixture({ followVisual = false } = {}) {
@@ -50,6 +55,68 @@ function motionFixture({ followVisual = false } = {}) {
 }
 
 describe("assistant orb choreography", () => {
+  it("tracks a fixed-size launcher moved by its layout ancestors, then disconnects", async () => {
+    let notify = () => {};
+    const observe = vi.fn(), disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { notify = callback; }
+      observe = observe;
+      disconnect = disconnect;
+    });
+    let bounds = new DOMRect(1250, 30, 48, 48);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => bounds);
+    const { unmount } = render(<Harness />);
+    await act(async () => {});
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    expect(orb.style.transform).toBe("translate(1226px, 6px) scale(0.5)");
+    for (const name of ["launcher", "launcher-root", "context", "topbar"]) {
+      expect(observe).toHaveBeenCalledWith(document.querySelector(`[data-slot='${name}']`));
+    }
+    bounds = new DOMRect(1100, 54, 48, 48);
+    act(notify);
+    expect(orb.style.transform).toBe("translate(1076px, 30px) scale(0.5)");
+    unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    bounds = new DOMRect(50, 50, 48, 48);
+    act(notify);
+    expect(orb.style.transform).toBe("translate(1076px, 30px) scale(0.5)");
+  });
+
+  it.each(["resize", "scroll", "visibilitychange"])("updates idle position on %s without re-rendering", async (event) => {
+    let bounds = new DOMRect(1250, 30, 48, 48);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => bounds);
+    const { unmount } = render(<Harness />);
+    await act(async () => {});
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    bounds = new DOMRect(750, 45, 48, 48);
+    const target = event === "resize" ? window : document;
+    act(() => target.dispatchEvent(new Event(event)));
+    expect(orb.style.transform).toBe("translate(726px, 21px) scale(0.5)");
+    unmount();
+    bounds = new DOMRect(50, 50, 48, 48);
+    act(() => target.dispatchEvent(new Event(event)));
+    expect(orb.style.transform).toBe("translate(726px, 21px) scale(0.5)");
+  });
+
+  it("tracks font loading and ignores its late resolution after cleanup", async () => {
+    let finishFonts = () => {};
+    const fonts = new EventTarget();
+    Object.defineProperty(fonts, "ready", { value: new Promise<void>(resolve => { finishFonts = resolve; }) });
+    Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+    let bounds = new DOMRect(1250, 30, 48, 48);
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => bounds);
+    const { unmount } = render(<Harness />);
+    await act(async () => {});
+    const orb = document.querySelector<HTMLElement>("[data-slot='visual']")!;
+    bounds = new DOMRect(900, 30, 48, 48);
+    act(() => fonts.dispatchEvent(new Event("loadingdone")));
+    expect(orb.style.transform).toBe("translate(876px, 6px) scale(0.5)");
+    unmount();
+    bounds = new DOMRect(50, 50, 48, 48);
+    await act(async () => { finishFonts(); fonts.dispatchEvent(new Event("loadingdone")); });
+    expect(orb.style.transform).toBe("translate(876px, 6px) scale(0.5)");
+  });
+
   it("converts measured CSS-zoom bounds without shifting the orb centre", () => {
     const pose = orbPose(new DOMRect(100, 200, 48, 48), 2);
     expect(pose).toEqual({ x: 62, y: 112, size: 24 });

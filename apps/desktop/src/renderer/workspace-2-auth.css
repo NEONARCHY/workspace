@@ -138,6 +138,8 @@
   background: transparent;
   box-shadow: none;
 }
+/* Our accessible toggle owns visibility; Edge must not add a second eye. */
+.auth-card .auth-password-input .fui-Input__input::-ms-reveal { display: none; }
 .auth-card .fui-Input__input:-webkit-autofill,
 .auth-card .fui-Input__input:-webkit-autofill:hover,
 .auth-card .fui-Input__input:-webkit-autofill:focus {

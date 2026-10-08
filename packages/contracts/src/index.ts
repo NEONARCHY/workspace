@@ -1,4 +1,5 @@
 export const moduleKeys = [
+  "home",
   "tasks",
   "team_overview",
   "payment_requests",
@@ -39,6 +40,11 @@ export interface PersonalPreferences {
   readonly revision: number;
   /** Administrator-managed menu presentation; not a module permission. */
   readonly hiddenNavigationKeys?: readonly NavigationKey[];
+}
+
+export interface PersonalReactionSummary {
+  readonly totalCount: number;
+  readonly reactions: readonly { readonly emoji: string; readonly count: number }[];
 }
 export interface SidebarVisibility {
   readonly userId: string;
@@ -415,10 +421,13 @@ export interface ChatMessage {
   readonly chatId: string;
   readonly authorId: string;
   readonly body: string;
+  readonly forwarded?: ForwardedContent | null;
   readonly systemKind?: "member_left" | "ownership_transferred" | "task_deadline_request" | null;
   readonly time: string;
   readonly createdAt?: string;
   readonly own?: boolean;
+  /** True only after a recipient other than the author opens the conversation. */
+  readonly readByRecipient?: boolean;
   readonly replyToMessageId?: string | null;
   readonly mentionUserIds?: readonly string[];
   readonly editedAt?: string | null;
@@ -431,6 +440,21 @@ export interface ChatMessage {
   readonly pinnedAt?: string | null;
   readonly pinnedByUserId?: string | null;
   readonly canPin?: boolean;
+}
+
+/** Provenance is set by the server, never inferred from message text. */
+export interface ForwardedContent {
+  readonly kind: "message" | "feed";
+  readonly authorId: string | null;
+  readonly authorName: string;
+  readonly postId?: string | null;
+  readonly title?: string | null;
+  readonly available: boolean;
+}
+
+export interface ForwardSource {
+  readonly kind: "message" | "feed";
+  readonly id: string;
 }
 
 export interface LinkPreview {
@@ -709,7 +733,8 @@ export type NotificationKind =
   | "zoom"
   | "hisobot"
   | "support"
-  | "birthday";
+  | "birthday"
+  | "feed";
 export type NotificationPriority = "normal" | "attention" | "urgent";
 export type NotificationSection = Extract<
   WorkspaceSection,
@@ -745,6 +770,9 @@ export interface WorkspaceNotification {
 }
 
 export interface NotificationPreferences {
+  readonly feedEnabled?: boolean;
+  readonly soundEnabled?: boolean;
+  readonly soundVolume?: number;
   readonly desktopEnabled: boolean;
   readonly messagesEnabled: boolean;
   readonly tasksEnabled: boolean;

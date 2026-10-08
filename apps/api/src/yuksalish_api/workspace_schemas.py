@@ -158,17 +158,34 @@ class MessageReactionResponse(ApiModel):
     reactor_user_ids: list[str] = Field(default_factory=list)
 
 
+class ForwardedContentResponse(ApiModel):
+    kind: Literal["message", "feed"]
+    author_id: str | None
+    author_name: str
+    post_id: str | None = None
+    title: str | None = None
+    available: bool = True
+
+
+class ForwardMessageRequest(ApiModel):
+    request_id: UUID
+    kind: Literal["message", "feed"]
+    source_id: UUID
+
+
 class ChatMessageResponse(ApiModel):
     id: str
     chat_id: str
     author_id: str
     body: str
+    forwarded: ForwardedContentResponse | None = None
     system_kind: Literal[
         "member_left", "ownership_transferred", "task_deadline_request"
     ] | None = None
     time: str
     created_at: datetime
     own: bool
+    read_by_recipient: bool = False
     reply_to_message_id: str | None = None
     mention_user_ids: list[str] = Field(default_factory=list)
     edited_at: datetime | None = None
@@ -1263,7 +1280,7 @@ class RespondCalendarEventRequest(ApiModel):
 
 NotificationKind = Literal[
     "message", "task", "approval", "trip", "calendar", "absence", "zoom", "hisobot",
-    "support",
+    "support", "birthday", "feed",
 ]
 NotificationPriority = Literal["normal", "attention", "urgent"]
 NotificationSection = Literal[
@@ -1301,6 +1318,9 @@ class NotificationResponse(ApiModel):
 
 
 class NotificationPreferencesResponse(ApiModel):
+    feed_enabled: bool = True
+    sound_enabled: bool = True
+    sound_volume: int = Field(default=20, ge=0, le=100)
     desktop_enabled: bool = True
     messages_enabled: bool = True
     tasks_enabled: bool = True
@@ -1313,6 +1333,10 @@ class NotificationPreferencesResponse(ApiModel):
 
 
 class NotificationPreferencesUpdate(ApiModel):
+    # Older clients must not overwrite these new preferences.
+    feed_enabled: bool | None = None
+    sound_enabled: bool | None = None
+    sound_volume: int | None = Field(default=None, ge=0, le=100)
     desktop_enabled: bool
     messages_enabled: bool
     tasks_enabled: bool
@@ -1325,6 +1349,7 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
+    "home",
     "tasks",
     "team_overview",
     "payment_requests",
@@ -1348,6 +1373,7 @@ NavigationKey = Literal[
     "settings",
 ]
 DEFAULT_NAVIGATION: list[NavigationKey] = [
+    "home",
     "tasks",
     "team_overview",
     "payment_requests",
@@ -1430,13 +1456,19 @@ class NavigationOrder(ApiModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="forbid")
     # Derived from the catalog so adding a section never silently breaks reordering.
     order: list[NavigationKey] = Field(
-        min_length=len(DEFAULT_NAVIGATION), max_length=len(DEFAULT_NAVIGATION)
+        min_length=len(DEFAULT_NAVIGATION) - 1, max_length=len(DEFAULT_NAVIGATION)
     )
     revision: int = Field(ge=0)
 
     @field_validator("order")
     @classmethod
     def complete_order(cls, value: list[NavigationKey]) -> list[NavigationKey]:
+        # A pre-Home client may save its complete former menu during rollout.
+        if (
+            len(value) == len(DEFAULT_NAVIGATION) - 1
+            and set(value) == set(DEFAULT_NAVIGATION) - {"home"}
+        ):
+            return ["home", *value]
         if set(value) != set(DEFAULT_NAVIGATION):
             raise ValueError("Меню должно содержать все разделы без повторений")
         return value

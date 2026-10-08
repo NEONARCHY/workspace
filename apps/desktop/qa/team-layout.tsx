@@ -14,6 +14,7 @@ import "../src/renderer/team-dashboard.css";
 import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/employee-scope.css";
 import "../src/renderer/sliding-segmented.css";
+import "../src/renderer/list-row-hover.css";
 
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
@@ -46,7 +47,7 @@ const tasks: readonly WorkspaceTask[] = (["new", "in_progress", "awaiting_review
   }));
 
 createRoot(document.getElementById("root")!).render(
-  <FluentProvider theme={workspaceTheme}>
+  <FluentProvider theme={workspaceTheme} className="app-provider" style={{ zoom: new URLSearchParams(location.search).has("zoom") ? 2 : 1 }}>
     <EmployeeProfileProvider onOpenProfile={() => undefined}>
       <main className="layout-qa">
         <header>Тестовый просмотр: синтетические данные, сохранение отключено.</header>

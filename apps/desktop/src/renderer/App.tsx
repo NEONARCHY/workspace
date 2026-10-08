@@ -21,6 +21,7 @@ import type {
   ZoomMeetingsRegistry,
   FeedPost,
   NotificationPreferences,
+  ForwardSource,
   NavigationKey,
   PersonalPreferences,
   ProjectInput,
@@ -56,6 +57,7 @@ import {
   Alert24Regular,
   ApprovalsApp24Regular,
   Board24Regular,
+  Home24Regular,
   CalendarLtr24Regular,
   Chat24Filled,
   Chat24Regular,
@@ -79,6 +81,7 @@ import { YuksalishAssistant } from "./YuksalishAssistant";
 import { DesktopUpdateGate } from "./DesktopUpdateGate";
 import { requiresDesktopUpdate, type DesktopUpdateStatus } from "./desktop-updates";
 import { workspacePlatform } from "./platform-adapter";
+import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
 import { workspaceTheme } from "./workspace-theme";
@@ -101,14 +104,14 @@ import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
-  CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
+  CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
 import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
-import { initialKnownNotificationIds } from "./notification-delivery";
+import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
@@ -164,6 +167,8 @@ import {
   publishWorkspaceWorkflow,
   saveWorkspaceWorkflow,
   sendWorkspaceMessage,
+  forwardWorkspaceContent,
+  loadWorkspaceFeedPost,
   createWorkspaceChat,
   updateWorkspaceChat,
   updateWorkspaceChatAvatar,
@@ -304,6 +309,7 @@ const initialWorkspace: WorkspaceState = {
 };
 
 const navItems: readonly NavItem[] = [
+  { key: "home", label: "Главная", icon: <Home24Regular /> },
   {
     key: "tasks",
     label: "Задачи",
@@ -374,7 +380,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 }
 
 export function App() {
-  const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("messenger");
+  const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
   const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
@@ -382,6 +388,8 @@ export function App() {
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
   const [switchingNetwork, setSwitchingNetwork] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceState>(initialWorkspace);
+  useNotificationSounds(session && workspace.currentUser.id === session.user.id ? session.user.id : undefined,
+    workspace.notifications, workspace.notificationPreferences);
   const [efficiency, setEfficiency] = useState<EfficiencyOverview>();
   const [efficiencyLoading, setEfficiencyLoading] = useState(false);
   const [efficiencyError, setEfficiencyError] = useState<string>();
@@ -412,7 +420,7 @@ export function App() {
   const [supportFocusRequestId, setSupportFocusRequestId] = useState<string>();
   const activeToken = useRef<string | undefined>(undefined);
   const [focusTarget, setFocusTarget] = useState<{
-    section: WorkspaceSection; entityId?: string; revision: number;
+    section: WorkspaceSection; entityId?: string; incomingReferent?: boolean; revision: number;
   }>();
   const [paymentCreateContext, setPaymentCreateContext] = useState<{ projectId: string; workstreamId: string }>();
   const consumePaymentCreateContext = useCallback(() => setPaymentCreateContext(undefined), []);
@@ -469,21 +477,14 @@ export function App() {
     setEfficiencyError(undefined);
     setMembersRegistry(undefined);
     setMembersError(undefined);
+    setZoomRegistry(undefined);
+    setZoomError(undefined);
     setNavigationEditing(false);
     setSession(authenticated);
     persistRefreshSession(authenticated.refreshToken);
-    try {
-      const web = workspacePlatform.kind === "web";
-      const key = web
-        ? "yuksalish:web:last-section"
-        : `yuksalish:resume-section:${authenticated.user.id}`;
-      const storage = web ? sessionStorage : localStorage;
-      const lastSection = storage.getItem(key);
-      if (!web) storage.removeItem(key);
-      if (lastSection && navItems.some((item) => item.key === lastSection && item.key !== "settings")) {
-        setActiveSection(lastSection === "project_funding" ? "project_hub" : lastSection as WorkspaceSection);
-      }
-    } catch { /* local storage can be disabled */ }
+    // Each authenticated session starts at the personal hub, never another
+    // employee's or the previous session's restored section.
+    setActiveSection("home");
     setConnectionDetail(apiConnectionLabel());
     setAuthError(undefined);
     setBackgroundError("");
@@ -581,14 +582,15 @@ export function App() {
 
   const refreshZoom = useCallback(async () => {
     if (!session) return;
+    const token = session.accessToken;
     setZoomLoading(true);
     try {
-      setZoomRegistry(await loadZoomMeetings(session.accessToken));
-      setZoomError(undefined);
+      const registry = await loadZoomMeetings(token);
+      if (activeToken.current === token) { setZoomRegistry(registry); setZoomError(undefined); }
     } catch (error) {
-      setZoomError(error instanceof Error ? error.message : "Не удалось загрузить конференции.");
+      if (activeToken.current === token) setZoomError(error instanceof Error ? error.message : "Не удалось загрузить конференции.");
     } finally {
-      setZoomLoading(false);
+      if (activeToken.current === token) setZoomLoading(false);
     }
   }, [session]);
 
@@ -598,11 +600,11 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    // The calendar shows conferences too, so both sections need the schedule.
-    if (activeSection !== "zoom_meetings" && activeSection !== "calendar") return undefined;
+    if (!["home", "zoom_meetings", "calendar"].includes(activeSection)
+      || workspace.moduleAccess.find(item => item.moduleKey === "zoom_meetings")?.permissions.view !== true) return undefined;
     const timer = window.setTimeout(() => void refreshZoom(), 0);
     return () => window.clearTimeout(timer);
-  }, [activeSection, refreshZoom]);
+  }, [activeSection, refreshZoom, workspace.moduleAccess]);
 
   useEffect(() => {
     if (activeSection !== "members" || membersRegistry || membersError) return undefined;
@@ -731,6 +733,7 @@ export function App() {
       hisobot: true,
       support: preferences.desktopEnabled,
       birthday: preferences.calendarEnabled,
+      feed: preferences.feedEnabled !== false,
     };
     for (const notification of workspace.notifications) {
       if (known.has(notification.id)) continue;
@@ -740,7 +743,7 @@ export function App() {
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
       ) continue;
       known.add(notification.id);
-      if (notification.desktopDeliveredAt || notification.readAt) continue;
+      if (notification.desktopDeliveredAt || notification.readAt || isObsoleteHisobotNotification(notification)) continue;
       void workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
@@ -784,12 +787,6 @@ export function App() {
       }
     }, reportError);
   }, [refreshWorkspace, reportError, session, activeApiOrigin]);
-
-  useEffect(() => {
-    if (!session || workspacePlatform.kind !== "web") return;
-    try { sessionStorage.setItem("yuksalish:web:last-section", activeSection); }
-    catch { /* session storage can be disabled */ }
-  }, [activeSection, session]);
 
   const personalMutation = async (operation: (token: string) => Promise<PersonalPreferences>) => {
     if (!session) throw new Error("Войдите снова");
@@ -881,6 +878,26 @@ export function App() {
       throw error;
     }
   };
+
+  const handleForwardContent = async (chatId: string, source: ForwardSource, requestId: string) => {
+    if (!session) return undefined;
+    const owner = session.user.id;
+    const message = await forwardWorkspaceContent(session.accessToken, chatId, source, requestId);
+    if (activeToken.current !== session.accessToken) return undefined;
+    if (workspace.currentUser.id === owner) storeMessage(message);
+    return message;
+  };
+
+  const openFeedPost = useCallback(async (id: string) => {
+    if (!session) return;
+    try {
+      const post = await loadWorkspaceFeedPost(session.accessToken, id);
+      if (activeToken.current !== session.accessToken) return;
+      setWorkspace(current => ({ ...current, feedPosts: [post, ...current.feedPosts.filter(item => item.id !== id)] }));
+      setFocusTarget(current => ({ section: "feed", entityId: id, revision: (current?.revision ?? 0) + 1 }));
+      setActiveSection("feed");
+    } catch (failure) { reportError(failure); }
+  }, [reportError, session]);
 
   const handleSendVoiceMessage = async (
     chatId: string,
@@ -1649,6 +1666,7 @@ export function App() {
 
   const openNotification = (notification: WorkspaceNotification) => {
     void handleMarkNotificationRead(notification);
+    if (notification.section === "feed" && notification.entityId) { void openFeedPost(notification.entityId); return; }
     if (notification.kind === "support") {
       setSupportFocusRequestId(notification.entityId ?? undefined);
       setSupportOpen(true);
@@ -1676,6 +1694,10 @@ export function App() {
           .then(mergeNotification)
           .catch(reportError);
       }
+      if (notification.section === "feed" && notification.entityId) {
+        void openFeedPost(notification.entityId);
+        return;
+      }
       if (notification.kind === "support") {
         setSupportFocusRequestId(notification.entityId ?? undefined);
         setSupportOpen(true);
@@ -1693,7 +1715,7 @@ export function App() {
       }));
       setActiveSection(section);
     });
-  }, [reportError, session, workspace.notifications]);
+  }, [openFeedPost, reportError, session, workspace.notifications]);
 
   const preloadToken = session?.accessToken;
   const preloadUserId = session?.user.id;
@@ -1879,6 +1901,8 @@ export function App() {
     attachments={workspace.attachments}
     people={workspace.people}
     onSendMessage={handleSendMessage}
+    onForwardContent={handleForwardContent}
+    onOpenFeedPost={openFeedPost}
     onSendVoiceMessage={handleSendVoiceMessage}
     onReactMessage={handleMessageReaction}
     onPinMessage={handleMessagePin}
@@ -1935,9 +1959,9 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow, closeOverflow) => {
+          /> : <AdaptiveNavigation sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
-                <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen} onCloseOverflow={closeOverflow}
+                <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen}
                   onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];
@@ -2000,7 +2024,30 @@ export function App() {
 
           <main className="app-content" id="workspace-content" tabIndex={-1}>
             <Suspense fallback={<div className="workspace-module-loading" role="status">Открываем раздел…</div>}>
-            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("messenger")}>
+            <RecoveryBoundary key={`${session.user.id}:${displayedSection}`} onHome={() => setActiveSection("home")}>
+            {displayedSection === "home" ? <PersonalHomeView
+              key={session.user.id}
+              token={session.accessToken}
+              workspace={workspace}
+              canView={canView}
+              zoomMeetings={zoomRegistry?.meetings}
+              zoomError={zoomError}
+              onOpenNotification={openNotification}
+              onRefresh={async () => {
+                await refreshWorkspace(session.accessToken);
+                if (canView("zoom_meetings")) await refreshZoom();
+              }}
+              onOpen={target => {
+                if (!canView(target.section)) return;
+                if (target.section === "settings") return;
+                if (target.section === "feed" && target.entityId) { void openFeedPost(target.entityId); return; }
+                setActiveSection(target.section);
+                if (target.section !== "notifications") {
+                  setFocusTarget({ section: target.section, entityId: target.entityId,
+                    incomingReferent: target.incomingReferent, revision: Date.now() });
+                }
+              }}
+            /> : null}
             {displayedSection === "notifications" ? (
               <NotificationCenter
                 key={focusNotification?.revision}
@@ -2068,6 +2115,8 @@ export function App() {
                 people={workspace.people}
                 departments={workspace.departments}
                 onSendMessage={handleSendMessage}
+                onForwardContent={handleForwardContent}
+                onOpenFeedPost={openFeedPost}
                 onSendVoiceMessage={handleSendVoiceMessage}
                 onReactMessage={handleMessageReaction}
                 onPinMessage={handleMessagePin}
@@ -2195,12 +2244,15 @@ export function App() {
                 people={workspace.people}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
-                focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
+                focusRequestId={focusTarget?.section === "ai_referent" && !focusTarget.incomingReferent ? focusTarget.entityId : undefined}
+                focusIncomingId={focusTarget?.section === "ai_referent" && focusTarget.incomingReferent ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
               />
             ) : null}
             {displayedSection === "incoming_letters" ? (
               <IncomingLettersView
+                key={focusTarget?.revision}
+                focusLetterId={focusTarget?.section === "incoming_letters" ? Number(focusTarget.entityId) : undefined}
                 token={session.accessToken}
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
@@ -2219,6 +2271,9 @@ export function App() {
                 key={focusTarget?.section === "feed" ? focusTarget.revision : undefined}
                 assistantDraft={canUseAssistant && preparedAction?.kind === "feed" ? preparedAction : undefined}
                 posts={workspace.feedPosts}
+                focusPostId={focusTarget?.section === "feed" ? focusTarget.entityId : undefined}
+                chats={workspace.chats}
+                onForwardContent={canView("messenger") ? handleForwardContent : undefined}
                 people={workspace.people}
                 token={session.accessToken}
                 currentUserId={workspace.currentUser.id}

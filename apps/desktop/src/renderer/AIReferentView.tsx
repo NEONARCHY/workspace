@@ -80,6 +80,7 @@ interface AIReferentViewProps {
   readonly canCreate: boolean;
   readonly canAdmin?: boolean;
   readonly focusRequestId?: string;
+  readonly focusIncomingId?: string;
   readonly focusRevision?: number;
 }
 
@@ -183,7 +184,7 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusRevision }: AIReferentViewProps) {
+export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision }: AIReferentViewProps) {
   const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "visibility" | "addresses" | "archive" | "telegram">("incoming");
   const [visibility, setVisibility] = useState<AIReferentVisibility>();
   const [visibilityError, setVisibilityError] = useState("");
@@ -358,6 +359,9 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
     if (!focusRequestId) return;
     queueMicrotask(() => { setRegisterKind("outgoing"); setSelectedId(focusRequestId); });
   }, [focusRequestId, focusRevision]);
+  useEffect(() => {
+    if (focusIncomingId) queueMicrotask(() => setRegisterKind("incoming"));
+  }, [focusIncomingId, focusRevision]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -621,7 +625,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
         registerKind === "telegram" ? <AIReferentTelegram token={token} /> :
         registerKind === "incoming" ? (canIncoming ? <>
           {visibility?.incomingMode === "assigned" ? <p className="ai-referent-readonly">Здесь только письма, назначенные вам роботом Exat. Общий журнал скрыт.</p> : null}
-          <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}`} token={token} />
+          <AIReferentIncomingRegister key={`${visibility?.incomingMode}:${visibility?.revision}:${focusRevision}`} token={token} focusLetterId={focusIncomingId} />
         </> : <Spinner label="Проверяем доступ к входящим" />) : (
         <div className="ai-referent-page ai-referent-outgoing-page" key={registerKind}>
 

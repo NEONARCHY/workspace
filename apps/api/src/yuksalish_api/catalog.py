@@ -5,6 +5,12 @@ from .schemas import LocalizedLabel, ModuleDescriptor
 
 MODULE_CATALOG = (
     ModuleDescriptor(
+        key="home",
+        label=LocalizedLabel(ru="Главная", uz_cyrl="Бош саҳифа", uz_latn="Bosh sahifa"),
+        route="/home",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="tasks",
         label=LocalizedLabel(ru="Задачи", uz_cyrl="Вазифалар", uz_latn="Vazifalar"),
         route="/tasks",

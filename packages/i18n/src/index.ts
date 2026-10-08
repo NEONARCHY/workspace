@@ -1,3 +1,5 @@
+import { personalHomeMessages } from "./personal-home-messages";
+
 export const locales = ["ru", "uz_cyrl", "uz_latn"] as const;
 export type Locale = (typeof locales)[number];
 
@@ -45,6 +47,7 @@ type Translation = Readonly<{ uz_cyrl: string; uz_latn: string }>;
  * same wording instead of maintaining screen-specific copies.
  */
 export const productMessages: Readonly<Record<string, Translation>> = {
+  ...personalHomeMessages,
   "Настройки": { uz_cyrl: "Созламалар", uz_latn: "Sozlamalar" },
   "Оформление": { uz_cyrl: "Кўриниш", uz_latn: "Ko‘rinish" },
   "Двухфакторная авторизация": { uz_cyrl: "Икки босқичли аутентификация", uz_latn: "Ikki bosqichli autentifikatsiya" },

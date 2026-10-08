@@ -1,13 +1,33 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
+import type { NavigationKey } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
+import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 
 const items = [
   { key: "one", label: "Первый" },
   { key: "two", label: "Второй" },
   { key: "three", label: "Третий" },
 ];
+
+const aiItems = groupAiNavigation([
+  { key: "tasks" as const, label: "Задачи", icon: null },
+  { key: "ai_referent" as const, label: "AI Referent", icon: null },
+  { key: "ai_hisobot" as const, label: "AI Hisobot", icon: null },
+  { key: "feed" as const, label: "Лента", icon: null },
+]);
+
+function AiOverflowNavigation() {
+  const [activeKey, setActiveKey] = useState<NavigationKey>("tasks");
+  const [open, setOpen] = useState(false);
+  return <AdaptiveNavigation items={aiItems} expandedItem={open ? { key: "ai_modules", height: 101 } : undefined}
+    renderItem={(item, inOverflow) => item.key === "ai_modules"
+      ? <div className="rail-slot" key={item.key}><AiModulesNavigation modules={item.modules} activeKey={activeKey}
+        inOverflow={inOverflow} inline open={open} onOpenChange={setOpen} onSelect={setActiveKey} /></div>
+      : <div className="rail-slot" key={item.key}><button className="rail-action" type="button">{item.label}</button></div>} />;
+}
 
 describe("AdaptiveNavigation overflow", () => {
   const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
@@ -58,6 +78,36 @@ describe("AdaptiveNavigation overflow", () => {
     expect(screen.getByRole("button", { name: "Пятый" })).toBeInTheDocument();
   });
 
+  it("keeps live counters on their own overflow buttons, not on the drawer heading", () => {
+    const entries = [...items, { key: "four", label: "Четвёртый" }];
+    const renderItems = (badges: Record<string, number>) => <AdaptiveNavigation items={entries} renderItem={(item) => <button key={item.key} className="rail-action">
+      <span className="rail-label">{item.label}</span>
+      {badges[item.key] ? <span className="rail-badge">{badges[item.key]}</span> : null}
+    </button>} />;
+    const view = render(renderItems({ two: 6, three: 2 }));
+    fireEvent.click(screen.getByRole("button", { name: "Ещё, 3 разделов" }));
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    expect(drawer.querySelector("header")).toHaveTextContent(/^Другие разделы$/);
+    expect(drawer.querySelector("header small, header .rail-badge")).toBeNull();
+    expect(within(drawer).getByRole("button", { name: "Второй 6" }).querySelector(".rail-badge")).toHaveTextContent("6");
+    expect(within(drawer).getByRole("button", { name: "Третий 2" }).querySelector(".rail-badge")).toHaveTextContent("2");
+    expect(within(drawer).getByRole("button", { name: "Четвёртый" }).querySelector(".rail-badge")).toBeNull();
+
+    view.rerender(renderItems({ two: 5 }));
+    expect(within(drawer).getByRole("button", { name: "Второй 5" }).querySelector(".rail-badge")).toHaveTextContent("5");
+    expect(within(drawer).getByRole("button", { name: "Третий" }).querySelector(".rail-badge")).toBeNull();
+  });
+
+  it("does not move the page selection surface to the open More button", () => {
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(45);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(200);
+    render(<AdaptiveNavigation items={items} renderItem={(item) => <div key={item.key} className="rail-slot"><button className="rail-action">{item.label}</button></div>} />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    expect(more).toHaveClass("active");
+    expect(document.querySelector(".navigation-sliding > .sliding-segmented-indicator")).toHaveStyle({ opacity: "0" });
+  });
+
   it("updates the open portalled drawer when the sidebar palette changes", () => {
     const renderItem = (item: typeof items[number]) => <button key={item.key} className="rail-action">{item.label}</button>;
     const view = render(<AdaptiveNavigation items={items} sidebarTheme="navy" renderItem={renderItem} />);
@@ -90,6 +140,27 @@ describe("AdaptiveNavigation overflow", () => {
     expect(more).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(entry);
     expect(select).toHaveBeenCalledWith("two", true);
+    expect(more).toHaveAttribute("aria-expanded", "false");
+  });
+  it("keeps the real More drawer and AI group open after selecting either module", () => {
+    render(<AiOverflowNavigation />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    const trigger = within(drawer).getByRole("button", { name: "ИИ-модули" });
+    fireEvent.click(trigger);
+    for (const name of ["AI Referent", "AI Hisobot"]) {
+      const module = within(drawer).getByRole("button", { name });
+      fireEvent.pointerDown(module);
+      fireEvent.click(module);
+      expect(more).toHaveAttribute("aria-expanded", "true");
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(module).toHaveAttribute("aria-current", "page");
+    }
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(more).toHaveAttribute("aria-expanded", "false");
   });
   it("reserves More using the actual taller collapsed button height", () => {

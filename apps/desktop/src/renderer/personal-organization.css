@@ -14,7 +14,6 @@
 .rail-more-count { display: grid; min-width: 20px; height: 20px; place-items: center; padding-inline: 5px; border-radius: 10px; color: var(--ws-link); background: #fff; font-size: 10px; font-weight: 700; }
 .rail-more-drawer { position: fixed; z-index: 60; left: 12px; bottom: 82px; width: min(284px, calc(100vw - 24px)); max-height: min(520px, calc(100dvh - 24px)); box-sizing: border-box; padding: 10px; overflow: auto; border: 1px solid rgb(255 255 255 / 90%); border-radius: 22px; color: var(--ws-text); background: rgb(250 253 253 / 96%); box-shadow: 0 22px 55px rgb(41 58 85 / 22%); backdrop-filter: blur(16px); }
 .rail-more-drawer > header { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 10px; color: var(--ws-muted); font-size: 12px; }
-.rail-more-drawer > header small { display: grid; min-width: 22px; height: 22px; place-items: center; border-radius: 11px; background: var(--ws-accent-wash); color: var(--ws-link); }
 .rail-more-drawer > div { display: grid; gap: 3px; }
 .rail-more-drawer .rail-action { color: var(--ws-muted); }
 .rail-more-drawer .rail-action:hover, .rail-more-drawer .rail-action.active { color: var(--ws-text); }

@@ -20,6 +20,7 @@ import "./hr.css";
 import "./ai-referent.css";
 import "./zoom.css";
 import "./message-layout.css";
+import "./forwarding.css";
 import "./team-dashboard.css";
 import "./workday-presence.css";
 import "./spatial-workspace.css";

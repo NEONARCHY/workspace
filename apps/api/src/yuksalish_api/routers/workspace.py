@@ -72,6 +72,7 @@ from yuksalish_api.repository import (
     extend_task_deadline,
     get_attachment,
     list_task_project_options,
+    load_feed_post,
     load_workspace,
     mark_all_notifications_read,
     mark_chat_read,
@@ -365,13 +366,17 @@ async def post_message(
 @router.post("/chats/{chat_id}/read", status_code=204)
 async def post_chat_read(
     chat_id: UUID,
+    request: Request,
     current_user: Annotated[AuthenticatedUser, Depends(require_user)],
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> Response:
     try:
-        await mark_chat_read(connection, current_user, chat_id)
+        changed = await mark_chat_read(connection, current_user, chat_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
+    await connection.commit()
+    if changed:
+        await _event_bus(request).publish({"type": "message.read", "entityId": str(chat_id)})
     return Response(status_code=204)
 
 
@@ -384,6 +389,18 @@ async def get_message_search(
     return await search_messages(connection, current_user, q)
 
 
+@router.get("/feed/posts/{post_id}", response_model=FeedPostResponse)
+async def get_feed_post(
+    post_id: UUID,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> FeedPostResponse:
+    try:
+        return await load_feed_post(connection, current_user, post_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+
+
 @router.post("/feed/posts", response_model=FeedPostResponse, status_code=201)
 async def post_feed_post(
     payload: CreateFeedPostRequest,
@@ -392,7 +409,9 @@ async def post_feed_post(
     connection: Annotated[AsyncConnection, Depends(get_connection)],
 ) -> FeedPostResponse:
     result = await create_feed_post(connection, current_user, payload)
-    await _event_bus(request).publish({"type": "feed.created", "entityId": result.id})
+    # Refreshing peers must observe the post and its notifications in one committed state.
+    await connection.commit()
+    await _event_bus(request).publish({"type": "feed.created"})
     return result
 
 
@@ -547,7 +566,8 @@ async def remove_feed_post(
         await delete_feed_post(connection, current_user, post_id)
     except WorkspaceRepositoryError as error:
         raise _translate(error) from error
-    await _event_bus(request).publish({"type": "feed.deleted", "entityId": str(post_id)})
+    await connection.commit()
+    await _event_bus(request).publish({"type": "feed.deleted"})
 
 
 @router.patch("/feed/posts/{post_id}/pin", response_model=FeedPostResponse)

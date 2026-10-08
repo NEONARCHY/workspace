@@ -50,6 +50,8 @@ async def get_preferences(
         if chat_id in accessible and chat_id not in archived
     ]
     navigation = [key for key in row["navigation_order"] if key in DEFAULT_NAVIGATION]
+    if "home" not in navigation:
+        navigation.insert(0, "home")
     if "incoming_letters" not in navigation and "ai_referent" in navigation:
         navigation.insert(navigation.index("ai_referent") + 1, "incoming_letters")
     navigation += [key for key in DEFAULT_NAVIGATION if key not in navigation]

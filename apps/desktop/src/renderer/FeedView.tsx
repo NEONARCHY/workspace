@@ -1,5 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
@@ -11,6 +11,7 @@ import {
   Send24Regular,
   Add24Regular,
   ArrowReply24Regular,
+  ArrowForward24Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
@@ -18,9 +19,14 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { ReactionPicker } from "./ReactionPicker";
 import { ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
+import type { ChatSummary } from "@yuksalish/contracts";
 import { generateBirthdayGreeting } from "./workspace-api";
 
 interface FeedViewProps {
+  readonly chats?: readonly ChatSummary[];
+  readonly onForwardContent?: ForwardContentAction;
+  readonly focusPostId?: string;
   readonly canUseAssistant?: boolean;
   readonly assistantDraft?: AssistantActionDraft;
   readonly posts: readonly FeedPost[];
@@ -77,12 +83,19 @@ export function FeedReactions({ reactions, disabled, currentUserId, onToggle, pe
   </div>;
 }
 
-export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false }: FeedViewProps) {
+export function FeedView({ posts, people, token, currentUserId, onCreate, onComment, onReact, onDeleteComment, onPin, onDelete, assistantDraft, canUseAssistant = false, chats = [], onForwardContent, focusPostId }: FeedViewProps) {
   const deleteFocusTarget = useRestoreFocusTarget();
   const [title, setTitle] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.title ?? "" : "");
   const [body, setBody] = useState(assistantDraft?.kind === "feed" ? assistantDraft.fields.body ?? "" : "");
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [forwarding, setForwarding] = useState<FeedPost>();
+  const focusedPost = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!focusPostId) return;
+    focusedPost.current?.scrollIntoView?.({ block: "center", behavior: "instant" });
+    focusedPost.current?.focus({ preventScroll: true });
+  }, [focusPostId]);
   const [composerOpen, setComposerOpen] = useState(assistantDraft?.kind === "feed");
   const [replying, setReplying] = useState<Record<string, FeedComment | undefined>>({});
   const [pendingDelete, setPendingDelete] = useState<{ post: FeedPost; commentId?: string }>();
@@ -180,10 +193,12 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
         </WorkspaceSectionHeader>
       <div className="feed-main">
         <div className="feed-list">
+          {focusPostId && !posts.some(post => post.id === focusPostId) && <p className="feed-focus-notice" role="status">Объявление удалено или недоступно</p>}
           {posts.map((post) => {
             const author = person(post.authorUserId);
             return (
-              <article className={`feed-card ${post.isPinned ? "pinned" : ""} ${post.systemKind === "birthday" ? "is-birthday" : ""}`} key={post.id}>
+              <article className={`feed-card ${post.isPinned ? "pinned" : ""} ${post.systemKind === "birthday" ? "is-birthday" : ""} ${focusPostId === post.id ? "is-focused" : ""}`} key={post.id}
+                ref={focusPostId === post.id ? focusedPost : undefined} tabIndex={focusPostId === post.id ? -1 : undefined} aria-label={post.title}>
                 <header>
                   {post.systemKind === "birthday" ? <span className="feed-system-avatar" aria-hidden="true">Y</span> : null}
                   {author ? <EmployeeProfileLink userId={author.id} personName={author.name}><ProfileAvatar person={author} token={token} size={40} /></EmployeeProfileLink> : null}
@@ -216,6 +231,8 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                 <h2>{post.title}</h2>
                 <p className="feed-copy">{post.body}</p>
                 <div className="feed-actions">
+                  {onForwardContent && <Button appearance="subtle" size="small" icon={<ArrowForward24Regular />} aria-label={`Переслать объявление: ${post.title}`}
+                    onClick={() => setForwarding(post)}>Переслать</Button>}
                   <FeedReactions reactions={post.reactions ?? []} people={people} token={token} disabled={busy} currentUserId={currentUserId} onToggle={(emoji, reacted) => void onReact(post, emoji, reacted)} />
                   <span><Comment24Regular /> {post.comments.length}</span>
                 </div>
@@ -329,6 +346,8 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
         onCancel={() => setPendingDelete(undefined)}
         onConfirm={confirmDelete}
       />
+      {forwarding && onForwardContent && <ForwardDialog source={{ kind: "feed", id: forwarding.id }}
+        preview={forwarding.title} chats={chats} onForward={onForwardContent} onClose={() => setForwarding(undefined)} />}
     </section>
   );
 }

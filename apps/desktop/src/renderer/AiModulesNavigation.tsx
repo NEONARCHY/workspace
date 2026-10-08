@@ -43,7 +43,7 @@ export function moveAiNavigationGroup(order: readonly NavigationKey[], source: s
   });
 }
 
-export function AiModulesNavigation({ modules, activeKey, inOverflow = false, inline = false, sidebarTheme = defaultSidebarTheme, open: controlledOpen, onOpenChange, onSelect, onCloseOverflow }: {
+export function AiModulesNavigation({ modules, activeKey, inOverflow = false, inline = false, sidebarTheme = defaultSidebarTheme, open: controlledOpen, onOpenChange, onSelect }: {
   readonly modules: readonly AiModuleNavigationItem[];
   readonly activeKey: NavigationKey;
   readonly inOverflow?: boolean;
@@ -52,7 +52,7 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
   readonly onSelect: (key: NavigationKey) => void;
-  readonly onCloseOverflow: () => void;
+  readonly onCloseOverflow?: () => void;
 }) {
   const [localOpen, setLocalOpen] = useState(false);
   const open = controlledOpen ?? localOpen;
@@ -102,14 +102,14 @@ export function AiModulesNavigation({ modules, activeKey, inOverflow = false, in
   const links = <nav className="rail-ai-links" aria-label="Выбор ИИ-модуля">
     {modules.map((item) => <button className={`rail-ai-link${activeKey === item.key ? " active" : ""}`}
       type="button" key={item.key} aria-current={activeKey === item.key ? "page" : undefined}
-      onClick={() => { setOpen(false); onCloseOverflow(); onSelect(item.key); }}>
+      onClick={() => onSelect(item.key)}>
       <span className="rail-ai-link-icon" aria-hidden="true">{item.icon}</span>
       <span>{item.label}</span>
     </button>)}
   </nav>;
 
   return <>
-    <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " active" : ""}`} type="button"
+    <button ref={triggerRef} className={`rail-action rail-ai-trigger${active ? " has-active-module" : ""}`} type="button"
       aria-label="ИИ-модули" title="ИИ-модули" aria-expanded={open} aria-haspopup={inlinePanel ? undefined : "dialog"}
       aria-controls={inlinePanel || open ? "rail-ai-modules" : undefined} onClick={toggle}>
       <span className="rail-icon"><Sparkle24Regular /></span>

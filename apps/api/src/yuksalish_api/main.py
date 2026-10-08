@@ -31,6 +31,7 @@ from .routers import (
     edo_incoming,
     health,
     hisobot,
+    home,
     hr,
     members,
     messenger,
@@ -154,6 +155,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return response
 
     application.include_router(health.router, prefix=runtime_settings.api_prefix)
+    application.include_router(home.router, prefix=runtime_settings.api_prefix)
     application.include_router(members.router, prefix=runtime_settings.api_prefix)
     application.include_router(hr.router, prefix=runtime_settings.api_prefix)
     application.include_router(modules.router, prefix=runtime_settings.api_prefix)

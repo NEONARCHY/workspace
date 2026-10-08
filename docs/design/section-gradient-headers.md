@@ -15,6 +15,10 @@ cards, dialogs, login or account settings.
 - White headings and pale supporting text on a bounded navy/teal gradient.
   Primary actions are white with navy text; secondary actions use translucent
   dark surfaces. Segmented navigation remains light with a distinct selection.
+- Header navigation uses the same neutral-light family as AI Referent tabs:
+  13 px semibold idle labels, navy bold selected labels and a white selection
+  surface. Task views, project/trip sections and payment modes share the scoped
+  rule; focus and forced-colour selection remain visible.
 - Fourteen distinct decorative SVG motifs represent tasks, employees, absences,
   notifications, HR, calendar, trips, team, Telegram access, feed, messaging,
   payments, Zoom and the member registry. The AI modules retain their existing

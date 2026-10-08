@@ -7,6 +7,8 @@ body:has(.messenger-view, .calendar-view:not(.task-calendar-embedded)) .app-shel
 body:has(.yuksalish-assistant-root) .global-bar { padding-right: 16px; }
 
 .yuksalish-assistant-root { display: contents; }
+/* Equal flex gaps must end at the avatar, not its menu's extra left padding. */
+.workspace-top-context:has(.assistant-launcher) .workspace-identity-menu { padding-inline-start: 0; }
 /* Keep the paused launcher in its header slot, below the foreground scrim. */
 .yuksalish-assistant-root[data-blocking-dialog] .assistant-panel { visibility: hidden; }
 .assistant-launcher { display: block; flex: 0 0 auto; width: 48px; height: 48px; border: 0; padding: 0; background: transparent; cursor: pointer; pointer-events: auto; border-radius: 50%; }

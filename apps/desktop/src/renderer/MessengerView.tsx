@@ -64,6 +64,9 @@ import { ReactionPeople, ReactionDetailsMenu, type ReactionDetailsTarget } from 
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
+import { ForwardedMessage } from "./ForwardedMessage";
+import { MessageMetadata } from "./MessageMetadata";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
@@ -88,6 +91,7 @@ function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): bo
   if (!first || !second || first.systemKind || second.systemKind || first.chatId !== second.chatId
     || first.authorId !== second.authorId || !first.createdAt || !second.createdAt
     || first.replyToMessageId || second.replyToMessageId || first.isPinned || second.isPinned
+    || first.forwarded || second.forwarded
     || first.reactions?.length || first.deletedAt || second.deletedAt) return false;
   const firstAt = Date.parse(first.createdAt);
   const secondAt = Date.parse(second.createdAt);
@@ -97,6 +101,8 @@ function messagesShareBubbleGroup(first?: ChatMessage, second?: ChatMessage): bo
 }
 
 export interface MessengerViewProps {
+  readonly onForwardContent?: ForwardContentAction;
+  readonly onOpenFeedPost?: (id: string) => void | Promise<void>;
   readonly canUseAssistant?: boolean;
   readonly assistantDraft?: AssistantActionDraft;
   readonly assistantRecipientId?: string;
@@ -203,6 +209,8 @@ function Conversation({
   currentUserRole,
   chatActions,
   onSendMessage,
+  onForwardContent,
+  onOpenFeedPost,
   onSendVoiceMessage,
   onReactMessage,
   onPinMessage,
@@ -796,7 +804,7 @@ function Conversation({
                   </EmployeeProfileLink>
                 )}
                 <div className="message-content">
-                  <div className="message-body">
+                  <div className={`message-body${message.forwarded || messageAttachments.length ? " has-rich-content" : ""}`}>
                     {!own && (groupedWithPrevious
                       ? <span className="sr-only">Сообщение от {personName(message.authorId)}</span>
                       : <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}><strong>{personName(message.authorId)}</strong></EmployeeProfileLink>)}
@@ -806,7 +814,8 @@ function Conversation({
                         <span>{parent.body}</span>
                       </blockquote>
                     )}
-                    {voiceAttachments.length === 0 ? <p className="message-text">{message.body}</p> : null}
+                    {message.forwarded ? <ForwardedMessage message={message} onOpenPost={onOpenFeedPost} />
+                      : voiceAttachments.length === 0 ? <p className="message-text">{message.body}</p> : null}
                     {revealPhase === "revealing" ? (
                       <MessageRevealOverlay
                         request={outgoingReveal?.request}
@@ -827,7 +836,7 @@ function Conversation({
                         {voiceAttachments.map((attachment) => (
                           <VoiceMessagePlayer key={attachment.id} attachment={attachment} onLoad={onLoadAttachment} />
                         ))}
-                        {message.body ? <MessageLinkPreviews body={message.body} token={token} /> : null}
+                        {message.body && message.forwarded?.kind !== "feed" ? <MessageLinkPreviews body={message.body} token={token} /> : null}
                         <AttachmentChips
                           attachments={messageAttachments.filter((attachment) => attachment.mediaKind !== "voice")}
                           onDownload={onDownloadAttachment}
@@ -835,12 +844,7 @@ function Conversation({
                         />
                       </>
                     )}
-                    <time>
-                      {message.editedAt && !message.deletedAt
-                        ? "изменено · "
-                        : ""}
-                      {message.time}
-                    </time>
+                    <MessageMetadata message={message} own={own} />
                     {!message.deletedAt && (
                       <div className={`message-actions message-reaction-trigger ${reactionTargetId === message.id ? "is-visible" : ""}`} role="group" aria-label="Реакция на сообщение">
                         <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
@@ -881,7 +885,7 @@ function Conversation({
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
           <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
-          <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>
+              {onForwardContent && <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
           {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}
           <Button appearance="subtle" icon={<TaskListSquareLtr24Regular />} onClick={() => { setTaskSource(message); setContextMenu(undefined); }}>В задачу</Button>
           {own && message.canEdit && !hasVoice ? <Button appearance="subtle" onClick={() => { startEditing(message); setContextMenu(undefined); }}>Изменить</Button> : null}
@@ -964,19 +968,9 @@ function Conversation({
           return task;
         }}
       /> : null}
-      {forwarding ? <div className="message-forward-overlay" role="presentation" onPointerDown={(event) => { if (event.target === event.currentTarget) setForwarding(undefined); }}>
-        <aside className="message-forward-drawer" role="dialog" aria-modal="true" aria-label="Переслать сообщение">
-          <header><div><small>Пересылка</small><strong>Выберите чат</strong></div><Button appearance="subtle" aria-label="Закрыть пересылку" onClick={() => setForwarding(undefined)}>×</Button></header>
-          <p>{forwarding.body.slice(0, 180)}</p>
-          <div className="message-forward-list">
-            {availableChats.filter((target) => target.id !== chat.id && target.permissions.sendMessages).map((target) => <button type="button" key={target.id} onClick={() => void run(async () => {
-              const forwarded = await onSendMessage(target.id, `Переслано от ${personName(forwarding.authorId)}:\n${forwarding.body}`, [], { mentionUserIds: [] });
-              if (!forwarded) throw new Error("Не удалось переслать сообщение");
-              setForwarding(undefined);
-            })}><Avatar name={target.title} size={32} color="colorful" /><span><strong>{target.title}</strong><small>{target.kind === "direct" ? "Личный диалог" : "Рабочий чат"}</small></span></button>)}
-          </div>
-        </aside>
-      </div> : null}
+      {forwarding && onForwardContent ? <ForwardDialog source={{ kind: "message", id: forwarding.id }}
+        preview={forwarding.body} chats={availableChats} excludeChatId={chat.id}
+        onForward={onForwardContent} onClose={() => setForwarding(undefined)} /> : null}
       {!canSend ? (
         <div className="chat-read-only">
           Вам доступно только чтение. Право отправлять сообщения меняет владелец

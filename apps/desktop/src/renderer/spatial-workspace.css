@@ -467,8 +467,8 @@ html.spatial-drag-active, html.spatial-drag-active * { cursor: grab !important; 
 .team-dash-flow { background: #fff; }
 .team-dash-person { border: 0; border-bottom: 1px solid #e5eeec; border-radius: 0; padding: 16px 20px; }
 .team-dash-person.selected { border-radius: 14px; background: #e4f1ed; }
-.team-dash-task { border: 0; border-bottom: 1px solid #ecf0ef; border-radius: 0; padding: 18px 6px; }
-.team-dash-task:hover { background: #f0f7f3; border-radius: 14px; }
+.team-dash-task { border: 0; border-bottom: 1px solid #ecf0ef; border-radius: 14px; padding: 18px 6px; }
+.team-dash-task:hover { background: #f0f7f3; }
 .team-dash-week-bars i { box-shadow: 0 0 16px rgb(0 145 168 / 9%); }
 .notification-context { display: grid; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #cbded9; animation: spatial-appear 220ms ease; }
 .notification-context > div { display: flex; align-items: center; justify-content: space-between; }
