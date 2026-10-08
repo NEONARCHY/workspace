@@ -7,6 +7,10 @@ export const defaultPersonalPreferences: PersonalPreferences = {
 export function normalizeNavigation(order: readonly NavigationKey[]): NavigationKey[] {
   const known = [...new Set(order.filter((key) => navigationKeys.includes(key)))];
   const missing = navigationKeys.filter((key) => !known.includes(key));
+  if (known.includes("ai_referent") && missing.includes("incoming_letters")) {
+    known.splice(known.indexOf("ai_referent") + 1, 0, "incoming_letters");
+    missing.splice(missing.indexOf("incoming_letters"), 1);
+  }
   if (known.includes("projects")) {
     for (const key of (["project_hub", "project_funding"] as const)) {
       const missingIndex = missing.indexOf(key);

@@ -9,6 +9,7 @@ const tasks = () => import("./TasksView");
 const team = () => import("./TeamDashboardView");
 const approvals = () => import("./ApprovalsView");
 const referent = () => import("./AIReferentView");
+const incomingLetters = () => import("./IncomingLettersView");
 const hisobot = () => import("./AIHisobotView");
 const telegram = () => import("./TelegramAccessView");
 const feed = () => import("./FeedView");
@@ -29,6 +30,7 @@ export const TasksView = lazy(() => tasks().then((module) => ({ default: module.
 export const TeamDashboardView = lazy(() => team().then((module) => ({ default: module.TeamDashboardView })));
 export const ApprovalsView = lazy(() => approvals().then((module) => ({ default: module.ApprovalsView })));
 export const AIReferentView = lazy(() => referent().then((module) => ({ default: module.AIReferentView })));
+export const IncomingLettersView = lazy(() => incomingLetters().then((module) => ({ default: module.IncomingLettersView })));
 export const AIHisobotView = lazy(() => hisobot().then((module) => ({ default: module.AIHisobotView })));
 export const TelegramAccessView = lazy(() => telegram().then((module) => ({ default: module.TelegramAccessView })));
 export const FeedView = lazy(() => feed().then((module) => ({ default: module.FeedView })));
@@ -47,7 +49,7 @@ export const SupportDialog = lazy(() => support().then((module) => ({ default: m
 
 const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
   ["tasks", tasks], ["team_overview", team], ["payment_requests", approvals],
-  ["ai_referent", referent], ["ai_hisobot", hisobot], ["telegram_access", telegram],
+  ["ai_referent", referent], ["incoming_letters", incomingLetters], ["ai_hisobot", hisobot], ["telegram_access", telegram],
   ["feed", feed], ["projects", projects], ["project_hub", projectHub],
   ["project_funding", projectHub], ["trip_approvals", trips], ["calendar", calendar],
   ["zoom_meetings", zoom], ["absences", absences], ["members", members],

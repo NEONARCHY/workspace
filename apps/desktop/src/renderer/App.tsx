@@ -100,7 +100,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { WorkspacePeopleProvider } from "./WorkspaceSelect";
 import {
-  AbsencesView, AccountPanel, AIHisobotView, AIReferentView, ApprovalsView,
+  AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
   SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
@@ -316,6 +316,7 @@ const navItems: readonly NavItem[] = [
     icon: <DocumentBulletList24Regular />,
   },
   { key: "ai_referent", label: "AI Referent", icon: <Mail24Regular /> },
+  { key: "incoming_letters", label: "Входящие письма", icon: <Mail24Regular /> },
   { key: "ai_hisobot", label: "AI Hisobot", icon: <DocumentBulletList24Filled /> },
   { key: "telegram_access", label: "Доступ к ботам", icon: <PeopleTeam24Regular /> },
   { key: "feed", label: "Лента", icon: <News24Regular /> },
@@ -2196,6 +2197,14 @@ export function App() {
                 canAdmin={session.user.role === "admin" || session.user.role === "superadmin"}
                 focusRequestId={focusTarget?.section === "ai_referent" ? focusTarget.entityId : undefined}
                 focusRevision={focusTarget?.section === "ai_referent" ? focusTarget.revision : undefined}
+              />
+            ) : null}
+            {displayedSection === "incoming_letters" ? (
+              <IncomingLettersView
+                token={session.accessToken}
+                people={workspace.people}
+                currentUserId={workspace.currentUser.id}
+                canEdit={modulePermissions.incoming_letters?.edit ?? false}
               />
             ) : null}
             {displayedSection === "ai_hisobot" ? (

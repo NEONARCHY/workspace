@@ -41,6 +41,16 @@ MODULE_CATALOG = (
         status="available",
     ),
     ModuleDescriptor(
+        key="incoming_letters",
+        label=LocalizedLabel(
+            ru="Входящие письма",
+            uz_cyrl="Кирувчи хатлар",
+            uz_latn="Kiruvchi xatlar",
+        ),
+        route="/incoming-letters",
+        status="available",
+    ),
+    ModuleDescriptor(
         key="ai_hisobot",
         label=LocalizedLabel(ru="AI Hisobot", uz_cyrl="AI Ҳисобот", uz_latn="AI Hisobot"),
         route="/ai-hisobot",
