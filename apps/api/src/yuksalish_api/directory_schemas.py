@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 
 from .position_policy import latin_position_name
 from .workspace_schemas import ApiModel, ModulePermissionSet
@@ -139,6 +139,13 @@ class EmployeeAccessUpdateRequest(ApiModel):
     department_id: UUID | None = None
     position_id: UUID | None = None
     direct_manager_user_id: UUID | None = None
+
+
+class SelfSuperadminOrganizationUpdateRequest(ApiModel):
+    model_config = ConfigDict(extra="forbid")
+
+    department_id: UUID | None = None
+    position_id: UUID | None = None
 
 
 class DirectoryBootstrapResponse(ApiModel):

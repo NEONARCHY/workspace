@@ -6,6 +6,7 @@ import { defineConfig } from "vitest/config";
 
 import { compareReleaseVersions, numberUpdateNotes } from "./src/renderer/release-versions.mts";
 import { readReleaseNoteOrder } from "./release-note-order.mts";
+import { cspConnectSources } from "./csp-connect-sources.mts";
 
 const tabsterEsmPath = fileURLToPath(
   new URL("./node_modules/tabster/dist/esm/index.js", import.meta.url),
@@ -92,6 +93,16 @@ if (releaseNotes.version !== packageJson.version || !releaseNotes.title.trim()
 const builtAt = new Date().toISOString();
 const buildId = process.env.YUKSALISH_WEB_BUILD_ID ?? `${packageJson.version}-${builtAt}`;
 const localTlsDirectory = process.env.YUKSALISH_LOCAL_DEV_TLS_DIR;
+const cspPlugin = (mode: string) => ({
+  name: "yuksalish-connect-policy",
+  transformIndexHtml(html: string) {
+    const marker = "__YUKSALISH_CONNECT_SOURCES__";
+    if (!html.includes(marker)) throw new Error("Desktop connection policy marker is missing.");
+    return html.replace(marker, cspConnectSources(
+      mode, process.env.VITE_API_BASE_URL, process.env.VITE_LAN_API_BASE_URL,
+    ));
+  },
+});
 const webManifest = {
   buildId,
   version: currentWebVersion,
@@ -105,7 +116,7 @@ const webManifest = {
 };
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react()],
+  plugins: [react(), cspPlugin(mode)],
   root: ".",
   base: mode === "web" ? "/" : "./",
   define: {
@@ -166,7 +177,7 @@ export default defineConfig(({ mode }) => ({
   },
   // Emit a tiny non-cacheable manifest used by the running web client.
   ...(mode === "web" ? {
-    plugins: [react(), {
+    plugins: [react(), cspPlugin(mode), {
       name: "yuksalish-version-manifest",
       configureServer(server) {
         server.middlewares.use((request, response, next) => {

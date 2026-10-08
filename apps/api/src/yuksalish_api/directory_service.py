@@ -26,6 +26,7 @@ from .directory_schemas import (
     PositionResponse,
     PositionUpdateRequest,
     RoleDescriptorResponse,
+    SelfSuperadminOrganizationUpdateRequest,
 )
 from .position_policy import is_executive_leader, is_human_resources_position
 from .tables import (
@@ -884,6 +885,32 @@ async def delete_position(
     return detached_count
 
 
+async def _validated_position_name(
+    connection: AsyncConnection, position_id: UUID | None,
+) -> str | None:
+    if position_id is None:
+        return None
+    position = (
+        (await connection.execute(
+            select(positions.c.name).where(
+                positions.c.id == position_id, positions.c.is_active.is_(True),
+            )
+        )).mappings().first()
+    )
+    if position is None:
+        raise DirectoryServiceError(422, "Position is not active or does not exist")
+    return str(position["name"])
+
+
+async def _validate_department(
+    connection: AsyncConnection, department_id: UUID | None,
+) -> None:
+    if department_id is not None and await connection.scalar(
+        select(departments.c.id).where(departments.c.id == department_id)
+    ) is None:
+        raise DirectoryServiceError(422, "Department does not exist")
+
+
 async def update_employee_access(
     connection: AsyncConnection,
     actor: AuthenticatedUser,
@@ -919,29 +946,8 @@ async def update_employee_access(
         if manager is None or manager["status"] != "active":
             raise DirectoryServiceError(422, "Direct manager must be an active employee")
 
-    position_name = None
-    if payload.position_id is not None:
-        position = (
-            (
-                await connection.execute(
-                    select(positions.c.name).where(
-                        positions.c.id == payload.position_id,
-                        positions.c.is_active.is_(True),
-                    )
-                )
-            )
-            .mappings()
-            .first()
-        )
-        if position is None:
-            raise DirectoryServiceError(422, "Position is not active or does not exist")
-        position_name = position["name"]
-    if payload.department_id is not None:
-        department_exists = await connection.scalar(
-            select(departments.c.id).where(departments.c.id == payload.department_id)
-        )
-        if department_exists is None:
-            raise DirectoryServiceError(422, "Department does not exist")
+    position_name = await _validated_position_name(connection, payload.position_id)
+    await _validate_department(connection, payload.department_id)
     now = datetime.now(UTC)
     if employee["department_id"] != payload.department_id:
         await connection.execute(update(departments).where(
@@ -994,6 +1000,75 @@ async def update_employee_access(
         status=employee["status"],
         direct_manager_user_id=(
             str(payload.direct_manager_user_id) if payload.direct_manager_user_id else None
+        ),
+    )
+
+
+async def update_own_superadmin_organization(
+    connection: AsyncConnection,
+    actor: AuthenticatedUser,
+    payload: SelfSuperadminOrganizationUpdateRequest,
+) -> DirectoryEmployeeResponse:
+    if actor.role != "superadmin":
+        raise DirectoryServiceError(403, "Superadmin role required")
+    employee = (
+        (await connection.execute(select(users).where(users.c.id == actor.id).with_for_update()))
+        .mappings()
+        .first()
+    )
+    if employee is None:
+        raise DirectoryServiceError(404, "Employee was not found")
+    if employee["role"] != "superadmin":
+        raise DirectoryServiceError(403, "Superadmin role required")
+
+    position_name = await _validated_position_name(connection, payload.position_id)
+    await _validate_department(connection, payload.department_id)
+    changed = (
+        employee["position_id"] != payload.position_id
+        or employee["department_id"] != payload.department_id
+        or employee["job_title"] != position_name
+    )
+    if changed:
+        if employee["department_id"] != payload.department_id:
+            await connection.execute(
+                update(departments).where(departments.c.lead_user_id == actor.id)
+                .values(lead_user_id=None)
+            )
+        await connection.execute(
+            update(users).where(users.c.id == actor.id).values(
+                position_id=payload.position_id,
+                department_id=payload.department_id,
+                job_title=position_name,
+                updated_at=datetime.now(UTC),
+            )
+        )
+        await _audit(
+            connection, actor, "employee.own_organization_updated", "user", actor.id,
+            {
+                "before": {
+                    "positionId": str(employee["position_id"]) if employee["position_id"] else None,
+                    "departmentId": (
+                        str(employee["department_id"]) if employee["department_id"] else None
+                    ),
+                },
+                "after": {
+                    "positionId": str(payload.position_id) if payload.position_id else None,
+                    "departmentId": str(payload.department_id) if payload.department_id else None,
+                },
+            },
+        )
+    return DirectoryEmployeeResponse(
+        id=str(actor.id),
+        username=employee["username"],
+        name=employee["full_name"],
+        role="superadmin",
+        department_id=str(payload.department_id) if payload.department_id else None,
+        position_id=str(payload.position_id) if payload.position_id else None,
+        job_title=position_name,
+        status=employee["status"],
+        direct_manager_user_id=(
+            str(employee["direct_manager_user_id"])
+            if employee["direct_manager_user_id"] else None
         ),
     )
 
