@@ -1,10 +1,9 @@
-/* Owner refinement, 2026-10-07: plain white page canvas, one trailing gutter.
+/* Owner refinement, 2026-10-08: white page roots, original shell background, one trailing gutter.
    Only page roots are flattened; cards, banners, chat themes and portals keep their surfaces. */
 .app-shell {
   --ws-page-canvas: #fff;
   --ws-page-trailing-gutter: 20px;
   padding-inline-end: 0;
-  background: var(--ws-page-canvas);
 }
 /* Older AI/directory shells reserved a second physical right inset. */
 body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view)) .app-shell {
@@ -12,7 +11,6 @@ body:has(.app-content > :is(.employees-view, .ai-referent-view, .ai-hisobot-view
 }
 .app-shell .app-content {
   padding-inline-end: var(--ws-page-trailing-gutter);
-  background: var(--ws-page-canvas);
 }
 .app-shell .app-content > :is(.workspace-view, .team-dashboard, .telegram-access-view) {
   min-width: 0;

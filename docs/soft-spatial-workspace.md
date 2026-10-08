@@ -8,9 +8,10 @@ The three attached briefs are identical. Video reviewed as a full 2fps storyboar
 
 ## Composition map
 
-- Refinement 2026-10-07: the authenticated shell and immediate page roots now use
-  a plain white canvas without the old glass/gradient frame. One 20 px trailing
-  gutter is reserved by `.app-content`; page-local trailing padding and the
+- Refinement 2026-10-08: only immediate page roots use a plain white canvas
+  without the old glass/gradient frame. The shell keeps its original ambient
+  background; transparent `.app-content` exposes it in the 20 px trailing
+  gutter reserved by `.app-content`; page-local trailing padding and the
   legacy directory/AI shell inset no longer accumulate with it. Inner surfaces,
   banners, chat wallpapers and portal dialogs retain their own material.
   Native vertical scrollbars may sit inside that gutter's content edge.

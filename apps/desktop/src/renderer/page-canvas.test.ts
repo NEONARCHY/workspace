@@ -26,6 +26,16 @@ describe("Plain page canvas contract", () => {
     expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban::-webkit-scrollbar { height: 10px; }");
     expect(read("scrollbars.css")).toContain(".approvals-view .approval-kanban { scrollbar-width: auto; }");
   });
+  it("preserves the original shell background behind white pages and their gutter", () => {
+    const css = read("page-canvas.css");
+    const shell = css.match(/^\.app-shell \{([^}]+)\}/m)?.[1];
+    const content = css.match(/^\.app-shell \.app-content \{([^}]+)\}/m)?.[1];
+    expect(shell).toBeDefined();
+    expect(content).toBeDefined();
+    expect(shell).not.toMatch(/background(?:-color|-image)?\s*:/);
+    expect(content).not.toMatch(/background(?:-color|-image)?\s*:/);
+    expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, #dfedea 0, transparent 48%), var(--ws-canvas)");
+  });
   it("uses the new hook only for payments, leaving other boards' pan behavior unchanged", () => {
     const payments = read("ApprovalsView.tsx");
     expect(payments).toContain("useHorizontalBoardScroll");
