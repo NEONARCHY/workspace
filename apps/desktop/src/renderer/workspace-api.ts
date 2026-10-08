@@ -90,6 +90,7 @@ import type {
   TaskEfficiencyExclusionReason,
   TaskReturnReason,
   TaskStatus,
+  TaskProjectOption,
   TripAction,
   TripStage,
   TripRequest,
@@ -1414,6 +1415,10 @@ export function createWorkspaceTask(
   );
 }
 
+export function loadTaskProjectOptions(token: string): Promise<readonly TaskProjectOption[]> {
+  return apiRequest<readonly TaskProjectOption[]>("/tasks/project-options", {}, token);
+}
+
 export function updateWorkspaceTask(
   token: string,
   taskId: string,
@@ -1421,6 +1426,7 @@ export function updateWorkspaceTask(
     readonly title: string;
     readonly description: string;
     readonly project: string;
+    readonly projectId?: string | null;
     readonly assigneeId: string;
     readonly priority: WorkspaceTask["priority"];
     readonly dueAt?: string | null;

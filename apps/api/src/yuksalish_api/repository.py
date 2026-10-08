@@ -123,6 +123,7 @@ from .workspace_schemas import (
     TaskEfficiencyExclusionRequest,
     TaskParticipantRequest,
     TaskParticipantResponse,
+    TaskProjectOption,
     TaskResponse,
     TaskReturnResponse,
     TripAction,
@@ -310,6 +311,9 @@ def _task(
         title=row["title"],
         description=row["description"],
         project=row["project_key"] or "Без проекта",
+        project_id=(
+            str(row["project_hub_project_id"]) if row.get("project_hub_project_id") else None
+        ),
         author_id=str(row["author_user_id"]),
         assignee_id=str(row["primary_assignee_user_id"]),
         due_label=_due_label(row["due_at"]),
@@ -3974,6 +3978,47 @@ async def _sync_task_chat(
     return cast(UUID, chat_id)
 
 
+async def list_task_project_options(
+    connection: AsyncConnection, current_user: AuthenticatedUser,
+) -> list[TaskProjectOption]:
+    from .project_hub_service import _can_view_project
+
+    rows = (
+        (await connection.execute(
+            select(project_hub_projects)
+            .where(project_hub_projects.c.lifecycle_status == "active")
+            .order_by(project_hub_projects.c.title)
+        )).mappings().all()
+    )
+    return [
+        TaskProjectOption(id=str(row["id"]), code=row["code"], title=row["title"])
+        for row in rows if await _can_view_project(connection, current_user, row)
+    ]
+
+
+async def _selected_task_project(
+    connection: AsyncConnection, current_user: AuthenticatedUser, project_id: str,
+) -> tuple[UUID, str]:
+    from .project_hub_service import _can_view_project
+
+    try:
+        project_uuid = UUID(project_id)
+    except ValueError as error:
+        raise WorkspaceRepositoryError(422, "Invalid project identifier") from error
+    row = (
+        (await connection.execute(
+            select(project_hub_projects).where(project_hub_projects.c.id == project_uuid)
+        )).mappings().first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Project was not found")
+    if not await _can_view_project(connection, current_user, row):
+        raise WorkspaceRepositoryError(403, "Project is not accessible")
+    if row["lifecycle_status"] != "active":
+        raise WorkspaceRepositoryError(409, "Project is no longer active")
+    return project_uuid, cast(str, row["title"])
+
+
 async def create_task(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,
@@ -4032,6 +4077,19 @@ async def create_task(
         parent_row = await _task_access_row(connection, current_user, parent_task_id, edit=True)
         if parent_row["status"] in {"completed", "cancelled"}:
             raise WorkspaceRepositoryError(409, "A closed task cannot receive new subtasks")
+    selected_project_id: UUID | None = None
+    project_label = payload.project.strip() or "Без проекта"
+    if payload.project_id:
+        selected_project_id, project_label = await _selected_task_project(
+            connection, current_user, payload.project_id
+        )
+    elif (
+        parent_row is not None and "project_id" not in payload.model_fields_set
+        and parent_row["project_hub_project_id"] is not None
+        and project_label in {"Без проекта", parent_row["project_key"]}
+    ):
+        selected_project_id = cast(UUID, parent_row["project_hub_project_id"])
+        project_label = cast(str, parent_row["project_key"])
     participant_ids: list[tuple[UUID, str]] = []
     seen_participants: set[UUID] = set()
     for participant in payload.participants:
@@ -4072,7 +4130,8 @@ async def create_task(
         "parent_task_id": parent_task_id,
         "cycle_id": cycle_id,
         "cycle_occurrence_key": "initial" if cycle_id is not None else None,
-        "project_key": payload.project,
+        "project_key": project_label,
+        "project_hub_project_id": selected_project_id,
         "starts_at": now,
         "due_at": payload.due_at,
         "result_text": None,
@@ -4221,6 +4280,19 @@ async def update_task(
     if task_row["due_at"] != payload.due_at:
         await _task_access_row(connection, current_user, task_id, manage=True)
     assignee_id = await _active_user_id(connection, payload.assignee_id)
+    selected_project_id = task_row["project_hub_project_id"]
+    project_label = payload.project.strip() or "Без проекта"
+    if "project_id" in payload.model_fields_set:
+        if payload.project_id:
+            selected_project_id, project_label = await _selected_task_project(
+                connection, current_user, payload.project_id
+            )
+        else:
+            selected_project_id = None
+    elif project_label != task_row["project_key"]:
+        # Installed older clients send only a free-text label. Preserve a link on
+        # unrelated edits, but unlink when they explicitly change that label.
+        selected_project_id = None
     now = datetime.now(UTC)
     await connection.execute(
         update(tasks)
@@ -4228,7 +4300,8 @@ async def update_task(
         .values(
             title=payload.title,
             description=payload.description,
-            project_key=payload.project,
+            project_key=project_label,
+            project_hub_project_id=selected_project_id,
             primary_assignee_user_id=assignee_id,
             priority=payload.priority,
             due_at=payload.due_at,
@@ -5414,6 +5487,7 @@ async def materialize_due_task_cycles(
                     cycle_id=cycle["id"],
                     cycle_occurrence_key=occurrence_key,
                     project_key=template["project_key"],
+                    project_hub_project_id=template["project_hub_project_id"],
                     starts_at=scheduled_at,
                     due_at=scheduled_at + duration if duration is not None else None,
                     result_text=None,
