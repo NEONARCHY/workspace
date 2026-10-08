@@ -42,13 +42,14 @@ function Preview() {
   const [active, setActive] = useState<NavigationKey>("ai_referent");
   const collapsed = params.has("collapsed");
   const badges: Partial<Record<NavigationKey, number>> = { tasks: 3, payment_requests: 4, notifications: 2 };
+  const [aiOpen, setAiOpen] = useState(false);
   return <FluentProvider theme={workspaceTheme} className="app-provider">
     <div className={`app-shell${collapsed ? " rail-collapsed" : ""}`}>
       <aside className="app-rail sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Основная навигация" style={overflow ? { maxHeight: 440 } : undefined}>
         <div className="workspace-logo"><span className="rail-toggle" aria-hidden="true">☰</span><CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" /></div>
         <div className="rail-customize"><span>Меню</span></div>
-        <AdaptiveNavigation sidebarTheme={sidebarTheme} items={items} renderItem={(item, inOverflow, closeOverflow) => item.key === "ai_modules"
-          ? <div className="rail-slot" key={item.key}><AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={active} inOverflow={inOverflow} onCloseOverflow={closeOverflow} onSelect={setActive} /></div>
+        <AdaptiveNavigation sidebarTheme={sidebarTheme} items={items} expandedItem={aiOpen && !collapsed ? { key: "ai_modules", height: 101 } : undefined} renderItem={(item, inOverflow, closeOverflow) => item.key === "ai_modules"
+          ? <div className="rail-slot" key={item.key}><AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={active} inOverflow={inOverflow} inline={!collapsed} open={aiOpen} onOpenChange={setAiOpen} onSelect={setActive} /></div>
           : <div className="rail-slot" key={item.key}><button type="button" className={`rail-action${active === item.key ? " active" : ""}`} aria-label={item.label} onClick={() => { setActive(item.key); closeOverflow(); }}>
             <span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span>
             {badges[item.key] ? <span className="rail-badge">{badges[item.key]}</span> : null}</button></div>}

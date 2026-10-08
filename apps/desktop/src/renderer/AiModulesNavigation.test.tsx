@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { NavigationKey } from "@yuksalish/contracts";
@@ -12,11 +13,19 @@ const items = [
   { key: "ai_hisobot" as NavigationKey, label: "AI Hisobot", icon: <span>H</span> },
 ];
 
+function ControlledAiNavigation({ inline = false, inOverflow = false }: { inline?: boolean; inOverflow?: boolean }) {
+  const [activeKey, setActiveKey] = useState<NavigationKey>("tasks");
+  const [open, setOpen] = useState(false);
+  return <AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey={activeKey}
+    inline={inline} inOverflow={inOverflow} open={open} onOpenChange={setOpen}
+    onSelect={setActiveKey} />;
+}
+
 describe("AI module sidebar group", () => {
   afterEach(cleanup);
 
   it("retains an inert clipped inline list for reversible opening and closing", () => {
-    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} onCloseOverflow={vi.fn()} />);
+    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: "ИИ-модули" });
     const panel = view.container.querySelector(".rail-ai-disclosure")!;
     expect(panel).toHaveAttribute("inert");
@@ -40,7 +49,7 @@ describe("AI module sidebar group", () => {
   });
 
   it("expands inline in the regular sidebar rather than creating a floating panel", () => {
-    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} onCloseOverflow={vi.fn()} />);
+    const view = render(<AiModulesNavigation modules={[items[1]!, items[3]!]} activeKey="tasks" inline onSelect={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
     expect(view.container.querySelector(".rail-ai-inline .rail-ai-links")).not.toBeNull();
     expect(document.querySelector(".rail-ai-popover")).toBeNull();
@@ -57,10 +66,9 @@ describe("AI module sidebar group", () => {
 
   it("opens with keyboard-friendly controls and navigates to the chosen module", async () => {
     const onSelect = vi.fn();
-    const onCloseOverflow = vi.fn();
     render(<FluentProvider theme={webLightTheme}><AiModulesNavigation
       modules={[items[1]!, items[3]!]} activeKey="ai_hisobot"
-      onSelect={onSelect} onCloseOverflow={onCloseOverflow}
+      onSelect={onSelect}
     /></FluentProvider>);
     const trigger = screen.getByRole("button", { name: "ИИ-модули" });
     expect(trigger).toHaveClass("active");
@@ -70,14 +78,13 @@ describe("AI module sidebar group", () => {
     expect(within(nav).getByRole("button", { name: "AI Hisobot" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "AI Referent" }));
     expect(onSelect).toHaveBeenCalledWith("ai_referent");
-    expect(onCloseOverflow).toHaveBeenCalledOnce();
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
   });
 
   it("closes with Escape and returns focus to the group button", () => {
     render(<FluentProvider theme={webLightTheme}><AiModulesNavigation
       modules={[items[1]!, items[3]!]} activeKey="tasks"
-      onSelect={vi.fn()} onCloseOverflow={vi.fn()}
+      onSelect={vi.fn()}
     /></FluentProvider>);
     const trigger = screen.getByRole("button", { name: "ИИ-модули" });
     fireEvent.click(trigger);
@@ -88,7 +95,7 @@ describe("AI module sidebar group", () => {
   });
 
   it("updates a collapsed-sidebar popover to the chosen palette", () => {
-    const props = { modules: [items[1]!, items[3]!], activeKey: "tasks" as const, onSelect: vi.fn(), onCloseOverflow: vi.fn() };
+    const props = { modules: [items[1]!, items[3]!], activeKey: "tasks" as const, onSelect: vi.fn() };
     const view = render(<AiModulesNavigation {...props} sidebarTheme="navy" />);
     fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
     const popover = screen.getByRole("dialog", { name: "ИИ-модули" });
@@ -99,15 +106,36 @@ describe("AI module sidebar group", () => {
 
   it("expands inside the More drawer without closing it", () => {
     const onSelect = vi.fn();
-    const onCloseOverflow = vi.fn();
     render(<FluentProvider theme={webLightTheme}><AiModulesNavigation
       modules={[items[1]!, items[3]!]} activeKey="tasks" inOverflow
-      onSelect={onSelect} onCloseOverflow={onCloseOverflow}
+      onSelect={onSelect}
     /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "ИИ-модули" }));
-    expect(onCloseOverflow).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "AI Hisobot" }));
     expect(onSelect).toHaveBeenCalledWith("ai_hisobot");
-    expect(onCloseOverflow).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "ИИ-модули" })).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it.each([
+    { name: "expanded sidebar", inline: true, inOverflow: false },
+    { name: "collapsed sidebar popover", inline: false, inOverflow: false },
+    { name: "More drawer", inline: false, inOverflow: true },
+  ])("keeps the controlled group open when switching both modules in $name", ({ inline, inOverflow }) => {
+    render(<ControlledAiNavigation inline={inline} inOverflow={inOverflow} />);
+    const trigger = screen.getByRole("button", { name: "ИИ-модули" });
+    fireEvent.click(trigger);
+    const referent = screen.getByRole("button", { name: "AI Referent" });
+    const hisobot = screen.getByRole("button", { name: "AI Hisobot" });
+    fireEvent.click(referent);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(referent).toHaveAttribute("aria-current", "page");
+    expect(hisobot).not.toHaveAttribute("aria-current");
+    fireEvent.click(hisobot);
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(hisobot).toHaveAttribute("aria-current", "page");
+    expect(referent).not.toHaveAttribute("aria-current");
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "AI Hisobot" })).not.toBeInTheDocument();
   });
 });

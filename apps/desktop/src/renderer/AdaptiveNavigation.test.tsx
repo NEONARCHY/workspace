@@ -1,13 +1,33 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useState } from "react";
+import type { NavigationKey } from "@yuksalish/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AdaptiveNavigation } from "./AdaptiveNavigation";
+import { AiModulesNavigation, groupAiNavigation } from "./AiModulesNavigation";
 
 const items = [
   { key: "one", label: "Первый" },
   { key: "two", label: "Второй" },
   { key: "three", label: "Третий" },
 ];
+
+const aiItems = groupAiNavigation([
+  { key: "tasks" as const, label: "Задачи", icon: null },
+  { key: "ai_referent" as const, label: "AI Referent", icon: null },
+  { key: "ai_hisobot" as const, label: "AI Hisobot", icon: null },
+  { key: "feed" as const, label: "Лента", icon: null },
+]);
+
+function AiOverflowNavigation() {
+  const [activeKey, setActiveKey] = useState<NavigationKey>("tasks");
+  const [open, setOpen] = useState(false);
+  return <AdaptiveNavigation items={aiItems} expandedItem={open ? { key: "ai_modules", height: 101 } : undefined}
+    renderItem={(item, inOverflow) => item.key === "ai_modules"
+      ? <div className="rail-slot" key={item.key}><AiModulesNavigation modules={item.modules} activeKey={activeKey}
+        inOverflow={inOverflow} inline open={open} onOpenChange={setOpen} onSelect={setActiveKey} /></div>
+      : <div className="rail-slot" key={item.key}><button className="rail-action" type="button">{item.label}</button></div>} />;
+}
 
 describe("AdaptiveNavigation overflow", () => {
   const originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
@@ -120,6 +140,27 @@ describe("AdaptiveNavigation overflow", () => {
     expect(more).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(entry);
     expect(select).toHaveBeenCalledWith("two", true);
+    expect(more).toHaveAttribute("aria-expanded", "false");
+  });
+  it("keeps the real More drawer and AI group open after selecting either module", () => {
+    render(<AiOverflowNavigation />);
+    const more = screen.getByRole("button", { name: "Ещё, 2 разделов" });
+    fireEvent.click(more);
+    const drawer = screen.getByRole("complementary", { name: "Другие разделы" });
+    const trigger = within(drawer).getByRole("button", { name: "ИИ-модули" });
+    fireEvent.click(trigger);
+    for (const name of ["AI Referent", "AI Hisobot"]) {
+      const module = within(drawer).getByRole("button", { name });
+      fireEvent.pointerDown(module);
+      fireEvent.click(module);
+      expect(more).toHaveAttribute("aria-expanded", "true");
+      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      expect(module).toHaveAttribute("aria-current", "page");
+    }
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(more).toHaveAttribute("aria-expanded", "false");
   });
   it("reserves More using the actual taller collapsed button height", () => {
