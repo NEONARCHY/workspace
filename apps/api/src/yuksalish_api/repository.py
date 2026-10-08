@@ -1919,6 +1919,9 @@ async def _sync_notifications_for_user(
     referent_letters = select(ai_referent_letters.c.id).where(
         or_(referent_sent, referent_non_sent)
     )
+    from .hisobot_service import collapse_hisobot_notification_backlog
+
+    await collapse_hisobot_notification_backlog(connection, now, user_id=current_user.id)
     rows = (
         (
             await connection.execute(

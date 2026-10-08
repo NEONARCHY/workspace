@@ -1,5 +1,6 @@
 import type { NotificationPreferences, WorkspaceNotification } from "@yuksalish/contracts";
 import notificationUrl from "./assets/workspace-notification.mp3?url";
+import { isObsoleteHisobotNotification } from "./notification-delivery";
 
 export function notificationSoundEnabled(item: WorkspaceNotification, prefs: NotificationPreferences): boolean {
   const channels = {
@@ -9,7 +10,8 @@ export function notificationSoundEnabled(item: WorkspaceNotification, prefs: Not
     feed: prefs.feedEnabled !== false,
   };
   return prefs.soundEnabled !== false && (prefs.soundVolume ?? 20) > 0 && channels[item.kind]
-    && (!item.isReminder || item.kind === "hisobot" || prefs.remindersEnabled);
+    && (!item.isReminder || item.kind === "hisobot" || prefs.remindersEnabled)
+    && !isObsoleteHisobotNotification(item);
 }
 
 export class WorkspaceSounds {

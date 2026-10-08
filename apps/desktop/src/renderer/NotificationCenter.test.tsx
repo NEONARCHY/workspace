@@ -15,6 +15,19 @@ const props = { preferences, onOpen: vi.fn(), onMarkRead: vi.fn(), onMarkAllRead
 const center = (items: readonly WorkspaceNotification[]) => <FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={items} /></FluentProvider>;
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 
+it("exposes the selected metric and shares a decorative task-style hover layer", () => {
+  render(center(notifications(7).slice(0, 2)));
+  const metric = screen.getByRole("button", { name: /Новые уведомления/ });
+  expect(metric).toHaveAttribute("aria-pressed", "false");
+  fireEvent.click(metric);
+  expect(metric).toHaveAttribute("aria-pressed", "true");
+  const row = screen.getByText("Событие 0").closest("article")!;
+  expect(row).toHaveClass("priority-attention");
+  expect(row.querySelector(":scope > .list-row-hover-wash")).toHaveAttribute("aria-hidden", "true");
+  fireEvent.click(within(row).getByRole("button", { name: /Задачи.*Событие 0/ }));
+  expect(props.onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: "notification-0" }));
+});
+
 it("shows 100% read while seven unresolved actions remain in the queue", () => {
   render(center(notifications()));
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");

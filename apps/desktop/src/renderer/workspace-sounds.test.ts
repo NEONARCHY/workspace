@@ -41,6 +41,13 @@ it("plays the whole clip with soft gain and does not overlap a burst", async () 
   sounds.stop();
   expect(sources[0]!.disconnect).toHaveBeenCalled();
 });
+it("keeps expired Hisobot reminders silent while allowing a dated missed-report notice", () => {
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-09T04:00:00Z"));
+  const report = { ...item, kind: "hisobot" as const, occurredAt: "2026-10-08T13:25:00Z" };
+  expect(notificationSoundEnabled({ ...report, isReminder: true }, prefs)).toBe(false);
+  expect(notificationSoundEnabled(report, prefs)).toBe(true);
+  expect(notificationSoundEnabled({ ...report, resolvedAt: "2026-10-08T13:30:00Z" }, prefs)).toBe(false);
+});
 it("cannot start pending audio after mute or logout", async () => {
   let resolve!: (buffer: { duration: number }) => void;
   decode.mockImplementation(() => new Promise(done => { resolve = done; }));

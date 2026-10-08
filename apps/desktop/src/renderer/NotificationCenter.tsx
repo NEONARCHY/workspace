@@ -214,6 +214,7 @@ export function NotificationCenter({
       <div className="notification-metrics" aria-label="Сводка уведомлений">
         <button
           className={filter === "attention" ? "active" : ""}
+          aria-pressed={filter === "attention"}
           type="button"
           onClick={() => setFilter("attention")}
         >
@@ -222,6 +223,7 @@ export function NotificationCenter({
         </button>
         <button
           className={filter === "unread" ? "active" : ""}
+          aria-pressed={filter === "unread"}
           type="button"
           onClick={() => setFilter("unread")}
         >
@@ -230,6 +232,7 @@ export function NotificationCenter({
         </button>
         <button
           className={filter === "all" ? "active" : ""}
+          aria-pressed={filter === "all"}
           type="button"
           onClick={() => setFilter("all")}
         >
@@ -274,6 +277,7 @@ export function NotificationCenter({
               className={`notification-row priority-${notification.priority} ${notification.readAt ? "read" : "unread"}`}
               key={notification.id}
             >
+              <span className="list-row-hover-wash" aria-hidden="true" />
               <span className={`notification-kind kind-${notification.kind}`}>
                 <NotificationIcon kind={notification.kind} />
               </span>

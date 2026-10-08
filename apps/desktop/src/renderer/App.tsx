@@ -110,7 +110,7 @@ import {
 } from "./workspace-module-preload";
 import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
-import { initialKnownNotificationIds } from "./notification-delivery";
+import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
 import {
   acceptInvitation,
@@ -746,7 +746,7 @@ export function App() {
         || (notification.kind !== "hisobot" && notification.isReminder && !preferences.remindersEnabled)
       ) continue;
       known.add(notification.id);
-      if (notification.desktopDeliveredAt || notification.readAt) continue;
+      if (notification.desktopDeliveredAt || notification.readAt || isObsoleteHisobotNotification(notification)) continue;
       void workspacePlatform.showNotification({
         id: notification.id,
         title: "Yuksalish Workspace",
