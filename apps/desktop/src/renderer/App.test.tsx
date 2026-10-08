@@ -1668,9 +1668,10 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.click(screen.getByRole("button", {
+    fireEvent.click(await screen.findByRole("button", {
       name: `Открыть задачу: ${initialTasks[1]!.title}`,
-    }));
+    }, { timeout: 10_000 }));
+    screen.getByRole("button", { name: "Закрыть задачу" }).focus();
     expect(screen.getByText("Ожидает решения")).toBeInTheDocument();
     expect(screen.getByText("Результат отправлен. Ожидает решения постановщика.")).toBeInTheDocument();
 
@@ -1702,7 +1703,10 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
     fireEvent.click(await screen.findByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
-    }));
+    }, { timeout: 10_000 }));
+    // DOM tests have no layout for Tabster's automatic focus search. Establish
+    // focus inside the modal, as the browser does, before its delayed ARIA update.
+    screen.getByRole("button", { name: "Закрыть задачу" }).focus();
     expect(screen.queryByRole("button", { name: "Создать заявку на оплату" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Файлы результата"), {
@@ -1714,7 +1718,11 @@ describe("corporate workspace authentication alpha", () => {
     ));
     // The request is recorded before the uploaded file and dialog finish rendering.
     expect(await screen.findByText("result.txt", {}, { timeout: 10_000 })).toBeInTheDocument();
-    fireEvent.change(await screen.findByRole("textbox", { name: "Результат задачи" }, { timeout: 10_000 }), {
+    const resultInput = await screen.findByRole("textbox", { name: "Результат задачи" }, { timeout: 10_000 });
+    expect(resultInput).toBeVisible();
+    expect(resultInput.closest('[aria-hidden="true"]')).toBeNull();
+    expect(resultInput).toHaveAccessibleName("Результат задачи");
+    fireEvent.change(resultInput, {
       target: { value: "Работа завершена, файл приложен" },
     });
     await waitFor(() => expect(screen.getByRole("button", { name: "Завершить и отправить на проверку" })).toBeEnabled(), { timeout: 10_000 });
