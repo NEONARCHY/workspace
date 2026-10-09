@@ -134,16 +134,25 @@ describe("Employee list and retained access controls", () => {
   it("filters by role and pending activation without changing server data", async () => {
     mount(); await screen.findByRole("table");
     const table = screen.getByRole("table");
-    fireEvent.change(screen.getByLabelText("Фильтр по роли сотрудника"), {
-      target: { value: "manager" },
-    });
+    // Exercise Fluent's actual option selection, not its legacy native-change bridge.
+    const roleFilter = screen.getByRole("combobox", { name: "Фильтр по роли сотрудника" });
+    fireEvent.click(roleFilter);
+    fireEvent.click(await screen.findByRole("option", { name: "Руководитель" }));
+    expect(roleFilter).toHaveTextContent("Руководитель");
     await waitFor(() => {
       expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
       expect(within(table).getByRole("button", { name: "Открыть профиль: Бахтиёр Самугов" })).toBeInTheDocument();
     }, { timeout: 3000 });
-    fireEvent.change(screen.getByLabelText("Фильтр состояния сотрудников"), {
-      target: { value: "invited" },
+    const statusFilter = screen.getByRole("combobox", { name: "Фильтр состояния сотрудников" });
+    fireEvent.click(statusFilter);
+    fireEvent.click(await screen.findByRole("option", { name: "Активные" }));
+    expect(statusFilter).toHaveTextContent("Активные");
+    await waitFor(() => {
+      expect(within(table).queryAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(0);
     });
+    fireEvent.click(statusFilter);
+    fireEvent.click(await screen.findByRole("option", { name: "Приглашённые" }));
+    expect(statusFilter).toHaveTextContent("Приглашённые");
     await waitFor(() => {
       expect(within(table).getAllByRole("button", { name: /^Открыть профиль:/ })).toHaveLength(1);
     }, { timeout: 3000 });

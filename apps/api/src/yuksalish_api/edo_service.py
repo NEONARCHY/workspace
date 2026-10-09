@@ -250,8 +250,9 @@ async def list_letters(
         result = EdoIncomingPage.model_validate(payload)
     except ValidationError as error:
         raise EdoBridgeError(502, "Формат списка ЭДО не соответствует контракту.") from error
-    for letter in result.data:
-        _check_letter_scope(letter, read_scope)
+    # API v1 list rows omit assignments. EDO applies the signed scope before
+    # COUNT/pagination; _request_json has verified its scope acknowledgement.
+    # Only detail responses support the additional local assignment check.
     return result.model_copy(update={
         "data": [_decorate(letter, settings) for letter in result.data],
         "deadline_timezone_verified": _verified(settings),

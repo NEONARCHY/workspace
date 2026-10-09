@@ -87,7 +87,8 @@ async def test_old_or_mismatched_edo_cannot_silently_ignore_scope(
         assert claims(request)["incoming_read"] == scope.claim()
         response = {"data": payload}
         if request.url.path.endswith("/incoming"):
-            response = {"data": [payload], "meta": {"page": 1, "limit": 20, "total": 1}}
+            compact = {key: value for key, value in payload.items() if key != "assignments"}
+            response = {"data": [compact], "meta": {"page": 1, "limit": 20, "total": 1}}
         return httpx.Response(200, json=response, headers={SCOPE_HEADER: ack} if ack else {})
 
     intercept(monkeypatch, httpx.MockTransport(respond))
@@ -118,6 +119,42 @@ async def test_department_response_cannot_include_unrelated_letter(monkeypatch):
     assert caught.value.status_code == 502
 
 
+async def test_department_compact_list_preserves_edo_pagination(monkeypatch):
+    actor = uuid4()
+    scope = EdoReadScope(mode="employees", employee_ids=(actor,))
+    requests = []
+
+    def respond(request):
+        requests.append(request)
+        assert claims(request)["sub"] == str(actor)
+        assert claims(request)["incoming_read"] == scope.claim()
+        assert dict(request.url.params) == {"page": "2", "limit": "1", "q": "notice"}
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"id": 17, "in_num": "TEST-17", "status": 1}],
+                "meta": {"page": 2, "limit": 1, "total": 3},
+            },
+            headers={SCOPE_HEADER: scope.digest()},
+        )
+
+    intercept(monkeypatch, httpx.MockTransport(respond))
+    page = await list_letters(
+        settings(), actor, page=2, limit=1, query="notice", status=None, read_scope=scope
+    )
+    assert [letter.id for letter in page.data] == [17]
+    assert page.data[0].assignments == []
+    assert page.meta.model_dump() == {"page": 2, "limit": 1, "total": 3}
+    assert page.visibility == "departments"
+    assert len(requests) == 1  # No per-letter fetches or local pagination/filtering.
+
+
+def test_all_scope_digest_matches_edo_php_contract():
+    assert EdoReadScope(mode="all").digest() == (
+        "5bcd0b94068390657edab2530e6c965227ee0424c10ee72ea0a0cd7b425578e1"
+    )
+
+
 @pytest.mark.parametrize("mode", ["all", "employees"])
 async def test_expanded_list_detail_and_attachment_success(monkeypatch, mode):
     actor, member = uuid4(), uuid4()
@@ -132,7 +169,8 @@ async def test_expanded_list_detail_and_attachment_success(monkeypatch, mode):
             return httpx.Response(200, content=b"synthetic-file", headers=headers)
         body = {"data": payload}
         if request.url.path.endswith("/incoming"):
-            body = {"data": [payload], "meta": {"page": 1, "limit": 20, "total": 1}}
+            compact = {key: value for key, value in payload.items() if key != "assignments"}
+            body = {"data": [compact], "meta": {"page": 1, "limit": 20, "total": 1}}
         return httpx.Response(200, json=body, headers=headers)
 
     intercept(monkeypatch, httpx.MockTransport(respond))
