@@ -16,7 +16,9 @@ from yuksalish_api.assistant_chats import (
     chat_message_scope,
     clear_chat,
     create_chat,
+    delete_chat,
     list_chats,
+    pin_chat,
     touch_chat,
 )
 from yuksalish_api.assistant_service import (
@@ -157,6 +159,24 @@ async def new_chat(user: User, connection: Connection) -> AssistantChatRecord:
 @router.delete("/chats/{chat_id}/messages", status_code=204)
 async def erase_chat(chat_id: UUID, user: User, connection: Connection) -> None:
     await clear_chat(connection, user.id, chat_id)
+
+
+class ChatPinRequest(BaseModel):
+    pinned: bool
+
+
+@router.patch("/chats/{chat_id}/pin")
+async def set_chat_pin(
+    chat_id: UUID, payload: ChatPinRequest, user: User, connection: Connection,
+) -> list[AssistantChatRecord]:
+    return await pin_chat(connection, user.id, chat_id, payload.pinned)
+
+
+@router.delete("/chats/{chat_id}")
+async def remove_chat(
+    chat_id: UUID, user: User, connection: Connection,
+) -> list[AssistantChatRecord]:
+    return await delete_chat(connection, user.id, chat_id)
 
 
 @router.post("/messages")

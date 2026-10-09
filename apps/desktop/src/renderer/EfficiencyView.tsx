@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { EfficiencyOverview, EmployeeEfficiency } from "@yuksalish/contracts";
-import { Avatar, Button, Input } from "@fluentui/react-components";
+import { Button, Input } from "@fluentui/react-components";
 import { Dismiss24Regular, Search20Regular } from "@fluentui/react-icons";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 interface EfficiencyViewProps {
+  readonly token?: string;
   readonly overview?: EfficiencyOverview;
   readonly loading: boolean;
   readonly error?: string;
@@ -101,7 +103,7 @@ export function HistoryChart({ employee }: { readonly employee: EmployeeEfficien
   </>;
 }
 
-function EmployeeSummary({ employee, title }: { readonly employee: EmployeeEfficiency; readonly title: string }) {
+function EmployeeSummary({ employee, title, token }: { readonly employee: EmployeeEfficiency; readonly title: string; readonly token?: string }) {
   const metrics = [
     { label: "Выполнено вовремя", value: employee.onTimeCount, tone: "success" as const },
     { label: "Просрочено", value: employee.overdueCount, tone: "danger" as const },
@@ -117,7 +119,7 @@ function EmployeeSummary({ employee, title }: { readonly employee: EmployeeEffic
     <div className="eff-summary-lead">
       <ScoreGauge employee={employee} />
       <div className="eff-summary-copy">
-        <EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-person"><Avatar name={employee.name} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></EmployeeProfileLink>
+        <EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-person"><ProfileAvatar person={{ id: employee.userId, name: employee.name, avatarVersion: employee.avatarVersion }} token={token} size={40} /><div><h2>{employee.name}</h2><p>{employee.jobTitle}</p></div></EmployeeProfileLink>
         <h3>{employee.percentage == null ? "Пока нет задач, по которым можно рассчитать процент" : "Доля задач, переданных или выполненных в установленный срок"}</h3>
         <p>{employee.eligibleCount ? `В расчёт вошло: ${countLabel(employee.eligibleCount, ["задача", "задачи", "задач"])}. Вовремя выполнено: ${countLabel(employee.onTimeCount, ["задача", "задачи", "задач"])}.` : "Будущие задачи и задачи без срока не ухудшают результат. Показатель появится, когда наступит срок хотя бы одной учитываемой задачи."}</p>
         {employee.smallSample ? <div className="eff-sample-note">Выборка пока небольшая — интерпретируйте процент осторожно.</div> : null}
@@ -154,7 +156,7 @@ function DataCoverageCard({ overview }: { readonly overview: EfficiencyOverview 
   </aside>;
 }
 
-export function EfficiencyView({ overview, loading, error, onPeriodChange }: EfficiencyViewProps) {
+export function EfficiencyView({ token, overview, loading, error, onPeriodChange }: EfficiencyViewProps) {
   const [query, setQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState(overview?.currentUserId ?? "");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -186,7 +188,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
     </div>
     {error ? <div className="eff-inline-error" role="status">Показаны последние загруженные данные. {error}</div> : null}
     <div className="eff-overview-grid">
-      <EmployeeSummary employee={activeEmployee} title={activeTitle} />
+      <EmployeeSummary employee={activeEmployee} title={activeTitle} token={token} />
       <div className="eff-context-stack">
         {activeEmployee.userId !== mine.userId ? <Button className="eff-back-to-mine" appearance="secondary" onClick={() => setSelectedUserId(mine.userId)}>Вернуться к моей сводке</Button> : null}
         <aside className="eff-method-card"><span className="eff-kicker">Методика {overview.methodologyVersion}</span><h2>Один показатель — один понятный смысл</h2><p>Все учитываемые задачи имеют одинаковый вес. Возвраты, комментарии и субъективные оценки не меняют процент.</p><dl><div><dt>Начало достоверного учёта</dt><dd>{new Date(overview.trackingStartedAt).toLocaleDateString("ru-RU")}</dd></div><div><dt>Часовой пояс</dt><dd>{overview.timezone}</dd></div><div><dt>Формула</dt><dd>Вовремя ÷ учтено</dd></div></dl><Button appearance="subtle" onClick={() => setHelpOpen(true)}>Открыть правила расчёта</Button></aside>
@@ -197,7 +199,7 @@ export function EfficiencyView({ overview, loading, error, onPeriodChange }: Eff
     <section className="eff-people" aria-label="Эффективность сотрудников">
       <div className="eff-people-heading"><div><h2>Сотрудники</h2><p>Нейтральная сортировка по имени. Это не рейтинг.</p></div><Input aria-label="Поиск сотрудников в эффективности" contentBefore={<Search20Regular />} placeholder="Имя или должность" value={query} onChange={(_, data) => setQuery(data.value)} /></div>
       <div className="eff-table-scroll" tabIndex={0} aria-label="Таблица прокручивается горизонтально">
-        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} tabIndex={0} aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedUserId(employee.userId); } }}><td><EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-table-person"><Avatar name={employee.name} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></EmployeeProfileLink></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
+        <table className="eff-table"><thead><tr><th>Сотрудник</th><th>Выполнение в срок</th><th>Вовремя / всего</th><th>Просрочено</th><th>Ожидает проверки</th><th>Возвраты</th><th>Без срока</th><th>Объём данных</th></tr></thead><tbody>{visibleEmployees.map((employee) => <tr key={employee.userId} className={activeEmployee.userId === employee.userId ? "selected" : ""} tabIndex={0} aria-label={`Открыть сводку: ${employee.name}`} onClick={() => setSelectedUserId(employee.userId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedUserId(employee.userId); } }}><td><EmployeeProfileLink userId={employee.userId} personName={employee.name} className="eff-table-person"><ProfileAvatar person={{ id: employee.userId, name: employee.name, avatarVersion: employee.avatarVersion }} token={token} size={32} /><span><strong>{employee.name}</strong><small>{employee.jobTitle}</small></span></EmployeeProfileLink></td><td><div className="eff-table-score"><strong>{percentageLabel(employee)}</strong>{employee.percentage != null ? <span aria-hidden="true"><i style={{ width: `${employee.percentage}%` }} /></span> : null}{employee.smallSample ? <small>мало данных</small> : null}</div></td><td>{employee.onTimeCount} / {employee.eligibleCount}</td><td>{employee.overdueCount}</td><td>{employee.awaitingReviewCount}</td><td>{employee.returnedForRevisionCount}</td><td>{employee.noDueDateCount}</td><td>{employee.sampleSize} задач</td></tr>)}</tbody></table>
       </div>
       {!visibleEmployees.length ? <div className="eff-table-empty">По вашему запросу сотрудники не найдены.</div> : null}
     </section>

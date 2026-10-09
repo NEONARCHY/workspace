@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
-import { Avatar, Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-components";
+import { Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
 import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { DepartmentIcon } from "./DepartmentIcon";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
 export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
 
-export function EmployeeRecords({ employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
+export function EmployeeRecords({ token, employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
+  token: string;
   employees: readonly DirectoryEmployee[];
   departments: readonly WorkspaceDepartment[];
   filterKey: string;
@@ -58,7 +60,7 @@ export function EmployeeRecords({ employees, departments, filterKey, selectedIds
           }}
         >
           <td className="record-selection-cell"><span className="list-row-hover-wash" aria-hidden="true" /><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
-          <td><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><Avatar name={employee.name} size={36} color="colorful" aria-hidden="true" /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
+          <td><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><ProfileAvatar person={employee} token={token} size={36} aria-hidden={true} /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
           <td className="employee-position">
             {employee.jobTitle ? employee.jobTitle : (
               <span className="employee-position-missing" title="Должность не назначена">

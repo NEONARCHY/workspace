@@ -1,20 +1,30 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createDepartment, deleteDepartment, updateDepartment } = vi.hoisted(() => ({ createDepartment: vi.fn(), deleteDepartment: vi.fn(), updateDepartment: vi.fn() }));
+const { createDepartment, deleteDepartment, updateDepartment, loadProfileAvatar } = vi.hoisted(() => ({ createDepartment: vi.fn(), deleteDepartment: vi.fn(), updateDepartment: vi.fn(), loadProfileAvatar: vi.fn() }));
 vi.mock("./workspace-api", () => ({
   createDepartment,
   deleteDepartment,
   updateDepartment,
   updateDepartmentMembers: vi.fn(),
+  loadProfileAvatar,
 }));
 
 import { DepartmentManagement } from "./DepartmentManagement";
 
 beforeEach(() => vi.resetAllMocks());
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("DepartmentManagement", () => {
+  it("shows the saved photo in department member cards", async () => {
+    loadProfileAvatar.mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:department-avatar");
+    const view = render(<DepartmentManagement token="token" departments={[
+      { id: "central", code: "central", name: "ЦА", scope: "central", assignedUsersCount: 1 },
+    ]} employees={[{ id: "department-photo", username: "photo", name: "Азиза Каримова", role: "employee", departmentId: "central", status: "active", avatarVersion: "photo-v1" }]} onChanged={vi.fn()} />);
+    await waitFor(() => expect(view.container.querySelector(".department-member-row .fui-Avatar__image")).toHaveAttribute("src", "blob:department-avatar"));
+    expect(loadProfileAvatar).toHaveBeenCalledWith("token", "department-photo", "photo-v1");
+  });
   it("opens the central department even if a regional one is first, and switches without mixing", () => {
     render(<DepartmentManagement token="token" departments={[
       { id: "regional", code: "regional", name: "Регион", scope: "regional", assignedUsersCount: 0 },

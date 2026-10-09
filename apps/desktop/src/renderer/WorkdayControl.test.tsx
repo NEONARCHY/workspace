@@ -7,12 +7,13 @@ import type { WorkdayMe, WorkdayTeam } from "@yuksalish/contracts";
 
 import { TeamPresencePanel } from "./TeamPresencePanel";
 import { WorkdayControl } from "./WorkdayControl";
-import { finishMyWorkday, loadMyWorkday, loadTeamWorkday, startMyWorkday } from "./workspace-api";
+import { finishMyWorkday, loadMyWorkday, loadProfileAvatar, loadTeamWorkday, startMyWorkday } from "./workspace-api";
 import { workspaceTheme } from "./workspace-theme";
 
 vi.mock("./workspace-api", () => ({
   loadMyWorkday: vi.fn(), startMyWorkday: vi.fn(), finishMyWorkday: vi.fn(),
   loadTeamWorkday: vi.fn(), saveWorkdaySchedule: vi.fn(),
+  loadProfileAvatar: vi.fn(),
 }));
 
 const initial: WorkdayMe = {
@@ -40,7 +41,18 @@ function show(element: ReactNode) {
 
 describe("workday presence", () => {
   beforeEach(() => vi.clearAllMocks());
-  afterEach(() => cleanup());
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+
+  it("loads the team member photo from the version supplied by the team API", async () => {
+    vi.mocked(loadProfileAvatar).mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:workday-avatar");
+    vi.mocked(loadTeamWorkday).mockResolvedValue({ asOf: initial.asOf, workingCount: 1, members: [
+      { userId: "presence-photo", name: "Дилшод Рахимов", avatarVersion: "photo-v1", jobTitle: "Специалист", status: "working", schedule: initial.schedule, session: working.session, absenceKind: null, canEditSchedule: false },
+    ] });
+    const view = show(<TeamPresencePanel token="test-token" />);
+    await waitFor(() => expect(view.container.querySelector(".team-presence-person .fui-Avatar__image")).toHaveAttribute("src", "blob:workday-avatar"));
+    expect(loadProfileAvatar).toHaveBeenCalledWith("test-token", "presence-photo", "photo-v1");
+  });
 
   it("starts and finishes only on explicit button clicks", async () => {
     vi.mocked(loadMyWorkday).mockResolvedValue(initial);

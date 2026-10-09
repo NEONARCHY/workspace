@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DirectoryEmployee } from "@yuksalish/contracts";
@@ -7,6 +7,7 @@ import { EmployeeRecords } from "./EmployeeRecords";
 import { EmployeeProfileProvider } from "./EmployeeProfileLink";
 import { workspaceTheme } from "./workspace-theme";
 import { initialTasks, people } from "./test-fixtures/demo-data";
+import * as api from "./workspace-api";
 
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
   id: `e-${i}`, name: `Сотрудник ${i + 1}`, username: `employee-${i + 1}`, role: "employee", status: i === 30 ? "pending" : "active", jobTitle: "Mutaxassis",
@@ -14,11 +15,25 @@ const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({
 const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `t-${i}`, title: `Задача ${i + 1}`, dueAt: i === 30 ? null : new Date(2026, 8, i + 1).toISOString() }));
 const wrap = (node: React.ReactNode, onOpenProfile = vi.fn()) => <FluentProvider theme={workspaceTheme}><EmployeeProfileProvider onOpenProfile={onOpenProfile}>{node}</EmployeeProfileProvider></FluentProvider>;
 const employeeRecordProps = (onOpen = vi.fn(), onToggle = vi.fn()) => ({
+  token: "test-token",
   departments: [], selectedIds: new Set<string>(), onOpen, onToggle, onTogglePage: vi.fn(),
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("Corporate record tables", () => {
+  it("shows saved employee photos without changing profile and management actions", async () => {
+    const load = vi.spyOn(api, "loadProfileAvatar").mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:employee-avatar");
+    const onOpenProfile = vi.fn(), onOpen = vi.fn();
+    const employee = { ...employees[0]!, id: "employee-photo", avatarVersion: "photo-v1" };
+    const view = render(wrap(<EmployeeRecords employees={[employee]} filterKey="photo" {...employeeRecordProps(onOpen)} />, onOpenProfile));
+    await waitFor(() => expect(view.container.querySelector(".employee-record-profile .fui-Avatar__image")).toHaveAttribute("src", "blob:employee-avatar"));
+    expect(load).toHaveBeenCalledWith("test-token", employee.id, "photo-v1");
+    fireEvent.click(screen.getByRole("button", { name: `Открыть профиль: ${employee.name}` }));
+    expect(onOpenProfile).toHaveBeenCalledWith(employee.id);
+    fireEvent.click(screen.getByRole("button", { name: `Управление сотрудником: ${employee.name}` }));
+    expect(onOpen).toHaveBeenCalledWith(employee);
+  });
   it("keeps each hover layer decorative and inside an existing cell", () => {
     render(wrap(<>
       <TaskRecords tasks={tasks.slice(0, 2)} people={people} filterKey="all" onSelect={vi.fn()} />

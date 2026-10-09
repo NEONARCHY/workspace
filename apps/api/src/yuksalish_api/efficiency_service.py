@@ -469,7 +469,7 @@ async def load_efficiency_overview(
     employee_rows = (
         (
             await connection.execute(
-                select(users.c.id, users.c.full_name, users.c.job_title)
+                select(users.c.id, users.c.full_name, users.c.job_title, users.c.avatar_updated_at)
                 .where(users.c.status == "active")
                 .order_by(users.c.full_name)
             )
@@ -524,6 +524,10 @@ async def load_efficiency_overview(
                 "user_id": str(employee["id"]),
                 "name": employee["full_name"],
                 "job_title": employee["job_title"] or "Должность не указана",
+                "avatar_version": (
+                    employee["avatar_updated_at"].isoformat()
+                    if employee.get("avatar_updated_at") else None
+                ),
                 "period": requested_period,
                 "timezone": methodology["timezone"],
                 "methodology_version": methodology["version"],
@@ -577,10 +581,14 @@ async def load_personal_efficiency(
         )
         for period_key in previous_periods(requested_period, 6)
     }
+    avatar_updated_at = await connection.scalar(
+        select(users.c.avatar_updated_at).where(users.c.id == current_user.id)
+    )
     summary = {
         "user_id": str(current_user.id),
         "name": current_user.full_name,
         "job_title": current_user.job_title or "Должность не указана",
+        "avatar_version": avatar_updated_at.isoformat() if avatar_updated_at else None,
         "period": requested_period,
         "timezone": methodology["timezone"],
         "methodology_version": methodology["version"],

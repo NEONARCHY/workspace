@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
@@ -106,7 +106,7 @@ from yuksalish_api.repository import (
     update_trip_request,
 )
 from yuksalish_api.seed import seed_demo_data
-from yuksalish_api.tables import audit_events, chat_members, chats, task_cycles, tasks
+from yuksalish_api.tables import audit_events, chat_members, chats, task_cycles, tasks, users
 from yuksalish_api.workspace_schemas import (
     ApprovalActionRequest,
     ChangeProjectStageRequest,
@@ -257,6 +257,12 @@ async def _exercise_live_workspace(database_url: str) -> None:
                 "Отмена",
             }
 
+            avatar_stamp = datetime(2026, 10, 9, tzinfo=UTC)
+            await connection.execute(
+                update(users).where(users.c.id == employee.id).values(
+                    avatar_updated_at=avatar_stamp
+                )
+            )
             directory = await load_directory(connection)
             assert len(directory.positions) >= 20
             audit_event_count = await connection.scalar(
@@ -271,6 +277,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             dilshod = next(
                 employee for employee in directory.employees if employee.username == "dilshod"
             )
+            assert dilshod.avatar_version == avatar_stamp.isoformat()
             updated_employee = await update_employee_access(
                 connection,
                 admin,
@@ -282,6 +289,7 @@ async def _exercise_live_workspace(database_url: str) -> None:
             )
             assert updated_employee.role == "employee"
             assert updated_employee.job_title == "Integration Position"
+            assert updated_employee.avatar_version == avatar_stamp.isoformat()
             renamed_position = await update_position(
                 connection,
                 admin,

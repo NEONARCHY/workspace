@@ -787,6 +787,16 @@ export function clearAssistantChat(token: string, chatId: string): Promise<void>
   return apiRequest<void>(`/assistant/chats/${encodeURIComponent(chatId)}/messages`, { method: "DELETE" }, token);
 }
 
+export function deleteAssistantChat(token: string, chatId: string): Promise<readonly AssistantChat[]> {
+  clearAssistantPreload();
+  return apiRequest<readonly AssistantChat[]>(`/assistant/chats/${encodeURIComponent(chatId)}`, { method: "DELETE" }, token);
+}
+
+export function pinAssistantChat(token: string, chatId: string, pinned: boolean): Promise<readonly AssistantChat[]> {
+  return apiRequest<readonly AssistantChat[]>(`/assistant/chats/${encodeURIComponent(chatId)}/pin`,
+    { method: "PATCH", body: JSON.stringify({ pinned }) }, token);
+}
+
 export function loadAssistantMessages(token: string, chatId?: string): Promise<readonly AssistantMessage[]> {
   const entry = warmedAssistantMessages;
   if (!chatId && entry?.token === token && Date.now() - entry.startedAt < 60_000) {

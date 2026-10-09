@@ -6,7 +6,9 @@ import { WorkdayControl } from "../src/renderer/WorkdayControl";
 import { WorkspaceIdentity } from "../src/renderer/WorkspaceIdentity";
 import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
 import { workspaceTheme } from "../src/renderer/workspace-theme";
-import type { AssistantMessage, WorkdayMe } from "@yuksalish/contracts";
+import type { AssistantChat, AssistantMessage, WorkdayMe } from "@yuksalish/contracts";
+import { TaskRecords } from "../src/renderer/TaskRecords";
+import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import "../src/renderer/styles.css";
 import "../src/renderer/design-system.css";
 import "../src/renderer/responsive.css";
@@ -17,6 +19,12 @@ import "../src/renderer/motion.css";
 import "../src/renderer/yuksalish-assistant.css";
 import "../src/renderer/context-motion.css";
 import "../src/renderer/assistant-chat.css";
+import "../src/renderer/record-lists.css";
+import "../src/renderer/workspace-2-tasks.css";
+import "../src/renderer/accent-surfaces.css";
+import "../src/renderer/list-row-hover.css";
+import "../src/renderer/confirm-action-dialog.css";
+import "../src/renderer/surface-hierarchy.css";
 
 document.body.style.minHeight = "100vh";
 document.body.style.background = "linear-gradient(135deg, #eaf4f3, #f9fbfb 64%, #dcecf0)";
@@ -27,6 +35,11 @@ const workday = (): WorkdayMe => ({ status: workdayStatus,
   session: null, absenceKind: null, asOf: "2026-10-08T04:00:00Z" });
 const history = new Map<string, AssistantMessage[]>();
 const firstChat = new URLSearchParams(location.search).has("history") ? "qa-work" : "qa-chat";
+let chats: AssistantChat[] = ["qa-chat", "qa-work", "qa-text"].map((id, index) => ({
+  id, title: ["Новый чат", "План рабочей недели", "Подготовка текста"][index]!, isDefault: !index,
+  isPinned: false, createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
+}));
+chats.sort((a, b) => Number(b.id === firstChat) - Number(a.id === firstChat));
 const json = (value: unknown) => new Response(JSON.stringify(value), {
   status: 200, headers: { "Content-Type": "application/json" },
 });
@@ -38,17 +51,6 @@ window.fetch = (resource, options) => {
     return Promise.resolve(json(workday()));
   }
   if (url.pathname === "/api/v1/assistant/chats" && (!options?.method || options.method === "GET")) {
-    const chats = [{
-      id: "qa-chat", title: "Новый чат", isDefault: true,
-      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
-    }, {
-      id: "qa-work", title: "План рабочей недели", isDefault: false,
-      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
-    }, {
-      id: "qa-text", title: "Подготовка текста", isDefault: false,
-      createdAt: "2026-10-05T10:00:00Z", updatedAt: "2026-10-05T10:00:00Z",
-    }];
-    chats.sort((a, b) => Number(b.id === firstChat) - Number(a.id === firstChat));
     return Promise.resolve(json(chats));
   }
   if (url.pathname === "/api/v1/assistant/messages" && (!options?.method || options.method === "GET")) {
@@ -74,8 +76,22 @@ window.fetch = (resource, options) => {
     return new Promise((resolve) => window.setTimeout(() => resolve(json(answer)), 900));
   }
   if (url.pathname === "/api/v1/assistant/chats" && options?.method === "POST") {
-    return Promise.resolve(json({ id: `qa-new-${Date.now()}`, title: "Новый чат", isDefault: false,
-      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }));
+    const created = { id: `qa-new-${Date.now()}`, title: "Новый чат", isDefault: false,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    chats.unshift(created);
+    return Promise.resolve(json(created));
+  }
+  const action = url.pathname.match(/^\/api\/v1\/assistant\/chats\/([^/]+)(\/pin)?$/);
+  if (action && options?.method === "PATCH") {
+    const input = JSON.parse(String(options.body)) as { pinned: boolean };
+    chats = chats.map(chat => chat.id === action[1] ? { ...chat, isPinned: input.pinned } : chat);
+    return Promise.resolve(json(chats));
+  }
+  if (action && options?.method === "DELETE") {
+    chats = chats.filter(chat => chat.id !== action[1]); history.delete(action[1]!);
+    if (!chats.length) chats = [{ id: `qa-fresh-${Date.now()}`, title: "Новый чат", isDefault: true,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }];
+    return Promise.resolve(json(chats));
   }
   const clearing = url.pathname.match(/^\/api\/v1\/assistant\/chats\/([^/]+)\/messages$/);
   if (clearing && options?.method === "DELETE") {
@@ -92,6 +108,7 @@ function TopbarStand() {
   const [name, setName] = useState("Тестовый пользователь с длинным именем");
   const [inset, setInset] = useState(false);
   const [zoom, setZoom] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<string>();
   return <FluentProvider className="app-provider" theme={workspaceTheme} style={{ zoom: zoom ? 1.25 : 1 }}>
     <p style={{ padding: "8px 20px", fontSize: 12, color: "#52697b" }}>Локальный предпросмотр · сообщения остаются только в памяти этой страницы</p>
     <nav style={{ display: "flex", gap: 18, padding: "0 20px", fontSize: 13 }}>
@@ -110,6 +127,10 @@ function TopbarStand() {
       <Button onClick={() => setInset(value => !value)}>Изменить ширину панели</Button>
       <Button onClick={() => setZoom(value => !value)}>Масштаб 125%</Button>
     </div>
+    <main className="app-content" style={{ margin: 20, height: 550, background: "transparent" }}>
+      <TaskRecords tasks={initialTasks} people={people} currentUserId={people[0]!.id}
+        selectedId={selectedTask} filterKey="qa-surface" onSelect={setSelectedTask} />
+    </main>
   </FluentProvider>;
 }
 createRoot(document.getElementById("root")!).render(<TopbarStand />);

@@ -141,6 +141,7 @@ export interface DirectoryEmployee {
   readonly jobTitle?: string | null;
   readonly status: string;
   readonly directManagerUserId?: string | null;
+  readonly avatarVersion?: string | null;
 }
 
 export interface DirectoryBootstrap {
@@ -525,6 +526,7 @@ export interface AssistantChat {
   readonly id: string;
   readonly title: string;
   readonly isDefault: boolean;
+  readonly isPinned?: boolean;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -678,6 +680,7 @@ export interface WorkdayTeamMember {
   readonly session: WorkdaySession | null;
   readonly absenceKind: string | null;
   readonly canEditSchedule: boolean;
+  readonly avatarVersion?: string | null;
 }
 
 export interface WorkdayTeam {
@@ -1563,6 +1566,7 @@ export interface EmployeeEfficiency {
   readonly userId: string;
   readonly name: string;
   readonly jobTitle: string;
+  readonly avatarVersion?: string | null;
   readonly period: string;
   readonly timezone: string;
   readonly percentage?: number | null;

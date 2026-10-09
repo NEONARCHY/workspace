@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, delete, exists, func, literal, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 from typing_extensions import TypedDict
@@ -16,6 +16,7 @@ class AssistantChatRecord(TypedDict):
     id: str
     title: str
     isDefault: bool
+    isPinned: bool
     createdAt: str
     updatedAt: str
 
@@ -23,13 +24,14 @@ class AssistantChatRecord(TypedDict):
 async def list_chats(connection: AsyncConnection, user_id: UUID) -> list[AssistantChatRecord]:
     await connection.execute(
         insert(assistant_chats)
-        .values(
-            id=uuid4(),
-            user_id=user_id,
-            title="Первый чат",
-            is_default=True,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+        .from_select(
+            ["id", "user_id", "title", "is_default", "created_at", "updated_at"],
+            select(
+                literal(uuid4()), literal(user_id), literal("Первый чат"), literal(True),
+                literal(datetime.now(UTC)), literal(datetime.now(UTC)),
+            ).where(~exists(select(assistant_chats.c.id).where(
+                assistant_chats.c.user_id == user_id,
+            ))),
         )
         .on_conflict_do_nothing(
             index_elements=[assistant_chats.c.user_id],
@@ -41,7 +43,8 @@ async def list_chats(connection: AsyncConnection, user_id: UUID) -> list[Assista
             await connection.execute(
                 select(assistant_chats)
                 .where(assistant_chats.c.user_id == user_id)
-                .order_by(assistant_chats.c.updated_at.desc(), assistant_chats.c.id.desc())
+                .order_by(assistant_chats.c.is_pinned.desc(),
+                    assistant_chats.c.updated_at.desc(), assistant_chats.c.id.desc())
             )
         )
         .mappings()
@@ -52,6 +55,7 @@ async def list_chats(connection: AsyncConnection, user_id: UUID) -> list[Assista
             id=str(row["id"]),
             title=row["title"],
             isDefault=row["is_default"],
+            isPinned=row["is_pinned"],
             createdAt=row["created_at"].isoformat(),
             updatedAt=row["updated_at"].isoformat(),
         )
@@ -75,6 +79,7 @@ async def create_chat(connection: AsyncConnection, user_id: UUID) -> AssistantCh
         id=str(chat_id),
         title="Новый чат",
         isDefault=False,
+        isPinned=False,
         createdAt=now.isoformat(),
         updatedAt=now.isoformat(),
     )
@@ -150,3 +155,32 @@ async def touch_chat(
             ),
         )
     )
+
+
+async def pin_chat(
+    connection: AsyncConnection, user_id: UUID, chat_id: UUID, pinned: bool,
+) -> list[AssistantChatRecord]:
+    await chat_message_scope(connection, user_id, chat_id, lock=True)
+    await connection.execute(update(assistant_chats).where(
+        assistant_chats.c.id == chat_id, assistant_chats.c.user_id == user_id,
+    ).values(is_pinned=pinned))
+    return await list_chats(connection, user_id)
+
+
+async def delete_chat(
+    connection: AsyncConnection, user_id: UUID, chat_id: UUID,
+) -> list[AssistantChatRecord]:
+    scope = await chat_message_scope(connection, user_id, chat_id, lock=True)
+    # Scrub every turn, including previously cleared ones, before removing the
+    # conversation. Detach the empty rows so CASCADE cannot erase account-wide
+    # request timestamps and let repeated deletion bypass the hourly allowance.
+    await connection.execute(update(assistant_messages).where(
+        assistant_messages.c.user_id == user_id, assistant_messages.c.chat_id == scope,
+    ).values(content="", source_labels=None, references=None, action_draft=None,
+        chat_id=None, cleared_at=func.coalesce(assistant_messages.c.cleared_at, datetime.now(UTC))))
+    await connection.execute(delete(assistant_chats).where(
+        assistant_chats.c.id == chat_id, assistant_chats.c.user_id == user_id,
+    ))
+    # Only an entirely empty account receives a new, distinct blank conversation.
+    # A deleted default chat is never recreated beside the remaining chats.
+    return await list_chats(connection, user_id)

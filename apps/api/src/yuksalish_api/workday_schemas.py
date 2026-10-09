@@ -56,6 +56,7 @@ class WorkdayTeamMemberResponse(ApiModel):
     session: WorkdaySessionResponse | None
     absence_kind: str | None
     can_edit_schedule: bool
+    avatar_version: str | None = None
 
 
 class WorkdayTeamResponse(ApiModel):
