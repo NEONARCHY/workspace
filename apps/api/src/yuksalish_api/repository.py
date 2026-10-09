@@ -393,6 +393,8 @@ def _payment_details(
     responsible_user_id: UUID | str | None = None,
 ) -> PaymentRequestDetails:
     return PaymentRequestDetails(
+        budget_article_id=payload.get("budget_article_id"),
+        budget_article_title=str(payload.get("budget_article_title", "")),
         transfer_type=payload.get("transfer_type"),
         project_name=str(payload.get("project_name", "")),
         project_code=str(payload.get("project_code", "")),
@@ -5916,6 +5918,8 @@ async def publish_workflow(
 
 
 PAYMENT_DETAIL_FIELDS = {
+    "budget_article_id",
+    "budget_article_title",
     "transfer_type",
     "project_name",
     "project_code",
@@ -6125,11 +6129,17 @@ async def create_approval_request(
     route_variant_payload = await _payment_route_variant_payload(
         connection, template["id"], payload.project_id, project_name,
     )
+    from .project_budget_service import validate_article_link
+
+    article_title = await validate_article_link(
+        connection, payload.budget_article_id, payload.project_id, payload.currency,
+    )
     request_id = uuid4()
     now = datetime.now(UTC)
     number = str(int(now.timestamp() * 1000))[-6:]
     request_payload = {
         **_payment_payload(payload),
+        "budget_article_title": article_title,
         **({"project_name": project_name, "project_code": project_code}
            if payload.project_id else {}),
         "amount": payload.amount,
@@ -6270,6 +6280,10 @@ async def update_approval_request(
     if not can_revise:
         raise WorkspaceRepositoryError(403, "This user cannot edit the returned request")
 
+    from .project_budget_service import ensure_unbooked, validate_article_link
+
+    await ensure_unbooked(connection, request_id)
+
     responsible_id, employee_ids = await _validate_request_people(
         connection,
         current_user,
@@ -6281,6 +6295,11 @@ async def update_approval_request(
         for field in ("project_id", "workstream_id", "project_item_id"):
             submitted_details[field] = (row["payload"] or {}).get(field)
     project_id = submitted_details["project_id"]
+    if "budget_article_id" not in payload.model_fields_set:
+        submitted_details["budget_article_id"] = (
+            (row["payload"] or {}).get("budget_article_id")
+            if project_id == (row["payload"] or {}).get("project_id") else None
+        )
     previous_details = row["payload"] or {}
     if "calendar_event_id" not in payload.model_fields_set:
         submitted_details["calendar_event_id"] = (
@@ -6297,6 +6316,9 @@ async def update_approval_request(
     )
     if project_id:
         submitted_details.update(project_name=project_name, project_code=project_code)
+    submitted_details["budget_article_title"] = await validate_article_link(
+        connection, submitted_details["budget_article_id"], project_id, payload.currency,
+    )
     previous_route_payload = row["payload"] or {}
     route_variant_payload = (
         {
@@ -6378,6 +6400,11 @@ async def delete_approval_request(
     if row is None:
         raise WorkspaceRepositoryError(404, "Request was not found")
 
+    from .project_budget_service import ensure_unbooked
+
+    await ensure_unbooked(connection, request_id)
+
+    # Keep recorded expenses immutable rather than cascading financial history.
     # Request history and deadline/action rows cascade from approval_requests. The
     # attachment table intentionally has a polymorphic owner, so clean its rows
     # explicitly to avoid leaving metadata that points at a deleted request.
@@ -7417,6 +7444,9 @@ async def act_on_request(
         )
         if not is_administrator and not can_move_current:
             raise WorkspaceRepositoryError(403, "This user cannot move the request")
+        from .project_budget_service import ensure_unbooked
+
+        await ensure_unbooked(connection, request_id)
         now = datetime.now(UTC)
         await connection.execute(
             insert(approval_actions).values(
@@ -7572,6 +7602,13 @@ async def act_on_request(
             finished_at = now
         else:
             status = "running"
+    if status == "approved":
+        from .project_budget_service import record_expense
+
+        await record_expense(
+            connection, request_id, current_user.id, row["payload"] or {},
+            int(row["current_version"]),
+        )
     await connection.execute(
         update(approval_requests)
         .where(approval_requests.c.id == request_id)

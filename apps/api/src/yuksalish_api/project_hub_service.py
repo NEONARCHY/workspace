@@ -172,7 +172,10 @@ async def load_payment_project_targets(
     project_ids = {project.id for project in projects}
     workstreams = [row for row in hub.workstreams if row.project_id in project_ids]
     workstream_ids = {row.id for row in workstreams}
+    from .project_budget_service import article_choices
+
     return PaymentProjectTargets(
+        budget_articles=await article_choices(connection, [UUID(value) for value in project_ids]),
         projects=[
             PaymentProjectOption(id=row.id, code=row.code, title=row.title)
             for row in projects

@@ -1,4 +1,7 @@
 import type {
+  ProjectBudgetSummary,
+  ProjectBudgetArticle,
+  ProjectBudgetArticleInput,
   ProjectDocumentImport,
   ProjectImportContent,
   ProjectImportPublication,
@@ -1936,6 +1939,12 @@ export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
 
 export function loadProjectImports(token: string, projectId?: string): Promise<readonly ProjectDocumentImport[]> {
   return apiRequest("/project-imports" + (projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""), {}, token);
+}
+export function loadProjectBudget(token: string, projectId: string): Promise<ProjectBudgetSummary> {
+  return apiRequest(`/project-hub/projects/${projectId}/budget`, {}, token);
+}
+export function addProjectBudgetArticle(token: string, projectId: string, article: ProjectBudgetArticleInput): Promise<ProjectBudgetArticle> {
+  return apiRequest(`/project-hub/projects/${projectId}/budget/articles`, { method: "POST", body: JSON.stringify(article) }, token);
 }
 export function createProjectImport(token: string): Promise<ProjectDocumentImport> {
   return apiRequest("/project-imports", { method: "POST" }, token);

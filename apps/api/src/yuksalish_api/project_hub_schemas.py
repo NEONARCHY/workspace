@@ -18,6 +18,17 @@ class HubModel(BaseModel):
     )
 
 
+class BudgetArticleResponse(HubModel):
+    id: str
+    project_id: str
+    title: str
+    amount: str
+    currency: Literal["UZS", "USD", "EUR"]
+    funding: Literal["donor", "own", "unspecified"]
+    actual_amount: str = "0"
+    remaining_amount: str = "0"
+
+
 class PaymentProjectOption(HubModel):
     id: str
     code: str
@@ -42,6 +53,7 @@ class PaymentProjectTargets(HubModel):
     projects: list[PaymentProjectOption]
     workstreams: list[PaymentWorkstreamOption]
     items: list[PaymentItemOption]
+    budget_articles: list["BudgetArticleResponse"] = Field(default_factory=list)
 
 
 class ProjectHubWrite(HubModel):

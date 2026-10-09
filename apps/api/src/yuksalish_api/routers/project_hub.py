@@ -9,7 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from yuksalish_api.access_control import ensure_module_action
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
+from yuksalish_api.project_budget_schemas import BudgetArticleWrite, ProjectBudgetResponse
+from yuksalish_api.project_budget_service import add_article, load_budget
 from yuksalish_api.project_hub_schemas import (
+    BudgetArticleResponse,
     PaymentProjectTargets,
     ProjectFundingAction,
     ProjectFundingResponse,
@@ -49,6 +52,25 @@ Connection = Annotated[AsyncConnection, Depends(get_connection)]
 
 def _error(error: WorkspaceRepositoryError) -> HTTPException:
     return HTTPException(error.status_code, error.detail)
+
+
+@router.get("/projects/{project_id}/budget", response_model=ProjectBudgetResponse)
+async def get_budget(project_id: UUID, user: User, connection: Connection) -> ProjectBudgetResponse:
+    try:
+        return await load_budget(connection, user, project_id)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
+
+
+@router.post("/projects/{project_id}/budget/articles", response_model=BudgetArticleResponse,
+             status_code=201)
+async def post_article(
+    project_id: UUID, payload: BudgetArticleWrite, user: User, connection: Connection,
+) -> BudgetArticleResponse:
+    try:
+        return await add_article(connection, user, project_id, payload)
+    except WorkspaceRepositoryError as error:
+        raise _error(error) from error
 
 
 @router.get("", response_model=ProjectHubOverview)

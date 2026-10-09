@@ -273,6 +273,9 @@ async def publish_import(
         raise WorkspaceRepositoryError(422, str(error)) from error
     created = await save_project(connection, user, project)
     project_id = UUID(created.id)
+    from .project_budget_service import seed_articles
+
+    await seed_articles(connection, user.id, project_id, import_id, content.budget_lines)
     for workstream_template, children in zip(directions, items, strict=True):
         created_direction = await save_workstream(
             connection, user, project_id, workstream_template,

@@ -743,6 +743,8 @@ class ApprovalDeadlineControlResponse(ApiModel):
 
 
 class PaymentRequestDetails(ApiModel):
+    budget_article_id: str | None = None
+    budget_article_title: str = Field(default="", max_length=500)
     transfer_type: (
         Literal[
             "Гонорар (с расчетом)",  # noqa: RUF001 - Cyrillic enum value
@@ -832,7 +834,7 @@ class ApprovalRequestVersionResponse(ApiModel):
 
 class CreateApprovalRequest(PaymentRequestDetails):
     title: str = Field(min_length=1, max_length=240)
-    amount: int = Field(gt=0)
+    amount: int = Field(gt=0, le=9_007_199_254_740_991)
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     source_task_id: str | None = None
@@ -854,7 +856,7 @@ class CreateApprovalRequest(PaymentRequestDetails):
 
 class UpdateApprovalRequest(PaymentRequestDetails):
     title: str = Field(min_length=1, max_length=240)
-    amount: int = Field(gt=0)
+    amount: int = Field(gt=0, le=9_007_199_254_740_991)
     currency: str = Field(default="UZS", min_length=3, max_length=3)
     purpose: str = Field(default="", max_length=20_000)
     change_comment: str | None = Field(default=None, max_length=4000)

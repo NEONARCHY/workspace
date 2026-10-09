@@ -24,6 +24,7 @@ import { ScopedPeopleCheckboxes } from "./ScopedPeopleCheckboxes";
 import { approvalColumnTotals } from "./approval-board";
 import { assistantPeopleIds, resolveAssistantPerson } from "./assistant-form-handoff";
 import { ProjectImportDialog } from "./ProjectImportDialog";
+import { ProjectBudgetDialog } from "./ProjectBudgetDialog";
 
 type ViewMode = "projects" | "funding";
 type FormMode = "project" | "workstream" | "item" | "request" | "status" | null;
@@ -92,6 +93,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
   assistantDraft }: Props) {
   const [hub, setHub] = useState<ProjectHubOverview>(emptyHub);
   const [importOpen, setImportOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [importArchiveProjectId, setImportArchiveProjectId] = useState<string>();
   const [requests, setRequests] = useState<readonly ProjectHubRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,6 +293,7 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         {mode === "projects" && canCreateProject ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => startProject()}>Новый проект</Button> : null}
         {mode === "projects" && canCreateProject ? <Button onClick={() => { setImportArchiveProjectId(undefined); setImportOpen(true); }}>Из документов с ИИ</Button> : null}
         {mode === "projects" && selectedProject ? <Button onClick={() => { setImportArchiveProjectId(selectedProject.id); setImportOpen(true); }}>Документы проекта</Button> : null}
+        {mode === "projects" && selectedProject ? <Button onClick={() => setBudgetOpen(true)}>Бюджет и расходы</Button> : null}
         {mode === "funding" && canCreateRequest ? <Button className="project-hub-primary-action" appearance="primary" icon={<Add24Regular />} onClick={() => { setFundingProjectId((id) => id || hub.projects[0]?.id || ""); setFundingWorkstreamId(""); setRequestForm({ itemId: "", title: "", purpose: "", amount: "", approvalDueAt: "" }); setRequestFiles([]); setRequestDraftId(""); setUploadedFileCount(0); setActionError(""); setFormMode("request"); }}>Новая проектная заявка</Button> : null}</div></div>
     </header>
     {loadError ? <p className="project-hub-error" role="alert">{loadError}</p> : null}
@@ -392,5 +395,6 @@ export function ProjectHubView({ mode, token, people, departments, currentUserId
         setSelectedProjectId(id); setSelectedWorkstreamId(""); setSelectedItemId("");
         setImportOpen(false); void reload();
       }} /> : null}
+    {budgetOpen && selectedProject ? <ProjectBudgetDialog token={token} project={selectedProject} onClose={() => setBudgetOpen(false)} /> : null}
   </section>;
 }

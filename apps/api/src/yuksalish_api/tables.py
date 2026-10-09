@@ -31,6 +31,23 @@ project_document_imports = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+project_budget_articles = sa.Table(
+    "project_budget_articles", metadata,
+    sa.Column("id", uuid_type), sa.Column("project_id", uuid_type),
+    sa.Column("title", sa.String(500)), sa.Column("planned_amount", sa.String(30)),
+    sa.Column("currency", sa.String(3)), sa.Column("funding", sa.String(16)),
+    sa.Column("import_id", uuid_type), sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+project_payment_expenses = sa.Table(
+    "project_payment_expenses", metadata,
+    sa.Column("id", uuid_type), sa.Column("request_id", uuid_type),
+    sa.Column("project_id", uuid_type), sa.Column("article_id", uuid_type),
+    sa.Column("amount", sa.Numeric(30, 0)), sa.Column("currency", sa.String(3)),
+    sa.Column("request_version", sa.Integer()), sa.Column("snapshot", postgresql.JSONB()),
+    sa.Column("actor_user_id", uuid_type), sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 personal_preferences = sa.Table(
     "workspace_personal_preferences", metadata,
     sa.Column("user_id", uuid_type, primary_key=True),

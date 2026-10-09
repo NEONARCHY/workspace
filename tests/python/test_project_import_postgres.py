@@ -16,6 +16,7 @@ from yuksalish_api.main import create_app
 from yuksalish_api.object_storage import InMemoryObjectStorage
 from yuksalish_api.project_hub_service import load_hub, publish_event
 from yuksalish_api.project_import_schemas import (
+    ImportBudgetLine,
     ImportContent,
     ImportDirection,
     ImportIssue,
@@ -168,6 +169,8 @@ async def test_review_publish_privacy_idempotency_and_unscheduled_events() -> No
                     )
                 assert locked.value.status_code == 409
                 content = ImportContent(
+                    budget_lines=[ImportBudgetLine(title="Imported article", amount="500.25",
+                                                   currency="UZS")],
                     project=ImportProject(
                         title="Document project", code=f"IM-{manager.id.hex[:8]}", budget="1000",
                     ),
@@ -222,6 +225,12 @@ async def test_review_publish_privacy_idempotency_and_unscheduled_events() -> No
                 assert retried.project_id == published.project_id
                 assert published.state == "published"
                 assert published.publication == publication
+                from yuksalish_api.project_budget_service import load_budget
+
+                budget = await load_budget(connection, manager, UUID(published.project_id or ""))
+                assert len(budget.articles) == 1
+                assert budget.articles[0].amount == "500.25"
+                assert budget.articles[0].remaining_amount == "500.25"
                 with pytest.raises(WorkspaceRepositoryError) as different_retry:
                     await publish_import(connection, manager, import_id, publication.model_copy(
                         update={"access_status": "open"},
