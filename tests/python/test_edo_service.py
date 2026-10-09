@@ -14,6 +14,7 @@ from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.edo_schemas import EdoIncomingDetail, EdoIncomingLetter
+from yuksalish_api.edo_scope import EdoReadScope
 from yuksalish_api.edo_service import (
     EdoBridgeError,
     add_assignment,
@@ -187,6 +188,7 @@ async def test_workspace_route_checks_module_permission_before_read(
     application.dependency_overrides[get_connection] = lambda: object()
     remote_read = AsyncMock(return_value=EdoIncomingDetail(data=EdoIncomingLetter(id=17)))
     monkeypatch.setattr(edo_incoming, "get_letter", remote_read)
+    monkeypatch.setattr(edo_incoming, "resolve_read_scope", AsyncMock(return_value=EdoReadScope()))
     permission = AsyncMock(side_effect=HTTPException(403, "Module permission required"))
     monkeypatch.setattr(edo_incoming, "ensure_module_action", permission)
     async with httpx.AsyncClient(

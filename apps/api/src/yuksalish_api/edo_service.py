@@ -21,6 +21,7 @@ import httpx
 from pydantic import ValidationError
 
 from .edo_schemas import EdoIncomingDetail, EdoIncomingLetter, EdoIncomingPage
+from .edo_scope import SCOPE_HEADER, EdoReadScope
 from .settings import Settings
 
 _ATTACHMENT_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
@@ -38,7 +39,10 @@ def _base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
 
-def issue_edo_assertion(employee_id: UUID, settings: Settings, *, now: int | None = None) -> str:
+def issue_edo_assertion(
+    employee_id: UUID, settings: Settings, *, now: int | None = None,
+    read_scope: EdoReadScope | None = None,
+) -> str:
     """Create a short-lived standard HS256 JWT; never expose it to the renderer."""
     try:
         key = base64.b64decode(
@@ -50,14 +54,19 @@ def issue_edo_assertion(employee_id: UUID, settings: Settings, *, now: int | Non
         raise EdoBridgeError(503, "Интеграция писем не настроена.")
     issued = int(time.time()) if now is None else now
     header = _base64url(b'{"alg":"HS256","typ":"JWT"}')
-    payload = _base64url(json.dumps({
+    claims: dict[str, object] = {
         "iss": settings.edo_workspace_id,
         "aud": "edo-workspace-v1",
         "sub": str(employee_id),
         "iat": issued,
         "exp": issued + 120,
         "active": True,
-    }, separators=(",", ":"), ensure_ascii=True).encode("utf-8"))
+    }
+    if read_scope is not None and read_scope.expanded:
+        claims["incoming_read"] = read_scope.claim()
+    payload = _base64url(json.dumps(
+        claims, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8"))
     signing_input = f"{header}.{payload}"
     signature = _base64url(hmac.new(key, signing_input.encode("ascii"), hashlib.sha256).digest())
     return f"{signing_input}.{signature}"
@@ -78,11 +87,14 @@ def _configured_base(settings: Settings) -> str:
     return raw
 
 
-def _headers(settings: Settings, employee_id: UUID, *, key: str | None = None) -> dict[str, str]:
+def _headers(
+    settings: Settings, employee_id: UUID, *, key: str | None = None,
+    read_scope: EdoReadScope | None = None,
+) -> dict[str, str]:
     headers = {
         "Accept": "application/json",
         "Authorization": f"Bearer {settings.edo_service_credential.get_secret_value()}",
-        "X-Workspace-Assertion": issue_edo_assertion(employee_id, settings),
+        "X-Workspace-Assertion": issue_edo_assertion(employee_id, settings, read_scope=read_scope),
     }
     if key is not None:
         if not _IDEMPOTENCY_KEY.fullmatch(key):
@@ -148,6 +160,23 @@ def _verified(settings: Settings) -> bool:
         return False
 
 
+def _check_scope_response(response: httpx.Response, scope: EdoReadScope | None) -> None:
+    if (
+        scope is not None and scope.expanded
+        and response.headers.get(SCOPE_HEADER) != scope.digest()
+    ):
+        raise EdoBridgeError(
+            503, "ЭДО ещё не подтвердил расширенный доступ. Требуется обновление интеграции ЭДО."
+        )
+
+
+def _check_letter_scope(letter: EdoIncomingLetter, scope: EdoReadScope | None) -> None:
+    if scope is not None and scope.mode == "employees":
+        allowed = {str(value) for value in scope.employee_ids}
+        if not any(item.employee_id in allowed for item in letter.assignments):
+            raise EdoBridgeError(502, "ЭДО вернул письмо вне разрешённой области.")
+
+
 async def _request_json(
     settings: Settings,
     employee_id: UUID,
@@ -157,9 +186,12 @@ async def _request_json(
     params: dict[str, str | int] | None = None,
     body: dict[str, object] | None = None,
     key: str | None = None,
+    read_scope: EdoReadScope | None = None,
 ) -> dict[str, Any]:
     base = _configured_base(settings)
-    headers = _headers(settings, employee_id, key=key)
+    if read_scope is not None and method != "GET":
+        raise ValueError("Read scopes cannot authorize mutations")
+    headers = _headers(settings, employee_id, key=key, read_scope=read_scope)
     try:
         async with _client(settings) as client:
             response = await client.request(
@@ -186,6 +218,7 @@ async def _request_json(
             except ValueError:
                 pass
         _raise_upstream(response.status_code, code)
+    _check_scope_response(response, read_scope)
     try:
         value = response.json()
     except ValueError as error:
@@ -203,32 +236,48 @@ async def list_letters(
     limit: int,
     query: str,
     status: str | None,
+    read_scope: EdoReadScope | None = None,
 ) -> EdoIncomingPage:
     params: dict[str, str | int] = {"page": page, "limit": limit}
     if query:
         params["q"] = query
     if status:
         params["status"] = status
-    payload = await _request_json(settings, employee_id, "GET", "/incoming", params=params)
+    payload = await _request_json(
+        settings, employee_id, "GET", "/incoming", params=params, read_scope=read_scope
+    )
     try:
         result = EdoIncomingPage.model_validate(payload)
     except ValidationError as error:
         raise EdoBridgeError(502, "Формат списка ЭДО не соответствует контракту.") from error
+    # API v1 list rows omit assignments. EDO applies the signed scope before
+    # COUNT/pagination; _request_json has verified its scope acknowledgement.
+    # Only detail responses support the additional local assignment check.
     return result.model_copy(update={
         "data": [_decorate(letter, settings) for letter in result.data],
         "deadline_timezone_verified": _verified(settings),
+        "visibility": read_scope.visibility if read_scope else "assigned",
     })
 
 
-async def get_letter(settings: Settings, employee_id: UUID, letter_id: int) -> EdoIncomingDetail:
-    payload = await _request_json(settings, employee_id, "GET", f"/incoming/{letter_id}")
+async def get_letter(
+    settings: Settings, employee_id: UUID, letter_id: int, *,
+    read_scope: EdoReadScope | None = None,
+) -> EdoIncomingDetail:
+    payload = await _request_json(
+        settings, employee_id, "GET", f"/incoming/{letter_id}", read_scope=read_scope
+    )
     try:
         result = EdoIncomingDetail.model_validate(payload)
     except ValidationError as error:
         raise EdoBridgeError(502, "Формат письма ЭДО не соответствует контракту.") from error
+    _check_letter_scope(result.data, read_scope)
+    if result.data.id != letter_id:
+        raise EdoBridgeError(502, "ЭДО вернул другую карточку письма.")
     return result.model_copy(update={
         "data": _decorate(result.data, settings),
         "deadline_timezone_verified": _verified(settings),
+        "visibility": read_scope.visibility if read_scope else "assigned",
     })
 
 
@@ -281,15 +330,19 @@ async def stream_attachment(
     employee_id: UUID,
     letter_id: int,
     attachment_id: str,
+    *,
+    read_scope: EdoReadScope | None = None,
 ) -> AsyncIterator[bytes]:
     if not _ATTACHMENT_ID.fullmatch(attachment_id):
         raise EdoBridgeError(404, "Файл не найден.")
     base = _configured_base(settings)
+    if read_scope is not None and read_scope.mode == "employees":
+        await get_letter(settings, employee_id, letter_id, read_scope=read_scope)
     client = _client(settings)
     try:
         request = client.build_request(
             "GET", f"{base}/workspace/v1/incoming/{letter_id}/attachments/{attachment_id}",
-            headers=_headers(settings, employee_id),
+            headers=_headers(settings, employee_id, read_scope=read_scope),
         )
         response = await client.send(request, stream=True)
     except httpx.RequestError as error:
@@ -299,6 +352,13 @@ async def stream_attachment(
         await response.aclose()
         await client.aclose()
         _raise_upstream(response.status_code)
+
+    try:
+        _check_scope_response(response, read_scope)
+    except EdoBridgeError:
+        await response.aclose()
+        await client.aclose()
+        raise
 
     async def chunks() -> AsyncIterator[bytes]:
         try:

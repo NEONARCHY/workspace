@@ -7,6 +7,7 @@ import {
   loadEdoIncomingLetter, loadEdoIncomingLetters,
 } from "./workspace-api";
 import "./incoming-letters.css";
+import { EdoIncomingAccess, edoVisibilityLabels } from "./EdoIncomingAccess";
 
 type StatusFilter = "all" | EdoIncomingFilter;
 
@@ -32,13 +33,15 @@ function safeFileName(name: string): string {
   ).join("").slice(0, 180) || "document";
 }
 
-export function IncomingLettersView({ token, people, currentUserId, canEdit, focusLetterId }: {
+export function IncomingLettersView({ token, people, currentUserId, canEdit, focusLetterId, canManageAccess = false }: {
   readonly token: string;
   readonly people: readonly WorkspacePerson[];
   readonly currentUserId: string;
   readonly canEdit: boolean;
   readonly focusLetterId?: number;
+  readonly canManageAccess?: boolean;
 }) {
+  const [managingAccess, setManagingAccess] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -194,13 +197,23 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
   const totalPages = registry ? Math.max(1, Math.ceil(registry.meta.total / registry.meta.limit)) : 1;
   const overdueOnPage = registry?.data.filter((item) => item.overdue === true).length ?? 0;
 
+  if (managingAccess && canManageAccess) return <section className="workspace-view edo-incoming edo-incoming-access" aria-label="Входящие письма">
+    <header className="edo-incoming-header"><h1>Доступ к письмам</h1>
+      <button type="button" className="edo-incoming-secondary" onClick={() => setManagingAccess(false)}>Вернуться к письмам</button>
+    </header>
+    <EdoIncomingAccess token={token} people={people} />
+  </section>;
+
   return <section className="workspace-view edo-incoming" aria-label="Входящие письма">
     <header className="edo-incoming-header">
       <div><p className="edo-incoming-eyebrow">Документооборот · поручения</p><h1>Входящие письма</h1>
-        <p>Письма, назначенные вам в документообороте. Выполнение передаётся обратно в ЭДО.</p></div>
+        <p>{edoVisibilityLabels[registry?.visibility ?? "assigned"]}. Выполнение передаётся обратно в ЭДО.</p></div>
+      <div className="edo-access-actions">
+      {canManageAccess ? <button type="button" className="edo-incoming-secondary" onClick={() => setManagingAccess(true)}>Доступ к письмам</button> : null}
       <button type="button" className="edo-incoming-secondary" onClick={() => {
         void refreshList(); if (selectedId !== undefined) void refreshDetail(selectedId);
       }} disabled={loading || detailLoading}>Обновить</button>
+      </div>
     </header>
     <div className="edo-incoming-summary" aria-live="polite">
       <span><strong>{registry?.meta.total ?? "—"}</strong> найдено писем</span>

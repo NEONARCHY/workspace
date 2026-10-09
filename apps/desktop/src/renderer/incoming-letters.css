@@ -28,6 +28,19 @@
 }
 
 .edo-incoming-header { align-items: flex-start; }
+.edo-incoming.edo-incoming-access { grid-template-rows: auto minmax(0, 1fr); }
+.edo-access-panel { overflow: auto; padding: 20px; border-radius: 20px; background: var(--ws-surface, #fff); }
+.edo-access-intro { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; }
+.edo-access-intro h2 { margin-top: 0; }
+.edo-access-intro p, .edo-access-form p { color: var(--ws-muted); max-width: 760px; line-height: 1.5; }
+.edo-access-form { display: grid; gap: 16px; max-width: 760px; }
+.edo-access-form > label { display: grid; gap: 8px; }
+.edo-access-form fieldset { display: grid; gap: 6px; border: 1px solid var(--ws-border, #c8d9e0); border-radius: 12px; padding: 16px; }
+.edo-access-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.edo-access-panel [role="alert"] { color: var(--ws-danger, #a33a34); }
+@media (max-width: 700px) {
+  .edo-access-intro, .edo-incoming-access .edo-incoming-header { flex-direction: column; }
+}
 .edo-incoming-header h1 { margin: 2px 0 5px; font-size: 28px; line-height: 1.2; }
 .edo-incoming-header p { margin: 0; color: var(--ws-muted, #60758a); }
 .edo-incoming-header .edo-incoming-eyebrow,
@@ -43,9 +56,9 @@
 .edo-incoming-actions label { display: grid; gap: 7px; font-size: 12px; font-weight: 650; }
 .edo-incoming-controls label:first-child { flex: 1 1 280px; max-width: 500px; }
 .edo-incoming-controls label:nth-child(2) { min-width: 180px; }
-.edo-incoming input,
-.edo-incoming select,
-.edo-incoming textarea {
+.edo-incoming:not(.edo-incoming-access) input,
+.edo-incoming:not(.edo-incoming-access) select,
+.edo-incoming:not(.edo-incoming-access) textarea {
   min-height: 40px;
   padding: 8px 12px;
   border: 1px solid #c8d9e0;

@@ -112,4 +112,17 @@ describe("incoming EDO letters", () => {
     expect(screen.queryByRole("button", { name: "Добавить исполнителя" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Отметить выполненным" })).not.toBeInTheDocument();
   });
+
+  it("shows full-read scope without granting execution or access administration", async () => {
+    vi.mocked(loadEdoIncomingLetters).mockResolvedValue({ ...page, visibility: "all" });
+    vi.mocked(loadEdoIncomingLetter).mockResolvedValue({
+      data: { ...letter, assignments: [] }, deadline_timezone_verified: false, visibility: "all",
+    });
+    show();
+    await openLetter();
+    expect(screen.getByText(/Все входящие письма/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Доступ к письмам" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить исполнителя" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Отметить выполненным" })).not.toBeInTheDocument();
+  });
 });

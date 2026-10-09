@@ -72,7 +72,7 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   const recognitionLoader = useCallback(() => loadEmployeeRecognitionProfile(token, user.id), [token, user.id]);
   const reactionLoader = useCallback(() => loadPersonalReactions(token), [token]);
   const referentLoader = useCallback(() => loadAIReferentIncomingRegistry(token), [token]);
-  const edoLoader = useCallback(() => loadEdoIncomingLetters(token), [token]);
+  const edoLoader = useCallback(() => loadEdoIncomingLetters(token, { personal: true }), [token]);
   const projectLoader = useCallback(() => loadProjectHub(token), [token]);
   const efficiency = useResource(identity + ":" + period, true, efficiencyLoader, revision);
   const recognition = useResource(identity, true, recognitionLoader, revision);

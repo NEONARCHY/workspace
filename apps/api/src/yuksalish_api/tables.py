@@ -2,6 +2,16 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 metadata = sa.MetaData()
+
+edo_incoming_access = sa.Table(
+    "edo_incoming_access", metadata,
+    sa.Column("user_id", postgresql.UUID(as_uuid=True), primary_key=True),
+    sa.Column("mode", sa.String(16)),
+    sa.Column("department_ids", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()),
+    sa.Column("updated_by_user_id", postgresql.UUID(as_uuid=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
 uuid_type = postgresql.UUID(as_uuid=True)
 
 personal_preferences = sa.Table(

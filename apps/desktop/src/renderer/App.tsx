@@ -2257,6 +2257,7 @@ export function App() {
                 people={workspace.people}
                 currentUserId={workspace.currentUser.id}
                 canEdit={modulePermissions.incoming_letters?.edit ?? false}
+                canManageAccess={isAdmin}
               />
             ) : null}
             {displayedSection === "ai_hisobot" ? (
