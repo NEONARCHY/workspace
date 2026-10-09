@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Checkbox, Input, Spinner } from "@fluentui/react-components";
 import type { EdoAccessConfiguration, EdoAccessUpdate, EdoVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { EdoEmployeeSync } from "./EdoEmployeeSync";
 import { loadEdoAccess, saveEdoAccess } from "./workspace-api";
 
 export const edoVisibilityLabels: Record<EdoVisibility, string> = {
@@ -100,5 +101,6 @@ export function EdoIncomingAccess({ token, people }: {
           <Button disabled={saving} onClick={() => choose(selected)}>Отменить изменения</Button></div>
       </> : null}
     </div> : null}
+    <EdoEmployeeSync token={token} />
   </section>;
 }

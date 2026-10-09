@@ -12,6 +12,8 @@ from ..access_control import ensure_module_action
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
 from ..edo_access import read_access, resolve_read_scope, save_access
+from ..edo_employee_schemas import EmployeeSyncStatus
+from ..edo_employee_sync import employee_sync_status, retry_employee_sync
 from ..edo_schemas import (
     EdoAccessConfiguration,
     EdoAccessRule,
@@ -56,6 +58,26 @@ async def put_access(
     user_id: UUID, payload: EdoAccessUpdate, user: User, connection: Connection,
 ) -> EdoAccessRule:
     return await save_access(connection, user, user_id, payload)
+
+
+@router.get("/employee-sync", response_model=EmployeeSyncStatus)
+async def get_employee_sync(
+    request: Request,
+    user: User,
+    connection: Connection,
+    response: Response,
+) -> EmployeeSyncStatus:
+    response.headers["Cache-Control"] = "no-store, private"
+    return await employee_sync_status(connection, user, request.app.state.settings)
+
+
+@router.post("/employee-sync/{user_id}/retry", status_code=204)
+async def retry_employee(
+    user_id: UUID,
+    user: User,
+    connection: Connection,
+) -> None:
+    await retry_employee_sync(connection, user, user_id)
 
 
 @router.get("", response_model=EdoIncomingPage)

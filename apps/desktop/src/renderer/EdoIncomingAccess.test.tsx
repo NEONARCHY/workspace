@@ -6,6 +6,7 @@ import { workspaceTheme } from "./workspace-theme";
 import { loadEdoAccess, saveEdoAccess } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({ loadEdoAccess: vi.fn(), saveEdoAccess: vi.fn() }));
+vi.mock("./EdoEmployeeSync", () => ({ EdoEmployeeSync: () => null }));
 const config = {
   rules: [
     { userId: "admin", mode: "all" as const, departmentIds: [], revision: 0, editable: false },
