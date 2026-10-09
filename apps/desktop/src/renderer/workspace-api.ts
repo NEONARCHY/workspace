@@ -23,6 +23,7 @@ import type {
   EdoAccessConfiguration,
   EdoAccessRule,
   EdoAccessUpdate,
+  EdoEmployeeSyncStatus,
   EdoIncomingDetail,
   EdoIncomingFilter,
   EdoIncomingPage,
@@ -186,6 +187,15 @@ export function loadEdoAccess(token: string) {
   return apiRequest<EdoAccessConfiguration>(
     "/incoming-letters/access", {}, token,
   );
+}
+
+export function loadEdoEmployeeSync(token: string) {
+  return apiRequest<EdoEmployeeSyncStatus>("/incoming-letters/employee-sync", {}, token);
+}
+
+export function retryEdoEmployeeSync(token: string, userId: string) {
+  return apiRequest<void>(`/incoming-letters/employee-sync/${encodeURIComponent(userId)}/retry`,
+    { method: "POST" }, token);
 }
 
 export function saveEdoAccess(

@@ -1152,6 +1152,22 @@ export interface EdoAccessConfiguration {
   readonly departments: readonly { readonly id: string; readonly name: string }[];
 }
 
+export interface EdoEmployeeSyncStatus {
+  readonly enabled: boolean;
+  readonly configured: boolean;
+  readonly entries: readonly {
+    readonly userId: string;
+    readonly name: string;
+    readonly status: "pending" | "synced" | "retry" | "conflict";
+    readonly revision: number;
+    readonly deliveredRevision: number;
+    readonly edoUserId: number | null;
+    readonly attempts: number;
+    readonly lastErrorCode: string | null;
+    readonly lastSyncedAt: string | null;
+  }[];
+}
+
 export interface EdoAccessUpdate {
   readonly expectedRevision: number;
   readonly mode: EdoVisibility;

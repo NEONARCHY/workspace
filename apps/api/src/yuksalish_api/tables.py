@@ -14,6 +14,25 @@ edo_incoming_access = sa.Table(
 )
 uuid_type = postgresql.UUID(as_uuid=True)
 
+edo_employee_sync = sa.Table(
+    "edo_employee_sync",
+    metadata,
+    sa.Column("user_id", uuid_type, primary_key=True),
+    sa.Column("payload", postgresql.JSONB()),
+    sa.Column("payload_hash", sa.String(64)),
+    sa.Column("revision", sa.BigInteger()),
+    sa.Column("delivered_revision", sa.BigInteger()),
+    sa.Column("edo_user_id", sa.BigInteger()),
+    sa.Column("state", sa.String(16)),
+    sa.Column("attempts", sa.Integer()),
+    sa.Column("next_attempt_at", sa.DateTime(timezone=True)),
+    sa.Column("lease_token", uuid_type),
+    sa.Column("lease_until", sa.DateTime(timezone=True)),
+    sa.Column("last_error_code", sa.String(48)),
+    sa.Column("last_synced_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 personal_preferences = sa.Table(
     "workspace_personal_preferences", metadata,
     sa.Column("user_id", uuid_type, primary_key=True),

@@ -165,6 +165,10 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return "messenger", "admin"
     if normalized.startswith("/telegram-access"):
         return "telegram_access", "admin"
+    if normalized == "/incoming-letters/employee-sync" or normalized.startswith(
+        "/incoming-letters/employee-sync/"
+    ):
+        return "incoming_letters", "admin"
     if normalized in {
         "/assistant/messages", "/assistant/transcribe", "/assistant/rewrite",
         "/assistant/birthday-greeting",

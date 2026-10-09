@@ -6,6 +6,8 @@ import structlog
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import RequestResponseEndpoint
 
 from . import __version__
@@ -13,6 +15,7 @@ from .absence_service import materialize_sick_document_notifications
 from .ai_referent_agent_service import expire_jobs
 from .birthday_service import materialize_birthdays
 from .database import create_database_engine
+from .edo_employee_sync import run_employee_sync_cycle
 from .efficiency_service import materialize_efficiency_digest_notifications
 from .events import WorkspaceEventBus
 from .hisobot_service import materialize_hisobot_reminders
@@ -107,10 +110,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         scheduler_task = asyncio.create_task(
             notification_scheduler(), name="workspace-notification-scheduler"
         )
+
+        async def employee_sync_scheduler() -> None:
+            while True:
+                try:
+                    await run_employee_sync_cycle(engine, runtime_settings)
+                except (SQLAlchemyError, ValidationError) as error:
+                    logger.error("edo_employee_sync_failed", error_type=type(error).__name__)
+                await asyncio.sleep(20)
+
+        employee_sync_task = asyncio.create_task(
+            employee_sync_scheduler(), name="workspace-edo-employee-sync"
+        )
         logger.info("api_started", environment=runtime_settings.environment, version=__version__)
         try:
             yield
         finally:
+            employee_sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await employee_sync_task
             scheduler_task.cancel()
             with suppress(asyncio.CancelledError):
                 await scheduler_task
