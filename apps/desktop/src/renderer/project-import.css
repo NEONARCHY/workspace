@@ -1,0 +1,47 @@
+.project-import-dialog {
+  width: min(1060px, calc(100vw - 32px));
+  max-width: 1060px;
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--ws-text);
+  background: var(--ws-surface);
+}
+.project-import-dialog > header,
+.project-import-dialog > footer {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.project-import-dialog > header { justify-content: space-between; }
+.project-import-dialog h2 { margin: 4px 0; font-size: 24px; }
+.project-import-dialog p { font-size: 14px; line-height: 1.5; }
+.project-import-dialog footer { border-top: 1px solid var(--ws-line); }
+.project-import-dialog footer [role="alert"] { flex-basis: 100%; margin: 0; }
+.project-import-scroll { overflow: auto; min-height: 0; padding: 8px 24px 24px; }
+.project-import-scroll > * + * { margin-top: 16px; }
+.project-import-scroll label { display: grid; gap: 6px; font-size: 14px; }
+.project-import-scroll fieldset { border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.project-import-scroll legend { margin-bottom: 12px; font-weight: 600; }
+.project-import-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.project-import-grid .wide { grid-column: 1 / -1; }
+.project-import-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.project-import-block, .project-import-work {
+  padding: 16px; border: 1px solid var(--ws-line); border-radius: 12px; margin: 12px 0;
+}
+.project-import-block > * + *, .project-import-work > * + * { margin-top: 12px; }
+.project-import-scroll .project-import-check { display: flex; align-items: start; gap: 10px; }
+.project-import-check input { margin: 3px 0 0; width: 18px; height: 18px; flex-shrink: 0; }
+.project-import-file { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; overflow-wrap: anywhere; }
+.project-import-sources { font-size: 12px; overflow-wrap: anywhere; }
+.project-import-sources summary { cursor: pointer; }
+.project-import-sources span { margin-left: 8px; }
+@media (max-width: 720px) {
+  .project-import-grid { grid-template-columns: minmax(0, 1fr); }
+  .project-import-dialog > header, .project-import-dialog > footer { padding: 12px 16px; }
+  .project-import-scroll { padding: 8px 16px 16px; }
+}

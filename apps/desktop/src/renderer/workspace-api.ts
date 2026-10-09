@@ -1,4 +1,7 @@
 import type {
+  ProjectDocumentImport,
+  ProjectImportContent,
+  ProjectImportPublication,
   PersonalReactionSummary,
   AssistantChat,
   AssistantMessage,
@@ -1929,6 +1932,42 @@ export function changeWorkspaceProjectStage(
 
 export function loadProjectHub(token: string): Promise<ProjectHubOverview> {
   return apiRequest<ProjectHubOverview>("/project-hub", {}, token);
+}
+
+export function loadProjectImports(token: string, projectId?: string): Promise<readonly ProjectDocumentImport[]> {
+  return apiRequest("/project-imports" + (projectId ? `?projectId=${encodeURIComponent(projectId)}` : ""), {}, token);
+}
+export function createProjectImport(token: string): Promise<ProjectDocumentImport> {
+  return apiRequest("/project-imports", { method: "POST" }, token);
+}
+export function loadProjectImport(token: string, id: string): Promise<ProjectDocumentImport> {
+  return apiRequest(`/project-imports/${id}`, {}, token);
+}
+export function analyzeProjectImport(token: string, draft: ProjectDocumentImport): Promise<ProjectDocumentImport> {
+  return apiRequest(`/project-imports/${draft.id}/analyze`, {
+    method: "POST", body: JSON.stringify({ expectedRevision: draft.revision, allowExternalProcessing: true }),
+  }, token);
+}
+export function reviewProjectImport(token: string, draft: ProjectDocumentImport, content: ProjectImportContent): Promise<ProjectDocumentImport> {
+  return apiRequest(`/project-imports/${draft.id}/review`, {
+    method: "PUT", body: JSON.stringify({ expectedRevision: draft.revision, content }),
+  }, token);
+}
+export function publishProjectImport(token: string, id: string, publication: ProjectImportPublication): Promise<ProjectDocumentImport> {
+  return apiRequest(`/project-imports/${id}/publish`, { method: "POST", body: JSON.stringify(publication) }, token);
+}
+export function uploadProjectImportDocument(token: string, draft: ProjectDocumentImport, file: File): Promise<ProjectDocumentImport> {
+  checkRemoteUploadSize(file);
+  const query = new URLSearchParams({ fileName: file.name, expectedRevision: String(draft.revision) });
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/project-imports/${draft.id}/documents?${query}`, {
+    method: "PUT", headers: { Accept: "application/json", Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream" }, body: file,
+  }, async (result) => await result.json() as ProjectDocumentImport, 120_000);
+}
+export function downloadProjectImportDocument(token: string, id: string, documentId: string): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/project-imports/${id}/documents/${documentId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (result) => result.blob(), 120_000);
 }
 
 export function loadPaymentProjectTargets(token: string): Promise<PaymentProjectTargets> {

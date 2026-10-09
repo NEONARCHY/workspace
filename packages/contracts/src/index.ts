@@ -1,3 +1,5 @@
+export * from "./project-imports";
+
 export const moduleKeys = [
   "home",
   "tasks",
@@ -1728,6 +1730,7 @@ export interface ProjectHubItemAction {
 }
 
 export interface ProjectHubItem {
+  readonly schedulePending?: boolean;
   readonly id: string;
   readonly projectId: string;
   readonly workstreamId: string;
