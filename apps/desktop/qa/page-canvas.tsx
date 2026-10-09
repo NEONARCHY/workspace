@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
-import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular } from "@fluentui/react-icons";
-import type { ApprovalRequestSummary, CalendarEvent, WorkspaceNotification } from "@yuksalish/contracts";
+import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
+import type { ApprovalRequestSummary, CalendarEvent, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
 import { MessengerView } from "../src/renderer/MessengerView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
+import { ZoomView } from "../src/renderer/ZoomView";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { UndoActionsProvider } from "../src/renderer/UndoActions";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
@@ -72,6 +73,22 @@ import "../src/renderer/surface-hierarchy.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
+const zoomPeople = people.map((person, index) => ({ ...person, departmentId: index > 1 ? "qa-region" : "qa-central" }));
+const zoomDepartments: readonly WorkspaceDepartment[] = [
+  { id: "qa-central", name: "Тестовый ЦА", code: "qa-central", scope: "central", assignedUsersCount: 2 },
+  { id: "qa-region", name: "Тестовый регион", code: "qa-region", scope: "regional", assignedUsersCount: Math.max(0, zoomPeople.length - 2) },
+];
+// Zoom preview cannot create, change or cancel real conferences.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const url = new URL(input instanceof Request ? input.url : String(input), location.href);
+  if (!url.pathname.startsWith("/api/v1/zoom-meetings")) return nativeFetch(input, init);
+  const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+  if (method === "GET" && url.pathname === "/api/v1/zoom-meetings/availability") {
+    return Response.json({ configured: true, timezone: "Asia/Tashkent", slotMinutes: 15, hostCalendarSynced: true, intervals: [] });
+  }
+  return Response.json({ detail: "Тестовый стенд: сохранение конференций отключено" }, { status: 403 });
+};
 const calendarDay = new Date();
 calendarDay.setHours(10, 0, 0, 0);
 const calendarEvents: CalendarEvent[] = Array.from({ length: 3 }, (_, i) => ({
@@ -120,6 +137,7 @@ function Preview() {
     { id: "calendar", label: "Календарь", icon: <Calendar20Regular /> },
     { id: "payments", label: "Заявки на оплату", icon: <ReceiptMoney20Regular /> },
     { id: "messenger", label: "Мессенджер", icon: <Chat20Regular /> },
+    { id: "zoom", label: "Zoom-конференции", icon: <Video20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -141,6 +159,7 @@ function Preview() {
             : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={initialMessages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
+            : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
