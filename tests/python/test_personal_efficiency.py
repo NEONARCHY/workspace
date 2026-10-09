@@ -13,9 +13,11 @@ from yuksalish_api.workspace_schemas import PersonalEfficiencyResponse
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("can_view_tasks", [True, False])
+@pytest.mark.parametrize("avatar_updated_at", [None, datetime(2026, 9, 9, tzinfo=UTC)])
 async def test_personal_summary_preserves_credit_without_leaking_inaccessible_tasks(
     monkeypatch: pytest.MonkeyPatch,
     can_view_tasks: bool,
+    avatar_updated_at: datetime | None,
 ) -> None:
     from yuksalish_api import efficiency_service
 
@@ -56,6 +58,7 @@ async def test_personal_summary_preserves_credit_without_leaking_inaccessible_ta
     participant_result = MagicMock()
     participant_result.scalars.return_value.all.return_value = []
     connection = AsyncMock()
+    connection.scalar.return_value = avatar_updated_at
     connection.execute.side_effect = [
         methodology_result,
         event_result,
@@ -77,6 +80,13 @@ async def test_personal_summary_preserves_credit_without_leaking_inaccessible_ta
     )
     validated = PersonalEfficiencyResponse.model_validate(data)
     assert validated.employee.user_id == str(user.id)
+    assert validated.employee.avatar_version == (
+        avatar_updated_at.isoformat() if avatar_updated_at else None
+    )
+    connection.scalar.assert_awaited_once()
+    avatar_query = connection.scalar.call_args.args[0]
+    assert "users.avatar_updated_at" in str(avatar_query)
+    assert user.id in avatar_query.compile().params.values()
     assert validated.employee.percentage == 100
     assert validated.employee.on_time_count == 1
     assert validated.impact_tasks == []
@@ -97,6 +107,7 @@ async def test_invalid_period_rejected_before_queries() -> None:
     with pytest.raises(ValueError):
         await load_personal_efficiency(connection, user, "2026-13")
     connection.execute.assert_not_awaited()
+    connection.scalar.assert_not_awaited()
 
 
 @pytest.mark.anyio
