@@ -69,7 +69,6 @@ import "../src/renderer/navigation-sliding.css";
 import "../src/renderer/section-headers.css";
 import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
-import "../src/renderer/surface-hierarchy.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
