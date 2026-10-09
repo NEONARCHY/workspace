@@ -20,6 +20,9 @@ import type {
   AIReferentIncomingAccessRule,
   AIReferentIncomingAccessUpdate,
   AIReferentVisibility,
+  EdoAccessConfiguration,
+  EdoAccessRule,
+  EdoAccessUpdate,
   EdoIncomingDetail,
   EdoIncomingFilter,
   EdoIncomingPage,
@@ -179,13 +182,29 @@ export function loadMembersRegistry(token: string): Promise<MembersRegistry> {
   return apiRequest<MembersRegistry>("/members", {}, token);
 }
 
+export function loadEdoAccess(token: string) {
+  return apiRequest<EdoAccessConfiguration>(
+    "/incoming-letters/access", {}, token,
+  );
+}
+
+export function saveEdoAccess(
+  token: string, userId: string, payload: EdoAccessUpdate,
+) {
+  return apiRequest<EdoAccessRule>(
+    `/incoming-letters/access/${encodeURIComponent(userId)}`,
+    { method: "PUT", body: JSON.stringify(payload) }, token,
+  );
+}
+
 export function loadEdoIncomingLetters(
   token: string,
-  options: { readonly page?: number; readonly q?: string; readonly status?: EdoIncomingFilter } = {},
+  options: { readonly page?: number; readonly q?: string; readonly status?: EdoIncomingFilter; readonly personal?: boolean } = {},
 ): Promise<EdoIncomingPage> {
   const query = new URLSearchParams({ page: String(options.page ?? 1), limit: "20" });
   if (options.q?.trim()) query.set("q", options.q.trim());
   if (options.status) query.set("status", options.status);
+  if (options.personal) query.set("personal", "true");
   return apiRequest<EdoIncomingPage>(`/incoming-letters?${query}`, {}, token);
 }
 

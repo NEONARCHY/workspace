@@ -1134,15 +1134,38 @@ export interface EdoIncomingLetter {
   readonly overdue: boolean | null;
 }
 
+export type EdoVisibility = "assigned" | "departments" | "all";
+
+export interface EdoAccessRule {
+  readonly userId: string;
+  readonly mode: EdoVisibility;
+  readonly departmentIds: readonly string[];
+  readonly revision: number;
+  readonly editable: boolean;
+}
+
+export interface EdoAccessConfiguration {
+  readonly rules: readonly EdoAccessRule[];
+  readonly departments: readonly { readonly id: string; readonly name: string }[];
+}
+
+export interface EdoAccessUpdate {
+  readonly expectedRevision: number;
+  readonly mode: EdoVisibility;
+  readonly departmentIds: readonly string[];
+}
+
 export interface EdoIncomingPage {
   readonly data: readonly EdoIncomingLetter[];
   readonly meta: { readonly page: number; readonly limit: number; readonly total: number };
   readonly deadline_timezone_verified: boolean;
+  readonly visibility?: EdoVisibility;
 }
 
 export interface EdoIncomingDetail {
   readonly data: EdoIncomingLetter;
   readonly deadline_timezone_verified: boolean;
+  readonly visibility?: EdoVisibility;
 }
 
 export interface AIReferentIncomingLetter {

@@ -1,8 +1,9 @@
 """Workspace-facing incoming letters; EDO remains the source of truth."""
 
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Path, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -10,13 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 from ..access_control import ensure_module_action
 from ..auth import AuthenticatedUser, require_user
 from ..database import get_connection
+from ..edo_access import read_access, resolve_read_scope, save_access
 from ..edo_schemas import (
+    EdoAccessConfiguration,
+    EdoAccessRule,
+    EdoAccessUpdate,
     EdoAssignWrite,
     EdoCompleteWrite,
     EdoIncomingDetail,
     EdoIncomingPage,
     EdoListStatus,
 )
+from ..edo_scope import EdoReadScope
 from ..edo_service import (
     EdoBridgeError,
     add_assignment,
@@ -37,21 +43,40 @@ def _error(error: EdoBridgeError) -> HTTPException:
     return HTTPException(error.status_code, error.message)
 
 
+@router.get("/access", response_model=EdoAccessConfiguration)
+async def get_access(
+    user: User, connection: Connection, response: Response,
+) -> EdoAccessConfiguration:
+    response.headers["Cache-Control"] = "no-store, private"
+    return await read_access(connection, user)
+
+
+@router.put("/access/{user_id}", response_model=EdoAccessRule)
+async def put_access(
+    user_id: UUID, payload: EdoAccessUpdate, user: User, connection: Connection,
+) -> EdoAccessRule:
+    return await save_access(connection, user, user_id, payload)
+
+
 @router.get("", response_model=EdoIncomingPage)
 async def incoming_list(
     request: Request,
+    response: Response,
     user: User,
     connection: Connection,
     page: Annotated[int, Query(ge=1, le=10000)] = 1,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     q: Annotated[str, Query(max_length=100)] = "",
     status: EdoListStatus | None = None,
+    personal: bool = False,
 ) -> EdoIncomingPage:
     await ensure_module_action(connection, user, "incoming_letters", "view")
+    response.headers["Cache-Control"] = "no-store, private"
+    scope = EdoReadScope() if personal else await resolve_read_scope(connection, user)
     try:
         return await list_letters(
             request.app.state.settings, user.id, page=page, limit=limit,
-            query=q.strip(), status=status,
+            query=q.strip(), status=status, read_scope=scope,
         )
     except EdoBridgeError as error:
         raise _error(error) from error
@@ -59,11 +84,13 @@ async def incoming_list(
 
 @router.get("/{letter_id}", response_model=EdoIncomingDetail)
 async def incoming_detail(
-    letter_id: LetterId, request: Request, user: User, connection: Connection
+    letter_id: LetterId, request: Request, response: Response, user: User, connection: Connection
 ) -> EdoIncomingDetail:
     await ensure_module_action(connection, user, "incoming_letters", "view")
+    response.headers["Cache-Control"] = "no-store, private"
+    scope = await resolve_read_scope(connection, user)
     try:
-        return await get_letter(request.app.state.settings, user.id, letter_id)
+        return await get_letter(request.app.state.settings, user.id, letter_id, read_scope=scope)
     except EdoBridgeError as error:
         raise _error(error) from error
 
@@ -77,9 +104,10 @@ async def incoming_attachment(
     connection: Connection,
 ) -> StreamingResponse:
     await ensure_module_action(connection, user, "incoming_letters", "view")
+    scope = await resolve_read_scope(connection, user)
     try:
         chunks = await stream_attachment(
-            request.app.state.settings, user.id, letter_id, attachment_id
+            request.app.state.settings, user.id, letter_id, attachment_id, read_scope=scope
         )
     except EdoBridgeError as error:
         raise _error(error) from error

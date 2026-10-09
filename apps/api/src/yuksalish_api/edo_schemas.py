@@ -3,7 +3,45 @@
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from .workspace_schemas import ApiModel
+
+EdoVisibility = Literal["assigned", "departments", "all"]
+
+
+class EdoAccessUpdate(ApiModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_revision: int = Field(ge=0)
+    mode: EdoVisibility
+    department_ids: list[UUID] = Field(default_factory=list, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_departments(self) -> "EdoAccessUpdate":
+        if len(set(self.department_ids)) != len(self.department_ids):
+            raise ValueError("Duplicate departments")
+        if (self.mode == "departments") != bool(self.department_ids):
+            raise ValueError("Only department visibility requires selected departments")
+        return self
+
+
+class EdoAccessRule(ApiModel):
+    user_id: UUID
+    mode: EdoVisibility
+    department_ids: list[UUID] = Field(default_factory=list)
+    revision: int = 0
+    editable: bool
+
+
+class EdoDepartmentOption(ApiModel):
+    id: UUID
+    name: str
+
+
+class EdoAccessConfiguration(ApiModel):
+    rules: list[EdoAccessRule]
+    departments: list[EdoDepartmentOption]
 
 
 class EdoAssignment(BaseModel):
@@ -53,11 +91,13 @@ class EdoIncomingPage(BaseModel):
     data: list[EdoIncomingLetter]
     meta: EdoPageMeta
     deadline_timezone_verified: bool = False
+    visibility: EdoVisibility = "assigned"
 
 
 class EdoIncomingDetail(BaseModel):
     data: EdoIncomingLetter
     deadline_timezone_verified: bool = False
+    visibility: EdoVisibility = "assigned"
 
 
 class EdoAssignWrite(BaseModel):
