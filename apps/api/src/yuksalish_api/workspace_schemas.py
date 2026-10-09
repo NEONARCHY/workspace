@@ -568,6 +568,7 @@ class EmployeeEfficiencyResponse(ApiModel):
     user_id: str
     name: str
     job_title: str
+    avatar_version: str | None = None
     period: str
     timezone: str
     percentage: float | None

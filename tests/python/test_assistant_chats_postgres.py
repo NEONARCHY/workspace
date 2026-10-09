@@ -30,6 +30,7 @@ async def exercise(url: str) -> None:
     )
     engine = create_async_engine(url)
     created_ids: list[UUID] = []
+    created_message_ids: list[UUID] = []
     legacy_message = uuid4()
     try:
         async with (
@@ -74,9 +75,11 @@ async def exercise(url: str) -> None:
                 created_ids.append(UUID(response.json()["id"]))
             async with engine.begin() as connection:
                 for index, chat_id in enumerate(created_ids):
+                    message_id = uuid4()
+                    created_message_ids.append(message_id)
                     await connection.execute(
                         assistant_messages.insert().values(
-                            id=uuid4(),
+                            id=message_id,
                             user_id=owner_id,
                             chat_id=chat_id,
                             role="user",
@@ -145,11 +148,45 @@ async def exercise(url: str) -> None:
                 )
                 assert row["content"] == "" and row["references"] is None
                 assert row["cleared_at"] is not None and row["created_at"] is not None
+                request_time = row["created_at"]
+            pinned = await client.patch(
+                f"/api/v1/assistant/chats/{created_ids[1]}/pin",
+                json={"pinned": True}, headers=owner,
+            )
+            assert pinned.status_code == 200, pinned.text
+            assert pinned.json()[0]["id"] == str(created_ids[1])
+            reloaded = (await client.get("/api/v1/assistant/chats", headers=owner)).json()
+            assert reloaded[0]["isPinned"] is True
+            assert (await client.patch(
+                f"/api/v1/assistant/chats/{created_ids[1]}/pin",
+                json={"pinned": False}, headers=other,
+            )).status_code == 404
+            assert (await client.delete(
+                f"/api/v1/assistant/chats/{created_ids[0]}", headers=other,
+            )).status_code == 404
+            removed = await client.delete(
+                f"/api/v1/assistant/chats/{created_ids[0]}", headers=owner,
+            )
+            assert removed.status_code == 200, removed.text
+            for available in [removed.json(), (
+                await client.get("/api/v1/assistant/chats", headers=owner)
+            ).json()]:
+                assert str(created_ids[0]) not in [chat["id"] for chat in available]
+                assert defaults[0]["id"] in [chat["id"] for chat in available]
+            assert (await client.get(
+                f"/api/v1/assistant/messages?chat_id={created_ids[0]}", headers=owner,
+            )).status_code == 404
+            async with engine.begin() as connection:
+                retained = (await connection.execute(select(assistant_messages).where(
+                    assistant_messages.c.id == created_message_ids[0],
+                ))).mappings().one()
+                assert retained["chat_id"] is None and retained["content"] == ""
+                assert retained["references"] is None and retained["created_at"] == request_time
     finally:
         async with engine.begin() as connection:
             await connection.execute(
                 delete(assistant_messages).where(
-                    assistant_messages.c.id == legacy_message,
+                    assistant_messages.c.id.in_([legacy_message, *created_message_ids]),
                 )
             )
             if created_ids:

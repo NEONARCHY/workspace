@@ -42,6 +42,26 @@ describe("web API addresses and session restore", () => {
     expect(JSON.parse(String(options.body))).toEqual({ model: "flash-lite", message: "Hello", continue_draft: false, chat_id: "chat" });
   });
 
+  it("pins and permanently deletes chats using the authenticated server list", async () => {
+    window.yuksalish = undefined;
+    const remaining = [{ id: "remaining", title: "Рабочий чат", isPinned: true }];
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(remaining), {
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await expect(api.pinAssistantChat("chat-token", "chat/id", true)).resolves.toEqual(remaining);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/assistant/chats/chat%2Fid/pin"),
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ pinned: true }) }),
+    );
+    expect(new Headers(fetchMock.mock.calls.at(-1)?.[1].headers).get("Authorization")).toBe("Bearer chat-token");
+    await expect(api.deleteAssistantChat("chat-token", "chat/id")).resolves.toEqual(remaining);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining("/assistant/chats/chat%2Fid"), expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("derives HTTPS and WebSocket endpoints from the browser origin", async () => {
     window.yuksalish = undefined;
     Object.defineProperty(document, "cookie", {

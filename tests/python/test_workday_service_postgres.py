@@ -40,6 +40,9 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                         id=user_id, username=f"workday-{user_id.hex[:12]}",
                         full_name=f"Test {user_id.hex[:8]}", role=role, status="active",
                         direct_manager_user_id=manager,
+                        avatar_updated_at=(
+                            datetime(2026, 10, 9, tzinfo=UTC) if user_id == employee_id else None
+                        ),
                         created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
                     ))
                 employee = AuthenticatedUser(
@@ -76,6 +79,12 @@ async def test_workday_checkin_schedule_scope_and_automatic_close() -> None:
                 assert team.working_count == 1
                 employee_row = next(row for row in team.members if row.user_id == employee_id)
                 assert employee_row.can_edit_schedule
+                assert employee_row.avatar_version == "2026-10-09T00:00:00+00:00"
+                assert employee_row.model_dump(by_alias=True)["avatarVersion"] == (
+                    "2026-10-09T00:00:00+00:00"
+                )
+                manager_row = next(row for row in team.members if row.user_id == manager_id)
+                assert manager_row.avatar_version is None
                 finished = await finish_workday(
                     connection, employee, now=datetime(2026, 9, 26, 7, tzinfo=UTC)
                 )

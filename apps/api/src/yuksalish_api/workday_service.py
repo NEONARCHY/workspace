@@ -244,7 +244,7 @@ async def load_team(
     if current_user.role not in {"manager", "admin", "superadmin"}:
         raise WorkdayError(403, "Обзор присутствия доступен только руководителю")
     checked_at = now or datetime.now(UTC)
-    statement = select(users.c.id, users.c.full_name, users.c.job_title,
+    statement = select(users.c.id, users.c.full_name, users.c.job_title, users.c.avatar_updated_at,
         users.c.direct_manager_user_id).where(users.c.status == "active")
     if current_user.role == "manager":
         statement = statement.where(
@@ -258,6 +258,9 @@ async def load_team(
             user_id=row["id"],
             name=row["full_name"],
             job_title=row["job_title"],
+            avatar_version=(
+                row["avatar_updated_at"].isoformat() if row.get("avatar_updated_at") else None
+            ),
             status=_status(
                 local_day(checked_at), _session(sessions.get(row["id"])), absences.get(row["id"])
             ),

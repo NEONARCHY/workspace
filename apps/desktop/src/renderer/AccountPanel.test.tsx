@@ -48,6 +48,7 @@ afterEach(() => {
   api.createPasswordReset.mockReset();
   api.setupTotp.mockReset();
   api.confirmTotp.mockReset();
+  vi.restoreAllMocks();
 });
 
 it("opens settings as a full profile-sized dialog and closes without a transition", () => {
@@ -83,6 +84,9 @@ it("shows only the selected section, without scrolling anchors or duplicate titl
 
 it("uploads a profile avatar and reports the new server version", async () => {
   api.uploadProfileAvatar.mockResolvedValue({ avatarVersion: "2026-09-19T12:00:00Z" });
+  api.loadProfileAvatar.mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:account-updated-avatar");
+  const dispatch = vi.spyOn(window, "dispatchEvent");
   const onAvatarChanged = vi.fn();
   render(
     <FluentProvider theme={webLightTheme}>
@@ -97,6 +101,11 @@ it("uploads a profile avatar and reports the new server version", async () => {
   fireEvent.change(input, { target: { files: [file] } });
   await waitFor(() => expect(api.uploadProfileAvatar).toHaveBeenCalledWith("test-token", file));
   expect(onAvatarChanged).toHaveBeenCalledWith("2026-09-19T12:00:00Z");
+  expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({
+    type: "yuksalish:profile-avatar-changed",
+    detail: { userId: "admin-1", avatarVersion: "2026-09-19T12:00:00Z" },
+  }));
+  await waitFor(() => expect(document.querySelector(".account-profile .fui-Avatar__image")).toHaveAttribute("src", "blob:account-updated-avatar"));
 });
 
 it("offers appearance settings to ordinary employees and persists their sidebar choice", () => {

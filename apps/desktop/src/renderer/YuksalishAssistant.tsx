@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
-import { Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
-import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, Paperclip, PenLine, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X } from "lucide-react";
+import { Menu, MenuItem, MenuList, MenuPopover, MenuTrigger, Popover, PopoverSurface, PopoverTrigger } from "@fluentui/react-components";
+import { ArrowUp, ArrowUpRight, CalendarDays, ChevronDown, FileText, FolderKanban, ListChecks, ListTodo, Maximize2, MessageCircle, Mic, Minimize2, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Paperclip, PenLine, Pin, PinOff, Plane, Plus, Reply, Square, Trash2, Upload, UserRound, X } from "lucide-react";
 
 import type { AssistantActionDraft, AssistantChat, AssistantMessage, AssistantModel, AssistantReference } from "@yuksalish/contracts";
 import { GradientOrb } from "@/components/ui/gradient-orb";
 import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocking-dialog";
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
-import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
+import { createAssistantChat, deleteAssistantChat, pinAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { useAssistantOrbJourney } from "./assistant-orb-journey";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
@@ -140,7 +140,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const [chatId, setChatId] = useState("");
   const [chatPickerOpen, setChatPickerOpen] = useState(false);
   const [chatBusy, setChatBusy] = useState(false);
-  const [confirmClear, setConfirmClear] = useState(false);
+  const [chatToDelete, setChatToDelete] = useState<AssistantChat>();
+  const confirmClear = Boolean(chatToDelete);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [clearError, setClearError] = useState("");
   const chatOperationRef = useRef(false);
   const chatDraftsRef = useRef(new Map<string, string>());
@@ -348,24 +350,60 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     }
   };
 
-  const clearCurrentChat = async () => {
-    if (chatOperationRef.current || !chatId) return;
+  const deleteSelectedChat = async () => {
+    if (chatOperationRef.current || !chatToDelete) return;
     chatOperationRef.current = true; setChatBusy(true); setClearError("");
     try {
-      await clearAssistantChat(token, chatId);
+      const remaining = await deleteAssistantChat(token, chatToDelete.id);
       if (!mountedRef.current) return;
-      setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
-      setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
-      setSelectedActionKind(undefined);
-      chatDraftsRef.current.delete(chatId);
-      setChats((current) => current.map((chat) => chat.id === chatId
-        ? { ...chat, title: chat.isDefault ? "Первый чат" : "Новый чат" } : chat));
-      setConfirmClear(false); setError("");
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setChats(remaining); chatDraftsRef.current.delete(chatToDelete.id);
+      setChatToDelete(undefined); setError("");
+      if (chatToDelete.id === chatId) {
+        setChatId(""); setMessages([]); setDraft(""); setSelectedFile(null); setReplyingTo(null); setReplyMenu(null);
+        setEditingDraftId(undefined); setDismissedDraftId(undefined); setAnimatedReplyId(null);
+        setSelectedActionKind(undefined);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        const next = remaining[0];
+        if (next) {
+          try {
+            const history = await loadAssistantMessages(token, next.id);
+            if (mountedRef.current) {
+              setChatId(next.id); setMessages(history); setDraft(chatDraftsRef.current.get(next.id) ?? "");
+            }
+          } catch {
+            if (mountedRef.current) setError("Чат удалён. Не удалось открыть следующий — выберите его в списке.");
+          }
+        }
+      }
     } catch (failure) {
-      if (mountedRef.current) setClearError(failure instanceof Error ? failure.message : "Не удалось очистить чат.");
+      if (mountedRef.current) setClearError(failure instanceof Error ? failure.message : "Не удалось удалить чат. Обновите список перед повтором.");
     } finally { chatOperationRef.current = false; setChatBusy(false); }
   };
+
+  const toggleChatPin = async (chat: AssistantChat) => {
+    if (chatControlsDisabled || chatOperationRef.current) return;
+    chatOperationRef.current = true; setChatBusy(true); setError("");
+    try {
+      const updated = await pinAssistantChat(token, chat.id, !chat.isPinned);
+      if (mountedRef.current) setChats(updated);
+    } catch (failure) {
+      if (mountedRef.current) setError(failure instanceof Error ? failure.message : "Не удалось изменить закрепление.");
+    } finally { chatOperationRef.current = false; setChatBusy(false); }
+  };
+
+  const requestChatDeletion = (chat: AssistantChat) => {
+    if (chatControlsDisabled || chatOperationRef.current) return;
+    setClearError(""); setChatToDelete(chat); setChatPickerOpen(false);
+  };
+
+  const chatMenu = (chat: AssistantChat) => <MenuPopover className="assistant-chat-menu">
+    <MenuList aria-label={`Действия с чатом: ${chat.title}`}>
+      <MenuItem disabled={chatControlsDisabled} icon={chat.isPinned ? <PinOff size={16} /> : <Pin size={16} />}
+        onClick={() => void toggleChatPin(chat)}>{chat.isPinned ? "Открепить чат" : "Закрепить чат"}</MenuItem>
+      <MenuItem className="assistant-chat-delete" disabled={chatControlsDisabled} icon={<Trash2 size={16} />}
+        onClick={() => requestChatDeletion(chat)}>Удалить чат</MenuItem>
+    </MenuList>
+  </MenuPopover>;
 
   useEffect(() => {
     if (!replyMenu) return;
@@ -592,7 +630,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
       ? "solving" : "composing";
   const compact = viewport.width <= 600;
-  const showChatSidebar = expanded && viewport.width > CHAT_SIDEBAR_MIN_WIDTH;
+  const canShowChatSidebar = expanded && viewport.width > CHAT_SIDEBAR_MIN_WIDTH;
+  const showChatSidebar = canShowChatSidebar && !sidebarCollapsed;
+  const orderedChats = [...chats].sort((left, right) => Number(Boolean(right.isPinned)) - Number(Boolean(left.isPinned)));
   const currentChat = chats.find((chat) => chat.id === chatId);
   const edge = compact ? 8 : expanded ? 12 : 18;
   const panelWidth = expanded || compact ? viewport.width - edge * 2 : Math.min(460, viewport.width - 36);
@@ -644,6 +684,13 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <motion.span layout="position" className="assistant-header-title"
             transition={{ duration: reducedMotion ? 0 : .42, ease: [0.2, 0, 0, 1] }}>
             <strong>Ассистент Yuksalish</strong><small>Ваши дела и любые вопросы</small></motion.span>
+          {canShowChatSidebar && <button type="button" className="assistant-sidebar-toggle"
+            aria-label={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
+            title={sidebarCollapsed ? "Показать список чатов" : "Свернуть список чатов"}
+            aria-expanded={showChatSidebar} aria-controls={showChatSidebar ? "assistant-chat-sidebar" : undefined}
+            onClick={() => { setChatPickerOpen(false); setSidebarCollapsed((current) => !current); }}>
+            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>}
           <button type="button" aria-label={expanded ? "Свернуть окно" : "Развернуть окно"}
             title={expanded ? "Свернуть окно" : "Развернуть окно"}
             onClick={() => { setChatPickerOpen(false); setPresetsOpen(false); sizeFromRef.current = panelRef.current?.getBoundingClientRect() ?? null; setExpanded((current) => !current); }}>
@@ -652,19 +699,20 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <button type="button" aria-label="Закрыть ассистента" title="Закрыть"
             onClick={close}><X size={19} /></button>
         </header>
-        {showChatSidebar && <aside className="assistant-chat-sidebar" aria-label="Чаты ассистента">
+        {showChatSidebar && <aside id="assistant-chat-sidebar" className="assistant-chat-sidebar" aria-label="Чаты ассистента">
           <div className="assistant-sidebar-heading"><span>Ваши чаты</span><strong>{chats.length}</strong></div>
           <button type="button" className="assistant-sidebar-new" disabled={chatControlsDisabled}
             onClick={() => void changeChat()}><Plus size={17} aria-hidden="true" /> Новый чат</button>
           <nav className="assistant-sidebar-list" aria-label="Список чатов ассистента">
-            {chats.map((chat) => <button type="button" key={chat.id} className="assistant-sidebar-chat"
+            {orderedChats.map((chat) => <Menu key={chat.id} openOnContext>
+              <MenuTrigger disableButtonEnhancement><button type="button" className="assistant-sidebar-chat"
               aria-current={chat.id === chatId ? "true" : undefined} disabled={chatControlsDisabled}
               onClick={() => void changeChat(chat.id)}>
               {chat.id === chatId && <motion.span className="assistant-sidebar-active" layoutId="assistant-sidebar-active"
                 transition={{ duration: reducedMotion ? 0 : .26, ease: [0.2, 0, 0, 1] }} aria-hidden="true" />}
-              <MessageCircle size={18} aria-hidden="true" />
-              <span><strong title={chat.title}>{chat.title}</strong><small>{chat.isDefault ? "Основной чат" : "Диалог"}</small></span>
-            </button>)}
+              {chat.isPinned ? <Pin size={18} aria-hidden="true" /> : <MessageCircle size={18} aria-hidden="true" />}
+              <span><strong title={chat.title}>{chat.title}</strong><small>{chat.isPinned ? "Закреплён" : chat.isDefault ? "Основной чат" : "Диалог"}</small></span>
+            </button></MenuTrigger>{chatMenu(chat)}</Menu>)}
           </nav>
         </aside>}
         <nav className="assistant-chat-controls" aria-label="Чаты ассистента">
@@ -689,7 +737,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
               initial={reducedMotion ? false : { opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
               transition={{ duration: reducedMotion ? 0 : .17, ease: [0.2, 0, 0, 1] }}>
-              {chats.map((chat) => <button type="button" role="option" tabIndex={-1} aria-selected={chat.id === chatId}
+              {orderedChats.map((chat) => <button type="button" role="option" tabIndex={-1} aria-selected={chat.id === chatId}
                 key={chat.id} onClick={() => void changeChat(chat.id)}
                 onKeyDown={(event) => {
                   if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); setChatPickerOpen(false); chatPickerRef.current?.querySelector<HTMLElement>("[role='combobox']")?.focus(); }
@@ -703,9 +751,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
           <button type="button" className="assistant-chat-new" disabled={chatControlsDisabled} onClick={() => void changeChat()}>
             <Plus size={16} aria-hidden="true" /> Новый чат
           </button>
-          <button type="button" aria-label="Очистить текущий чат" title="Очистить текущий чат"
-            disabled={chatControlsDisabled || !messages.length}
-            onClick={() => { setClearError(""); setConfirmClear(true); }}><Trash2 size={16} /></button>
+          {currentChat && <Menu><MenuTrigger disableButtonEnhancement>
+            <button type="button" aria-label="Действия с текущим чатом" title="Действия с чатом" disabled={chatControlsDisabled}>
+              <MoreHorizontal size={18} />
+            </button></MenuTrigger>{chatMenu(currentChat)}</Menu>}
         </nav>
         {chatBusy && <span className="assistant-chat-status" role="status">Обновляю чат…</span>}
         <div className={`assistant-stream ${messages.length === 0 && loaded ? "is-empty" : ""}`}
@@ -886,9 +935,9 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         </div>}
       </motion.section>}
     </AnimatePresence>
-    <ConfirmActionDialog open={confirmClear} title="Очистить текущий чат?"
-      message={clearError || "Переписка этого чата будет удалена без восстановления. Остальные чаты сохранятся."}
-      confirmLabel="Очистить чат" busyLabel="Очищаем…" busy={chatBusy}
-      onCancel={() => setConfirmClear(false)} onConfirm={clearCurrentChat} />
+    <ConfirmActionDialog open={confirmClear} title="Удалить чат?"
+      message={clearError || `«${chatToDelete?.title ?? "Чат"}» и вся его переписка будут удалены без восстановления. Остальные чаты сохранятся.`}
+      confirmLabel="Удалить чат" busyLabel="Удаляем…" busy={chatBusy}
+      onCancel={() => setChatToDelete(undefined)} onConfirm={deleteSelectedChat} />
   </div>;
 }

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,8 +9,9 @@ import type { EfficiencyOverview } from "@yuksalish/contracts";
 
 import { EfficiencyView } from "./EfficiencyView";
 import { workspaceTheme } from "./workspace-theme";
+import * as api from "./workspace-api";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 const overview: EfficiencyOverview = {
   period: "2026-09",
@@ -48,6 +49,16 @@ function renderView(onPeriodChange = vi.fn()) {
 }
 
 describe("EfficiencyView", () => {
+  it("shows the employee photo in both the summary and the aggregate table", async () => {
+    const load = vi.spyOn(api, "loadProfileAvatar").mockResolvedValue(new Blob(["photo"], { type: "image/png" }));
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:efficiency-avatar");
+    const employee = { ...overview.employees[0]!, userId: "efficiency-photo", avatarVersion: "photo-v1" };
+    const view = render(<FluentProvider theme={workspaceTheme}><EfficiencyView token="eff-token" overview={{ ...overview, currentUserId: employee.userId, employees: [employee] }} loading={false} onPeriodChange={vi.fn()} /></FluentProvider>);
+    await waitFor(() => expect(view.container.querySelectorAll(".fui-Avatar__image")).toHaveLength(2));
+    view.container.querySelectorAll(".fui-Avatar__image").forEach(image => expect(image).toHaveAttribute("src", "blob:efficiency-avatar"));
+    expect(load).toHaveBeenCalledWith("eff-token", employee.userId, "photo-v1");
+    expect(screen.getByLabelText(/Выполнение задач в срок: 80%/)).toHaveTextContent("8 из 10 задач");
+  });
   it("shows a transparent formula, sample size and no-data state", () => {
     renderView();
 

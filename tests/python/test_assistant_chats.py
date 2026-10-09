@@ -13,7 +13,14 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
 from sqlalchemy.dialects import postgresql
 
-from yuksalish_api.assistant_chats import chat_message_scope, clear_chat, create_chat, list_chats
+from yuksalish_api.assistant_chats import (
+    chat_message_scope,
+    clear_chat,
+    create_chat,
+    delete_chat,
+    list_chats,
+    pin_chat,
+)
 from yuksalish_api.assistant_service import (
     ask_assistant,
     message_history,
@@ -114,6 +121,7 @@ def test_list_preserves_legacy_chat_and_handles_concurrent_initialization() -> N
                                 "id": chat_id,
                                 "title": "Первый чат",
                                 "is_default": True,
+                                "is_pinned": False,
                                 "created_at": now,
                                 "updated_at": now,
                             }
@@ -126,6 +134,7 @@ def test_list_preserves_legacy_chat_and_handles_concurrent_initialization() -> N
     assert asyncio.run(list_chats(connection, user_id))[0]["id"] == str(chat_id)
     statement = connection.execute.await_args_list[0].args[0].compile(dialect=postgresql.dialect())
     assert "ON CONFLICT (user_id) WHERE is_default DO NOTHING" in str(statement)
+    assert "NOT (EXISTS" in str(statement)  # Do not recreate a deleted default beside other chats.
     listing = connection.execute.await_args_list[1].args[0].compile()
     assert user_id in listing.params.values()
 
@@ -205,6 +214,12 @@ def test_http_endpoints_deny_another_users_chat_before_read_write_or_model_call(
             assert response.status_code == 404
             response = await client.delete(f"/assistant/chats/{foreign_chat}/messages")
             assert response.status_code == 404
+            response = await client.delete(f"/assistant/chats/{foreign_chat}")
+            assert response.status_code == 404
+            response = await client.patch(
+                f"/assistant/chats/{foreign_chat}/pin", json={"pinned": True}
+            )
+            assert response.status_code == 404
             response = await client.post(
                 "/assistant/messages",
                 json={
@@ -215,6 +230,42 @@ def test_http_endpoints_deny_another_users_chat_before_read_write_or_model_call(
             assert response.status_code == 404
 
     asyncio.run(exercise())
-    assert connection.execute.await_count == 3
+    assert connection.execute.await_count == 5
     for call in connection.execute.await_args_list:
         assert str(call.args[0]).startswith("SELECT")
+
+
+@pytest.mark.parametrize("default", [False, True])
+def test_delete_scrubs_and_detaches_turns_before_removing_owned_chat(default: bool) -> None:
+    user_id, chat_id = uuid4(), uuid4()
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[
+        Mock(one_or_none=lambda: SimpleNamespace(is_default=default)), Mock(), Mock(), Mock(),
+        Mock(mappings=lambda: Mock(all=lambda: [])),
+    ]))
+    assert asyncio.run(delete_chat(connection, user_id, chat_id)) == []
+    scrub = connection.execute.await_args_list[1].args[0].compile(dialect=postgresql.dialect())
+    assert "UPDATE assistant_messages" in str(scrub)
+    assert user_id in scrub.params.values()
+    assert scrub.params["content"] == "" and scrub.params["chat_id"] is None
+    assert scrub.params["references"] is None and scrub.params["action_draft"] is None
+    assert "created_at" not in scrub.params
+    scope_sql = "assistant_messages.chat_id IS NULL" if default else "assistant_messages.chat_id ="
+    assert scope_sql in str(scrub)
+    removal = connection.execute.await_args_list[2].args[0].compile()
+    assert str(removal).startswith("DELETE FROM assistant_chats")
+    assert user_id in removal.params.values() and chat_id in removal.params.values()
+
+
+def test_pin_is_owner_checked_and_does_not_touch_message_content_or_recency() -> None:
+    user_id, chat_id = uuid4(), uuid4()
+    connection = SimpleNamespace(execute=AsyncMock(side_effect=[
+        Mock(one_or_none=lambda: SimpleNamespace(is_default=False)), Mock(), Mock(),
+        Mock(mappings=lambda: Mock(all=lambda: [])),
+    ]))
+    asyncio.run(pin_chat(connection, user_id, chat_id, True))
+    statement = connection.execute.await_args_list[1].args[0].compile()
+    assert statement.params["is_pinned"] is True
+    assert user_id in statement.params.values() and chat_id in statement.params.values()
+    assert "updated_at" not in statement.params
+    listing = str(connection.execute.await_args_list[3].args[0])
+    assert "ORDER BY assistant_chats.is_pinned DESC" in listing

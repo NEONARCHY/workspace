@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from yuksalish_api.auth import load_authenticated_user
@@ -30,6 +30,7 @@ from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import (
     employee_efficiency_snapshots,
     task_efficiency_events,
+    users,
     workspace_notifications,
 )
 from yuksalish_api.workspace_schemas import (
@@ -58,6 +59,12 @@ async def _exercise_efficiency(database_url: str) -> None:
                 manager = await load_authenticated_user(connection, manager_row["id"])
                 co_assignee = await load_authenticated_user(connection, co_assignee_row["id"])
                 assert employee is not None and manager is not None and co_assignee is not None
+                avatar_stamp = datetime(2026, 10, 9, tzinfo=UTC)
+                await connection.execute(
+                    update(users).where(users.c.id == employee.id).values(
+                        avatar_updated_at=avatar_stamp
+                    )
+                )
                 due_at = datetime.now(UTC) + timedelta(hours=2)
                 task = await create_task(
                     connection,
@@ -152,6 +159,9 @@ async def _exercise_efficiency(database_url: str) -> None:
                 assert task.id not in payload
                 assert "comments" not in payload and "attachments" not in payload
                 assert {row["name"] for row in overview["employees"]}
+                assert next(
+                    row for row in overview["employees"] if row["user_id"] == str(employee.id)
+                )["avatar_version"] == avatar_stamp.isoformat()
                 personal = await load_personal_efficiency(connection, employee)
                 assert personal["employee"]["user_id"] == str(employee.id)
                 assert personal["employee"] == next(

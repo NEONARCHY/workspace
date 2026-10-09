@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 
 import type { WorkdayTeam, WorkdayTeamMember } from "@yuksalish/contracts";
 import {
-  Avatar, Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field,
+  Button, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field,
 } from "@fluentui/react-components";
 import { ArrowSync20Regular, Clock20Regular, PeopleTeam24Regular } from "@fluentui/react-icons";
 
 import { WorkspaceDialog as Dialog } from "./WorkspaceDialog";
 import { loadTeamWorkday, saveWorkdaySchedule } from "./workspace-api";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { useContextMotion } from "./useContextMotion";
@@ -129,7 +130,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
     <div className="team-presence-viewport" ref={peopleMotion}>
     <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
-        <EmployeeProfileLink userId={person.userId} personName={person.name}><Avatar name={person.name} size={36} color="colorful" /></EmployeeProfileLink>
+        <EmployeeProfileLink userId={person.userId} personName={person.name}><ProfileAvatar person={{ id: person.userId, name: person.name, avatarVersion: person.avatarVersion }} token={token} size={36} /></EmployeeProfileLink>
         <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
         <span className={`team-presence-status is-${person.status}`}>{statusLabel(person)}</span>
         <span className="team-presence-times">{person.session

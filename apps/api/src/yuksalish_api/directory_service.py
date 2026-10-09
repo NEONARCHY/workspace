@@ -238,6 +238,7 @@ async def load_directory(
                     users.c.direct_manager_user_id,
                     func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
                     users.c.status,
+                    users.c.avatar_updated_at,
                 )
                 .outerjoin(positions, positions.c.id == users.c.position_id)
                 .order_by(users.c.full_name)
@@ -285,6 +286,9 @@ async def load_directory(
                 position_id=str(row["position_id"]) if row["position_id"] else None,
                 job_title=row["job_title"],
                 status=row["status"],
+                avatar_version=(
+                    row["avatar_updated_at"].isoformat() if row.get("avatar_updated_at") else None
+                ),
                 direct_manager_user_id=(
                     str(row["direct_manager_user_id"]) if row["direct_manager_user_id"] else None
                 ),
@@ -998,6 +1002,9 @@ async def update_employee_access(
         position_id=str(payload.position_id) if payload.position_id else None,
         job_title=position_name,
         status=employee["status"],
+        avatar_version=(
+            employee["avatar_updated_at"].isoformat() if employee.get("avatar_updated_at") else None
+        ),
         direct_manager_user_id=(
             str(payload.direct_manager_user_id) if payload.direct_manager_user_id else None
         ),
@@ -1066,6 +1073,9 @@ async def update_own_superadmin_organization(
         position_id=str(payload.position_id) if payload.position_id else None,
         job_title=position_name,
         status=employee["status"],
+        avatar_version=(
+            employee["avatar_updated_at"].isoformat() if employee.get("avatar_updated_at") else None
+        ),
         direct_manager_user_id=(
             str(employee["direct_manager_user_id"])
             if employee["direct_manager_user_id"] else None
@@ -1167,4 +1177,7 @@ async def update_employee_status(
         position_id=str(employee["position_id"]) if employee["position_id"] else None,
         job_title=employee["job_title"],
         status=payload.status,
+        avatar_version=(
+            employee["avatar_updated_at"].isoformat() if employee.get("avatar_updated_at") else None
+        ),
     )

@@ -31,7 +31,7 @@ import { AudioDeviceSettings } from "./AudioDeviceSettings";
 import { DesktopUpdateSettings } from "./DesktopUpdateSettings";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { BirthdayDayPicker, birthdayMonthLength, birthdayMonthName } from "./BirthdayDayPicker";
-import { ProfileAvatar } from "./ProfileAvatar";
+import { notifyProfileAvatarChanged, ProfileAvatar } from "./ProfileAvatar";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
@@ -367,6 +367,7 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
                   if (!file) return;
                   setAvatarBusy(true);
                   void uploadProfileAvatar(token, file).then((result) => {
+                    notifyProfileAvatarChanged(user.id, result.avatarVersion);
                     onAvatarChanged?.(result.avatarVersion);
                     setFeedback("Аватар обновлён и сохранён на сервере.");
                   }).catch((error: unknown) => setFeedback(error instanceof Error ? error.message : "Не удалось загрузить аватар"))

@@ -486,6 +486,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
       </div>
       <EmployeeRecords
+        token={token}
         employees={visibleEmployees}
         departments={directory.departments}
         filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}:${employeeScopeFilter}`}

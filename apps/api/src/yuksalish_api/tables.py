@@ -103,6 +103,7 @@ assistant_chats = sa.Table(
     sa.Column("user_id", uuid_type),
     sa.Column("title", sa.String(100)),
     sa.Column("is_default", sa.Boolean()),
+    sa.Column("is_pinned", sa.Boolean()),
     sa.Column("created_at", sa.DateTime(timezone=True)),
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )

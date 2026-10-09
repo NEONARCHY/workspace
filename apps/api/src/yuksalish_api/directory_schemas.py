@@ -132,6 +132,7 @@ class DirectoryEmployeeResponse(ApiModel):
     job_title: str | None
     status: str
     direct_manager_user_id: str | None = None
+    avatar_version: str | None = None
 
 
 class EmployeeAccessUpdateRequest(ApiModel):

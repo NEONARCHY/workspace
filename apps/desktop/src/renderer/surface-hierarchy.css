@@ -1,0 +1,85 @@
+/* Calm separation, not another page backing. Ambient canvas and hero materials
+   remain untouched; only real panels, controls and repeated objects opt in. */
+:root {
+  --ws-line: #ccdce1;
+  --ws-muted-surface: #edf3f5;
+  --ws-object-surface: #f0f5f7;
+  --ws-object-edge: #cbdde3;
+  --ws-inset-surface: #e5eef2;
+}
+
+/* A crisp quiet edge makes the white work surface legible on the mint shell.
+   Inset strokes preserve the existing geometry and do not tint exterior gaps. */
+body .app-provider .app-content :is(.home-panel, .home-overview article, .feed-card,
+  .calendar-board, .team-dash-panel, .team-dash-metric, .task-focus-object,
+  .department-tree, .department-editor, .eff-people, .absence-summary > button,
+  .notification-stream-shell, .notification-settings, .list-pane, .conversation-pane) {
+  box-shadow: inset 0 0 0 1px var(--ws-object-edge);
+}
+body .app-provider .app-content :is(.task-filter-tabs, .notification-tabs, .team-presence-filter,
+  .department-tree, .messenger-view .chat-search) {
+  background-color: var(--ws-inset-surface);
+}
+
+/* Tables remain semantic tables with sticky headers, sorting and one scroll
+   context. The inter-row air separates records even without hover or colour. */
+.app-provider .record-table-frame { border-color: var(--ws-object-edge); background: #fff; }
+.app-provider .record-table { border-spacing: 0 7px; }
+.app-provider .record-table th { background: var(--ws-inset-surface); border-color: var(--ws-object-edge); }
+body .app-provider .record-table .record-row {
+  background-color: var(--ws-object-surface);
+  border-radius: 12px;
+  /* Table-row backgrounds do not follow rounded td borders on their own.
+     Clip the one continuous priority/hover wash, not each cell separately. */
+  clip-path: inset(0 round 12px);
+}
+body .app-provider .record-table .record-row > td {
+  border-block: 1px solid var(--ws-object-edge);
+  padding-block: 14px;
+}
+body .app-provider .record-table .record-row > td:first-child { border-inline-start: 1px solid var(--ws-object-edge); border-start-start-radius: 12px; border-end-start-radius: 12px; }
+body .app-provider .record-table .record-row > td:last-child { border-inline-end: 1px solid var(--ws-object-edge); border-start-end-radius: 12px; border-end-end-radius: 12px; }
+body .app-provider .record-table .record-row.selected { background-color: #dceef1; }
+body .app-provider .record-table .record-row.selected > td { border-color: #91bfc8; }
+/* Keep the existing priority and travelling hover wash, not a new strip. */
+.app-provider :is(.team-dash-task, .team-dash-person, .team-presence-person, .trip-list-item) {
+  border: 1px solid var(--ws-object-edge);
+  border-radius: 14px;
+  background-color: var(--ws-object-surface);
+}
+.app-provider .team-presence-people { row-gap: 7px; }
+.app-provider .team-presence-person { padding-inline: 10px; }
+.app-provider .team-presence-person:last-child { border-bottom: 1px solid var(--ws-object-edge); }
+.app-provider .team-dash-task-list { gap: 8px; }
+.app-provider .home-row { border-color: color-mix(in srgb, var(--home-accent) 23%, var(--ws-object-edge)); }
+.app-provider .notification-row { border-color: color-mix(in srgb, var(--ws-surface-accent) 24%, var(--ws-object-edge)); }
+
+/* Assistant is a bounded foreground panel, never a page/root recolour. */
+.assistant-panel .assistant-chat-sidebar { background: var(--ws-inset-surface); border-color: var(--ws-object-edge); }
+.assistant-sidebar-list { gap: 8px; padding: 2px; }
+.assistant-sidebar-chat { background: rgb(255 255 255 / 65%); border: 1px solid var(--ws-object-edge); }
+.assistant-sidebar-chat[aria-current="true"] { border-color: #8ebcc7; }
+.assistant-sidebar-active { background: #deedf2; border-color: #8ebcc7; box-shadow: none; }
+.assistant-panel .assistant-stream { background: #f0f5f7; }
+.assistant-panel .assistant-chat-controls { background: #eaf1f4; border-color: var(--ws-object-edge); }
+.assistant-panel .assistant-composer-area { background: #edf3f5; border-color: var(--ws-object-edge); }
+.assistant-panel .assistant-composer { background: #fff; border-color: #adc8d2; }
+.assistant-panel .assistant-message.is-assistant { border-color: var(--ws-object-edge); box-shadow: 0 2px 8px rgb(41 58 85 / 4%); }
+.assistant-panel .assistant-quick-prompts button { border-color: #b7d1d8; }
+.assistant-chat-menu .assistant-chat-delete { color: #9f3b4b; }
+.assistant-panel .assistant-header .assistant-sidebar-toggle { flex: none; color: var(--ws-link); background: var(--ws-muted-surface); }
+
+@media (forced-colors: active) {
+  :root { --ws-line: CanvasText; --ws-object-edge: CanvasText; --ws-object-surface: Canvas; --ws-inset-surface: Canvas; --ws-muted-surface: Canvas; }
+  body .app-provider .app-content :is(.home-panel, .home-overview article, .feed-card,
+    .calendar-board, .team-dash-panel, .team-dash-metric, .task-focus-object,
+    .department-tree, .department-editor, .eff-people, .absence-summary > button,
+    .notification-stream-shell, .notification-settings, .list-pane, .conversation-pane) {
+    outline: 1px solid CanvasText; outline-offset: -1px;
+  }
+  body .app-provider .record-table .record-row.selected { background: Highlight; color: HighlightText; }
+  .assistant-sidebar-chat, .assistant-panel .assistant-stream, .assistant-panel .assistant-chat-controls,
+  .assistant-panel .assistant-composer-area, .assistant-panel .assistant-composer { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  .assistant-sidebar-active { background: Canvas; border-color: Highlight; }
+  .assistant-chat-menu .assistant-chat-delete { color: CanvasText; }
+}

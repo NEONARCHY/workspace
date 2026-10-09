@@ -18,6 +18,7 @@ import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/scrollbars.css";
 import "../src/renderer/section-headers.css";
 import "../src/renderer/page-canvas.css";
+import "../src/renderer/surface-hierarchy.css";
 let employeeId = "aziza";
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, options) => {

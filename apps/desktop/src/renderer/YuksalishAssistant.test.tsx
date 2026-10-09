@@ -5,14 +5,14 @@ import { FluentProvider } from "@fluentui/react-components";
 import { YuksalishAssistant } from "./YuksalishAssistant";
 import * as orbJourney from "./assistant-orb-journey";
 import { workspaceTheme } from "./workspace-theme";
-import { clearAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
+import { deleteAssistantChat, pinAssistantChat, createAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, transcribeAssistantVoice } from "./workspace-api";
 
 vi.mock("thinking-orbs", () => ({
   ThinkingOrb: ({ state }: { state: string }) => <span data-testid={`thinking-${state}`} />,
 }));
 
 vi.mock("./workspace-api", () => ({
-  clearAssistantChat: vi.fn(), createAssistantChat: vi.fn(), listAssistantChats: vi.fn(),
+  deleteAssistantChat: vi.fn(), pinAssistantChat: vi.fn(), createAssistantChat: vi.fn(), listAssistantChats: vi.fn(),
   loadAssistantMessages: vi.fn(),
   sendAssistantMessage: vi.fn(),
   transcribeAssistantVoice: vi.fn(),
@@ -52,7 +52,8 @@ describe("YuksalishAssistant", () => {
     vi.mocked(listAssistantChats).mockResolvedValue([{ id: "first", title: "Первый чат", isDefault: true,
       createdAt: "2026-10-04T09:00:00Z", updatedAt: "2026-10-04T09:00:00Z" }]);
     vi.mocked(createAssistantChat).mockReset();
-    vi.mocked(clearAssistantChat).mockReset();
+    vi.mocked(deleteAssistantChat).mockReset();
+    vi.mocked(pinAssistantChat).mockReset();
     vi.mocked(loadAssistantMessages).mockReset().mockResolvedValue([]);
     vi.mocked(sendAssistantMessage).mockReset();
   });
@@ -197,30 +198,34 @@ describe("YuksalishAssistant", () => {
     expect(screen.getByText("ИИ может допускать ошибки, перепроверяйте ответы")).toBeInTheDocument();
   });
 
-  it("confirms clearing only the current chat and keeps its content on failure", async () => {
+  it("confirms permanent deletion and keeps the chat and draft on failure", async () => {
     vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "saved", role: "assistant", model: "flash-lite",
       content: "Переписка для очистки", createdAt: "2026-10-04T09:00:00Z" }]);
     let rejectClear!: (reason: Error) => void;
-    vi.mocked(clearAssistantChat).mockImplementationOnce(() => new Promise<void>((_, reject) => {
+    vi.mocked(deleteAssistantChat).mockImplementationOnce(() => new Promise((_, reject) => {
       rejectClear = reject;
-    })).mockResolvedValue(undefined);
+    })).mockResolvedValue([{ id: "replacement", title: "Новый чат", isDefault: true,
+      createdAt: "2026-10-09", updatedAt: "2026-10-09" }]);
     // Match App's provider boundary for Fluent's portal, focus and motion lifecycle.
     render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test-token" /></FluentProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
     await screen.findByText("Переписка для очистки");
-    fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
-    const firstConfirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Сохранить черновик" } });
+    fireEvent.click(screen.getByRole("button", { name: "Действия с текущим чатом" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
+    const firstConfirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
     const cancelButton = within(firstConfirmation).getByRole("button", { name: "Отмена", hidden: true });
     // Model the focus of a real pointer click before asserting Tabster's modal state.
     act(() => cancelButton.focus());
     await waitFor(() => expect(firstConfirmation).not.toHaveAttribute("aria-hidden", "true"));
     fireEvent.click(within(firstConfirmation).getByRole("button", { name: "Отмена" }));
-    expect(clearAssistantChat).not.toHaveBeenCalled();
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Очистить текущий чат?" })).not.toBeInTheDocument());
+    expect(deleteAssistantChat).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить чат?" })).not.toBeInTheDocument());
     // Wait for Fluent's exit presence, not only its hidden accessibility state.
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
-    fireEvent.click(screen.getByRole("button", { name: "Очистить текущий чат" }));
-    const confirmation = await screen.findByRole("dialog", { name: "Очистить текущий чат?" });
+    fireEvent.click(screen.getByRole("button", { name: "Действия с текущим чатом" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
+    const confirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
     const confirmButton = confirmation.querySelector<HTMLButtonElement>(".confirm-action-danger")!;
     // fireEvent.click alone does not focus like a browser's pointer click. Keep
     // Tabster's active modal on the confirmation, including the pending/error phase.
@@ -229,22 +234,105 @@ describe("YuksalishAssistant", () => {
     expect(document.activeElement).toBe(confirmButton);
     fireEvent.click(confirmButton);
     expect(confirmation).toBeInTheDocument();
-    expect(confirmation).toHaveAccessibleName("Очистить текущий чат?");
+    expect(confirmation).toHaveAccessibleName("Удалить чат?");
     expect(confirmation).not.toHaveAttribute("aria-hidden", "true");
-    expect(within(confirmation).getByRole("button", { name: "Очищаем…" })).toBeDisabled();
+    expect(within(confirmation).getByRole("button", { name: "Удаляем…" })).toBeDisabled();
     expect(within(confirmation).getByRole("button", { name: "Отмена" })).toBeDisabled();
     expect(confirmation).toHaveAttribute("aria-busy", "true");
     await act(async () => rejectClear(new Error("Сбой очистки")));
     expect(within(confirmation).getByText("Сбой очистки")).toBeInTheDocument();
     expect(confirmation).toHaveAttribute("aria-busy", "false");
-    expect(clearAssistantChat).toHaveBeenCalledTimes(1);
+    expect(deleteAssistantChat).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Переписка для очистки")).toBeInTheDocument();
-    const retryButton = await within(confirmation).findByRole("button", { name: "Очистить чат" });
+    expect(screen.getByRole("textbox", { hidden: true })).toHaveValue("Сохранить черновик");
+    vi.mocked(loadAssistantMessages).mockResolvedValueOnce([]);
+    const retryButton = await within(confirmation).findByRole("button", { name: "Удалить чат" });
     await waitFor(() => expect(retryButton).toBeEnabled());
     fireEvent.click(retryButton);
     await waitFor(() => expect(screen.queryByText("Переписка для очистки")).not.toBeInTheDocument());
-    expect(clearAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
-    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Первый чат"));
+    expect(deleteAssistantChat).toHaveBeenLastCalledWith("test-token", "first");
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveTextContent("Новый чат"));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    fireEvent.click(screen.getByRole("combobox", { name: "Чат ассистента" }));
+    expect(screen.queryByRole("option", { name: "Первый чат" })).not.toBeInTheDocument();
+  });
+
+  it("pins through the sidebar context menu and collapses without losing the active draft", async () => {
+    const chats = ["first", "second"].map(id => ({ id, title: id, isDefault: id === "first",
+      isPinned: false, createdAt: "2026-10-09", updatedAt: "2026-10-09" }));
+    vi.mocked(listAssistantChats).mockResolvedValue(chats);
+    vi.mocked(pinAssistantChat).mockResolvedValue([chats[0]!, { ...chats[1]!, isPinned: true }]);
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test-token" /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Не потерять" } });
+    const sidebar = screen.getByRole("navigation", { name: "Список чатов ассистента" });
+    fireEvent.contextMenu(within(sidebar).getByRole("button", { name: /second/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Закрепить чат" }));
+    await waitFor(() => expect(pinAssistantChat).toHaveBeenCalledWith("test-token", "second", true));
+    await waitFor(() => expect(within(sidebar).getAllByRole("button")[0]).toHaveTextContent("second"));
+    expect(screen.getByRole("textbox")).toHaveValue("Не потерять");
+    expect(within(sidebar).getByRole("button", { name: /first/ })).toHaveAttribute("aria-current", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть список чатов" }));
+    expect(screen.queryByRole("navigation", { name: "Список чатов ассистента" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox")).toHaveValue("Не потерять");
+    fireEvent.click(screen.getByRole("button", { name: "Показать список чатов" }));
+    const restored = screen.getByRole("navigation", { name: "Список чатов ассистента" });
+    fireEvent.contextMenu(within(restored).getByRole("button", { name: /second/ }));
+    expect(await screen.findByRole("menuitem", { name: "Открепить чат" })).toBeInTheDocument();
+    expect(loadAssistantMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes an inactive chat without changing the active history or unsent draft", async () => {
+    const chats = ["first", "second"].map(id => ({ id, title: id, isDefault: id === "first",
+      createdAt: "2026-10-09", updatedAt: "2026-10-09" }));
+    vi.mocked(listAssistantChats).mockResolvedValue(chats);
+    vi.mocked(deleteAssistantChat).mockResolvedValue([chats[0]!]);
+    vi.mocked(loadAssistantMessages).mockResolvedValue([{ id: "saved", role: "assistant", model: "flash-lite",
+      content: "Активная переписка", createdAt: "2026-10-09T09:00:00Z" }]);
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test-token" /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("Активная переписка");
+    fireEvent.click(screen.getByRole("button", { name: "Развернуть окно" }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Мой черновик" } });
+    const sidebar = screen.getByRole("navigation", { name: "Список чатов ассистента" });
+    fireEvent.contextMenu(within(sidebar).getByRole("button", { name: /second/ }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
+    const confirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
+    const confirm = confirmation.querySelector<HTMLButtonElement>(".confirm-action-danger")!;
+    act(() => confirm.focus());
+    fireEvent.click(confirm);
+    await waitFor(() => expect(deleteAssistantChat).toHaveBeenCalledWith("test-token", "second"));
+    await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
+    expect(within(sidebar).queryByRole("button", { name: /second/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(sidebar).getByRole("button", { name: /first/ })).toHaveAttribute("aria-current", "true"));
+    expect(screen.getByRole("textbox")).toHaveValue("Мой черновик");
+    expect(screen.getByText("Активная переписка")).toBeInTheDocument();
+    expect(loadAssistantMessages).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not restore a deleted conversation when loading the next chat fails", async () => {
+    const chats = ["first", "second"].map(id => ({ id, title: id, isDefault: id === "first",
+      createdAt: "2026-10-09", updatedAt: "2026-10-09" }));
+    vi.mocked(listAssistantChats).mockResolvedValue(chats);
+    vi.mocked(deleteAssistantChat).mockResolvedValue([chats[1]!]);
+    render(<FluentProvider theme={workspaceTheme}><YuksalishAssistant token="test-token" /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Открыть ассистента Yuksalish" }));
+    await screen.findByText("С чего начнём?");
+    vi.mocked(loadAssistantMessages).mockRejectedValueOnce(new Error("Нет сети"));
+    fireEvent.click(screen.getByRole("button", { name: "Действия с текущим чатом" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
+    const confirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
+    const confirm = confirmation.querySelector<HTMLButtonElement>(".confirm-action-danger")!;
+    act(() => confirm.focus()); fireEvent.click(confirm);
+    await screen.findByText("Чат удалён. Не удалось открыть следующий — выберите его в списке.");
+    await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
+    fireEvent.click(screen.getByRole("combobox", { name: "Чат ассистента" }));
+    expect(screen.queryByRole("option", { name: "first" })).not.toBeInTheDocument();
+    vi.mocked(loadAssistantMessages).mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByRole("option", { name: "second" }));
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Чат ассистента" })).toHaveAttribute("data-chat-id", "second"));
   });
 
   it("accepts the 50 MB boundary without sending automatically", async () => {
@@ -845,6 +933,7 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(sendAssistantMessage).toHaveBeenCalledWith(
       "test-token", "flash-lite", "Добавь описание", undefined, true, "first",
     ));
+    await screen.findByText("Уточнил черновик.");
     fireEvent.click((await screen.findAllByRole("button", { name: "Открыть заполненную форму" }))[0]!);
     expect(onPrepareAction).toHaveBeenCalledWith(draft);
     expect(screen.getByRole("dialog", { name: "Ассистент Yuksalish" })).toBeInTheDocument();
