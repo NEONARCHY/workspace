@@ -95,6 +95,10 @@ services:
 
   worker:
     <<: *python-service
+    # Import analysis needs outbound HTTPS; keep it separate from API/edge ingress.
+    networks:
+      - backend
+      - worker-egress
     command: ["python", "-m", "yuksalish_worker.main"]
     depends_on:
       postgres:
@@ -136,6 +140,7 @@ networks:
   backend:
     internal: true
   api-egress:
+  worker-egress:
   test-loopback:
   edge:
 
