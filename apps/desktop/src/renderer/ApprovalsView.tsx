@@ -282,6 +282,8 @@ function WorkflowObjectNode({ data, selected }: NodeProps<ApprovalNode>) {
 const workflowNodeTypes: NodeTypes = { approvalObject: WorkflowObjectNode };
 
 interface PaymentFormState {
+  readonly currency: string;
+  readonly budgetArticleId: string;
   readonly transferType: NonNullable<PaymentRequestDetails["transferType"]> | "";
   readonly projectName: string;
   readonly projectCode: string;
@@ -308,8 +310,10 @@ function isSubsidyProjectSelection(projectId: string, targets: PaymentProjectTar
     project.id === projectId && project.title.trim().toLocaleLowerCase("ru-RU") === "субсидия");
 }
 
-function emptyPaymentForm(currentUserId: string): PaymentFormState {
+export function emptyPaymentForm(currentUserId: string): PaymentFormState {
   return {
+    currency: "UZS",
+    budgetArticleId: "",
     transferType: "",
     projectName: "",
     projectCode: "",
@@ -336,8 +340,11 @@ function formFromDetails(
   details: PaymentRequestDetails,
   responsibleUserId: string,
   calendarEventId?: string | null,
+  currency = "UZS",
 ): PaymentFormState {
   return {
+    currency,
+    budgetArticleId: details.budgetArticleId ?? "",
     transferType: details.transferType ?? "",
     projectName: details.projectName,
     projectCode: details.projectCode,
@@ -369,7 +376,8 @@ function requestPayload(
   return {
     title,
     amount,
-    currency: "UZS",
+    currency: form.currency,
+    budgetArticleId: form.budgetArticleId || null,
     purpose,
     transferType: form.transferType || null,
     projectName: form.projectName,
@@ -738,7 +746,7 @@ interface PaymentFieldsProps {
   readonly revision?: boolean;
 }
 
-function PaymentFields({ form, targets, calendarEvents, people, departments, onChange, leadSection, revision = false }: PaymentFieldsProps) {
+export function PaymentFields({ form, targets, calendarEvents, people, departments, onChange, leadSection, revision = false }: PaymentFieldsProps) {
   const [tripScope, setTripScope] = useState<EmployeeScope>(() => employeeScope(
     people.find((person) => person.id === form.employeeIds[0])?.departmentId,
     departments ?? [],
@@ -774,12 +782,26 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
             </WorkspaceSelect>
           </label>
           <label>Проект · необязательно<WorkspaceSelect aria-label={`${prefix}проект`} value={form.projectId}
-            onChange={(event) => onChange({ ...form, projectId: event.target.value, workstreamId: "", projectItemId: "", calendarEventId: "",
+            onChange={(event) => onChange({ ...form, projectId: event.target.value, workstreamId: "", projectItemId: "", calendarEventId: "", budgetArticleId: "",
               projectName: targets.projects.find((project) => project.id === event.target.value)?.title ?? "",
               projectCode: targets.projects.find((project) => project.id === event.target.value)?.code ?? "" })}>
             <option value="">Выберите проект</option>
             {form.projectId && !targets.projects.some((project) => project.id === form.projectId) ? <option value={form.projectId}>{form.projectName || "Ранее выбранный проект"}</option> : null}
             {targets.projects.map((project) => <option value={project.id} key={project.id}>{project.code} · {project.title}</option>)}
+          </WorkspaceSelect></label>
+          <label>Валюта оплаты<WorkspaceSelect aria-label={`${prefix}валюта оплаты`} value={form.currency}
+            onChange={(event) => onChange({ ...form, currency: event.target.value, budgetArticleId: "" })}>
+            {!['UZS', 'USD', 'EUR'].includes(form.currency) ? <option>{form.currency}</option> : null}
+            <option>UZS</option><option>USD</option><option>EUR</option>
+          </WorkspaceSelect></label>
+          <label>Бюджетная статья · необязательно<WorkspaceSelect aria-label={`${prefix}бюджетная статья`} value={form.budgetArticleId} disabled={!form.projectId}
+            onChange={(event) => onChange({ ...form, budgetArticleId: event.target.value,
+              currency: targets.budgetArticles?.find((article) => article.id === event.target.value)?.currency ?? form.currency })}>
+            <option value="">Без статьи</option>
+            {form.budgetArticleId && !targets.budgetArticles?.some((article) => article.id === form.budgetArticleId) ? <option value={form.budgetArticleId}>Ранее выбранная статья</option> : null}
+            {(targets.budgetArticles ?? []).filter((article) => article.projectId === form.projectId).map((article) => <option key={article.id} value={article.id}>
+              {article.title} · остаток {article.remainingAmount} {article.currency}
+            </option>)}
           </WorkspaceSelect></label>
           <label>Направление<WorkspaceSelect aria-label={`${prefix}направление`} required={!revision && !!form.projectId} disabled={!form.projectId} value={form.workstreamId}
             onChange={(event) => onChange({ ...form, workstreamId: event.target.value, projectItemId: "", calendarEventId: "" })}>
@@ -851,6 +873,7 @@ function PaymentFields({ form, targets, calendarEvents, people, departments, onC
                 calendarEventId: eventId,
                 ...(project && selected?.workstreamId ? {
                   projectId: project.id,
+                  budgetArticleId: project.id === form.projectId ? form.budgetArticleId : "",
                   workstreamId: selected.workstreamId,
                   projectItemId: selected.projectItemId ?? "",
                   projectName: project.title,
@@ -1355,8 +1378,8 @@ export function ApprovalsView({
   const createRequest = async () => {
     if (creatingBusyRef.current) return;
     const amount = Number(requestAmount.replace(/\s/g, ""));
-    if (!requestTitle.trim() || !Number.isFinite(amount) || amount <= 0) {
-      setCreateError("Укажите название и положительную сумму заявки");
+    if (!requestTitle.trim() || !Number.isSafeInteger(amount) || amount <= 0) {
+      setCreateError("Укажите название и положительную целую сумму не более 9 007 199 254 740 991");
       return;
     }
     if ((requestDetails.projectId && !paymentTargets.projects.some((project) => project.id === requestDetails.projectId))
@@ -1401,7 +1424,7 @@ export function ApprovalsView({
     setEditTitle(request.title);
     setEditAmount(String(request.amount));
     setEditPurpose(request.purpose);
-    setEditDetails(formFromDetails(request.details, request.responsibleUserId, request.calendarEventId));
+    setEditDetails(formFromDetails(request.details, request.responsibleUserId, request.calendarEventId, request.currency));
     setEditFiles([]);
     setEditAdditionalFiles([]);
     setEditError("");
@@ -1409,8 +1432,8 @@ export function ApprovalsView({
 
   const saveRevision = async (request: ApprovalRequestSummary) => {
     const amount = Number(editAmount.replace(/\s/g, ""));
-    if (!editTitle.trim() || !Number.isFinite(amount) || amount <= 0) {
-      setEditError("Укажите название и положительную сумму заявки");
+    if (!editTitle.trim() || !Number.isSafeInteger(amount) || amount <= 0) {
+      setEditError("Укажите название и положительную целую сумму не более 9 007 199 254 740 991");
       return;
     }
     setEditError("");
@@ -1907,7 +1930,7 @@ export function ApprovalsView({
                           />
                         </label>
                         <label>
-                          Сумма в UZS <b>обязательно</b>
+                          Сумма в {requestDetails.currency} <b>обязательно</b>
                           <Input
                             aria-label="Сумма заявки"
                             aria-invalid={Boolean(createError && Number(requestAmount.replace(/\s/g, "")) <= 0)}
@@ -2050,6 +2073,7 @@ export function ApprovalsView({
                         <div><dt>Код проекта</dt><dd>{selectedRequest.details.projectCode || "Не указан"}</dd></div>
                         {selectedRequest.details.workstreamId ? <div><dt>Направление</dt><dd>{paymentTargets.workstreams.find((row) => row.id === selectedRequest.details.workstreamId)?.title || "Связанное направление"}</dd></div> : null}
                         {selectedRequest.details.projectItemId ? <div><dt>Задача или мероприятие</dt><dd>{paymentTargets.items.find((row) => row.id === selectedRequest.details.projectItemId)?.title || "Связанная работа"}</dd></div> : null}
+                        {selectedRequest.details.budgetArticleId ? <div><dt>Бюджетная статья</dt><dd>{selectedRequest.details.budgetArticleTitle || paymentTargets.budgetArticles?.find((row) => row.id === selectedRequest.details.budgetArticleId)?.title || "Связанная статья"}</dd></div> : null}
                         <div><dt>Категория</dt><dd>{selectedRequest.details.paymentPurpose || "Не выбрана"}</dd></div>
                         {selectedRequest.calendarEventId ? <div><dt>Событие календаря</dt><dd>{calendarEvents.find((event) => event.id === selectedRequest.calendarEventId)?.title ?? "Связанное событие"}</dd></div> : null}
                         <div><dt>Со счёта</dt><dd>{selectedRequest.details.sourceAccount || "Не указан"}</dd></div>

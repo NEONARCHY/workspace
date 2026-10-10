@@ -172,7 +172,10 @@ async def load_payment_project_targets(
     project_ids = {project.id for project in projects}
     workstreams = [row for row in hub.workstreams if row.project_id in project_ids]
     workstream_ids = {row.id for row in workstreams}
+    from .project_budget_service import article_choices
+
     return PaymentProjectTargets(
+        budget_articles=await article_choices(connection, [UUID(value) for value in project_ids]),
         projects=[
             PaymentProjectOption(id=row.id, code=row.code, title=row.title)
             for row in projects
@@ -610,6 +613,7 @@ async def _item_response(
         project_id=str(row["project_id"]),
         workstream_id=str(row["workstream_id"]),
         kind=row["kind"],
+        schedule_pending=row["schedule_pending"],
         title=row["title"],
         description=row["description"],
         starts_at=row["starts_at"],
@@ -712,6 +716,7 @@ async def save_item(
         title=payload.title,
         description=payload.description,
         kind=payload.kind,
+        schedule_pending=payload.schedule_pending,
         starts_at=payload.starts_at,
         due_at=payload.due_at,
         budget=payload.budget,
@@ -919,6 +924,8 @@ async def publish_event(
         return await _item_response(connection, row)
     if row["status"] == "cancelled":
         raise WorkspaceRepositoryError(409, "Cancelled events cannot be published")
+    if row["schedule_pending"] or row["starts_at"] is None or row["due_at"] is None:
+        raise WorkspaceRepositoryError(409, "Set exact start and end times before publishing")
     assignees = list(
         (
             await connection.execute(

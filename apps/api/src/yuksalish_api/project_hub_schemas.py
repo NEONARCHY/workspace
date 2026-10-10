@@ -18,6 +18,17 @@ class HubModel(BaseModel):
     )
 
 
+class BudgetArticleResponse(HubModel):
+    id: str
+    project_id: str
+    title: str
+    amount: str
+    currency: Literal["UZS", "USD", "EUR"]
+    funding: Literal["donor", "own", "unspecified"]
+    actual_amount: str = "0"
+    remaining_amount: str = "0"
+
+
 class PaymentProjectOption(HubModel):
     id: str
     code: str
@@ -42,6 +53,7 @@ class PaymentProjectTargets(HubModel):
     projects: list[PaymentProjectOption]
     workstreams: list[PaymentWorkstreamOption]
     items: list[PaymentItemOption]
+    budget_articles: list["BudgetArticleResponse"] = Field(default_factory=list)
 
 
 class ProjectHubWrite(HubModel):
@@ -109,6 +121,7 @@ class ProjectWorkstreamResponse(ProjectWorkstreamWrite):
 
 
 class ProjectWorkItemWrite(HubModel):
+    schedule_pending: bool = False
     workstream_id: str | None = None
     kind: Literal["task", "event"]
     title: str = Field(min_length=1, max_length=240)
@@ -123,7 +136,13 @@ class ProjectWorkItemWrite(HubModel):
         self.title = self.title.strip()
         if not self.title:
             raise ValueError("Work item title is required")
-        if self.kind == "event" and (self.starts_at is None or self.due_at is None):
+        if self.schedule_pending and (
+            self.kind != "event" or self.starts_at is not None or self.due_at is not None
+        ):
+            raise ValueError("Only an undated planned event can await scheduling")
+        if self.kind == "event" and not self.schedule_pending and (
+            self.starts_at is None or self.due_at is None
+        ):
             raise ValueError("An event requires start and end times")
         if self.starts_at and self.due_at and self.due_at <= self.starts_at:
             raise ValueError("End time must follow start time")

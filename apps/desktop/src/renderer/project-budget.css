@@ -1,0 +1,12 @@
+.project-budget-dialog { width: min(1000px, calc(100vw - 32px)); max-width: 1000px; max-height: calc(100dvh - 32px); display: flex; flex-direction: column; padding: 0; }
+.project-budget-dialog > header, .project-budget-dialog > footer { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 24px; flex-shrink: 0; }
+.project-budget-dialog > header { justify-content: space-between; }
+.project-budget-dialog h2 { font-size: 24px; }
+.project-budget-dialog > footer { border-top: 1px solid var(--ws-line); }
+.project-budget-dialog [role="alert"] { flex-basis: 100%; }
+.project-budget-scroll { overflow: auto; padding: 0 24px 24px; min-height: 0; }
+.project-budget-scroll label { display: grid; gap: 6px; margin: 12px 0; }
+.project-budget-table { overflow-x: auto; }
+.project-budget-table table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.project-budget-table th, .project-budget-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--ws-line); font-variant-numeric: tabular-nums; }
+.project-budget-table small { display: block; font-weight: normal; }

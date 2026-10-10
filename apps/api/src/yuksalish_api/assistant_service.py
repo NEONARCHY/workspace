@@ -771,6 +771,8 @@ async def generate_text(
     contents: list[dict[str, object]],
     *,
     temperature: float = 0.5,
+    max_output_tokens: int = 2048,
+    json_output: bool = False,
 ) -> str:
     if not api_key:
         raise ValueError("Ассистент пока не настроен администратором.")
@@ -782,7 +784,10 @@ async def generate_text(
             json={
                 "systemInstruction": {"parts": [{"text": system_text}]},
                 "contents": contents,
-                "generationConfig": {"maxOutputTokens": 2048, "temperature": temperature},
+                "generationConfig": {
+                    "maxOutputTokens": max_output_tokens, "temperature": temperature,
+                    **({"responseMimeType": "application/json"} if json_output else {}),
+                },
             },
         )
         if response.status_code in (401, 403):

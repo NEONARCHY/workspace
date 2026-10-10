@@ -1,3 +1,7 @@
+export * from "./project-imports";
+export * from "./project-budget";
+import type { ProjectBudgetArticle } from "./project-budget";
+
 export const moduleKeys = [
   "home",
   "tasks",
@@ -1728,6 +1732,7 @@ export interface ProjectHubItemAction {
 }
 
 export interface ProjectHubItem {
+  readonly schedulePending?: boolean;
   readonly id: string;
   readonly projectId: string;
   readonly workstreamId: string;
@@ -1907,6 +1912,8 @@ export interface ApprovalDeadlineControl {
 }
 
 export interface PaymentRequestDetails {
+  readonly budgetArticleId?: string | null;
+  readonly budgetArticleTitle?: string;
   readonly transferType?: "Гонорар (с расчетом)" | "Конвертация" | "Другие услуги" | null;
   readonly projectName: string;
   readonly projectCode: string;
@@ -1929,6 +1936,7 @@ export interface PaymentRequestDetails {
 }
 
 export interface PaymentProjectTargets {
+  readonly budgetArticles?: readonly ProjectBudgetArticle[];
   readonly projects: readonly { readonly id: string; readonly code: string; readonly title: string }[];
   readonly workstreams: readonly { readonly id: string; readonly projectId: string; readonly title: string }[];
   readonly items: readonly { readonly id: string; readonly projectId: string; readonly workstreamId: string;
