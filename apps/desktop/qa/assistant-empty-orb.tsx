@@ -24,7 +24,6 @@ import "../src/renderer/workspace-2-tasks.css";
 import "../src/renderer/accent-surfaces.css";
 import "../src/renderer/list-row-hover.css";
 import "../src/renderer/confirm-action-dialog.css";
-import "../src/renderer/surface-hierarchy.css";
 
 document.body.style.minHeight = "100vh";
 document.body.style.background = "linear-gradient(135deg, #eaf4f3, #f9fbfb 64%, #dcecf0)";
