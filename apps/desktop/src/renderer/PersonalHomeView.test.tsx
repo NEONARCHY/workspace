@@ -110,7 +110,7 @@ describe("Personal Home", () => {
     expect(row).toHaveAttribute("data-tone", "danger");
     expect(row).toHaveTextContent("Просрочено");
     expect(panel.queryByText("Письмо ЭДО 4")).not.toBeInTheDocument();
-    expect(panel.getByText(/ЭДО: 10 писем назначено вам/)).toBeInTheDocument();
+    expect(panel.getByText(/Писем, назначенных вам в ЭДО: 10/)).toBeInTheDocument();
   });
   it("previews only explicitly assigned letters and opens the incoming register, not an outgoing request", async () => {
     const letter: AIReferentIncomingLetter = {

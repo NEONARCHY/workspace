@@ -166,8 +166,8 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
       <ResourceState loading={mailLoading} onRetry={retry} />
       {referent?.error ? <ResourceState loading={false} error={referent.error} onRetry={retry} /> : null}
       {edoError ? <ResourceState loading={false} error={edoError} onRetry={retry} /> : null}
-      {personalEdo ? <p className="home-notice">ЭДО: {personalEdo.meta.total} писем назначено вам.
-        {personalEdo.meta.total > myEdo.slice(0, 3).length ? " Здесь показаны последние три; полный список — во «Входящих письмах»." : null}</p> : null}
+      {personalEdo ? <p className="home-notice">Писем, назначенных вам в ЭДО: {personalEdo.meta.total}.
+        {personalEdo.meta.total > myEdo.slice(0, 3).length ? " Здесь показаны до трёх последних писем; полный список — во «Входящих письмах»." : null}</p> : null}
     </Panel>,
     recognition: <Panel id="recognition" title="Награды и достижения" note="Признание коллег и подтверждённые результаты" icon={<Reward24Regular />} action={openProfile ? <Button size="small" appearance="subtle" onClick={() => openProfile(user.id)}>Мой профиль</Button> : undefined}>
       <ResourceState loading={!recognition} error={recognition?.error} onRetry={retry} />
