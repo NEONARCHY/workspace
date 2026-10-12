@@ -12,6 +12,7 @@ import type {
   AIReferentRegistry,
   AIReferentVisibility,
   WorkspacePerson,
+  WorkspaceAttachment,
 } from "@yuksalish/contracts";
 import {
   Button,
@@ -82,6 +83,7 @@ interface AIReferentViewProps {
   readonly focusRequestId?: string;
   readonly focusIncomingId?: string;
   readonly focusRevision?: number;
+  readonly onPreviewAttachment?: (attachment: WorkspaceAttachment) => void;
 }
 
 const statusLabels: Readonly<Record<AIReferentLetter["status"], string>> = {
@@ -184,7 +186,7 @@ function dateTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision }: AIReferentViewProps) {
+export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
   const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "visibility" | "addresses" | "archive" | "telegram">("incoming");
   const [visibility, setVisibility] = useState<AIReferentVisibility>();
   const [visibilityError, setVisibilityError] = useState("");
@@ -807,6 +809,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                 />
                 {savedPrimary ? <ul className="ai-referent-attachments" aria-label="Сохранённое письмо"><li>
                   <span title={savedPrimary.fileName}>{savedPrimary.fileName}<small>{form.file ? "Будет заменено выбранным DOCX после сохранения." : "Прикреплено к черновику — повторная загрузка не нужна."}</small></span>
+                  {onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(savedPrimary)} aria-label={`Открыть ${savedPrimary.fileName}`}>Открыть</Button>}
                   <Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(savedPrimary.id, savedPrimary.fileName)} aria-label={`Скачать ${savedPrimary.fileName}`}>Скачать</Button>
                 </li></ul> : null}
                 {form.file ? <div className="ai-referent-preflight" role="status" aria-live="polite">
@@ -825,6 +828,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   onFiles={(files) => setForm((current) => ({ ...current, additionalFiles: [...(current.additionalFiles ?? []), ...files] }))}
                 />{savedAdditional.length ? <ul className="ai-referent-attachments" aria-label="Сохранённые вложения">{savedAdditional.map((attachment) => <li key={attachment.id}>
                   <span title={attachment.fileName}>{attachment.fileName}<small>Прикреплено к черновику</small></span>
+                  {onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(attachment)} aria-label={`Открыть ${attachment.fileName}`}>Открыть</Button>}
                   <Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(attachment.id, attachment.fileName)} aria-label={`Скачать ${attachment.fileName}`}>Скачать</Button>
                 </li>)}</ul> : null}{selectedAdditionalFiles.length ? <ul className="ai-referent-attachments" aria-label="Добавленные вложения">{selectedAdditionalFiles.map((file, index) => <li key={`${file.name}-${file.lastModified}-${index}`}>
                   <span title={file.name}>{file.name}</span>
@@ -877,7 +881,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                     if (!pdf) throw new Error("Итоговый PDF ещё недоступен. Обновите письмо.");
                     saveReferentBlob(await downloadAIReferentPacket(token, "outgoing", selected.id, pdf), referentDownloadName(selected.displayNumber || selected.subject || "Подписанное письмо", "pdf"));
                   }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Не удалось загрузить PDF."));
-                }}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p><Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
+                }}>Скачать подписанное письмо</Button></section> : primaryDocument ? <section className="ai-referent-detail-card"><h3>Письмо · {primaryDocument.fileName}</h3><p>Пока письмо не подписано, доступен исходный документ. После подписи его заменит PDF.</p>{onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(primaryDocument)}>Открыть в Workspace</Button>}<Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(primaryDocument.id, primaryDocument.fileName)}>Скачать письмо</Button></section> : null}
                 {selected.workflowKind === "delivery" ? <section className="ai-referent-detail-card ai-referent-recipient">
                   <h3>Получатель</h3>
                   <strong>{selected.recipientOrganization}</strong>

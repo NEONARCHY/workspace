@@ -106,6 +106,7 @@ async def test_workspace_routes_delegate_to_services(monkeypatch: pytest.MonkeyP
         "post_attachment",
         "get_attachment",
         "download_attachment",
+        "preview_attachment",  # Covered by focused permission/storage preview tests.
         "put_attachment",
     }
     exercised = 0
