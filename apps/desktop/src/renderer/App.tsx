@@ -109,7 +109,7 @@ import {
   AbsencesView, AccountPanel, AIHisobotView, AIReferentView, IncomingLettersView, ApprovalsView,
   CalendarView, EmployeeProfileDialog, EmployeesView, FeedView, HrView, PersonalHomeView,
   MembersView, preloadWorkspaceModules, prepareEmployeeProfile, ProjectHubView, ProjectsView,
-  SupportDialog, TasksView, TeamDashboardView, TelegramAccessView,
+  SupportDialog, TasksView, TeamDashboardView, TelegramAccessView, SurveyAnalyticsView,
   TripApprovalsView, ZoomView,
 } from "./workspace-module-preload";
 import { clearProfilePreload } from "./profile-preload";
@@ -320,6 +320,7 @@ const navItems: readonly NavItem[] = [
     icon: <TaskListSquareLtr24Regular />,
   },
   { key: "team_overview", label: "Обзор команды", icon: <Board24Regular /> },
+  { key: "survey_analytics", label: "Аналитика опросов", icon: <Board24Regular /> },
   {
     key: "payment_requests",
     label: "Заявки на оплату",
@@ -388,6 +389,10 @@ export function App() {
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
+  const [surveyVisitedBy, setSurveyVisitedBy] = useState<string>();
+  if (!session && surveyVisitedBy) setSurveyVisitedBy(undefined);
+  else if (session && activeSection === "survey_analytics" && surveyVisitedBy !== session.user.id)
+    setSurveyVisitedBy(session.user.id);
   const [sessionRestoring, setSessionRestoring] = useState(() => workspacePlatform.hasSessionHint());
   const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [activeApiOrigin, setActiveApiOrigin] = useState<string>();
@@ -2483,6 +2488,15 @@ export function App() {
               />
             ) : null}
             </RecoveryBoundary>
+            {canView("survey_analytics") && (displayedSection === "survey_analytics" || surveyVisitedBy === session.user.id) ? (
+              <div style={{ display: displayedSection === "survey_analytics" ? "contents" : "none" }}>
+                <RecoveryBoundary key={session.user.id} onHome={() => setActiveSection("home")}>
+                  <SurveyAnalyticsView key={session.user.id} token={session.accessToken}
+                    canCreate={modulePermissions.survey_analytics?.create ?? false}
+                    canEdit={modulePermissions.survey_analytics?.edit ?? false} />
+                </RecoveryBoundary>
+              </div>
+            ) : null}
             </Suspense>
           </main>
         </div>

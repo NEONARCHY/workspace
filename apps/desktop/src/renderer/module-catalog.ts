@@ -122,6 +122,7 @@ export const fallbackModules: readonly ModuleDescriptor[] = [
     route: "/employees",
     status: "available",
   },
+  { key: "survey_analytics", label: { ru: "Аналитика опросов", uz_cyrl: "Сўровномалар таҳлили", uz_latn: "So‘rovnomalar tahlili" }, route: "/survey-analytics", status: "available" },
 ];
 
 export async function loadModuleCatalog(

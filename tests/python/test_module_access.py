@@ -37,6 +37,19 @@ def test_permission_normalization_preserves_safe_dependencies() -> None:
 
 
 def test_request_paths_map_to_server_enforced_module_actions() -> None:
+    assert request_module_action("/api/v1/survey-analyses", "GET") == ("survey_analytics", "view")
+    assert request_module_action("/api/v1/survey-analyses", "POST") == (
+        "survey_analytics", "create",
+    )
+    assert request_module_action("/api/v1/survey-analyses/id", "PUT") == (
+        "survey_analytics", "edit",
+    )
+    assert request_module_action("/api/v1/survey-analyses/id/original", "GET") == (
+        "survey_analytics", "view",
+    )
+    assert request_module_action("/api/v1/survey-analyses/id/export", "POST") == (
+        "survey_analytics", "view",
+    )
     assert request_module_action("/api/v1/workspace/bootstrap", "GET") is None
     assert request_module_action("/api/v1/assistant/messages", "GET") == (
         "assistant", "view"
