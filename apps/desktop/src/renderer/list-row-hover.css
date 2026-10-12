@@ -46,7 +46,8 @@ body .app-provider .task-record-table .record-row[data-deadline] {
   --row-wash-end: 6%;
   background-image: linear-gradient(90deg,
     color-mix(in srgb, var(--row-hover-accent) 18%, transparent),
-    transparent 28%);
+    color-mix(in srgb, var(--row-hover-accent) 7%, transparent) 42%,
+    transparent 100%);
 }
 body .app-provider .task-record-table .record-row[data-deadline="warning"] {
   --row-hover-accent: var(--ws-accent-warning);
@@ -54,23 +55,29 @@ body .app-provider .task-record-table .record-row[data-deadline="warning"] {
 body .app-provider .task-record-table .record-row[data-deadline="danger"] {
   --row-hover-accent: var(--ws-accent-danger);
 }
-/* Keep the single gradient on the row, not repeated in each cell. */
-body .app-provider .task-record-table .record-title {
-  background-color: transparent;
-  background-image: none;
+/* Cells must stay transparent even on hover/selection: legacy first-cell
+   shorthands otherwise hide the row wash or split it at the title's edge. */
+body .app-provider .task-record-table .record-row > td,
+body .app-provider .task-record-table .record-row:is(:hover, :focus-within, .selected) > td {
+  position: static;
+  background: transparent;
 }
 /* Crossfade from the resting tint, rather than stacking translucent tints or
    starting a second gradient abruptly at the first column's edge. */
-body .app-provider .task-record-table .record-row:where(:not(.selected))[data-deadline] .list-row-hover-wash {
+body .app-provider .task-record-table .record-row[data-deadline] .list-row-hover-wash {
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), white),
-    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), white));
+    color-mix(in srgb, var(--row-hover-accent) 10%, white) 42%,
+    white 100%);
+  transform: none;
+  transition: opacity var(--ws-motion-fast) var(--ws-ease);
+  box-shadow: none;
 }
 
-/* Existing selection/deadline washes remain the only gradient in their area.
+/* Other selected surfaces retain their existing selection wash.
    A travelling underline provides hover feedback without additive tinting. */
 body .app-provider :is(.team-dash-person, .trip-list-item).selected::before,
-body .app-provider .record-table .record-row.selected .list-row-hover-wash {
+body .app-provider .record-table .record-row.selected:not([data-deadline]) .list-row-hover-wash {
   background: none;
   box-shadow: inset 0 -2px color-mix(in srgb, var(--row-hover-accent) 55%, transparent);
 }
