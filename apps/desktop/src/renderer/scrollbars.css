@@ -10,7 +10,7 @@ html body :is(.app-provider, .fui-FluentProvider) * {
     scrollbar-width: auto;
     scrollbar-color: auto;
   }
-  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar { width: 4px; height: 4px; }
+  html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar { width: 6px; height: 6px; }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-track,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-corner { background: transparent; }

@@ -858,6 +858,7 @@ async def forward_detail_map(
     if feed_ids and (await module_permissions_for_user(connection, user))["feed"]["view"]:
         available = set((await connection.execute(select(feed_posts.c.id).where(
             feed_posts.c.id.in_(feed_ids),
+            feed_posts.c.deleted_at.is_(None),
         ))).scalars())
     result: dict[UUID, ForwardedContentResponse] = {}
     for message_id, value in forwarded.items():

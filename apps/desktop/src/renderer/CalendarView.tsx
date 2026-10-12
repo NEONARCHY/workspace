@@ -15,7 +15,7 @@ import type {
   WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Input, Textarea } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
@@ -38,6 +38,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { useCalendarEventClock } from "./useCalendarEventClock";
+import { CalendarAppearance, CalendarIcon, calendarAppearanceStyle } from "./CalendarAppearance";
 
 interface CalendarViewProps {
   readonly token?: string;
@@ -151,6 +152,8 @@ function emptyDraft(currentUserId: string, date = new Date()): CalendarEventInpu
     allDay: false,
     location: "",
     attendeeIds: [currentUserId],
+    color: "#4C96A5",
+    iconKey: "meeting",
   };
 }
 
@@ -159,6 +162,8 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
     title: event.title,
     description: event.description,
     eventType: event.eventType,
+    color: event.color ?? null,
+    iconKey: event.iconKey ?? "meeting",
     startsAt: localInput(new Date(event.startsAt)),
     endsAt: localInput(new Date(event.endsAt)),
     allDay: event.allDay,
@@ -212,6 +217,11 @@ export function CalendarView({
   };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [availabilityWarning, setAvailabilityWarning] = useState("");
+  const chairmanIds = useMemo(() => new Set(people.filter(person =>
+    (person.jobTitle ?? "").replace(/[‘’ʻʼ`]/g, "'").trim().replace(/\s+/g, " ").toLowerCase() === '"yuksalish" harakati raisi, qonunchilik palatasi qo\'mita raisi'
+  ).map(person => person.id)), [people]);
+  const warnChairman = (person: WorkspacePerson) => setAvailabilityWarning(`${person.name} уже занят в это время: участие в другом событии подтверждено. Выберите другое время или уберите его из участников.`);
   const [projectTargets, setProjectTargets] = useState<PaymentProjectTargets>({ projects: [], workstreams: [], items: [] });
   const [projectTargetsLoading, setProjectTargetsLoading] = useState(false);
   const [projectTargetsError, setProjectTargetsError] = useState("");
@@ -325,11 +335,11 @@ export function CalendarView({
         continue;
       }
       for (const attendee of event.attendees) {
-        if (attendee.status !== "declined") busyIds.add(attendee.userId);
+        if (attendee.status !== "declined" && (!chairmanIds.has(attendee.userId) || attendee.status === "accepted")) busyIds.add(attendee.userId);
       }
     }
     return busyIds;
-  }, [draft, events, selected?.id]);
+  }, [draft, events, selected?.id, chairmanIds]);
   const days = useMemo(() => {
     const firstWeekday = (month.getDay() + 6) % 7;
     const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -448,6 +458,8 @@ export function CalendarView({
       setError("Укажите название каждой подготовленной внутренней задачи или удалите пустую строку.");
       return;
     }
+    const busyChairman = people.find(person => chairmanIds.has(person.id) && busyAttendeeIds.has(person.id) && draft.attendeeIds.includes(person.id));
+    if (busyChairman) { warnChairman(busyChairman); return; }
     if (!selected && preparedTasks.some((task) => {
       if (!task.dueAt) return false;
       const dueAt = new Date(task.dueAt).getTime();
@@ -553,6 +565,7 @@ export function CalendarView({
       }
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Не удалось сохранить событие.");
+      if (saveError instanceof Error && saveError.message.includes("заняты")) setAvailabilityWarning(saveError.message);
     } finally {
       setBusy(false);
     }
@@ -712,6 +725,8 @@ export function CalendarView({
                     {visibleEvents.map((event) => (
                       <button
                         className={`calendar-event-pill ${event.eventType} ${event.status}`}
+                        style={calendarAppearanceStyle(event)}
+                        aria-label={`${eventTime(event)} · ${event.title}`}
                         key={event.id}
                         type="button"
                         onClick={(clickEvent) => {
@@ -723,12 +738,13 @@ export function CalendarView({
                         }}
                       >
                         <span>{event.allDay ? "День" : dayKey(new Date(event.startsAt)) === key ? new Date(event.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
-                        <strong>{event.title}</strong>
+                        <CalendarIcon iconKey={event.iconKey} /><strong>{event.title}</strong>
                       </button>
                     ))}
                     {visibleZoom.map((meeting) => (
                       <button
                         className="calendar-event-pill zoom"
+                        aria-label={`${new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} · Zoom · ${meeting.topic}`}
                         key={meeting.id}
                         type="button"
                         onClick={(clickEvent) => {
@@ -737,7 +753,7 @@ export function CalendarView({
                         }}
                       >
                         <span>{new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <strong>{meeting.topic}</strong>
+                        <CalendarIcon zoom /><strong>{meeting.topic}</strong>
                       </button>
                     ))}
                     {dayItemCount > visibleEventsPerDay ? <span className="calendar-more-events">Ещё {dayItemCount - visibleEventsPerDay}</span> : null}
@@ -775,6 +791,7 @@ export function CalendarView({
                 <option value={selected.eventType}>{typeLabels[selected.eventType]}</option>
               ) : null}
             </Select>
+            <CalendarAppearance draft={draft} disabled={busy} onChange={setDraft} />
             <div className="calendar-form-dates">
               <label>
                 Начало
@@ -809,13 +826,17 @@ export function CalendarView({
                   disabled={busy || (
                     person.id !== currentUserId
                     && busyAttendeeIds.has(person.id)
+                    && !chairmanIds.has(person.id)
                     && !draft.attendeeIds.includes(person.id)
                   )}
-                  onChange={(_event, data) => setDraft({
+                  onChange={(_event, data) => {
+                    if (data.checked && busyAttendeeIds.has(person.id) && chairmanIds.has(person.id)) { warnChairman(person); return; }
+                    setDraft({
                     ...draft,
                     audienceScope: undefined,
                     attendeeIds: data.checked ? [...draft.attendeeIds, person.id] : draft.attendeeIds.filter((id) => id !== person.id),
-                  })}
+                    });
+                  }}
                 />
               ))}
             </fieldset>
@@ -927,6 +948,7 @@ export function CalendarView({
                   onClick={() => onOpenZoomMeeting?.(meeting.id)}
                 >
                   <span className="calendar-agenda-time">
+                    <CalendarIcon zoom />
                     {new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
                   </span>
                   <strong>{meeting.topic}</strong>
@@ -937,8 +959,8 @@ export function CalendarView({
                 </button>
               ))}
               {selectedDayEvents.length > 0 ? selectedDayEvents.map((event) => (
-                <button className={`calendar-agenda-card ${event.eventType} ${event.status}`} key={event.id} type="button" onClick={() => { setSelected(event); setError(""); }}>
-                  <span className="calendar-agenda-time">{eventTime(event)}</span>
+                <button className={`calendar-agenda-card ${event.eventType} ${event.status}`} style={calendarAppearanceStyle(event)} key={event.id} type="button" onClick={() => { setSelected(event); setError(""); }}>
+                  <span className="calendar-agenda-time"><CalendarIcon iconKey={event.iconKey} />{eventTime(event)}</span>
                   <strong>{event.title}</strong>
                   <small>{typeLabels[event.eventType]}{event.location ? ` · ${event.location}` : ""}</small>
                   {event.status === "cancelled" ? <em>Отменено</em> : null}
@@ -968,6 +990,8 @@ export function CalendarView({
         departments={departments}
         currentUserId={currentUserId}
         busyAttendeeIds={busyAttendeeIds}
+        chairmanIds={chairmanIds}
+        onUnavailableChairman={warnChairman}
         minimumStart={localInput(startOfDay(new Date()))}
         tasks={preparedTasks}
         payment={preparedPayment}
@@ -983,6 +1007,11 @@ export function CalendarView({
         onClose={closeDraft}
         onSubmit={save}
       /> : null}
+      {availabilityWarning ? <Dialog open onOpenChange={(_, data) => { if (!data.open) setAvailabilityWarning(""); }}>
+        <DialogSurface aria-label="Участник уже занят"><DialogBody><DialogTitle>Участник уже занят</DialogTitle>
+          <DialogContent>{availabilityWarning}</DialogContent><DialogActions><Button appearance="primary" onClick={() => setAvailabilityWarning("")}>Понятно</Button></DialogActions>
+        </DialogBody></DialogSurface>
+      </Dialog> : null}
       {taskComposerEvent && onCreateTask ? <TaskComposer
         open
         people={people}

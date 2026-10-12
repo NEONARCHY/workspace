@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
-import type { ApprovalRequestSummary, CalendarEvent, OfficeFilePreview, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, CalendarEvent, CalendarEventInput, ChatMessage, OfficeFilePreview, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
 import FileViewer from "../src/renderer/FileViewer";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
@@ -175,6 +175,24 @@ function Preview() {
   const [sample, setSample] = useState(0);
   const [selectedTask, setSelectedTask] = useState<string>();
   const [previewFile, setPreviewFile] = useState<WorkspaceAttachment>();
+  const [scheduleEvents, setScheduleEvents] = useState<readonly CalendarEvent[]>(calendarEvents);
+  const createPreviewEvent = async (payload: CalendarEventInput): Promise<CalendarEvent> => {
+    const now = new Date().toISOString();
+    const event: CalendarEvent = { ...payload, id: crypto.randomUUID(), organizerUserId: people[0]!.id, status: "scheduled", attendees: payload.attendeeIds.map(userId => ({ userId, status: userId === people[0]!.id ? "accepted" : "pending" })), canRespond: false, canEdit: true, createdAt: now, updatedAt: now };
+    setScheduleEvents(current => [...current, event]);
+    return event;
+  };
+  const [messages, setMessages] = useState<readonly ChatMessage[]>(initialMessages);
+  const sendPreviewMessage = async (chatId: string, body: string) => {
+    const message: ChatMessage = { id: crypto.randomUUID(), chatId, authorId: "aziza", body, time: "12:05", createdAt: new Date().toISOString(), own: true };
+    setMessages(current => [...current, message]);
+    return message;
+  };
+  const showGroupedPreview = () => setMessages([
+    ...initialMessages,
+    ...["Первое сообщение группы", "Второе сообщение группы", "Последнее сообщение группы"].map((body, index): ChatMessage => ({ id: `qa-group-${index}`, chatId: "finance", authorId: "baxtiyor", body, time: `12:0${index}`, createdAt: `2026-10-12T09:0${index}:00Z` })),
+    { id: "qa-long", chatId: "finance", authorId: "dilshod", body: "Длинное одиночное сообщение: проверяем, что аватар остаётся у нижнего края, а текст не сдвигается. ".repeat(6), time: "12:04", createdAt: "2026-10-12T09:04:00Z" },
+  ]);
   const previewSamples = ["Word.docx", "План.xlsx", "Изображение.svg", "Документ.pdf"].map((fileName, index): WorkspaceAttachment => ({
     id: `qa-preview-${index}`, fileName, ownerType: "task", ownerId: "qa-task", contentType: index === 2 ? "image/svg+xml" : "application/octet-stream", byteSize: 12000, sha256: "qa", uploadedByUserId: "qa", documentRole: "general", createdAt: "2026-10-12T10:00:00Z",
   }));
@@ -237,15 +255,16 @@ function Preview() {
               <button type="button" onClick={() => simulateFileDrag("dragenter")}>QA: готовность принять файл</button>
               <button type="button" onClick={() => simulateFileDrag("drop")}>QA: drop тестового файла</button>
               <button type="button" onClick={() => simulateFileDrag("dragend")}>QA: отмена drag</button>
+              <button type="button" onClick={showGroupedPreview}>QA: группа и длинный текст</button>
             </div>}
           </header>
           <main className="app-content" id="workspace-content">
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
-            : section === "calendar" ? <CalendarView events={calendarEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={nothing} onUpdate={nothing} onCancel={nothing} />
+            : section === "calendar" ? <CalendarView events={scheduleEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={createPreviewEvent} onUpdate={nothing} onCancel={nothing} />
             : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
-            : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={initialMessages} tasks={[]} attachments={[]} people={people}
+            : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={messages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
-              onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
+              onSendMessage={sendPreviewMessage} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
              : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>

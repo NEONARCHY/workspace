@@ -150,6 +150,7 @@ export interface DirectoryEmployee {
 }
 
 export interface DirectoryBootstrap {
+  readonly canTerminateEmployees?: boolean;
   readonly roles: readonly RoleDescriptor[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkspacePosition[];
@@ -558,6 +559,7 @@ export type GreetingLanguage = "ru" | "uz_latn" | "uz_cyrl";
 
 export type CalendarEventType = "meeting" | "deadline" | "trip" | "task" | "general";
 export type CalendarAttendanceStatus = "accepted" | "pending" | "declined";
+export type CalendarEventIconKey = "trees" | "blood" | "hearing" | "assembly" | "meeting" | "trip" | "project" | "teambuilding" | "mountains" | "contract" | "memorandum" | "training" | "interview";
 
 export interface CalendarEventAttendee {
   readonly userId: string;
@@ -574,6 +576,8 @@ export interface CalendarEvent {
   readonly title: string;
   readonly description: string;
   readonly eventType: CalendarEventType;
+  readonly color?: string | null;
+  readonly iconKey?: CalendarEventIconKey | null;
   readonly startsAt: string;
   readonly endsAt: string;
   readonly allDay: boolean;
@@ -593,6 +597,8 @@ export interface CalendarEventInput {
   readonly title: string;
   readonly description: string;
   readonly eventType: CalendarEventType;
+  readonly color?: string | null;
+  readonly iconKey?: CalendarEventIconKey | null;
   readonly startsAt: string;
   readonly endsAt: string;
   readonly allDay: boolean;

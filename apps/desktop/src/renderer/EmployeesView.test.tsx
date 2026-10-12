@@ -46,6 +46,45 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Employee list and retained access controls", () => {
+  it("separates dismissed employees from every ordinary list filter", async () => {
+    const former = { ...data.employees[1]!, status: "archived" };
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: true, employees: [data.employees[0]!, former] });
+    mount(); await screen.findByRole("table");
+    const table = screen.getByRole("table");
+    expect(table).not.toHaveTextContent(former.name);
+    fireEvent.click(screen.getByRole("button", { name: "Уволенные" }));
+    expect(table).toHaveTextContent(former.name);
+    expect(table).not.toHaveTextContent(data.employees[0]!.name);
+    expect(table).toHaveTextContent("Уволен");
+    fireEvent.click(screen.getByRole("button", { name: "Уволенные" }));
+    expect(table).not.toHaveTextContent(former.name);
+  });
+
+  it("lets an authorized manager terminate but not block or restore, and removes the saved row", async () => {
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: true });
+    vi.mocked(updateEmployeeStatus).mockResolvedValue({ ...data.employees[0]!, status: "archived" });
+    mount({ ...user, role: "manager" }); await screen.findByRole("table");
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
+    expect(screen.queryByRole("button", { name: "Заблокировать" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Уволить" }));
+    expect(screen.getByRole("button", { name: "Подтвердить" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Основание изменения состояния сотрудника"), { target: { value: "Завершение трудового договора" } });
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await waitFor(() => expect(screen.getByRole("table")).not.toHaveTextContent("Азиза Каримова"));
+    expect(updateEmployeeStatus).toHaveBeenCalledWith("test-token", "one", "archived", "Завершение трудового договора");
+    fireEvent.click(screen.getByRole("button", { name: "Уволенные" }));
+    expect(screen.getByRole("table")).toHaveTextContent("Азиза Каримова");
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
+    expect(screen.queryByRole("button", { name: "Восстановить доступ" })).not.toBeInTheDocument();
+  });
+
+  it("hides dismissal controls without the server capability", async () => {
+    vi.mocked(loadDirectory).mockResolvedValue({ ...data, canTerminateEmployees: false });
+    mount({ ...user, role: "employee" }); await screen.findByRole("table");
+    expect(screen.queryByRole("button", { name: "Уволенные" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Управление сотрудником: Азиза Каримова" }));
+    expect(screen.queryByRole("button", { name: "Уволить" })).not.toBeInTheDocument();
+  });
   it("lets a superadmin change only their own position and department", async () => {
     const self = { ...data.employees[0]!, id: "me", username: "admin", name: "Администратор", role: "superadmin" as const };
     const onEmployeeChanged = vi.fn();

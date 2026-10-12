@@ -301,7 +301,10 @@ async def birthday_greeting(
         await connection.execute(
             select(feed_posts.c.birthday_user_id, users.c.full_name)
             .join(users, users.c.id == feed_posts.c.birthday_user_id)
-            .where(feed_posts.c.id == payload.post_id, feed_posts.c.system_kind == "birthday")
+            .where(
+                feed_posts.c.id == payload.post_id, feed_posts.c.system_kind == "birthday",
+                feed_posts.c.deleted_at.is_(None),
+            )
         )
     ).one_or_none()
     if row is None:

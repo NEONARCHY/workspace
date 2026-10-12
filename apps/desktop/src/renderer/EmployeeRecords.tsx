@@ -8,7 +8,7 @@ import { ProfileAvatar } from "./ProfileAvatar";
 import { DepartmentIcon } from "./DepartmentIcon";
 
 export const employeeRoleLabels: Record<WorkspaceRole, string> = { superadmin: "Суперадминистратор", admin: "Администратор", manager: "Руководитель", employee: "Сотрудник" };
-export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "В архиве" })[status] ?? status;
+export const employeeStatusLabel = (status: string) => ({ active: "Активен", pending: "Ожидает активации", invited: "Приглашён", disabled: "Отключён", blocked: "Заблокирован", archived: "Уволен" })[status] ?? status;
 
 export function EmployeeRecords({ token, employees, departments, filterKey, selectedIds, onOpen, onToggle, onTogglePage }: {
   token: string;

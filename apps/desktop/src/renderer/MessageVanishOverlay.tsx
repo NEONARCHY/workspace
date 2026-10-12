@@ -234,6 +234,9 @@ function animateParticles({
       animationFrame = requestAnimationFrame(render);
     } else {
       context.clearRect(0, 0, width, height);
+      // Retain the intact final frame until React reveals the DOM text and
+      // removes this canvas in the same commit. Clearing here caused a blink.
+      if (direction === "restore") context.drawImage(source, 0, 0, width, height);
       onComplete(requestId);
     }
   };

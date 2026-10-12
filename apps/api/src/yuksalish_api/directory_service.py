@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, insert, select, update
+from sqlalchemy import and_, delete, exists, func, insert, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection
@@ -28,7 +29,11 @@ from .directory_schemas import (
     RoleDescriptorResponse,
     SelfSuperadminOrganizationUpdateRequest,
 )
-from .position_policy import is_executive_leader, is_human_resources_position
+from .position_policy import (
+    is_employee_lifecycle_leader,
+    is_executive_leader,
+    is_human_resources_position,
+)
 from .tables import (
     audit_events,
     auth_invitations,
@@ -37,6 +42,8 @@ from .tables import (
     chats,
     departments,
     hisobot_unit_reports,
+    hr_employee_profiles,
+    hr_settings,
     messages,
     module_access_rules,
     positions,
@@ -50,6 +57,17 @@ class DirectoryServiceError(ValueError):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+async def can_terminate_employees(connection: AsyncConnection, actor: AuthenticatedUser) -> bool:
+    if (actor.role in {"admin", "superadmin", "manager"}
+        or is_employee_lifecycle_leader(actor.job_title)
+        or is_human_resources_position(actor.job_title)):
+        return True
+    return bool(await connection.scalar(select(or_(
+        exists(select(hr_settings.c.id).where(hr_settings.c.hr_user_id == actor.id)),
+        exists(select(departments.c.id).where(departments.c.lead_user_id == actor.id)),
+    ))))
 
 
 ROLE_DESCRIPTORS = [
@@ -117,7 +135,9 @@ async def _position_response(
                     positions,
                     func.count(users.c.id).label("assigned_users_count"),
                 )
-                .outerjoin(users, users.c.position_id == positions.c.id)
+                .outerjoin(users, and_(
+                    users.c.position_id == positions.c.id, users.c.status != "archived",
+                ))
                 .where(positions.c.id == position_id)
                 .group_by(positions.c.id)
             )
@@ -148,7 +168,9 @@ async def _department_response(
                     departments,
                     func.count(users.c.id).label("assigned_users_count"),
                 )
-                .outerjoin(users, users.c.department_id == departments.c.id)
+                .outerjoin(users, and_(
+                    users.c.department_id == departments.c.id, users.c.status != "archived",
+                ))
                 .where(departments.c.id == department_id)
                 .group_by(departments.c.id)
             )
@@ -159,7 +181,9 @@ async def _department_response(
     if row is None:
         raise DirectoryServiceError(404, "Department was not found")
     member_ids = list((await connection.execute(
-        select(users.c.id).where(users.c.department_id == department_id).order_by(users.c.full_name)
+        select(users.c.id).where(
+            users.c.department_id == department_id, users.c.status != "archived",
+        ).order_by(users.c.full_name)
     )).scalars().all())
     chat_id = await connection.scalar(select(chats.c.id).where(
         chats.c.context_type == "department", chats.c.context_id == department_id,
@@ -195,6 +219,7 @@ async def load_directory(
     connection: AsyncConnection,
     actor: AuthenticatedUser | None = None,
 ) -> DirectoryBootstrapResponse:
+    can_terminate = await can_terminate_employees(connection, actor) if actor else False
     department_rows = (
         (
             await connection.execute(
@@ -202,7 +227,9 @@ async def load_directory(
                     departments,
                     func.count(users.c.id).label("assigned_users_count"),
                 )
-                .outerjoin(users, users.c.department_id == departments.c.id)
+                .outerjoin(users, and_(
+                    users.c.department_id == departments.c.id, users.c.status != "archived",
+                ))
                 .group_by(departments.c.id)
                 .order_by(departments.c.name)
             )
@@ -217,7 +244,9 @@ async def load_directory(
                     positions,
                     func.count(users.c.id).label("assigned_users_count"),
                 )
-                .outerjoin(users, users.c.position_id == positions.c.id)
+                .outerjoin(users, and_(
+                    users.c.position_id == positions.c.id, users.c.status != "archived",
+                ))
                 .group_by(positions.c.id)
                 .order_by(positions.c.is_active.desc(), positions.c.sort_order, positions.c.name)
             )
@@ -263,6 +292,7 @@ async def load_directory(
             .all()
         )
     return DirectoryBootstrapResponse(
+        can_terminate_employees=can_terminate,
         roles=ROLE_DESCRIPTORS,
         departments=[await _department_response(connection, row["id"]) for row in department_rows],
         positions=[
@@ -294,6 +324,7 @@ async def load_directory(
                 ),
             )
             for row in employee_rows
+            if row["status"] != "archived" or can_terminate or actor is None
         ],
         modules=[
             ModuleAccessDescriptorResponse(
@@ -1089,7 +1120,11 @@ async def update_employee_status(
     employee_id: UUID,
     payload: EmployeeStatusUpdateRequest,
 ) -> DirectoryEmployeeResponse:
-    _require_admin(actor)
+    if payload.status == "archived":
+        if not await can_terminate_employees(connection, actor):
+            raise DirectoryServiceError(403, "Employee termination permission required")
+    else:
+        _require_admin(actor)
     employee = (
         (await connection.execute(select(users).where(users.c.id == employee_id).with_for_update()))
         .mappings()
@@ -1135,6 +1170,15 @@ async def update_employee_status(
         )
     )
     if payload.status != "active":
+        if payload.status == "archived":
+            await connection.execute(update(hr_employee_profiles).where(
+                hr_employee_profiles.c.user_id == employee_id,
+                hr_employee_profiles.c.employment_status == "active",
+            ).values(
+                employment_status="terminated",
+                terminated_on=now.astimezone(ZoneInfo("Asia/Tashkent")).date(),
+                termination_reason=payload.reason, updated_at=now,
+            ))
         await connection.execute(update(departments).where(
             departments.c.lead_user_id == employee_id
         ).values(lead_user_id=None))

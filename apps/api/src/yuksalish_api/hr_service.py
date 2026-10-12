@@ -12,7 +12,9 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .access_control import ensure_module_action
+from .administration_schemas import EmployeeStatusUpdateRequest
 from .auth import AuthenticatedUser
+from .directory_service import DirectoryServiceError, update_employee_status
 from .hr_schemas import (
     HrHistoryResponse,
     HrOverviewResponse,
@@ -422,6 +424,25 @@ async def terminate_profile(
     payload: HrTerminationWrite,
 ) -> HrProfileResponse:
     await _require_actor(connection, actor, "hr", "edit")
+    profile = (await connection.execute(select(hr_employee_profiles.c.user_id).where(
+        hr_employee_profiles.c.id == profile_id,
+    ))).first()
+    if profile is None:
+        raise HrError(404, "Кадровая карточка не найдена")
+    if profile.user_id is not None:
+        status = await connection.scalar(select(users.c.status).where(
+            users.c.id == profile.user_id,
+        ))
+        if status != "archived":
+            try:
+                await update_employee_status(
+                    connection, actor, profile.user_id, EmployeeStatusUpdateRequest(
+                        status="archived",
+                        reason=f"Кадровое увольнение: {payload.termination_reason}"[:500],
+                    ),
+                )
+            except DirectoryServiceError as error:
+                raise HrError(error.status_code, error.detail) from error
     now = datetime.now(UTC)
     result = await connection.execute(
         update(hr_employee_profiles)
@@ -435,17 +456,6 @@ async def terminate_profile(
     )
     if not result.rowcount:
         raise HrError(404, "Кадровая карточка не найдена")
-    profile = (
-        await connection.execute(
-            select(hr_employee_profiles.c.user_id).where(hr_employee_profiles.c.id == profile_id)
-        )
-    ).one()
-    if profile.user_id is not None:
-        await connection.execute(
-            update(users)
-            .where(users.c.id == profile.user_id)
-            .values(status="archived", updated_at=now)
-        )
     row = (
         await connection.execute(
             select(hr_employee_profiles).where(hr_employee_profiles.c.id == profile_id)

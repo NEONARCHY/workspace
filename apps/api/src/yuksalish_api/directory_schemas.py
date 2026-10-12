@@ -150,6 +150,7 @@ class SelfSuperadminOrganizationUpdateRequest(ApiModel):
 
 
 class DirectoryBootstrapResponse(ApiModel):
+    can_terminate_employees: bool = False
     roles: list[RoleDescriptorResponse]
     departments: list[DepartmentResponse]
     positions: list[PositionResponse]
