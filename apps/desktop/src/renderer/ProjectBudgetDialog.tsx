@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, DialogSurface, Input } from "@fluentui/react-components";
 import type { ProjectBudgetArticleInput, ProjectBudgetSummary, ProjectHubProject } from "@yuksalish/contracts";
 import { WorkspaceDialog } from "./WorkspaceDialog";
@@ -25,6 +25,17 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
   const [error, setError] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [creationKey, setCreationKey] = useState(() => crypto.randomUUID());
+  const articleFormRef = useRef<HTMLFormElement>(null);
+  const addArticleRef = useRef<HTMLButtonElement>(null);
+  const hadArticleForm = useRef(false);
+  useEffect(() => {
+    // Opening replaces the focused footer button; saving temporarily disables
+    // it. Keep the modal focus inside the usable form, also after a retry error.
+    if (busy) return;
+    if (adding) articleFormRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    else if (hadArticleForm.current) addArticleRef.current?.focus();
+    hadArticleForm.current = adding;
+  }, [adding, busy]);
   useEffect(() => {
     let cancelled = false;
     void loadProjectBudget(token, project.id).then((value) => {
@@ -66,7 +77,7 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
           {!summary.articles.length ? <p>Статей пока нет. Их можно добавить вручную или из проверенного импорта.</p> : null}
           <p>В общих расходах учитываются и оплаты без статьи. Валюты не конвертируются. Исторические завершённые заявки и прежние проектные согласования не пересчитаны.</p>
         </> : null}
-        {adding && project.canEdit ? <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
+        {adding && project.canEdit ? <form ref={articleFormRef} onSubmit={(event) => { event.preventDefault(); void save(); }}>
           <label>Название статьи<Input required maxLength={500} disabled={busy} value={article.title} onChange={(_, data) => setArticle({ ...article, title: data.value })} /></label>
           <label>Плановая сумма<Input required inputMode="decimal" maxLength={30} disabled={busy} value={article.amount} onChange={(_, data) => setArticle({ ...article, amount: data.value })} /></label>
           <label>Валюта<WorkspaceSelect disabled={busy} value={article.currency} onChange={(event) => setArticle({ ...article, currency: event.target.value === "USD" ? "USD" : event.target.value === "EUR" ? "EUR" : "UZS" })}><option>UZS</option><option>USD</option><option>EUR</option></WorkspaceSelect></label>
@@ -76,7 +87,7 @@ export function ProjectBudgetDialog({ token, project, onClose }: Props) {
         </form> : null}
       </div>
       <footer>{error ? <p role="alert">{error}</p> : null}<Button disabled={busy} onClick={() => { setBusy(true); setError(""); setRefresh((value) => value + 1); }}>Обновить бюджет</Button>
-        {project.canEdit && !adding ? <Button disabled={busy} onClick={() => {
+        {project.canEdit && !adding ? <Button ref={addArticleRef} disabled={busy} onClick={() => {
           setCreationKey(crypto.randomUUID());
           setArticle({ ...empty, currency: project.currency });
           setError(""); setAdding(true);

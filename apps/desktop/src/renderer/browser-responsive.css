@@ -1,4 +1,130 @@
 /* Browser-only layout. Keep the existing palette, surfaces and domain actions. */
+/* Domain sizing uses the same surfaces and server-confirmed actions as desktop. */
+.web-platform .fui-DialogSurface:is(.project-import-dialog, .project-budget-dialog) { display: flex; flex-direction: column; gap: 0; padding: 0; overflow: hidden; }
+.web-platform :is(.project-import-scroll, .project-budget-scroll) { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform :is(.project-hub-view, .approvals-view, .trips-view, .calendar-view) { min-width: 0; }
+  .web-platform :is(.approval-kanban, .trip-kanban, .project-hub-task-board, .project-hub-funding-board) { overscroll-behavior-inline: contain; scroll-padding-inline: 8px; }
+  .web-platform :is(.approval-column-stack, .project-hub-index-list) { overscroll-behavior-block: contain; }
+  .web-platform .project-hub-view .project-hub-header-side { flex-wrap: wrap; gap: 12px; }
+  .web-platform .project-hub-view .project-hub-header-actions { min-width: 0; flex-wrap: wrap; }
+  .web-platform .project-hub-view .project-hub-workspace { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .project-hub-view .project-hub-item-detail { max-height: none; overflow: visible; }
+  .web-platform .project-hub-view .project-hub-title { flex-wrap: wrap; }
+  .web-platform :is(.approval-view-toolbar, .trip-commandbar) { flex-wrap: wrap; }
+  .web-platform .approvals-view { display: flex; flex-direction: column; overflow-y: auto; }
+  .web-platform .approvals-view > .approvals-toolbar { flex: none; }
+  .web-platform .approvals-view .approval-workspace { flex: none; overflow: visible; }
+  .web-platform .approvals-view :is(.approval-commandbar, .approval-view-toolbar) { flex: none; }
+  .web-platform .approvals-view .approval-kanban { flex: none; height: clamp(340px, 55dvh, 540px); }
+  .web-platform .trips-view { overflow-y: auto; }
+  .web-platform .trips-view > :not(.trip-kanban) { flex-shrink: 0; }
+  .web-platform .trips-view .trip-kanban { flex: none; height: clamp(340px, 55dvh, 540px); }
+  .web-platform .approvals-view .approval-board-empty { width: min(460px, calc(100vw - 56px)); }
+  .web-platform .approvals-view .approval-detail-overlay { top: var(--ws-browser-top, 0px); bottom: auto; height: var(--ws-browser-height, 100dvh); padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+  .web-platform .approvals-view .approval-detail-panel { min-width: 0; width: min(780px, 100%); height: 100%; max-height: 100%; }
+  .web-platform .approvals-view .approval-create-panel { min-width: 0; width: 100%; height: 100%; max-height: 100%; }
+  .web-platform .fui-DialogSurface:is(.project-hub-dialog, .project-import-dialog, .project-budget-dialog, .trip-dialog.context-record-dialog) {
+    position: fixed;
+    top: calc(var(--ws-browser-top, 0px) + max(8px, env(safe-area-inset-top)));
+    left: max(8px, env(safe-area-inset-left));
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+    height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-height: none;
+    margin: 0;
+  }
+  .web-platform .trip-dialog.context-record-dialog .context-record-workspace { grid-template-columns: minmax(0, 1fr); overflow-y: auto; }
+  .web-platform .trip-dialog.context-record-dialog .context-record-workspace > .trip-detail { overflow: visible; padding-inline: 16px; }
+  .web-platform .trip-dialog.context-record-dialog .trip-detail > header { margin-inline: -16px; padding-inline: 16px; }
+  .web-platform .trip-dialog.context-record-dialog .context-record-workspace > .embedded-chat { min-width: 0; min-height: 480px; border-left: 0; }
+  .web-platform .trip-dialog.context-record-dialog .embedded-conversation { height: 480px; }
+  .web-platform .project-budget-dialog .project-budget-table { overflow-x: auto; overscroll-behavior-inline: contain; }
+  .web-platform .project-budget-table table { min-width: 620px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded),
+  .web-platform .calendar-view:not(.task-calendar-embedded):has(.calendar-detail) { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) > * { flex-shrink: 0; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-main { display: flex; flex-direction: column; height: auto; min-height: 0; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-board { flex: none; height: 500px; min-height: 460px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-side,
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) { position: static; width: auto; height: auto; max-height: none; overflow: visible; margin: 0; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-detail { overflow: visible; }
+  .web-platform .calendar-view .calendar-toolbar-actions { flex-wrap: wrap; }
+}
+@media (any-pointer: coarse) {
+  .web-platform .spatial-card { touch-action: pan-x pan-y; }
+  .web-platform .spatial-card .spatial-grip { width: 48px; height: 48px; opacity: 1; pointer-events: auto; touch-action: none; }
+  .web-platform .spatial-card :is(.approval-card-open, .project-hub-task-card > button:first-child) { padding-right: 52px; }
+  .web-platform .app-provider :is(.project-hub-view, .project-hub-dialog, .approvals-view, .trips-view, .trip-dialog, .calendar-view, .calendar-event-composer) :is(.fui-Button, .ws2-segmented button, .approval-mode-switch button, .approval-board-filters button, .approval-detail-tabs button, .approval-detail-header > button) { min-width: 48px; min-height: 48px; }
+  /* Match the shared Button rule's :not() specificity without !important. */
+  .web-platform .app-provider :is(.project-hub-view, .project-hub-dialog, .approvals-view, .trips-view, .trip-dialog, .calendar-view, .calendar-event-composer) .fui-Button:not(.message-actions .fui-Button):not(.chat-more) { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.project-hub-view, .project-hub-dialog, .approvals-view, .trips-view, .trip-dialog, .calendar-view) :is(.workspace-select, .person-picker-trigger, .ws-date-time-trigger, .fui-Input) { min-height: 48px; }
+  .web-platform :is(.project-hub-view, .project-hub-dialog, .approvals-view, .trips-view, .trip-dialog, .calendar-view) :is(input, textarea, select) { font-size: 16px; }
+  .web-platform .project-hub-dialog .employee-scope-switch > button { min-height: 48px; }
+  .web-platform .calendar-event-pill { min-height: 48px; }
+  .web-platform .app-provider .fui-DialogSurface:is(.project-import-dialog, .project-budget-dialog) .fui-Button:not(.message-actions .fui-Button):not(.chat-more) { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.project-import-dialog, .project-budget-dialog) :is(input, textarea, select) { font-size: 16px; }
+  .web-platform .project-import-check, .web-platform .project-import-sources summary { min-height: 48px; align-items: center; }
+}
+@media (max-width: 700px) {
+  .web-platform .project-hub-view.workspace-view { padding: 8px; }
+  .web-platform .project-hub-view .project-hub-layout { flex: none; min-height: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
+  .web-platform .project-hub-view .project-hub-index-list { max-height: 240px; }
+  .web-platform .project-hub-view .project-hub-canvas { overflow: visible; padding: 14px; }
+  .web-platform .project-hub-view .project-hub-header { padding: 16px; min-height: 0; }
+  .web-platform .project-hub-view .project-hub-header h1 { font-size: 26px; }
+  .web-platform .project-hub-view .project-hub-hero-summary { min-width: 0; }
+  .web-platform .project-hub-view .project-hub-hero-summary { display: flex; flex-direction: row; align-items: center; gap: 12px; width: 100%; padding: 12px; }
+  .web-platform .project-hub-view .project-hub-hero-summary span { margin: 0; }
+  .web-platform .project-hub-view .project-hub-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .web-platform .project-hub-view .project-hub-header-actions > button { white-space: normal; max-width: 100%; }
+  .web-platform .project-hub-view .project-hub-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .web-platform .project-hub-view .project-hub-title, .web-platform .project-hub-view .project-hub-section-head { gap: 12px; }
+  .web-platform .project-hub-view .project-hub-task-board { grid-template-columns: repeat(5, minmax(230px, 1fr)); }
+  .web-platform .project-hub-view .project-hub-funding-layout,
+  .web-platform .project-hub-view .project-hub-funding-layout.has-selection { display: flex; flex-direction: column; flex: none; overflow: visible; gap: 12px; }
+  .web-platform .project-hub-view .project-hub-funding-board.project-request-kanban { flex: none; grid-template-columns: repeat(4, minmax(250px, 1fr)); height: clamp(340px, 55dvh, 520px); }
+  .web-platform .project-hub-view .project-hub-funding-detail { width: 100%; max-height: none; overflow: visible; }
+  .web-platform .project-hub-dialog .project-hub-dialog-head { padding: 12px 16px; gap: 8px; }
+  .web-platform .project-hub-dialog .project-hub-dialog-head h2 { font-size: 21px; }
+  .web-platform .project-hub-dialog .project-hub-fields { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .project-hub-dialog .project-hub-approvers > div { flex-wrap: wrap; }
+  .web-platform .project-hub-dialog .project-hub-approvers > div > span { flex-basis: calc(100% - 36px); overflow-wrap: anywhere; }
+  .web-platform .project-budget-dialog > :is(header, footer) { padding: 12px 16px; }
+  .web-platform .project-budget-dialog h2 { font-size: 21px; overflow-wrap: anywhere; }
+  .web-platform .project-budget-scroll { padding-inline: 16px; }
+  .web-platform :is(.approvals-view, .trips-view) .process-record-row { grid-template-columns: minmax(0, 1fr); }
+  .web-platform :is(.approvals-view, .trips-view) :is(.approval-metrics, .ws2-process-metrics) { flex-wrap: wrap; white-space: normal; }
+  .web-platform .trips-view .ws2-process-overview { flex-wrap: wrap; overflow: visible; gap: 8px; }
+  .web-platform .trips-view .ws2-process-focus { width: 100%; min-width: 0; }
+  .web-platform .trips-view .ws2-process-metrics { flex: 1; }
+  .web-platform .trips-view .ws2-process-metrics > div { flex: 1 1 100px; min-width: 0; }
+  .web-platform .approvals-view .approval-metric { min-width: 0; flex: 1 1 120px; }
+  .web-platform .approvals-view .approval-metric-actionable { min-width: 0; }
+  .web-platform :is(.approvals-view, .trips-view) :is(.approval-board-filters, .ws2-segmented) { max-width: 100%; overflow-x: auto; }
+  .web-platform .approvals-view .approval-detail-header { grid-template-columns: minmax(0, 1fr) auto; padding: 12px; }
+  .web-platform .approvals-view .approval-detail-header > div:first-child { grid-column: 1; }
+  .web-platform .approvals-view .approval-detail-header > button:last-child { grid-column: 2; }
+  .web-platform .approvals-view .approval-detail-header > .fui-Badge { justify-self: start; }
+  .web-platform .approvals-view .approval-detail-header h2 { white-space: normal; overflow-wrap: anywhere; }
+  .web-platform .approvals-view .approval-detail-tabs { padding-inline: 12px; flex: none; overflow-x: auto; }
+  .web-platform .approvals-view .approval-detail-tabs button { flex: none; }
+  .web-platform .approvals-view .approval-detail-content > :is(.approval-detail-facts, .approval-detail-process) > * { margin-inline: 12px; }
+  .web-platform .approvals-view :is(.approval-key-facts, .approval-fact-section > dl) { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .approvals-view .approval-key-facts dd { white-space: normal; }
+  .web-platform .approvals-view .approval-decision-block { position: static; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) { padding: 0; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-board { height: 360px; min-height: 360px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-grid { gap: 3px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-day { padding: 4px 2px; min-height: 48px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-day-header { flex-wrap: wrap; justify-content: center; gap: 2px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) :is(.calendar-day-events, .calendar-today-label) { display: none; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-day-count { min-width: 16px; height: 16px; font-size: 10px; }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-side { padding: 14px; }
+  .web-platform .calendar-view .calendar-toolbar { flex-wrap: wrap; }
+  .web-platform .calendar-view .calendar-toolbar-actions { justify-content: flex-start; }
+  .web-platform .calendar-view .browser-calendar-agenda { display: inline-flex; justify-self: stretch; }
+}
+.browser-calendar-agenda { display: none; }
 .web-platform :is(body, #root) { height: 100dvh; }
 .web-platform .app-provider > .app-shell.browser-compact,
 .web-platform .app-shell.browser-compact {
@@ -183,4 +309,18 @@
 @media (forced-colors: active) {
   .browser-menu-trigger { background: ButtonFace; color: ButtonText; border-color: ButtonText; }
   .browser-navigation-dialog .app-rail.sidebar-palette { background: Canvas; color: CanvasText; }
+}
+
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  /* One outer canvas edge, reserved once by the browser shell. Internal card
+     padding and intentional lane widths do not become page-level gutters. */
+  .web-platform .app-content > :is(.project-hub-view.workspace-view, .approvals-view, .trips-view, .calendar-view:not(.task-calendar-embedded)) {
+    padding-inline: 0;
+    margin-inline: 0;
+    scrollbar-gutter: stable;
+  }
+  .web-platform .calendar-view:not(.task-calendar-embedded) .calendar-main { padding-inline: 0; }
+  .web-platform .approvals-view .approval-commandbar,
+  .web-platform .trips-view .ws2-process-overview { margin-inline: 0; }
+  .web-platform :is(.approvals-view, .trips-view) :is(.approval-view-toolbar, .trip-commandbar, .approval-kanban, .trip-list, .process-record-list) { padding-inline: 0; margin-inline: 0; }
 }

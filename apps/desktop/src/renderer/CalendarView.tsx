@@ -763,9 +763,13 @@ export function CalendarView({
             })}
           </div>
         </div>
+        <Button className="browser-calendar-agenda" appearance="subtle" onClick={() => {
+          sideRef.current?.scrollIntoView?.({ block: "nearest" });
+          sideRef.current?.focus({ preventScroll: true });
+        }}>События выбранного дня · {selectedDayEvents.length + selectedDayZoom.length}</Button>
       </div>
 
-      <aside className="calendar-side" ref={sideRef} aria-label="События выбранного дня"
+      <aside className="calendar-side" ref={sideRef} tabIndex={-1} aria-label="События выбранного дня"
         onKeyDown={(event) => {
           if (event.key === "Escape" && !event.defaultPrevented && selected && !draft) {
             event.stopPropagation();

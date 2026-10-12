@@ -308,7 +308,9 @@ export function SpatialCard({ id, lane, label, disabled, children, className = "
     className={`${className} spatial-card ${disabled ? "" : "is-draggable"} ${board.interactionMode === "payment" ? "is-payment-motion" : ""} ${isDragging ? "is-lifted" : ""} ${board.pendingId === id ? "is-committing" : ""} ${hoverSuppressed ? "is-hover-suppressed" : ""}`} data-spatial-card={id}
     data-hover-suppressed={hoverSuppressed ? "true" : undefined}
     onPointerLeave={event => { board.clearHoverSuppression(id); onPointerLeave?.(event); }}
-    onPointerDown={event => listeners?.onPointerDown?.(event)}>
+    // A finger scrolls the card/lane; only the explicit grip starts touch DnD.
+    // Mouse/pen retain the existing whole-card drag behaviour.
+    onPointerDown={event => { if (event.pointerType !== "touch") listeners?.onPointerDown?.(event); }}>
     {children}
     {!disabled ? <button ref={setActivatorNodeRef} {...attributes} {...listeners} type="button" className="spatial-grip" aria-label={`Перенести: ${label}`} onClick={event => event.stopPropagation()}><ReOrderDotsVertical20Regular /></button> : null}
   </article>;

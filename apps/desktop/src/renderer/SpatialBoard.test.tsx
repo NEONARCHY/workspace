@@ -14,6 +14,22 @@ function setup(allowed = true, onMove = vi.fn(async () => undefined)) {
   return { onMove, card: document.querySelector('[data-spatial-card="one"]')!, next: document.querySelector('[data-spatial-lane="next"]')! };
 }
 describe("Spatial object transfer", () => {
+  it("lets a finger scroll the card body but retains explicit grip transfer", async () => {
+    class TouchPointer extends MouseEvent {
+      readonly pointerType = "touch";
+      readonly pointerId = 1;
+      readonly isPrimary = true;
+    }
+    vi.stubGlobal("PointerEvent", TouchPointer);
+    const { card, next, onMove } = setup();
+    fireEvent.pointerDown(card, { clientX: 30, clientY: 120, button: 0 });
+    await act(async () => { fireEvent.pointerMove(document, { clientX: 150, clientY: 160 }); });
+    expect(document.querySelector(".spatial-drag-preview")).toBeNull();
+    fireEvent.pointerUp(document);
+    expect(onMove).not.toHaveBeenCalled();
+    await dropSpatialCard(card, next);
+    await waitFor(() => expect(onMove).toHaveBeenCalledExactlyOnceWith("one", "next"));
+  });
   it("lifts a real overlay, preserves the source and highlights only allowed destinations", async () => {
     const { card, next, onMove } = setup();
     await startSpatialDrag(card, next);
