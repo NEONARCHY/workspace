@@ -107,10 +107,10 @@ def preview_office(name: str, content: bytes, sheet_index: int, row_offset: int)
                 min_row=row_offset + 1, max_row=min(total_rows, row_offset + 200),
                 max_col=min(total_columns, 80), values_only=True,
             )
-            for shown, raw in zip(rows, raw_rows, strict=True):
+            for shown_row, raw in zip(rows, raw_rows, strict=True):
                 for index, value in enumerate(raw):
-                    if not shown[index] and isinstance(value, str) and value.startswith("="):
-                        shown[index] = value[:2000]
+                    if not shown_row[index] and isinstance(value, str) and value.startswith("="):
+                        shown_row[index] = value[:2000]
         if sum(len(value) for row in rows for value in row) > MAX_TEXT_CHARS:
             raise ValueError("Слишком много текста на странице; скачайте оригинал")
         return OfficePreview(
