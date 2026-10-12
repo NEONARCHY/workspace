@@ -2115,3 +2115,5 @@ export interface DesktopUpdatePolicy {
   readonly updatedAt: string | null;
   readonly release: DesktopRelease | null;
 }
+export type { HiringFields, HiringSignatureBox, HiringSummary, HiringDetail, HiringRegistry,
+  HiringActionName, HiringDocumentKind } from "./hr-hiring";
