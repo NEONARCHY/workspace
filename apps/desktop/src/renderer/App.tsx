@@ -1,4 +1,7 @@
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { fileViewerKind } from "./file-viewer-kind";
+import { loadOfficeFilePreview } from "./workspace-api";
+const FileViewer = lazy(() => import("./FileViewer"));
 import { UndoActionsProvider } from "./UndoActions";
 
 import type {
@@ -382,6 +385,7 @@ function emptySupportRegistry(person: WorkspacePerson): SupportRegistry {
 }
 
 export function App() {
+  const [previewAttachment, setPreviewAttachment] = useState<WorkspaceAttachment>();
   const [activeSection, setActiveSection] = useState<WorkspaceSection | "notifications">("home");
   const [connectionDetail, setConnectionDetail] = useState("Сервер подключён");
   const [session, setSession] = useState<AuthenticationSession>();
@@ -834,7 +838,7 @@ export function App() {
     return uploaded;
   };
 
-  const handleDownloadAttachment = async (attachment: WorkspaceAttachment) => {
+  const handleSaveAttachment = async (attachment: WorkspaceAttachment) => {
     if (session === undefined) return;
     try {
       const blob = await downloadWorkspaceAttachment(session.accessToken, attachment.id);
@@ -849,10 +853,19 @@ export function App() {
     }
   };
 
-  const handleLoadAttachment = async (attachment: WorkspaceAttachment) => {
-    if (session === undefined) throw new Error("Войдите снова");
-    return await downloadWorkspaceAttachment(session.accessToken, attachment.id);
+  const handleDownloadAttachment = async (attachment: WorkspaceAttachment) => {
+    if (fileViewerKind(attachment) === "unsupported") await handleSaveAttachment(attachment);
+    else setPreviewAttachment(attachment);
   };
+
+  const handleLoadAttachment = useCallback(async (attachment: WorkspaceAttachment, signal?: AbortSignal) => {
+    if (session === undefined) throw new Error("Войдите снова");
+    return await downloadWorkspaceAttachment(session.accessToken, attachment.id, signal);
+  }, [session]);
+  const handleLoadOffice = useCallback(async (attachment: WorkspaceAttachment, sheet: number, offset: number, signal?: AbortSignal) => {
+    if (!session) throw new Error("Войдите снова");
+    return loadOfficeFilePreview(session.accessToken, attachment.id, sheet, offset, signal);
+  }, [session]);
 
   const storeMessage = (message: ChatMessage) => {
     setWorkspace((current) => ({
@@ -2248,6 +2261,7 @@ export function App() {
             ) : null}
             {displayedSection === "ai_referent" ? (
               <AIReferentView
+                onPreviewAttachment={setPreviewAttachment}
                 token={session.accessToken}
                 people={workspace.people}
                 canCreate={modulePermissions.ai_referent?.create ?? false}
@@ -2549,6 +2563,9 @@ export function App() {
         />
         </Suspense>
       ) : null}
+      {previewAttachment ? <Suspense fallback={null}><FileViewer key={previewAttachment.id} attachment={previewAttachment}
+        onClose={() => setPreviewAttachment(undefined)} onLoad={handleLoadAttachment}
+        onLoadOffice={handleLoadOffice} onDownload={handleSaveAttachment} /></Suspense> : null}
       <WebUpdateNotice mandatory={Boolean(updatePolicy?.mandatory)} onAvailabilityChange={setWebUpdateAvailable} />
       </EmployeeProfileProvider>
       </WorkspacePeopleProvider>

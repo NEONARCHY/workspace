@@ -1,5 +1,6 @@
 import type {
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
+  OfficeFilePreview,
   ProjectBudgetSummary,
   ProjectBudgetArticle,
   ProjectBudgetArticleInput,
@@ -724,7 +725,14 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
           credentials: workspacePlatform.kind === "web" ? "same-origin" : "omit",
           signal: controller.signal,
         });
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
+          throw new ApiHttpError(response.status, typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
+        }
+        // Keep cancellation and timeout alive until the response body is read.
+        return await read(response);
       } catch (error) {
+        if (error instanceof ApiHttpError) throw error;
         if (options.signal?.aborted) throw error;
         const failedOrigin = new URL(requestUrl).origin;
         const replacement = requestUrl.startsWith(`${failedOrigin}/`)
@@ -744,11 +752,6 @@ async function boundedRequest<T>(url: string, options: RequestInit, read: (respo
         window.clearTimeout(timer);
         options.signal?.removeEventListener("abort", abort);
       }
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null) as { detail?: unknown } | null;
-        throw new ApiHttpError(response.status, typeof payload?.detail === "string" ? payload.detail : `Сервер вернул ошибку ${response.status}`);
-      }
-      return await read(response);
     }
     throw new Error("Не удалось подключиться к Workspace.");
   } finally {
@@ -2217,10 +2220,15 @@ export async function uploadWorkspaceAttachment(
 export async function downloadWorkspaceAttachment(
   token: string,
   attachmentId: string,
+  signal?: AbortSignal,
 ): Promise<Blob> {
   return boundedRequest(`${getApiBaseUrl()}/api/v1/attachments/${attachmentId}`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { Authorization: `Bearer ${token}` }, signal,
   }, (response) => response.blob(), 120_000);
+}
+
+export function loadOfficeFilePreview(token: string, id: string, sheet = 0, offset = 0, signal?: AbortSignal): Promise<OfficeFilePreview> {
+  return apiRequest<OfficeFilePreview>(`/attachments/${encodeURIComponent(id)}/preview?sheet=${sheet}&offset=${offset}`, {signal}, token);
 }
 
 export async function uploadProfileAvatar(token: string, file: File): Promise<{ avatarVersion: string }> {

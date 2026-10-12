@@ -1,4 +1,5 @@
 export * from "./project-imports";
+export * from "./file-preview";
 export * from "./project-budget";
 import type { ProjectBudgetArticle } from "./project-budget";
 
