@@ -44,12 +44,11 @@ PDF_LIMIT = asyncio.Semaphore(2)
 EDITABLE = {"draft", "returned"}
 
 
-async def route(connection: AsyncConnection) -> RowMapping:
-    row = (
-        (await connection.execute(select(hr_settings).where(hr_settings.c.id == 1)))
-        .mappings()
-        .first()
-    )
+async def route(connection: AsyncConnection, *, lock: bool = False) -> RowMapping:
+    query = select(hr_settings).where(hr_settings.c.id == 1)
+    if lock:
+        query = query.with_for_update(read=True)
+    row = (await connection.execute(query)).mappings().first()
     if row is None or not row["hr_user_id"] or not row["chair_user_id"]:
         raise Error(409, "Назначьте кадровика и председателя в настройках HR")
     return row
@@ -61,7 +60,7 @@ def is_hr(user: AuthenticatedUser, settings: RowMapping) -> bool:
 
 async def require_hr(connection: AsyncConnection, user: AuthenticatedUser) -> RowMapping:
     await ensure_module_action(connection, user, "hr", "edit")
-    settings = await route(connection)
+    settings = await route(connection, lock=True)
     if not is_hr(user, settings):
         raise Error(403, "Оформление доступно кадровику")
     return settings
@@ -71,7 +70,7 @@ async def require_case(
     connection: AsyncConnection, user: AuthenticatedUser, case_id: UUID, *, lock: bool = False
 ) -> tuple[RowMapping, RowMapping]:
     await ensure_module_action(connection, user, "hr", "view")
-    settings = await route(connection)
+    settings = await route(connection, lock=lock)
     query = select(cases).where(cases.c.id == case_id)
     if not is_hr(user, settings):
         query = query.where(cases.c.signer_id == user.id, cases.c.status != "draft")
@@ -93,7 +92,9 @@ def summary(row: RowMapping, user: AuthenticatedUser, settings: RowMapping) -> H
         revision=row["revision"],
         updated_at=row["updated_at"],
         can_edit=is_hr(user, settings) and row["status"] in EDITABLE,
-        can_sign=row["signer_id"] == user.id and row["status"] == "pending",
+        can_sign=row["signer_id"] == user.id
+        and settings["chair_user_id"] == user.id
+        and row["status"] == "pending",
     )
 
 
