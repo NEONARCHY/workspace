@@ -2,14 +2,54 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
-import { ArrowDownload24Regular, Attach24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
+import { ArrowDownload24Regular, ArrowExpand24Regular, Attach24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
 import { MediaVolumeControl } from "./MediaVolumeControl";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
+import { fileViewerKind } from "./file-viewer-kind";
+import "./attachment-thumbnails.css";
 
 interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
   readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
-  readonly onLoad?: (attachment: WorkspaceAttachment) => Promise<Blob>;
+  readonly onLoad?: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
+}
+
+function ImageAttachment({attachment, onLoad, onOpen}: {
+  readonly attachment: WorkspaceAttachment;
+  readonly onLoad: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
+  readonly onOpen: (attachment: WorkspaceAttachment) => void | Promise<void>;
+}) {
+  const ref = useRef<HTMLElement>(null);
+  const [visibility, setVisibility] = useState({visible:false, epoch:0});
+  const [resource, setResource] = useState({epoch:-1, url:"", failed:false});
+  useEffect(() => {
+    if (!ref.current || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(entries => {
+      const visible = entries[0]?.isIntersecting === true;
+      setVisibility(current => current.visible === visible ? current : {visible, epoch:current.epoch + 1});
+    });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (!visibility.visible) return;
+    let active = true;
+    let url = "";
+    const controller = new AbortController();
+    void onLoad(attachment, controller.signal).then(blob => {
+      if (!active) return;
+      url = URL.createObjectURL(blob);
+      setResource({epoch:visibility.epoch, url, failed:false});
+    }).catch(() => {if (active) setResource({epoch:visibility.epoch, url:"", failed:true});});
+    return () => {active = false; controller.abort(); if (url) URL.revokeObjectURL(url);};
+  }, [attachment, onLoad, visibility]);
+  const shown = visibility.visible && resource.epoch === visibility.epoch;
+  return <article ref={ref} className="attachment-media-preview attachment-image-card">
+    <button className="attachment-image-thumb" type="button" aria-label={`Открыть изображение: ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
+      {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={() => setResource(current => ({...current, url:"", failed:true}))} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : "Изображение · открыть"}</span>}
+    </button>
+    <button type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}><Document24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
+  </article>;
 }
 
 function fileSize(value: number): string {
@@ -130,12 +170,16 @@ export function InlineVideoPlayer({ url, fileName }: { readonly url: string; rea
   );
 }
 
-function InlineAudioPlayer({ url, blob, fileName }: { readonly url: string; readonly blob: Blob; readonly fileName: string }) {
+export function InlineAudioPlayer({ url, blob, fileName, onError }: { readonly url: string; readonly blob: Blob; readonly fileName: string; readonly onError?: () => void }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [artworkUrl, setArtworkUrl] = useState("");
+  useEffect(() => {
+    const audio = audioRef.current;
+    return () => { if (audio) {audio.pause(); audio.removeAttribute("src"); audio.load();} };
+  }, [url]);
   useEffect(() => {
     let active = true;
     let nextUrl = "";
@@ -149,11 +193,11 @@ function InlineAudioPlayer({ url, blob, fileName }: { readonly url: string; read
   const togglePlayback = () => {
     const audio = audioRef.current;
     if (!audio) return;
-    if (audio.paused) void audio.play().catch(() => undefined);
+    if (audio.paused) void audio.play().catch(() => onError?.());
     else audio.pause();
   };
   return <div className="attachment-audio-player">
-    <audio ref={audioRef} src={url} preload="metadata" onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrentTime(0); }} />
+    <audio ref={audioRef} src={url} preload="metadata" aria-label={fileName} onError={onError} onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)} onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); setCurrentTime(0); }} />
     <div className={`attachment-audio-artwork ${artworkUrl ? "has-artwork" : ""}`} aria-hidden="true">{artworkUrl ? <img src={artworkUrl} alt="" /> : <span>♪</span>}</div>
     <div className="attachment-audio-content">
       <strong title={fileName}>{fileName.replace(/\.[^.]+$/, "")}</strong>
@@ -167,53 +211,21 @@ function InlineAudioPlayer({ url, blob, fileName }: { readonly url: string; read
   </div>;
 }
 
-function AttachmentPreview({ attachment, onLoad, onDownload }: {
-  readonly attachment: WorkspaceAttachment;
-  readonly onLoad: (attachment: WorkspaceAttachment) => Promise<Blob>;
-  readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
-}) {
-  const [url, setUrl] = useState("");
-  const [mediaBlob, setMediaBlob] = useState<Blob>();
-  const [failed, setFailed] = useState(false);
-  useEffect(() => {
-    let active = true;
-    let objectUrl = "";
-    void onLoad(attachment).then((blob) => {
-      if (!active) return;
-      objectUrl = URL.createObjectURL(blob);
-      setMediaBlob(blob);
-      setUrl(objectUrl);
-    }).catch(() => active && setFailed(true));
-    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [attachment, onLoad]);
-  const image = attachment.contentType.startsWith("image/");
-  const audio = isAudioAttachment(attachment);
-  return <article className="attachment-media-preview">
-    {url && image ? <img src={url} alt={attachment.fileName} /> : null}
-    {url && mediaBlob && audio ? <InlineAudioPlayer url={url} blob={mediaBlob} fileName={attachment.fileName} /> : null}
-    {url && !image && !audio ? <InlineVideoPlayer url={url} fileName={attachment.fileName} /> : null}
-    {!url ? <span>{failed ? "Превью недоступно" : "Загружаем превью…"}</span> : null}
-    <button type="button" onClick={() => void onDownload(attachment)} title={`Скачать ${attachment.fileName}`}><ArrowDownload24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
-  </article>;
-}
-
 export function AttachmentChips({ attachments, onDownload, onLoad }: AttachmentChipsProps) {
   if (attachments.length === 0) return null;
   return (
     <div className="attachment-chips" aria-label="Вложения">
-      {attachments.map((attachment) => onLoad && (attachment.contentType.startsWith("image/") || attachment.contentType.startsWith("video/") || isAudioAttachment(attachment)) ? (
-        <AttachmentPreview key={attachment.id} attachment={attachment} onLoad={onLoad} onDownload={onDownload} />
-      ) : (
+      {attachments.map((attachment) => onLoad && fileViewerKind(attachment) === "image" ? <ImageAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
         <button
           key={attachment.id}
           type="button"
-          title={`${attachment.fileName}, ${fileSize(attachment.byteSize)}`}
+          title={`${fileViewerKind(attachment) === "unsupported" ? "Скачать" : "Открыть"}: ${attachment.fileName}, ${fileSize(attachment.byteSize)}`}
           onClick={() => void onDownload(attachment)}
         >
           <Document24Regular />
           <span>{attachment.fileName}</span>
           <small>{fileSize(attachment.byteSize)}</small>
-          <ArrowDownload24Regular />
+          {fileViewerKind(attachment) === "unsupported" ? <ArrowDownload24Regular /> : <ArrowExpand24Regular />}
         </button>
       ))}
     </div>

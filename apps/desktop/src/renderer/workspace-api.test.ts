@@ -24,6 +24,27 @@ describe("web API addresses and session restore", () => {
     );
     api.clearAssistantPreload();
   });
+  it("cancels a file download after headers while the body is still loading", async () => {
+    window.yuksalish = undefined;
+    let bodyStarted: (() => void) | undefined;
+    const started = new Promise<void>(resolve => { bodyStarted = resolve; });
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) => ({
+      ok: true, status: 200,
+      blob: () => new Promise<Blob>((_resolve, reject) => {
+        bodyStarted?.();
+        init.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), {once:true});
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    const controller = new AbortController();
+    const result = api.downloadWorkspaceAttachment("test-token", "private-file", controller.signal);
+    const rejected = expect(result).rejects.toHaveProperty("name", "AbortError");
+    await started;
+    controller.abort();
+    await rejected;
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
 
   it("creates and lists persistent chats and handles an empty clear response", async () => {
     window.yuksalish = undefined;
