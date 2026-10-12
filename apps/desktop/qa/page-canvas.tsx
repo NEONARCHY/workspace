@@ -146,7 +146,9 @@ function Preview() {
     const due = new Date();
     due.setDate(due.getDate() + days);
     due.setHours(13, 0, 0, 0);
-    return { ...initialTasks[0]!, id: `qa-deadline-${days}`, title: `Тестовая задача · до срока ${days} дн.`, dueAt: due.toISOString(), dueLabel: due.toLocaleString("ru-RU"), priority: "urgent" as const };
+    return { ...initialTasks[0]!, id: `qa-deadline-${days}`, title: `Тестовая задача · до срока ${days} дн.`, dueAt: due.toISOString(), dueLabel: due.toLocaleString("ru-RU"), priority: "urgent" as const,
+      participants: [{ userId: "aziza", role: "co_assignee" as const }, { userId: "malika", role: "observer" as const }],
+    };
   });
   const simulateFileDrag = (kind: "dragenter" | "drop" | "dragend") => {
     const dataTransfer = new DataTransfer();
