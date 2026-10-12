@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useHorizontalBoardScroll } from "./useHorizontalBoardScroll";
 
-function Surface({ visible = true }: { visible?: boolean }) {
-  const ref = useHorizontalBoardScroll<HTMLDivElement>();
+function Surface({ visible = true, delayed = false }: { visible?: boolean; delayed?: boolean }) {
+  const ref = useHorizontalBoardScroll<HTMLDivElement>(delayed ? { hoverDelayMs: 500, overButtons: true } : {});
   return visible ? <div ref={ref} data-testid="board" style={{ lineHeight: "20px" }}>
     <div data-testid="empty" />
     <article data-spatial-card="request"><span data-testid="card">Заявка</span></article>
@@ -11,8 +11,8 @@ function Surface({ visible = true }: { visible?: boolean }) {
     <div data-testid="stack" style={{ overflowY: "auto" }}><span data-testid="stack-empty" /></div>
   </div> : null;
 }
-function setup() {
-  const view = render(<Surface />);
+function setup(delayed = false) {
+  const view = render(<Surface delayed={delayed} />);
   const board = view.getByTestId("board");
   Object.defineProperties(board, { clientWidth: { value: 400, configurable: true }, scrollWidth: { value: 1400, configurable: true } });
   const wheel = (target: Element = view.getByTestId("empty"), init: WheelEventInit = {}) => {
@@ -22,9 +22,39 @@ function setup() {
   };
   return { ...view, board, wheel };
 }
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("useHorizontalBoardScroll", () => {
+  it("enables wheel over employee buttons only after 500ms of continuous hover", () => {
+    vi.useFakeTimers();
+    const { board, wheel, getByRole } = setup(true);
+    const button = getByRole("button");
+    expect(wheel(button).defaultPrevented).toBe(false);
+    fireEvent.mouseEnter(board);
+    vi.advanceTimersByTime(499);
+    expect(wheel(button).defaultPrevented).toBe(false);
+    vi.advanceTimersByTime(1);
+    expect(wheel(button).defaultPrevented).toBe(true);
+    expect(board.scrollLeft).toBe(40);
+    fireEvent.mouseLeave(board);
+    fireEvent.mouseEnter(board);
+    expect(wheel(button).defaultPrevented).toBe(false);
+    vi.advanceTimersByTime(500);
+    fireEvent.blur(window);
+    expect(wheel(button).defaultPrevented).toBe(false);
+  });
+  it("preserves native gestures, boundaries and input fields after the hover delay", () => {
+    vi.useFakeTimers();
+    const { board, wheel, getByRole } = setup(true);
+    fireEvent.mouseEnter(board);
+    vi.advanceTimersByTime(500);
+    for (const init of [{ ctrlKey: true }, { deltaX: 30 }, { shiftKey: true }, { deltaY: -40 }]) {
+      expect(wheel(board, init).defaultPrevented).toBe(false);
+    }
+    expect(wheel(getByRole("textbox")).defaultPrevented).toBe(false);
+    Object.defineProperty(board, "scrollWidth", { value: 400 });
+    expect(wheel().defaultPrevented).toBe(false);
+  });
   it("scrolls empty space horizontally and clamps to the board extent", () => {
     const { board, wheel } = setup();
     expect(wheel().defaultPrevented).toBe(true);

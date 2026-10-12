@@ -16,6 +16,7 @@ from .access_control import ModuleAction, ensure_module_action, module_permissio
 from .ai_referent_incoming_access import named_responsible
 from .ai_referent_visibility import OPERATOR_VISIBLE_STATUSES, may_view_letter
 from .auth import AuthenticatedUser, load_authenticated_user
+from .calendar_audience import calendar_audience_ids, can_invite_calendar_audience
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
@@ -2824,6 +2825,8 @@ async def load_workspace(
             )
         ),
         people=people,
+        can_invite_calendar_audience=can("calendar", "create")
+        and can_invite_calendar_audience(current_user),
         departments=[WorkspaceDepartmentResponse(
             id=str(row["id"]), code=row["code"], name=row["name"], scope=row["scope"],
             parent_id=str(row["parent_id"]) if row["parent_id"] else None,
@@ -3517,7 +3520,11 @@ async def create_calendar_event(
         connection, current_user, payload.project_id, payload.workstream_id,
         payload.project_item_id,
     )
-    attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    attendee_ids = (
+        await calendar_audience_ids(connection, current_user, payload.audience_scope)
+        if payload.audience_scope else
+        await _validate_calendar_attendees(connection, payload.attendee_ids)
+    )
     participant_ids = _calendar_participant_ids(current_user.id, attendee_ids)
     await _ensure_calendar_participants_are_available(
         connection,
@@ -3617,7 +3624,11 @@ async def update_calendar_event(
     )
     if not retaining_project_link:
         await _validated_payment_project_names(connection, current_user, *project_ids)
-    attendee_ids = await _validate_calendar_attendees(connection, payload.attendee_ids)
+    attendee_ids = (
+        await calendar_audience_ids(connection, current_user, payload.audience_scope)
+        if payload.audience_scope else
+        await _validate_calendar_attendees(connection, payload.attendee_ids)
+    )
     participant_ids = _calendar_participant_ids(row["organizer_user_id"], attendee_ids)
     await _ensure_calendar_participants_are_available(
         connection,

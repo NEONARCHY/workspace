@@ -132,6 +132,11 @@ const roots = [
 function Preview() {
   const [section, setSection] = useState("notifications");
   const [sample, setSample] = useState(0);
+  const simulateFileDrag = (kind: "dragenter" | "drop" | "dragend") => {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(new File(["Synthetic drag/drop QA only"], "qa-drop.txt", { type: "text/plain", lastModified: 1 }));
+    document.querySelector(".messenger-view")?.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer }));
+  };
   const nav = [
     { id: "notifications", label: "Уведомления", icon: <Alert20Regular /> },
     { id: "calendar", label: "Календарь", icon: <Calendar20Regular /> },
@@ -151,10 +156,15 @@ function Preview() {
         <div className="app-stage">
           <header className="global-bar qa-canvas-toolbar"><span>Проверка подложек и отступов · без рабочих данных</span>
             {section === "samples" && <select aria-label="Макет раздела" value={sample} onChange={event => setSample(Number(event.target.value))}>{roots.map(([label], i) => <option key={label} value={i}>{label}</option>)}</select>}
+            {section === "messenger" && <div className="qa-file-drop-actions">
+              <button type="button" onClick={() => simulateFileDrag("dragenter")}>QA: готовность принять файл</button>
+              <button type="button" onClick={() => simulateFileDrag("drop")}>QA: drop тестового файла</button>
+              <button type="button" onClick={() => simulateFileDrag("dragend")}>QA: отмена drag</button>
+            </div>}
           </header>
           <main className="app-content" id="workspace-content">
             {section === "notifications" ? <NotificationCenter notifications={notifications} preferences={{ desktopEnabled: true, messagesEnabled: true, tasksEnabled: true, approvalsEnabled: true, tripsEnabled: true, calendarEnabled: true, absencesEnabled: true, zoomEnabled: true, remindersEnabled: true }} onOpen={nothing} onMarkRead={nothing} onMarkAllRead={nothing} onUpdatePreferences={nothing} />
-            : section === "calendar" ? <CalendarView events={calendarEvents} people={people} currentUserId={people[0]!.id} onCreate={nothing} onUpdate={nothing} onCancel={nothing} />
+            : section === "calendar" ? <CalendarView events={calendarEvents} people={zoomPeople} departments={zoomDepartments} canInviteCalendarAudience currentUserId={people[0]!.id} onCreate={nothing} onUpdate={nothing} onCancel={nothing} />
             : section === "payments" ? <ApprovalsView token="qa-only" canManage={false} canCreateRequest={false} currentUserId={people[0]!.id} people={people} positions={[]} requests={requests} calendarEvents={[]} attachments={[]} onSaveWorkflow={nothing} onPublishWorkflow={nothing} onCreateRequest={nothing} onAction={nothing} onDeleteRequest={nothing} onReviseRequest={nothing} onUploadAttachments={nothing} onDownloadAttachment={nothing} />
             : section === "messenger" ? <MessengerView token="qa-only" currentUserId="aziza" currentUserRole="employee" chats={initialChats} messages={initialMessages} tasks={[]} attachments={[]} people={people}
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}

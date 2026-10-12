@@ -141,18 +141,6 @@
 }
 
 .task-record-table .record-title { position: relative; padding-left: 28px; }
-.task-record-signal {
-  position: absolute;
-  top: 50%;
-  left: 12px;
-  width: 5px;
-  height: 28px;
-  border-radius: 999px;
-  background: #b9c5cb;
-  transform: translateY(-50%);
-}
-.task-record-signal.priority-high { background: #d39b2c; }
-.task-record-signal.priority-urgent { background: #b94f4a; }
 .task-record-progress { display: block; width: min(168px, 72%); height: 3px; margin-top: 7px; overflow: hidden; border-radius: 999px; background: #e5ecee; }
 .task-record-progress i { display: block; height: 100%; border-radius: inherit; background: var(--ws-accent, #0091a8); }
 .task-record-table tbody tr { transition: transform 160ms var(--ws-ease-out, ease), background-color 160ms ease, box-shadow 160ms ease; }
@@ -406,7 +394,6 @@
   .task-record-dialog .attachment-panel-dropzone,
   .task-record-dialog .checklist-row,
   .task-section-help { border: 1px solid CanvasText; }
-  .task-record-signal,
   .task-record-progress i,
   .task-journey li > span { forced-color-adjust: none; }
 }

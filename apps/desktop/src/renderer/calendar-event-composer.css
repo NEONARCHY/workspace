@@ -1,4 +1,9 @@
 .calendar-event-composer .record-composer-fields { gap: 18px; }
+.calendar-audience-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.calendar-audience-actions .fui-Button { min-width: 0; padding-inline: 8px; }
+.calendar-audience-actions .fui-Button[aria-pressed="true"] { color: var(--ws-link); background: #e3f1f0; border-color: var(--ws-link); }
+.calendar-audience p, .calendar-attendee-count { color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
+@media (forced-colors: active) { .calendar-audience-actions .fui-Button[aria-pressed="true"] { color: HighlightText; background: Highlight; border-color: Highlight; } }
 .calendar-event-composer .record-section > .fui-Button { margin-top: 14px; }
 .calendar-event-composer .record-field-grid > label { min-width: 0; }
 .calendar-event-composer .record-field-grid .fui-Input,

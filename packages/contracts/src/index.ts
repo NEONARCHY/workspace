@@ -597,6 +597,8 @@ export interface CalendarEventInput {
   readonly allDay: boolean;
   readonly location: string;
   readonly attendeeIds: readonly string[];
+  /** Explicit command; the API resolves all active staff of this scope at save time. */
+  readonly audienceScope?: "central" | "regional" | "all" | null;
   readonly projectId?: string | null;
   readonly workstreamId?: string | null;
   readonly projectItemId?: string | null;
@@ -2006,6 +2008,8 @@ export interface WorkspaceBootstrap {
   readonly currentUser: WorkspacePerson;
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
+  /** Older APIs omit this capability, so bulk invitations remain hidden. */
+  readonly canInviteCalendarAudience?: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];

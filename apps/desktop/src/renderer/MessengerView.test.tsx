@@ -82,6 +82,116 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  const fileTransfer = (files: readonly File[] = []) => ({ types: ["Files"], files, items: [], dropEffect: "none" });
+  it("makes both panes a file target without flickering across nested elements and cancels cleanly", () => {
+    const { props } = renderMessenger();
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const pane = root.querySelector(".list-pane")!;
+    const transfer = fileTransfer();
+    fireEvent.dragEnter(root, { dataTransfer: transfer });
+    expect(root).toHaveAttribute("data-file-drop", "ready");
+    fireEvent.dragEnter(pane, { dataTransfer: transfer });
+    fireEvent.dragLeave(root, { dataTransfer: transfer, relatedTarget: pane });
+    expect(root).toHaveAttribute("data-file-drop", "ready");
+    fireEvent.dragOver(pane, { dataTransfer: transfer });
+    expect(transfer.dropEffect).toBe("copy");
+    fireEvent.dragLeave(pane, { dataTransfer: transfer });
+    expect(root).not.toHaveAttribute("data-file-drop");
+    fireEvent.dragEnter(pane, { dataTransfer: transfer });
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(root).not.toHaveAttribute("data-file-drop");
+    fireEvent.dragEnter(pane, { dataTransfer: { types: ["text/plain"] } });
+    expect(root).not.toHaveAttribute("data-file-drop");
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+  });
+  it("appends and deduplicates picked and dropped files without sending or replacing text", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ ...initialMessages[0]!, id: "sent-file" });
+    renderMessenger({ onSendMessage });
+    const first = new File(["one"], "one.txt", { type: "text/plain", lastModified: 1 });
+    const second = new File(["two"], "two.txt", { type: "text/plain", lastModified: 2 });
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Мой черновик" } });
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    fireEvent.drop(root.querySelector(".list-pane")!, { dataTransfer: fileTransfer([first, second]) });
+    expect(screen.getAllByRole("button", { name: "Убрать файл one.txt" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Убрать файл two.txt" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Мой черновик");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(initialChats[0]!.id, "Мой черновик", [first, second], expect.any(Object)));
+  });
+  it("keeps distinct dropped files with identical metadata", () => {
+    renderMessenger();
+    const options = { type: "text/plain", lastModified: 1 };
+    const first = new File(["AAA"], "same.txt", options);
+    const second = new File(["BBB"], "same.txt", options);
+    fireEvent.drop(screen.getByRole("region", { name: "Мессенджер" }), { dataTransfer: fileTransfer([first, second]) });
+    expect(screen.getAllByRole("button", { name: "Убрать файл same.txt" })).toHaveLength(2);
+  });
+  it.each(["sendMessages", "uploadFiles"] as const)("refuses dropped files when %s is denied", permission => {
+    const chat = { ...initialChats[0]!, permissions: { ...initialChats[0]!.permissions, [permission]: false } };
+    const { props } = renderMessenger({ chats: [chat] });
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const transfer = fileTransfer([new File(["test"], "denied.txt")]);
+    fireEvent.dragEnter(root, { dataTransfer: transfer });
+    expect(root).toHaveAttribute("data-file-drop", "blocked");
+    fireEvent.dragOver(root, { dataTransfer: transfer });
+    expect(transfer.dropEffect).toBe("none");
+    fireEvent.drop(root, { dataTransfer: transfer });
+    expect(screen.queryByRole("button", { name: "Убрать файл denied.txt" })).not.toBeInTheDocument();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+  });
+  it("keeps existing files and text when a drop batch is too large or contains a folder", () => {
+    renderMessenger();
+    const keep = new File(["keep"], "keep.txt");
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [keep] } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Оставить текст" } });
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const huge = new File(["test"], "huge.pdf");
+    Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
+    fireEvent.drop(root, { dataTransfer: fileTransfer([new File(["small"], "small.txt"), huge]) });
+    expect(screen.getByRole("alert")).toHaveTextContent("25 МБ");
+    expect(screen.queryByRole("button", { name: "Убрать файл small.txt" })).not.toBeInTheDocument();
+    fireEvent.drop(root, { dataTransfer: { ...fileTransfer(), items: [{ webkitGetAsEntry: () => ({ isDirectory: true }) }] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("загрузка папок не поддерживается");
+    expect(screen.getByRole("button", { name: "Убрать файл keep.txt" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Оставить текст");
+  });
+  it("blocks file receipt while chat management is open without creating a group", () => {
+    const { props } = renderMessenger();
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    fireEvent.click(screen.getByRole("button", { name: "Создать группу" }));
+    const transfer = fileTransfer([new File(["test"], "modal.txt")]);
+    fireEvent.dragEnter(root, { dataTransfer: transfer });
+    expect(root).toHaveAttribute("data-file-drop", "blocked");
+    fireEvent.drop(root, { dataTransfer: transfer });
+    expect(root.querySelector(".pending-files")).toBeNull();
+    expect(props.chatActions.create).not.toHaveBeenCalled();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+  });
+  it("does not add files to an edit or a message that is being sent", async () => {
+    let finish: (value: ChatMessage) => void = () => {};
+    const onSendMessage = vi.fn(() => new Promise<ChatMessage>(resolve => { finish = resolve; }));
+    const own: ChatMessage = { id: "own", chatId: initialChats[0]!.id, authorId: "aziza", body: "Изменяемый текст", time: "12:00", canEdit: true };
+    renderMessenger({ onSendMessage, messages: [own] });
+    openMessageMenu(own.body);
+    fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const transfer = fileTransfer([new File(["test"], "blocked.txt")]);
+    fireEvent.dragEnter(root, { dataTransfer: transfer });
+    expect(root).toHaveAttribute("data-file-drop", "blocked");
+    fireEvent.drop(root, { dataTransfer: transfer });
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+    fireEvent.keyDown(screen.getByLabelText("Редактирование сообщения"), { key: "Escape" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Отправляем" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    fireEvent.dragEnter(root, { dataTransfer: transfer });
+    expect(root).toHaveAttribute("data-file-drop", "blocked");
+    fireEvent.drop(root, { dataTransfer: transfer });
+    expect(screen.queryByRole("button", { name: "Убрать файл blocked.txt" })).not.toBeInTheDocument();
+    await act(async () => finish({ ...own, id: "sent", body: "Отправляем" }));
+  });
+
   it.each(["self", "both"])("asks which participants should lose the direct chat (%s) and offers five-second undo", async mode => {
     vi.useFakeTimers();
     const chatActions = actions();

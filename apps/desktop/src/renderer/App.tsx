@@ -222,6 +222,7 @@ interface WorkspaceState {
   readonly currentUser: WorkspacePerson;
   readonly moduleAccess: readonly EffectiveModuleAccess[];
   readonly canCreatePaymentRequests: boolean;
+  readonly canInviteCalendarAudience?: boolean;
   readonly people: readonly WorkspacePerson[];
   readonly departments: readonly WorkspaceDepartment[];
   readonly positions: readonly WorkflowPosition[];
@@ -2367,6 +2368,7 @@ export function App() {
                 key={focusTarget?.revision}
                 token={session.accessToken}
                 canLinkProjects={canView("project_hub")}
+                canInviteCalendarAudience={workspace.canInviteCalendarAudience === true}
                 events={workspace.calendarEvents}
                 createFromChat={calendarChatDraft}
                 tasks={workspace.tasks}
