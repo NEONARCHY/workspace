@@ -56,6 +56,14 @@
 .task-participant-anchor:hover, .task-participant-anchor:focus-within { z-index: 1; }
 .task-participant-avatar { display: inline-flex; border-radius: 50%; }
 .task-participant-avatar .fui-Avatar { box-sizing: content-box; border: 2px solid white; outline: 1px solid var(--task-participant-ring, #bfd2d5); }
+/* Scale only the visual avatar; the anchor, neighbours and tooltip stay put. */
+.task-participant-avatar .fui-Avatar { scale: 1; transition: scale var(--ws-motion-fast) var(--ws-ease); }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .task-participant-anchor:hover .task-participant-avatar .fui-Avatar { scale: 1.25; }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .task-participant-avatar .fui-Avatar { scale: 1; transition: none; }
+}
 .task-participant-primary { --task-participant-ring: #0091a8; }
 .task-participant-co { --task-participant-ring: #71869b; }
 .task-participant-observer { --task-participant-ring: #b6c4ca; }
