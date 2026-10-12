@@ -44,9 +44,9 @@ async def exercise_audience(database_url: str) -> None:
                 region_id, child_id = uuid4(), uuid4()
                 await connection.execute(insert(departments), [
                     {"id": region_id, "code": f"qa-{region_id}", "name": "QA region",
-                     "scope": "regional", "parent_id": None},
+                     "scope": "regional", "parent_id": None, "created_at": datetime.now(UTC)},
                     {"id": child_id, "code": f"qa-{child_id}", "name": "QA child",
-                     "scope": "central", "parent_id": region_id},
+                     "scope": "central", "parent_id": region_id, "created_at": datetime.now(UTC)},
                 ])
                 await connection.execute(update(users).where(users.c.id == employee.id)
                                          .values(department_id=child_id))

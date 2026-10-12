@@ -665,7 +665,8 @@ export function TasksView(props: TasksViewProps) {
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
-              const columnTasks = visibleTasks.filter((task) => task.status === status);
+              const columnTasks = visibleTasks.filter((task) =>
+                (isTaskOverdue(task, deadlineNow) ? "overdue" : task.status) === status);
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" role="region" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>

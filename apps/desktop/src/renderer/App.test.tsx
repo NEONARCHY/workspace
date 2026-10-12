@@ -1415,7 +1415,7 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace();
     fireEvent.click(screen.getByRole("button", { name: "Задачи" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Поиск задач" }), { target: { value: "__no_task_matches__" } });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Поиск задач" }), { target: { value: "__no_task_matches__" } });
     expect(document.querySelectorAll(".task-row")).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Kanban" }));
     expect(document.querySelectorAll(".kanban-card")).toHaveLength(0);
@@ -1423,7 +1423,9 @@ describe("corporate workspace authentication alpha", () => {
     expect(document.querySelectorAll(".kanban-card").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Просроченные" }));
     const cards = [...document.querySelectorAll(".kanban-card")];
-    expect(cards.length).toBe(initialTasks.filter((task) => task.status === "overdue").length);
+    const overdueTasks = initialTasks.filter(task => !["completed", "cancelled"].includes(task.status)
+      && (task.status === "overdue" || Boolean(task.dueAt && Date.parse(task.dueAt) < Date.now())));
+    expect(cards.length).toBe(overdueTasks.length);
     expect(cards.every((card) => card.closest('[data-task-status="overdue"]'))).toBe(true);
     expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "PATCH")).toHaveLength(0);
   });
@@ -1846,9 +1848,9 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Канбан" }));
     expect(screen.getByLabelText("Доска заявок по стадиям")).toBeInTheDocument();
 
-    const card = screen.getByRole("button", {
+    const card = (await screen.findByRole("button", {
       name: "Открыть заявку №502: Заявка для доски",
-    }).closest("article");
+    })).closest("article");
     expect(card).not.toBeNull();
     installSpatialGeometry();
     const targetColumn = screen.getByLabelText(/^Согласовано: 0 заявок$/);
