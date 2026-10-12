@@ -83,6 +83,7 @@ async def test_module_catalog_has_all_locales() -> None:
         "members",
         "hr",
         "employees",
+        "survey_analytics",
     ]
     assert all(
         set(module["label"]) == {"ru", "uz_cyrl", "uz_latn"} for module in payload["modules"]

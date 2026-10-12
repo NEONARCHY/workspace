@@ -25,8 +25,10 @@ export const moduleKeys = [
   "calendar",
   "zoom_meetings",
   "employees",
+  "survey_analytics",
 ] as const;
 
+export * from "./survey-analytics";
 export type ModuleKey = (typeof moduleKeys)[number];
 export const navigationKeys = [
   ...moduleKeys.filter((key): key is Exclude<ModuleKey, "assistant"> => key !== "assistant"),

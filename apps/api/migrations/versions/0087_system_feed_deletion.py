@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0086_system_feed_deletion"
-down_revision = "0085_merge_edo_employee_sync"
+revision = "0087_system_feed_deletion"
+down_revision = "0086_survey_analytics"
 branch_labels = None
 depends_on = None
 

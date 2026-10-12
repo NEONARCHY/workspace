@@ -14,6 +14,18 @@ edo_incoming_access = sa.Table(
 )
 uuid_type = postgresql.UUID(as_uuid=True)
 
+survey_analyses = sa.Table(
+    "survey_analyses", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("owner_user_id", uuid_type), sa.Column("request_id", uuid_type),
+    sa.Column("content_hash", sa.String(64)), sa.Column("title", sa.String(240)),
+    sa.Column("file_name", sa.String(240)), sa.Column("original_key", sa.String(200)),
+    sa.Column("parsed_key", sa.String(200)), sa.Column("configuration", postgresql.JSONB()),
+    sa.Column("revision", sa.Integer()), sa.Column("archived", sa.Boolean()),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
 project_document_imports = sa.Table(
     "project_document_imports", metadata,
     sa.Column("id", uuid_type, primary_key=True),

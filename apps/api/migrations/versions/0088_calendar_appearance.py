@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0087_calendar_appearance"
-down_revision = "0086_system_feed_deletion"
+revision = "0088_calendar_appearance"
+down_revision = "0087_system_feed_deletion"
 branch_labels = None
 depends_on = None
 

@@ -223,7 +223,9 @@ describe("YuksalishAssistant", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Удалить чат?" })).not.toBeInTheDocument());
     // Wait for Fluent's exit presence, not only its hidden accessibility state.
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
-    fireEvent.click(screen.getByRole("button", { name: "Действия с текущим чатом" }));
+    // Tabster restores the background's accessibility asynchronously after exit.
+    // Query the accessible button, rather than bypassing its modal isolation.
+    fireEvent.click(await screen.findByRole("button", { name: "Действия с текущим чатом" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "Удалить чат" }));
     const confirmation = await screen.findByRole("dialog", { name: "Удалить чат?" });
     const confirmButton = confirmation.querySelector<HTMLButtonElement>(".confirm-action-danger")!;

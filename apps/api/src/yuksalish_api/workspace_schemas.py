@@ -1365,6 +1365,7 @@ class NotificationPreferencesUpdate(ApiModel):
 
 
 NavigationKey = Literal[
+    "survey_analytics",
     "home",
     "tasks",
     "team_overview",
@@ -1409,6 +1410,7 @@ DEFAULT_NAVIGATION: list[NavigationKey] = [
     "members",
     "hr",
     "employees",
+    "survey_analytics",
     "notifications",
     "settings",
 ]

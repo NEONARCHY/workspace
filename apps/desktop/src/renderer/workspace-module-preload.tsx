@@ -12,6 +12,7 @@ const approvals = () => import("./ApprovalsView");
 const referent = () => import("./AIReferentView");
 const incomingLetters = () => import("./IncomingLettersView");
 const hisobot = () => import("./AIHisobotView");
+const surveys = () => import("./SurveyAnalyticsView");
 const telegram = () => import("./TelegramAccessView");
 const feed = () => import("./FeedView");
 const projects = () => import("./ProjectsView");
@@ -34,6 +35,7 @@ export const ApprovalsView = lazy(() => approvals().then((module) => ({ default:
 export const AIReferentView = lazy(() => referent().then((module) => ({ default: module.AIReferentView })));
 export const IncomingLettersView = lazy(() => incomingLetters().then((module) => ({ default: module.IncomingLettersView })));
 export const AIHisobotView = lazy(() => hisobot().then((module) => ({ default: module.AIHisobotView })));
+export const SurveyAnalyticsView = lazy(() => surveys().then((module) => ({ default: module.SurveyAnalyticsView })));
 export const TelegramAccessView = lazy(() => telegram().then((module) => ({ default: module.TelegramAccessView })));
 export const FeedView = lazy(() => feed().then((module) => ({ default: module.FeedView })));
 export const ProjectsView = lazy(() => projects().then((module) => ({ default: module.ProjectsView })));
@@ -56,7 +58,7 @@ const sectionLoaders: readonly [NavigationKey, () => Promise<unknown>][] = [
   ["feed", feed], ["projects", projects], ["project_hub", projectHub],
   ["project_funding", projectHub], ["trip_approvals", trips], ["calendar", calendar],
   ["zoom_meetings", zoom], ["absences", absences], ["members", members],
-  ["hr", hr], ["employees", employees],
+  ["hr", hr], ["employees", employees], ["survey_analytics", surveys],
 ];
 
 export async function prepareEmployeeProfile(token: string, userId: string): Promise<() => void> {

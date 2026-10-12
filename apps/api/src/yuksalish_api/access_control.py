@@ -179,10 +179,13 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/assistant/birthday-greeting",
     }:
         return "assistant", "view"
+    if normalized.startswith("/survey-analyses/") and normalized.endswith("/export"):
+        return "survey_analytics", "view"
     if normalized.startswith("/hisobot") and not normalized.startswith("/hisobot/bridge"):
         return "ai_hisobot", "create" if upper_method in {"POST", "PUT"} else "view"
     prefixes = (
         (("/home",), "home"),
+        (("/survey-analyses",), "survey_analytics"),
         (("/messenger/", "/chats/", "/messages/"), "messenger"),
         (("/tasks",), "tasks"),
         (("/approval-templates",), "payment_requests"),
@@ -225,6 +228,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if upper_method == "GET":
         return module_key, "view"
     collection_paths = {
+        "/survey-analyses",
         "/tasks",
         "/approval-requests",
         "/ai-referent/letters",

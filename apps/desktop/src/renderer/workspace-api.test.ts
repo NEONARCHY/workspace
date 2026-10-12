@@ -10,6 +10,27 @@ describe("web API addresses and session restore", () => {
     vi.unstubAllGlobals();
   });
 
+  it("keeps private survey filenames out of URLs and sends versioned settings to authenticated endpoints", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}", { headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    const file = new File(["Q\nA"], "Мой опрос.csv", { type: "text/csv" });
+    await api.importSurveyAnalysis("survey-token", file, "request-id", "utf-8-sig", ";");
+    const [input, request] = fetchMock.mock.calls.at(-1)! as [string, RequestInit];
+    const url = new URL(input);
+    expect(url.searchParams.get("fileName")).toBeNull();
+    expect(url.searchParams.get("requestId")).toBe("request-id");
+    expect(new Headers(request.headers).get("X-Survey-Filename")).toBe(encodeURIComponent(file.name));
+    expect(new Headers(request.headers).get("Authorization")).toBe("Bearer survey-token");
+    expect(request.body).toBe(file);
+    const configuration = { sheet: 0, headerRow: 0, types: {}, separator: ";" as const, missingValues: [], query: "", filters: [], savedViews: [] };
+    await api.saveSurveyAnalysis("survey-token", "analysis-id", { expectedRevision: 3, title: "Analysis", archived: false, configuration });
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("/survey-analyses/analysis-id"), expect.objectContaining({ method: "PUT", body: expect.stringContaining('"expectedRevision":3') }));
+    await expect(api.importSurveyAnalysis("survey-token", new File([], "empty.csv"), "empty-id", "utf-8-sig", ",")).rejects.toThrow("Файл пуст");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps chat-specific history separate from the prewarmed legacy conversation", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockImplementation(async () => new Response("[]", { headers: { "Content-Type": "application/json" } }));
