@@ -19,6 +19,7 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { CalendarProjectLinkFields } from "./CalendarProjectLinkFields";
+import { CalendarAudienceActions } from "./CalendarAudienceActions";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -50,6 +51,8 @@ interface CalendarEventComposerProps {
   readonly onRetryProjectTargets: () => void;
   readonly canCreateTask: boolean;
   readonly canCreatePayment: boolean;
+  readonly canInviteCalendarAudience?: boolean;
+  readonly onSelectAudience?: (scope: NonNullable<CalendarEventInput["audienceScope"]>) => void;
   readonly busy: boolean;
   readonly error: string;
   readonly onDraftChange: (next: CalendarEventInput) => void;
@@ -91,6 +94,8 @@ export function CalendarEventComposer({
   onRetryProjectTargets,
   canCreateTask,
   canCreatePayment,
+  canInviteCalendarAudience = false,
+  onSelectAudience,
   busy,
   error,
   onDraftChange,
@@ -203,6 +208,8 @@ export function CalendarEventComposer({
             </RecordSection> : null}
 
             <RecordSection title="Участники" description="Занятого в это время коллегу пригласить нельзя.">
+              {canInviteCalendarAudience && onSelectAudience ? <CalendarAudienceActions scope={draft.audienceScope}
+                count={draft.attendeeIds.length} busy={busy} hasDepartments={Boolean(departments)} onSelect={onSelectAudience} /> : null}
               {departments ? <EmployeeScopeSwitch value={attendeeScope} onChange={setAttendeeScope} label="Группа участников мероприятия" /> : null}
               <Input aria-label="Поиск участника" placeholder="Найти коллегу" value={attendeeQuery} onChange={(_event, data) => setAttendeeQuery(data.value)} />
               <div className="calendar-composer-attendees">
@@ -213,9 +220,10 @@ export function CalendarEventComposer({
                       <span>{person.name}{person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}</span>
                     </EmployeeProfileLink></span>}
                     checked={draft.attendeeIds.includes(person.id)}
-                    disabled={person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
+                    disabled={busy || person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
                     onChange={(_event, data) => onDraftChange({
                       ...draft,
+                      audienceScope: undefined,
                       attendeeIds: data.checked
                         ? [...draft.attendeeIds, person.id]
                         : draft.attendeeIds.filter((id) => id !== person.id),

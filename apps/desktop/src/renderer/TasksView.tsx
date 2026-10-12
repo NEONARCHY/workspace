@@ -54,6 +54,8 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { loadTaskProjectOptions } from "./workspace-api";
+import { isTaskOverdue } from "./task-deadline";
+import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
   new: "Новые",
@@ -347,6 +349,7 @@ export function TasksView(props: TasksViewProps) {
     return () => { active = false; };
   }, [props.token, projectRequestKey]);
 
+  const deadlineNow = useTaskDeadlineClock(tasks);
   const visibleTasks = useMemo(() => {
     const search = query.trim().toLocaleLowerCase("ru");
     const names = new Map(people.map((person) => [person.id, person.name]));
@@ -354,7 +357,7 @@ export function TasksView(props: TasksViewProps) {
       const matchesFilter = filter === "mine" ? task.assigneeId === currentUserId
         : filter === "review" ? task.status === "awaiting_review"
           && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))
-        : filter === "overdue" ? task.status === "overdue"
+        : filter === "overdue" ? isTaskOverdue(task, deadlineNow)
         : filter === "completed" ? task.status === "completed"
         : !["completed", "cancelled"].includes(task.status);
       const matchesRole = roleFilter === "all" || roleFilter === "author" && task.authorId === currentUserId
@@ -363,16 +366,16 @@ export function TasksView(props: TasksViewProps) {
       const participantNames = task.participants.map((item) => names.get(item.userId) ?? "").join(" ");
       return matchesFilter && matchesRole && (!search || `${task.title} ${task.project} ${names.get(task.assigneeId) ?? ""} ${names.get(task.authorId) ?? ""} ${participantNames}`.toLocaleLowerCase("ru").includes(search));
     });
-  }, [currentUserId, filter, tasks, query, people, roleFilter]);
+  }, [currentUserId, filter, tasks, query, people, roleFilter, deadlineNow]);
 
   const taskCounts = useMemo(() => ({
     active: tasks.filter((task) => !["completed", "cancelled"].includes(task.status)).length,
     mine: tasks.filter((task) => task.assigneeId === currentUserId).length,
-    overdue: tasks.filter((task) => task.status === "overdue").length,
+    overdue: tasks.filter((task) => isTaskOverdue(task, deadlineNow)).length,
     completed: tasks.filter((task) => task.status === "completed").length,
     review: tasks.filter((task) => task.status === "awaiting_review"
       && (task.authorId === currentUserId || ["manager", "admin", "superadmin"].includes(people.find((person) => person.id === currentUserId)?.role ?? ""))).length,
-  }), [currentUserId, people, tasks]);
+  }), [currentUserId, people, tasks, deadlineNow]);
 
   const selectedTask = tasks.find((task) => task.id === selectedId)
     ?? visibleTasks[0];
@@ -662,7 +665,8 @@ export function TasksView(props: TasksViewProps) {
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {
-              const columnTasks = visibleTasks.filter((task) => task.status === status);
+              const columnTasks = visibleTasks.filter((task) =>
+                (isTaskOverdue(task, deadlineNow) ? "overdue" : task.status) === status);
               return <SpatialLane id={status} className="kanban-column" data-task-status={status} key={status}>
                 <header><strong>{statusLabels[status]}</strong><Badge appearance="filled">{columnTasks.length}</Badge></header>
                 <div className="kanban-stack" role="region" tabIndex={0} aria-label={`${statusLabels[status]}: задачи`}>

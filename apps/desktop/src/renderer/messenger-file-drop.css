@@ -1,0 +1,20 @@
+.messenger-view { position: relative; isolation: isolate; }
+.messenger-file-drop {
+  position: absolute; z-index: 10; inset: 8px; display: grid; place-items: center;
+  padding: 24px; border: 2px dashed var(--ws-link); border-radius: 20px;
+  background: #eaf6f5; color: var(--ws-ink); pointer-events: none;
+  opacity: 0; visibility: hidden;
+  transition: opacity var(--ws-motion-micro) var(--ws-ease), visibility 0s var(--ws-motion-micro);
+}
+.messenger-view[data-file-drop] > .messenger-file-drop { opacity: 1; visibility: visible; transition-delay: 0s; }
+.messenger-view[data-file-drop="blocked"] > .messenger-file-drop { border-color: var(--ws-muted); background: #eff3f5; }
+.messenger-file-drop-copy { display: grid; justify-items: center; gap: 12px; max-width: 440px; text-align: center; }
+.messenger-file-drop-copy strong { font-size: 20px; line-height: 1.4; text-wrap: balance; }
+.messenger-file-drop-copy small { color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
+.messenger-file-drop-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: #d5eae9; color: var(--ws-link); }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) { .messenger-file-drop { transition: none; } }
+@media (forced-colors: active) {
+  .messenger-file-drop, .messenger-view[data-file-drop="blocked"] > .messenger-file-drop { background: Canvas; color: CanvasText; border-color: Highlight; }
+  .messenger-file-drop-icon { background: ButtonFace; color: ButtonText; }
+  .messenger-file-drop-copy small { color: CanvasText; }
+}

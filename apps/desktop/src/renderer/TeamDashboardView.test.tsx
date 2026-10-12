@@ -82,6 +82,24 @@ describe("TeamDashboardView", () => {
     return onSelectTask;
   }
 
+  it("scrolls the employee focus strip after half a second without changing selection", () => {
+    renderDashboard();
+    const strip = screen.getByRole("group", { name: "Фокус на сотруднике" });
+    Object.defineProperties(strip, { clientWidth: { value: 400 }, scrollWidth: { value: 1200 } });
+    const all = within(strip).getByRole("button", { name: "Вся команда" });
+    fireEvent.mouseEnter(strip);
+    const wheel = () => {
+      const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 40 });
+      fireEvent(all, event); return event;
+    };
+    expect(wheel().defaultPrevented).toBe(false);
+    vi.advanceTimersByTime(500);
+    expect(wheel().defaultPrevented).toBe(true);
+    expect(strip.scrollLeft).toBe(40);
+    expect(all).toHaveAttribute("aria-pressed", "true");
+    fireEvent.mouseLeave(strip);
+    expect(wheel().defaultPrevented).toBe(false);
+  });
   it("shows an operational summary without turning workload into a rating", () => {
     renderDashboard();
 

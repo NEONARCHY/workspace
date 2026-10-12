@@ -22,7 +22,6 @@ import "../src/renderer/sliding-segmented.css";
 import "../src/renderer/context-motion.css";
 import "../src/renderer/list-row-hover.css";
 import "../src/renderer/page-canvas.css";
-import "../src/renderer/surface-hierarchy.css";
 
 const token = "qa-avatar-no-real-token";
 let currentFixtureVersion = "v1";

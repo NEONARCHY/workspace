@@ -85,12 +85,12 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   min-height: 36px;
   border-color: rgb(255 255 255 / 40%);
   color: #fff;
-  background: rgb(9 43 63 / 28%);
+  background: #185367;
 }
 .ws-section-header :is(.fui-Button, .telegram-access-secondary):not(:disabled):hover {
   border-color: rgb(255 255 255 / 72%);
   color: #fff;
-  background: rgb(9 43 63 / 46%);
+  background: #123f54;
 }
 .ws-section-header .ws-section-header-primary {
   border-color: #fff;
@@ -106,7 +106,8 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 .ws-section-header .fui-Button:disabled {
   border-color: rgb(255 255 255 / 20%);
   color: rgb(255 255 255 / 64%);
-  background: rgb(9 43 63 / 18%);
+  background: #426c7a;
+  opacity: 1;
 }
 .ws-section-header :is(button, input):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
 /* Segmented controls stay light: selected, idle and hover remain distinct. */
@@ -222,7 +223,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   padding: 14px 20px;
   border: 1px solid rgb(255 255 255 / 30%);
   color: #fff;
-  background: rgb(9 43 63 / 26%);
+  background: #185367;
 }
 .team-dashboard .ws-section-header .team-dash-hero-summary :is(strong, span, svg) { color: inherit; }
 

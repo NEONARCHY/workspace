@@ -1242,6 +1242,7 @@ class CalendarEventWriteRequest(ApiModel):
     all_day: bool = False
     location: str = Field(default="", max_length=240)
     attendee_ids: list[str] = Field(default_factory=list, max_length=100)
+    audience_scope: Literal["central", "regional", "all"] | None = None
     project_id: str | None = None
     workstream_id: str | None = None
     project_item_id: str | None = None
@@ -1481,6 +1482,7 @@ class WorkspaceBootstrapResponse(ApiModel):
     current_user: PersonResponse
     module_access: list[EffectiveModuleAccessResponse]
     can_create_payment_requests: bool
+    can_invite_calendar_audience: bool = False
     people: list[PersonResponse]
     departments: list["WorkspaceDepartmentResponse"]
     positions: list[WorkflowPositionResponse]

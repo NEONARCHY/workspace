@@ -27,6 +27,7 @@ import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { SlidingSegmented } from "./SlidingSegmented";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
+import { useHorizontalBoardScroll } from "./useHorizontalBoardScroll";
 
 interface TeamDashboardViewProps {
   readonly token: string;
@@ -153,6 +154,7 @@ export function TeamDashboardView({
   onSelectTask,
 }: TeamDashboardViewProps) {
   const [teamFilter, setTeamFilter] = useState<TeamFilter>("all");
+  const peopleScrollRef = useHorizontalBoardScroll<HTMLDivElement>({ hoverDelayMs: 500, overButtons: true });
   const [selectedPersonId, setSelectedPersonId] = useState<string>();
   const [scope, setScope] = useState<EmployeeScope>("central");
   const [attentionFilter, setAttentionFilter] = useState<"all" | "overdue" | "review" | "today">("all");
@@ -284,7 +286,7 @@ export function TeamDashboardView({
       ? <TeamPresencePanel token={token} /> : null}
 
     {departments ? <EmployeeScopeSwitch value={scope} onChange={(next) => { setScope(next); setSelectedPersonId(undefined); }} label="Сотрудники в обзоре команды" /> : null}
-    <div className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
+    <div ref={peopleScrollRef} className="team-focus-strip" role="group" aria-label="Фокус на сотруднике">
       <button type="button" aria-pressed={!selectedPersonId} className="team-focus-all" onClick={() => setSelectedPersonId(undefined)}><PeopleTeam24Regular /><span>Вся команда</span></button>
       {visiblePeople.map(person => <button key={person.id} type="button" className="team-focus-person" aria-pressed={selectedPersonId === person.id} onClick={() => setSelectedPersonId(current => current === person.id ? undefined : person.id)} title={person.jobTitle ?? person.name}><EmployeeProfileLink userId={person.id} personName={person.name}><Avatar size={36} name={person.name} color="colorful" /><span>{person.name}</span></EmployeeProfileLink></button>)}
     </div>

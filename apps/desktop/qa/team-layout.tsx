@@ -15,6 +15,7 @@ import "../src/renderer/spatial-workspace.css";
 import "../src/renderer/employee-scope.css";
 import "../src/renderer/sliding-segmented.css";
 import "../src/renderer/list-row-hover.css";
+import "../src/renderer/section-headers.css";
 
 const nativeFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {

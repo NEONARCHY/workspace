@@ -1,5 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { WandSparkles } from "lucide-react";
 import { scrollToLatest } from "./message-scroll";
 import type {
@@ -62,7 +62,8 @@ import { ReactionPicker } from "./ReactionPicker";
 import { MessageContextMenu, menuPortalContainerFor } from "./MessageContextMenu";
 import { ReactionPeople, ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
-import { rewriteMessengerDraft, type AssistantRewriteStyle } from "./workspace-api";
+import { rewriteMessengerDraft, validateWorkspaceAttachmentFile, type AssistantRewriteStyle } from "./workspace-api";
+import { MessengerFileDropSurface, useMessengerFileReceiver } from "./MessengerFileDrop";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
 import { ForwardedMessage } from "./ForwardedMessage";
@@ -324,6 +325,24 @@ function Conversation({
     };
   }, [draft, draftKey]);
   const canSend = chat.permissions.sendMessages;
+  const fileDropBlocked = !canSend ? "В этом чате нельзя отправлять сообщения"
+    : !chat.permissions.uploadFiles ? "Вложения запрещены владельцем группы"
+    : busy ? "Дождитесь завершения текущего действия"
+    : editing ? "Сначала завершите редактирование сообщения"
+    : voiceOpen ? "Сначала завершите голосовое сообщение"
+    : taskSource || forwarding || deleting || avatarPickerOpen || reactionDialog
+      ? "Сначала закройте открытое окно чата" : undefined;
+  const acceptFiles = useCallback((files: readonly File[]) => {
+    if (fileDropBlocked || !files.length) return false;
+    try { files.forEach(file => validateWorkspaceAttachmentFile(file)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось прикрепить файлы"); return false; }
+    focusAfterSend.current = true;
+    // Distinct files can share all metadata; never discard one on that basis.
+    setPendingFiles(current => [...new Set([...current, ...files])]);
+    setError("");
+    return true;
+  }, [fileDropBlocked, setPendingFiles, setError]);
+  useMessengerFileReceiver(chat.id, chat.title, fileDropBlocked, acceptFiles, setError);
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -439,7 +458,7 @@ function Conversation({
       focusAfterSend.current = false;
       composerInputRef.current?.focus();
     }
-  }, [busy, draft]);
+  }, [busy, draft, pendingFiles]);
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => { setContextMenu(undefined); setReactionPreview(false); };
@@ -1078,10 +1097,8 @@ function Conversation({
               type="file"
               multiple
               aria-label="Файлы сообщения"
-              disabled={busy || !chat.permissions.uploadFiles}
-              onChange={(event) =>
-                setPendingFiles(Array.from(event.target.files ?? []))
-              }
+              disabled={Boolean(fileDropBlocked)}
+              onChange={(event) => { acceptFiles(Array.from(event.target.files ?? [])); event.target.value = ""; }}
             />
             <Tooltip
               content={
@@ -1319,6 +1336,7 @@ export function MessengerView(props: MessengerViewProps) {
   const [assistantPreparationDismissed, setAssistantPreparationDismissed] = useState(false);
   const activeChat = visibleChats.find((chat) => chat.id === activeChatId)
     ?? (assistantChat?.id === activeChatId ? assistantChat : undefined) ?? firstActive;
+  const showDroppedFiles = useCallback(() => setConversationOpen(true), [setConversationOpen]);
   const assistantRecipient = props.assistantDraft?.kind === "message" && props.assistantRecipientId
     ? props.people.find((person) => person.id === props.assistantRecipientId) : undefined;
   const pendingAssistantChat = assistantRecipient && !assistantChat && !assistantPreparationDismissed
@@ -1380,7 +1398,9 @@ export function MessengerView(props: MessengerViewProps) {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
   return (
-    <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+    <MessengerFileDropSurface className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`}
+      activeChatId={activeChat?.id} onAccepted={showDroppedFiles}
+      blockedReason={panel || deletionChoice || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}>
       <aside className="list-pane">
         <WorkspaceSectionHeader motif="messages" className="pane-heading messenger-pane-heading ws-section-header-compact">
           <div>
@@ -1485,6 +1505,6 @@ export function MessengerView(props: MessengerViewProps) {
         </DialogSurface>
       </WorkspaceDialog>
       {!undo.isShared ? <UndoActionsToast manager={undo} /> : null}
-    </section>
+    </MessengerFileDropSurface>
   );
 }

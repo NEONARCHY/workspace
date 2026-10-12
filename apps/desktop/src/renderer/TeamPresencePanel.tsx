@@ -130,7 +130,7 @@ export function TeamPresencePanel({ token }: { readonly token: string }) {
     <div className="team-presence-viewport" ref={peopleMotion}>
     <div className="team-presence-people">
       {members.map((person) => <div key={person.userId} className={`team-presence-person is-${person.status}`}>
-        <EmployeeProfileLink userId={person.userId} personName={person.name}><ProfileAvatar person={{ id: person.userId, name: person.name, avatarVersion: person.avatarVersion }} token={token} size={36} /></EmployeeProfileLink>
+        <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-avatar"><ProfileAvatar person={{ id: person.userId, name: person.name, avatarVersion: person.avatarVersion }} token={token} size={36} /></EmployeeProfileLink>
         <EmployeeProfileLink userId={person.userId} personName={person.name} className="team-presence-person-name"><strong>{person.name}</strong><small>{person.jobTitle || "Должность не указана"}</small></EmployeeProfileLink>
         <span className={`team-presence-status is-${person.status}`}>{statusLabel(person)}</span>
         <span className="team-presence-times">{person.session

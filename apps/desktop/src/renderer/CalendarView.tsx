@@ -1,4 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { CalendarAudienceActions } from "./CalendarAudienceActions";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -41,6 +42,7 @@ import { useCalendarEventClock } from "./useCalendarEventClock";
 interface CalendarViewProps {
   readonly token?: string;
   readonly canLinkProjects?: boolean;
+  readonly canInviteCalendarAudience?: boolean;
   readonly focusEventId?: string;
   readonly createFromChat?: {
     readonly key: string;
@@ -171,6 +173,7 @@ function editDraft(event: CalendarEvent): CalendarEventInput {
 export function CalendarView({
   token = "",
   canLinkProjects = false,
+  canInviteCalendarAudience = false,
   focusEventId,
   createFromChat,
   events,
@@ -199,6 +202,14 @@ export function CalendarView({
   const [selectedState, setSelected] = useState<CalendarEvent | undefined>(focusedEvent);
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
+  const activePeople = people.filter(person => !person.status || person.status === "active");
+  const selectAudience = (scope: NonNullable<CalendarEventInput["audienceScope"]>) => {
+    if (!canInviteCalendarAudience || !draft || busy) return;
+    setDraft({ ...draft, audienceScope: scope, attendeeIds: [...new Set([currentUserId,
+      ...activePeople.filter(person => scope === "all" || (departments
+        && employeeScope(person.departmentId, departments) === scope)).map(person => person.id),
+    ])] });
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [projectTargets, setProjectTargets] = useState<PaymentProjectTargets>({ projects: [], workstreams: [], items: [] });
@@ -463,6 +474,8 @@ export function CalendarView({
     setBusy(true);
     const payload = {
       ...draft,
+      // The server expands the audience, including staff absent from an older bootstrap.
+      attendeeIds: draft.audienceScope ? [] : draft.attendeeIds,
       title: draft.title.trim(),
       startsAt: start.toISOString(),
       endsAt: end.toISOString(),
@@ -783,21 +796,24 @@ export function CalendarView({
             </div> : null}
             <fieldset>
               <legend>Участники</legend>
+              {canInviteCalendarAudience ? <CalendarAudienceActions scope={draft.audienceScope}
+                count={draft.attendeeIds.length} busy={busy} hasDepartments={Boolean(departments)} onSelect={selectAudience} /> : null}
               {departments ? <EmployeeScopeSwitch value={editAttendeeScope} onChange={setEditAttendeeScope} label="Группа участников события" /> : null}
-              {people.filter((person) => !departments || employeeScope(person.departmentId, departments) === editAttendeeScope).map((person) => (
+              {activePeople.filter((person) => !departments || employeeScope(person.departmentId, departments) === editAttendeeScope).map((person) => (
                 <Checkbox
                   key={person.id}
                   label={<span className="workspace-person-choice"><Avatar name={person.name} size={24} color="colorful" aria-hidden="true" /><EmployeeProfileLink userId={person.id} personName={person.name}>
                     {person.name}{busyAttendeeIds.has(person.id) ? " · занят" : ""}
                   </EmployeeProfileLink></span>}
                   checked={draft.attendeeIds.includes(person.id)}
-                  disabled={
+                  disabled={busy || (
                     person.id !== currentUserId
                     && busyAttendeeIds.has(person.id)
                     && !draft.attendeeIds.includes(person.id)
-                  }
+                  )}
                   onChange={(_event, data) => setDraft({
                     ...draft,
+                    audienceScope: undefined,
                     attendeeIds: data.checked ? [...draft.attendeeIds, person.id] : draft.attendeeIds.filter((id) => id !== person.id),
                   })}
                 />
@@ -941,6 +957,8 @@ export function CalendarView({
       </aside>
       {draft && !selected ? <CalendarEventComposer
         draft={draft}
+        canInviteCalendarAudience={canInviteCalendarAudience}
+        onSelectAudience={selectAudience}
         projectTargets={projectTargets}
         canLinkProjects={canLinkProjects}
         projectTargetsLoading={projectTargetsLoading}

@@ -29,6 +29,7 @@ import type {
   EdoAccessConfiguration,
   EdoAccessRule,
   EdoAccessUpdate,
+  EdoEmployeeSyncStatus,
   EdoIncomingDetail,
   EdoIncomingFilter,
   EdoIncomingPage,
@@ -192,6 +193,15 @@ export function loadEdoAccess(token: string) {
   return apiRequest<EdoAccessConfiguration>(
     "/incoming-letters/access", {}, token,
   );
+}
+
+export function loadEdoEmployeeSync(token: string) {
+  return apiRequest<EdoEmployeeSyncStatus>("/incoming-letters/employee-sync", {}, token);
+}
+
+export function retryEdoEmployeeSync(token: string, userId: string) {
+  return apiRequest<void>(`/incoming-letters/employee-sync/${encodeURIComponent(userId)}/retry`,
+    { method: "POST" }, token);
 }
 
 export function saveEdoAccess(
@@ -2133,6 +2143,16 @@ export function actOnWorkspaceAbsence(token: string, requestId: string, action: 
   return apiRequest<AbsenceRequest>(`/absence-requests/${requestId}/actions`, { method: "POST", body: JSON.stringify({ action, comment }) }, token);
 }
 
+export function validateWorkspaceAttachmentFile(file: File, voice = false): void {
+  const isAudioFile = file.type.toLowerCase().startsWith("audio/")
+    || /\.(?:mp3|m4a|aac|wav|flac|ogg|oga|opus|webm)$/i.test(file.name);
+  const maxBytes = voice ? 4 * 1024 * 1024 : isAudioFile ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
+  if (file.size > maxBytes) {
+    throw new Error(isAudioFile ? "Аудиофайл должен быть не больше 100 МБ" : "Файл должен быть не больше 25 МБ");
+  }
+  checkRemoteUploadSize(file);
+}
+
 export async function uploadWorkspaceAttachment(
   token: string,
   ownerType: AttachmentOwnerType,
@@ -2146,12 +2166,7 @@ export async function uploadWorkspaceAttachment(
   },
   expectedRevision?: number,
 ): Promise<WorkspaceAttachment> {
-  const isAudioFile = file.type.toLowerCase().startsWith("audio/")
-    || /\.(?:mp3|m4a|aac|wav|flac|ogg|oga|opus|webm)$/i.test(file.name);
-  const maxBytes = media ? 4 * 1024 * 1024 : isAudioFile ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
-  if (file.size > maxBytes) {
-    throw new Error(isAudioFile ? "Аудиофайл должен быть не больше 100 МБ" : "Файл должен быть не больше 25 МБ");
-  }
+  validateWorkspaceAttachmentFile(file, Boolean(media));
   const query = new URLSearchParams({ fileName: file.name, documentRole });
   if (expectedRevision !== undefined) query.set("expectedRevision", String(expectedRevision));
   if (media) {
@@ -2159,7 +2174,6 @@ export async function uploadWorkspaceAttachment(
     query.set("mediaDurationMs", String(media.mediaDurationMs));
     query.set("mediaCodec", media.mediaCodec);
   }
-  checkRemoteUploadSize(file);
   const url = `${getApiBaseUrl()}/api/v1/attachments/${ownerType}/${ownerId}?${query.toString()}`;
   return boundedRequest(url, {
     method: "PUT",
