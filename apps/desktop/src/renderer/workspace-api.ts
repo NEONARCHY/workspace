@@ -1,4 +1,5 @@
 import type {
+  HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringDocumentKind,
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
   OfficeFilePreview,
   ProjectBudgetSummary,
@@ -571,6 +572,46 @@ export function loadHisobotUnitReports(token: string, startDate: string, endDate
 
 export function loadHrOverview(token: string): Promise<HrOverview> {
   return apiRequest<HrOverview>("/hr", {}, token);
+}
+
+export function loadHiringRegistry(token: string, offset = 0): Promise<HiringRegistry> {
+  return apiRequest<HiringRegistry>(`/hr/hiring?offset=${offset}`, {}, token);
+}
+
+export function loadHiringCase(token: string, id: string): Promise<HiringDetail> {
+  return apiRequest<HiringDetail>(`/hr/hiring/${id}`, {}, token);
+}
+
+export function saveHiringCase(token: string, id: string, expectedRevision: number,
+  fields: HiringFields, applicationBox: HiringSignatureBox): Promise<HiringDetail> {
+  return apiRequest<HiringDetail>(`/hr/hiring/${id}`, { method: "PUT",
+    body: JSON.stringify({ expectedRevision, fields, applicationBox }) }, token);
+}
+
+export function actHiringCase(token: string, id: string, expectedRevision: number,
+  action: HiringActionName, requestId: string, comment = ""): Promise<HiringDetail> {
+  return apiRequest<HiringDetail>(`/hr/hiring/${id}/actions`, { method: "POST",
+    body: JSON.stringify({ expectedRevision, action, requestId, comment }) }, token);
+}
+
+export function uploadHiringDocument(token: string, id: string, expectedRevision: number,
+  kind: "application" | "employee-scan", file: File): Promise<HiringDetail> {
+  if (file.size > 10 * 1024 * 1024) throw new Error("Документ должен быть не больше 10 МиБ");
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/${id}/documents/${kind}?expectedRevision=${expectedRevision}`,
+    { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" }, body: file },
+    async (response) => await response.json() as HiringDetail, 120_000);
+}
+
+export function saveHiringSignature(token: string, file: File): Promise<void> {
+  if (file.size > 1024 * 1024) throw new Error("Подпись должна быть не больше 1 МиБ");
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/signature`,
+    { method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "image/png" }, body: file },
+    async () => undefined, 120_000);
+}
+
+export function downloadHiringDocument(token: string, id: string, kind: HiringDocumentKind): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/${id}/documents/${kind}`,
+    { headers: { Authorization: `Bearer ${token}` } }, (response) => response.blob(), 120_000);
 }
 
 export function saveHrSettings(token: string, payload: HrSettings): Promise<HrSettings> {

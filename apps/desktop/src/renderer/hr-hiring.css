@@ -1,0 +1,23 @@
+.hr-hiring { min-width: 0; }
+.hr-hiring-toolbar, .hr-hiring-signature, .hr-hiring-footer, .hr-hiring-buttons, .hr-hiring-pagination { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.hr-hiring-toolbar { justify-content: space-between; margin: 20px 0; }
+.hr-hiring-toolbar h2 { margin: 0; }
+.hr-hiring-toolbar p { color: var(--ws-muted); }
+.hr-hiring-toolbar > div:last-child { display: flex; gap: 8px; }
+.hr-hiring-signature { padding: 12px 0; }
+.hr-hiring-layout { display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); gap: 20px; }
+.hr-hiring-layout > aside { display: flex; flex-direction: column; gap: 8px; }
+.hr-hiring-layout > aside > button { display: grid; gap: 5px; text-align: left; padding: 16px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); color: var(--ws-text); cursor: pointer; font: inherit; }
+.hr-hiring-layout > aside > button.selected { border-color: var(--ws-link); background: var(--ws-selected); }
+.hr-hiring-layout > aside > button:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.hr-hiring-detail { min-width: 0; padding: 20px; background: var(--ws-surface); border-radius: 16px; }
+.hr-hiring-detail fieldset { margin: 16px 0; border: 1px solid var(--ws-line); border-radius: 12px; padding: 16px; min-width: 0; }
+.hr-hiring-detail legend { font-weight: 600; padding: 0 6px; }
+.hr-hiring-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 8px 0 16px; }
+.hr-hiring-grid > * { min-width: 0; }
+.hr-hiring-footer { position: sticky; bottom: 0; padding: 16px 0; background: var(--ws-surface); }
+.hr-hiring-preview { width: min(960px, calc(100vw - 32px)); max-width: 960px; }
+.hr-hiring-preview iframe { width: 100%; height: min(65vh, 760px); border: 1px solid var(--ws-line); }
+.hr-hiring-pagination { justify-content: space-between; padding-top: 12px; }
+@media (max-width: 1024px) { .hr-hiring-layout { grid-template-columns: 1fr; } .hr-hiring-layout > aside { max-height: 260px; overflow: auto; } }
+@media (max-width: 640px) { .hr-hiring-grid { grid-template-columns: 1fr; } .hr-hiring-detail { padding: 12px; } }

@@ -330,7 +330,9 @@ describe("YuksalishAssistant", () => {
     act(() => confirm.focus()); fireEvent.click(confirm);
     await screen.findByText("Чат удалён. Не удалось открыть следующий — выберите его в списке.");
     await waitFor(() => expect(document.querySelector(".confirm-action-dialog")).toBeNull());
-    fireEvent.click(screen.getByRole("combobox", { name: "Чат ассистента" }));
+    // Surface exit and Tabster's background restoration are separate async steps.
+    // Keep the accessible query: a hidden picker must never count as usable.
+    fireEvent.click(await screen.findByRole("combobox", { name: "Чат ассистента" }));
     expect(screen.queryByRole("option", { name: "first" })).not.toBeInTheDocument();
     vi.mocked(loadAssistantMessages).mockResolvedValueOnce([]);
     fireEvent.click(screen.getByRole("option", { name: "second" }));
