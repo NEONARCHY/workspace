@@ -1110,6 +1110,39 @@ async function selectPaymentDirection() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it("uses the real mobile web menu without losing the current section", async () => {
+    const server = mockServer();
+    const original = server.getMockImplementation()!;
+    server.mockImplementation((input, options) => original(String(input).replace("/auth/web/", "/auth/"), options));
+    vi.stubGlobal("yuksalish", undefined);
+    const mobileMedia = Object.assign(new EventTarget(), { matches: true, media: "mobile-browser", addListener: vi.fn(), removeListener: vi.fn() });
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => query.includes("max-width: 1023px") ? mobileMedia : { matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn() }));
+    render(<App />);
+    await loginToWorkspace("aziza", "home");
+    const trigger = screen.getByRole("button", { name: "Открыть меню" });
+    expect(document.querySelector(".app-shell")).toHaveClass("browser-compact");
+    expect(screen.queryByRole("complementary", { name: "Основная навигация" })).not.toBeInTheDocument();
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("dialog", { name: "Меню разделов" });
+    fireEvent.click(within(menu).getByRole("button", { name: "Мессенджер" }));
+    await screen.findByRole("textbox", { name: "Новое сообщение" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Меню разделов" })).not.toBeInTheDocument());
+    const draft = screen.getByRole("textbox", { name: "Новое сообщение" });
+    fireEvent.change(draft, { target: { value: "Мобильный черновик" } });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть меню" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Меню разделов" })).not.toBeInTheDocument());
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toBe(draft);
+    expect(draft).toHaveValue("Мобильный черновик");
+    act(() => { mobileMedia.matches = false; mobileMedia.dispatchEvent(new Event("change")); });
+    fireEvent.click(screen.getByRole("button", { name: "Свернуть меню" }));
+    expect(document.querySelector(".app-shell")).toHaveClass("rail-collapsed");
+    act(() => { mobileMedia.matches = true; mobileMedia.dispatchEvent(new Event("change")); });
+    expect(document.querySelector(".app-shell")).not.toHaveClass("rail-collapsed");
+    act(() => { mobileMedia.matches = false; mobileMedia.dispatchEvent(new Event("change")); });
+    expect(document.querySelector(".app-shell")).toHaveClass("rail-collapsed");
+    expect(draft).toHaveValue("Мобильный черновик");
+  });
   it("opens survey analytics only on demand and retains its draft across section changes", async () => {
     const survey: SurveyAnalysisDetail = {
       analysis: { id: "survey-test", title: "Сохранённый опрос", fileName: "sample.csv", revision: 1,

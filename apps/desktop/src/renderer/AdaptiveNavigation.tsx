@@ -15,11 +15,13 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
   renderItem,
   expandedItem,
   sidebarTheme = defaultSidebarTheme,
+  scrollable = false,
 }: {
   readonly items: readonly T[];
   readonly renderItem: (item: T, inOverflow: boolean, closeOverflow: () => void) => ReactNode;
   readonly expandedItem?: { readonly key: string; readonly height: number };
   readonly sidebarTheme?: SidebarTheme;
+  readonly scrollable?: boolean;
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const moreRef = useRef<HTMLButtonElement>(null);
@@ -32,6 +34,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     const container = containerRef.current;
     if (!container) return;
     const update = () => {
+      if (scrollable) { setVisibleCount(items.length); return; }
       // Collapsed icons are taller than labelled rows. Fit the actual hit target,
       // including the gap, rather than letting More overflow into the profile.
       const action = container.querySelector<HTMLElement>(":scope > .rail-slot > .rail-action, :scope > .rail-action");
@@ -60,7 +63,7 @@ export function AdaptiveNavigation<T extends AdaptiveNavigationItem>({
     const observer = new ResizeObserver(update);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [items, expandedItem?.key, expandedItem?.height]);
+  }, [items, expandedItem?.key, expandedItem?.height, scrollable]);
 
   useEffect(() => {
     if (!open) return;

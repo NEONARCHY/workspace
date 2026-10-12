@@ -116,6 +116,8 @@ import { clearProfilePreload } from "./profile-preload";
 import { createRefreshQueue } from "./refresh-queue";
 import { initialKnownNotificationIds, isObsoleteHisobotNotification } from "./notification-delivery";
 import { useCompactWindow } from "./use-compact-window";
+import { useBrowserCompactLayout } from "./browser-layout";
+import { BrowserNavigation } from "./BrowserNavigation";
 import {
   acceptInvitation,
   acceptWorkspaceTaskResult,
@@ -418,7 +420,11 @@ export function App() {
   const [aiModulesOpen, setAiModulesOpen] = useState(false);
   const compactWindow = useCompactWindow();
   const [railPreference, setRailPreference] = useState<boolean>();
-  const railCollapsed = railPreference ?? compactWindow;
+  const browserCompact = useBrowserCompactLayout(workspacePlatform.kind === "web");
+  const [browserMenuOpen, setBrowserMenuOpen] = useState(false);
+  const browserMenuTrigger = useRef<HTMLButtonElement>(null);
+  const railCollapsed = !browserCompact && (railPreference ?? compactWindow);
+  const closeBrowserMenu = () => { setBrowserMenuOpen(false); if (browserCompact) setAiModulesOpen(false); };
   const { theme: sidebarTheme } = useSidebarTheme(session?.user.id);
   const [backgroundError, setBackgroundError] = useState("");
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
@@ -1951,10 +1957,11 @@ export function App() {
         void prepareEmployeeProfile(session.accessToken, userId).catch(() => undefined);
       }}>
       <a className="skip-to-content" href="#workspace-content">Перейти к содержимому</a>
-      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}`}>
+      <div className={`app-shell ${railCollapsed ? "rail-collapsed" : ""}${browserCompact ? " browser-compact" : ""}`}>
+        <BrowserNavigation compact={browserCompact} open={browserMenuOpen} returnFocusRef={browserMenuTrigger} onOpenChange={(open) => { if (open) setBrowserMenuOpen(true); else closeBrowserMenu(); }}>
         <aside className="app-rail sidebar-palette" data-sidebar-theme={sidebarTheme} aria-label="Основная навигация">
           <div className="workspace-logo" aria-label="Yuksalish Workspace">
-            <button type="button" className="rail-toggle" disabled={navigationEditing} aria-label={railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={!railCollapsed} onClick={() => setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
+            <button type="button" className="rail-toggle" disabled={!browserCompact && navigationEditing} aria-label={browserCompact ? "Закрыть меню" : railCollapsed ? "Развернуть меню" : "Свернуть меню"} aria-expanded={browserCompact ? browserMenuOpen : !railCollapsed} onClick={() => browserCompact ? closeBrowserMenu() : setRailPreference(!railCollapsed)}><Navigation24Regular /></button>
             <CompanyLogo tone={sidebarTheme === "light" ? "color" : "white"} className="rail-brand" />
           </div>
           <div className="rail-customize">
@@ -1967,7 +1974,7 @@ export function App() {
                   event.currentTarget.form?.requestSubmit();
                   return;
                 }
-                setRailPreference(false);
+                if (!browserCompact) setRailPreference(false);
                 setNavigationEditing(true);
               }}><Edit16Regular /></button>
           </div>
@@ -1978,10 +1985,10 @@ export function App() {
             badges={badgeBySection}
             onClose={() => setNavigationEditing(false)}
             onSave={(order, revision) => personalMutation((token) => reorderNavigation(token, order, revision))}
-          /> : <AdaptiveNavigation sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
+          /> : <AdaptiveNavigation scrollable={browserCompact} sidebarTheme={sidebarTheme} items={sidebarItems} expandedItem={aiModulesOpen && !railCollapsed ? { key: "ai_modules", height: aiModuleExpansionHeight } : undefined} renderItem={(item, inOverflow) => {
               if (item.key === "ai_modules") return <div key={item.key} className="rail-slot" data-navigation-key={item.key}>
                 <AiModulesNavigation sidebarTheme={sidebarTheme} modules={item.modules} activeKey={displayedSection} inOverflow={inOverflow} inline={!railCollapsed} open={aiModulesOpen} onOpenChange={setAiModulesOpen}
-                  onSelect={(key) => { if (key === "settings") return; setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
+                  onSelect={(key) => { if (key === "settings") return; closeBrowserMenu(); setPreparedAction(undefined); setFocusTarget(undefined); setActiveSection(key); }} />
               </div>;
               const badge = badgeBySection[item.key];
               const icon = displayedSection === item.key && item.key === "messenger"
@@ -1997,6 +2004,7 @@ export function App() {
                   title={item.label}
                   aria-current={displayedSection === item.key ? "page" : undefined}
                   onClick={() => {
+                    closeBrowserMenu();
                     if (item.key === "settings") { setAccountOpen(true); return; }
                     if (item.key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
                     setPreparedAction(undefined);
@@ -2012,15 +2020,17 @@ export function App() {
               );
             }} />}
           <div className="rail-bottom">
-            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${workspace.currentUser.name}`} aria-haspopup="dialog" onClick={() => setProfileUserId(workspace.currentUser.id)}>
+            <button className="rail-profile" type="button" aria-label={`Открыть профиль: ${workspace.currentUser.name}`} aria-haspopup="dialog" onClick={() => { closeBrowserMenu(); setProfileUserId(workspace.currentUser.id); }}>
               <ProfileAvatar person={workspace.currentUser} token={session.accessToken} size={32} />
               <span>{workspace.currentUser.name}</span>
             </button>
           </div>
         </aside>
+        </BrowserNavigation>
 
         <div className={`app-stage ${backgroundError ? "has-feedback" : ""}`}>
           <header className="global-bar">
+            {browserCompact ? <button ref={browserMenuTrigger} type="button" className="browser-menu-trigger" aria-label="Открыть меню" aria-controls={browserMenuOpen ? "browser-navigation" : undefined} aria-haspopup="dialog" aria-expanded={browserMenuOpen} onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setBrowserMenuOpen(true); }}><Navigation24Regular /></button> : null}
             <SectionJump items={orderedNavItems} commands={[
               ...(canView("tasks") ? workspace.tasks.map(task => ({ id: `task:${task.id}`, label: task.title, context: `Задача · ${task.project}`, icon: <TaskListSquareLtr24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "tasks", entityId: task.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("tasks"); } })) : []),
               ...(canView("messenger") ? workspace.chats.map(chat => ({ id: `chat:${chat.id}`, label: chat.title, context: "Рабочий чат", icon: <Chat24Regular />, onSelect: () => { setPreparedAction(undefined); setFocusTarget(current => ({ section: "messenger", entityId: chat.id, revision: (current?.revision ?? 0) + 1 })); setActiveSection("messenger"); } })) : []),
