@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import secrets
 from datetime import UTC, datetime
@@ -7,6 +8,8 @@ from urllib.parse import quote
 from uuid import UUID
 from zipfile import BadZipFile, ZipFile
 
+from defusedxml.common import DefusedXmlException
+from defusedxml.ElementTree import ParseError
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncConnection
 
@@ -26,6 +29,7 @@ from yuksalish_api.ai_referent_configuration_service import (
     require_configuration_admin,
     save_configuration,
 )
+from yuksalish_api.ai_referent_files_service import read_limited_packet
 from yuksalish_api.ai_referent_incoming_access import (
     IncomingAccessConfiguration,
     IncomingAccessRule,
@@ -65,9 +69,32 @@ from yuksalish_api.ai_referent_service import (
 )
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
+from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 
 router = APIRouter(prefix="/ai-referent", tags=["ai-referent"])
+_local_preview_slots = asyncio.Semaphore(2)
+
+
+@router.post("/file-preview", response_model=OfficePreview)
+async def preview_local_file(
+    request: Request,
+    response: Response,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    file_name: Annotated[str, Query(alias="fileName", min_length=1, max_length=500)],
+    sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=150000)] = 0,
+) -> OfficePreview:
+    """Read an unsaved document without creating letters, files or robot jobs."""
+    await ensure_module_action(connection, current_user, "ai_referent", "view")
+    response.headers["Cache-Control"] = "private, no-store"
+    try:
+        async with _local_preview_slots:
+            content = await read_limited_packet(request.stream(), 25 * 1024 * 1024)
+            return await asyncio.to_thread(preview_office, file_name, content, sheet, offset)
+    except (ValueError, BadZipFile, ParseError, DefusedXmlException, KeyError) as error:
+        raise HTTPException(422, "Документ недоступен для просмотра. Скачайте оригинал.") from error
 
 
 @router.get("/visibility", response_model=IncomingVisibility)

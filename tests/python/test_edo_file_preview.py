@@ -7,10 +7,11 @@ from zipfile import ZipFile
 import pytest
 from fastapi import HTTPException, Response
 
+from yuksalish_api.access_control import request_module_action
 from yuksalish_api.edo_schemas import EdoAttachment, EdoIncomingDetail, EdoIncomingLetter
 from yuksalish_api.edo_scope import EdoReadScope
 from yuksalish_api.edo_service import EdoBridgeError
-from yuksalish_api.routers import edo_incoming
+from yuksalish_api.routers import ai_referent, edo_incoming
 
 
 def document() -> bytes:
@@ -126,3 +127,44 @@ async def test_malformed_document_is_not_reported_as_success(
             17, "doc", MagicMock(), Response(), MagicMock(), AsyncMock(), 0, 0,
         )
     assert failure.value.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_unsaved_file_preview_is_read_only_and_checks_access_before_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    permission = AsyncMock(side_effect=HTTPException(403, "Forbidden"))
+    monkeypatch.setattr(ai_referent, "ensure_module_action", permission)
+    request = MagicMock()
+    request.stream.return_value = chunks(document())
+    assert request_module_action("/api/v1/ai-referent/file-preview", "POST") == (
+        "ai_referent", "view",
+    )
+    with pytest.raises(HTTPException):
+        await ai_referent.preview_local_file(
+            request, Response(), MagicMock(), AsyncMock(), "local.docx", 0, 0,
+        )
+    request.stream.assert_not_called()
+    permission.side_effect = None
+    response = Response()
+    result = await ai_referent.preview_local_file(
+        request, response, MagicMock(), AsyncMock(), "local.docx", 0, 0,
+    )
+    assert result.blocks[0].text == "External content"
+    assert response.headers["Cache-Control"] == "private, no-store"
+
+
+@pytest.mark.anyio
+async def test_unsaved_preview_limits_upload_without_creating_document(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(ai_referent, "ensure_module_action", AsyncMock())
+    request = MagicMock()
+    request.stream.return_value = chunks(b"invalid office")
+    connection = AsyncMock()
+    with pytest.raises(HTTPException) as failure:
+        await ai_referent.preview_local_file(
+            request, Response(), MagicMock(), connection, "local.docx", 0, 0,
+        )
+    assert failure.value.status_code == 422
+    connection.execute.assert_not_awaited()

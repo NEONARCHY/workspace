@@ -266,6 +266,17 @@ export function loadEdoIncomingOfficePreview(
   );
 }
 
+export function previewAIReferentLocalFile(
+  token: string, file: File, sheet = 0, offset = 0, signal?: AbortSignal,
+): Promise<OfficeFilePreview> {
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/ai-referent/file-preview?fileName=${encodeURIComponent(file.name)}&sheet=${sheet}&offset=${offset}`,
+    { method: "POST", body: file, signal, cache: "no-store", headers: {
+      Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream",
+    } }, async response => await response.json() as OfficeFilePreview, 120_000,
+  );
+}
+
 export function loadEmployeeRecognitionProfile(
   token: string,
   userId: string,
