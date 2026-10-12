@@ -18,6 +18,8 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); vi.useRealTimers(); });
 it("exposes the selected metric and shares a decorative task-style hover layer", () => {
   render(center(notifications(7).slice(0, 2)));
   const metric = screen.getByRole("button", { name: /Новые уведомления/ });
+  expect(metric).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
   expect(metric).toHaveAttribute("aria-pressed", "false");
   fireEvent.click(metric);
   expect(metric).toHaveAttribute("aria-pressed", "true");
@@ -32,6 +34,7 @@ it("shows 100% read while seven unresolved actions remain in the queue", () => {
   render(center(notifications()));
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   expect(within(screen.getByRole("group", { name: "Прочтение уведомлений" })).getByText("100%")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
   expect(screen.getAllByText("нужно действие")).toHaveLength(7);
   expect(screen.getByRole("button", { name: "Прочитать все" })).toBeDisabled();
 });
@@ -41,12 +44,30 @@ it.each([[7, "98"], [1, "99"], [300, "0"]])("counts %i unread independently of w
 });
 it("updates only from confirmed read data and retains the unresolved queue", () => {
   const view = render(center(notifications(7)));
+  fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
   fireEvent.click(screen.getByRole("button", { name: "Прочитать все" }));
   expect(props.onMarkAllRead).toHaveBeenCalledOnce();
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "98");
   view.rerender(center(notifications()));
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
   expect(screen.getAllByText("нужно действие")).toHaveLength(7);
+});
+it("defaults to unread, puts it first and does not hide unread informational events", () => {
+  const items = notifications(2).slice(0, 3);
+  items[1] = { ...items[1]!, requiresAction: false };
+  render(center(items));
+  const metrics = within(screen.getByLabelText("Сводка уведомлений")).getAllByRole("button");
+  expect(metrics[0]).toHaveTextContent("Новые уведомления");
+  expect(metrics[0]).toHaveAttribute("aria-pressed", "true");
+  expect(metrics[1]).toHaveTextContent("Нужно решить");
+  expect(screen.getByText("Событие 0")).toBeInTheDocument();
+  expect(screen.getByText("Событие 1")).toBeInTheDocument();
+  expect(screen.queryByText("Событие 2")).toBeNull();
+});
+it("still opens a read notification from a direct reference", () => {
+  render(<FluentProvider theme={workspaceTheme}><NotificationCenter {...props} notifications={notifications().slice(0, 1)} focusNotification={{ id: "notification-0", revision: 1 }} /></FluentProvider>);
+  expect(screen.getByRole("button", { name: /Вся история/ })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getAllByText("Событие 0").length).toBeGreaterThan(0);
 });
 it("does not claim that an empty history is fully read", () => {
   render(center([]));

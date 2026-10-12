@@ -1983,6 +1983,7 @@ export function App() {
                     if (item.key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
                     setPreparedAction(undefined);
                     setFocusTarget(undefined);
+                    setFocusNotification(undefined);
                     setActiveSection(item.key);
                   }}
                 >
@@ -2009,6 +2010,7 @@ export function App() {
               if (key === "settings") { setAccountOpen(true); return; }
               if (key === "team_overview" && efficiency === undefined && !efficiencyLoading) void handleLoadEfficiency();
               setPreparedAction(undefined);
+              setFocusNotification(undefined);
               setFocusTarget(undefined); setActiveSection(key);
             }} />
             <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} /><WorkdayControl token={session.accessToken} />

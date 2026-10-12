@@ -1193,14 +1193,14 @@ describe("corporate workspace authentication alpha", () => {
     expect(screen.getByRole("button", { name: /Ещё, \d+ разделов/ })).toHaveAttribute("aria-expanded", "false");
   });
 
-  it("opens the attention queue, marks an item read and follows its deep link", async () => {
+  it("opens the unread queue, marks an item read and follows its deep link", async () => {
     const fetchMock = mockServer();
     render(<App />);
     await loginToWorkspace();
 
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
     expect(screen.getByRole("heading", { name: "Требует моего внимания" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Новые уведомления/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Новые уведомления/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("2", { selector: ".rail-badge" })).toBeInTheDocument();
     expect(screen.getByText("1", { selector: ".notification-metrics strong" })).toBeInTheDocument();
 
@@ -1283,6 +1283,9 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
     expect(screen.queryByRole("dialog", { name: "Вернувшаяся заявка" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    expect(await screen.findByRole("button", { name: /Новые уведомления/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Исправить заявку")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
     fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
     expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
   });
