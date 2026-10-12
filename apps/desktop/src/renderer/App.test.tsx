@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  SurveyAnalysisDetail,
   ApprovalRequestSummary,
   CalendarEvent,
   CalendarEventInput,
@@ -1078,6 +1079,36 @@ async function selectPaymentDirection() {
 }
 
 describe("corporate workspace authentication alpha", () => {
+  it("opens survey analytics only on demand and retains its draft across section changes", async () => {
+    const survey: SurveyAnalysisDetail = {
+      analysis: { id: "survey-test", title: "Сохранённый опрос", fileName: "sample.csv", revision: 1,
+        archived: false, createdAt: "2026-10-12T00:00:00Z", updatedAt: "2026-10-12T00:00:00Z",
+        configuration: { sheet: 0, headerRow: 0, types: {}, separator: ";", missingValues: [], query: "", filters: [], savedViews: [] } },
+      workbook: { warnings: [], sheets: [{ name: "Ответы", rows: [["Вопрос"], ["Ответ"]] }] },
+    };
+    const server = mockServer();
+    const original = server.getMockImplementation()!;
+    server.mockImplementation(async (input, options) => {
+      const url = String(input);
+      if (url.endsWith("/survey-analyses")) return response([survey.analysis]);
+      if (url.endsWith("/survey-analyses/survey-test")) return response(survey);
+      return original(input, options);
+    });
+    render(<App />);
+    await loginToWorkspace("aziza", "home");
+    expect(server.mock.calls.some(([input]) => String(input).includes("/survey-analyses"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Аналитика опросов" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Сохранённый опрос/ }));
+    const title = await screen.findByRole("textbox", { name: "Название анализа" });
+    fireEvent.change(title, { target: { value: "Несохранённый черновик" } });
+    fireEvent.click(screen.getByRole("button", { name: "Главная" }));
+    await screen.findByLabelText("Персональная Главная");
+    expect(title).not.toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Аналитика опросов" }));
+    expect(screen.getByRole("textbox", { name: "Название анализа" })).toBe(title);
+    expect(title).toHaveValue("Несохранённый черновик");
+    expect(server.mock.calls.filter(([input]) => String(input).endsWith("/survey-analyses/survey-test"))).toHaveLength(1);
+  });
   it("starts on personal Home after login, ignoring the previous web or desktop section", async () => {
     sessionStorage.setItem("yuksalish:web:last-section", "messenger");
     for (const person of people) localStorage.setItem(`yuksalish:resume-section:${person.id}`, "calendar");
@@ -2088,6 +2119,7 @@ describe("corporate workspace authentication alpha", () => {
       "Календарь",
       "Zoom-конференции",
       "Сотрудники",
+      "Аналитика опросов",
       "Уведомления",
       "Настройки",
     ]);

@@ -1,4 +1,5 @@
 import type {
+  SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
   ProjectBudgetSummary,
   ProjectBudgetArticle,
   ProjectBudgetArticleInput,
@@ -1986,6 +1987,33 @@ export function uploadProjectImportDocument(token: string, draft: ProjectDocumen
 export function downloadProjectImportDocument(token: string, id: string, documentId: string): Promise<Blob> {
   return boundedRequest(`${getApiBaseUrl()}/api/v1/project-imports/${id}/documents/${documentId}`, {
     headers: { Authorization: `Bearer ${token}` },
+  }, (result) => result.blob(), 120_000);
+}
+
+export function listSurveyAnalyses(token: string): Promise<readonly SurveyAnalysis[]> {
+  return apiRequest("/survey-analyses", {}, token);
+}
+export function loadSurveyAnalysis(token: string, id: string): Promise<SurveyAnalysisDetail> {
+  return apiRequest(`/survey-analyses/${encodeURIComponent(id)}`, {}, token, 120_000);
+}
+export function importSurveyAnalysis(token: string, file: File, requestId: string, encoding: string, delimiter: string): Promise<SurveyAnalysisDetail> {
+  if (!file.size || file.size > 10 * 1024 * 1024) return Promise.reject(new Error("Файл пуст или превышает 10 МиБ."));
+  const query = new URLSearchParams({ requestId, encoding, delimiter });
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/survey-analyses?${query}`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream", "X-Survey-Filename": encodeURIComponent(file.name) }, body: file,
+  }, (result) => result.json() as Promise<SurveyAnalysisDetail>, 120_000);
+}
+export function saveSurveyAnalysis(token: string, id: string, update: SurveyAnalysisUpdate): Promise<SurveyAnalysis> {
+  return apiRequest(`/survey-analyses/${encodeURIComponent(id)}`, { method: "PUT", body: JSON.stringify(update) }, token);
+}
+export function downloadSurveyOriginal(token: string, id: string): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/survey-analyses/${encodeURIComponent(id)}/original`, {
+    headers: { Authorization: `Bearer ${token}` },
+  }, (result) => result.blob(), 120_000);
+}
+export function exportSurveyWorkbook(token: string, id: string, payload: SurveyExport): Promise<Blob> {
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/survey-analyses/${encodeURIComponent(id)}/export`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload),
   }, (result) => result.blob(), 120_000);
 }
 

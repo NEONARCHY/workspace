@@ -178,4 +178,10 @@ MODULE_CATALOG = (
         route="/employees",
         status="available",
     ),
+    ModuleDescriptor(
+        key="survey_analytics",
+        label=LocalizedLabel(ru="Аналитика опросов", uz_cyrl="Сўровномалар таҳлили",
+                             uz_latn="So‘rovnomalar tahlili"),
+        route="/survey-analytics", status="available",
+    ),
 )
