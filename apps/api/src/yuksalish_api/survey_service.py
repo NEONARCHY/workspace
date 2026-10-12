@@ -1,5 +1,6 @@
 """Owner-only survey storage; module administrators cannot read other authors' answers."""
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -24,6 +25,8 @@ from .survey_schemas import (
     SurveyWorkbook,
 )
 from .tables import audit_events, survey_analyses, users
+
+SURVEY_PARSE_LIMIT = asyncio.Semaphore(2)
 
 
 def analysis_response(row: RowMapping) -> SurveyAnalysis:
@@ -101,9 +104,10 @@ async def create_analysis(
     if count is not None and count >= 50:
         raise WorkspaceRepositoryError(409, "Достигнут предел 50 личных анализов, включая архив.")
     try:
-        workbook = await run_in_threadpool(
-            parse_workbook, filename, content, encoding=encoding, delimiter=delimiter,
-        )
+        async with SURVEY_PARSE_LIMIT:
+            workbook = await run_in_threadpool(
+                parse_workbook, filename, content, encoding=encoding, delimiter=delimiter,
+            )
     except ValueError as error:
         raise WorkspaceRepositoryError(422, str(error)) from error
     analysis_id = uuid4()

@@ -37,6 +37,7 @@ def check_coordinates(content: bytes) -> None:
         for item in archive.infolist():
             if not item.filename.endswith(".xml"):
                 continue
+            coordinates: set[str] = set()
             with archive.open(item) as stream:
                 for _, element in ElementTree.iterparse(stream, events=("end",)):
                     if item.filename.startswith("xl/worksheets/") and element.tag.endswith("}c"):
@@ -44,6 +45,9 @@ def check_coordinates(content: bytes) -> None:
                         match = re.fullmatch(r"([A-Z]{1,3})([1-9][0-9]{0,5})", coordinate)
                         if not match:
                             raise SurveyDocumentError("Некорректная координата ячейки XLSX.")
+                        if coordinate in coordinates:
+                            raise SurveyDocumentError("Повторная координата ячейки XLSX.")
+                        coordinates.add(coordinate)
                         column = 0
                         for letter in match[1]:
                             column = column * 26 + ord(letter) - ord("A") + 1
@@ -60,7 +64,8 @@ def parse_workbook(
         return _parse_workbook(filename, content, encoding=encoding, delimiter=delimiter)
     except SurveyDocumentError:
         raise
-    except (ValueError, KeyError, OSError, EOFError, struct.error, xlrd.XLRDError,
+    except (ValueError, KeyError, IndexError, OverflowError, OSError, EOFError,
+            struct.error, xlrd.XLRDError,
             ElementTree.ParseError, DefusedXmlException, InvalidFileException) as error:
         raise SurveyDocumentError(
             "Не удалось прочитать файл. Проверьте формат и структуру.",
@@ -86,6 +91,7 @@ def checked_workbook(sheets: list[SurveySheet], warnings: list[str]) -> SurveyWo
         raise SurveyDocumentError("В файле должно быть от 1 до 20 листов.")
     cells = 0
     text_size = 0
+    matrix_cells = 0
     for sheet in sheets:
         if len(sheet.rows) > MAX_ROWS:
             raise SurveyDocumentError("Превышен предел 25 000 строк на лист. Данные не обрезаны.")
@@ -98,6 +104,11 @@ def checked_workbook(sheets: list[SurveySheet], warnings: list[str]) -> SurveyWo
                 raise SurveyDocumentError(
                     "Слишком большой набор: до 150 000 ячеек и 2 млн символов.",
                 )
+        matrix_cells += len(sheet.rows) * max((len(row) for row in sheet.rows), default=0)
+        if matrix_cells > MAX_CELLS:
+            raise SurveyDocumentError(
+                "Прямоугольная таблица превышает 150 000 ячеек с учётом пропусков.",
+            )
     if not any(value.strip() for sheet in sheets for row in sheet.rows for value in row):
         raise SurveyDocumentError("В файле нет заполненных ячеек.")
     return SurveyWorkbook(sheets=sheets, warnings=warnings)

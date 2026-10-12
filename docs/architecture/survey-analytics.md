@@ -83,6 +83,9 @@ Boundaries: 10 MiB/file, 20 sheets, 25,000 rows/sheet, 512 columns, 150,000 matr
 bounded field reader (about 128 KiB/cell). Office archives have existing compressed-package
 checks plus safe XML and actual coordinate limits before the workbook reader allocates rows.
 Encrypted files, macros and external XLSX links are rejected, never silently truncated.
+The 150,000 limit also covers the full rectangular matrix including implicit empty cells,
+preventing sparse inputs from ballooning during analysis/export. Parsing is limited to
+two concurrent tasks per API process and runs off the event loop.
 XLSX formulas are retained as text with a warning; XLS uses saved values without recalculation.
 
 New dependency: pinned `xlrd==2.0.2` for legacy XLS; XLSX uses existing openpyxl. Install

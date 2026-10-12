@@ -69,10 +69,20 @@ def test_csv_limits_reject_without_silent_truncation(content: bytes) -> None:
         parse_workbook("data.csv", content, delimiter=";")
 
 
+def test_sparse_matrix_cannot_expand_to_an_unbounded_export() -> None:
+    # Few actual values, but too many reconstructed cells for browser/export safety.
+    content = (";".join(["Q"] * 500) + "\n" + "A\n" * 400).encode()
+    with pytest.raises(SurveyDocumentError, match="150 000"):
+        parse_workbook("sparse.csv", content, delimiter=";")
+
+
 @pytest.mark.parametrize("replacement", [
     b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
     b'<sheetData><row r="25001"><c r="A25001"><v>1</v></c></row></sheetData></worksheet>',
     b'<!DOCTYPE x [<!ENTITY foo SYSTEM "file:///secret">]><worksheet>&foo;</worksheet>',
+    b'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+    b'<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="A1"><v>2</v></c>'
+    b'</row></sheetData></worksheet>',
 ])
 def test_sparse_bombs_and_unsafe_xml_are_rejected_before_openpyxl(replacement: bytes) -> None:
     output = io.BytesIO()
