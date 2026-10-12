@@ -9,8 +9,10 @@ from pathlib import PurePosixPath
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
+from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
 
+from defusedxml.common import DefusedXmlException
 from fastapi import (
     APIRouter,
     Depends,
@@ -43,6 +45,7 @@ from yuksalish_api.auth import (
 from yuksalish_api.database import get_connection
 from yuksalish_api.efficiency_service import load_efficiency_overview, load_personal_efficiency
 from yuksalish_api.events import WorkspaceEventBus
+from yuksalish_api.file_preview import OfficePreview, preview_office
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 from yuksalish_api.repository import (
     WorkspaceRepositoryError,
@@ -1587,13 +1590,12 @@ async def put_attachment(
     return result
 
 
-@router.get("/attachments/{attachment_id}")
-async def download_attachment(
+async def _attachment_content(
     attachment_id: UUID,
     request: Request,
-    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
-    connection: Annotated[AsyncConnection, Depends(get_connection)],
-) -> Response:
+    current_user: AuthenticatedUser,
+    connection: AsyncConnection,
+) -> tuple[AttachmentResponse, bytes]:
     try:
         metadata, storage_key = await get_attachment(
             connection,
@@ -1614,14 +1616,55 @@ async def download_attachment(
         raise _translate(error) from error
     except ObjectStorageError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
+    return metadata, content
+
+
+@router.get("/attachments/{attachment_id}")
+async def download_attachment(
+    attachment_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    metadata, content = await _attachment_content(attachment_id, request, current_user, connection)
     return Response(
         content=content,
         media_type=metadata.content_type,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(metadata.file_name)}",
             "Content-Length": str(len(content)),
+            "Cache-Control": "private, no-store",
         },
     )
+
+
+_office_preview_slots = asyncio.Semaphore(2)
+
+
+@router.get("/attachments/{attachment_id}/preview", response_model=OfficePreview)
+async def preview_attachment(
+    attachment_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+    response: Response,
+    sheet: Annotated[int, Query(ge=0, le=1000)] = 0,
+    offset: Annotated[int, Query(ge=0, le=150_000)] = 0,
+) -> OfficePreview:
+    response.headers["Cache-Control"] = "private, no-store"
+    try:
+        async with _office_preview_slots:
+            metadata, content = await _attachment_content(
+                attachment_id, request, current_user, connection,
+            )
+            return await asyncio.to_thread(
+                preview_office, metadata.file_name, content, sheet, offset,
+            )
+    except (ValueError, BadZipFile, ParseError, DefusedXmlException, KeyError) as error:
+        raise HTTPException(
+            status_code=422,
+            detail="Unable to preview document; use DOCX/XLSX or download original",
+        ) from error
 
 
 @router.websocket("/events")

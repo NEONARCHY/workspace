@@ -2,7 +2,8 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
-import type { ApprovalRequestSummary, CalendarEvent, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, CalendarEvent, OfficeFilePreview, WorkspaceAttachment, WorkspaceDepartment, WorkspaceNotification } from "@yuksalish/contracts";
+import FileViewer from "../src/renderer/FileViewer";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
 import { MessengerView } from "../src/renderer/MessengerView";
@@ -142,6 +143,28 @@ function Preview() {
   const [section, setSection] = useState("notifications");
   const [sample, setSample] = useState(0);
   const [selectedTask, setSelectedTask] = useState<string>();
+  const [previewFile, setPreviewFile] = useState<WorkspaceAttachment>();
+  const previewSamples = ["Word.docx", "План.xlsx", "Изображение.svg", "Документ.pdf"].map((fileName, index): WorkspaceAttachment => ({
+    id: `qa-preview-${index}`, fileName, ownerType: "task", ownerId: "qa-task", contentType: index === 2 ? "image/svg+xml" : "application/octet-stream", byteSize: 12000, sha256: "qa", uploadedByUserId: "qa", documentRole: "general", createdAt: "2026-10-12T10:00:00Z",
+  }));
+  const loadPreviewBlob = async (file: WorkspaceAttachment) => {
+    if (file.fileName.endsWith("pdf")) {
+      const stream = "BT /F1 22 Tf 60 740 Td (Workspace - built-in PDF preview) Tj ET";
+      const objects = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>", "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>", `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`];
+      let pdf = "%PDF-1.4\n";
+      const offsets = [0];
+      objects.forEach((object, index) => {offsets.push(pdf.length); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;});
+      const xref = pdf.length;
+      pdf += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map(offset => `${String(offset).padStart(10,"0")} 00000 n \n`).join("")}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+      return new Blob([pdf], {type:"application/pdf"});
+    }
+    return new Blob(['<svg xmlns="http://www.w3.org/2000/svg" width="900" height="550"><rect width="900" height="550" fill="#e5f3f4"/><rect x="80" y="80" width="740" height="390" rx="32" fill="#fff"/><text x="140" y="190" font-size="32" fill="#293a55">Workspace · Preview</text><circle cx="190" cy="330" r="64" fill="#0091a8"/></svg>'], {type:"image/svg+xml"});
+  };
+  const previewOffice = async (file: WorkspaceAttachment, sheet: number, offset: number): Promise<OfficeFilePreview> => ({
+    kind: file.fileName.endsWith("xlsx") ? "excel" : "word", sheetIndex: sheet, rowOffset: offset, totalRows: 420, truncated: false,
+    sheets: ["Рабочий план", "Итоги"], rows: Array.from({length: Math.min(200, 420 - offset)}, (_, index) => [`${offset + index + 1}`, "Подготовка встречи", "13 октября", "В работе"]),
+    blocks: [{kind: "paragraph", text: "План рабочей встречи", rows: []}, {kind: "paragraph", text: "Согласуем повестку, материалы и следующие шаги команды. Документ показан в режиме чтения: исходный файл остаётся без изменений.", rows: []}, {kind: "table", text: "", rows: [["Пункт", "Ответственный", "Срок"], ["Подготовить материалы", "Рабочая группа", "13 октября"], ["Подтвердить участников", "Координатор", "14 октября"]]}],
+  });
   const taskSamples = [1, 2, 5].map(days => {
     const due = new Date();
     due.setDate(due.getDate() + days);
@@ -163,6 +186,7 @@ function Preview() {
     { id: "zoom", label: "Zoom-конференции", icon: <Video20Regular /> },
     { id: "trips", label: "Командировки", icon: <Calendar20Regular /> },
     { id: "tasks", label: "Задачи", icon: <Grid20Regular /> },
+    { id: "files", label: "Просмотр файлов", icon: <Grid20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -192,7 +216,8 @@ function Preview() {
               onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
              : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
-             : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
+              : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
+              : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
@@ -200,6 +225,7 @@ function Preview() {
           </main>
         </div>
       </div>
+      {previewFile && <FileViewer key={previewFile.id} attachment={previewFile} onClose={() => setPreviewFile(undefined)} onDownload={nothing} onLoadOffice={previewOffice} onLoad={loadPreviewBlob} />}
     </UndoActionsProvider>
   </FluentProvider>;
 }
