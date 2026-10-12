@@ -1283,6 +1283,9 @@ describe("corporate workspace authentication alpha", () => {
     fireEvent.click(screen.getByRole("button", { name: "Закрыть карточку заявки" }));
     expect(screen.queryByRole("dialog", { name: "Вернувшаяся заявка" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Уведомления" }));
+    expect(await screen.findByRole("button", { name: /Новые уведомления/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Исправить заявку")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Нужно решить/ }));
     fireEvent.click(screen.getByText("Исправить заявку").closest("button")!);
     expect(await screen.findByRole("dialog", { name: "Вернувшаяся заявка" })).toBeInTheDocument();
   });
