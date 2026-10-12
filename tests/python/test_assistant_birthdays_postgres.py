@@ -145,22 +145,25 @@ async def exercise(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
         assert greeting.json()["text"] == "Короткий тестовый ответ"
 
         # Ordinary colleagues cannot delete system announcements; admins can.
+        assert (await client.get(
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
+        )).status_code == 200
         denied_delete = await client.delete(
-            f"/api/v1/workspace/feed/posts/{post_id}", headers=colleague,
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
         )
         assert denied_delete.status_code == 403
         admin_feed = (await client.get("/api/v1/workspace/bootstrap", headers=owner)).json()
         admin_post = next(item for item in admin_feed["feedPosts"] if item["id"] == str(post_id))
         assert admin_post["canDelete"] is True
         removed = await client.delete(
-            f"/api/v1/workspace/feed/posts/{post_id}", headers=owner,
+            f"/api/v1/feed/posts/{post_id}", headers=owner,
         )
         assert removed.status_code == 204, removed.text
         assert (await client.get(
-            f"/api/v1/workspace/feed/posts/{post_id}", headers=colleague,
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
         )).status_code == 404
         assert (await client.post(
-            f"/api/v1/workspace/feed/posts/{post_id}/comments", headers=colleague,
+            f"/api/v1/feed/posts/{post_id}/comments", headers=colleague,
             json={"body": "Cannot comment on deleted announcement"},
         )).status_code == 404
         assert (await client.post(
