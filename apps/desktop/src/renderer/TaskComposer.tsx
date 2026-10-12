@@ -320,6 +320,7 @@ export function TaskComposer({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (busy) return;
     if (!title.trim()) {
       setError("Укажите название задачи.");
       return;
@@ -395,6 +396,8 @@ export function TaskComposer({
       } else if (persistDraft) {
         void workspacePlatform.clearDraft(draftKey).catch(() => undefined);
       }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалось добавить задачу. Проверьте подключение и повторите.");
     } finally {
       setBusy(false);
     }

@@ -6,13 +6,14 @@ export function menuPortalContainerFor(target: Element): HTMLElement {
   return target.closest<HTMLElement>(".fui-DialogSurface")?.parentElement ?? document.body;
 }
 
-export function MessageContextMenu({ x, y, children, onPointerDown, portalContainer, label }: {
+export function MessageContextMenu({ x, y, children, onPointerDown, portalContainer, label, autoFocus = false }: {
   readonly x: number;
   readonly y: number;
   readonly children: ReactNode;
   readonly onPointerDown: PointerEventHandler<HTMLDivElement>;
   readonly portalContainer: HTMLElement;
   readonly label?: string;
+  readonly autoFocus?: boolean;
 }) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
@@ -33,11 +34,12 @@ export function MessageContextMenu({ x, y, children, onPointerDown, portalContai
     };
     update();
     if (label) menu.focus();
+    else if (autoFocus) menu.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     const observer = new ResizeObserver(update);
     observer.observe(menu);
     window.addEventListener("resize", update);
     return () => { observer.disconnect(); window.removeEventListener("resize", update); };
-  }, [x, y, label]);
+  }, [x, y, label, autoFocus]);
 
   return <PortalMountNodeProvider value={portalContainer}><Portal><div ref={menuRef} className="message-context-menu"
     role={label ? "dialog" : "menu"} aria-label={label} tabIndex={label ? -1 : undefined}

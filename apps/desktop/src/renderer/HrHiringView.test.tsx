@@ -1,6 +1,7 @@
 import { FluentProvider, webLightTheme } from "@fluentui/react-components";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { disposeTabster, getTabster } from "tabster";
 import type { HiringDetail, HiringFields, HiringRegistry } from "@yuksalish/contracts";
 import type * as WorkspaceApi from "./workspace-api";
 import { HrHiringView } from "./HrHiringView";
@@ -20,7 +21,14 @@ beforeEach(() => {
   vi.mocked(saveHiringCase).mockResolvedValue(item);
   vi.mocked(actHiringCase).mockResolvedValue({ ...item, status: "pending", revision: 2, canEdit: false });
 });
-afterEach(() => { cleanup(); vi.resetAllMocks(); });
+afterEach(() => {
+  cleanup();
+  // Providers share a window-scoped focus manager. Do not carry an old modal
+  // root and its deferred aria-hidden updates into the next isolated scenario.
+  const tabster = getTabster(window);
+  if (tabster) disposeTabster(tabster, true);
+  vi.resetAllMocks();
+});
 function mount() { render(<FluentProvider theme={webLightTheme}><HrHiringView token="synthetic-token" /></FluentProvider>); }
 async function openCase() { fireEvent.click(await screen.findByRole("button", { name: /Тестовый сотрудник/ })); await screen.findByLabelText(/Паспорт \/ ID-карта/); }
 async function focusClick(control: HTMLElement) { await act(async () => { control.focus(); }); fireEvent.click(control); }
@@ -50,6 +58,14 @@ describe("HR hiring", () => {
     mount(); await openCase();
     await focusClick(screen.getByRole("button", { name: "Подписать пакет" }));
     const dialog = await screen.findByRole("dialog", { name: "Подписать весь пакет?" });
+    // Model actual focus entering the controlled dialog after it has mounted.
+    // jsdom's first auto-focus can precede Tabster's modal registration; simply
+    // waiting then leaves the same focused node in an inactive modal forever.
+    await act(async () => { within(dialog).getByText("Отмена").focus(); });
+    await waitFor(() => {
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+      expect(dialog).not.toHaveAttribute("aria-hidden", "true");
+    });
     expect(within(dialog).getByRole("button", { name: "Подтвердить" })).toBeDisabled();
     await focusClick(within(dialog).getByRole("checkbox"));
     // fireEvent alone never gives the confirmation the focus of a real click.

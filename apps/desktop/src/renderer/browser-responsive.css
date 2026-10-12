@@ -1,4 +1,4 @@
-/* Browser-only foundation. Desktop Electron and domain workflows stay unchanged. */
+/* Browser-only layout. Keep the existing palette, surfaces and domain actions. */
 .web-platform :is(body, #root) { height: 100dvh; }
 .web-platform .app-provider > .app-shell.browser-compact,
 .web-platform .app-shell.browser-compact {
@@ -8,6 +8,123 @@
   gap: 0;
   padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
   transition: none;
+}
+.record-mobile-label, .browser-chat-menu, .browser-message-menu { display: none; }
+.app-provider .message-reaction-trigger .browser-message-menu { display: none; }
+
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  /* These shared composers retain one body scroller and a non-shrinking footer. */
+  .web-platform .fui-DialogSurface.record-composer-dialog {
+    position: fixed;
+    top: calc(var(--ws-browser-top, 0px) + max(8px, env(safe-area-inset-top)));
+    left: max(8px, env(safe-area-inset-left));
+    width: calc(100vw - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)));
+    height: calc(var(--ws-browser-height, 100dvh) - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
+    max-height: none;
+    margin: 0;
+  }
+  .web-platform .record-composer-backdrop {
+    top: var(--ws-browser-top, 0px);
+    bottom: auto;
+    height: var(--ws-browser-height, 100dvh);
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  .web-platform .record-composer-dialog .record-composer,
+  .web-platform .record-composer-dialog > .fui-DialogBody { min-height: 0; max-height: 100%; height: 100%; }
+  .web-platform .record-composer .record-composer-header { padding: 14px 16px; gap: 8px; }
+  .web-platform .record-composer .record-composer-header h2 { font-size: 22px; }
+  .web-platform .record-composer .record-composer-body { padding: 16px; scroll-padding-block: 16px; }
+  .web-platform .record-composer .record-composer-footer { padding: 12px 16px; gap: 8px; }
+  .web-platform .record-composer-columns { gap: 16px; }
+  .web-platform .record-section, .web-platform .record-summary-card { padding: 16px; }
+  .web-platform .record-table-frame { margin-inline: 0; margin-bottom: 0; }
+  .web-platform :is(.tasks-view, .employees-view) :is(.record-list-controls, .task-filters) { padding-inline: 0; gap: 8px; }
+  .web-platform .employee-selection-bar { margin: 8px 0 0; }
+  .web-platform .record-table-footer { gap: 8px; padding: 10px; }
+  .web-platform .record-table-paging { flex-wrap: wrap; gap: 8px; }
+}
+
+@media (any-pointer: coarse) {
+  /* Hybrid tablets also need visible alternatives to right click / hover. */
+  .web-platform .chat-row-with-actions { display: grid; grid-template-columns: minmax(0, 1fr) 48px; align-items: center; }
+  .web-platform .browser-chat-menu { display: grid; place-items: center; width: 48px; height: 48px; padding: 0; border: 0; border-radius: 12px; color: var(--ws-link); background: transparent; cursor: pointer; }
+  .web-platform .browser-chat-menu:focus-visible { outline: 2px solid var(--ws-link); outline-offset: -3px; }
+  .web-platform .message-content .message-reaction-trigger { position: static; display: flex; width: auto; gap: 4px; margin-top: 6px; opacity: 1; pointer-events: auto; transform: none; }
+  .web-platform .app-provider .message-reaction-trigger .browser-message-menu { display: inline-flex; }
+  .web-platform .app-provider :is(.conversation-pane, .list-pane, .message-context-menu, .record-composer, .record-table-footer, .record-list-controls, .task-filters, .employee-selection-bar) .fui-Button,
+  .web-platform .app-provider .message-reaction-trigger .fui-Button { min-width: 48px; min-height: 48px; }
+  .web-platform .app-provider .record-composer :is(.record-composer-header, .record-composer-body, .record-composer-footer) .fui-Button,
+  .web-platform .app-provider .conversation-pane :is(.conversation-header, .composer) .fui-Button,
+  .web-platform .app-provider .list-pane .pane-heading .fui-Button { min-width: 48px; min-height: 48px; }
+  .web-platform :is(.record-page-nav, .record-page-size-trigger, .record-table th button, .employee-record-manage, .task-composer-person-chip > button, .task-composer-checklist button, .task-composer-dependencies button) { min-width: 48px; min-height: 48px; }
+  .web-platform .task-participant-anchor { min-width: 48px; min-height: 48px; align-items: center; justify-content: center; }
+  .web-platform .task-participant-anchor + .task-participant-anchor { margin-left: 0; }
+  .web-platform :is(.record-composer, .task-filters, .record-list-controls, .conversation-pane) :is(.fui-Input, .workspace-select, .person-picker-trigger, .ws-date-time-trigger) { min-height: 48px; }
+  .web-platform :is(.record-composer, .conversation-pane, .record-list-controls, .task-filters) :is(input, textarea, select) { font-size: 16px; }
+  .web-platform .record-selection-cell .fui-Checkbox { min-height: 48px; }
+  .web-platform .task-team-scopes button, .web-platform .task-team-modes button { min-height: 48px; }
+}
+
+@media (max-width: 800px) {
+  .web-platform .messenger-view { grid-template-columns: minmax(0, 1fr); padding: 0; gap: 0; }
+  .web-platform .messenger-view:not(.conversation-open) > .conversation-pane,
+  .web-platform .messenger-view.conversation-open > .list-pane { display: none; }
+  .web-platform .messenger-view .conversation-header .compact-back { display: inline-flex; }
+  .web-platform .messenger-view .conversation-pane { min-width: 0; min-height: 0; height: 100%; }
+  .web-platform .messenger-view .conversation-header { padding: 8px 12px; gap: 8px; }
+  .web-platform .messenger-view .conversation-header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; min-height: 64px; }
+  .web-platform .messenger-view .conversation-header .compact-back { grid-column: 1; grid-row: 1; font-size: 0; margin: 0; padding: 0; min-width: 48px; }
+  .web-platform .messenger-view .conversation-identity { grid-column: 2; grid-row: 1; gap: 8px; margin: 0; }
+  .web-platform .messenger-view .browser-chat-actions-trigger { grid-column: 3; grid-row: 1; }
+  .web-platform .conversation-search[hidden] { display: none; }
+  .web-platform .browser-chat-actions-popover { max-width: calc(100vw - 24px); max-height: calc(var(--ws-browser-height, 100dvh) - 32px); overflow-y: auto; }
+  .web-platform .browser-chat-actions-popover > div { display: grid; gap: 4px; }
+  .web-platform .app-provider .browser-chat-actions-popover > div .fui-Button { min-height: 48px; min-width: 48px; font-size: 14px; justify-content: flex-start; white-space: normal; }
+  .web-platform .embedded-conversation .conversation-header { display: flex; }
+  .web-platform .messenger-view .conversation-header-actions { gap: 4px; }
+  .web-platform .messenger-view .message-scroll { padding: 12px 8px; }
+  .web-platform .conversation-pane .composer { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 8px; gap: 4px; }
+  .web-platform .conversation-pane .composer > .composer-input { grid-column: 1 / -2; grid-row: 1; }
+  .web-platform .conversation-pane .composer > .fui-Button:last-child { grid-column: -2 / -1; grid-row: 1; }
+  .web-platform .conversation-pane .composer > :not(.composer-input) { justify-self: center; }
+  .web-platform .conversation-pane .composer .composer-field-shell, .web-platform .conversation-pane .composer .fui-Input { min-width: 0; width: 100%; }
+  .web-platform .composer .pending-files { max-height: 64px; overflow-y: auto; }
+  .web-platform .composer .pending-files button { white-space: normal; overflow-wrap: anywhere; }
+  .web-platform .conversation-header h2 { font-size: 16px; }
+}
+
+@media (max-width: 700px) {
+  /* All fields stay in one semantic table. Only its layout changes, not its state. */
+  .web-platform .record-table { display: block; min-width: 0; width: 100%; }
+  .web-platform .record-table thead { display: block; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+  .web-platform .record-table thead tr { display: flex; width: max-content; }
+  .web-platform .record-table th { position: static; display: block; flex: 0 0 auto; width: auto; min-width: 120px; padding-inline: 10px; }
+  .web-platform .record-table th.record-selection-heading { min-width: 48px; }
+  .web-platform .record-table tbody { display: grid; gap: 10px; padding: 10px; }
+  .web-platform .record-table .record-row { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px; border: 1px solid var(--ws-line); border-radius: 14px; overflow: hidden; }
+  .web-platform .record-table .record-row td { position: static; display: block; min-width: 0; padding: 0; border: 0; background: transparent; }
+  .web-platform .record-table .record-row td.record-title { grid-column: 1 / -1; }
+  .web-platform .record-table .record-row .record-open { display: flex; align-items: center; min-height: 48px; width: 100%; }
+  .web-platform .record-table .record-row td:last-child { grid-column: 1 / -1; }
+  .web-platform .record-mobile-label { display: block; margin-bottom: 4px; color: var(--ws-muted); font-size: 12px; font-weight: 500; }
+  .web-platform .record-table .record-row .list-row-hover-wash { width: 100%; height: 100%; inset: 0; }
+  .web-platform .employee-record-table .employee-row { grid-template-columns: 48px minmax(0, 1fr); transform: none; box-shadow: none; }
+  .web-platform .employee-record-table .employee-row td:nth-child(n+3) { grid-column: 1 / -1; }
+  .web-platform .employee-record-table .employee-person { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .web-platform .employee-record-table .employee-record-manage { justify-self: start; }
+  .web-platform .record-table-footer { align-items: flex-start; }
+  .web-platform .record-table-paging { max-width: 100%; }
+  .web-platform .record-list-controls > label { flex: 1 1 130px; min-width: 0; }
+  .web-platform .record-list-controls .workspace-select { width: 100%; min-width: 0; }
+  .web-platform .record-composer .record-field-grid,
+  .web-platform .record-composer .record-composer-columns { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .record-composer .record-composer-summary { position: static; }
+  .web-platform .record-composer .record-composer-footer { grid-template-columns: minmax(0, 1fr); }
+  .web-platform .record-composer-footer > div { flex-wrap: wrap; }
+  .web-platform .record-composer-footer > div > button { flex: 1 1 120px; }
+}
+@media (forced-colors: active) {
+  .web-platform .record-table .record-row { border-color: CanvasText; }
 }
 .browser-compact .app-stage,
 .browser-compact .app-stage.has-feedback { min-width: 0; grid-template-rows: auto minmax(0, 1fr); }

@@ -1,17 +1,16 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 // Compact browser windows and touch tablets use the same labelled menu.
-export const browserNavigationQuery = "(max-width: 1023px), (max-width: 1366px) and (pointer: coarse)";
+export const browserNavigationQuery = "(max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse)";
 
-const subscribe = (notify: () => void) => {
-  const media = window.matchMedia?.(browserNavigationQuery);
-  media?.addEventListener("change", notify);
-  return () => media?.removeEventListener("change", notify);
-};
-
-export function useBrowserCompactLayout(enabled: boolean) {
+export function useBrowserCompactLayout(enabled: boolean, query = browserNavigationQuery) {
+  const subscribe = useCallback((notify: () => void) => {
+    const media = window.matchMedia?.(query);
+    media?.addEventListener("change", notify);
+    return () => media?.removeEventListener("change", notify);
+  }, [query]);
   const compact = useSyncExternalStore(subscribe,
-    () => window.matchMedia?.(browserNavigationQuery).matches ?? false, () => false);
+    () => window.matchMedia?.(query).matches ?? false, () => false);
   return enabled && compact;
 }
 

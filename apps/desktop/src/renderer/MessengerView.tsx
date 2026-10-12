@@ -40,8 +40,10 @@ import {
   Add24Regular,
   Attach24Regular,
   CalendarLtr24Regular,
+  ChevronLeft20Regular,
   Color24Regular,
   Mic24Regular,
+  MoreHorizontal20Regular,
   Pin24Regular,
   PinOff24Regular,
   Search24Regular,
@@ -51,6 +53,8 @@ import {
 import { AttachmentChips } from "./AttachmentPanel";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
+import { BrowserChatActions } from "./BrowserChatActions";
+import { useBrowserCompactLayout } from "./browser-layout";
 import { UndoActionsToast, useUndoActions } from "./UndoActions";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { defaultPersonalPreferences } from "./personal-organization";
@@ -260,7 +264,7 @@ function Conversation({
   const removalTimer = useRef<number | undefined>(undefined);
   const previousRows = useRef(new Map<string, { message: ChatMessage; index: number; height: number }>());
   const locallyRemovedIds = useRef(new Set<string>());
-  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement }>();
+  const [contextMenu, setContextMenu] = useState<{ message: ChatMessage; x: number; y: number; portalContainer: HTMLElement; trigger?: HTMLButtonElement }>();
   const [reactionQuick, setReactionQuick] = useState<ReactionDetailsTarget & { message: ChatMessage }>();
   const [reactionDialog, setReactionDialog] = useState<ChatMessage>();
   const [reactionPreview, setReactionPreview] = useState(false);
@@ -269,6 +273,8 @@ function Conversation({
   const [avatarPickerOpen, setAvatarPickerOpen] = useState(false);
   const [avatarDraft, setAvatarDraft] = useState<ChatAvatarIconKey>(chat.avatarIconKey ?? defaultChatIcon(chat));
   const [query, setQuery] = useState("");
+  const compactBrowser = useBrowserCompactLayout(workspacePlatform.kind === "web", "(max-width: 800px)");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deadlineOpen, setDeadlineOpen] = useState(false);
@@ -463,9 +469,17 @@ function Conversation({
   useEffect(() => {
     if (!contextMenu) return;
     const close = () => { setContextMenu(undefined); setReactionPreview(false); };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      contextMenu.trigger?.focus({ preventScroll: true });
+    };
     window.addEventListener("pointerdown", close);
     window.addEventListener("blur", close);
-    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); };
+    window.addEventListener("keydown", escape, true);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("blur", close); window.removeEventListener("keydown", escape, true); };
   }, [contextMenu]);
   const startEditing = (message: ChatMessage) => {
     if (busy || !canSend || message.authorId !== currentUserId || !message.canEdit || message.deletedAt) return;
@@ -613,7 +627,7 @@ function Conversation({
     <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}
       title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
       <header className="conversation-header">
-        {!embedded ? <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button> : null}
+        {!embedded ? <Button className="compact-back" appearance="subtle" icon={<ChevronLeft20Regular />} onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
           {chat.canEditAvatar && chatActions.setAvatar ? <Dialog open={avatarPickerOpen}
             onOpenChange={(_, data) => { if (data.open) setAvatarDraft(chat.avatarIconKey ?? defaultChatIcon(chat)); setAvatarPickerOpen(data.open); }}>
@@ -643,7 +657,9 @@ function Conversation({
           </p>
           </div>
         </div>
-        <div className="conversation-header-actions">
+        <BrowserChatActions compact={compactBrowser}>
+          {compactBrowser ? <Button appearance="subtle" icon={<Search24Regular />} onClick={() => { setSearchOpen((value) => !value); if (searchOpen) setQuery(""); }}>{searchOpen ? "Закрыть поиск" : "Поиск в переписке"}</Button> : null}
+          {compactBrowser && latestPinned && !searchOpen ? <Button appearance="subtle" icon={<Pin24Regular />} onClick={() => setPinnedOpen((value) => !value)}>Закреплено: {pinnedMessages.length}</Button> : null}
           {canRequestDeadline ? <Button appearance="secondary" icon={<CalendarLtr24Regular />} aria-expanded={deadlineOpen} onClick={() => {
             if (!deadlineOpen && taskForChat?.dueAt) {
               const next = new Date(Math.max(Date.now(), new Date(taskForChat.dueAt).getTime()) + 24 * 60 * 60_000);
@@ -682,7 +698,7 @@ function Conversation({
             {chat.kind === "group" ? "Участники и права" : "Участники"}
           </Button>
           </> : null}
-        </div>
+        </BrowserChatActions>
       </header>
       {deadlineOpen && canRequestDeadline ? <div className="task-deadline-request-popover" role="region" aria-label="Запрос переноса срока">
         <strong>Новый срок задачи</strong>
@@ -696,7 +712,7 @@ function Conversation({
         <span>Этот чат в вашем архиве</span>
         <Button size="small" appearance="subtle" disabled={busy || !onPersonalChat} onClick={() => void run(() => onPersonalChat!(chat.id, "unarchive"))}>Вернуть из архива</Button>
       </div>}
-      <div className="conversation-search">
+      <div className="conversation-search" hidden={compactBrowser && !searchOpen}>
         <Input
           aria-label="Поиск в переписке"
           placeholder="Найти сообщение в этом чате"
@@ -871,6 +887,11 @@ function Conversation({
                         <ReactionPicker userId={currentUserId} disabled={!canSend || busy} ownMessage={own}
                           active={(message.reactions ?? []).filter((item) => item.reactedByCurrentUser).map((item) => item.emoji)}
                           onSelect={(emoji) => void run(() => onReactMessage(message, emoji))} />
+                        <Button className="browser-message-menu" appearance="subtle" icon={<MoreHorizontal20Regular />}
+                          aria-label="Действия сообщения" aria-haspopup="menu" onClick={(event) => {
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            setContextMenu({ message, x: rect.left, y: rect.bottom, portalContainer: menuPortalContainerFor(event.currentTarget), trigger: event.currentTarget });
+                          }} />
                       </div>
                     )}
                   </div>
@@ -904,7 +925,7 @@ function Conversation({
         const own = message.authorId === currentUserId;
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
-        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
+        return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} autoFocus={Boolean(contextMenu.trigger)} onPointerDown={(event) => event.stopPropagation()}>
           {message.body && !(message.forwarded?.kind === "feed" && !message.forwarded.available) ? <Button appearance="subtle" onClick={() => {
             setContextMenu(undefined);
             void run(async () => {
@@ -1328,6 +1349,7 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 
 export function MessengerView(props: MessengerViewProps) {
   useMessengerFileNavigationGuard();
+  const listPaneRef = useRef<HTMLElement>(null);
   const restoreFocusTarget = useRestoreFocusTarget();
   const { chats, messages, focusChatId, onMarkRead } = props;
   const undo = useUndoActions();
@@ -1409,8 +1431,8 @@ export function MessengerView(props: MessengerViewProps) {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
   return (
-    <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
-      <aside className="list-pane">
+    <section className={`workspace-view messenger-view ${(conversationOpen && activeChat) || pendingAssistantChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
+      <aside className="list-pane" ref={listPaneRef}>
         <WorkspaceSectionHeader motif="messages" className="pane-heading messenger-pane-heading ws-section-header-compact">
           <div>
             <span className="messenger-eyebrow">Рабочее пространство</span>
@@ -1456,7 +1478,13 @@ export function MessengerView(props: MessengerViewProps) {
           chat={activeChat}
           availableChats={visibleChats}
           onManage={() => setPanel("manage")}
-          onBack={() => setConversationOpen(false)}
+          onBack={() => {
+            setConversationOpen(false);
+            const row = Array.from(listPaneRef.current?.querySelectorAll<HTMLElement>("[data-chat-id]") ?? [])
+              .find((item) => item.dataset.chatId === activeChat.id)?.querySelector<HTMLButtonElement>(".chat-row");
+            // The list is revealed in this commit; retain keyboard context without remounting the draft.
+            requestAnimationFrame(() => row?.isConnected && row.focus({ preventScroll: true }));
+          }}
           fileDropDisabledReason={panel || deletionChoice || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
         />
       ) : (

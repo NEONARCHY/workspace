@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Badge, Checkbox, useRestoreFocusTarget } from "@fluentui/react-components";
 import { Warning16Regular } from "@fluentui/react-icons";
 import type { DirectoryEmployee, WorkspaceDepartment, WorkspaceRole } from "@yuksalish/contracts";
-import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { DepartmentIcon } from "./DepartmentIcon";
@@ -38,9 +38,9 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
   const pageSelection = selectedOnPage === 0 ? false : selectedOnPage === pageEmployees.length ? true : "mixed";
   return <div className="record-table-frame employee-records">
     <div className="record-table-scroll" role="region" aria-label="Список сотрудников" tabIndex={0}>
-      <table className="record-table employee-record-table" aria-label="Сотрудники">
-        <thead><tr>
-          <th className="record-selection-heading" scope="col">
+      <table role="table" className="record-table employee-record-table" aria-label="Сотрудники">
+        <thead role="rowgroup"><tr role="row">
+          <th role="columnheader" className="record-selection-heading" scope="col">
             <Checkbox
               aria-label="Выбрать сотрудников на странице"
               checked={pageSelection}
@@ -50,7 +50,7 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
           </th>
           {[["name", "Сотрудник"], ["position", "Должность"], ["department", "Подразделение"], ["username", "Логин"], ["role", "Роль"], ["status", "Состояние"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}
         </tr></thead>
-        <tbody>{pageEmployees.map(employee => <tr
+        <tbody role="rowgroup">{pageEmployees.map(employee => <tr role="row"
           className={`record-row employee-row${selectedIds.has(employee.id) ? " selected" : ""}`}
           aria-selected={selectedIds.has(employee.id)}
           key={employee.id}
@@ -59,9 +59,9 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
             onToggle(employee.id, !selectedIds.has(employee.id));
           }}
         >
-          <td className="record-selection-cell"><span className="list-row-hover-wash" aria-hidden="true" /><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
-          <td><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><ProfileAvatar person={employee} token={token} size={36} aria-hidden={true} /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
-          <td className="employee-position">
+          <td role="cell" className="record-selection-cell"><span className="list-row-hover-wash" aria-hidden="true" /><Checkbox aria-label={`Выбрать сотрудника: ${employee.name}`} checked={selectedIds.has(employee.id)} onChange={(_, data) => onToggle(employee.id, data.checked === true)} /></td>
+          <td role="cell"><span className="record-person employee-person"><EmployeeProfileLink userId={employee.id} personName={employee.name} className="employee-record-profile"><ProfileAvatar person={employee} token={token} size={36} aria-hidden={true} /><span><strong>{employee.name}</strong><small>@{employee.username}</small></span></EmployeeProfileLink><button {...restoreFocusTarget} type="button" className="employee-record-manage" aria-haspopup="dialog" aria-label={`Управление сотрудником: ${employee.name}`} onClick={() => onOpen(employee)}>Управление</button></span></td>
+          <td role="cell" className="employee-position"><RecordMobileLabel>Должность</RecordMobileLabel>
             {employee.jobTitle ? employee.jobTitle : (
               <span className="employee-position-missing" title="Должность не назначена">
                 <Warning16Regular aria-hidden="true" />
@@ -69,10 +69,10 @@ export function EmployeeRecords({ token, employees, departments, filterKey, sele
               </span>
             )}
           </td>
-          <td className="employee-department">{departmentById.get(employee.departmentId ?? "") ? <span className="employee-department-name"><DepartmentIcon iconKey={departmentById.get(employee.departmentId ?? "")?.iconKey} />{departmentNames.get(employee.departmentId ?? "")}</span> : "Не назначено"}</td>
-          <td className="record-username">@{employee.username}</td>
-          <td><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>
-          <td><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : employee.status === "archived" ? "subtle" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>
+          <td role="cell" className="employee-department"><RecordMobileLabel>Подразделение</RecordMobileLabel>{departmentById.get(employee.departmentId ?? "") ? <span className="employee-department-name"><DepartmentIcon iconKey={departmentById.get(employee.departmentId ?? "")?.iconKey} />{departmentNames.get(employee.departmentId ?? "")}</span> : "Не назначено"}</td>
+          <td role="cell" className="record-username"><RecordMobileLabel>Логин</RecordMobileLabel>@{employee.username}</td>
+          <td role="cell"><RecordMobileLabel>Роль</RecordMobileLabel><span className={`role-mark role-${employee.role}`}>{employeeRoleLabels[employee.role]}</span></td>
+          <td role="cell"><RecordMobileLabel>Состояние</RecordMobileLabel><Badge appearance="tint" color={employee.status === "active" ? "success" : employee.status === "invited" ? "brand" : employee.status === "archived" ? "subtle" : "warning"}>{employeeStatusLabel(employee.status)}</Badge></td>
         </tr>)}</tbody>
       </table>
       {!employees.length && <div className="record-table-empty"><strong>Сотрудники не найдены</strong><span>Измените поисковый запрос или фильтры.</span></div>}
