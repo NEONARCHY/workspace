@@ -64,11 +64,17 @@ function replaceEmployee(
   return {
     ...directory,
     employees: directory.employees.map((item) => (item.id === employee.id ? employee : item)),
+    positions: directory.positions.map(position => ({
+      ...position,
+      assignedUsersCount: position.assignedUsersCount
+        - (previous?.positionId === position.id && previous.status !== "archived" ? 1 : 0)
+        + (employee.positionId === position.id && employee.status !== "archived" ? 1 : 0),
+    })),
     departments: directory.departments.map((department) => ({
       ...department,
       assignedUsersCount: department.assignedUsersCount
-        - (previous?.departmentId === department.id ? 1 : 0)
-        + (employee.departmentId === department.id ? 1 : 0),
+        - (previous?.departmentId === department.id && previous.status !== "archived" ? 1 : 0)
+        + (employee.departmentId === department.id && employee.status !== "archived" ? 1 : 0),
     })),
   };
 }
@@ -122,6 +128,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [pendingPositionDelete, setPendingPositionDelete] = useState<WorkspacePosition>();
   const [roleFilter, setRoleFilter] = useState<WorkspaceRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "invited" | "inactive">("all");
+  const [showDismissed, setShowDismissed] = useState(false);
   const [panel, setPanel] = useState<"employee" | "positions" | null>(null);
   const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(false);
@@ -139,6 +146,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   const [recognitionSettings, setRecognitionSettings] = useState<RecognitionSettings>();
   const [recognitionSettingsBusy, setRecognitionSettingsBusy] = useState(false);
   const canManage = allowAdministration ?? ["admin", "superadmin"].includes(currentUser.role);
+  const canTerminate = Boolean(directory?.canTerminateEmployees ?? canManage);
   const canManageSidebar = canManage && ["admin", "superadmin"].includes(currentUser.role);
   const canManageDepartments = canManage
     || currentUser.role === "manager"
@@ -271,7 +279,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
   };
 
   const saveEmployeeStatus = async () => {
-    if (busy || !canManage || directory === undefined || selectedEmployee === undefined || employeeStatusAction === undefined || employeeStatusReason.trim().length < 12) return;
+    if (busy || !(canManage || canTerminate && employeeStatusAction === "archived") || directory === undefined || selectedEmployee === undefined || employeeStatusAction === undefined || employeeStatusReason.trim().length < 12) return;
     setBusy(true);
     try {
       const saved = await updateEmployeeStatus(
@@ -284,6 +292,10 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
       onEmployeeChanged?.(saved);
       setEmployeeStatusAction(undefined);
       setEmployeeStatusReason("");
+      if (saved.status === "archived") {
+        setPanel(null);
+        setSelectedEmployeeIds(current => new Set([...current].filter(id => id !== saved.id)));
+      }
       showFeedback(
         saved.status === "active"
           ? `${saved.name}: доступ восстановлен.`
@@ -421,7 +433,8 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
 
   const search = employeeQuery.trim().toLocaleLowerCase("ru");
   const visibleEmployees = directory.employees.filter((employee) =>
-    employeeScope(employee.departmentId, directory.departments) === employeeScopeFilter
+    (showDismissed && canTerminate ? employee.status === "archived" : employee.status !== "archived")
+      && employeeScope(employee.departmentId, directory.departments) === employeeScopeFilter
       && `${employee.name} ${employee.username} ${employee.jobTitle ?? ""} ${directory.departments.find((department) => department.id === employee.departmentId)?.name ?? ""}`.toLocaleLowerCase("ru").includes(search)
       && (roleFilter === "all" || employee.role === roleFilter)
       && (statusFilter === "all" || statusFilter === "active" && employee.status === "active"
@@ -451,10 +464,12 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
     <section className={`workspace-view employees-view${selectedEmployeeIds.size ? " has-selection" : ""}`} aria-label="Сотрудники">
       <WorkspaceSectionHeader motif="employees" className="section-toolbar">
         <div>
-          <h1>Сотрудники</h1>
-          <p>{directory.employees.length} учётных записей · {directory.positions.filter((item) => item.isActive).length} активных должностей</p>
+          <h1>{showDismissed ? "Уволенные сотрудники" : "Сотрудники"}</h1>
+          <p>{showDismissed
+            ? `${directory.employees.filter(employee => employee.status === "archived").length} уволенных сотрудников · рабочая история сохранена`
+            : `${directory.employees.filter(employee => employee.status !== "archived").length} учётных записей · ${directory.positions.filter(item => item.isActive).length} активных должностей`}</p>
         </div>
-        {canManage && onInvite && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
+        {canManage && onInvite && !showDismissed && <Button className="ws-section-header-primary" appearance="primary" icon={<Add24Regular />} onClick={onInvite}>Пригласить сотрудника</Button>}
       </WorkspaceSectionHeader>
         <div className="employees-header-tools" role="group" aria-label="Управление сотрудниками">
           {canManage && recognitionSettings ? <Switch
@@ -479,17 +494,18 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
         </div>
 
       <div className="record-list-controls">
+        {canTerminate ? <Button appearance={showDismissed ? "primary" : "secondary"} aria-pressed={showDismissed} onClick={() => { setShowDismissed(value => !value); setStatusFilter("all"); setSelectedEmployeeIds(new Set()); }}>Уволенные</Button> : null}
         <EmployeeScopeSwitch value={employeeScopeFilter} onChange={setEmployeeScopeFilter} label="Показывать сотрудников" />
         <Input className="employee-search" contentBefore={<Search20Regular />} aria-label="Поиск сотрудников" placeholder="Имя, логин, должность или подразделение" value={employeeQuery} onChange={(_, data) => setEmployeeQuery(data.value)} />
         <label>Роль<Select aria-label="Фильтр по роли сотрудника" value={roleFilter} onChange={event => setRoleFilter(event.target.value as typeof roleFilter)}><option value="all">Все роли</option>{Object.entries(employeeRoleLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</Select></label>
-        <label>Состояние<Select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></Select></label>
+        {!showDismissed ? <label>Состояние<Select aria-label="Фильтр состояния сотрудников" value={statusFilter} onChange={event => setStatusFilter(event.target.value as typeof statusFilter)}><option value="all">Все сотрудники</option><option value="active">Активные</option><option value="invited">Приглашённые</option><option value="inactive">Неактивные</option></Select></label> : null}
         {(search || roleFilter !== "all" || statusFilter !== "all") && <Button appearance="subtle" onClick={() => { setEmployeeQuery(""); setRoleFilter("all"); setStatusFilter("all"); }}>Сбросить фильтры</Button>}
       </div>
       <EmployeeRecords
         token={token}
         employees={visibleEmployees}
         departments={directory.departments}
-        filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}:${employeeScopeFilter}`}
+        filterKey={`${employeeQuery}:${roleFilter}:${statusFilter}:${employeeScopeFilter}:${showDismissed}`}
         selectedIds={selectedEmployeeIds}
         onOpen={selectEmployee}
         onToggle={toggleEmployee}
@@ -631,8 +647,9 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                   </div>
                 </Field>
               </div>
-              {canManage ? (
+              {canManage || canTerminate ? (
                 <div className="employee-admin-actions">
+                  {canManage ? <>
                   <Button
                     appearance="primary"
                     disabled={busy || (selectedEmployee.role === "superadmin" && !canEditOwnSuperadminOrganization)}
@@ -640,12 +657,13 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                   >
                     {canEditOwnSuperadminOrganization ? "Сохранить должность и подразделение" : "Сохранить сотрудника"}
                   </Button>
+                  </> : null}
                   {selectedEmployee.id !== currentUser.id
                     && (selectedEmployee.role !== "superadmin" || currentUser.role === "superadmin")
                     && (selectedEmployee.role !== "admin" || currentUser.role === "superadmin") ? <div className="employee-status-actions" aria-label="Управление состоянием сотрудника">
-                      {selectedEmployee.status === "blocked" || selectedEmployee.status === "archived" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("active"); setEmployeeStatusReason(""); setFeedback(""); }}>Восстановить доступ</Button> : null}
-                      {selectedEmployee.status === "active" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("blocked"); setEmployeeStatusReason(""); setFeedback(""); }}>Заблокировать</Button> : null}
-                      {selectedEmployee.status !== "archived" ? <Button className="employee-archive-button" disabled={busy} onClick={() => { setEmployeeStatusAction("archived"); setEmployeeStatusReason(""); setFeedback(""); }}>Архивировать</Button> : null}
+                      {canManage && (selectedEmployee.status === "blocked" || selectedEmployee.status === "archived") ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("active"); setEmployeeStatusReason(""); setFeedback(""); }}>Восстановить доступ</Button> : null}
+                      {canManage && selectedEmployee.status === "active" ? <Button disabled={busy} onClick={() => { setEmployeeStatusAction("blocked"); setEmployeeStatusReason(""); setFeedback(""); }}>Заблокировать</Button> : null}
+                      {canTerminate && selectedEmployee.status !== "archived" ? <Button className="employee-archive-button" disabled={busy} onClick={() => { setEmployeeStatusAction("archived"); setEmployeeStatusReason(""); setFeedback(""); }}>Уволить</Button> : null}
                     </div> : null}
                 </div>
               ) : null}
@@ -768,7 +786,7 @@ export function EmployeesView({ token, currentUser, allowAdministration, allowCh
                   ? `${selectedEmployee.name} снова сможет войти в Workspace. Исторические задачи и переписка останутся без изменений.`
                   : employeeStatusAction === "blocked"
                     ? `Доступ ${selectedEmployee.name} будет остановлен немедленно, а все активные сеансы — отозваны. Учётная запись останется в списке.`
-                    : `${selectedEmployee.name} будет перемещён в архив и потеряет доступ. Задачи, согласования и история сохранятся.`}
+                     : `${selectedEmployee.name} потеряет доступ и исчезнет из общего списка. Запись останется в «Уволенные», задачи, согласования и история сохранятся.`}
               </p>
               <Field label="Основание" required hint="Минимум 12 символов. Причина будет записана в аудит.">
                 <Textarea aria-label="Основание изменения состояния сотрудника" resize="vertical" maxLength={500} value={employeeStatusReason} disabled={busy} onChange={(_, data) => setEmployeeStatusReason(data.value)} />

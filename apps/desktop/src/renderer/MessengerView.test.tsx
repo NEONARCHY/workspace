@@ -82,6 +82,33 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("copies the whole message and leaves native field shortcuts unhandled", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
+    renderMessenger();
+    const text = initialMessages[0]!.body;
+    openMessageMenu(text);
+    fireEvent.click(screen.getByRole("button", { name: "Копировать" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(text));
+    const input = screen.getByLabelText("Новое сообщение");
+    for (const key of ["c", "v"]) {
+      expect(fireEvent.keyDown(input, { key, ctrlKey: true })).toBe(true);
+      expect(fireEvent.keyDown(input, { key, metaKey: true })).toBe(true);
+    }
+    expect(fireEvent.contextMenu(input)).toBe(true);
+  });
+
+  it("reports clipboard denial without modifying the message or composer", async () => {
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    renderMessenger();
+    fireEvent.change(screen.getByLabelText("Новое сообщение"), { target: { value: "Черновик" } });
+    openMessageMenu(initialMessages[0]!.body);
+    fireEvent.click(screen.getByRole("button", { name: "Копировать" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Не удалось скопировать"));
+    expect(screen.getByLabelText("Новое сообщение")).toHaveValue("Черновик");
+    expect(screen.getByText(initialMessages[0]!.body)).toBeInTheDocument();
+  });
+
   const fileTransfer = (files: readonly File[] = []) => ({ types: ["Files"], files, items: [], dropEffect: "none" });
   it("targets only the conversation without flickering across nested elements and cancels cleanly", () => {
     const { props } = renderMessenger();
@@ -719,6 +746,7 @@ describe("Private messenger", () => {
     });
     const messages: ChatMessage[] = [
       makeMessage("first", "baxtiyor", "09:00"),
+      makeMessage("middle", "baxtiyor", "09:00"),
       makeMessage("second", "baxtiyor", "09:01"),
       { ...makeMessage("notice", "baxtiyor", "09:02"), systemKind: "member_left", body: "Бахтиёр вышел из группы" },
       makeMessage("after-notice", "baxtiyor", "09:03"),
@@ -732,9 +760,14 @@ describe("Private messenger", () => {
     const row = (id: string) => document.querySelector<HTMLElement>(`.message-row:has([data-message-id="${id}"])`);
     expect(row("first")).toHaveClass("is-group-first");
     expect(row("second")).toHaveClass("is-group-last");
-    expect(row("second")?.querySelector(".message-avatar-spacer")).toBeInTheDocument();
+    expect(row("first")?.querySelector(".message-avatar-spacer")).toBeInTheDocument();
+    expect(row("middle")).toHaveClass("is-group-middle");
+    expect(row("middle")?.querySelector(".message-avatar-spacer")).toBeInTheDocument();
+    expect(row("second")?.querySelector(".message-sender-avatar")).toBeInTheDocument();
+    expect(row("second")?.querySelector(".message-avatar-spacer")).not.toBeInTheDocument();
     expect(row("second")).toHaveTextContent("Текст second");
     expect(row("after-notice")?.className).not.toMatch(/is-group-/);
+    expect(row("after-notice")?.querySelector(".message-sender-avatar")).toBeInTheDocument();
     expect(row("own-first")).toHaveClass("is-group-first");
     expect(row("own-last")).toHaveClass("is-group-last");
     expect(row("own-last")?.querySelector(".message-reactions")).toHaveTextContent("👍");
@@ -931,6 +964,11 @@ describe("Private messenger", () => {
     });
     expect(message).not.toHaveClass("message-awaiting-reveal");
     expect(message).not.toHaveClass("message-particle-revealing");
+    // The canvas stays intact while React commits the visible real text.
+    expect(canvasContext.drawImage.mock.invocationCallOrder.at(-1)).toBeGreaterThan(
+      canvasContext.clearRect.mock.invocationCallOrder.at(-1)!,
+    );
+    expect(message?.querySelector(".message-reveal-canvas")).toBeNull();
   });
 
   it("restores the draft when an animated send fails", async () => {

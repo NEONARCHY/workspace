@@ -252,10 +252,10 @@
 }
 
 .app-content > .workspace-view {
-  animation: ws2-view-arrive 250ms var(--ws-ease);
+  animation: ws2-view-arrive 320ms var(--ws-ease);
 }
 @keyframes ws2-view-arrive {
-  from { opacity: .86; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

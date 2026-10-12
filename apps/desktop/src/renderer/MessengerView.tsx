@@ -819,8 +819,8 @@ function Conversation({
                   if (!event.currentTarget.contains(event.relatedTarget)) setReactionTargetId((current) => current === message.id ? undefined : current);
                 }}
               >
-                {!own && (groupedWithPrevious ? <span className="message-avatar-spacer" aria-hidden="true" /> :
-                  <EmployeeProfileLink userId={message.authorId} personName={personName(message.authorId)}>
+                {!own && (groupedWithNext ? <span className="message-avatar-spacer" aria-hidden="true" /> :
+                  <EmployeeProfileLink className="message-sender-avatar" userId={message.authorId} personName={personName(message.authorId)}>
                     {personById(message.authorId) ? <ProfileAvatar person={personById(message.authorId)!} token={token} size={32} /> : <Avatar name={personName(message.authorId)} size={32} color="colorful" />}
                   </EmployeeProfileLink>
                 )}
@@ -905,6 +905,14 @@ function Conversation({
         const hasVoice = attachments.some((attachment) => attachment.ownerType === "message" && attachment.ownerId === message.id && attachment.mediaKind === "voice");
         const mayDelete = message.canDelete ?? (own || message.canPin || ["admin", "superadmin"].includes(currentUserRole));
         return <MessageContextMenu x={contextMenu.x} y={contextMenu.y} portalContainer={contextMenu.portalContainer} onPointerDown={(event) => event.stopPropagation()}>
+          {message.body && !(message.forwarded?.kind === "feed" && !message.forwarded.available) ? <Button appearance="subtle" onClick={() => {
+            setContextMenu(undefined);
+            void run(async () => {
+              if (!navigator.clipboard?.writeText) throw new Error("Копирование недоступно. Выделите текст и нажмите Ctrl+C.");
+              try { await navigator.clipboard.writeText(message.body); }
+              catch { throw new Error("Не удалось скопировать. Выделите текст и нажмите Ctrl+C."); }
+            });
+          }}>Копировать</Button> : null}
           <Button appearance="subtle" onClick={() => { setReply(message); setContextMenu(undefined); }}>Ответить</Button>
               {onForwardContent && <Button appearance="subtle" onClick={() => { setForwarding(message); setContextMenu(undefined); }}>Переслать</Button>}
           {message.canPin ? <Button appearance="subtle" icon={message.isPinned ? <PinOff24Regular /> : <Pin24Regular />} onClick={() => { void run(() => onPinMessage(message, !message.isPinned)); setContextMenu(undefined); }}>{message.isPinned ? "Открепить" : "Закрепить"}</Button> : null}

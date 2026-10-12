@@ -38,7 +38,7 @@ def test_administration_payloads_require_a_meaningful_reason() -> None:
 def test_administration_routes_require_server_side_admin_permissions() -> None:
     assert request_module_action("/api/v1/directory/employees/id/status", "PATCH") == (
         "employees",
-        "admin",
+        "view",
     )
     assert request_module_action("/api/v1/administration/chats", "GET") == (
         "messenger",

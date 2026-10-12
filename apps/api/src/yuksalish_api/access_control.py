@@ -158,6 +158,11 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
     if normalized in {"/workspace/bootstrap", "/directory"}:
         return ("employees", "view") if normalized == "/directory" else None
     if normalized.startswith("/directory/"):
+        if (normalized.startswith("/directory/employees/")
+            and normalized.endswith("/status") and upper_method == "PATCH"):
+            # Lifecycle authority is checked in the service; other account
+            # mutations still require admin, including block/restore payloads.
+            return "employees", "view"
         return "employees", "admin"
     if normalized.startswith("/administration/chats") or normalized.startswith(
         "/administration/chat-inspections"

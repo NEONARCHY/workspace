@@ -80,7 +80,8 @@ async def materialize_birthdays(
                 select(feed_posts.c.id).where(
                     feed_posts.c.birthday_user_id == person.id,
                     feed_posts.c.birthday_year == local_today.year,
-                )
+                    feed_posts.c.deleted_at.is_(None),
+                ).with_for_update(read=True)
             )
         else:
             created += 1

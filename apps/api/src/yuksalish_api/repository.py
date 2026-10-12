@@ -20,7 +20,7 @@ from .calendar_audience import calendar_audience_ids, can_invite_calendar_audien
 from .efficiency_service import METHODOLOGY_VERSION, record_task_event
 from .errors import WorkspaceRepositoryError as WorkspaceRepositoryError
 from .personal_preferences import get_preferences as get_personal_preferences
-from .position_policy import is_executive_leader
+from .position_policy import is_calendar_chairman, is_executive_leader
 from .tables import (
     absence_requests,
     ai_referent_letters,
@@ -848,9 +848,8 @@ def _feed_post(
         can_edit=not row["system_kind"] and (
             row["author_user_id"] == current_user.id or _is_privileged(current_user)
         ),
-        can_delete=not row["system_kind"] and (
-            row["author_user_id"] == current_user.id
-            or current_user.role in {"admin", "superadmin"}
+        can_delete=current_user.role in {"admin", "superadmin"} or (
+            not row["system_kind"] and row["author_user_id"] == current_user.id
         ),
         can_pin=not row["system_kind"] and (
             row["author_user_id"] == current_user.id
@@ -938,6 +937,8 @@ def _calendar_event(
         title=row["title"],
         description=row["description"] or "",
         event_type=row["event_type"],
+        color=row.get("color"),
+        icon_key=row.get("icon_key"),
         starts_at=row["starts_at"],
         ends_at=row["ends_at"],
         all_day=row["all_day"],
@@ -2724,7 +2725,7 @@ async def load_workspace(
     feed_rows = (
         (
             await connection.execute(
-                select(feed_posts).order_by(
+                select(feed_posts).where(feed_posts.c.deleted_at.is_(None)).order_by(
                     feed_posts.c.is_pinned.desc(),
                     feed_posts.c.created_at.desc(),
                 )
@@ -3058,7 +3059,9 @@ async def _feed_post_response(
     post_id: UUID,
 ) -> FeedPostResponse:
     row = (
-        (await connection.execute(select(feed_posts).where(feed_posts.c.id == post_id)))
+        (await connection.execute(select(feed_posts).where(
+            feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+        )))
         .mappings()
         .first()
     )
@@ -3131,7 +3134,9 @@ async def add_feed_comment(
     post_id: UUID,
     payload: CreateFeedCommentRequest,
 ) -> FeedPostResponse:
-    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    exists = await connection.scalar(select(feed_posts.c.id).where(
+        feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+    ))
     if exists is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
     if payload.parent_comment_id is not None:
@@ -3165,6 +3170,11 @@ async def delete_feed_comment(
     post_id: UUID,
     comment_id: UUID,
 ) -> FeedPostResponse:
+    exists = await connection.scalar(select(feed_posts.c.id).where(
+        feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+    ))
+    if exists is None:
+        raise WorkspaceRepositoryError(404, "Feed post was not found")
     comment = (
         (
             await connection.execute(
@@ -3206,7 +3216,9 @@ async def set_feed_like(
     post_id: UUID,
     liked: bool,
 ) -> FeedPostResponse:
-    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    exists = await connection.scalar(select(feed_posts.c.id).where(
+        feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+    ))
     if exists is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
     await connection.execute(
@@ -3238,7 +3250,9 @@ async def toggle_feed_reaction(
 ) -> FeedPostResponse:
     if emoji not in messenger_service.REACTION_EMOJIS:
         raise WorkspaceRepositoryError(422, "Unsupported reaction")
-    exists = await connection.scalar(select(feed_posts.c.id).where(feed_posts.c.id == post_id))
+    exists = await connection.scalar(select(feed_posts.c.id).where(
+        feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+    ))
     if exists is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
     if comment_id is None:
@@ -3287,7 +3301,7 @@ async def pin_feed_post(
         (
             await connection.execute(
                 select(feed_posts.c.author_user_id, feed_posts.c.system_kind)
-                .where(feed_posts.c.id == post_id)
+                .where(feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None))
             )
         )
         .mappings()
@@ -3323,7 +3337,9 @@ async def delete_feed_post(
     post = (
         (
             await connection.execute(
-                select(feed_posts).where(feed_posts.c.id == post_id).with_for_update()
+                select(feed_posts).where(
+                    feed_posts.c.id == post_id, feed_posts.c.deleted_at.is_(None),
+                ).with_for_update()
             )
         )
         .mappings()
@@ -3331,7 +3347,7 @@ async def delete_feed_post(
     )
     if post is None:
         raise WorkspaceRepositoryError(404, "Feed post was not found")
-    if post["system_kind"]:
+    if post["system_kind"] and current_user.role not in {"admin", "superadmin"}:
         raise WorkspaceRepositoryError(403, "System posts cannot be deleted")
     if post["author_user_id"] != current_user.id and current_user.role not in {
         "admin",
@@ -3341,9 +3357,16 @@ async def delete_feed_post(
             403,
             "Only the author or an administrator can delete feed posts",
         )
-    await connection.execute(delete(feed_posts).where(feed_posts.c.id == post_id))
+    if post["system_kind"]:
+        now = datetime.now(UTC)
+        await connection.execute(update(feed_posts).where(feed_posts.c.id == post_id).values(
+            deleted_at=now, deleted_by_user_id=current_user.id, updated_at=now,
+        ))
+    else:
+        await connection.execute(delete(feed_posts).where(feed_posts.c.id == post_id))
     await connection.execute(delete(workspace_notifications).where(
-        workspace_notifications.c.kind == "feed", workspace_notifications.c.entity_id == post_id,
+        workspace_notifications.c.kind.in_(["feed", "birthday"]),
+        workspace_notifications.c.entity_id == post_id,
     ))
 
 
@@ -3393,7 +3416,13 @@ async def _replace_calendar_attendees(
     event_id: UUID,
     attendee_ids: Sequence[UUID],
     organizer_user_id: UUID,
+    *,
+    preserve_responses: bool = False,
 ) -> None:
+    previous = {
+        row["user_id"]: row
+        for row in (await _calendar_attendee_map(connection, [event_id])).get(event_id, [])
+    } if preserve_responses else {}
     await connection.execute(
         delete(calendar_event_attendees).where(calendar_event_attendees.c.event_id == event_id)
     )
@@ -3404,8 +3433,14 @@ async def _replace_calendar_attendees(
                 {
                     "event_id": event_id,
                     "user_id": user_id,
-                    "status": "accepted" if user_id == organizer_user_id else "pending",
-                    "responded_at": datetime.now(UTC) if user_id == organizer_user_id else None,
+                    "status": (
+                        "accepted" if user_id == organizer_user_id
+                        else previous[user_id]["status"] if user_id in previous else "pending"
+                    ),
+                    "responded_at": (
+                        datetime.now(UTC) if user_id == organizer_user_id
+                        else previous[user_id]["responded_at"] if user_id in previous else None
+                    ),
                 }
                 for user_id in attendee_ids
             ],
@@ -3429,7 +3464,7 @@ async def _ensure_calendar_participants_are_available(
         (
             await connection.execute(
                 select(users.c.id)
-                .where(users.c.id.in_(participant_ids))
+                .where(users.c.id.in_(participant_ids), users.c.status == "active")
                 .order_by(users.c.id)
                 .with_for_update()
             )
@@ -3439,12 +3474,17 @@ async def _ensure_calendar_participants_are_available(
         raise WorkspaceRepositoryError(422, "Every calendar participant must be active")
 
     statement = (
-        select(users.c.full_name)
+        select(
+            users.c.full_name,
+            func.coalesce(positions.c.name, users.c.job_title).label("job_title"),
+            calendar_event_attendees.c.status,
+        )
         .select_from(
             calendar_event_attendees.join(
                 calendar_events,
                 calendar_events.c.id == calendar_event_attendees.c.event_id,
             ).join(users, users.c.id == calendar_event_attendees.c.user_id)
+            .outerjoin(positions, positions.c.id == users.c.position_id)
         )
         .where(
             calendar_event_attendees.c.user_id.in_(participant_ids),
@@ -3457,7 +3497,11 @@ async def _ensure_calendar_participants_are_available(
     )
     if excluding_event_id is not None:
         statement = statement.where(calendar_events.c.id != excluding_event_id)
-    busy_names = list((await connection.execute(statement)).scalars())
+    busy_rows = (await connection.execute(statement)).mappings().all()
+    busy_names = sorted({
+        row["full_name"] for row in busy_rows
+        if row["status"] == "accepted" or not is_calendar_chairman(row["job_title"])
+    })
     if busy_names:
         names = ", ".join(sorted(busy_names)[:3])
         suffix = " и другие" if len(busy_names) > 3 else ""
@@ -3544,6 +3588,8 @@ async def create_calendar_event(
             title=payload.title,
             description=payload.description,
             event_type=payload.event_type,
+            color=payload.color,
+            icon_key=payload.icon_key,
             starts_at=payload.starts_at,
             ends_at=payload.ends_at,
             all_day=payload.all_day,
@@ -3647,6 +3693,10 @@ async def update_calendar_event(
             title=payload.title,
             description=payload.description,
             event_type=payload.event_type,
+            color=payload.color if "color" in payload.model_fields_set else row.get("color"),
+            icon_key=(
+                payload.icon_key if "icon_key" in payload.model_fields_set else row.get("icon_key")
+            ),
             starts_at=payload.starts_at,
             ends_at=payload.ends_at,
             all_day=payload.all_day,
@@ -3671,13 +3721,20 @@ async def update_calendar_event(
         event_id,
         participant_ids,
         row["organizer_user_id"],
+        preserve_responses=(
+            row["starts_at"] == payload.starts_at and row["ends_at"] == payload.ends_at
+            and row["all_day"] == payload.all_day
+        ),
     )
     updated_row = (
         (await connection.execute(select(calendar_events).where(calendar_events.c.id == event_id)))
         .mappings()
         .one()
     )
-    await _notify_calendar_invitees(connection, updated_row, participant_ids)
+    updated_attendees = (await _calendar_attendee_map(connection, [event_id])).get(event_id, [])
+    await _notify_calendar_invitees(connection, updated_row, [
+        attendee["user_id"] for attendee in updated_attendees if attendee["status"] == "pending"
+    ])
     return await _calendar_event_response(connection, current_user, event_id)
 
 

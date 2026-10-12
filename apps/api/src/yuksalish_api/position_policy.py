@@ -27,12 +27,19 @@ def is_human_resources_position(job_title: str | None) -> bool:
     return "kadr" in normalized or "персонал" in normalized
 
 
+def is_calendar_chairman(job_title: str | None) -> bool:
+    """Equivalent apostrophes/spacing in the chairman's calendar identity only."""
+    apostrophes = str.maketrans({"‘": "'", "’": "'", "ʻ": "'", "ʼ": "'", "`": "'"})
+    normalized = " ".join((job_title or "").translate(apostrophes).casefold().split())
+    chairman = EXECUTIVE_LEADER_POSITION_NAME.translate(apostrophes).casefold()
+    return normalized == chairman
+
+
 def is_calendar_audience_leader(job_title: str | None) -> bool:
     """Calendar-only authority: do not broaden the chairman's other object permissions."""
     apostrophes = str.maketrans({"‘": "'", "’": "'", "ʻ": "'", "ʼ": "'", "`": "'"})
     normalized = " ".join((job_title or "").translate(apostrophes).casefold().split())
-    chairman = EXECUTIVE_LEADER_POSITION_NAME.translate(apostrophes).casefold()
-    return normalized == chairman or bool(re.fullmatch(
+    return is_calendar_chairman(job_title) or bool(re.fullmatch(
         r"rais(?:ning)? (?:birinchi )?o'rinbosari", normalized
     ))
 
@@ -44,3 +51,17 @@ def latin_position_name(value: str) -> str:
     if CYRILLIC_PATTERN.search(normalized):
         raise ValueError("Position name must use Latin script")
     return normalized
+
+
+def is_employee_lifecycle_leader(job_title: str | None) -> bool:
+    """Recognise actual leadership positions, not a leader's assistant or specialist."""
+    if is_calendar_audience_leader(job_title):
+        return True
+    apostrophes = str.maketrans({"‘": "'", "’": "'", "ʻ": "'", "ʼ": "'", "`": "'"})
+    normalized = " ".join((job_title or "").translate(apostrophes).casefold().split())
+    if normalized in {"bosh hisobchi", "direktor"}:
+        return True
+    return (
+        normalized.endswith(("boshlig'i", "boshligi", "rahbari"))
+        and any(word in normalized for word in ("bo'lim", "bo'linma", "departament", "boshqarma"))
+    )

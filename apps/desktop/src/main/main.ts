@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, Notification, screen, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, screen, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -7,6 +7,7 @@ import { fitWindowBounds, type WindowBounds } from "./window-state";
 import { registerDesktopUpdates } from "./updates";
 import { registerEncryptedDrafts } from "./drafts";
 import { registerSecureSession } from "./secure-session";
+import { editContextMenu } from "./edit-context-menu";
 
 app.enableSandbox();
 
@@ -72,6 +73,11 @@ function createWindow(): BrowserWindow {
   // keeps a bare Alt press from changing the viewport and creating phantom
   // scrollbars inside full-height dialogs on Windows.
   window.removeMenu();
+  window.webContents.on("context-menu", (_event, params) => {
+    if (params.frame !== window.webContents.mainFrame || !isAllowedNavigation(window.webContents.getURL())) return;
+    const template = editContextMenu(params);
+    if (template.length) Menu.buildFromTemplate(template).popup({ window });
+  });
 
   window.once("ready-to-show", () => { if (saved.maximized) window.maximize(); window.show(); });
   const load = () => developmentUrl !== undefined ? window.loadURL(developmentUrl) : window.loadFile(rendererFile);
@@ -175,6 +181,7 @@ void app.whenReady().then(() => {
   session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
     const target = webContents?.getURL() || details.requestingUrl || requestingOrigin;
     if (!isAllowedNavigation(target) || !details.isMainFrame) return false;
+    if (permission === "clipboard-sanitized-write") return Boolean(webContents?.isFocused());
     if (permission === "speaker-selection") return true;
     return permission === "media" && details.mediaType === "audio";
   });
@@ -184,7 +191,8 @@ void app.whenReady().then(() => {
     const audioOnly = permission === "media"
       && (mediaTypes === undefined
         || (mediaTypes.length === 1 && mediaTypes[0] === "audio"));
-    callback(trustedMainFrame && (permission === "speaker-selection" || audioOnly));
+    callback(trustedMainFrame && (permission === "speaker-selection" || audioOnly
+      || (permission === "clipboard-sanitized-write" && webContents.isFocused())));
   });
   createWindow();
   app.on("activate", () => {

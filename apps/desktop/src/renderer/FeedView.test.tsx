@@ -48,6 +48,16 @@ describe("birthday greeting access", () => {
     expect(screen.queryByRole("button", { name: "Сгенерировать поздравление для коллеги" })).not.toBeInTheDocument();
   });
 
+  it("offers confirmed deletion of a system announcement only with the server capability", async () => {
+    const onDelete = vi.fn().mockResolvedValue(true);
+    render(<FluentProvider theme={webLightTheme}><FeedView posts={[{ ...birthday, canDelete: true }]} people={[]} token="token" currentUserId="admin"
+      onCreate={vi.fn()} onComment={vi.fn()} onReact={vi.fn()} onDeleteComment={vi.fn()} onPin={vi.fn()} onDelete={onDelete} /></FluentProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить публикацию" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Удалить публикацию?" })).getByRole("button", { name: "Удалить" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ systemKind: "birthday" })));
+  });
+
   it("shows AI greeting controls to employees with assistant access", () => {
     view(true);
     expect(screen.getByRole("button", { name: "Сгенерировать поздравление для коллеги" })).toBeInTheDocument();
