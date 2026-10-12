@@ -42,11 +42,13 @@ describe("actual project budget", () => {
     setup();
     await screen.findByRole("rowheader", { name: /Services/ });
     fireEvent.click(screen.getByRole("button", { name: "Добавить статью" }));
+    expect(screen.getByLabelText("Название статьи")).toHaveFocus();
     fireEvent.change(screen.getByLabelText("Название статьи"), { target: { value: "New article" } });
     fireEvent.change(screen.getByLabelText("Плановая сумма"), { target: { value: "0.25" } });
     vi.mocked(addProjectBudgetArticle).mockRejectedValue(new Error("Сеть недоступна"));
     fireEvent.click(screen.getByRole("button", { name: "Сохранить статью" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Сеть недоступна");
+    expect(screen.getByLabelText("Название статьи")).toHaveFocus();
     expect(screen.getByLabelText("Плановая сумма")).toHaveValue("0.25");
     fireEvent.click(screen.getByRole("button", { name: "Сохранить статью" }));
     await waitFor(() => expect(addProjectBudgetArticle).toHaveBeenCalledTimes(2));

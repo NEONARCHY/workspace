@@ -192,7 +192,7 @@ export function TripApprovalsView({ focusRequestId, requests, people, department
       {visibleRequests.length === 0 ? <p className="trip-board-help">{requests.length ? "По выбранным фильтрам поездок нет. Измените поиск или выберите «Все»." : "Поездок пока нет. Создайте первую командировку — она появится в колонке «Запуск»."}</p> : null}
       {view === "kanban" ? (
         <SpatialBoard canDrop={(id, target) => { const request = requests.find(item => item.id === id); return !busy && !!request && !!tripDropAction(request, target as TripStage, isAdministrator); }} onMove={async (id, target) => { const request = requests.find(item => item.id === id); const targetStage = target as TripStage; const action = request && tripDropAction(request, targetStage, isAdministrator); if (request && action) { if (action === "move") await commitAction(request, action, `Перенос на этап «${displayTripColumns.find((column) => column.key === targetStage)?.label ?? targetStage}»`, targetStage); else await act(request, action); } }}>
-        <div className="approval-kanban trip-kanban middle-pan-surface" aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
+        <div className="approval-kanban trip-kanban middle-pan-surface" role="region" tabIndex={0} aria-label="Стадии поездок" aria-busy={busy} {...boardPan}>
           {displayTripColumns.map((column) => {
             const items = visibleRequests.filter((request) => request.stage === column.key);
             return <SpatialLane id={column.key} key={column.key} data-stage-key={column.key} className={`approval-column trip-column `}
