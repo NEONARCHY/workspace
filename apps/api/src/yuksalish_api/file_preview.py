@@ -1,10 +1,10 @@
 """Read-only, bounded Office content; no HTML, macros or external resources."""
 
+from collections.abc import Iterable
 from io import BytesIO
 from itertools import islice
 from pathlib import PurePath
-from typing import Literal
-from xml.etree.ElementTree import Element
+from typing import Literal, Protocol
 from zipfile import ZipFile
 
 import openpyxl  # type: ignore[import-untyped]
@@ -13,6 +13,15 @@ from pydantic import Field
 
 from .project_import_documents import MAX_TEXT_CHARS, document_type
 from .workspace_schemas import ApiModel
+
+
+class TextElement(Protocol):
+    """Only the read-only XML interface needed to extract document text."""
+
+    @property
+    def text(self) -> str | None: ...
+
+    def iter(self, tag: str) -> Iterable["TextElement"]: ...
 
 
 class PreviewBlock(ApiModel):
@@ -47,7 +56,7 @@ def preview_office(name: str, content: bytes, sheet_index: int, row_offset: int)
         budget = MAX_TEXT_CHARS
         truncated = False
 
-        def text(node: Element) -> str:
+        def text(node: TextElement) -> str:
             return "".join(part.text or "" for part in node.iter(ns + "t"))
 
         for node in body:

@@ -9,10 +9,10 @@ from pathlib import PurePosixPath
 from typing import Annotated, Literal, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
-from xml.etree.ElementTree import ParseError
 from zipfile import BadZipFile, ZipFile
 
 from defusedxml.common import DefusedXmlException
+from defusedxml.ElementTree import ParseError
 from fastapi import (
     APIRouter,
     Depends,
