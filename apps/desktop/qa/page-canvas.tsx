@@ -10,11 +10,12 @@ import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ZoomView } from "../src/renderer/ZoomView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
 import { SectionJump } from "../src/renderer/SectionJump";
+import { TaskRecords } from "../src/renderer/TaskRecords";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { UndoActionsProvider } from "../src/renderer/UndoActions";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
 import { workspaceTheme } from "../src/renderer/workspace-theme";
-import { initialChats, initialMessages, people } from "../src/renderer/test-fixtures/demo-data";
+import { initialChats, initialMessages, initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -140,6 +141,13 @@ const roots = [
 function Preview() {
   const [section, setSection] = useState("notifications");
   const [sample, setSample] = useState(0);
+  const [selectedTask, setSelectedTask] = useState<string>();
+  const taskSamples = [1, 2, 5].map(days => {
+    const due = new Date();
+    due.setDate(due.getDate() + days);
+    due.setHours(13, 0, 0, 0);
+    return { ...initialTasks[0]!, id: `qa-deadline-${days}`, title: `Тестовая задача · до срока ${days} дн.`, dueAt: due.toISOString(), dueLabel: due.toLocaleString("ru-RU"), priority: "urgent" as const };
+  });
   const simulateFileDrag = (kind: "dragenter" | "drop" | "dragend") => {
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(new File(["Synthetic drag/drop QA only"], "qa-drop.txt", { type: "text/plain", lastModified: 1 }));
@@ -152,6 +160,7 @@ function Preview() {
     { id: "messenger", label: "Мессенджер", icon: <Chat20Regular /> },
     { id: "zoom", label: "Zoom-конференции", icon: <Video20Regular /> },
     { id: "trips", label: "Командировки", icon: <Calendar20Regular /> },
+    { id: "tasks", label: "Задачи", icon: <Grid20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -180,7 +189,8 @@ function Preview() {
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
-            : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
+             : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
+             : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
