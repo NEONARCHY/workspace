@@ -251,11 +251,31 @@ export function completeEdoIncomingLetter(
 }
 
 export function downloadEdoIncomingAttachment(
-  token: string, id: number, attachmentId: string,
+  token: string, id: number, attachmentId: string, signal?: AbortSignal,
 ): Promise<Blob> {
   return boundedRequest(`${getApiBaseUrl()}/api/v1/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}`, {
-    headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal,
   }, (response) => response.blob(), 120_000);
+}
+
+export function loadEdoIncomingOfficePreview(
+  token: string, id: number, attachmentId: string, sheet = 0, offset = 0, signal?: AbortSignal,
+): Promise<OfficeFilePreview> {
+  return apiRequest<OfficeFilePreview>(
+    `/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}/preview?sheet=${sheet}&offset=${offset}`,
+    { signal }, token, 120_000,
+  );
+}
+
+export function previewAIReferentLocalFile(
+  token: string, file: File, sheet = 0, offset = 0, signal?: AbortSignal,
+): Promise<OfficeFilePreview> {
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/ai-referent/file-preview?fileName=${encodeURIComponent(file.name)}&sheet=${sheet}&offset=${offset}`,
+    { method: "POST", body: file, signal, cache: "no-store", headers: {
+      Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream",
+    } }, async response => await response.json() as OfficeFilePreview, 120_000,
+  );
 }
 
 export function loadEmployeeRecognitionProfile(

@@ -620,6 +620,7 @@ body:has(.app-content > :is(.ai-referent-view, .ai-hisobot-view)) .app-shell { p
 .ai-referent-attachments { display: grid; gap: 6px; margin: -6px 0 0; padding: 0; list-style: none; }
 .ai-referent-attachments li { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 11px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); }
 .ai-referent-attachments li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-referent-attachments button.ai-referent-file-name { flex: 1; display: block; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-referent-attachments li > span > small { display: block; margin-top: 3px; color: var(--ws-muted); white-space: normal; }
 .ai-referent-attachment-action, .ai-referent-attachments button { flex: none; border: 0; background: transparent; color: var(--ws-link); font: inherit; font-weight: 600; cursor: pointer; }
 .ai-referent-attachment-action input { position: absolute; width: 1px; height: 1px; opacity: 0; }

@@ -214,7 +214,7 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         return module_key, "admin"
     if normalized.endswith("/actions"):
         return module_key, "view"
-    if normalized == "/ai-referent/telegram-link":
+    if normalized in {"/ai-referent/telegram-link", "/ai-referent/file-preview"}:
         return module_key, "view"
     if module_key == "tasks" and normalized.endswith(
         ("/accept-result", "/return-for-revision")

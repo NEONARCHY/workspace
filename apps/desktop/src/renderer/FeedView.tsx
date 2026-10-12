@@ -1,4 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import { useEffect, useRef, useState } from "react";
 
 import type { AssistantActionDraft, FeedComment, FeedPost, GreetingLanguage, MessageReaction, WorkspacePerson } from "@yuksalish/contracts";
@@ -241,10 +242,10 @@ export function FeedView({ posts, people, token, currentUserId, onCreate, onComm
                     setGreetingPostId(post.id); setGreetingText(""); setGreetingError("");
                   }}>Сгенерировать поздравление для коллеги</Button> : <div className="feed-greeting-panel">
                     <label htmlFor={`greeting-language-${post.id}`}>Язык поздравления</label>
-                    <select id={`greeting-language-${post.id}`} value={greetingLanguage}
+                    <WorkspaceSelect id={`greeting-language-${post.id}`} value={greetingLanguage}
                       disabled={greetingBusy} onChange={(event) => setGreetingLanguage(event.target.value as GreetingLanguage)}>
                       <option value="ru">Русский</option><option value="uz_latn">O‘zbekcha</option><option value="uz_cyrl">Ўзбекча</option>
-                    </select>
+                    </WorkspaceSelect>
                     <Button disabled={greetingBusy} onClick={() => void createGreeting(post.id)}>
                       {greetingBusy ? "Создаю…" : greetingText ? "Создать другой вариант" : "Создать текст"}
                     </Button>

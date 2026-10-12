@@ -410,11 +410,13 @@ describe("YuksalishAssistant", () => {
     expect(document.querySelector(".assistant-empty .assistant-empty-orb.assistant-orb-slot")).toBeInTheDocument();
     expect(document.querySelectorAll(".assistant-travelling-orb .gradient-orb-fallback")).toHaveLength(1);
     expect(document.querySelector(".assistant-header .gradient-orb-fallback")).toBeNull();
-    expect(screen.getByRole<HTMLSelectElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
+    expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
+    fireEvent.click(screen.getByRole("combobox", { name: "Режим" }));
     expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Фокус" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Режим"), { target: { value: "pro" } });
+    fireEvent.click(screen.getByRole("option", { name: "Фокус" }));
+    expect(screen.getByRole("combobox", { name: "Режим" })).toHaveTextContent("Фокус");
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
       target: { value: "Какие у меня задачи?" },
     });

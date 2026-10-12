@@ -9,11 +9,13 @@ import { workspaceTheme } from "./workspace-theme";
 import { actOnAIReferentLetter, addAIReferentManualRecipient, createAIReferentLetter, checkAIReferentDocument, loadAIReferentAuthority, loadAIReferentLetter, loadAIReferentPacket, loadAIReferentIncomingRegistry, loadAIReferentRegistry, loadAIReferentReviewers, loadAIReferentRecipients, loadAIReferentManualRecipients, updateAIReferentLetter, uploadWorkspaceAttachment } from "./workspace-api";
 import type { AIReferentLetter } from "@yuksalish/contracts";
 import { loadAIReferentVisibility } from "./workspace-api";
+import { previewAIReferentLocalFile } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   actOnAIReferentLetter: vi.fn(),
   addAIReferentManualRecipient: vi.fn(),
   checkAIReferentDocument: vi.fn(),
+  previewAIReferentLocalFile: vi.fn(),
   loadAIReferentDocumentCheck: vi.fn(),
   uploadAIReferentCommentAudio: vi.fn(),
   downloadAIReferentCommentAudio: vi.fn(),
@@ -366,6 +368,33 @@ describe("AIReferentView", () => {
     expect(screen.getByText("Revised.pdf")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Удалить вложение Revised.pdf" }));
     expect(screen.queryByText("Revised.pdf")).not.toBeInTheDocument();
+  });
+
+  it("reopens selected primary and additional documents without creating or uploading a letter", async () => {
+    vi.mocked(checkAIReferentDocument).mockResolvedValue({ id: "check", status: "pending", reviewerKeys: [], detail: "" });
+    vi.mocked(previewAIReferentLocalFile).mockResolvedValue({ kind: "word", blocks: [{ kind: "paragraph", text: "Просмотр выбранного оригинала", rows: [] }], sheets: [], sheetIndex: 0, rowOffset: 0, totalRows: 0, rows: [], truncated: false });
+    vi.mocked(createAIReferentLetter).mockClear();
+    vi.mocked(uploadWorkspaceAttachment).mockClear();
+    render(<FluentProvider theme={workspaceTheme}><AIReferentView token="token" people={[]} canCreate /></FluentProvider>);
+    await openComposer();
+    const primary = new File(["PK"], "selected.docx");
+    const additional = new File(["PK"], "appendix.docx");
+    fireEvent.change(screen.getByLabelText("Выбрать основной документ DOCX"), { target: { files: [primary] } });
+    fireEvent.change(screen.getByLabelText("Выбрать дополнительные вложения"), { target: { files: [additional] } });
+    expect(previewAIReferentLocalFile).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Открыть выбранное письмо selected.docx" }));
+    expect(await screen.findByText("Просмотр выбранного оригинала")).toBeInTheDocument();
+    // Model browser autofocus: JSDOM has no geometry for Tabster's modal focus search.
+    act(() => document.querySelector<HTMLButtonElement>(".file-viewer-header button")?.focus());
+    expect(previewAIReferentLocalFile).toHaveBeenLastCalledWith("token", primary, 0, 0, expect.any(AbortSignal));
+    fireEvent.click(await screen.findByRole("button", { name: "Закрыть просмотрщик" }));
+    act(() => document.querySelector<HTMLInputElement>('.ai-referent-form-dialog input[placeholder="Если пропустить — исходящий номер"]')?.focus());
+    expect(screen.getByRole("button", { name: "Открыть выбранное письмо selected.docx" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Просмотреть выбранное вложение appendix.docx" }));
+    expect(await screen.findByText("Просмотр выбранного оригинала")).toBeInTheDocument();
+    expect(previewAIReferentLocalFile).toHaveBeenLastCalledWith("token", additional, 0, 0, expect.any(AbortSignal));
+    expect(createAIReferentLetter).not.toHaveBeenCalled();
+    expect(uploadWorkspaceAttachment).not.toHaveBeenCalled();
   });
 
   it("shows failed checks, retries them and removes the checking message on success", async () => {

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DialogBody, DialogContent, DialogSurface, DialogTitle, Input, Spinner } from "@fluentui/react-components";
 import { ArrowDownload20Regular, Dismiss20Regular, Add20Regular, Subtract20Regular, ArrowLeft20Regular, ArrowRight20Regular, ArrowClockwise20Regular } from "@fluentui/react-icons";
 import type { OfficeFilePreview, WorkspaceAttachment } from "@yuksalish/contracts";
@@ -8,15 +8,51 @@ import { InlineAudioPlayer } from "./AttachmentPanel";
 import "./file-viewer.css";
 const PdfFilePreview = lazy(() => import("./PdfFilePreview"));
 
-interface Props {
-  readonly attachment: WorkspaceAttachment;
+export type FileViewerSource = Pick<WorkspaceAttachment, "id" | "fileName" | "contentType" | "byteSize">;
+interface Props<T extends FileViewerSource> {
+  readonly attachment: T;
   readonly onClose: () => void;
-  readonly onLoad: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
-  readonly onLoadOffice: (attachment: WorkspaceAttachment, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
-  readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onLoad: (attachment: T, signal?: AbortSignal) => Promise<Blob>;
+  readonly onLoadOffice: (attachment: T, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
+  readonly onDownload: (attachment: T) => void | Promise<void>;
 }
 
-export default function FileViewer({ attachment, onClose, onLoad, onLoadOffice, onDownload }: Props) {
+export default function WorkspaceFileViewer(props: Props<WorkspaceAttachment>) {
+  return <FileViewer {...props} />;
+}
+
+/** External sources keep their own authorized routes and do not impersonate Workspace attachments. */
+export function ExternalFileViewer(props: Props<FileViewerSource>) {
+  return <FileViewer {...props} />;
+}
+
+export function LocalFileViewer({ file, onClose, onLoadOffice }: {
+  readonly file: File;
+  readonly onClose: () => void;
+  readonly onLoadOffice: (file: File, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
+}) {
+  const source = useMemo<FileViewerSource>(() => ({
+    id: `local:${file.name}:${file.size}:${file.lastModified}`,
+    fileName: file.name, contentType: file.type, byteSize: file.size,
+  }), [file]);
+  const load = useCallback(async (_source: FileViewerSource, signal?: AbortSignal) => {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    return file;
+  }, [file]);
+  const loadOffice = useCallback((_source: FileViewerSource, sheet: number, offset: number, signal?: AbortSignal) =>
+    onLoadOffice(file, sheet, offset, signal), [file, onLoadOffice]);
+  const download = useCallback(() => {
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = file.name;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, [file]);
+  return <FileViewer attachment={source} onClose={onClose} onLoad={load} onLoadOffice={loadOffice} onDownload={download} />;
+}
+
+function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload }: Props<T>) {
   const kind = fileViewerKind(attachment);
   const [url, setUrl] = useState("");
   const [mediaBlob, setMediaBlob] = useState<Blob>();

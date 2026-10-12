@@ -63,7 +63,7 @@ import { MessageContextMenu, menuPortalContainerFor } from "./MessageContextMenu
 import { ReactionPeople, ReactionDetailsMenu, type ReactionDetailsTarget } from "./ReactionPeople";
 import { MessageLinkPreviews } from "./MessageLinkPreviews";
 import { rewriteMessengerDraft, validateWorkspaceAttachmentFile, type AssistantRewriteStyle } from "./workspace-api";
-import { MessengerFileDropSurface, useMessengerFileReceiver } from "./MessengerFileDrop";
+import { MessengerFileDropSurface, useMessengerFileNavigationGuard } from "./MessengerFileDrop";
 import { EmployeeProfileLink } from "./EmployeeProfileLink";
 import { ForwardDialog, type ForwardContentAction } from "./ForwardDialog";
 import { ForwardedMessage } from "./ForwardedMessage";
@@ -232,12 +232,14 @@ function Conversation({
   embedded = false,
   assistantDraft,
   canUseAssistant = false,
+  fileDropDisabledReason,
 }: Omit<MessengerViewProps, "chats" | "onMarkRead"> & {
   readonly chat: ChatSummary;
   readonly availableChats: readonly ChatSummary[];
   readonly onManage: () => void;
   readonly onBack: () => void;
   readonly embedded?: boolean;
+  readonly fileDropDisabledReason?: string;
 }) {
   const [draft, setDraft] = useState(assistantDraft?.kind === "message" ? assistantDraft.fields.body ?? "" : "");
   const draftKey = `chat:${currentUserId}:${chat.id}`;
@@ -325,13 +327,13 @@ function Conversation({
     };
   }, [draft, draftKey]);
   const canSend = chat.permissions.sendMessages;
-  const fileDropBlocked = !canSend ? "В этом чате нельзя отправлять сообщения"
+  const fileDropBlocked = fileDropDisabledReason || (!canSend ? "В этом чате нельзя отправлять сообщения"
     : !chat.permissions.uploadFiles ? "Вложения запрещены владельцем группы"
     : busy ? "Дождитесь завершения текущего действия"
     : editing ? "Сначала завершите редактирование сообщения"
     : voiceOpen ? "Сначала завершите голосовое сообщение"
     : taskSource || forwarding || deleting || avatarPickerOpen || reactionDialog
-      ? "Сначала закройте открытое окно чата" : undefined;
+      ? "Сначала закройте открытое окно чата" : undefined);
   const acceptFiles = useCallback((files: readonly File[]) => {
     if (fileDropBlocked || !files.length) return false;
     try { files.forEach(file => validateWorkspaceAttachmentFile(file)); }
@@ -342,7 +344,6 @@ function Conversation({
     setError("");
     return true;
   }, [fileDropBlocked, setPendingFiles, setError]);
-  useMessengerFileReceiver(chat.id, chat.title, fileDropBlocked, acceptFiles, setError);
   const personName = (id: string) =>
     people.find((person) => person.id === id)?.name ?? "Сотрудник";
   const personById = (id: string) => people.find((person) => person.id === id);
@@ -609,7 +610,8 @@ function Conversation({
     }
   };
   return (
-    <article className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}>
+    <MessengerFileDropSurface className={`conversation-pane${embedded ? " embedded-conversation" : ""}`}
+      title={chat.title} blockedReason={fileDropBlocked} receive={acceptFiles} reject={setError}>
       <header className="conversation-header">
         {!embedded ? <Button className="compact-back" appearance="subtle" onClick={onBack}>К списку чатов</Button> : null}
         <div className="conversation-identity">
@@ -1288,7 +1290,7 @@ function Conversation({
           </div>}
         </>
       )}
-    </article>
+    </MessengerFileDropSurface>
   );
 }
 
@@ -1296,6 +1298,7 @@ export function EmbeddedConversation(props: MessengerViewProps & {
   readonly chatId: string;
   readonly contextLabel?: "задачи" | "проекта" | "поездки";
 }) {
+  useMessengerFileNavigationGuard();
   const { onMarkRead, contextLabel = "задачи" } = props;
   const chat = props.chats.find((item) => item.id === props.chatId);
   useEffect(() => {
@@ -1316,6 +1319,7 @@ export function EmbeddedConversation(props: MessengerViewProps & {
 }
 
 export function MessengerView(props: MessengerViewProps) {
+  useMessengerFileNavigationGuard();
   const restoreFocusTarget = useRestoreFocusTarget();
   const { chats, messages, focusChatId, onMarkRead } = props;
   const undo = useUndoActions();
@@ -1336,7 +1340,6 @@ export function MessengerView(props: MessengerViewProps) {
   const [assistantPreparationDismissed, setAssistantPreparationDismissed] = useState(false);
   const activeChat = visibleChats.find((chat) => chat.id === activeChatId)
     ?? (assistantChat?.id === activeChatId ? assistantChat : undefined) ?? firstActive;
-  const showDroppedFiles = useCallback(() => setConversationOpen(true), [setConversationOpen]);
   const assistantRecipient = props.assistantDraft?.kind === "message" && props.assistantRecipientId
     ? props.people.find((person) => person.id === props.assistantRecipientId) : undefined;
   const pendingAssistantChat = assistantRecipient && !assistantChat && !assistantPreparationDismissed
@@ -1398,9 +1401,7 @@ export function MessengerView(props: MessengerViewProps) {
     if (activeChat?.unread) void onMarkRead(activeChat.id);
   }, [activeChat?.id, activeChat?.unread, onMarkRead]);
   return (
-    <MessengerFileDropSurface className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`}
-      activeChatId={activeChat?.id} onAccepted={showDroppedFiles}
-      blockedReason={panel || deletionChoice || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}>
+    <section className={`workspace-view messenger-view ${conversationOpen && activeChat ? "conversation-open" : ""}`} aria-label="Мессенджер">
       <aside className="list-pane">
         <WorkspaceSectionHeader motif="messages" className="pane-heading messenger-pane-heading ws-section-header-compact">
           <div>
@@ -1448,6 +1449,7 @@ export function MessengerView(props: MessengerViewProps) {
           availableChats={visibleChats}
           onManage={() => setPanel("manage")}
           onBack={() => setConversationOpen(false)}
+          fileDropDisabledReason={panel || deletionChoice || pendingLeave ? "Сначала закройте окно управления чатом" : undefined}
         />
       ) : (
         <div className="empty-state">
@@ -1505,6 +1507,6 @@ export function MessengerView(props: MessengerViewProps) {
         </DialogSurface>
       </WorkspaceDialog>
       {!undo.isShared ? <UndoActionsToast manager={undo} /> : null}
-    </MessengerFileDropSurface>
+    </section>
   );
 }

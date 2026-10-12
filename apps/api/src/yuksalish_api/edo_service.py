@@ -10,7 +10,7 @@ import hmac
 import json
 import re
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit
@@ -332,7 +332,7 @@ async def stream_attachment(
     attachment_id: str,
     *,
     read_scope: EdoReadScope | None = None,
-) -> AsyncIterator[bytes]:
+) -> AsyncGenerator[bytes, None]:
     if not _ATTACHMENT_ID.fullmatch(attachment_id):
         raise EdoBridgeError(404, "Файл не найден.")
     base = _configured_base(settings)
@@ -360,7 +360,7 @@ async def stream_attachment(
         await client.aclose()
         raise
 
-    async def chunks() -> AsyncIterator[bytes]:
+    async def chunks() -> AsyncGenerator[bytes, None]:
         try:
             async for chunk in response.aiter_bytes():
                 yield chunk

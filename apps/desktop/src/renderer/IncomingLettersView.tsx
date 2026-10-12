@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   EdoIncomingDetail, EdoIncomingFilter, EdoIncomingLetter, EdoIncomingPage, WorkspacePerson,
 } from "@yuksalish/contracts";
 import {
   addEdoIncomingAssignment, completeEdoIncomingLetter, downloadEdoIncomingAttachment,
-  loadEdoIncomingLetter, loadEdoIncomingLetters,
+  loadEdoIncomingLetter, loadEdoIncomingLetters, loadEdoIncomingOfficePreview,
 } from "./workspace-api";
 import "./incoming-letters.css";
 import { EdoIncomingAccess, edoVisibilityLabels } from "./EdoIncomingAccess";
+import { WorkspaceSelect } from "./WorkspaceSelect";
+import type { FileViewerSource } from "./FileViewer";
+import { fileViewerKind } from "./file-viewer-kind";
+
+const ExternalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.ExternalFileViewer })));
 
 type StatusFilter = "all" | EdoIncomingFilter;
 
@@ -60,8 +65,7 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
   const [targetId, setTargetId] = useState("");
   const [result, setResult] = useState("");
   const [confirmComplete, setConfirmComplete] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState("");
-  const [previewName, setPreviewName] = useState("");
+  const [preview, setPreview] = useState<{ readonly letterId: number; readonly file: FileViewerSource }>();
   const listSequence = useRef(0);
   const detailSequence = useRef(0);
 
@@ -129,7 +133,6 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
     }, 0);
     return () => { window.clearTimeout(timer); detailSequence.current += 1; };
   }, [selectedId, refreshDetail]);
-  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
   const selectLetter = (id: number) => {
     if (selectedId !== id) {
@@ -139,8 +142,7 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
       setTargetId("");
       setResult("");
       setConfirmComplete(false);
-      setPreviewUrl("");
-      setPreviewName("");
+      setPreview(undefined);
       setNeedsReconcile(false);
       setActionError("");
     }
@@ -171,27 +173,34 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
     }
   };
 
-  const openAttachment = async (attachment: { readonly id: string; readonly name: string }, preview: boolean) => {
+  const loadPreview = useCallback((file: FileViewerSource, signal?: AbortSignal) => {
+    if (!preview) return Promise.reject(new Error("Сначала выберите документ"));
+    return downloadEdoIncomingAttachment(token, preview.letterId, file.id, signal);
+  }, [token, preview]);
+  const loadOfficePreview = useCallback((file: FileViewerSource, sheet: number, offset: number, signal?: AbortSignal) => {
+    if (!preview) return Promise.reject(new Error("Сначала выберите документ"));
+    return loadEdoIncomingOfficePreview(token, preview.letterId, file.id, sheet, offset, signal);
+  }, [token, preview]);
+  const saveAttachment = useCallback(async (letterId: number, file: FileViewerSource) => {
+    const blob = await downloadEdoIncomingAttachment(token, letterId, file.id);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = safeFileName(file.fileName);
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }, [token]);
+  const downloadPreview = useCallback((file: FileViewerSource) => {
+    if (!preview) return Promise.reject(new Error("Сначала выберите документ"));
+    return saveAttachment(preview.letterId, file);
+  }, [preview, saveAttachment]);
+  const openAttachment = async (attachment: { readonly id: string; readonly name: string; readonly size: number }, view: boolean) => {
     if (!letter) return;
+    const file: FileViewerSource = { id: attachment.id, fileName: attachment.name, byteSize: attachment.size, contentType: "" };
+    if (view) { setPreview({ letterId: letter.id, file }); return; }
     setActionError("");
-    try {
-      const blob = await downloadEdoIncomingAttachment(token, letter.id, attachment.id);
-      const pdf = attachment.name.toLowerCase().endsWith(".pdf");
-      const url = URL.createObjectURL(preview && pdf
-        ? new Blob([blob], { type: "application/pdf" }) : blob);
-      if (preview && pdf) {
-        setPreviewUrl(url);
-        setPreviewName(attachment.name);
-      } else {
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = safeFileName(attachment.name);
-        anchor.click();
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      }
-    } catch (reason) {
-      setActionError(reason instanceof Error ? reason.message : "Не удалось открыть документ.");
-    }
+    try { await saveAttachment(letter.id, file); }
+    catch (reason) { setActionError(reason instanceof Error ? reason.message : "Не удалось скачать документ."); }
   };
 
   const totalPages = registry ? Math.max(1, Math.ceil(registry.meta.total / registry.meta.limit)) : 1;
@@ -227,11 +236,11 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
         }} placeholder="Номер или слова из описания" />
       </label>
       <label>Состояние
-        <select value={filter} onChange={(event) => { setFilter(event.target.value as StatusFilter); setPage(1); }}>
+        <WorkspaceSelect aria-label="Состояние" value={filter} onChange={(event) => { setFilter(event.target.value as StatusFilter); setPage(1); }}>
           <option value="all">Все состояния</option><option value="unread">Не просмотрено</option>
           <option value="in_progress">В работе</option><option value="completed">Выполнено</option>
           <option value="confirmed">Подтверждено</option>
-        </select>
+        </WorkspaceSelect>
       </label>
     </div>
     <div className="edo-incoming-layout">
@@ -241,10 +250,11 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
         {!loading && !error && registry?.data.length === 0 ? <p className="edo-incoming-empty">Письма по выбранным условиям не найдены.</p> : null}
         {!loading && !error && registry?.data.map((item) => <button type="button" key={item.id}
           className={`edo-incoming-row${selectedId === item.id ? " is-selected" : ""}`}
+          data-status={item.status ?? "new"}
           aria-pressed={selectedId === item.id} onClick={() => selectLetter(item.id)}>
           <span className="edo-incoming-row-head"><strong>{item.in_num || `Письмо № ${item.id}`}</strong>
             <span className={`edo-incoming-status status-${item.status ?? "new"}`}>{statusName(item.status)}</span></span>
-          <span className="edo-incoming-row-org">{item.organization || "Организация не указана"}</span>
+          <span className="edo-incoming-row-org" title={item.organization || "Организация не указана"}>{item.organization || "Организация не указана"}</span>
           <span className="edo-incoming-row-desc">{item.description || "Краткое описание отсутствует"}</span>
           <span className="edo-incoming-row-foot">Зарегистрировано: {dateLabel(item.in_date)} · Срок: {dateLabel(item.deadline)}
             {item.overdue === true ? <em>Просрочено</em> : null}</span>
@@ -284,21 +294,20 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
           <div className="edo-incoming-section"><h3>Оригинал и вложения</h3>
             {letter.attachments.length ? <ul className="edo-incoming-files">{letter.attachments.map((attachment) => <li key={attachment.id}>
               <span>{attachment.name}</span><div>
-                {attachment.name.toLowerCase().endsWith(".pdf") ? <button type="button" onClick={() => void openAttachment(attachment, true)}>Просмотреть</button> : null}
+                {fileViewerKind({fileName: attachment.name, contentType: ""}) !== "unsupported" ? <button type="button" onClick={() => void openAttachment(attachment, true)}>Просмотреть</button> : null}
                 <button type="button" onClick={() => void openAttachment(attachment, false)}>Скачать</button>
               </div></li>)}</ul> : <p>Файлов пока нет.</p>}
-            {previewUrl ? <div className="edo-incoming-preview"><div><strong>{previewName}</strong><button type="button" onClick={() => setPreviewUrl("")}>Закрыть просмотр</button></div>
-              <iframe title={`Предпросмотр ${previewName}`} src={previewUrl} /></div> : null}</div>
+            </div>
           {letter.result !== null || letter.result_time ? <div className="edo-incoming-section"><h3>Результат выполнения</h3>
             <p>{letter.result || "Без текста результата"}</p><small>{letter.result_time ? `Отмечено: ${dateLabel(letter.result_time)}` : ""}</small></div> : null}
           {canEdit && (letter.status === null || letter.status === 1) ? <div className="edo-incoming-actions">
             <h3>Действия по письму</h3>
             {assignedIds.has(currentUserId) ? <>
               <label>Передать следующему исполнителю
-                <select value={targetId} disabled={!canAct} onChange={(event) => setTargetId(event.target.value)}>
+                <WorkspaceSelect aria-label="Передать следующему исполнителю" value={targetId} disabled={!canAct} onChange={(event) => setTargetId(event.target.value)}>
                   <option value="">Выберите сотрудника</option>
                   {candidates.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                </select></label>
+                </WorkspaceSelect></label>
               <button type="button" className="edo-incoming-secondary" disabled={!canAct || !targetId}
                 onClick={() => void applyAction("assign")}>Добавить исполнителя</button>
               <div className="edo-incoming-complete"><label>Результат (необязательно, до 255 символов)
@@ -320,5 +329,9 @@ export function IncomingLettersView({ token, people, currentUserId, canEdit, foc
         </> : null}
       </div>
     </div>
+    {preview && <Suspense fallback={<span role="status">Открываем просмотрщик…</span>}>
+      <ExternalFileViewer key={`${preview.letterId}:${preview.file.id}`} attachment={preview.file} onClose={() => setPreview(undefined)}
+        onLoad={loadPreview} onLoadOffice={loadOfficePreview} onDownload={downloadPreview} />
+    </Suspense>}
   </section>;
 }

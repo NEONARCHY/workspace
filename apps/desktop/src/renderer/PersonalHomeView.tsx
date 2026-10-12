@@ -11,6 +11,7 @@ import { useContextMotion } from "./useContextMotion";
 import { ApiHttpError, loadAIReferentIncomingRegistry, loadEdoIncomingLetters, loadEmployeeRecognitionProfile, loadPersonalEfficiency, loadPersonalReactions, loadProjectHub } from "./workspace-api";
 import { buildPersonalHome, homeDate, homePeriod, rankHomePanels, timestamp, type HomePanelKey, type HomeTarget, type HomeWorkspace } from "./personal-home";
 import "./personal-home.css";
+import { personalGreetingName } from "./personal-greeting-name";
 
 interface Props {
   readonly token: string;
@@ -102,7 +103,17 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
   };
   const allLink = (section: NavigationKey, label: string) => <Button size="small" appearance="subtle" aria-label={label} icon={<ArrowRight20Regular />} onClick={() => onOpen({ section })} />;
   const myReferent = referent?.data?.letters.filter(l => l.responsibleUserId === user.id).sort((a, b) => timestamp(b.receivedAt) - timestamp(a.receivedAt)) ?? [];
-  const myEdo = edo?.data?.data.filter(l => l.assignments.some(a => a.employee_id === user.id)) ?? [];
+  // personal=true is applied by the server before pagination. Compact EDO
+  // list rows omit assignments, so filtering them again would hide real mail.
+  // Never present a broader or unconfirmed scope as personal correspondence.
+  const personalEdo = edo?.data?.visibility === "assigned" ? edo.data : undefined;
+  const myEdo = personalEdo?.data ?? [];
+  const edoError = edo?.error ?? (edo?.data && !personalEdo
+    ? "Не удалось подтвердить личную область писем. Обновите данные или обратитесь к администратору."
+    : undefined);
+  const mailLoading = (canView("ai_referent") && !referent)
+    || (canView("incoming_letters") && !edo);
+  const canViewMail = canView("ai_referent") || canView("incoming_letters");
   const unread = data.notifications.filter(n => !n.readAt).length;
   const important = data.notifications.filter(n => n.requiresAction && !n.resolvedAt).length;
   const next = data.signals[0];
@@ -135,11 +146,29 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
     department: <Panel id="department" title="Мой отдел" note={data.department?.name ?? "Подразделение пока не назначено"} icon={<PeopleTeam24Regular />}>
       {data.department ? <><div className="home-department-count"><strong>{Math.max(0, data.department.assignedUsersCount - 1)}</strong><span>других сотрудников в отделе</span>{data.department.chatId && canView("messenger") ? <Button size="small" onClick={() => onOpen({ section: "messenger", entityId: data.department?.chatId ?? undefined })}>Чат отдела</Button> : null}</div><ul className="home-colleagues">{data.colleagues.slice(0, 6).map(p => <li key={p.id}><EmployeeProfileLink userId={p.id} personName={p.name}><ProfileAvatar person={p} token={token} size={36} /><span><strong>{p.name}</strong><small>{p.jobTitle || "Сотрудник"}</small></span></EmployeeProfileLink></li>)}</ul>{data.colleagues.length > 6 ? <details className="home-more-colleagues"><summary>Ещё {data.colleagues.length - 6} сотрудников отдела</summary><ul className="home-colleagues">{data.colleagues.slice(6).map(p => <li key={p.id}><EmployeeProfileLink userId={p.id} personName={p.name}><ProfileAvatar person={p} token={token} size={36} /><span><strong>{p.name}</strong><small>{p.jobTitle || "Сотрудник"}</small></span></EmployeeProfileLink></li>)}</ul></details> : null}</> : <Empty>Администратор назначает отдел в разделе «Отделы и подразделения».</Empty>}
     </Panel>,
-    mail: <Panel id="mail" title="Мои письма" note="Только письма с явным назначением вам" icon={<Mail24Regular />}>
-      {myReferent.length || myEdo.length ? <ul className="home-list">{myReferent.slice(0, 3).map(l => <Row key={"ref:" + l.id} title={l.subject || "Входящее письмо"} note={l.senderOrganization + " · " + l.platformIncomingNumber} onClick={() => onOpen({ section: "ai_referent", entityId: l.id, incomingReferent: true })} />)}{myEdo.slice(0, 3).map(l => <Row key={"edo:" + l.id} title={l.description || "Письмо №" + (l.in_num || l.id)} note={l.organization || "Входящее ЭДО"} onClick={() => onOpen({ section: "incoming_letters", entityId: String(l.id) })} />)}</ul> : <Empty>{edo?.unavailable ? "В разработке · интеграция входящих писем ещё не подключена." : myReferent.length === 0 && myEdo.length === 0 && (referent?.data || edo?.data) ? "В последних доступных письмах нет назначенных вам." : !canView("ai_referent") && !canView("incoming_letters") ? "Модуль писем недоступен по вашим правам." : referent?.error || edo?.error ? "Не удалось загрузить письма." : "Готовим ваши письма…"}</Empty>}
+    mail: <Panel id="mail" title="Мои письма" note="Письма, назначенные лично вам" icon={<Mail24Regular />}
+      action={canView("incoming_letters") ? allLink("incoming_letters", "Открыть входящие письма") : undefined}>
+      {myReferent.length || myEdo.length ? <ul className="home-list">
+        {myReferent.slice(0, 3).map(l => <Row key={"ref:" + l.id} title={l.subject || "Входящее письмо"}
+          note={["ИИ-референт", l.platformIncomingNumber, l.senderOrganization].filter(Boolean).join(" · ")}
+          onClick={() => onOpen({ section: "ai_referent", entityId: l.id, incomingReferent: true })} />)}
+        {myEdo.slice(0, 3).map(l => <Row key={"edo:" + l.id}
+          title={l.description || "Письмо №" + (l.in_num || l.id)}
+          note={["ЭДО", "№" + (l.in_num || l.id), l.organization,
+            l.status === null ? "Не просмотрено" : l.status === 1 ? "В работе"
+              : l.status === 2 ? "Выполнено исполнителем" : "Подтверждено",
+            personalEdo?.deadline_timezone_verified && l.overdue === true ? "Просрочено" : null,
+          ].filter(Boolean).join(" · ")}
+          tone={personalEdo?.deadline_timezone_verified && l.overdue === true ? "danger" : "brand"}
+          onClick={() => onOpen({ section: "incoming_letters", entityId: String(l.id) })} />)}
+      </ul> : !canViewMail ? <Empty>Модуль писем недоступен по вашим правам.</Empty>
+        : !mailLoading && !referent?.error && !edoError
+          ? <Empty>В последних доступных письмах нет назначенных вам.</Empty> : null}
+      <ResourceState loading={mailLoading} onRetry={retry} />
       {referent?.error ? <ResourceState loading={false} error={referent.error} onRetry={retry} /> : null}
-      {edo?.error && !edo.unavailable ? <ResourceState loading={false} error={edo.error} onRetry={retry} /> : null}
-      <p className="home-notice">Превью последних доступных записей. Полная синхронизация с локальной платформой — в разработке.</p>
+      {edoError ? <ResourceState loading={false} error={edoError} onRetry={retry} /> : null}
+      {personalEdo ? <p className="home-notice">Писем, назначенных вам в ЭДО: {personalEdo.meta.total}.
+        {personalEdo.meta.total > myEdo.slice(0, 3).length ? " Здесь показаны до трёх последних писем; полный список — во «Входящих письмах»." : null}</p> : null}
     </Panel>,
     recognition: <Panel id="recognition" title="Награды и достижения" note="Признание коллег и подтверждённые результаты" icon={<Reward24Regular />} action={openProfile ? <Button size="small" appearance="subtle" onClick={() => openProfile(user.id)}>Мой профиль</Button> : undefined}>
       <ResourceState loading={!recognition} error={recognition?.error} onRetry={retry} />
@@ -154,7 +183,7 @@ export function PersonalHomeView({ token, workspace, canView, zoomMeetings = [],
     </Panel> : null,
   };
   return <div className="workspace-view personal-home" aria-label="Персональная Главная">
-    <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {user.name}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>
+    <WorkspaceSectionHeader motif="team" className="home-hero"><div><span>Главная · ваше рабочее пространство</span><h2>Добрый день, {personalGreetingName(user.name)}</h2><p>{next ? <>В фокусе: {next.title}</> : "Всё важное — рядом. Спокойный день начинается с ясного плана."}</p></div><Button icon={<ArrowSync20Regular />} disabled={refreshing} onClick={() => void refresh()}>{refreshing ? "Обновляем…" : "Обновить"}</Button></WorkspaceSectionHeader>
     {refreshError ? <p className="home-notice" role="alert">{refreshError}</p> : null}
     <div className="home-overview" aria-label="Мой день"><article><strong>{data.signals.length + important}</strong><span>сигналов внимания</span></article><article><strong>{canView("tasks") ? data.tasks.length : "—"}</strong><span>моих активных задач</span></article><article><strong>{canView("messenger") ? data.chats.reduce((sum, c) => sum + c.chat.unread, 0) : "—"}</strong><span>непрочитанных сообщений</span></article><article><strong>{unread}</strong><span>новых уведомлений</span></article></div>
     {orderChanged ? <div className="home-priority-update" role="status"><span>Приоритеты изменились. Обновить порядок блоков?</span><Button size="small" onClick={() => { setOrder(recommendedOrder); setLayoutRevision(value => value + 1); }}>Обновить фокус дня</Button></div> : null}

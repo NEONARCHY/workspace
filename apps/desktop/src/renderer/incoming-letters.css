@@ -73,29 +73,33 @@
 .edo-incoming-layout { display: grid; grid-template-columns: minmax(270px, .88fr) minmax(0, 1.4fr); gap: 14px; min-height: 0; }
 .edo-incoming-list,
 .edo-incoming-detail { min-width: 0; overflow: auto; border-radius: 20px; border: 1px solid #dce7eb; background: #fff; scrollbar-width: thin; }
-.edo-incoming-list { padding: 8px; }
+.edo-incoming-list { padding: 8px 16px 8px 8px; scrollbar-gutter: stable; }
 .edo-incoming-detail { padding: 22px; }
 .edo-incoming-row {
   display: grid;
-  gap: 7px;
+  gap: 4px;
   width: 100%;
-  padding: 14px;
+  padding: 10px 12px;
   margin-bottom: 6px;
   text-align: left;
   border: 1px solid transparent;
   border-radius: 13px;
   color: inherit;
-  background: transparent;
+  --letter-tone: 113 134 145;
+  --letter-opacity: 12%;
+  background: linear-gradient(90deg, rgb(var(--letter-tone) / var(--letter-opacity)), rgb(var(--letter-tone) / 5%) 48%, transparent 100%), var(--ws-surface, #fff);
   cursor: pointer;
 }
-.edo-incoming-row:hover { background: #f2f8f9; }
-.edo-incoming-row.is-selected { background: #e8f5f5; border-color: #92cbd3; box-shadow: inset 3px 0 #0091a8; }
+.edo-incoming-row[data-status="new"] { --letter-tone: 228 174 55; --letter-opacity: 19%; }
+.edo-incoming-row:is([data-status="2"], [data-status="3"]) { --letter-tone: 79 165 120; --letter-opacity: 17%; }
+.edo-incoming-row:hover { --letter-opacity: 24%; }
+.edo-incoming-row.is-selected { border-color: var(--ws-link, #006779); }
 .edo-incoming-row-head strong { font-size: 15px; font-variant-numeric: tabular-nums; }
-.edo-incoming-row-org { font-weight: 600; }
+.edo-incoming-row-org { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .edo-incoming-row-desc { color: #536b7e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .edo-incoming-row-foot { color: #60758a; font-size: 12px; flex-wrap: wrap; }
 .edo-incoming-row-foot em, .edo-incoming-late { color: #a33a34; font-style: normal; font-weight: 700; }
-.edo-incoming-status { flex: 0 0 auto; padding: 5px 8px; border-radius: 8px; background: #edf2f4; color: #38556a; font-size: 11px; font-weight: 700; }
+.edo-incoming-status { flex: 0 0 auto; padding: 3px 7px; border-radius: 8px; background: #edf2f4; color: #38556a; font-size: 11px; font-weight: 700; }
 .edo-incoming-status.status-2 { background: #e3f4ee; color: #176343; }
 .edo-incoming-status.status-3 { background: #e6f0f9; color: #294e78; }
 .edo-incoming-status.status-new { background: #fff0dc; color: #86510e; }
@@ -117,9 +121,8 @@
 .edo-incoming-files li { padding: 8px 0; border-bottom: 1px solid #edf1f3; flex-wrap: wrap; }
 .edo-incoming-files li span { overflow-wrap: anywhere; }
 .edo-incoming-files li div { display: flex; gap: 8px; }
-.edo-incoming-preview { margin-top: 12px; border: 1px solid #c8d9e0; border-radius: 12px; overflow: hidden; }
-.edo-incoming-preview > div { padding: 8px 12px; background: #f4f8f9; }
-.edo-incoming-preview iframe { display: block; width: 100%; height: min(65vh, 650px); border: 0; }
+.edo-incoming .workspace-select { min-width: 0; width: 100%; }
+.edo-incoming .workspace-select > button { text-align: left; justify-content: space-between; }
 
 .edo-incoming button:not(.edo-incoming-row) { min-height: 34px; padding: 6px 11px; border-radius: 9px; border: 1px solid #bdced8; background: #fff; color: #293a55; cursor: pointer; }
 .edo-incoming button.edo-incoming-primary { background: #293a55; border-color: #293a55; color: #fff; }
@@ -137,9 +140,10 @@
 .edo-incoming-pages { padding: 12px 8px; font-size: 12px; color: #60758a; }
 
 @media (max-width: 1000px) {
-  .edo-incoming { height: auto; min-height: 100%; grid-template-rows: auto; }
+  .app-provider .edo-incoming:not(.edo-incoming-access) { display: block; height: 100%; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+  .edo-incoming:not(.edo-incoming-access) > :is(.edo-incoming-header, .edo-incoming-summary, .edo-incoming-controls) { margin-bottom: 16px; }
   .edo-incoming-layout { grid-template-columns: 1fr; }
-  .edo-incoming-list { max-height: 350px; }
+  .edo-incoming-list { height: 320px; max-height: 350px; }
   .edo-incoming-detail { overflow: visible; }
 }
 @media (max-width: 600px) {
@@ -149,5 +153,6 @@
   .edo-incoming-detail { padding: 14px; }
 }
 @media (forced-colors: active) {
+  .edo-incoming-row { background: Canvas; border-color: CanvasText; }
   .edo-incoming-row.is-selected { border: 2px solid Highlight; box-shadow: none; }
 }

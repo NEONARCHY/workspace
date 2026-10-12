@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { previewAIReferentLocalFile } from "./workspace-api";
+
+const LocalFileViewer = lazy(() => import("./FileViewer").then(module => ({ default: module.LocalFileViewer })));
 import { SlidingSegmented } from "./SlidingSegmented";
 
 import type {
@@ -187,6 +190,9 @@ function dateTime(value: string): string {
 }
 
 export function AIReferentView({ token, people, canCreate, canAdmin = false, focusRequestId, focusIncomingId, focusRevision, onPreviewAttachment }: AIReferentViewProps) {
+  const [localPreview, setLocalPreview] = useState<File>();
+  const loadLocalOffice = useCallback((file: File, sheet: number, offset: number, signal?: AbortSignal) =>
+    previewAIReferentLocalFile(token, file, sheet, offset, signal), [token]);
   const [registerKind, setRegisterKind] = useState<"incoming" | "outgoing" | "sign_only" | "settings" | "visibility" | "addresses" | "archive" | "telegram">("incoming");
   const [visibility, setVisibility] = useState<AIReferentVisibility>();
   const [visibilityError, setVisibilityError] = useState("");
@@ -800,6 +806,7 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   hint={savedPrimary ? "Прежнее письмо сохранено. Выбирайте новый DOCX только для замены." : "Письмо в формате DOCX"}
                   actionLabel={form.file || savedPrimary ? "Заменить DOCX" : "Выбрать DOCX"}
                   files={form.file ? [form.file] : []}
+                  showSelectedFiles={false}
                   accept=".docx"
                   disabled={busy}
                   emphasized
@@ -807,6 +814,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   ariaLabel="Выбрать основной документ DOCX"
                   onFiles={(files) => selectDocument(files[0])}
                 />
+                {form.file ? <ul className="ai-referent-attachments" aria-label="Выбранное письмо"><li>
+                  <Button appearance="subtle" className="ai-referent-file-name" title={form.file.name} disabled={busy} onClick={() => setLocalPreview(form.file)} aria-label={`Открыть выбранное письмо ${form.file.name}`}>{form.file.name}</Button>
+                  <Button appearance="subtle" icon={<Open20Regular />} disabled={busy} onClick={() => setLocalPreview(form.file)} aria-label={`Просмотреть выбранное письмо ${form.file.name}`} />
+                </li></ul> : null}
                 {savedPrimary ? <ul className="ai-referent-attachments" aria-label="Сохранённое письмо"><li>
                   <span title={savedPrimary.fileName}>{savedPrimary.fileName}<small>{form.file ? "Будет заменено выбранным DOCX после сохранения." : "Прикреплено к черновику — повторная загрузка не нужна."}</small></span>
                   {onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(savedPrimary)} aria-label={`Открыть ${savedPrimary.fileName}`}>Открыть</Button>}
@@ -831,7 +842,8 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
                   {onPreviewAttachment && <Button disabled={busy} onClick={() => onPreviewAttachment(attachment)} aria-label={`Открыть ${attachment.fileName}`}>Открыть</Button>}
                   <Button disabled={busy} icon={<ArrowDownload20Regular />} onClick={() => void download(attachment.id, attachment.fileName)} aria-label={`Скачать ${attachment.fileName}`}>Скачать</Button>
                 </li>)}</ul> : null}{selectedAdditionalFiles.length ? <ul className="ai-referent-attachments" aria-label="Добавленные вложения">{selectedAdditionalFiles.map((file, index) => <li key={`${file.name}-${file.lastModified}-${index}`}>
-                  <span title={file.name}>{file.name}</span>
+                  <Button appearance="subtle" className="ai-referent-file-name" title={file.name} disabled={busy} onClick={() => setLocalPreview(file)} aria-label={`Открыть выбранное вложение ${file.name}`}>{file.name}</Button>
+                  <Button appearance="subtle" icon={<Open20Regular />} disabled={busy} onClick={() => setLocalPreview(file)} aria-label={`Просмотреть выбранное вложение ${file.name}`} />
                   <label className="ai-referent-attachment-action">Заменить<input type="file" disabled={busy} aria-label={`Заменить вложение ${file.name}`} onChange={(event) => { const replacement = event.currentTarget.files?.[0]; if (replacement) setForm((current) => ({ ...current, additionalFiles: (current.additionalFiles ?? []).map((item, position) => position === index ? replacement : item) })); event.currentTarget.value = ""; }} /></label>
                   <button type="button" disabled={busy} onClick={() => setForm((current) => ({ ...current, additionalFiles: (current.additionalFiles ?? []).filter((_, position) => position !== index) }))} aria-label={`Удалить вложение ${file.name}`}>Удалить</button>
                 </li>)}</ul> : null}</> : null}
@@ -974,6 +986,10 @@ export function AIReferentView({ token, people, canCreate, canAdmin = false, foc
           ) : null}
         </DialogSurface>
       </Dialog>
+      {formOpen && localPreview && <Suspense fallback={<span role="status">Открываем выбранный документ…</span>}>
+        <LocalFileViewer key={`${localPreview.name}:${localPreview.lastModified}:${localPreview.size}`} file={localPreview}
+          onClose={() => setLocalPreview(undefined)} onLoadOffice={loadLocalOffice} />
+      </Suspense>}
     </section>
   );
 }
