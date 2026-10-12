@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     edo_workspace_id: str = "yuksalish-workspace"
     edo_legacy_timezone: str = ""
     edo_ca_bundle: Path | None = None
+    edo_employee_sync_enabled: bool = False
+    edo_directory_credential: SecretStr = SecretStr("")
+    edo_directory_assertion_key_base64: SecretStr = SecretStr("")
     ai_referent_journal_max_bytes: int = 25 * 1024 * 1024
     ai_referent_packet_max_bytes: int = 200 * 1024 * 1024
     zoom_account_id: str = ""
