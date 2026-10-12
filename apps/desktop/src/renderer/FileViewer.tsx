@@ -8,15 +8,25 @@ import { InlineAudioPlayer } from "./AttachmentPanel";
 import "./file-viewer.css";
 const PdfFilePreview = lazy(() => import("./PdfFilePreview"));
 
-interface Props {
-  readonly attachment: WorkspaceAttachment;
+export type FileViewerSource = Pick<WorkspaceAttachment, "id" | "fileName" | "contentType" | "byteSize">;
+interface Props<T extends FileViewerSource> {
+  readonly attachment: T;
   readonly onClose: () => void;
-  readonly onLoad: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
-  readonly onLoadOffice: (attachment: WorkspaceAttachment, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
-  readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onLoad: (attachment: T, signal?: AbortSignal) => Promise<Blob>;
+  readonly onLoadOffice: (attachment: T, sheet: number, offset: number, signal?: AbortSignal) => Promise<OfficeFilePreview>;
+  readonly onDownload: (attachment: T) => void | Promise<void>;
 }
 
-export default function FileViewer({ attachment, onClose, onLoad, onLoadOffice, onDownload }: Props) {
+export default function WorkspaceFileViewer(props: Props<WorkspaceAttachment>) {
+  return <FileViewer {...props} />;
+}
+
+/** External sources keep their own authorized routes and do not impersonate Workspace attachments. */
+export function ExternalFileViewer(props: Props<FileViewerSource>) {
+  return <FileViewer {...props} />;
+}
+
+function FileViewer<T extends FileViewerSource>({ attachment, onClose, onLoad, onLoadOffice, onDownload }: Props<T>) {
   const kind = fileViewerKind(attachment);
   const [url, setUrl] = useState("");
   const [mediaBlob, setMediaBlob] = useState<Blob>();

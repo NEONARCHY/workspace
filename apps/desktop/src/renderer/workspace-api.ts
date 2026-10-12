@@ -250,11 +250,20 @@ export function completeEdoIncomingLetter(
 }
 
 export function downloadEdoIncomingAttachment(
-  token: string, id: number, attachmentId: string,
+  token: string, id: number, attachmentId: string, signal?: AbortSignal,
 ): Promise<Blob> {
   return boundedRequest(`${getApiBaseUrl()}/api/v1/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}`, {
-    headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal,
   }, (response) => response.blob(), 120_000);
+}
+
+export function loadEdoIncomingOfficePreview(
+  token: string, id: number, attachmentId: string, sheet = 0, offset = 0, signal?: AbortSignal,
+): Promise<OfficeFilePreview> {
+  return apiRequest<OfficeFilePreview>(
+    `/incoming-letters/${id}/attachments/${encodeURIComponent(attachmentId)}/preview?sheet=${sheet}&offset=${offset}`,
+    { signal }, token, 120_000,
+  );
 }
 
 export function loadEmployeeRecognitionProfile(

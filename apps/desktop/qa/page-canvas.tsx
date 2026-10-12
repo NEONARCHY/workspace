@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FluentProvider } from "@fluentui/react-components";
 import { Alert20Regular, Calendar20Regular, Chat20Regular, ReceiptMoney20Regular, Grid20Regular, Video20Regular } from "@fluentui/react-icons";
@@ -7,6 +7,7 @@ import FileViewer from "../src/renderer/FileViewer";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { CalendarView } from "../src/renderer/CalendarView";
 import { MessengerView } from "../src/renderer/MessengerView";
+import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ZoomView } from "../src/renderer/ZoomView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
@@ -139,6 +140,36 @@ const roots = [
   ["Zoom", "workspace-view zoom-view"], ["Члены", "workspace-view members-view"],
   ["Доступ к ботам", "telegram-access-view"],
 ] as const;
+function QaIncomingLetters() {
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    const mockFetch: typeof window.fetch = async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.href);
+      if (!url.pathname.includes("/api/v1/incoming-letters")) return originalFetch(input, init);
+      if (init?.method && init.method !== "GET") return new Response("Read-only QA", {status:403});
+      const letters = Array.from({length: 20}, (_, index) => ({
+        id: index + 1, version: 1, in_num: `QA-${index + 1}`, status: [null, 1, 2, 3][index % 4],
+        in_date: "2026-10-12", deadline: "2026-10-17", out_num: null, out_date: null,
+        organization: "Тестовая организация · письмо для проверки интерфейса",
+        description: "Обсуждение повестки и материалов рабочей встречи", region: "Ташкент",
+        deadline2: null, type: null, comment: null, result: null, result_time: null,
+        legacy_dates_timezone: "unknown", overdue: null, assignments: [],
+        attachments: [{id:"qa-document", name:"Тестовое письмо.docx", size:12000}],
+      }));
+      const detail = /incoming-letters\/(\d+)/.exec(url.pathname);
+      const payload = url.pathname.endsWith("/preview") ? {
+        kind:"word", blocks:[{kind:"paragraph", text:"Тестовый оригинал входящего письма. Только синтетические данные, без подключения к ЭДО.", rows:[]}],
+        sheets:[], sheetIndex:0, rowOffset:0, totalRows:0, rows:[], truncated:false,
+      } : detail ? {data: letters[Number(detail[1]) - 1], deadline_timezone_verified:false}
+        : {data: letters, meta:{page:1,limit:20,total:20}, deadline_timezone_verified:false};
+      return new Response(JSON.stringify(payload), {headers:{"Content-Type":"application/json"}});
+    };
+    window.fetch = mockFetch;
+    return () => { if (window.fetch === mockFetch) window.fetch = originalFetch; };
+  }, []);
+  return <IncomingLettersView token="qa-only" people={people} currentUserId="aziza" canEdit={false} />;
+}
+
 function Preview() {
   const [section, setSection] = useState("notifications");
   const [sample, setSample] = useState(0);
@@ -176,7 +207,7 @@ function Preview() {
   const simulateFileDrag = (kind: "dragenter" | "drop" | "dragend") => {
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(new File(["Synthetic drag/drop QA only"], "qa-drop.txt", { type: "text/plain", lastModified: 1 }));
-    document.querySelector(".messenger-view")?.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer }));
+    document.querySelector(".messenger-file-drop-surface")?.dispatchEvent(new DragEvent(kind, { bubbles: true, cancelable: true, dataTransfer }));
   };
   const nav = [
     { id: "notifications", label: "Уведомления", icon: <Alert20Regular /> },
@@ -187,6 +218,7 @@ function Preview() {
     { id: "trips", label: "Командировки", icon: <Calendar20Regular /> },
     { id: "tasks", label: "Задачи", icon: <Grid20Regular /> },
     { id: "files", label: "Просмотр файлов", icon: <Grid20Regular /> },
+    { id: "letters", label: "Входящие письма", icon: <ReceiptMoney20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -217,6 +249,7 @@ function Preview() {
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
              : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
               : section === "tasks" ? <section className="workspace-view tasks-view bp5-tasks"><TaskRecords tasks={taskSamples} people={people} filterKey="qa" selectedId={selectedTask} onSelect={setSelectedTask} /></section>
+              : section === "letters" ? <QaIncomingLetters />
               : section === "files" ? <section className="qa-canvas-sample-card"><h2>Встроенный просмотрщик · тестовые данные</h2>{previewSamples.map(file => <button key={file.id} onClick={() => setPreviewFile(file)}>{file.fileName}</button>)}</section>
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>

@@ -281,6 +281,14 @@
 .fui-Listbox.fui-Listbox { min-width: min(220px, calc(100vw - 24px)); max-width: min(360px, calc(100vw - 24px)); max-height: min(300px, calc(100dvh - 48px)); overflow-y: auto; overscroll-behavior: contain; padding: 7px; }
 .fui-Listbox .fui-Option { height: auto; min-height: 38px; align-items: flex-start; padding-block: 9px; line-height: 1.4; overflow-wrap: anywhere; white-space: normal; }
 .fui-Listbox .fui-Option > span { min-width: 0; overflow-wrap: anywhere; }
+/* Separators add no selectable nodes and leave emoji grids untouched. */
+.fui-Listbox .fui-Option + .fui-Option,
+.fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio) + :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio) { position: relative; }
+.fui-Listbox .fui-Option + .fui-Option::after,
+.fui-MenuList:not(.reaction-picker-grid):not(.message-reaction-grid):not(.feed-reaction-grid) > :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio) + :is(.fui-MenuItem, .fui-MenuItemCheckbox, .fui-MenuItemRadio)::after {
+  content: ""; position: absolute; inset-inline: 10px; top: -1px; height: 1px;
+  background: var(--ws-border, #cddde2); opacity: .65; pointer-events: none;
+}
 .fui-MenuList { display: grid; gap: 3px; }
 :is(.fui-MenuItem.fui-MenuItem, .fui-Option.fui-Option) {
   min-height: 38px;

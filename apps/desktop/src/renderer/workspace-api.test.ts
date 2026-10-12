@@ -46,6 +46,25 @@ describe("web API addresses and session restore", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
+  it("uses EDO-specific authorized routes for original and paginated Office content", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockImplementation(async () => new Response("{}", {
+      headers: { "Content-Type": "application/json" },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await api.loadEdoIncomingOfficePreview("edo-token", 17, "external file", 1, 200);
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(
+      "/incoming-letters/17/attachments/external%20file/preview?sheet=1&offset=200",
+    ), expect.anything());
+    const options = fetchMock.mock.calls[0]![1] as RequestInit;
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer edo-token");
+    await api.downloadEdoIncomingAttachment("edo-token", 17, "external file");
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining(
+      "/incoming-letters/17/attachments/external%20file",
+    ), expect.objectContaining({ cache: "no-store" }));
+  });
+
   it("creates and lists persistent chats and handles an empty clear response", async () => {
     window.yuksalish = undefined;
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init: RequestInit) =>
