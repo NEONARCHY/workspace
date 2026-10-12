@@ -1882,7 +1882,7 @@ describe("corporate workspace authentication alpha", () => {
     const fetchMock = mockServer();
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
-    fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
+    clickWithFocus(await screen.findByRole("button", { name: "Новая заявка" }));
     expect(screen.getByText("Что оплачиваем")).toBeInTheDocument();
     expect(screen.getByText("Реквизиты платежа")).toBeInTheDocument();
     expect(screen.getByText("Документы", { selector: "strong" })).toBeInTheDocument();
@@ -1893,7 +1893,7 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "7350000" },
     });
     await selectPaymentDirection();
-    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+    clickWithFocus(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     const openCard = await screen.findByRole("button", {
       name: "Открыть заявку №502: Заявка для доски",
@@ -1965,7 +1965,7 @@ describe("corporate workspace authentication alpha", () => {
     const fetchMock = mockServer({ failApprovalActionOnce: true });
     render(<App />);
     await loginToWorkspace("aziza", "payment_requests");
-    fireEvent.click(await screen.findByRole("button", { name: "Новая заявка" }));
+    clickWithFocus(await screen.findByRole("button", { name: "Новая заявка" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название заявки" }), {
       target: { value: "Заявка с повтором" },
     });
@@ -1973,7 +1973,7 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "7350000" },
     });
     await selectPaymentDirection();
-    fireEvent.click(screen.getByRole("button", { name: "Отправить по маршруту" }));
+    clickWithFocus(screen.getByRole("button", { name: "Отправить по маршруту" }));
 
     const openCard = await screen.findByRole("button", { name: "Открыть заявку №502: Заявка с повтором" });
     const card = openCard.closest("article");

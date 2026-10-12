@@ -62,6 +62,21 @@ def test_unicode_contract_order_slots_and_safe_signature() -> None:
     assert "ЎР МК" in text  # noqa: RUF001 - literal source wording
 
 
+def test_document_fields_are_text_not_paragraph_markup() -> None:
+    values = fields().model_copy(
+        update={"full_name": 'Тест <b>не тег</b> & "кавычки"', "address": "O'Connor & <адрес>"}
+    )
+    packet = documents(values, 'Руководитель <i>текст</i> & "имя"')
+    for name, content in packet.items():
+        text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
+        assert values.full_name in text, name
+        assert 'Руководитель <i>текст</i> & "имя"' in text, name
+    contract = "\n".join(
+        page.extract_text() for page in PdfReader(BytesIO(packet["contract"])).pages
+    )
+    assert values.address in contract
+
+
 @pytest.mark.parametrize(
     "patch",
     [

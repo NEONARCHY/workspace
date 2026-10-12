@@ -2,10 +2,10 @@
 
 import json
 import warnings
+from html import escape
 from io import BytesIO
 from pathlib import Path
 from threading import Lock
-from xml.sax.saxutils import escape
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader, PdfWriter, apply_configuration

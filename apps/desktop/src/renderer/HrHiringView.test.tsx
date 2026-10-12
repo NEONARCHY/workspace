@@ -51,13 +51,16 @@ describe("HR hiring", () => {
     await focusClick(screen.getByRole("button", { name: "Подписать пакет" }));
     const dialog = await screen.findByRole("dialog", { name: "Подписать весь пакет?" });
     expect(within(dialog).getByRole("button", { name: "Подтвердить" })).toBeDisabled();
-    fireEvent.click(within(dialog).getByRole("checkbox"));
-    fireEvent.click(within(dialog).getByRole("button", { name: "Подтвердить" }));
+    await focusClick(within(dialog).getByRole("checkbox"));
+    // fireEvent alone never gives the confirmation the focus of a real click.
+    // Keep Tabster's active modal here through the disabled/pending phase.
+    await focusClick(within(dialog).getByRole("button", { name: "Подтвердить" }));
     const retry = await within(dialog).findByRole("button", { name: "Повторить безопасно" });
     await waitFor(() => expect(retry).not.toBeDisabled());
-    expect(within(dialog).getByRole("button", { name: "Отмена" })).toBeDisabled();
+    await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
+    expect(await within(dialog).findByRole("button", { name: "Отмена" })).toBeDisabled();
     const first = vi.mocked(actHiringCase).mock.calls[0];
-    fireEvent.click(retry);
+    await focusClick(retry);
     await waitFor(() => expect(actHiringCase).toHaveBeenCalledTimes(2));
     expect(vi.mocked(actHiringCase).mock.calls[1]).toEqual(first);
   });
