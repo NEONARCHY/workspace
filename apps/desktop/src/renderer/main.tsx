@@ -63,7 +63,6 @@ import "./navigation-sliding.css";
 import "./section-headers.css";
 import "./sidebar-theme.css";
 import "./page-canvas.css";
-import "./surface-hierarchy.css";
 import { workspacePlatform } from "./platform-adapter";
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {
