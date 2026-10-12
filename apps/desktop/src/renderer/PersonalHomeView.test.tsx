@@ -131,6 +131,7 @@ describe("Personal Home", () => {
   it("shows real personal cards and opens the corresponding chat, notification, profile and post", async () => {
     render(view());
     expect((await screen.findAllByText("80%")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Добрый день, Азиза" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Мой отдел" })).toBeInTheDocument();
     fireEvent.click(within(screen.getByRole("region", { name: "Мини-мессенджер" })).getAllByRole("button")[1]!);
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ section: "messenger", entityId: expect.any(String) }));
@@ -159,7 +160,7 @@ describe("Personal Home", () => {
     rendered.rerender(view("dilshod"));
     await act(async () => finish?.({ ...homeRecognition(), rewards: [{ ...homeRecognition().rewards[0]!, title: "Секретная награда прежнего аккаунта" }] }));
     expect(screen.queryByText("Секретная награда прежнего аккаунта")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: /Дилшод Рахимов/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Добрый день, Дилшод" })).toBeInTheDocument();
   });
   it("keeps loaded cards visible during credential renewal and shows a retry without erasing data", async () => {
     const rendered = render(view("aziza", all, "first-token"));

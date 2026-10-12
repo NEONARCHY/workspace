@@ -109,7 +109,7 @@
 .assistant-panel .assistant-composer textarea::placeholder { color: var(--assistant-quiet); }
 .assistant-panel .assistant-composer-toolbar { justify-content: space-between; gap: 8px; border: 0; padding-top: 0; }
 .assistant-panel .assistant-model-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.assistant-panel .assistant-model-control select { width: 102px; max-width: 100%; height: 38px; padding: 6px 10px; border: 1px solid #d8e5e9; border-radius: 12px; background: #fff; color: var(--ws-ink, #293a55); font-size: 13px; }
+.assistant-panel .assistant-model-control .workspace-select { width: 112px; min-width: 0; max-width: 100%; }
 .assistant-panel .assistant-composer-actions { gap: 6px; }
 .assistant-panel .assistant-composer-actions button { width: 38px; height: 38px; border-radius: 12px; transform: none; transition: background-color 160ms ease, color 160ms ease; }
 .assistant-panel .assistant-composer-actions button:not(:disabled):hover { transform: none; }
@@ -176,7 +176,7 @@
   .assistant-panel .assistant-header-title strong { font-size: 13px; }
   .assistant-panel .assistant-header-title small { font-size: 12px; }
   .assistant-panel .assistant-quick-prompts { grid-template-columns: minmax(0, 1fr); }
-  .assistant-panel .assistant-model-control select { width: 90px; padding-inline: 6px; }
+  .assistant-panel .assistant-model-control .workspace-select { width: 104px; }
   .assistant-panel .assistant-composer-actions { gap: 2px; }
   .assistant-panel .assistant-action-draft dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }

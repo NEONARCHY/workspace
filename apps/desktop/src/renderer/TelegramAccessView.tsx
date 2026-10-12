@@ -1,4 +1,5 @@
 import { WorkspaceSectionHeader } from "./WorkspaceSectionHeader";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 import { useEffect, useMemo, useState } from "react";
 
 import type {
@@ -147,16 +148,16 @@ function PersonAccessRow({
       </fieldset>
       {selected.includes("hisobot") ? <div className="telegram-access-hisobot" aria-label="Настройки AI Hisobot">
         <label>Контур отчётности
-          <select value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy || Boolean(managedDepartment)}>
+          <WorkspaceSelect value={hisobotScope} onChange={(event) => setHisobotScope(event.target.value as "central" | "hudud")} disabled={busy || Boolean(managedDepartment)}>
             <option value="central">Центральный аппарат</option>
             <option value="hudud">Территориальное подразделение</option>
-          </select>
+          </WorkspaceSelect>
         </label>
         {managedDepartment ? <p className="telegram-access-scope-note">Контур определяется подразделением «{managedDepartment.name}» и обновляется автоматически. Для региона без узнаваемого названия выберите регион ниже.</p> : null}
         {hisobotScope === "hudud" ? <label>Регион
-          <select value={hisobotRegion} onChange={(event) => setHisobotRegion(event.target.value)} disabled={busy}>
+          <WorkspaceSelect value={hisobotRegion} onChange={(event) => setHisobotRegion(event.target.value)} disabled={busy}>
             {regions.map((region) => <option key={region} value={region}>{region}</option>)}
-          </select>
+          </WorkspaceSelect>
         </label> : null}
         <label className="telegram-access-hisobot-check"><input type="checkbox" checked={reportRequired} onChange={(event) => setReportRequired(event.target.checked)} disabled={busy} /> Сдаёт ежедневный отчёт</label>
         <label className="telegram-access-hisobot-check"><input type="checkbox" checked={managementAccess} onChange={(event) => setManagementAccess(event.target.checked)} disabled={busy} /> Видит все отчёты</label>

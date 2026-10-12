@@ -1,16 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FluentProvider } from "@fluentui/react-components";
+import { workspaceTheme } from "./workspace-theme";
 import type { EdoIncomingLetter, WorkspacePerson } from "@yuksalish/contracts";
 import { IncomingLettersView } from "./IncomingLettersView";
 import {
   addEdoIncomingAssignment, completeEdoIncomingLetter, loadEdoIncomingLetter,
-  loadEdoIncomingLetters,
+  loadEdoIncomingLetters, downloadEdoIncomingAttachment, loadEdoIncomingOfficePreview,
 } from "./workspace-api";
 
 vi.mock("./workspace-api", () => ({
   addEdoIncomingAssignment: vi.fn(), completeEdoIncomingLetter: vi.fn(),
   downloadEdoIncomingAttachment: vi.fn(), loadEdoIncomingLetter: vi.fn(),
-  loadEdoIncomingLetters: vi.fn(),
+  loadEdoIncomingLetters: vi.fn(), loadEdoIncomingOfficePreview: vi.fn(),
 }));
 
 const people: readonly WorkspacePerson[] = [
@@ -28,7 +30,7 @@ const letter: EdoIncomingLetter = {
 const page = { data: [letter], meta: { page: 1, limit: 20, total: 1 }, deadline_timezone_verified: false };
 
 function show(canEdit = true) {
-  return render(<IncomingLettersView token="test-token" people={people} currentUserId="current" canEdit={canEdit} />);
+  return render(<FluentProvider theme={workspaceTheme}><IncomingLettersView token="test-token" people={people} currentUserId="current" canEdit={canEdit} /></FluentProvider>);
 }
 
 async function openLetter() {
@@ -54,6 +56,40 @@ describe("incoming EDO letters", () => {
     expect(completeEdoIncomingLetter).not.toHaveBeenCalled();
   });
 
+  it("uses the shared viewer and the authorized EDO Office route only after opening a file", async () => {
+    vi.mocked(loadEdoIncomingLetter).mockResolvedValue({ data: {
+      ...letter, attachments: [{ id: "external-doc", name: "Ответ.docx", size: 2000 }],
+    }, deadline_timezone_verified: false });
+    vi.mocked(loadEdoIncomingOfficePreview).mockResolvedValue({ kind: "word", blocks: [{ kind: "paragraph", text: "Текст оригинала ЭДО", rows: [] }], sheets: [], sheetIndex: 0, rowOffset: 0, totalRows: 0, rows: [], truncated: false });
+    show(); await openLetter();
+    expect(loadEdoIncomingOfficePreview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Просмотреть" }));
+    expect(await screen.findByText("Текст оригинала ЭДО")).toBeInTheDocument();
+    expect(loadEdoIncomingOfficePreview).toHaveBeenCalledWith("test-token", 17, "external-doc", 0, 0, expect.any(AbortSignal));
+    expect(downloadEdoIncomingAttachment).not.toHaveBeenCalled();
+    expect(document.querySelector("iframe")).toBeNull();
+    const signal = vi.mocked(loadEdoIncomingOfficePreview).mock.calls[0]![5]!;
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть просмотрщик" }));
+    expect(signal.aborted).toBe(true);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows status tones independently of selection and filters through a styled listbox", async () => {
+    vi.mocked(loadEdoIncomingLetters).mockResolvedValue({ ...page, data: [
+      { ...letter, status: null }, { ...letter, id: 18, in_num: "EX-18", status: 1 },
+      { ...letter, id: 19, in_num: "EX-19", status: 2 }, { ...letter, id: 20, in_num: "EX-20", status: 3 },
+    ] });
+    show();
+    expect(await screen.findByRole("button", { name: /EX-17/ })).toHaveAttribute("data-status", "new");
+    expect(screen.getByRole("button", { name: /EX-18/ })).toHaveAttribute("data-status", "1");
+    expect(screen.getByRole("button", { name: /EX-19/ })).toHaveAttribute("data-status", "2");
+    expect(screen.getByRole("button", { name: /EX-20/ })).toHaveAttribute("data-status", "3");
+    fireEvent.click(screen.getByRole("combobox", { name: "Состояние" }));
+    expect(screen.getByRole("listbox")).toHaveClass("workspace-select-listbox");
+    fireEvent.click(screen.getByRole("option", { name: "Выполнено" }));
+    await waitFor(() => expect(loadEdoIncomingLetters).toHaveBeenLastCalledWith("test-token", expect.objectContaining({ status: "completed", page: 1 })));
+  });
+
   it("adds the next executor with the current version and keeps the original visible", async () => {
     vi.mocked(addEdoIncomingAssignment).mockResolvedValue({ data: {
       ...letter, version: 5, assignments: [...letter.assignments, {
@@ -62,9 +98,8 @@ describe("incoming EDO letters", () => {
     }, deadline_timezone_verified: false });
     show();
     await openLetter();
-    fireEvent.change(screen.getByRole("combobox", { name: "Передать следующему исполнителю" }), {
-      target: { value: "next" },
-    });
+    fireEvent.click(screen.getByRole("combobox", { name: "Передать следующему исполнителю" }));
+    fireEvent.click(screen.getByRole("option", { name: "Следующий исполнитель" }));
     fireEvent.click(screen.getByRole("button", { name: "Добавить исполнителя" }));
     await waitFor(() => expect(addEdoIncomingAssignment).toHaveBeenCalledWith(
       "test-token", 17, 4, "next", expect.any(String),

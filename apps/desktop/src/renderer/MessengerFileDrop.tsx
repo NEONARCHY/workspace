@@ -1,44 +1,31 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Attach24Regular } from "@fluentui/react-icons";
 import "./messenger-file-drop.css";
 
-interface FileReceiver {
-  readonly chatId: string;
+const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
+
+/** Keep outside drops inert even when no conversation is selected. */
+export function useMessengerFileNavigationGuard() {
+  useEffect(() => {
+    const preventNavigation = (event: DragEvent) => { if (isFileDrag(event)) event.preventDefault(); };
+    window.addEventListener("drop", preventNavigation);
+    return () => window.removeEventListener("drop", preventNavigation);
+  }, []);
+}
+
+/** The shared conversation is the only target, including embedded object chats. */
+export function MessengerFileDropSurface({ children, className, title, blockedReason, receive, reject }: {
+  readonly children: ReactNode;
+  readonly className: string;
   readonly title: string;
   readonly blockedReason?: string;
   readonly receive: (files: readonly File[]) => boolean;
   readonly reject: (message: string) => void;
-}
-const ReceiverContext = createContext<Dispatch<SetStateAction<FileReceiver | undefined>> | undefined>(undefined);
-
-export function useMessengerFileReceiver(
-  chatId: string, title: string, blockedReason: string | undefined,
-  receive: FileReceiver["receive"], reject: FileReceiver["reject"],
-) {
-  const register = useContext(ReceiverContext);
-  const receiver = useMemo(() => ({ chatId, title, blockedReason, receive, reject }), [chatId, title, blockedReason, receive, reject]);
-  useEffect(() => {
-    register?.(receiver);
-    return () => register?.(current => current === receiver ? undefined : current);
-  }, [register, receiver]);
-}
-
-const isFileDrag = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes("Files");
-
-/** One native drop target covers both panes; internal chat-card drags remain untouched. */
-export function MessengerFileDropSurface({ children, className, activeChatId, blockedReason, onAccepted }: {
-  readonly children: ReactNode;
-  readonly className: string;
-  readonly activeChatId?: string;
-  readonly blockedReason?: string;
-  readonly onAccepted: () => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
-  const [receiver, setReceiver] = useState<FileReceiver>();
   const [dragging, setDragging] = useState(false);
-  const reason = blockedReason || (!receiver || receiver.chatId !== activeChatId
-    ? "Сначала выберите чат для вложений" : receiver.blockedReason);
+  const reason = blockedReason;
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -65,14 +52,14 @@ export function MessengerFileDropSurface({ children, className, activeChatId, bl
     const drop = (event: DragEvent) => {
       if (!isFileDrag(event)) return;
       event.preventDefault(); clear();
-      if (reason || !receiver || !event.dataTransfer) return;
+      if (reason || !event.dataTransfer) return;
       if (Array.from(event.dataTransfer.items ?? []).some(item => item.webkitGetAsEntry?.()?.isDirectory)) {
-        receiver.reject("Перетащите отдельные файлы или архив — загрузка папок не поддерживается.");
+        reject("Перетащите отдельные файлы или архив — загрузка папок не поддерживается.");
         return;
       }
       const files = Array.from(event.dataTransfer.files);
-      if (!files.length) { receiver.reject("Не удалось прочитать файлы. Выберите их кнопкой вложения."); return; }
-      if (files.length && receiver.receive(files)) onAccepted();
+      if (!files.length) { reject("Не удалось прочитать файлы. Выберите их кнопкой вложения."); return; }
+      receive(files);
     };
     // Never navigate away from Workspace if a file is released outside the target.
     const outsideDrop = (event: DragEvent) => { if (isFileDrag(event)) event.preventDefault(); clear(); };
@@ -96,19 +83,17 @@ export function MessengerFileDropSurface({ children, className, activeChatId, bl
       window.removeEventListener("keydown", escape);
       clear();
     };
-  }, [receiver, reason, onAccepted]);
-  return <ReceiverContext.Provider value={setReceiver}>
-    <section ref={rootRef} className={className} aria-label="Мессенджер"
+  }, [receive, reject, reason]);
+  return <section ref={rootRef} className={`${className} messenger-file-drop-surface`} aria-label={`Чат: ${title}`}
       data-file-drop={dragging ? reason ? "blocked" : "ready" : undefined}>
       {children}
       <div className="messenger-file-drop" aria-hidden={!dragging}>
         <div className="messenger-file-drop-copy" role="status" aria-live="polite">
           <span className="messenger-file-drop-icon" aria-hidden="true"><Attach24Regular /></span>
           <strong>{reason || "Отпустите файлы, чтобы прикрепить"}</strong>
-          {!reason && <span>В чат «{receiver?.title}»</span>}
+          {!reason && <span>В чат «{title}»</span>}
           <small>{reason ? "Черновик и переписка останутся без изменений" : "Файлы появятся в черновике. Отправите их после проверки."}</small>
         </div>
       </div>
-    </section>
-  </ReceiverContext.Provider>;
+    </section>;
 }

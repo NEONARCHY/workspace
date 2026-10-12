@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { FluentProvider } from "@fluentui/react-components";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { OfficeFilePreview, WorkspaceAttachment } from "@yuksalish/contracts";
-import FileViewer from "./FileViewer";
+import FileViewer, { LocalFileViewer } from "./FileViewer";
 import { AttachmentChips } from "./AttachmentPanel";
 import { fileViewerKind } from "./file-viewer-kind";
 import { workspaceTheme } from "./workspace-theme";
@@ -21,6 +21,15 @@ it("classifies documents and media, giving video MIME precedence over webm audio
   expect(fileViewerKind({...file,fileName:"clip.webm",contentType:"video/webm"})).toBe("video");
   expect(fileViewerKind({...file,fileName:"song.mp3"})).toBe("audio");
   expect(fileViewerKind({...file,fileName:"archive.zip"})).toBe("unsupported");
+});
+it("opens an unsaved image locally and frees its URL without calling the Office server", async () => {
+  const local = new File(["image"], "selected.png", {type:"image/png"});
+  const office = vi.fn();
+  const view = render(wrap(<LocalFileViewer file={local} onClose={vi.fn()} onLoadOffice={office} />));
+  expect(await screen.findByRole("img", {name:"selected.png"})).toHaveAttribute("src", "blob:preview");
+  expect(office).not.toHaveBeenCalled();
+  view.unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
 });
 it("renders Word content as escaped text and tables without loading the original",async()=>{
   const p=props(); render(wrap(<FileViewer {...p}/>));

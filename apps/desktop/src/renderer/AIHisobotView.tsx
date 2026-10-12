@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { WorkspaceSelect } from "./WorkspaceSelect";
 
 import {
   CalendarClock24Regular, CalendarLtr24Regular, Clock24Regular,
@@ -239,7 +240,7 @@ export function AIHisobotView({ token }: { readonly token: string }) {
         <div className="hisobot-filters">
           <label>С&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Начало периода" value={startDate} onChange={setStartDate} /></label>
           <label>По&nbsp;<WorkspaceDateTimePicker mode="date" ariaLabel="Конец периода" value={endDate} min={startDate} onChange={setEndDate} /></label>
-          <select value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></select>
+          <WorkspaceSelect value={scope} onChange={(event) => setScope(event.target.value as typeof scope)} aria-label="Контур отчётности"><option value="all">Все подразделения</option><option value="central">Центральный аппарат</option><option value="hudud">Hudud</option></WorkspaceSelect>
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по региону, имени или тексту" aria-label="Поиск отчётов" />
           <button type="button" onClick={() => void loadTeam()}>Обновить</button>
         </div>

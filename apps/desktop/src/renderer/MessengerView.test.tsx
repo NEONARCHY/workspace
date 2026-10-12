@@ -83,13 +83,18 @@ function openChatMenu(chatId: string) {
 
 describe("Private messenger", () => {
   const fileTransfer = (files: readonly File[] = []) => ({ types: ["Files"], files, items: [], dropEffect: "none" });
-  it("makes both panes a file target without flickering across nested elements and cancels cleanly", () => {
+  it("targets only the conversation without flickering across nested elements and cancels cleanly", () => {
     const { props } = renderMessenger();
-    const root = screen.getByRole("region", { name: "Мессенджер" });
-    const pane = root.querySelector(".list-pane")!;
+    const workspace = screen.getByRole("region", { name: "Мессенджер" });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
+    const pane = root.querySelector(".conversation-header")!;
     const transfer = fileTransfer();
+    fireEvent.dragEnter(workspace.querySelector(".list-pane")!, { dataTransfer: transfer });
+    expect(root).not.toHaveAttribute("data-file-drop");
     fireEvent.dragEnter(root, { dataTransfer: transfer });
     expect(root).toHaveAttribute("data-file-drop", "ready");
+    expect(workspace).not.toHaveAttribute("data-file-drop");
+    expect(root.querySelector(".messenger-file-drop")).not.toBeNull();
     fireEvent.dragEnter(pane, { dataTransfer: transfer });
     fireEvent.dragLeave(root, { dataTransfer: transfer, relatedTarget: pane });
     expect(root).toHaveAttribute("data-file-drop", "ready");
@@ -111,8 +116,8 @@ describe("Private messenger", () => {
     const second = new File(["two"], "two.txt", { type: "text/plain", lastModified: 2 });
     fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
     fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Мой черновик" } });
-    const root = screen.getByRole("region", { name: "Мессенджер" });
-    fireEvent.drop(root.querySelector(".list-pane")!, { dataTransfer: fileTransfer([first, second]) });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
+    fireEvent.drop(root, { dataTransfer: fileTransfer([first, second]) });
     expect(screen.getAllByRole("button", { name: "Убрать файл one.txt" })).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Убрать файл two.txt" })).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Мой черновик");
@@ -125,13 +130,13 @@ describe("Private messenger", () => {
     const options = { type: "text/plain", lastModified: 1 };
     const first = new File(["AAA"], "same.txt", options);
     const second = new File(["BBB"], "same.txt", options);
-    fireEvent.drop(screen.getByRole("region", { name: "Мессенджер" }), { dataTransfer: fileTransfer([first, second]) });
+    fireEvent.drop(screen.getByRole("region", { name: /^Чат:/ }), { dataTransfer: fileTransfer([first, second]) });
     expect(screen.getAllByRole("button", { name: "Убрать файл same.txt" })).toHaveLength(2);
   });
   it.each(["sendMessages", "uploadFiles"] as const)("refuses dropped files when %s is denied", permission => {
     const chat = { ...initialChats[0]!, permissions: { ...initialChats[0]!.permissions, [permission]: false } };
     const { props } = renderMessenger({ chats: [chat] });
-    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
     const transfer = fileTransfer([new File(["test"], "denied.txt")]);
     fireEvent.dragEnter(root, { dataTransfer: transfer });
     expect(root).toHaveAttribute("data-file-drop", "blocked");
@@ -146,7 +151,7 @@ describe("Private messenger", () => {
     const keep = new File(["keep"], "keep.txt");
     fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [keep] } });
     fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Оставить текст" } });
-    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
     const huge = new File(["test"], "huge.pdf");
     Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
     fireEvent.drop(root, { dataTransfer: fileTransfer([new File(["small"], "small.txt"), huge]) });
@@ -159,7 +164,7 @@ describe("Private messenger", () => {
   });
   it("blocks file receipt while chat management is open without creating a group", () => {
     const { props } = renderMessenger();
-    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
     fireEvent.click(screen.getByRole("button", { name: "Создать группу" }));
     const transfer = fileTransfer([new File(["test"], "modal.txt")]);
     fireEvent.dragEnter(root, { dataTransfer: transfer });
@@ -176,7 +181,7 @@ describe("Private messenger", () => {
     renderMessenger({ onSendMessage, messages: [own] });
     openMessageMenu(own.body);
     fireEvent.click(screen.getByRole("button", { name: "Изменить" }));
-    const root = screen.getByRole("region", { name: "Мессенджер" });
+    const root = screen.getByRole("region", { name: /^Чат:/ });
     const transfer = fileTransfer([new File(["test"], "blocked.txt")]);
     fireEvent.dragEnter(root, { dataTransfer: transfer });
     expect(root).toHaveAttribute("data-file-drop", "blocked");
@@ -190,6 +195,43 @@ describe("Private messenger", () => {
     fireEvent.drop(root, { dataTransfer: transfer });
     expect(screen.queryByRole("button", { name: "Убрать файл blocked.txt" })).not.toBeInTheDocument();
     await act(async () => finish({ ...own, id: "sent", body: "Отправляем" }));
+  });
+
+  it("ignores drops on the chat list and prevents file navigation outside the conversation", () => {
+    const { props } = renderMessenger();
+    const transfer = fileTransfer([new File(["test"], "outside.txt")]);
+    const list = screen.getByRole("region", { name: "Мессенджер" }).querySelector(".list-pane")!;
+    expect(fireEvent.drop(list, { dataTransfer: transfer })).toBe(false);
+    expect(screen.queryByRole("button", { name: "Убрать файл outside.txt" })).not.toBeInTheDocument();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("prevents file navigation with no selected chat without intercepting ordinary drags", () => {
+    renderMessenger({ chats: [], people: [] });
+    const root = screen.getByRole("region", { name: "Мессенджер" });
+    expect(fireEvent.drop(root, { dataTransfer: fileTransfer([new File(["test"], "outside.txt")]) })).toBe(false);
+    expect(fireEvent.drop(root, { dataTransfer: { types: ["text/plain"] } })).toBe(true);
+  });
+
+  it.each(["задачи", "проекта", "поездки"] as const)("accepts files into an embedded %s chat draft without sending", contextLabel => {
+    const { props, unmount } = renderMessenger();
+    unmount();
+    const chat = initialChats[0]!;
+    render(<FluentProvider theme={webLightTheme}>
+      <EmbeddedConversation {...props} chatId={chat.id} contextLabel={contextLabel} />
+    </FluentProvider>);
+    const wrapper = screen.getByRole("region", { name: `Чат ${contextLabel}: ${chat.title}` });
+    const target = within(wrapper).getByRole("region", { name: /^Чат:/ });
+    fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Сохранить черновик" } });
+    const transfer = fileTransfer([new File(["test"], "embedded.txt")]);
+    fireEvent.dragEnter(target, { dataTransfer: transfer });
+    expect(target).toHaveAttribute("data-file-drop", "ready");
+    expect(wrapper).not.toHaveAttribute("data-file-drop");
+    fireEvent.drop(target, { dataTransfer: transfer });
+    expect(target).not.toHaveAttribute("data-file-drop");
+    expect(screen.getByRole("button", { name: "Убрать файл embedded.txt" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Новое сообщение" })).toHaveValue("Сохранить черновик");
+    expect(props.onSendMessage).not.toHaveBeenCalled();
   });
 
   it.each(["self", "both"])("asks which participants should lose the direct chat (%s) and offers five-second undo", async mode => {
