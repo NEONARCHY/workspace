@@ -885,6 +885,8 @@ feed_posts = sa.Table(
     sa.Column("system_kind", sa.String(32)),
     sa.Column("birthday_user_id", uuid_type),
     sa.Column("birthday_year", sa.SmallInteger()),
+    sa.Column("deleted_at", sa.DateTime(timezone=True)),
+    sa.Column("deleted_by_user_id", uuid_type),
 )
 
 feed_comments = sa.Table(
@@ -919,6 +921,8 @@ feed_reactions = sa.Table(
 calendar_events = sa.Table(
     "calendar_events",
     metadata,
+    sa.Column("color", sa.String(7)),
+    sa.Column("icon_key", sa.String(24)),
     sa.Column("id", uuid_type, primary_key=True),
     sa.Column("organizer_user_id", uuid_type),
     sa.Column("project_id", uuid_type),

@@ -144,6 +144,52 @@ async def exercise(url: str, monkeypatch: pytest.MonkeyPatch) -> None:
         assert greeting.status_code == 200, greeting.text
         assert greeting.json()["text"] == "Короткий тестовый ответ"
 
+        # Ordinary colleagues cannot delete system announcements; admins can.
+        assert (await client.get(
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
+        )).status_code == 200
+        denied_delete = await client.delete(
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
+        )
+        assert denied_delete.status_code == 403
+        admin_feed = (await client.get("/api/v1/workspace/bootstrap", headers=owner)).json()
+        admin_post = next(item for item in admin_feed["feedPosts"] if item["id"] == str(post_id))
+        assert admin_post["canDelete"] is True
+        removed = await client.delete(
+            f"/api/v1/feed/posts/{post_id}", headers=owner,
+        )
+        assert removed.status_code == 204, removed.text
+        assert (await client.get(
+            f"/api/v1/feed/posts/{post_id}", headers=colleague,
+        )).status_code == 404
+        assert (await client.post(
+            f"/api/v1/feed/posts/{post_id}/comments", headers=colleague,
+            json={"body": "Cannot comment on deleted announcement"},
+        )).status_code == 404
+        assert (await client.post(
+            "/api/v1/assistant/birthday-greeting", headers=colleague,
+            json={"post_id": str(post_id), "language": "ru"},
+        )).status_code == 404
+
+        engine = create_async_engine(url)
+        try:
+            async with engine.begin() as connection:
+                await materialize_birthdays(connection, date(2027, 4, 12))
+                tombstone = (await connection.execute(select(feed_posts).where(
+                    feed_posts.c.id == post_id,
+                ))).mappings().one()
+                assert tombstone["deleted_at"] is not None
+                assert tombstone["deleted_by_user_id"] == owner_id
+                assert await connection.scalar(select(func.count()).select_from(
+                    workspace_notifications
+                ).where(workspace_notifications.c.entity_id == post_id)) == 0
+            hidden_feed = (await client.get(
+                "/api/v1/workspace/bootstrap", headers=colleague,
+            )).json()
+            assert str(post_id) not in {item["id"] for item in hidden_feed["feedPosts"]}
+        finally:
+            await engine.dispose()
+
         cleanup_engine = create_async_engine(url)
         try:
             async with cleanup_engine.begin() as connection:

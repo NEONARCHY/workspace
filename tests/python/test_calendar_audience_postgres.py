@@ -11,10 +11,20 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from yuksalish_api.auth import load_authenticated_user
 from yuksalish_api.calendar_audience import calendar_audience_ids
 from yuksalish_api.errors import WorkspaceRepositoryError
-from yuksalish_api.repository import create_calendar_event, load_workspace, update_calendar_event
+from yuksalish_api.repository import (
+    cancel_calendar_event,
+    create_calendar_event,
+    load_workspace,
+    respond_to_calendar_event,
+    update_calendar_event,
+)
 from yuksalish_api.seed import seed_demo_data
 from yuksalish_api.tables import calendar_events, departments, users, workspace_notifications
-from yuksalish_api.workspace_schemas import CreateCalendarEventRequest, UpdateCalendarEventRequest
+from yuksalish_api.workspace_schemas import (
+    CreateCalendarEventRequest,
+    RespondCalendarEventRequest,
+    UpdateCalendarEventRequest,
+)
 
 
 async def exercise_audience(database_url: str) -> None:
@@ -111,6 +121,53 @@ async def exercise_audience(database_url: str) -> None:
                     ),
                 )
                 assert set(deputy_event.attendee_ids) == {str(deputy.id), str(employee.id)}
+
+                # Pending chair invitations may coexist; an accepted one reserves
+                # only its half-open interval, including after an appearance edit.
+                third_id = (await connection.execute(select(users.c.id).where(
+                    users.c.username == "aziza",
+                ))).scalar_one()
+                third = await load_authenticated_user(connection, third_id)
+                assert third is not None
+                booking_start = start + timedelta(days=10)
+                booking_end = booking_start + timedelta(hours=1)
+                first = await create_calendar_event(
+                    connection, employee, CreateCalendarEventRequest(
+                    title="Chair invitation", starts_at=booking_start, ends_at=booking_end,
+                    attendee_ids=[str(admin.id)], color="#669988", icon_key="training",
+                    ),
+                )
+                await create_calendar_event(connection, deputy, CreateCalendarEventRequest(
+                    title="Second pending invitation", starts_at=booking_start,
+                    ends_at=booking_end, attendee_ids=[str(admin.id)],
+                ))
+                await respond_to_calendar_event(connection, admin, UUID(first.id),
+                    RespondCalendarEventRequest(status="accepted"))
+                edited = await update_calendar_event(connection, employee, UUID(first.id),
+                    UpdateCalendarEventRequest(title="Appearance edit", starts_at=booking_start,
+                        ends_at=booking_end, attendee_ids=[str(admin.id)], color="#648ABD",
+                        icon_key="interview"))
+                assert next(item for item in edited.attendees
+                            if item.user_id == str(admin.id)).status == "accepted"
+                assert edited.color == "#648ABD" and edited.icon_key == "interview"
+                with pytest.raises(WorkspaceRepositoryError, match="заняты"):
+                    await create_calendar_event(connection, third, CreateCalendarEventRequest(
+                        title="Rejected chair overlap", starts_at=booking_start,
+                        ends_at=booking_end, attendee_ids=[str(admin.id)],
+                    ))
+                adjacent = await create_calendar_event(
+                    connection, third, CreateCalendarEventRequest(
+                    title="Adjacent chair invitation", starts_at=booking_end,
+                    ends_at=booking_end + timedelta(hours=1), attendee_ids=[str(admin.id)],
+                    ),
+                )
+                assert adjacent.id
+                await cancel_calendar_event(connection, employee, UUID(first.id))
+                free = await create_calendar_event(connection, third, CreateCalendarEventRequest(
+                    title="Cancelled booking releases chair", starts_at=booking_start,
+                    ends_at=booking_end, attendee_ids=[str(admin.id)],
+                ))
+                assert free.id
             finally:
                 await transaction.rollback()
     finally:

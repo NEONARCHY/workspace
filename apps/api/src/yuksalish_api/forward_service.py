@@ -81,6 +81,7 @@ async def forward_message(
                     select(feed_posts)
                     .where(
                         feed_posts.c.id == payload.source_id,
+                        feed_posts.c.deleted_at.is_(None),
                     )
                     .with_for_update(read=True)
                 )
@@ -134,6 +135,7 @@ async def forward_message(
                     select(feed_posts.c.id)
                     .where(
                         feed_posts.c.id == UUID(forwarded["post_id"]),
+                        feed_posts.c.deleted_at.is_(None),
                     )
                     .with_for_update(read=True)
                 )

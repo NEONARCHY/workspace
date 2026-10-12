@@ -4,6 +4,13 @@ import { describe, expect, it } from "vitest";
 
 const read = (name: string) => readFileSync(resolve(process.cwd(), "src/renderer", name), "utf8");
 describe("Scoped work-panel surfaces", () => {
+  it("widens shared native scrollbars and fades entering pages without animating layout", () => {
+    expect(read("scrollbars.css")).toContain("width: 6px; height: 6px");
+    const motion = read("workspace-2-interactions.css");
+    expect(motion).toContain("animation: ws2-view-arrive 320ms var(--ws-ease)");
+    expect(motion).toContain("from { opacity: 0; transform: translateY(6px); }");
+    expect(read("motion.css")).toContain("(prefers-reduced-motion: reduce), (forced-colors: active)");
+  });
   it("loads after page surfaces and sidebar styles", () => {
     const entry = read("main.tsx");
     for (const file of ["spatial-workspace.css", "workspace-2-messenger.css", "workspace-2-notifications.css", "sidebar-theme.css"]) {

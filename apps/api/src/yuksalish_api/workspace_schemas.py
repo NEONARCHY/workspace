@@ -1210,6 +1210,12 @@ class CalendarEventAttendeeResponse(ApiModel):
     responded_at: datetime | None
 
 
+CalendarEventIcon = Literal[
+    "trees", "blood", "hearing", "assembly", "meeting", "trip", "project",
+    "teambuilding", "mountains", "contract", "memorandum", "training", "interview",
+]
+
+
 class CalendarEventResponse(ApiModel):
     id: str
     organizer_user_id: str
@@ -1219,6 +1225,8 @@ class CalendarEventResponse(ApiModel):
     title: str
     description: str
     event_type: CalendarEventType
+    color: str | None = None
+    icon_key: CalendarEventIcon | None = None
     starts_at: datetime
     ends_at: datetime
     all_day: bool
@@ -1237,6 +1245,10 @@ class CalendarEventWriteRequest(ApiModel):
     title: str = Field(min_length=1, max_length=240)
     description: str = Field(default="", max_length=20_000)
     event_type: CalendarEventType = "general"
+    color: str | None = Field(
+        default=None, min_length=7, max_length=7, pattern=r"^#[0-9A-Fa-f]{6}$"
+    )
+    icon_key: CalendarEventIcon | None = None
     starts_at: datetime
     ends_at: datetime
     all_day: bool = False

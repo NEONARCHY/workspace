@@ -1,6 +1,7 @@
 /* Actions belong to the message, not to its coloured bubble. Keep their row in
    normal flow so hover/focus never resizes a bubble or shifts the next message. */
 .message { align-items: flex-start; }
+.message > .message-sender-avatar { display: inline-flex; flex: none; align-self: flex-end; }
 .message > .fui-Avatar { flex: none; margin-top: 8px; }
 .message-content { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: calc(100% - 78px); }
 .message.own .message-content { align-items: flex-end; max-width: calc(100% - 38px); }

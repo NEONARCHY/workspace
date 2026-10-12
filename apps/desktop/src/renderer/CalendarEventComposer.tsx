@@ -20,6 +20,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { CalendarProjectLinkFields } from "./CalendarProjectLinkFields";
 import { CalendarAudienceActions } from "./CalendarAudienceActions";
+import { CalendarAppearance } from "./CalendarAppearance";
 
 export interface PreparedEventTask {
   readonly key: number;
@@ -41,6 +42,8 @@ interface CalendarEventComposerProps {
   readonly departments?: readonly WorkspaceDepartment[];
   readonly currentUserId: string;
   readonly busyAttendeeIds: ReadonlySet<string>;
+  readonly chairmanIds?: ReadonlySet<string>;
+  readonly onUnavailableChairman?: (person: WorkspacePerson) => void;
   readonly minimumStart: string;
   readonly tasks: readonly PreparedEventTask[];
   readonly payment?: PreparedEventPayment;
@@ -84,6 +87,8 @@ export function CalendarEventComposer({
   departments,
   currentUserId,
   busyAttendeeIds,
+  chairmanIds,
+  onUnavailableChairman,
   minimumStart,
   tasks,
   payment,
@@ -200,6 +205,10 @@ export function CalendarEventComposer({
               </div>
             </RecordSection>
 
+            <RecordSection title="Оформление" description="Цвет и иконка помогают найти событие в расписании.">
+              <CalendarAppearance draft={draft} disabled={busy} onChange={onDraftChange} />
+            </RecordSection>
+
             {canLinkProjects ? <RecordSection title="Связь с проектом"
               description="При необходимости укажите проект, направление и работу. Это не создаёт новую проектную задачу.">
               {projectTargetsLoading ? <p role="status">Загружаем проекты…</p> : null}
@@ -220,14 +229,17 @@ export function CalendarEventComposer({
                       <span>{person.name}{person.id === currentUserId ? " · организатор" : busyAttendeeIds.has(person.id) ? " · занят" : ""}</span>
                     </EmployeeProfileLink></span>}
                     checked={draft.attendeeIds.includes(person.id)}
-                    disabled={busy || person.id === currentUserId || (busyAttendeeIds.has(person.id) && !draft.attendeeIds.includes(person.id))}
-                    onChange={(_event, data) => onDraftChange({
+                    disabled={busy || person.id === currentUserId || (busyAttendeeIds.has(person.id) && !chairmanIds?.has(person.id) && !draft.attendeeIds.includes(person.id))}
+                    onChange={(_event, data) => {
+                      if (data.checked && busyAttendeeIds.has(person.id) && chairmanIds?.has(person.id)) { onUnavailableChairman?.(person); return; }
+                      onDraftChange({
                       ...draft,
                       audienceScope: undefined,
                       attendeeIds: data.checked
                         ? [...draft.attendeeIds, person.id]
                         : draft.attendeeIds.filter((id) => id !== person.id),
-                    })}
+                      });
+                    }}
                   />
                 ))}
                 {!visiblePeople.length ? <p>Сотрудники не найдены.</p> : null}

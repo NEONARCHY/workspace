@@ -575,6 +575,7 @@ async def accessible_feed_context(connection: AsyncConnection, user: Authenticat
     rows = (
         await connection.execute(
             select(feed_posts.c.title, feed_posts.c.body, feed_posts.c.created_at)
+            .where(feed_posts.c.deleted_at.is_(None))
             .order_by(feed_posts.c.created_at.desc())
             .limit(12)
         )
