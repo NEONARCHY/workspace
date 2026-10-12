@@ -63,7 +63,15 @@ import "./navigation-sliding.css";
 import "./section-headers.css";
 import "./sidebar-theme.css";
 import "./page-canvas.css";
+import "./browser-responsive.css";
 import { workspacePlatform } from "./platform-adapter";
+import { observeBrowserViewport } from "./browser-layout";
+
+if (workspacePlatform.kind === "web") {
+  document.documentElement.classList.add("web-platform");
+  const stopViewport = observeBrowserViewport();
+  import.meta.hot?.dispose(stopViewport);
+}
 
 if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windows")) {
   document.documentElement.classList.add("desktop-window-chrome");

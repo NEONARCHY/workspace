@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Badge, useRestoreFocusTarget } from "@fluentui/react-components";
 import type { TaskStatus, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
-import { RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
+import { RecordMobileLabel, RecordTablePager, SortHeading, tableCollator, useTablePage, type TableSort } from "./RecordTableTools";
 import { TaskParticipantAvatar } from "./TaskParticipantAvatar";
 import { isTaskOverdue, taskDeadlineTone } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
@@ -40,19 +40,19 @@ export function TaskRecords({ tasks, people, token, currentUserId, selectedId, f
   ];
   return <div className="record-table-frame task-records">
     <div className="record-table-scroll" role="region" aria-label="Список задач" tabIndex={0}>
-      <table className="record-table task-record-table" aria-label="Задачи">
-        <thead><tr>{[["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["project", "Проект"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
-        <tbody>{sorted.slice(paging.start, paging.start + paging.size).map(task => <tr key={task.id} data-deadline={taskDeadlineTone(task, now)} className={`task-row record-row ${selectedId === task.id ? "selected" : ""}`} onClick={event => { if (!(event.target as HTMLElement).closest("button")) { event.currentTarget.querySelector("button")?.focus(); onSelect(task.id); } }}>
-          <td className="record-title"><span className="list-row-hover-wash" aria-hidden="true" /><button {...restoreFocusTarget} className="record-open" type="button" aria-haspopup="dialog" aria-label={`Открыть задачу: ${task.title}`} onClick={() => onSelect(task.id)}><strong>{task.title}</strong></button>
+      <table role="table" className="record-table task-record-table" aria-label="Задачи">
+        <thead role="rowgroup"><tr role="row">{[["title", "Название"], ["assignee", "Участники"], ["status", "Статус"], ["due", "Крайний срок"], ["author", "Постановщик"], ["project", "Проект"]].map(([column, label]) => <SortHeading key={column} column={column!} sort={sort} onSort={onSort}>{label}</SortHeading>)}</tr></thead>
+        <tbody role="rowgroup">{sorted.slice(paging.start, paging.start + paging.size).map(task => <tr role="row" key={task.id} data-deadline={taskDeadlineTone(task, now)} className={`task-row record-row ${selectedId === task.id ? "selected" : ""}`} onClick={event => { if (!(event.target as HTMLElement).closest("button")) { event.currentTarget.querySelector("button")?.focus(); onSelect(task.id); } }}>
+          <td role="cell" className="record-title"><span className="list-row-hover-wash" aria-hidden="true" /><button {...restoreFocusTarget} className="record-open" type="button" aria-haspopup="dialog" aria-label={`Открыть задачу: ${task.title}`} onClick={() => onSelect(task.id)}><strong>{task.title}</strong></button>
             <div className="record-secondary">{task.checklistTotal > 0 && <span>План {task.checklistDone}/{task.checklistTotal}</span>}{task.comments.length > 0 && <span>Обсуждение · {task.comments.length}</span>}{task.cycle && <span>Повторяется</span>}</div>
             {task.checklistTotal > 0 ? <span className="task-record-progress" aria-hidden="true"><i style={{ width: `${Math.round(task.checklistDone / task.checklistTotal * 100)}%` }} /></span> : null}
           </td>
-          <td><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>
+          <td role="cell"><RecordMobileLabel>Участники</RecordMobileLabel><div className="task-participant-group" aria-label="Участники задачи">{participants(task).map(({ userId, role }) =>
             <TaskParticipantAvatar key={`${userId}-${role}`} person={peopleById.get(userId)} role={role} token={token} />
           )}</div></td>
-          <td><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
-          <td className={isTaskOverdue(task, now) ? "record-deadline overdue" : "record-deadline"}>{task.dueLabel}{isTaskOverdue(task, now) && task.status !== "overdue" ? <small className="record-priority">Срок истёк</small> : null}</td>
-          <td><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td><td className="record-project">{task.project || "Без проекта"}</td>
+          <td role="cell"><RecordMobileLabel>Статус</RecordMobileLabel><Badge className="record-status-badge" data-status={task.status} appearance="tint" color={task.status === "overdue" ? "danger" : task.status === "completed" ? "success" : task.status === "awaiting_review" ? "warning" : "brand"}>{task.status === "awaiting_review" ? task.authorId === currentUserId ? "Ждёт вашей проверки" : "Ждёт проверки постановщиком" : statuses[task.status]}</Badge>{["high", "urgent"].includes(task.priority) && <small className="record-priority">{task.priority === "urgent" ? "Срочный приоритет" : "Высокий приоритет"}</small>}</td>
+          <td role="cell" className={isTaskOverdue(task, now) ? "record-deadline overdue" : "record-deadline"}><RecordMobileLabel>Крайний срок</RecordMobileLabel>{task.dueLabel}{isTaskOverdue(task, now) && task.status !== "overdue" ? <small className="record-priority">Срок истёк</small> : null}</td>
+          <td role="cell"><RecordMobileLabel>Постановщик</RecordMobileLabel><div className="task-participant-group"><TaskParticipantAvatar person={peopleById.get(task.authorId)} role="Постановщик" token={token} /></div></td><td role="cell" className="record-project"><RecordMobileLabel>Проект</RecordMobileLabel>{task.project || "Без проекта"}</td>
         </tr>)}</tbody>
       </table>
       {!tasks.length && <div className="record-table-empty"><strong>В этом разделе задач нет</strong><span>Измените поиск, переключите фильтр или создайте задачу.</span></div>}

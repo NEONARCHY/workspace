@@ -63,6 +63,16 @@ describe("AdaptiveNavigation overflow", () => {
     expect(more).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("keeps every permitted entry in a scrollable mobile menu instead of More", () => {
+    const entries = [...items, { key: "last", label: "Последний раздел" }];
+    const view = render(<AdaptiveNavigation scrollable items={entries} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);
+    expect(screen.getByRole("button", { name: "Последний раздел" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ещё/ })).not.toBeInTheDocument();
+    view.rerender(<AdaptiveNavigation scrollable items={entries.slice(0, 2)} renderItem={(item) => <button key={item.key} className="rail-action">{item.label}</button>} />);
+    expect(screen.queryByRole("button", { name: "Последний раздел" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Второй" })).toBeInTheDocument();
+  });
+
   it("moves trailing entries to More while keeping the expanded group mounted", () => {
     Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 250 });
     const entries = [...items, { key: "four", label: "Четвёртый" }, { key: "five", label: "Пятый" }];

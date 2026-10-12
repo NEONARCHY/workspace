@@ -49,6 +49,7 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
   const [notice, setNotice] = useState("");
   const [bucket, setBucket] = useState<ChatBucket>(initialBucket);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [contextChatId, setContextChatId] = useState<string>();
   const [morePreviewActive, setMorePreviewActive] = useState(false);
   const moreOpenPending = useRef(false);
   const moreOpenFallback = useRef<number | undefined>(undefined);
@@ -194,6 +195,8 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
         const managedLeave = ["project", "project_hub", "trip"].includes(chat.contextType ?? "");
         const canLeave = managedLeave ? chat.canLeave === true : userManaged && chat.kind === "group" && (chat.canLeave ?? (Boolean(currentMembership) && !(currentMembership?.role === "owner" && chat.members.length < 2)));
         const canSwipe = chat.kind === "direct" && !chat.contextType ? Boolean(onDelete) : canLeave && Boolean(onLeave);
+        const hasContextActions = Boolean(onChange || (pinned && onReorder)
+          || (onLeave && canLeave) || (onDelete && userManaged && (chat.kind === "direct" || chat.canDelete)));
         const startGroup = hasPins && (index === 0 || (pinnedIds.includes(visibleChats[index - 1]!.id) && !pinned));
         const groupLabel = bucket === "task-chats" ? (pinned ? "Закреплённые чаты задач" : "Остальные чаты задач") : bucket === "project-chats" ? "Чаты проектов" : bucket === "trip-chats" ? "Чаты поездок" : (pinned ? "Закреплённые" : "Остальные чаты");
         return [
@@ -202,7 +205,8 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
             data-chat-id={chat.id} data-pinned={pinned}>
             <SwipeRow label={`${chat.kind === "direct" ? "Удалить" : "Выйти"}: ${chat.title}`} disabled={!canSwipe || busy}
               onAction={() => { if (chat.kind === "direct") onDelete?.(chat); else if (canLeave) onLeave?.(chat); }}>
-            <Menu openOnContext>
+            <Menu openOnContext open={contextChatId === chat.id} onOpenChange={(_, data) => setContextChatId(data.open ? chat.id : undefined)}>
+              <div className="chat-row-with-actions">
               <MenuTrigger disableButtonEnhancement>
                 <button className={`chat-row ${chat.id === activeChatId ? "selected" : ""}`} type="button" onClick={() => onSelect(chat.id)}>
                   {peer && token ? <ProfileAvatar person={peer} token={token} size={40} /> : chat.kind === "direct" ? <Avatar name={chat.title} size={40} color="colorful" /> : <ChatIcon iconKey={chat.avatarIconKey ?? defaultChatIcon(chat)} />}
@@ -214,6 +218,9 @@ export function OrganizedChatList({ token, chats, messages, people = [], departm
                   </span>
                 </button>
               </MenuTrigger>
+              {hasContextActions ? <button type="button" className="browser-chat-menu" aria-label={`Действия чата: ${chat.title}`} aria-haspopup="menu" aria-expanded={contextChatId === chat.id}
+                disabled={busy} onClick={() => setContextChatId(chat.id)}><MoreHorizontal20Regular /></button> : null}
+              </div>
               <MenuPopover><MenuList>
                 {!archive && onChange ? <MenuItem icon={pinned ? <PinOff20Regular /> : <Pin20Regular />} onClick={() => void run(() => onChange(chat.id, pinned ? "unpin" : "pin"), pinned ? "Чат откреплён" : "Чат закреплён")}>{pinned ? "Открепить" : "Закрепить"}</MenuItem> : null}
                 {pinned && <MenuItem icon={<ArrowUp20Regular />} disabled={!onReorder || pinIndex === 0 || Boolean(query.trim())} onClick={() => move(chat.id, pinnedIds[pinIndex - 1]!)}>Переместить выше</MenuItem>}

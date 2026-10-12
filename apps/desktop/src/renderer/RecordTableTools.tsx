@@ -9,7 +9,7 @@ export function SortHeading({ column, children, sort, onSort }: {
   column: string; children: ReactNode; sort: TableSort; onSort: (key: string) => void;
 }) {
   const selected = sort.key === column;
-  return <th scope="col" aria-sort={selected ? sort.descending ? "descending" : "ascending" : undefined}>
+  return <th role="columnheader" scope="col" aria-sort={selected ? sort.descending ? "descending" : "ascending" : undefined}>
     <button type="button" onClick={() => onSort(column)}>{children}<span aria-hidden="true">{selected ? sort.descending ? "↓" : "↑" : "↕"}</span></button>
   </th>;
 }
@@ -52,4 +52,9 @@ export function RecordTablePager({ total, paging, label }: {
       </> : null}
     </div>
   </footer>;
+}
+
+/** Labels for the compact layout; native column headings remain available. */
+export function RecordMobileLabel({ children }: { children: ReactNode }) {
+  return <span className="record-mobile-label" aria-hidden="true">{children}</span>;
 }

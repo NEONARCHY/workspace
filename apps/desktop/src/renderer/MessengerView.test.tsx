@@ -82,6 +82,25 @@ function openChatMenu(chatId: string) {
 }
 
 describe("Private messenger", () => {
+  it("offers explicit chat and message menus without right click and keeps the draft on back", async () => {
+    const onPersonalChat = vi.fn().mockResolvedValue(undefined);
+    const { props } = renderMessenger({ onPersonalChat });
+    const input = screen.getByLabelText("Новое сообщение");
+    fireEvent.change(input, { target: { value: "Сохранить мой черновик" } });
+    const message = screen.getByText(initialMessages[0]!.body).closest(".message") as HTMLElement;
+    fireEvent.click(within(message).getByRole("button", { name: "Действия сообщения" }));
+    expect(screen.getByRole("button", { name: "Ответить" })).toBeInTheDocument();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("button", { name: "Ответить" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "К списку чатов" }));
+    expect(input).toHaveValue("Сохранить мой черновик");
+    const chat = initialChats[0]!;
+    fireEvent.click(screen.getByRole("button", { name: `Действия чата: ${chat.title}` }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "В архив" }));
+    await waitFor(() => expect(onPersonalChat).toHaveBeenCalledWith(chat.id, "archive"));
+    expect(input).toHaveValue("Сохранить мой черновик");
+  });
   it("copies the whole message and leaves native field shortcuts unhandled", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });

@@ -17,6 +17,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("reports a rejected save inside the form and preserves fields for retry", async () => {
+  const onClose = vi.fn();
+  const onSubmit = vi.fn().mockRejectedValueOnce(new Error("Тестовая ошибка сохранения")).mockResolvedValueOnce(undefined);
+  render(<FluentProvider theme={webLightTheme}><TaskComposer open people={people} tasks={[]}
+    currentUserId="aziza" initialTitle="Сохранить черновик" initialDescription="Важные детали"
+    onClose={onClose} onSubmit={onSubmit} /></FluentProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Тестовая ошибка сохранения");
+  expect(screen.getByRole("textbox", { name: "Название задачи" })).toHaveValue("Сохранить черновик");
+  expect(screen.getByRole("textbox", { name: "Описание новой задачи" })).toHaveValue("Важные детали");
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить задачу" }));
+  await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+  expect(onSubmit.mock.calls[1]).toEqual(onSubmit.mock.calls[0]);
+});
+
 it("submits the complete assistant-prepared task only after the final form confirmation", async () => {
   const onSubmit = vi.fn(async () => undefined);
   const prepared = resolveAssistantForm({ kind: "task", ready: true, fields: {
