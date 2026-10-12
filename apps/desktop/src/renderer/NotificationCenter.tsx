@@ -102,7 +102,7 @@ export function NotificationCenter({
   const undo = useUndoActions();
   const pending = undo.pending;
   const available = useMemo(() => notifications.filter(item => !pending.some(action => action.scope === "notification" && action.id === item.id)), [notifications, pending]);
-  const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "attention");
+  const [filter, setFilter] = useState<NotificationFilter>(focusNotification ? "all" : "unread");
   const [kindFilter, setKindFilter] = useState<NotificationKindFilter>("all");
   const [query, setQuery] = useState("");
   const streamMotion = useContextMotion(`${filter}:${kindFilter}`);
@@ -213,15 +213,6 @@ export function NotificationCenter({
 
       <div className="notification-metrics" aria-label="Сводка уведомлений">
         <button
-          className={filter === "attention" ? "active" : ""}
-          aria-pressed={filter === "attention"}
-          type="button"
-          onClick={() => setFilter("attention")}
-        >
-          <strong>{attentionCount}</strong>
-          <span><b>Нужно решить</b><small>Рабочие действия</small></span>
-        </button>
-        <button
           className={filter === "unread" ? "active" : ""}
           aria-pressed={filter === "unread"}
           type="button"
@@ -229,6 +220,15 @@ export function NotificationCenter({
         >
           <strong>{unreadCount}</strong>
           <span><b>Новые уведомления</b><small>Ещё не просмотрены</small></span>
+        </button>
+        <button
+          className={filter === "attention" ? "active" : ""}
+          aria-pressed={filter === "attention"}
+          type="button"
+          onClick={() => setFilter("attention")}
+        >
+          <strong>{attentionCount}</strong>
+          <span><b>Нужно решить</b><small>Рабочие действия</small></span>
         </button>
         <button
           className={filter === "all" ? "active" : ""}

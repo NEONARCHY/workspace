@@ -8,6 +8,8 @@ import { CalendarView } from "../src/renderer/CalendarView";
 import { MessengerView } from "../src/renderer/MessengerView";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { ZoomView } from "../src/renderer/ZoomView";
+import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
+import { SectionJump } from "../src/renderer/SectionJump";
 import { ScrollbarEdges } from "../src/renderer/ScrollbarEdges";
 import { UndoActionsProvider } from "../src/renderer/UndoActions";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
@@ -72,6 +74,13 @@ import "../src/renderer/page-canvas.css";
 import "./page-canvas.css";
 
 const nothing = async () => undefined;
+const jumpItems = [
+  ["home", "Главная"], ["tasks", "Задачи"], ["team_overview", "Обзор команды"],
+  ["payment_requests", "Заявки на оплату"], ["ai_referent", "AI Referent"],
+  ["incoming_letters", "Входящие письма"], ["feed", "Лента"],
+  ["notifications", "Уведомления"], ["calendar", "Календарь"],
+  ["messenger", "Мессенджер"], ["projects", "Проекты"],
+] as const;
 const zoomPeople = people.map((person, index) => ({ ...person, departmentId: index > 1 ? "qa-region" : "qa-central" }));
 const zoomDepartments: readonly WorkspaceDepartment[] = [
   { id: "qa-central", name: "Тестовый ЦА", code: "qa-central", scope: "central", assignedUsersCount: 2 },
@@ -142,6 +151,7 @@ function Preview() {
     { id: "payments", label: "Заявки на оплату", icon: <ReceiptMoney20Regular /> },
     { id: "messenger", label: "Мессенджер", icon: <Chat20Regular /> },
     { id: "zoom", label: "Zoom-конференции", icon: <Video20Regular /> },
+    { id: "trips", label: "Командировки", icon: <Calendar20Regular /> },
     { id: "samples", label: "Компоновка разделов", icon: <Grid20Regular /> },
   ];
   return <FluentProvider theme={workspaceTheme} className="app-provider">
@@ -154,6 +164,7 @@ function Preview() {
         </aside>
         <div className="app-stage">
           <header className="global-bar qa-canvas-toolbar"><span>Проверка подложек и отступов · без рабочих данных</span>
+            <SectionJump items={jumpItems.map(([key, label]) => ({ key, label, icon: <Grid20Regular /> }))} onNavigate={() => {}} />
             {section === "samples" && <select aria-label="Макет раздела" value={sample} onChange={event => setSample(Number(event.target.value))}>{roots.map(([label], i) => <option key={label} value={i}>{label}</option>)}</select>}
             {section === "messenger" && <div className="qa-file-drop-actions">
               <button type="button" onClick={() => simulateFileDrag("dragenter")}>QA: готовность принять файл</button>
@@ -169,6 +180,7 @@ function Preview() {
               chatActions={{ create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, transfer: async () => initialChats[0]!, remove: nothing, delete: nothing }}
               onSendMessage={nothing} onSendVoiceMessage={nothing} onReactMessage={nothing} onPinMessage={nothing} onEditMessage={nothing} onDeleteMessage={nothing} onCreateTaskFromMessage={nothing} onDownloadAttachment={nothing} onLoadAttachment={async () => new Blob()} onMarkRead={nothing} />
             : section === "zoom" ? <ZoomView token="qa-only" people={zoomPeople} departments={zoomDepartments} currentUserId={people[0]!.id} registry={{ configured: true, timezone: "Asia/Tashkent", reminderMinutes: 30, bookingHorizonDays: 180, slotMinutes: 15, meetings: [] }} loading={false} onRefresh={nothing} />
+            : section === "trips" ? <TripApprovalsView requests={[]} people={people} currentUser={people[0]!} onCreate={nothing} onUpdate={nothing} onAction={nothing} />
             : <section className={roots[sample]![1]} aria-label={`Макет: ${roots[sample]![0]}`}>
               <WorkspaceSectionHeader motif="tasks"><div><h1>{roots[sample]![0]}</h1><p>Проверка внешнего контейнера, не рабочая страница раздела.</p></div></WorkspaceSectionHeader>
               <div className="qa-canvas-sample-card"><h2>Карточки остаются самостоятельными</h2><p>Корень страницы не перекрашивается. Только существующие белые рабочие панели расширяются вместо внешней стеклянной рамки.</p></div>
