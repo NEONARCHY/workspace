@@ -121,3 +121,13 @@ filename-header hardening. 41 focused renderer/API/navigation tests plus the new
 section-retention scenario passed. Monorepo lint/typecheck/build, separate web build,
 dependency audit and 15 release workflow tests passed. The full renderer run and hosted CI
 are separate checks; use their latest status, not this checkpoint, before merge.
+
+The App workflow tests compile the real Home/project/trip/feed/calendar chunks during
+test collection, outside the business-scenario timer. They still use the production
+React.lazy/Suspense loader and mocked HTTP boundary; this is not a measurement of
+cold chunk download/compilation performance. Form queries are scoped to the actual
+accessible dialog, and unrelated workflows start from Home rather than first opening
+Messenger. The assistant cancellation regression waits for the background button to
+become accessible after Fluent exit and Tabster's asynchronous modal isolation cleanup;
+it does not query hidden controls or remove aria-hidden. Existing timeouts and business
+assertions are unchanged.
