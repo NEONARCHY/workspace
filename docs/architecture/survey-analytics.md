@@ -130,4 +130,11 @@ accessible dialog, and unrelated workflows start from Home rather than first ope
 Messenger. The assistant cancellation regression waits for the background button to
 become accessible after Fluent exit and Tabster's asynchronous modal isolation cleanup;
 it does not query hidden controls or remove aria-hidden. Existing timeouts and business
-assertions are unchanged.
+assertions are unchanged. Pointer activation in modal workflows models the focus that
+fireEvent.click alone omits; the calendar is awaited as an accessible region before its
+heading and composer actions are queried within that region.
+Each App scenario gets a real, separate Griffel renderer. After React cleanup only
+that renderer's tagged style elements are removed and the unmounted Tabster instance
+is disposed, preventing unrelated scenarios' accumulated CSS/focus state from changing
+the next test's timing or modal isolation. Neither renderer nor focus state is reset
+while a test is running; production setup is unchanged.

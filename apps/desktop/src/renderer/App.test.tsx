@@ -1,5 +1,8 @@
 import { dropSpatialCard, installSpatialGeometry } from "./spatial-test-helpers";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render as renderTestingLibrary, screen, waitFor, within } from "@testing-library/react";
+import { createDOMRenderer, RendererProvider } from "@fluentui/react-components";
+import type { ReactElement } from "react";
+import { disposeTabster, getTabster } from "tabster";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -31,6 +34,16 @@ import "./TripApprovalsView";
 import "./FeedView";
 import "./CalendarView";
 import "./SurveyAnalyticsView";
+import "./EmployeesView";
+
+function render(element: ReactElement) {
+  // Each scenario models a new app session. A shared Griffel renderer retains
+  // unrelated screens' CSS, making jsdom accessibility queries slower over time.
+  const renderer = createDOMRenderer(document, {
+    styleElementAttributes: { "data-app-test-renderer": "true" },
+  });
+  return renderTestingLibrary(<RendererProvider renderer={renderer}>{element}</RendererProvider>);
+}
 
 const workflow = {
   id: "workflow",
@@ -1060,6 +1073,13 @@ function mockServer(
   return fetchMock;
 }
 
+function clickWithFocus(control: HTMLElement) {
+  // A pointer click focuses a button before invoking its handler. fireEvent alone
+  // omits that step, which leaves Fluent's modal restoration target on the body.
+  act(() => control.focus());
+  fireEvent.click(control);
+}
+
 async function loginToWorkspace(username = "aziza", targetSection: "home" | "messenger" | "payment_requests" | "projects" = "messenger") {
   await screen.findByRole("button", { name: "Войти" });
   fireEvent.change(screen.getByLabelText(/^Логин/), {
@@ -1109,6 +1129,7 @@ describe("corporate workspace authentication alpha", () => {
     await loginToWorkspace("aziza", "home");
     expect(server.mock.calls.some(([input]) => String(input).includes("/survey-analyses"))).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Аналитика опросов" }));
+    await screen.findByRole("heading", { name: "Аналитика опросов" });
     fireEvent.click(await screen.findByRole("button", { name: /Сохранённый опрос/ }));
     const title = await screen.findByRole("textbox", { name: "Название анализа" });
     fireEvent.change(title, { target: { value: "Несохранённый черновик" } });
@@ -1130,6 +1151,11 @@ describe("corporate workspace authentication alpha", () => {
   });
   afterEach(() => {
     cleanup();
+    // All providers are unmounted before disposing focus state and only the
+    // styles owned by this test's renderer. Nothing is reset inside a scenario.
+    const tabster = getTabster(window);
+    if (tabster) disposeTabster(tabster, true);
+    document.head.querySelectorAll("style[data-app-test-renderer]").forEach(style => style.remove());
     sessionStorage.clear();
     localStorage.clear();
     vi.unstubAllGlobals();
@@ -2183,8 +2209,8 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "home");
 
-    fireEvent.click(screen.getByRole("button", { name: "Согласование поездок" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Новая командировка" }, { timeout: 5000 }));
+    clickWithFocus(screen.getByRole("button", { name: "Согласование поездок" }));
+    clickWithFocus(await screen.findByRole("button", { name: "Новая командировка" }, { timeout: 5000 }));
     const form = within(await screen.findByRole("dialog", { name: "Создать заявку на поездку" }));
     // fireEvent.change does not focus an input as typing in the browser would.
     // Keep Fluent/Tabster's active modal aligned with the form being edited.
@@ -2209,10 +2235,13 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "home");
 
-    fireEvent.click(screen.getByRole("button", { name: "Лента" }));
+    clickWithFocus(screen.getByRole("button", { name: "Лента" }));
     expect(await screen.findByText("Корпоративная лента подключена.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Новое объявление" }));
-    const form = within(await screen.findByRole("dialog", { name: "Новое объявление" }));
+    clickWithFocus(screen.getByRole("button", { name: "Новое объявление" }));
+    const dialog = await screen.findByRole("dialog", { name: "Новое объявление" });
+    const form = within(dialog);
+    act(() => form.getByLabelText("Заголовок публикации").focus());
+    await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
     fireEvent.change(form.getByRole("textbox", { name: "Заголовок публикации" }), {
       target: { value: "Итоги рабочего дня" },
     });
@@ -2260,17 +2289,20 @@ describe("corporate workspace authentication alpha", () => {
     render(<App />);
     await loginToWorkspace("aziza", "home");
 
-    fireEvent.click(within(document.querySelector(".app-rail")!).getByRole("button", {
+    clickWithFocus(within(document.querySelector(".app-rail")!).getByRole("button", {
       name: "Календарь",
     }));
-    expect(await screen.findByRole("heading", { name: "Календарь" })).toBeInTheDocument();
+    const calendar = await screen.findByRole("region", { name: "Календарь" });
+    expect(within(calendar).getByRole("heading", { name: "Календарь" })).toBeInTheDocument();
     expect(screen.queryByRole("button", {
       name: `Открыть задачу: ${initialTasks[0]!.title}`,
     })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
-    const dialog = screen.getByRole("dialog", { name: "Новое мероприятие" });
+    clickWithFocus(within(calendar).getByRole("button", { name: "Новое событие" }));
+    const dialog = await screen.findByRole("dialog", { name: "Новое мероприятие" });
     expect(dialog).toBeInTheDocument();
     const form = within(dialog);
+    act(() => form.getByLabelText("Название события").focus());
+    await waitFor(() => expect(dialog).not.toHaveAttribute("aria-hidden", "true"));
     fireEvent.change(form.getByRole("textbox", { name: "Название события" }), {
       target: { value: "Встреча BP-8" },
     });
@@ -2336,7 +2368,7 @@ describe("corporate workspace authentication alpha", () => {
   it("opens the employee directory and creates a position", async () => {
     mockServer();
     render(<App />);
-    await loginToWorkspace("malika");
+    await loginToWorkspace("malika", "home");
 
     fireEvent.click(screen.getByRole("button", { name: "Сотрудники" }));
     expect(await screen.findByRole("heading", { name: "Сотрудники" })).toBeInTheDocument();
