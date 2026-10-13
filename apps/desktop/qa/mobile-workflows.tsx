@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FluentProvider } from "@fluentui/react-components";
-import type { ApprovalRequestSummary, CalendarEvent, ProjectHubOverview, ProjectHubRequest, TripRequest } from "@yuksalish/contracts";
+import type { ApprovalRequestSummary, CalendarEvent, ProjectHubOverview, ProjectHubRequest, TripRequest, ZoomMeeting } from "@yuksalish/contracts";
 import { ProjectHubView } from "../src/renderer/ProjectHubView";
 import { ApprovalsView } from "../src/renderer/ApprovalsView";
 import { TripApprovalsView } from "../src/renderer/TripApprovalsView";
@@ -131,6 +131,13 @@ const events: CalendarEvent[] = Array.from({ length: 5 }, (_, i) => ({
   attendees: [], canRespond: false, canEdit: true, createdAt: stamp, updatedAt: stamp,
 }));
 const nativeFetch = window.fetch.bind(window);
+const zoomMeetings: ZoomMeeting[] = [{
+  id: "qa-zoom", topic: "Тестовая Zoom-конференция", description: "Синтетическая конференция для проверки календарного окна.",
+  startsAt: new Date(now.getTime() + 30 * 60000).toISOString(),
+  endsAt: new Date(now.getTime() + 90 * 60000).toISOString(), durationMinutes: 60,
+  status: "scheduled", source: "workspace", organizerUserId: people[0]!.id, organizerName: people[0]!.name,
+  participantIds: [people[0]!.id, people[1]!.id], canEdit: false, canCancel: false,
+}];
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.href);
   if (!url.pathname.startsWith("/api/")) return nativeFetch(input, init);
@@ -157,7 +164,7 @@ function Fixture() {
         {page === "projects" || page === "funding" ? <ProjectHubView key={page} mode={page === "projects" ? "projects" : "funding"} token="qa-only" people={people} currentUserId={people[0]!.id} canCreateProject canCreateRequest canViewFunding /> : null}
         {page === "payments" ? <ApprovalsView token="qa-only" canManage={canManage} canCreateRequest currentUserId={people[0]!.id} people={people} positions={[]} requests={payments} calendarEvents={events} attachments={[]} onSaveWorkflow={rejectSave} onPublishWorkflow={rejectSave} onCreateRequest={rejectSave} onAction={rejectSave} onDeleteRequest={rejectSave} onReviseRequest={rejectSave} onUploadAttachments={rejectSave} onDownloadAttachment={rejectSave} /> : null}
         {page === "trips" ? <TripApprovalsView requests={trips} people={people} currentUser={people[0]!} onCreate={rejectSave} onUpdate={rejectSave} onAction={rejectSave} /> : null}
-        {page === "calendar" ? <CalendarView events={events} people={people} currentUserId={people[0]!.id} onCreate={rejectSave} onUpdate={rejectSave} onCancel={rejectSave} /> : null}
+        {page === "calendar" ? <CalendarView events={events} zoomMeetings={zoomMeetings} people={people} currentUserId={people[0]!.id} onCreate={rejectSave} onUpdate={rejectSave} onCancel={rejectSave} /> : null}
       </main>
     </div></div>
   </EmployeeProfileProvider></FluentProvider>;
