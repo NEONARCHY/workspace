@@ -10,16 +10,10 @@ import { hasBlockingDialog, useBlockingDialog } from "@/components/ui/use-blocki
 import { ThinkingOrb } from "@/components/ui/thinking-orbs";
 import { createAssistantChat, deleteAssistantChat, pinAssistantChat, listAssistantChats, loadAssistantMessages, sendAssistantMessage, type AssistantAttachmentInput } from "./workspace-api";
 import { ConfirmActionDialog } from "./ConfirmActionDialog";
-import { WorkspaceSelect } from "./WorkspaceSelect";
+import { AssistantModelControl } from "./AssistantModelControl";
 import { useAssistantOrbJourney } from "./assistant-orb-journey";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
 import { browserNavigationQuery } from "./browser-layout";
-
-const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
-  { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
-  { value: "flash", label: "Рабочий", description: "Задачи, тексты и документы" },
-  { value: "pro", label: "Фокус", description: "Более сложные вопросы" },
-];
 
 const MAX_COMPOSER_HEIGHT = 180;
 const VOICE_LIMIT_MS = 60_000;
@@ -605,7 +599,6 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
     }
   };
 
-  const chosen = modelOptions.find((option) => option.value === model)!;
   const currentAnswer = [...messages].reverse().find((item) => item.role === "assistant");
   const currentActionId = currentAnswer?.id;
   const activeDraft = currentAnswer?.actionDraft && currentAnswer.id !== dismissedDraftId
@@ -891,14 +884,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
                   }
                 }} />
               <div className="assistant-composer-toolbar">
-                <div className="assistant-model-control">
-                  <label className="assistant-model-label" htmlFor="assistant-model">Режим</label>
-                  <WorkspaceSelect id="assistant-model" aria-label="Режим" value={model} disabled={busy}
-                    title={chosen.description}
-                    onChange={(event) => setModel(event.target.value as AssistantModel)}>
-                    {modelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </WorkspaceSelect>
-                </div>
+                <AssistantModelControl value={model} onChange={setModel} mountNode={panelRef.current} disabled={busy || chatBusy || confirmClear || preparingAction} />
                 <div className="assistant-composer-actions">
                   <input ref={fileInputRef} type="file" className="assistant-file-input" tabIndex={-1}
                     accept=".docx,.pdf,.png,.jpg,.jpeg,.webp,.txt,.webm" aria-label="Выбрать вложение"
