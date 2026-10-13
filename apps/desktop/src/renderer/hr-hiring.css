@@ -39,6 +39,11 @@
 .hr-identity > small { display: block; margin-top: 12px; }
 .hr-identity-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 16px; }
 .hr-identity-photos figure { margin: 0; min-width: 0; }
+.hr-identity-photo-frame { display: grid; place-items: center; height: 240px; overflow: hidden; }
+.hr-identity-photo-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hr-identity-expanded { width: min(920px, calc(100vw - 24px)); max-width: 920px; }
+.hr-identity-large-frame { display: grid; place-items: center; height: 65dvh; overflow: auto; }
+.hr-identity-large-frame img { max-width: 100%; max-height: 65dvh; object-fit: contain; }
 .hr-identity-photos img { display: block; max-width: 100%; width: 100%; max-height: 220px; object-fit: contain; border: 1px solid var(--ws-line); border-radius: 12px; }
 .hr-identity-photos figcaption { margin-top: 6px; color: var(--ws-muted); font-size: 12px; }
 .hr-identity-review { display: grid; gap: 12px; margin-top: 20px; border-top: 1px solid var(--ws-line); padding-top: 16px; }

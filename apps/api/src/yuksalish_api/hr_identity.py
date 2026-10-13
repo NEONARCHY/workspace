@@ -12,18 +12,19 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .errors import WorkspaceRepositoryError as Error
 from .hr_hiring_schemas import IdentityRecognition
+from .hr_identity_layout import card_regions, merge_results, prepare_region, td1_identity
 
 MAX_ID_BYTES = 5 * 1024 * 1024
 MAX_OUTPUT = 128 * 1024
 OCR_SLOTS = asyncio.Semaphore(2)
 LABELS = {
     "surname": r"FAMILIYASI|SURNAME|ФАМИЛИЯ|ФАМИЛИЯСИ",
-    "given": r"ISMI|GIVEN NAMES?|FIRST NAME|ИМЯ|ИСМИ",
+    "given": r"ISMI|GIVEN NAME(?:S|\(S\))?|FIRST NAME|ИМЯ|ИСМИ",
     "patronymic": r"OTASINING ISMI|PATRONYMIC|ОТЧЕСТВО|ОТАСИНИНГ ИСМИ",
     "full_name": r"F\.?I\.?O\.?|FULL NAME|ФИО|Ф\.И\.О\.",  # noqa: RUF001 - Cyrillic label
-    "pinfl": r"JSHSHIR|PINFL|PERSONAL (?:NUMBER|NO)|ЖШШИР|ПИНФЛ",
+    "pinfl": r"JSHSHIR|PINFL|SHAXSIY RAQAMI|PERSONAL (?:NUMBER|NO)|ЖШШИР|ПИНФЛ",
     "passport": (
-        r"HUJJAT (?:RAQAMI|NOMERI)|DOCUMENT (?:NUMBER|NO\.?|NR)|"
+        r"HUJJAT (?:RAQAMI|NOMERI)|KARTA RAQAMI|DOCUMENT (?:NUMBER|NO\.?|NR)|"
         r"CARD (?:NUMBER|NO\.?)|ID (?:NUMBER|NO\.?)|"
         r"НОМЕР (?:ДОКУМЕНТА|КАРТЫ)"  # noqa: RUF001 - Cyrillic label
     ),
@@ -94,7 +95,7 @@ def extract_identity(lines: list[str]) -> IdentityRecognition:
                 continue
             tail = line[match.end() :].lstrip(" :/.-")
             # Bilingual labels on one line, value on the next.
-            tail = re.sub(rf"^(?:{pattern})\b[ :/.-]*", "", tail).strip()
+            tail = re.sub(rf"^(?:{pattern})(?!\w)[ :/.-]*", "", tail).strip()
             if not tail and index + 1 < len(rows):
                 tail = rows[index + 1]
             if not tail or re.search(rf"\b(?:{ALL_LABELS})\b", tail):
@@ -134,59 +135,127 @@ def extract_identity(lines: list[str]) -> IdentityRecognition:
         if not value:
             messages.append(f"{title} не распознан однозначно. Можно заполнить вручную.")
     return IdentityRecognition(
-        full_name=full_name, pinfl=pinfl, passport=passport, warnings=list(dict.fromkeys(messages))
+        full_name=full_name,
+        pinfl=pinfl,
+        passport=passport,
+        name_complete=bool(patronymic or (full_name and len(full_name.split()) >= 3)),
+        warnings=list(dict.fromkeys(messages)),
     )
 
 
-async def recognise_identity(content: bytes, executable: Path) -> IdentityRecognition:
+async def recognise_identity(
+    content: bytes, executable: Path, rotation: int = 0
+) -> IdentityRecognition:
     if not executable.is_absolute() or not executable.is_file():
         raise Error(503, "Локальное распознавание не настроено. Данные можно заполнить вручную")
     if OCR_SLOTS.locked():
         raise Error(429, "Распознавание занято. Повторите через несколько секунд")
     async with OCR_SLOTS:
-        image = await asyncio.to_thread(normalise_photo, content)
+        photo: Image.Image = Image.open(BytesIO(await asyncio.to_thread(normalise_photo, content)))
+        if rotation:
+            photo = photo.rotate(-rotation, expand=True)
         try:
-            process = await asyncio.create_subprocess_exec(
-                str(executable),
-                "stdin",
-                "stdout",
-                "-l",
-                "eng+rus+uzb+uzb_cyrl",
-                "--psm",
-                "6",
-                "tsv",
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-                env={"OMP_THREAD_LIMIT": "1"},
-            )
-        except OSError as exc:
-            raise Error(503, "Локальное распознавание временно недоступно") from exc
-        try:
-            async with asyncio.timeout(25):
-                if process.stdin is None or process.stdout is None:
-                    raise Error(503, "Локальное распознавание временно недоступно")
-                process.stdin.write(image)
-                await process.stdin.drain()
-                process.stdin.close()
-                output = bytearray()
-                while chunk := await process.stdout.read(16 * 1024):
-                    output.extend(chunk)
-                    if len(output) > MAX_OUTPUT:
-                        raise Error(422, "На фото слишком много текста. Загрузите только ID-карту")  # noqa: RUF001
-                await process.wait()
-                if process.returncode:
-                    raise Error(
-                        503, "Локальное распознавание не завершено. Проверьте языковые модели"
+            async with asyncio.timeout(40):
+                output = await run_ocr(await asyncio.to_thread(prepare_region, photo), executable)
+                initial = extract_identity(tsv_lines(output))
+                if (
+                    initial.full_name
+                    and initial.name_complete
+                    and initial.pinfl
+                    and initial.passport
+                ):
+                    return initial
+                results = [initial]
+                for card in await asyncio.to_thread(card_regions, photo):
+                    visual = await run_ocr(
+                        await asyncio.to_thread(prepare_region, card), executable, sparse=True
                     )
-                return extract_identity(tsv_lines(output.decode("utf-8", errors="replace")))
-        except OSError as exc:
-            raise Error(503, "Локальное распознавание временно недоступно") from exc
+                    results.append(extract_identity(tsv_lines(visual)))
+                    # A broad band and a tighter TD1 band tolerate borders and stacked scans.
+                    # Every accepted value still needs the full set of checks; never repair digits.
+                    for top in (0.70, 0.745):
+                        area = card.crop(
+                            (
+                                round(card.width * 0.035),
+                                round(card.height * top),
+                                card.width - 1,
+                                card.height,
+                            )
+                        )
+                        mrz = await run_ocr(
+                            await asyncio.to_thread(prepare_region, area, mrz=True),
+                            executable,
+                            mrz=True,
+                        )
+                        checked = td1_identity(mrz.splitlines())
+                        if checked:
+                            results.append(checked)
+                            break
+                return merge_results(results)
         except TimeoutError as exc:
             raise Error(
-                503, "Распознавание заняло слишком много времени. Повторите с чётким фото"  # noqa: RUF001
+                503,
+                "Распознавание не завершено. Повторите с чётким фото сторон карты",  # noqa: RUF001
             ) from exc
-        finally:
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
+
+
+async def run_ocr(
+    image: bytes, executable: Path, *, sparse: bool = False, mrz: bool = False
+) -> str:
+    options = [
+        "-l",
+        "eng" if (sparse or mrz) else "eng+rus+uzb+uzb_cyrl",
+        "--psm",
+        "11" if sparse else "6",
+        "-c",
+        "load_system_dawg=0",
+        "-c",
+        "load_freq_dawg=0",
+    ]
+    if mrz:
+        options += ["-c", "tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"]
+    else:
+        options += ["-c", "tessedit_create_tsv=1"]
+    try:
+        process = await asyncio.create_subprocess_exec(
+            str(executable),
+            "stdin",
+            "stdout",
+            *options,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            env={"OMP_THREAD_LIMIT": "1"},
+        )
+    except OSError as exc:
+        raise Error(503, "Локальное распознавание временно недоступно") from exc
+    try:
+        async with asyncio.timeout(12):
+            if process.stdin is None or process.stdout is None:
+                raise Error(503, "Локальное распознавание временно недоступно")
+            process.stdin.write(image)
+            await process.stdin.drain()
+            process.stdin.close()
+            output = bytearray()
+            while chunk := await process.stdout.read(16 * 1024):
+                output.extend(chunk)
+                if len(output) > MAX_OUTPUT:
+                    raise Error(422, "На фото слишком много текста. Загрузите только ID-карту")  # noqa: RUF001
+            await process.wait()
+            if process.returncode:
+                raise Error(503, "Локальное распознавание не завершено. Проверьте языковые модели")
+            text = output.decode("utf-8", errors="replace")
+            if not mrz and not text.startswith("level\t"):
+                raise Error(503, "Локальное распознавание вернуло неподдерживаемый формат")
+            return text
+    except OSError as exc:
+        raise Error(503, "Локальное распознавание временно недоступно") from exc
+    except TimeoutError as exc:
+        raise Error(
+            503,
+            "Распознавание заняло слишком много времени. Повторите с чётким фото",  # noqa: RUF001
+        ) from exc
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()

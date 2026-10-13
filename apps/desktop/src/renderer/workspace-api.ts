@@ -578,11 +578,11 @@ export function loadHiringRegistry(token: string, offset = 0): Promise<HiringReg
   return apiRequest<HiringRegistry>(`/hr/hiring?offset=${offset}`, {}, token);
 }
 
-export function recognizeHiringIdentity(token: string, file: File): Promise<IdentityRecognition> {
+export function recognizeHiringIdentity(token: string, file: File, rotation = 0): Promise<IdentityRecognition> {
   if (file.size > 5 * 1024 * 1024) throw new Error("Фото ID-карты должно быть не больше 5 МиБ");
-  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/identity-card/recognize`,
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/identity-card/recognize?rotation=${rotation}`,
     { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" }, body: file },
-    async (response) => await response.json() as IdentityRecognition, 45_000);
+    async (response) => await response.json() as IdentityRecognition, 60_000);
 }
 
 export function loadHiringCase(token: string, id: string): Promise<HiringDetail> {

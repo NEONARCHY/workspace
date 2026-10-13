@@ -66,6 +66,7 @@ export interface IdentityRecognition {
   readonly fullName: string | null;
   readonly pinfl: string | null;
   readonly passport: string | null;
+  readonly nameComplete?: boolean;
   readonly warnings: readonly string[];
 }
 export type HiringDocumentKind = "contract" | "order" | "application" | "application-placement" | "employee-scan" | "packet";

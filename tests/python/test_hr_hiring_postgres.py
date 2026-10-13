@@ -32,7 +32,7 @@ async def test_identity_recognition_checks_hr_before_reading_image(hiring_api, m
     client, active, _storage, connection = hiring_api
     calls: list[bytes] = []
 
-    async def fake_ocr(content, executable):
+    async def fake_ocr(content, executable, rotation=0):
         calls.append(content)
         return IdentityRecognition(full_name="SYNTHETIC TESTOV", pinfl="00000000000000")
 
@@ -42,6 +42,8 @@ async def test_identity_recognition_checks_hr_before_reading_image(hiring_api, m
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["pinfl"] == "00000000000000"
+    assert calls == [b"synthetic-photo"]
+    assert (await client.post(endpoint + "?rotation=45", content=b"invalid")).status_code == 422
     assert calls == [b"synthetic-photo"]
     assert not (await connection.execute(select(hiring_cases))).first()
     active["user"] = replace(active["chair"], role="employee")
