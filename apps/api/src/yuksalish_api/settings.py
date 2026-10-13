@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     ai_referent_agent_token: SecretStr = SecretStr("")
     ai_referent_offline_authority_enabled: bool = False
     gemini_api_key: SecretStr = SecretStr("")
+    hr_identity_ocr_executable: Path = Path("/usr/bin/tesseract")
     hisobot_bridge_token: SecretStr = SecretStr("")
     edo_api_url: str = ""
     edo_service_credential: SecretStr = SecretStr("")

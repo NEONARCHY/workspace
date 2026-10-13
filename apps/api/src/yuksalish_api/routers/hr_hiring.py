@@ -14,7 +14,13 @@ from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.errors import WorkspaceRepositoryError
 from yuksalish_api.hr_hiring_pdf import MAX_BYTES
-from yuksalish_api.hr_hiring_schemas import HiringAction, HiringDetail, HiringRegistry, HiringWrite
+from yuksalish_api.hr_hiring_schemas import (
+    HiringAction,
+    HiringDetail,
+    HiringRegistry,
+    HiringWrite,
+    IdentityRecognition,
+)
 from yuksalish_api.hr_hiring_service import (
     act_case,
     detail,
@@ -27,6 +33,7 @@ from yuksalish_api.hr_hiring_service import (
     save_signature,
     upload_document,
 )
+from yuksalish_api.hr_identity import MAX_ID_BYTES, recognise_identity
 from yuksalish_api.object_storage import ObjectStorage, ObjectStorageError
 
 PRIVATE = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
@@ -49,8 +56,9 @@ class PrivateRoute(APIRoute):
             except WorkspaceRepositoryError as error:
                 raise HTTPException(error.status_code, error.detail, headers=PRIVATE) from error
             except ValueError as error:
-                raise HTTPException(422, "Проверьте документ, формат и место подписи",
-                                    headers=PRIVATE) from error
+                raise HTTPException(
+                    422, "Проверьте документ, формат и место подписи", headers=PRIVATE
+                ) from error
             except ObjectStorageError as error:
                 raise HTTPException(
                     503, "Хранилище документов временно недоступно", headers=PRIVATE
@@ -93,6 +101,17 @@ async def put_signature(user: User, connection: Connection, request: Request) ->
         connection, user, storage(request), await bounded_body(request, 1024 * 1024)
     )
     return Response(status_code=204)
+
+
+@router.post("/identity-card/recognize", response_model=IdentityRecognition)
+async def recognise_card(
+    user: User, connection: Connection, request: Request
+) -> IdentityRecognition:
+    await require_hr(connection, user)
+    return await recognise_identity(
+        await bounded_body(request, MAX_ID_BYTES),
+        request.app.state.settings.hr_identity_ocr_executable,
+    )
 
 
 @router.get("/{case_id}", response_model=HiringDetail)

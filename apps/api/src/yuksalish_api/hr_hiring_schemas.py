@@ -124,3 +124,10 @@ class HiringRegistry(ApiModel):
     can_configure_signature: bool
     signature_ready: bool
     signer_name: str
+
+
+class IdentityRecognition(ApiModel):
+    full_name: str | None = None
+    pinfl: str | None = None
+    passport: str | None = None
+    warnings: list[str] = Field(default_factory=list)

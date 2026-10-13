@@ -1,5 +1,5 @@
 import type {
-  HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringDocumentKind,
+  HiringDetail, HiringRegistry, HiringFields, HiringSignatureBox, HiringActionName, HiringDocumentKind, IdentityRecognition,
   SurveyAnalysis, SurveyAnalysisDetail, SurveyAnalysisUpdate, SurveyExport,
   OfficeFilePreview,
   ProjectBudgetSummary,
@@ -576,6 +576,13 @@ export function loadHrOverview(token: string): Promise<HrOverview> {
 
 export function loadHiringRegistry(token: string, offset = 0): Promise<HiringRegistry> {
   return apiRequest<HiringRegistry>(`/hr/hiring?offset=${offset}`, {}, token);
+}
+
+export function recognizeHiringIdentity(token: string, file: File): Promise<IdentityRecognition> {
+  if (file.size > 5 * 1024 * 1024) throw new Error("Фото ID-карты должно быть не больше 5 МиБ");
+  return boundedRequest(`${getApiBaseUrl()}/api/v1/hr/hiring/identity-card/recognize`,
+    { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/octet-stream" }, body: file },
+    async (response) => await response.json() as IdentityRecognition, 45_000);
 }
 
 export function loadHiringCase(token: string, id: string): Promise<HiringDetail> {

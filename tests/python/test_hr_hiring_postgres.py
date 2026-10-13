@@ -18,11 +18,40 @@ from test_hr_hiring_pdf import fields, signature
 from yuksalish_api.auth import AuthenticatedUser, require_user
 from yuksalish_api.database import get_connection
 from yuksalish_api.hr_hiring_pdf import documents
+from yuksalish_api.hr_hiring_schemas import IdentityRecognition
 from yuksalish_api.hr_hiring_tables import hiring_cases, hiring_receipts
 from yuksalish_api.main import create_app
 from yuksalish_api.object_storage import InMemoryObjectStorage, ObjectStorageError
 from yuksalish_api.settings import Settings
 from yuksalish_api.tables import audit_events, hr_settings, module_access_rules, users
+
+
+@pytest.mark.anyio
+@pytest.mark.postgres
+async def test_identity_recognition_checks_hr_before_reading_image(hiring_api, monkeypatch) -> None:
+    client, active, _storage, connection = hiring_api
+    calls: list[bytes] = []
+
+    async def fake_ocr(content, executable):
+        calls.append(content)
+        return IdentityRecognition(full_name="SYNTHETIC TESTOV", pinfl="00000000000000")
+
+    monkeypatch.setattr("yuksalish_api.routers.hr_hiring.recognise_identity", fake_ocr)
+    endpoint = "/api/v1/hr/hiring/identity-card/recognize"
+    response = await client.post(endpoint, content=b"synthetic-photo")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["pinfl"] == "00000000000000"
+    assert calls == [b"synthetic-photo"]
+    assert not (await connection.execute(select(hiring_cases))).first()
+    active["user"] = replace(active["chair"], role="employee")
+    response = await client.post(endpoint, content=b"do-not-read-or-recognise")
+    assert response.status_code == 403
+    assert calls == [b"synthetic-photo"]
+    active["user"] = active["hr"]
+    response = await client.post(endpoint, content=b"x" * (5 * 1024 * 1024 + 1))
+    assert response.status_code == 413
+    assert calls == [b"synthetic-photo"]
 
 
 @pytest.fixture
