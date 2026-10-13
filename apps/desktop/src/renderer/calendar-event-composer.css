@@ -42,6 +42,10 @@
 .calendar-appearance legend { margin-bottom: 10px; color: var(--ws-text); font-size: 13px; font-weight: 600; }
 .calendar-color-options, .calendar-icon-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .calendar-color-options .fui-Button, .calendar-icon-options .fui-Button { gap: 7px; min-height: 36px; border-radius: 10px; }
+.calendar-icon-options .fui-Button { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+.calendar-icon-options .calendar-event-icon { width: 20px; height: 20px; justify-content: center; }
+.calendar-icon-options .calendar-event-icon svg { width: 20px; height: 20px; }
+.calendar-icon-options .calendar-event-icon.is-trees svg { width: 9px; margin-inline-end: -3px; }
 .calendar-color-options .fui-Button[aria-pressed="true"], .calendar-icon-options .fui-Button[aria-pressed="true"] { border-color: var(--ws-link); background: var(--ws-selected); }
 .calendar-color-options .fui-Button > span { width: 13px; height: 13px; flex: none; border-radius: 50%; background: var(--calendar-choice-color); }
 .calendar-custom-color { display: flex; align-items: center; gap: 10px; margin-top: 12px; color: var(--ws-muted); font-size: 12px; }

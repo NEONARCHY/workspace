@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { CalendarEvent, CalendarEventIconKey, CalendarEventInput } from "@yuksalish/contracts";
-import { Button } from "@fluentui/react-components";
+import { Button, Tooltip } from "@fluentui/react-components";
 import { TreePine, Droplets, Ear, Users, Handshake, Plane, FolderKanban, HeartHandshake, Mountain, FileSignature, Files, GraduationCap, Mic, Video } from "lucide-react";
 
 export const calendarIcons = [
@@ -44,8 +44,10 @@ export function CalendarAppearance({ draft, disabled, onChange }: {
       <label className="calendar-custom-color">Свой цвет <input type="color" aria-label="Свой цвет события" value={color} onChange={event => onChange({ ...draft, color: event.target.value })} /></label>
     </fieldset>
     <fieldset disabled={disabled}><legend>Иконка события</legend>
-      <div className="calendar-icon-options">{calendarIcons.map(([key, label]) => <Button key={key} type="button" size="small" aria-pressed={(draft.iconKey ?? "meeting") === key} onClick={() => onChange({ ...draft, iconKey: key })}
-        icon={<CalendarIcon iconKey={key} />}>{label}</Button>)}</div>
+      <div className="calendar-icon-options">{calendarIcons.map(([key, label]) => <Tooltip key={key} content={label} relationship="description">
+        <Button type="button" size="small" aria-label={label} disabled={disabled} aria-pressed={(draft.iconKey ?? "meeting") === key} onClick={() => onChange({ ...draft, iconKey: key })}
+          icon={<CalendarIcon iconKey={key} />} />
+      </Tooltip>)}</div>
     </fieldset>
     <div className="calendar-appearance-preview calendar-agenda-card" style={calendarAppearanceStyle({ color })} aria-label="Предпросмотр оформления события">
       <CalendarIcon iconKey={draft.iconKey} /><strong>{draft.title.trim() || "Ваше событие"}</strong>

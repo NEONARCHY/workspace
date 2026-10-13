@@ -35,6 +35,20 @@ it("filters events and Zoom by a searchable employee selection without server wr
   expect(within(list).queryByText("Анна: планирование")).not.toBeInTheDocument();
   expect(create).not.toHaveBeenCalled();
 });
+it("opens from the employee arrow without a wrapping label reactivating the input", () => {
+  renderCalendar();
+  const picker = screen.getByRole("combobox", { name: "Сотрудник в событиях" });
+  expect(picker.closest("label")).toBeNull();
+  expect(screen.getByLabelText("Сотрудник", { exact: true })).toBe(picker);
+  const arrow = screen.getByRole("button", { name: "Open Сотрудник в событиях" });
+  fireEvent.mouseDown(arrow);
+  fireEvent.mouseUp(arrow);
+  fireEvent.click(arrow);
+  expect(picker).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(screen.getByRole("option", { name: /Вера Ивлева/ }));
+  expect(picker).toHaveValue("Вера Ивлева");
+  expect(picker).toHaveAttribute("aria-expanded", "false");
+});
 it("shows a chosen date range across months, then clears filters", () => {
   renderCalendar();
   fireEvent.change(screen.getByLabelText("События с даты"), { target: { value: "2026-11-01" } });

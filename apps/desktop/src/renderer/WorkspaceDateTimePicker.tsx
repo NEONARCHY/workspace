@@ -19,6 +19,7 @@ interface WorkspaceDateTimePickerProps {
   readonly disabled?: boolean;
   readonly required?: boolean;
   readonly min?: string;
+  readonly dateFormat?: "long" | "numeric";
 }
 
 const monthNames = [
@@ -55,12 +56,12 @@ function initialMonth(value: string, min?: string) {
   return validDate(datePart(value)) ?? validDate(datePart(min ?? "")) ?? new Date();
 }
 
-function displayValue(value: string, mode: PickerMode) {
+function displayValue(value: string, mode: PickerMode, dateFormat: "long" | "numeric") {
   if (!value) return mode === "date" ? "Выберите дату" : mode === "time" ? "Выберите время" : "Выберите дату и время";
   if (mode === "time") return value;
   const date = validDate(datePart(value));
   if (!date) return value;
-  const formatted = date.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
+  const formatted = date.toLocaleDateString("ru-RU", { day: "2-digit", month: dateFormat === "numeric" ? "2-digit" : "long", year: "numeric" });
   return mode === "datetime" && timePart(value) ? `${formatted}, ${timePart(value)}` : formatted;
 }
 
@@ -83,6 +84,7 @@ export function WorkspaceDateTimePicker({
   disabled = false,
   required = false,
   min,
+  dateFormat = "long",
 }: WorkspaceDateTimePickerProps) {
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() => initialMonth(value, min));
@@ -242,7 +244,7 @@ export function WorkspaceDateTimePicker({
         disabled={disabled}
       >
         {mode === "time" ? <Clock20Regular aria-hidden="true" /> : <CalendarLtr20Regular aria-hidden="true" />}
-        <span>{displayValue(value, mode)}</span>
+        <span>{displayValue(value, mode, dateFormat)}</span>
       </button>
     </PopoverTrigger>
     <PopoverSurface className="ws-date-time-popover" aria-label={ariaLabel ?? "Выбор даты и времени"}>

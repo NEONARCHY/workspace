@@ -14,6 +14,7 @@
 .calendar-filter-toggle > span { margin-left: auto; font-size: 20px; }
 .calendar-filter-field { display: grid; grid-template-rows: auto auto; align-content: start; gap: 6px; min-width: 0; color: var(--ws-theme-ink, #293a55); font-size: 12px; font-weight: 600; }
 .calendar-filter-field > :is(.fui-Combobox, .fui-Input, .workspace-datetime-picker) { width: 100%; min-width: 0; }
+.calendar-filters .fui-Combobox { min-height: 40px; }
 .calendar-filter-period { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .calendar-filter-options { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
 .calendar-filter-options > span { flex: 1; color: var(--ws-theme-muted, #708397); font-size: 12px; }
@@ -26,6 +27,8 @@
 .calendar-view-summary { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
 .calendar-view-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .calendar-view-controls > .ws-date-time-trigger { width: auto; max-width: 180px; flex: 0 1 auto; }
+.calendar-view-controls > .ws-date-time-trigger > span { white-space: nowrap; }
+.calendar-view-controls > .ws-date-time-trigger > svg { flex: none; }
 .calendar-view-bar h2 { margin: 0; color: var(--ws-theme-ink, #293a55); font-size: 20px; font-weight: 650; text-transform: capitalize; letter-spacing: -.02em; }
 .calendar-view-bar span[role="status"] { color: var(--ws-theme-muted, #708397); font-size: 12px; }
 .calendar-view-switch { display: flex; gap: 3px; padding: 4px; border-radius: 12px; background: var(--ws-theme-surface-soft, #edf4f6); }

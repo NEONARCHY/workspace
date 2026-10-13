@@ -17,6 +17,7 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
   readonly compact?: boolean;
 }) {
   const bodyId = useId();
+  const employeeInputId = useId();
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState<string>();
   const person = people.find(item => item.id === value.employeeId);
@@ -29,8 +30,9 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
       onClick={() => setExpanded(current => !current)}>Фильтры{activeCount ? ` · ${activeCount}` : ""}<span aria-hidden="true">{expanded ? "−" : "+"}</span></Button>}
     <div id={bodyId} className="calendar-filter-body" hidden={compact && !expanded}>
     <div className="calendar-filter-fields">
-      <label className="calendar-filter-field">Сотрудник
-        <Combobox aria-label="Сотрудник в событиях" placeholder="Все сотрудники" disabled={disabled}
+      <div className="calendar-filter-field">
+        <label htmlFor={employeeInputId}>Сотрудник</label>
+        <Combobox input={{ id: employeeInputId }} aria-label="Сотрудник в событиях" placeholder="Все сотрудники" disabled={disabled}
           value={search ?? person?.name ?? (value.employeeId ? "Выбранный сотрудник" : "Все сотрудники")} selectedOptions={[value.employeeId]}
           onChange={event => setSearch(event.target.value)} onBlur={() => setSearch(undefined)}
           onOptionSelect={(_, data) => { onChange({ ...value, employeeId: data.optionValue ?? "" }); setSearch(undefined); }}>
@@ -40,7 +42,7 @@ export function CalendarFilters({ value, onChange, onReset, people, token, curre
           </Option>)}
           {!candidates.length && <Option disabled value="no-match">Сотрудники не найдены</Option>}
         </Combobox>
-      </label>
+      </div>
       <label className="calendar-filter-field">Поиск события
         <Input aria-label="Поиск событий" placeholder="Название, место или описание" value={value.query} disabled={disabled}
           contentBefore={<Search20Regular />} onChange={(_, data) => onChange({ ...value, query: data.value })} />
