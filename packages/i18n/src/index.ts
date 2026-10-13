@@ -59,7 +59,7 @@ export const productMessages: Readonly<Record<string, Translation>> = {
   "Включить тёмную тему": { uz_cyrl: "Тўқ мавзуни ёқиш", uz_latn: "To‘q mavzuni yoqish" },
   "Как в системе": { uz_cyrl: "Тизимдагидек", uz_latn: "Tizimdagidek" },
   "Лёгкость и спокойные акценты": { uz_cyrl: "Енгиллик ва сокин урғулар", uz_latn: "Yengillik va sokin urg‘ular" },
-  "Глубина и бирюзовое свечение": { uz_cyrl: "Чуқурлик ва мовий ёғду", uz_latn: "Chuqurlik va moviy yog‘du" },
+  "Графитовые поверхности и мягкий свет": { uz_cyrl: "Графит тусли юзалар ва майин ёруғлик", uz_latn: "Grafit tusli yuzalar va mayin yorug‘lik" },
   "Следовать настройке устройства": { uz_cyrl: "Қурилма созламасига амал қилиш", uz_latn: "Qurilma sozlamasiga amal qilish" },
   "Тема применена, но сохранить выбор не удалось. После перезапуска он может сброситься.": { uz_cyrl: "Мавзу қўлланди, лекин танлов сақланмади. Қайта ишга туширилганда у ўзгариши мумкин.", uz_latn: "Mavzu qo‘llandi, lekin tanlov saqlanmadi. Qayta ishga tushirilganda u o‘zgarishi mumkin." },
   "Двухфакторная авторизация": { uz_cyrl: "Икки босқичли аутентификация", uz_latn: "Ikki bosqichli autentifikatsiya" },
