@@ -15,7 +15,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   margin: 0 0 14px;
   padding: 24px clamp(20px, 3vw, 36px);
   overflow: hidden;
-  border: 1px solid rgb(255 255 255 / 82%);
+  border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.82);
   border-radius: 24px 24px 30px 16px;
   color: var(--ws-header-ink);
   background: radial-gradient(circle at 76% 10%, rgb(116 221 211 / 8%), transparent 19rem),
@@ -83,46 +83,46 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
 }
 .ws-section-header :is(.fui-Button, .telegram-access-secondary) {
   min-height: 36px;
-  border-color: rgb(255 255 255 / 40%);
+  border-color: rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.4);
   color: #fff;
   background: #185367;
 }
 .ws-section-header :is(.fui-Button, .telegram-access-secondary):not(:disabled):hover {
-  border-color: rgb(255 255 255 / 72%);
+  border-color: rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.72);
   color: #fff;
   background: #123f54;
 }
 .ws-section-header .ws-section-header-primary {
-  border-color: #fff;
-  color: var(--ws-navy, #293a55);
-  background: #fff;
+  border-color: var(--ws-theme-line, #fff);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
+  background: var(--ws-theme-surface, #fff);
   box-shadow: 0 5px 12px rgb(6 38 56 / 15%);
 }
 .ws-section-header .ws-section-header-primary:not(:disabled):hover {
-  border-color: #eaf8f6;
-  color: var(--ws-navy, #293a55);
-  background: #eaf8f6;
+  border-color: var(--ws-theme-line, #eaf8f6);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
+  background: var(--ws-theme-surface-soft, #eaf8f6);
 }
 .ws-section-header .fui-Button:disabled {
-  border-color: rgb(255 255 255 / 20%);
+  border-color: rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.2);
   color: rgb(255 255 255 / 64%);
   background: #426c7a;
   opacity: 1;
 }
-.ws-section-header :is(button, input):focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.ws-section-header :is(button, input):focus-visible { outline: 2px solid var(--ws-theme-line, #fff); outline-offset: 3px; }
 /* Segmented controls stay light: selected, idle and hover remain distinct. */
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented, .calendar-month-navigation) {
   max-width: 100%;
-  border: 1px solid var(--ws-control-line, #d5e3e8);
-  background: #e7eeee;
-  color: var(--ws-navy, #293a55);
+  border: 1px solid var(--ws-control-line, var(--ws-theme-line, #d5e3e8));
+  background: var(--ws-theme-surface-soft, #e7eeee);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
 }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button {
   min-height: 36px;
   padding: 8px 13px;
   border: 0;
   border-radius: 10px;
-  color: #4e6775;
+  color: var(--ws-theme-muted, #4e6775);
   background: transparent;
   font: inherit;
   font-size: 13px;
@@ -130,25 +130,25 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   white-space: nowrap;
 }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:not(:disabled):hover {
-  color: var(--ws-navy, #293a55);
-  background: rgb(255 255 255 / 56%);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
+  background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.56);
 }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:is(.active, [aria-pressed="true"], [aria-selected="true"]) {
-  color: var(--ws-navy, #293a55);
-  background: #fff;
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
+  background: var(--ws-theme-surface, #fff);
   font-weight: 700;
 }
 .ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) > button:disabled { color: var(--ws-muted); cursor: default; }
 .ws-section-header .calendar-month-navigation .fui-Button {
-  color: var(--ws-navy, #293a55);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
   background: transparent;
   border-color: transparent;
 }
-.ws-section-header .calendar-month-navigation .fui-Button:hover { color: var(--ws-navy, #293a55); background: #dbeaed; }
-.ws-section-header .calendar-month-navigation button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
+.ws-section-header .calendar-month-navigation .fui-Button:hover { color: var(--ws-text, var(--ws-theme-ink, #293a55)); background: var(--ws-theme-wash-teal, #dbeaed); }
+.ws-section-header .calendar-month-navigation button:focus-visible { outline-color: var(--ws-navy, var(--ws-theme-line, #293a55)); outline-offset: -3px; }
 .tasks-view .ws-section-header .view-switch { min-width: 0; max-width: 100%; overflow-x: auto; }
 .tasks-view .ws-section-header .task-calendar-navigation-slot:empty { display: none; }
-.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) button:focus-visible { outline-color: var(--ws-navy, #293a55); outline-offset: -3px; }
+.ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented) button:focus-visible { outline-color: var(--ws-navy, var(--ws-theme-line, #293a55)); outline-offset: -3px; }
 
 /* The employee administration row is a separate working surface, not hero decoration. */
 .employees-header-tools {
@@ -161,7 +161,7 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   padding: 12px 14px;
   border: 1px solid var(--ws-line);
   border-radius: 16px;
-  background: rgb(255 255 255 / 80%);
+  background: rgb(var(--ws-theme-surface-rgb, 255 255 255) / 0.8);
 }
 .employees-header-tools .fui-Switch { margin-right: auto; }
 .workspace-view.employees-view > .ws-section-header {
@@ -214,14 +214,14 @@ body .app-provider :is(.workspace-view, .team-dashboard, .telegram-access-view) 
   width: auto;
   min-width: 0;
   min-height: 38px;
-  border-color: rgb(255 255 255 / 70%);
-  color: var(--ws-navy, #293a55);
-  background: #fff;
+  border-color: rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.7);
+  color: var(--ws-text, var(--ws-theme-ink, #293a55));
+  background: var(--ws-theme-surface, #fff);
 }
 .team-dashboard .ws-section-header .team-dash-hero-summary {
   flex: 0 1 auto;
   padding: 14px 20px;
-  border: 1px solid rgb(255 255 255 / 30%);
+  border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.3);
   color: #fff;
   background: #185367;
 }

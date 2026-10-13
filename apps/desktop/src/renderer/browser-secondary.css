@@ -1,6 +1,11 @@
 /* Browser completion: layout and touch access only. Domain palettes stay owned
    by their existing styles. Keep this layer last, including lazy-loaded pages. */
 .browser-feed-reaction-menu { display: none; }
+/* The team drawer's desktop rail clearance must not subtract 300 px on a
+   phone where the sidebar is closed. Keep titles and close controls visible. */
+@media (max-width: 1023px), (max-width: 1366px) and (any-pointer: coarse) {
+  .web-platform .app-provider .team-dash-flow-drawer { inset-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); width: auto; max-width: none; }
+}
 .feed-reaction-pair { display: inline-flex; align-items: center; }
 .feed-action-error { padding: 12px; border: 1px solid var(--ws-line); border-radius: 12px; color: var(--ws-danger); background: var(--ws-surface); }
 .hr-editor-scrim { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 16px; background: rgb(21 38 46 / 35%); }

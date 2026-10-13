@@ -1,10 +1,10 @@
 /* One selection surface travels beneath stationary labels in both menus. */
 .navigation-sliding.sliding-segmented { position: relative; inset: auto; isolation: isolate; }
 .navigation-sliding > .sliding-segmented-indicator {
-  border: 1px solid rgb(255 255 255 / 72%);
+  border: 1px solid rgb(var(--ws-theme-line-rgb, 255 255 255) / 0.72);
   border-radius: 14px;
-  background: radial-gradient(circle at 12% 50%, rgb(0 145 168 / 10%), transparent 42%), linear-gradient(100deg, #e1f1ee, #eaf3f2);
-  box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(255 255 255 / 82%);
+  background: radial-gradient(circle at 12% 50%, rgb(0 145 168 / 10%), transparent 42%), linear-gradient(100deg, var(--ws-theme-surface-soft, #e1f1ee), var(--ws-theme-surface-soft, #eaf3f2));
+  box-shadow: 0 8px 20px -16px rgb(41 58 85 / 30%), inset 0 1px rgb(var(--ws-theme-highlight-rgb, 255 255 255) / 0.82);
   box-sizing: border-box;
   transition: transform 260ms var(--ws-ease-physical);
 }

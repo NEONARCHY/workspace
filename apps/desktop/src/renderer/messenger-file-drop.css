@@ -2,16 +2,16 @@
 .messenger-file-drop {
   position: absolute; z-index: 10; inset: 8px; display: grid; place-items: center;
   padding: 24px; border: 2px dashed var(--ws-link); border-radius: 20px;
-  background: rgb(234 246 245 / 78%); color: var(--ws-ink); pointer-events: none;
+  background: rgb(var(--ws-theme-surface-soft-rgb, 234 246 245) / 0.78); color: var(--ws-ink); pointer-events: none;
   opacity: 0; visibility: hidden;
   transition: opacity var(--ws-motion-micro) var(--ws-ease), visibility 0s var(--ws-motion-micro);
 }
 .messenger-file-drop-surface[data-file-drop] > .messenger-file-drop { opacity: 1; visibility: visible; transition-delay: 0s; }
-.messenger-file-drop-surface[data-file-drop="blocked"] > .messenger-file-drop { border-color: var(--ws-muted); background: rgb(239 243 245 / 82%); }
-.messenger-file-drop-copy { display: grid; justify-items: center; gap: 12px; max-width: 440px; padding: 24px; border-radius: 16px; background: rgb(234 246 245 / 94%); text-align: center; }
+.messenger-file-drop-surface[data-file-drop="blocked"] > .messenger-file-drop { border-color: var(--ws-muted); background: rgb(var(--ws-theme-surface-soft-rgb, 239 243 245) / 0.82); }
+.messenger-file-drop-copy { display: grid; justify-items: center; gap: 12px; max-width: 440px; padding: 24px; border-radius: 16px; background: rgb(var(--ws-theme-surface-soft-rgb, 234 246 245) / 0.94); text-align: center; }
 .messenger-file-drop-copy strong { font-size: 20px; line-height: 1.4; text-wrap: balance; }
 .messenger-file-drop-copy small { color: var(--ws-muted); font-size: 13px; line-height: 1.5; }
-.messenger-file-drop-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: #d5eae9; color: var(--ws-link); }
+.messenger-file-drop-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 18px; background: var(--ws-theme-wash-teal, #d5eae9); color: var(--ws-link); }
 @media (prefers-reduced-motion: reduce), (forced-colors: active) { .messenger-file-drop { transition: none; } }
 @media (forced-colors: active) {
   .messenger-file-drop, .messenger-file-drop-surface[data-file-drop="blocked"] > .messenger-file-drop, .messenger-file-drop-copy { background: Canvas; color: CanvasText; border-color: Highlight; }

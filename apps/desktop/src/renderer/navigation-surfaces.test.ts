@@ -19,7 +19,7 @@ function luminance(hex: string) {
 it("keeps header tabs readable with a strong selected state and shared typography", () => {
   const idle = block(headerCss, `${tabs} > button`);
   const selected = block(headerCss, `${tabs} > button:is(.active, [aria-pressed="true"], [aria-selected="true"])`);
-  const idleColor = idle.match(/color:\s*(#[a-f0-9]{6});/)![1]!;
+  const idleColor = idle.match(/color:[^;]*(#[a-f0-9]{6})/)![1]!;
   const selectedColor = selected.match(/color:[^;]*(#[a-f0-9]{6})/)![1]!;
   for (const [ink, surface] of [[idleColor, "#e7eeee"], [selectedColor, "#ffffff"]]) {
     const a = luminance(ink!), b = luminance(surface!);

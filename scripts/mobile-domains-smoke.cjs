@@ -3,7 +3,9 @@ const { chromium } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const output = path.resolve('tmp/mobile-domains');
+const output = path.resolve(process.env.QA_THEME === 'dark' ? 'tmp/dark-theme/domains' : 'tmp/mobile-domains');
+const { inspect } = require('./dark-theme-smoke.cjs');
+const audits = [];
 fs.mkdirSync(output, { recursive: true });
 const cases = [[320,700,true],[390,844,true],[768,1024,true],[1024,768,true],[1180,820,true],[1440,900,false]];
 const report = [];
@@ -25,7 +27,13 @@ const report = [];
       const page = await context.newPage();
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
-      const shot = async suffix => page.screenshot({ path: path.join(output, `${width}x${height}-${suffix}.png`) });
+      const shot = async suffix => {
+        const name = `${width}x${height}-${suffix}`;
+        await page.screenshot({ path: path.join(output, name + '.png') });
+        if (process.env.QA_THEME === 'dark') {
+          audits.push(await inspect(page, name)); fs.writeFileSync(path.join(output, 'visual-audit.json'), JSON.stringify(audits, null, 2));
+        }
+      };
       const noOverflow = async () => assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, 'Document overflow');
       const visibleBounds = async selector => {
         const box = await page.locator(selector).boundingBox();
@@ -33,7 +41,7 @@ const report = [];
         return box;
       };
       try {
-        await page.goto('http://127.0.0.1:5173/qa/mobile-domains.html');
+        await page.goto('http://127.0.0.1:5173/qa/mobile-domains.html' + (process.env.QA_THEME === 'dark' ? '?theme=dark' : ''));
         await page.getByRole('heading', { name: 'Сообщения' }).waitFor();
         await noOverflow();
         if (width <= 800) await page.locator('.chat-row').first().click();

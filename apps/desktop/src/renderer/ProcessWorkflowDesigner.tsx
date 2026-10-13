@@ -8,6 +8,7 @@ import { WorkspaceSelect } from "./WorkspaceSelect";
 import { PersonPicker } from "./PersonPicker";
 import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
 import { nextAvailableStageColor, processStageColor, workflowStageColor } from "./workflow-stage-colors";
+import { useFrameNodeChanges } from "./useFrameNodeChanges";
 
 type FlowNode = Node<ApprovalNodeData>;
 interface FlowEdgeData extends Record<string, unknown> { readonly outcome: string; readonly condition: Readonly<Record<string, unknown>>; readonly sortOrder: number; }
@@ -32,7 +33,8 @@ const clone = (nodes: readonly FlowNode[], edges: readonly FlowEdge[], selectedI
 
 export function ProcessWorkflowDesigner({ workflow, processName, accent, people = [], departments, positions = [], onSave, onPublish }: Props) {
   const preparedNodes = useMemo(() => toNodes(workflow, accent), [accent, workflow]); const preparedEdges = useMemo(() => toEdges(workflow), [workflow]);
-  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(preparedNodes); const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(preparedEdges);
+  const [nodes, setNodes, applyNodesChange] = useNodesState<FlowNode>(preparedNodes); const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(preparedEdges);
+  const onNodesChange = useFrameNodeChanges(applyNodesChange);
   const [selectedId, setSelectedId] = useState(preparedNodes[0]?.id ?? ""); const [baseline, setBaseline] = useState(() => keyOf(preparedNodes, preparedEdges));
   const [undoStack, setUndoStack] = useState<readonly Snapshot[]>([]); const [redoStack, setRedoStack] = useState<readonly Snapshot[]>([]); const [busy, setBusy] = useState(false); const [message, setMessage] = useState(""); const dragStart = useRef<Snapshot | undefined>(undefined);
   const selected = nodes.find((node) => node.id === selectedId); const changed = keyOf(nodes, edges) !== baseline;

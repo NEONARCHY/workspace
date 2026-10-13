@@ -1,6 +1,6 @@
 /* Working canvas: the toolbar stays above it; its bottom meets the navigation rail. */
 .project-hub-view.workspace-view {
-  --project-muted: var(--ws-muted, #566b7c);
+  --project-muted: var(--ws-muted, var(--ws-theme-muted, #566b7c));
   display: flex;
   flex-direction: column;
   height: calc(100% - var(--ws-view-edge, 4px));
@@ -10,7 +10,7 @@
   overflow-x: hidden;
   overflow-y: auto;
   container: project-space / inline-size;
-  background: var(--ws-muted-surface, #f2f6f6);
+  background: var(--ws-muted-surface, var(--ws-theme-surface, #f2f6f6));
 }
 .project-hub-view.workspace-view > .project-hub-header {
   flex: 0 0 auto;
@@ -29,7 +29,7 @@
   align-self: stretch;
   border: 1px solid var(--ws-line);
   border-radius: 18px;
-  background: #fff;
+  background: var(--ws-theme-surface, #fff);
   box-shadow: none;
 }
 .project-hub-view .project-hub-index { display: flex; flex-direction: column; padding: 12px; overflow: hidden; }
@@ -57,7 +57,7 @@
 .project-hub-view .project-hub-funding-lane.approval-column { height: 100%; min-height: 0; max-height: none; border-radius: 18px; }
 .project-hub-view .project-hub-funding-lane .approval-column-total > span,
 .project-hub-view .project-hub-funding-lane .approval-column-empty { font-size: 12px; color: var(--project-muted); }
-.project-hub-view .project-hub-funding-detail { position: static; min-height: 0; max-height: 100%; border: 1px solid var(--ws-line); background: #fff; box-shadow: none; }
+.project-hub-view .project-hub-funding-detail { position: static; min-height: 0; max-height: 100%; border: 1px solid var(--ws-line); background: var(--ws-theme-surface, #fff); box-shadow: none; }
 .fui-DialogSurface.project-hub-dialog { max-width: 100%; max-height: 100%; container: project-dialog / inline-size; }
 .project-hub-dialog .scoped-people-checkboxes > .employee-scope-switch { display: flex; width: 100%; box-sizing: border-box; margin-bottom: 12px; }
 .project-hub-dialog .employee-scope-switch > button { white-space: nowrap; min-height: 38px; padding-inline: 8px; }
@@ -71,15 +71,15 @@
   padding: 16px;
   border: 1px dashed var(--ws-control-line);
   border-radius: 14px;
-  background: linear-gradient(110deg, #eaf7f6, #fff 80%);
+  background: linear-gradient(110deg, var(--ws-theme-surface-soft, #eaf7f6), var(--ws-theme-surface, #fff) 80%);
   text-align: left;
 }
 .project-hub-dialog .project-hub-request-files .ws-file-dropzone.is-dragging { border-style: solid; border-color: var(--ws-link); background: var(--ws-selected); }
 .project-hub-dialog .project-hub-request-files .ws-file-dropzone-copy { min-width: 0; align-items: flex-start; }
-.project-hub-dialog .project-hub-request-files .ws-file-dropzone-icon { margin: 0; background: #fff; color: var(--ws-link); }
+.project-hub-dialog .project-hub-request-files .ws-file-dropzone-icon { margin: 0; background: var(--ws-theme-surface, #fff); color: var(--ws-link); }
 .project-hub-dialog .project-hub-request-files .ws-file-dropzone-copy small { color: var(--ws-muted); line-height: 1.5; }
-.project-hub-dialog .project-hub-request-files .ws-file-dropzone-action { margin: 0; color: var(--ws-link); background: #fff; }
-.project-hub-dialog .project-hub-request-files > .project-hub-file-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 12px; background: #fff; }
+.project-hub-dialog .project-hub-request-files .ws-file-dropzone-action { margin: 0; color: var(--ws-link); background: var(--ws-theme-surface, #fff); }
+.project-hub-dialog .project-hub-request-files > .project-hub-file-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-theme-surface, #fff); }
 .project-hub-file-row > svg { flex: 0 0 auto; color: var(--ws-link); }
 .project-hub-file-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
 .project-hub-file-copy strong { color: var(--ws-text); font-size: 14px; overflow-wrap: anywhere; }

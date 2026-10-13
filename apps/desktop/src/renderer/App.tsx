@@ -87,7 +87,9 @@ import { workspacePlatform } from "./platform-adapter";
 import { useNotificationSounds } from "./useNotificationSounds";
 import { resolveAssistantForm } from "./assistant-form-handoff";
 import { WebUpdateNotice } from "./WebUpdateNotice";
-import { workspaceTheme } from "./workspace-theme";
+import { workspaceTheme, workspaceDarkTheme } from "./workspace-theme";
+import { useColorTheme } from "./color-theme";
+import { ColorThemeToggle } from "./ColorThemeToggle";
 import { SectionJump } from "./SectionJump";
 import { ConnectionIndicator, WorkspaceIdentity } from "./WorkspaceIdentity";
 import { CompanyLogo } from "./CompanyLogo";
@@ -426,6 +428,8 @@ export function App() {
   const railCollapsed = !browserCompact && (railPreference ?? compactWindow);
   const closeBrowserMenu = () => { setBrowserMenuOpen(false); if (browserCompact) setAiModulesOpen(false); };
   const { theme: sidebarTheme } = useSidebarTheme(session?.user.id);
+  const { theme: colorTheme } = useColorTheme(session?.user.id);
+  const fluentTheme = colorTheme === "dark" ? workspaceDarkTheme : workspaceTheme;
   const [backgroundError, setBackgroundError] = useState("");
   const [updatePolicy, setUpdatePolicy] = useState<DesktopUpdatePolicy>();
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>({ phase: "idle" });
@@ -1772,7 +1776,7 @@ export function App() {
 
   if (session === undefined) {
     return (
-      <FluentProvider theme={workspaceTheme} className="app-provider">
+      <FluentProvider theme={fluentTheme} className="app-provider">
         <LoginView
           busy={authBusy || sessionRestoring}
           error={authError}
@@ -1791,7 +1795,7 @@ export function App() {
   }
 
   if (workspacePlatform.kind === "electron" && requiresDesktopUpdate(updatePolicy, workspacePlatform.version)) {
-    return <FluentProvider theme={workspaceTheme} className="app-provider">
+    return <FluentProvider theme={fluentTheme} className="app-provider">
       <DesktopUpdateGate
         requiredVersion={updatePolicy!.minimumVersion!}
         currentVersion={workspacePlatform.version}
@@ -1950,7 +1954,7 @@ export function App() {
   />;
 
   return (
-    <FluentProvider theme={workspaceTheme} className="app-provider">
+    <FluentProvider theme={fluentTheme} className="app-provider">
       <UndoActionsProvider key={workspace.currentUser.id}>
       <WorkspacePeopleProvider people={workspace.people}>
       <EmployeeProfileProvider onOpenProfile={setProfileUserId} onPrepareProfile={(userId) => {
@@ -2042,6 +2046,7 @@ export function App() {
               setFocusTarget(undefined); setActiveSection(key);
             }} />
             <div className="workspace-top-context"><ConnectionIndicator detail={connectionDetail} error={Boolean(backgroundError)} updateAvailable={webUpdateAvailable} onSwitchNetwork={supportsDualApiOrigins() ? handleSwitchNetwork : undefined} switchingNetwork={switchingNetwork} /><WorkdayControl token={session.accessToken} />
+              <ColorThemeToggle userId={session.user.id} />
               {canUseAssistant && <YuksalishAssistant key={session.user.id} token={session.accessToken}
                 onOpenReference={openAssistantReference} onPrepareAction={prepareAssistantAction} />}
               <WorkspaceIdentity person={workspace.currentUser} token={session.accessToken} onProfile={() => setProfileUserId(workspace.currentUser.id)} onSupport={() => { setSupportFocusRequestId(undefined); setSupportOpen(true); }} supportMode={supportRegistry?.mode ?? (isAdmin ? "inbox" : "support")} supportIndicator={supportRegistry?.indicator} supportUnreadCount={supportRegistry?.unreadResponseCount} onSettings={() => setAccountOpen(true)} onLogout={() => void handleLogout()} /></div>

@@ -10,7 +10,7 @@ import { TaskComposer } from "../src/renderer/TaskComposer";
 import { EmployeeProfileProvider } from "../src/renderer/EmployeeProfileLink";
 import { initialChats, initialMessages, initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import { observeBrowserViewport } from "../src/renderer/browser-layout";
-import { workspaceTheme } from "../src/renderer/workspace-theme";
+import { useQaTheme } from "./color-theme";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -75,6 +75,7 @@ const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({ id: `mobile-person-${i}`, name: `Тестовый сотрудник ${i + 1}`, username: `synthetic-${i}`, jobTitle: "Длинная тестовая должность сотрудника регионального подразделения", role: "employee", status: "active" }));
 const chatActions = { create: async () => initialChats[0]!, update: async () => initialChats[0]!, add: async () => initialChats[0]!, setMember: async () => initialChats[0]!, remove: async () => undefined, transfer: async () => initialChats[0]!, delete: async () => undefined, dismiss: async () => undefined };
 function Fixture() {
+  const workspaceTheme = useQaTheme();
   const [page, setPage] = useState("messenger");
   const [form, setForm] = useState(false);
   const [selected, setSelected] = useState(new Set<string>());

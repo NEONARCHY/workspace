@@ -1,11 +1,11 @@
 /* Semantic colour vocabulary. Surfaces and interaction feedback are owned by
    spatial-workspace.css; there is no independent halo layer over every control. */
 :root {
-  --context-brand: #0091a8;
-  --context-success: #448876;
-  --context-warning: #956b32;
-  --context-danger: #a64959;
-  --context-secondary: #7778a4;
+  --context-brand: var(--ws-theme-ink-teal, #0091a8);
+  --context-success: var(--ws-theme-ink-teal, #448876);
+  --context-warning: var(--ws-theme-ink-warning, #956b32);
+  --context-danger: var(--ws-theme-ink-danger, #a64959);
+  --context-secondary: var(--ws-theme-ink-blue, #7778a4);
 }
 .animated-amount { position: relative; display: block; font-variant-numeric: tabular-nums; }
 .amount-accessible { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

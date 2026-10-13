@@ -33,11 +33,11 @@ body .app-provider .notification-row {
 }
 body .app-provider .notification-row > .list-row-hover-wash {
   background: linear-gradient(90deg,
-    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), white),
-    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), white));
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), var(--ws-theme-surface, white)),
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-end), var(--ws-theme-surface, white)));
 }
 /* One layer across the whole row, not one repeating band per cell. */
-body .app-provider .record-table .record-row { background-color: white; }
+body .app-provider .record-table .record-row { background-color: var(--ws-theme-surface, white); }
 body .app-provider .record-table .record-row > td { position: static; background-color: transparent; }
 body .app-provider .record-table .record-row.selected > td:first-child:not(.record-title) { background-image: none; }
 /* Deadline alone owns the semantic wash; priority remains a text label. */
@@ -66,9 +66,9 @@ body .app-provider .task-record-table .record-row:is(:hover, :focus-within, .sel
    starting a second gradient abruptly at the first column's edge. */
 body .app-provider .task-record-table .record-row[data-deadline] .list-row-hover-wash {
   background: linear-gradient(90deg,
-    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), white),
-    color-mix(in srgb, var(--row-hover-accent) 10%, white) 42%,
-    white 100%);
+    color-mix(in srgb, var(--row-hover-accent) var(--row-wash-start), var(--ws-theme-surface, white)),
+    color-mix(in srgb, var(--row-hover-accent) 10%, var(--ws-theme-surface, white)) 42%,
+    var(--ws-theme-surface, white) 100%);
   transform: none;
   transition: opacity var(--ws-motion-fast) var(--ws-ease);
   box-shadow: none;
@@ -88,7 +88,7 @@ body .app-provider .record-table .record-row:is(:hover, :focus-within) {
 }
 body .app-provider .team-dash-person.selected { transform: none; }
 body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):not(.selected):hover {
-  background-color: #f5f9fa;
+  background-color: var(--ws-theme-surface, #f5f9fa);
 }
 @media (hover: hover) and (pointer: fine) {
   body .app-provider :is(.team-dash-task, .team-dash-person, .trip-list-item):hover::before,

@@ -46,7 +46,7 @@
   padding: 18px;
   border-radius: 22px;
   scrollbar-gutter: stable;
-  background: #fff;
+  background: var(--ws-theme-surface, #fff);
 }
 .calendar-view:not(.task-calendar-embedded) .calendar-side:has(> .calendar-detail) {
   display: flex;
@@ -60,7 +60,7 @@
   min-height: 0;
   padding: 18px;
   border-radius: 20px;
-  background: #fff;
+  background: var(--ws-theme-surface, #fff);
   overflow-y: auto;
   scrollbar-gutter: stable;
 }

@@ -65,6 +65,8 @@ import "./sidebar-theme.css";
 import "./page-canvas.css";
 import "./browser-responsive.css";
 import "./browser-secondary.css";
+import "./dark-theme.css";
+import { initializeColorTheme } from "./color-theme";
 import { workspacePlatform } from "./platform-adapter";
 import { observeBrowserViewport } from "./browser-layout";
 
@@ -79,6 +81,7 @@ if (workspacePlatform.kind === "electron" && navigator.userAgent.includes("Windo
 }
 
 window.addEventListener("error", (event) => reportDiagnostic("window-error", event.error));
+initializeColorTheme();
 window.addEventListener("unhandledrejection", (event) => reportDiagnostic("unhandled-rejection", event.reason));
 
 const root = document.getElementById("root");

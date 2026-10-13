@@ -3,7 +3,9 @@ const { chromium, webkit } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const output = path.resolve('tmp/mobile-secondary');
+const output = path.resolve(process.env.QA_THEME === 'dark' ? 'tmp/dark-theme/secondary' : 'tmp/mobile-secondary');
+const { inspect } = require('./dark-theme-smoke.cjs');
+const audits = [];
 fs.mkdirSync(output, { recursive: true });
 const cases = [[320,700,true],[390,844,true],[768,1024,true],[1024,768,true],[1180,820,true],[1440,900,false]];
 const report = [];
@@ -24,7 +26,14 @@ const report = [];
         const page = await context.newPage(), errors = [];
         page.setDefaultTimeout(15000);
         page.on('pageerror', e => { errors.push(e.message); console.error('page error: '+e.message); });
-        const shot = async suffix => page.screenshot({ path: path.join(output, engine + '-' + width + '-' + suffix + '.png') });
+        const shot = async suffix => {
+          const name = engine + '-' + width + '-' + suffix;
+          await page.screenshot({ path: path.join(output, name + '.png') });
+          if (process.env.QA_THEME === 'dark') {
+            audits.push(await inspect(page, name));
+            fs.writeFileSync(path.join(output, 'visual-audit.json'), JSON.stringify(audits, null, 2));
+          }
+        };
         const bounds = async selector => {
           const box = await page.locator(selector).first().boundingBox();
           assert(box && box.x >= -1 && box.x + box.width <= width + 1, selector + ' X bounds ' + JSON.stringify(box));
@@ -52,7 +61,7 @@ const report = [];
           await page.evaluate(() => { visualViewport.shortHeight = null; visualViewport.offsetTop = 0; visualViewport.dispatchEvent(new Event('resize')); });
           await page.waitForTimeout(100);
         };
-        await page.goto('http://127.0.0.1:5173/qa/mobile-secondary.html');
+        await page.goto('http://127.0.0.1:5173/qa/mobile-secondary.html' + (process.env.QA_THEME === 'dark' ? '?theme=dark' : ''));
         await page.getByRole('heading', { name: 'Лента', exact: true }).waitFor();
         await overflow(); await bounds('.feed-card');
         if (touch) {
