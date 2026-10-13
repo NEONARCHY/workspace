@@ -13,9 +13,10 @@ interface ConfirmActionDialogProps {
   readonly busy?: boolean;
   readonly onCancel: () => void;
   readonly onConfirm: () => void | Promise<void>;
+  readonly onExited?: () => void;
 }
 
-export function ConfirmActionDialog({ open, title, message, confirmLabel = "Удалить", busyLabel = "Удаляем…", busy = false, onCancel, onConfirm }: ConfirmActionDialogProps) {
+export function ConfirmActionDialog({ open, title, message, confirmLabel = "Удалить", busyLabel = "Удаляем…", busy = false, onCancel, onConfirm, onExited }: ConfirmActionDialogProps) {
   const messageId = useId();
   const [content, setContent] = useState({ title, message, confirmLabel, busyLabel, busy });
   // Callers clear the target when closing; Fluent keeps its surface for exit
@@ -25,7 +26,10 @@ export function ConfirmActionDialog({ open, title, message, confirmLabel = "Уд
     || content.confirmLabel !== confirmLabel || content.busyLabel !== busyLabel || content.busy !== busy)) {
     setContent({ title, message, confirmLabel, busyLabel, busy });
   }
-  return <Dialog open={open} onOpenChange={(_, data) => { if (open && !data.open && !busy) onCancel(); }}>
+  return <Dialog open={open} surfaceMotion={{ outScale: 1, inScale: 1, duration: 240, exitDuration: 160,
+    easing: "cubic-bezier(0.2, 0, 0, 1)", exitEasing: "cubic-bezier(0.4, 0, 1, 1)",
+    onMotionFinish: (_, data) => { if (data.direction === "exit") onExited?.(); } }}
+    onOpenChange={(_, data) => { if (open && !data.open && !busy) onCancel(); }}>
     <DialogSurface className="confirm-action-dialog" aria-describedby={messageId} aria-busy={content.busy}>
       <DialogBody>
         <DialogTitle>{content.title}</DialogTitle>

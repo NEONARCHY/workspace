@@ -142,6 +142,7 @@ import {
   createWorkspaceFeedPost,
   deleteWorkspaceFeedPost,
   deleteWorkspaceTask,
+  deleteWorkspaceTaskAttachment,
   decideWorkspaceTaskDeadline,
   createWorkspaceProject,
   createWorkspaceTask,
@@ -866,6 +867,13 @@ export function App() {
   const handleDownloadAttachment = async (attachment: WorkspaceAttachment) => {
     if (fileViewerKind(attachment) === "unsupported") await handleSaveAttachment(attachment);
     else setPreviewAttachment(attachment);
+  };
+
+  const handleDeleteTaskAttachment = async (attachment: WorkspaceAttachment) => {
+    if (!session || attachment.ownerType !== "task") throw new Error("Войдите снова");
+    await deleteWorkspaceTaskAttachment(session.accessToken, attachment.ownerId, attachment.id);
+    setWorkspace(current => ({ ...current, attachments: current.attachments.filter(item => item.id !== attachment.id) }));
+    setPreviewAttachment(current => current?.id === attachment.id ? undefined : current);
   };
 
   const handleLoadAttachment = useCallback(async (attachment: WorkspaceAttachment, signal?: AbortSignal) => {
@@ -2222,6 +2230,7 @@ export function App() {
                 onExtendDeadline={handleExtendTaskDeadline}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onUploadAttachments={handleUploadTaskAttachments}
+                onDeleteAttachment={handleDeleteTaskAttachment}
                 onDownloadAttachment={handleDownloadAttachment}
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />

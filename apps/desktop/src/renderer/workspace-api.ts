@@ -1702,6 +1702,11 @@ export function loadPersonalEfficiency(token: string, period?: string): Promise<
   return apiRequest<PersonalEfficiency>(`/profile/me/efficiency${suffix}`, {}, token);
 }
 
+export function deleteWorkspaceTaskAttachment(token: string, taskId: string, attachmentId: string): Promise<void> {
+  return apiRequest<void>(`/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}`,
+    { method: "DELETE" }, token);
+}
+
 export function loadWorkspaceEfficiency(
   token: string,
   period?: string,

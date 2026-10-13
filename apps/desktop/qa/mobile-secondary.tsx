@@ -5,6 +5,7 @@ import { Button, FluentProvider } from "@fluentui/react-components";
 import type { AbsenceRequest, AIReferentRegistry, DirectoryBootstrap, HiringDetail, HiringFields, HiringRegistry, SupportRegistry, AssistantChat, EdoIncomingLetter, EmployeeRecognitionProfile, FeedPost, HisobotProfile, HisobotReport, HrOverview, MembersRegistry, NotificationPreferences, PersonalEfficiency, PersonalEfficiencyTask, TelegramAccessRegistry, WorkspaceNotification, WorkspacePerson, ZoomMeetingsRegistry } from "@yuksalish/contracts";
 import { FeedView } from "../src/renderer/FeedView";
 import { TasksView } from "../src/renderer/TasksView";
+import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { EmployeesView } from "../src/renderer/EmployeesView";
 import { SidebarVisibilityManagement } from "../src/renderer/SidebarVisibilityManagement";
@@ -283,6 +284,15 @@ window.fetch = async (input, init) => {
 function Fixture() {
   const workspaceTheme = useQaTheme();
   const [section, setSection] = useState("feed"), [account, setAccount] = useState(false), [person, setPerson] = useState(false), [sidebar, setSidebar] = useState(false), [supportOpen, setSupportOpen] = useState(false), [fileOpen, setFileOpen] = useState(false);
+  const attachmentQa = new URLSearchParams(location.search).has("attachments");
+  const [taskFiles, setTaskFiles] = useState<WorkspaceAttachment[]>(() => attachmentQa ? ["Свой документ", "Документ коллеги"].map((name, index) => ({
+    id: `qa-file-${index}`, ownerType: "task", ownerId: initialTasks[0]!.id, fileName: `${name}.pdf`,
+    contentType: "application/pdf", byteSize: 10240, sha256: "qa", uploadedByUserId: index ? "colleague" : user.id,
+    documentRole: "general", createdAt: stamp,
+  })) : []);
+  const taskRecords = attachmentQa ? initialTasks.map((task, index) => index ? task : {
+    ...task, dueAt: new Date(2099, 9, 13, 18).toISOString(), dueLabel: "13.10.2099, 13:00",
+  }) : initialTasks;
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
   return <FluentProvider theme={workspaceTheme} className="app-provider"><EmployeeProfileProvider onOpenProfile={() => setPerson(true)}>
     <div className="app-shell browser-compact"><div className="app-stage">
@@ -292,7 +302,8 @@ function Fixture() {
         </select><Button onClick={() => setAccount(true)} style={{ minHeight: 48 }}>Настройки</Button><Button onClick={() => setPerson(true)} style={{ minHeight: 48 }}>Профиль</Button><Button onClick={() => setSidebar(true)}>Меню сотрудника</Button><Button onClick={() => setSupportOpen(true)}>Поддержка QA</Button><Button onClick={() => setFileOpen(true)}>Файл QA</Button>
       </header><main className="app-content">
         <ThemeExtraPages section={section} directory={directory} />
-        {section === "tasks" && <TasksView token="qa-only" tasks={initialTasks} attachments={[]} people={people} currentUserId={user.id} efficiencyLoading={false} onLoadEfficiency={() => {}}
+        {section === "tasks" && <TasksView token="qa-only" tasks={taskRecords} attachments={taskFiles} people={attachmentQa ? people.map(person => person.id === user.id ? user : person) : people} currentUserId={user.id} efficiencyLoading={false} onLoadEfficiency={() => {}}
+          onDeleteAttachment={attachmentQa ? async file => { setTaskFiles(current => current.filter(item => item.id !== file.id)); } : undefined}
           onCreateTask={rejectSave} onCreateSubtask={rejectSave} onChangeStatus={rejectSave} onUpdateTask={rejectSave} onDeleteTask={rejectSave}
           onSetParticipant={rejectSave} onRemoveParticipant={rejectSave} onAddChecklistItem={rejectSave} onToggleChecklistItem={rejectSave} onDeleteChecklistItem={rejectSave}
           onAddComment={rejectSave} onSetDependency={rejectSave} onRemoveDependency={rejectSave} onSetCycle={rejectSave}

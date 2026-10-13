@@ -3,6 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 describe("web API addresses and session restore", () => {
   const defaultBridge = window.yuksalish;
   const cookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, "cookie");
+  it("deletes only the specified task attachment and propagates a server refusal", async () => {
+    window.yuksalish = undefined;
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(null, {status: 204}))
+      .mockResolvedValueOnce(Response.json({detail: "Можно удалить только собственный файл"}, {status: 403}));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = await import("./workspace-api");
+    await api.deleteWorkspaceTaskAttachment("qa-token", "task-id", "file-id");
+    expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining("/tasks/task-id/attachments/file-id"),
+      expect.objectContaining({method: "DELETE"}));
+    await expect(api.deleteWorkspaceTaskAttachment("qa-token", "task-id", "other-file"))
+      .rejects.toThrow("Можно удалить только собственный файл");
+  });
   afterEach(() => {
     window.yuksalish = defaultBridge;
     if (cookieDescriptor) Object.defineProperty(document, "cookie", cookieDescriptor);
