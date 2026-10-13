@@ -52,8 +52,11 @@ it("provides system-colour selection and visible keyboard focus", () => {
   expect(css).toContain("outline-color: var(--ws-rail-selected-icon)");
   expect(css).toContain(".workspace-logo .rail-toggle svg { color: inherit; }");
   expect(css).toContain(".sidebar-palette .rail-action:hover { color: var(--ws-rail-text); }");
-  expect(readFileSync("src/renderer/workspace-2-focus.css", "utf8"))
-    .toContain(":not(.sidebar-palette *, .sidebar-theme-choice):is(:focus, :focus-visible)");
+  const focus = readFileSync("src/renderer/workspace-2-focus.css", "utf8");
+  const exclusions = focus.match(/\):not\(([^)]+)\):is\(:focus, :focus-visible\)/)?.[1]
+    ?.split(",").map(selector => selector.trim());
+  expect(exclusions).toEqual(expect.arrayContaining([".sidebar-palette *", ".sidebar-theme-choice"]));
+  expect(focus).toContain('html:not([data-color-theme="dark"]) .app-provider :is(');
 });
 
 it.each(["uz_cyrl", "uz_latn"] as const)("translates the appearance choices in %s", locale => {

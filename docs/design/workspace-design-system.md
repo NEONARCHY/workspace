@@ -118,14 +118,19 @@ business rules, permissions, metrics, API or original company artwork.
   semantic `--ws-theme-*` roles, with their exact original light values retained
   as fallbacks. New UI should reuse these roles rather than add light-only
   literals. Do not recolour/invert logos, photos, emblems or authored documents.
-- Dark canvas is `#0b1724`, working surfaces `#162635` / `#1b2e3f`, text
-  `#e5eef4` / `#a3b7c7`, interactive turquoise `#7cdae1`. Status washes and
+- Owner's CRM-dark references (2026-10-13) replace the blue-tinted base with a
+  graphite canvas `#101115`, recessed `#14151a`, working `#1b1c22`, raised
+  `#262730` and selected `#30313d` surfaces. Text is `#f0f0f4` / `#b0b2bf`;
+  restrained turquoise `#9bd5d4` marks links and actions, not every surface.
+  Static top-edge light and a bounded violet sidebar wash establish depth.
+  Section headers (including the project hub) are graphite, not teal banners.
+  Status washes and
   readable status inks are paired; control borders meet 3:1 on tested surfaces.
   Source PDF/Office paper remains light, while the viewer controls are themed.
 - Theme changes fade the live document out/in over 120/200 ms without remounting
   React. A newer choice retargets the animation. Reduced motion, forced colours
   or a hidden document apply immediately, including interruptions mid-fade.
-  Hover glow is bounded and excludes disabled controls; no new animated blur,
+  Hover uses surface/edge changes, not a general neon glow; no new animated blur,
   text scaling, broad `!important` or `transition: all` is introduced.
 - Recognition rarity and optical artwork are retained. Dark foil/glare are
   restrained; locked emblems are subdued without lowering text opacity.

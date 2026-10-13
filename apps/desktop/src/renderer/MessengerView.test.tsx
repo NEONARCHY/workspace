@@ -129,6 +129,63 @@ describe("Private messenger", () => {
   });
 
   const fileTransfer = (files: readonly File[] = []) => ({ types: ["Files"], files, items: [], dropEffect: "none" });
+  it("pastes any file types into the draft and sends only on explicit confirmation", async () => {
+    const onSendMessage = vi.fn().mockResolvedValue({ ...initialMessages[0]!, id: "pasted" });
+    renderMessenger({ onSendMessage });
+    const first = new File(["one"], "keep.txt");
+    const files = [new File(["doc"], "letter.docx"), new File(["sheet"], "table.xlsx"),
+      new File(["pdf"], "letter.pdf"), new File(["zip"], "archive.zip")];
+    fireEvent.change(screen.getByLabelText("Файлы сообщения"), { target: { files: [first] } });
+    const input = screen.getByLabelText("Новое сообщение");
+    fireEvent.change(input, { target: { value: "Сохранить подпись" } });
+    expect(fireEvent.paste(input, { clipboardData: fileTransfer(files) })).toBe(false);
+    for (const file of [first, ...files]) expect(screen.getByRole("button", { name: `Убрать файл ${file.name}` })).toBeInTheDocument();
+    expect(input).toHaveValue("Сохранить подпись");
+    expect(onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith(initialChats[0]!.id, "Сохранить подпись", [first, ...files], expect.any(Object)));
+  });
+  it("preserves native text paste and does not attach files from search fields or the chat list", () => {
+    renderMessenger();
+    const input = screen.getByLabelText("Новое сообщение");
+    expect(fireEvent.paste(input, { clipboardData: { types: ["text/plain"], files: [], items: [] } })).toBe(true);
+    const transfer = fileTransfer([new File(["no"], "outside.txt")]);
+    expect(fireEvent.paste(screen.getByPlaceholderText("Найти сообщение в этом чате"), { clipboardData: transfer })).toBe(true);
+    expect(fireEvent.paste(document.querySelector(".list-pane")!, { clipboardData: transfer })).toBe(true);
+    expect(screen.queryByRole("button", { name: "Убрать файл outside.txt" })).not.toBeInTheDocument();
+  });
+  it("accepts file clipboard items when FileList is empty and rejects directories or unreadable items", () => {
+    renderMessenger();
+    const input = screen.getByLabelText("Новое сообщение");
+    const file = new File(["test"], "item.bin");
+    const item = { kind: "file", getAsFile: () => file };
+    fireEvent.paste(input, { clipboardData: { ...fileTransfer(), items: [item] } });
+    expect(screen.getByRole("button", { name: "Убрать файл item.bin" })).toBeInTheDocument();
+    fireEvent.paste(input, { clipboardData: { ...fileTransfer(), items: [{ ...item, webkitGetAsEntry: () => ({ isDirectory: true }) }] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("загрузка папок не поддерживается");
+    fireEvent.paste(input, { clipboardData: { ...fileTransfer(), items: [{ kind: "file", getAsFile: () => null }] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось прочитать файлы из буфера");
+    expect(screen.getAllByRole("button", { name: "Убрать файл item.bin" })).toHaveLength(1);
+  });
+  it.each(["sendMessages", "uploadFiles"] as const)("blocks file paste when %s is denied", permission => {
+    const chat = { ...initialChats[0]!, permissions: { ...initialChats[0]!.permissions, [permission]: false } };
+    const { props } = renderMessenger({ chats: [chat] });
+    fireEvent.paste(screen.getByRole("region", { name: /^Чат:/ }), { clipboardData: fileTransfer([new File(["no"], "denied.bin")]) });
+    expect(screen.getByRole("alert")).toHaveTextContent(permission === "sendMessages" ? "нельзя отправлять" : "Вложения запрещены");
+    expect(screen.queryByRole("button", { name: "Убрать файл denied.bin" })).not.toBeInTheDocument();
+    expect(props.onSendMessage).not.toHaveBeenCalled();
+  });
+  it("rejects an oversized paste atomically without changing the existing draft", () => {
+    renderMessenger();
+    const input = screen.getByLabelText("Новое сообщение");
+    fireEvent.change(input, { target: { value: "Сохранить" } });
+    const huge = new File(["test"], "huge.pdf");
+    Object.defineProperty(huge, "size", { value: 26 * 1024 * 1024 });
+    fireEvent.paste(input, { clipboardData: fileTransfer([new File(["ok"], "small.txt"), huge]) });
+    expect(screen.getByRole("alert")).toHaveTextContent("25 МБ");
+    expect(input).toHaveValue("Сохранить");
+    expect(screen.queryByRole("button", { name: "Убрать файл small.txt" })).not.toBeInTheDocument();
+  });
   it("targets only the conversation without flickering across nested elements and cancels cleanly", () => {
     const { props } = renderMessenger();
     const workspace = screen.getByRole("region", { name: "Мессенджер" });
@@ -233,12 +290,15 @@ describe("Private messenger", () => {
     expect(root).toHaveAttribute("data-file-drop", "blocked");
     fireEvent.drop(root, { dataTransfer: transfer });
     expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
+    fireEvent.paste(screen.getByLabelText("Редактирование сообщения"), { clipboardData: transfer });
+    expect(screen.getByLabelText("Редактирование сообщения")).toHaveValue(own.body);
     fireEvent.keyDown(screen.getByLabelText("Редактирование сообщения"), { key: "Escape" });
     fireEvent.change(screen.getByRole("textbox", { name: "Новое сообщение" }), { target: { value: "Отправляем" } });
     fireEvent.click(screen.getByRole("button", { name: "Отправить сообщение" }));
     fireEvent.dragEnter(root, { dataTransfer: transfer });
     expect(root).toHaveAttribute("data-file-drop", "blocked");
     fireEvent.drop(root, { dataTransfer: transfer });
+    fireEvent.paste(root, { clipboardData: transfer });
     expect(screen.queryByRole("button", { name: "Убрать файл blocked.txt" })).not.toBeInTheDocument();
     await act(async () => finish({ ...own, id: "sent", body: "Отправляем" }));
   });

@@ -1,4 +1,48 @@
 /* Workspace 2.0, payment-board slice. The stage palette and workflow remain data-driven. */
+/* Opaque light control surfaces separate the queue tools from the ambient canvas.
+   Keep these local to the working toolbar, never the coloured module header. */
+@media (forced-colors: none) {
+  html:not([data-color-theme="dark"]) .approvals-view {
+    --approval-summary-surface: #ffffff;
+    --approval-control-surface: #d6e3e6;
+    --approval-control-hover: #e7eff1;
+    --approval-control-selected: #ffffff;
+    --approval-action-surface: #edf6f4;
+    --approval-action-selected: #cce8e2;
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-commandbar {
+    border-color: transparent;
+    background: var(--approval-summary-surface);
+    box-shadow: 0 4px 14px -8px rgb(41 58 85 / 24%);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable {
+    background: var(--approval-action-surface);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable:hover,
+  html:not([data-color-theme="dark"]) .approvals-view .approval-metric-actionable[aria-pressed="true"] {
+    background: var(--approval-action-selected);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented {
+    --sliding-indicator-background: var(--approval-control-selected);
+    border-color: transparent;
+    background: var(--approval-control-surface);
+    box-shadow: none;
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented > button {
+    color: var(--ws-text);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented .approval-filter-count {
+    color: var(--ws-link);
+    background: var(--approval-action-surface);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view .approval-view-toolbar .ws2-segmented > button:not([aria-pressed="true"]):hover {
+    background: var(--approval-control-hover);
+  }
+  html:not([data-color-theme="dark"]) .approvals-view :is(.approval-view-toolbar .ws2-segmented > button, .approval-metric-actionable):focus-visible {
+    outline: 2px solid var(--ws-link);
+    outline-offset: 2px;
+  }
+}
 .approvals-view {
   --approval-lane-surface: rgb(var(--ws-theme-surface-soft-rgb, 238 243 242) / 0.78);
   --approval-lane-surface-active: rgb(var(--ws-theme-surface-soft-rgb, 235 246 244) / 0.88);

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { EfficiencyOverview } from "@yuksalish/contracts";
 
-import { EfficiencyView } from "./EfficiencyView";
+import { EfficiencyView, ScoreGauge } from "./EfficiencyView";
 import { workspaceTheme } from "./workspace-theme";
 import * as api from "./workspace-api";
 
@@ -47,6 +47,44 @@ const overview: EfficiencyOverview = {
 function renderView(onPeriodChange = vi.fn()) {
   return render(<FluentProvider theme={workspaceTheme}><EfficiencyView overview={overview} loading={false} onPeriodChange={onPeriodChange} /></FluentProvider>);
 }
+
+describe("ScoreGauge", () => {
+  it.each([
+    { percentage: 0, onTimeCount: 0, eligibleCount: 4, label: "0%" },
+    { percentage: 75, onTimeCount: 3, eligibleCount: 4, label: "75%" },
+    { percentage: 99.9, onTimeCount: 999, eligibleCount: 1000, label: "99,9%" },
+    { percentage: 100, onTimeCount: 10000, eligibleCount: 10000, label: "100%" },
+  ])("keeps $label inside the ring and the full count outside it", ({ label, ...values }) => {
+    const { container } = render(<ScoreGauge employee={{ ...overview.employees[0]!, ...values }} />);
+    const gauge = screen.getByRole("img", { name: `Выполнение задач в срок: ${label}; ${values.onTimeCount} из ${values.eligibleCount} задач` });
+    expect(gauge.querySelector(".eff-gauge-ring strong")).toHaveTextContent(label);
+    expect(gauge.querySelector(".eff-gauge-ring span")).toBeNull();
+    expect(gauge.querySelector(".eff-gauge-caption")).toHaveTextContent(`${values.onTimeCount} из ${values.eligibleCount} задач в срок`);
+    expect(container.querySelector("filter")).toBeNull();
+    const lengths = gauge.querySelector(".eff-gauge-progress")!.getAttribute("stroke-dasharray")!.split(" ").map(Number);
+    expect(lengths[0]! / (lengths[0]! + lengths[1]!)).toBeCloseTo(values.percentage / 100);
+  });
+
+  it("does not turn missing data into a zero-percent result", () => {
+    render(<ScoreGauge employee={overview.employees[1]!} />);
+    const gauge = screen.getByRole("img", { name: /Выполнение задач в срок: Нет данных/ });
+    expect(gauge.querySelector("strong")).toHaveTextContent("—");
+    expect(gauge.querySelector(".eff-gauge-caption")).toHaveTextContent("Нет данных");
+    expect(gauge.querySelector(".eff-gauge-placeholder")).not.toBeNull();
+    expect(gauge).not.toHaveTextContent("0%");
+  });
+
+  it("uses an auto-height caption and the same size variable for compact and full rings", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/renderer/styles.css"), "utf8");
+    const homeCss = readFileSync(resolve(process.cwd(), "src/renderer/personal-home.css"), "utf8");
+    expect(css).toMatch(/\.eff-score-gauge\s*\{[^}]*width: var\(--eff-gauge-size\)[^}]*max-width: 100%/);
+    expect(css).toMatch(/\.eff-gauge-ring\s*\{[^}]*aspect-ratio: 1/);
+    expect(css).toMatch(/\.eff-gauge-caption\s*\{[^}]*font-size: 12px[^}]*overflow-wrap: anywhere/);
+    expect(homeCss).toMatch(/\.personal-home \.eff-score-gauge\s*\{[^}]*--eff-gauge-size: 128px/);
+    expect(homeCss).not.toMatch(/\.personal-home \.eff-score-gauge\s*\{[^}]*height:/);
+    expect(homeCss).toContain(".home-efficiency > div:last-child > strong");
+  });
+});
 
 describe("EfficiencyView", () => {
   it("shows the employee photo in both the summary and the aggregate table", async () => {

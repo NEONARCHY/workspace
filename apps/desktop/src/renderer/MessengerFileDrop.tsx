@@ -61,6 +61,32 @@ export function MessengerFileDropSurface({ children, className, title, blockedRe
       if (!files.length) { reject("Не удалось прочитать файлы. Выберите их кнопкой вложения."); return; }
       receive(files);
     };
+    const paste = (event: ClipboardEvent) => {
+      if (event.defaultPrevented || !event.clipboardData) return;
+      // Search/filter/edit fields outside the composer keep their native paste.
+      const target = event.target;
+      if (target instanceof HTMLElement &&
+          (target.matches("input, textarea") || target.isContentEditable) &&
+          !target.closest(".composer-input")) return;
+      const data = event.clipboardData;
+      const items = Array.from(data.items ?? []);
+      const files = Array.from(data.files ?? []);
+      if (!files.length && !items.some(item => item.kind === "file") &&
+          !Array.from(data.types ?? []).includes("Files")) return;
+      // Consume file pastes even when blocked: never insert filesystem paths as text.
+      event.preventDefault();
+      if (reason) { reject(reason); return; }
+      if (items.some(item => item.webkitGetAsEntry?.()?.isDirectory)) {
+        reject("Вставьте отдельные файлы или архив — загрузка папок не поддерживается.");
+        return;
+      }
+      const pasted = files.length ? files : items.flatMap(item => {
+        const file = item.kind === "file" ? item.getAsFile() : null;
+        return file ? [file] : [];
+      });
+      if (!pasted.length) { reject("Не удалось прочитать файлы из буфера. Выберите их кнопкой вложения."); return; }
+      receive(pasted);
+    };
     // Never navigate away from Workspace if a file is released outside the target.
     const outsideDrop = (event: DragEvent) => { if (isFileDrag(event)) event.preventDefault(); clear(); };
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") clear(); };
@@ -68,6 +94,7 @@ export function MessengerFileDropSurface({ children, className, title, blockedRe
     root.addEventListener("dragover", over);
     root.addEventListener("dragleave", leave);
     root.addEventListener("drop", drop);
+    root.addEventListener("paste", paste);
     window.addEventListener("drop", outsideDrop);
     window.addEventListener("dragend", clear);
     window.addEventListener("blur", clear);
@@ -77,6 +104,7 @@ export function MessengerFileDropSurface({ children, className, title, blockedRe
       root.removeEventListener("dragover", over);
       root.removeEventListener("dragleave", leave);
       root.removeEventListener("drop", drop);
+      root.removeEventListener("paste", paste);
       window.removeEventListener("drop", outsideDrop);
       window.removeEventListener("dragend", clear);
       window.removeEventListener("blur", clear);

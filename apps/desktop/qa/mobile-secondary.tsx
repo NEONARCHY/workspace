@@ -1,10 +1,11 @@
 // Actual components, synthetic data. All API writes fail locally; nothing reaches a server.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Button, FluentProvider } from "@fluentui/react-components";
 import type { AbsenceRequest, AIReferentRegistry, DirectoryBootstrap, HiringDetail, HiringFields, HiringRegistry, SupportRegistry, AssistantChat, EdoIncomingLetter, EmployeeRecognitionProfile, FeedPost, HisobotProfile, HisobotReport, HrOverview, MembersRegistry, NotificationPreferences, PersonalEfficiency, PersonalEfficiencyTask, TelegramAccessRegistry, WorkspaceNotification, WorkspacePerson, ZoomMeetingsRegistry } from "@yuksalish/contracts";
 import { FeedView } from "../src/renderer/FeedView";
 import { TasksView } from "../src/renderer/TasksView";
+import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { NotificationCenter } from "../src/renderer/NotificationCenter";
 import { EmployeesView } from "../src/renderer/EmployeesView";
 import { SidebarVisibilityManagement } from "../src/renderer/SidebarVisibilityManagement";
@@ -22,8 +23,14 @@ import { AIHisobotView } from "../src/renderer/AIHisobotView";
 import { TelegramAccessView } from "../src/renderer/TelegramAccessView";
 import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
+import { AdaptiveNavigation } from "../src/renderer/AdaptiveNavigation";
+import { BrowserNavigation } from "../src/renderer/BrowserNavigation";
+import { CompanyLogo } from "../src/renderer/CompanyLogo";
+import { SectionJump } from "../src/renderer/SectionJump";
+import { ColorThemeToggle } from "../src/renderer/ColorThemeToggle";
+import { Home24Regular, TaskListSquareLtr24Regular, People24Regular, Alert24Regular, News24Regular, Video24Regular, Mail24Regular, Briefcase24Regular, Navigation24Regular } from "@fluentui/react-icons";
 import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
-import { observeBrowserViewport } from "../src/renderer/browser-layout";
+import { observeBrowserViewport, useBrowserCompactLayout } from "../src/renderer/browser-layout";
 import { useQaTheme } from "./color-theme";
 import { ThemeExtraPages } from "./dark-components";
 import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
@@ -223,6 +230,7 @@ const summary: PersonalEfficiency = {
   employee: { userId: people[0]!.id, name: "Сотрудник", jobTitle: "Специалист", period: "2026-10", timezone: "Asia/Tashkent", percentage: 75, onTimeCount: 3, eligibleCount: 4, overdueCount: 1, awaitingReviewCount: 1, noDueDateCount: 1, returnedForRevisionCount: 1, excludedCount: 1, sampleSize: 4, methodologyVersion: "EFF-2.0", trackingStartedAt: "2026-09-01T00:00:00Z", historyCompleteness: "complete", smallSample: true, history: [] },
   taskDetailsVisible: true, workload: { new: 1, inProgress: 2, awaitingReview: 1, completed: 3 }, recentTasks: [task], impactTasks: [task], impactTaskCount: 1,
 };
+const efficiencyOverview = { period: stamp.slice(0, 7), timezone: "Asia/Tashkent", methodologyVersion: "EFF-2.0", trackingStartedAt: stamp, currentUserId: user.id, employees: [summary.employee] };
 
 const letter: EdoIncomingLetter = {
   id: 17, version: 4, status: 1, in_num: "EX-17", in_date: "2026-10-01 00:00:00",
@@ -248,7 +256,7 @@ window.fetch = async (input, init) => {
   if (route === "/profile/me/efficiency") return Response.json(summary);
   if (route === "/home/reactions") return Response.json({ totalCount: 7, reactions: [{ emoji: "👍", count: 4 }, { emoji: "❤️", count: 3 }] });
   if (route === "/workday/team") return Response.json({ asOf: stamp, workingCount: 4, members: people.map(person => ({ userId: person.id, name: person.name, jobTitle: person.jobTitle, status: "working", schedule: { userId: person.id, startsAt: "09:00:00", endsAt: "18:00:00" }, session: null, absenceKind: null, canEditSchedule: true })) });
-  if (route === "/efficiency") return Response.json({ period: stamp.slice(0, 7), timezone: "Asia/Tashkent", methodologyVersion: "EFF-2.0", trackingStartedAt: stamp, currentUserId: user.id, employees: [summary.employee] });
+  if (route === "/efficiency") return Response.json(efficiencyOverview);
   if (route === "/hr") return Response.json(hr);
   if (route === "/hr/hiring") return Response.json(hiring);
   if (route.startsWith("/hr/hiring/")) return Response.json(item);
@@ -282,17 +290,56 @@ window.fetch = async (input, init) => {
 };
 function Fixture() {
   const workspaceTheme = useQaTheme();
-  const [section, setSection] = useState("feed"), [account, setAccount] = useState(false), [person, setPerson] = useState(false), [sidebar, setSidebar] = useState(false), [supportOpen, setSupportOpen] = useState(false), [fileOpen, setFileOpen] = useState(false);
+  const shell = new URLSearchParams(location.search).has("shell");
+  const compact = useBrowserCompactLayout(true);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const [section, setSection] = useState(shell ? "home" : "feed"), [account, setAccount] = useState(false), [person, setPerson] = useState(false), [sidebar, setSidebar] = useState(false), [supportOpen, setSupportOpen] = useState(false), [fileOpen, setFileOpen] = useState(false);
+  const navigation = [
+    { key: "home", label: "Главная", icon: <Home24Regular /> },
+    { key: "tasks", label: "Задачи", icon: <TaskListSquareLtr24Regular /> },
+    { key: "employees", label: "Сотрудники", icon: <People24Regular /> },
+    { key: "notifications", label: "Уведомления", icon: <Alert24Regular /> },
+    { key: "feed", label: "Лента", icon: <News24Regular /> },
+    { key: "zoom_meetings", label: "Zoom-конференции", icon: <Video24Regular /> },
+    { key: "incoming_letters", label: "Входящие письма", icon: <Mail24Regular /> },
+    { key: "hr", label: "HR", icon: <Briefcase24Regular /> },
+  ] as const;
+  const sectionKey = (key: string) => key === "incoming_letters" ? "incoming" : key === "zoom_meetings" ? "zoom" : key;
+  const navigate = (key: string) => { setSection(sectionKey(key)); setMenuOpen(false); };
+  const attachmentQa = new URLSearchParams(location.search).has("attachments");
+  const [taskFiles, setTaskFiles] = useState<WorkspaceAttachment[]>(() => attachmentQa ? ["Свой документ", "Документ коллеги"].map((name, index) => ({
+    id: `qa-file-${index}`, ownerType: "task", ownerId: initialTasks[0]!.id, fileName: `${name}.pdf`,
+    contentType: "application/pdf", byteSize: 10240, sha256: "qa", uploadedByUserId: index ? "colleague" : user.id,
+    documentRole: "general", createdAt: stamp,
+  })) : []);
+  const taskRecords = attachmentQa ? initialTasks.map((task, index) => index ? task : {
+    ...task, dueAt: new Date(2099, 9, 13, 18).toISOString(), dueLabel: "13.10.2099, 13:00",
+  }) : initialTasks;
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
   return <FluentProvider theme={workspaceTheme} className="app-provider"><EmployeeProfileProvider onOpenProfile={() => setPerson(true)}>
-    <div className="app-shell browser-compact"><div className="app-stage">
-      <header style={{ display: "flex", flexWrap: "wrap", gap: 4, paddingBottom: 8 }}>
+    <div className={`app-shell${!shell || compact ? " browser-compact" : ""}`}>
+      {shell && <BrowserNavigation compact={compact} open={menuOpen} returnFocusRef={menuTrigger} onOpenChange={setMenuOpen}>
+        <aside className="app-rail sidebar-palette" data-sidebar-theme="blue-teal" aria-label="Основная навигация">
+          <div className="workspace-logo"><button className="rail-toggle" aria-label="Закрыть меню" onClick={() => setMenuOpen(false)}><Navigation24Regular /></button><CompanyLogo tone="white" className="rail-brand" /></div>
+          <div className="rail-customize"><span>Меню</span></div>
+          <AdaptiveNavigation items={navigation} scrollable={compact} renderItem={(item, _overflow, closeOverflow) => <div className="rail-slot" key={item.key}><button className={`rail-action${section === sectionKey(item.key) ? " active" : ""}`} aria-current={section === sectionKey(item.key) ? "page" : undefined} onClick={() => { navigate(item.key); closeOverflow(); }}><span className="rail-icon">{item.icon}</span><span className="rail-label">{item.label}</span></button></div>} />
+          <div className="rail-bottom"><button className="rail-profile" onClick={() => setPerson(true)}>{user.name}</button></div>
+        </aside>
+      </BrowserNavigation>}
+      <div className="app-stage">
+      {shell ? <header className="global-bar">
+        {compact && <button ref={menuTrigger} className="browser-menu-trigger" aria-label="Открыть меню" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Navigation24Regular /></button>}
+        <SectionJump items={navigation} onNavigate={navigate} />
+        <div className="workspace-top-context"><ColorThemeToggle userId="qa-theme" /><Button onClick={() => setAccount(true)}>Настройки</Button><Button onClick={() => setPerson(true)}>{user.name}</Button></div>
+      </header> : <header style={{ display: "flex", flexWrap: "wrap", gap: 4, paddingBottom: 8 }}>
         <select aria-label="QA раздел" value={section} onChange={event => setSection(event.target.value)} style={{ minHeight: 48, minWidth: 0, maxWidth: "100%", fontSize: 16 }}>
           {["feed", "notifications", "hr", "members", "zoom", "absences", "referent", "hisobot", "bots", "incoming", "employees", "tasks", "home", "team", "departments", "access", "components", "login", "surveys", "legacy-projects"].map(key => <option key={key}>{key}</option>)}
         </select><Button onClick={() => setAccount(true)} style={{ minHeight: 48 }}>Настройки</Button><Button onClick={() => setPerson(true)} style={{ minHeight: 48 }}>Профиль</Button><Button onClick={() => setSidebar(true)}>Меню сотрудника</Button><Button onClick={() => setSupportOpen(true)}>Поддержка QA</Button><Button onClick={() => setFileOpen(true)}>Файл QA</Button>
-      </header><main className="app-content">
+      </header>}<main className="app-content">
         <ThemeExtraPages section={section} directory={directory} />
-        {section === "tasks" && <TasksView token="qa-only" tasks={initialTasks} attachments={[]} people={people} currentUserId={user.id} efficiencyLoading={false} onLoadEfficiency={() => {}}
+        {section === "tasks" && <TasksView token="qa-only" tasks={taskRecords} attachments={taskFiles} people={attachmentQa ? people.map(person => person.id === user.id ? user : person) : people} currentUserId={user.id} efficiency={efficiencyOverview} efficiencyLoading={false} onLoadEfficiency={() => {}}
+          onDeleteAttachment={attachmentQa ? async file => { setTaskFiles(current => current.filter(item => item.id !== file.id)); } : undefined}
           onCreateTask={rejectSave} onCreateSubtask={rejectSave} onChangeStatus={rejectSave} onUpdateTask={rejectSave} onDeleteTask={rejectSave}
           onSetParticipant={rejectSave} onRemoveParticipant={rejectSave} onAddChecklistItem={rejectSave} onToggleChecklistItem={rejectSave} onDeleteChecklistItem={rejectSave}
           onAddComment={rejectSave} onSetDependency={rejectSave} onRemoveDependency={rejectSave} onSetCycle={rejectSave}

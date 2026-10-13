@@ -5,7 +5,7 @@ import { transitionColorTheme, useColorTheme, type ColorThemePreference } from "
 
 const choices = [
   { value: "light", label: "Светлая", description: "Лёгкость и спокойные акценты", icon: <WeatherSunny24Regular /> },
-  { value: "dark", label: "Тёмная", description: "Глубина и бирюзовое свечение", icon: <DarkTheme24Regular /> },
+  { value: "dark", label: "Тёмная", description: "Графитовые поверхности и мягкий свет", icon: <DarkTheme24Regular /> },
   { value: "system", label: "Как в системе", description: "Следовать настройке устройства", icon: <Desktop24Regular /> },
 ] satisfies readonly { value: ColorThemePreference; label: string; description: string; icon: ReactNode }[];
 
