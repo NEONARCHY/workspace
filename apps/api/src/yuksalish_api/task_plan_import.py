@@ -5,9 +5,10 @@ Every candidate is reviewed before a separate confirm request writes anything.
 """
 
 import re
+from collections.abc import Iterator
 from io import BytesIO
 from pathlib import PurePath
-from xml.etree.ElementTree import Element
+from typing import Protocol
 from zipfile import ZipFile
 
 import openpyxl  # type: ignore[import-untyped]
@@ -24,7 +25,14 @@ _NUMBER = re.compile(r"^\s*(?:\d+[.)]|\d+(?:\.\d+)+[.)]?|[•●▪◦‣-])\s*"
 _TABLE_BULLET = re.compile(r"^\s*(?:[•●▪◦‣]\s*|-\s+)")
 
 
-def _docx_paragraph_text(paragraph: Element, ns: str) -> str:
+class _XmlNode(Protocol):
+    tag: str
+    text: str | None
+
+    def iter(self) -> Iterator["_XmlNode"]: ...
+
+
+def _docx_paragraph_text(paragraph: _XmlNode, ns: str) -> str:
     separators = {ns + "br", ns + "cr", ns + "tab"}
     return "".join(
         " " if node.tag in separators else node.text or ""
