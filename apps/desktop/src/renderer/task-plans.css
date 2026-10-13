@@ -21,5 +21,21 @@
 .task-plan-links ul { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
 .task-plan-links li { display: flex; gap: 6px; align-items: center; padding: 5px 8px; border: 1px solid var(--ws-line); border-radius: 9px; }
 .task-plan-links .inline-task-form { margin: 0; }
+.task-plan-import { display: grid; gap: 16px; margin-bottom: 20px; padding: 20px; border: 1px solid var(--ws-line); border-radius: 18px; background: var(--ws-surface); }
+.task-plan-import-heading { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.task-plan-import h3, .task-plan-import p { margin: 0; }
+.task-plan-import h3 { color: var(--ws-text); font-size: 18px; }
+.task-plan-import-heading p, .task-plan-import > p { color: var(--ws-muted); font-size: 13px; }
+.task-plan-import-upload, .task-plan-import-footer { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.task-plan-import label { display: grid; gap: 6px; min-width: 0; color: var(--ws-text); font-weight: 600; }
+.task-plan-import input[type="date"], .task-plan-import input[type="file"] { min-height: 34px; max-width: 100%; border: 1px solid var(--ws-line); border-radius: 8px; padding: 6px 8px; background: var(--ws-surface); color: var(--ws-text); font: inherit; }
+.task-plan-import-fields { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(135px, 1fr)); gap: 12px; }
+.task-plan-import-rows { display: grid; gap: 10px; max-height: min(45vh, 560px); overflow-y: auto; padding-right: 5px; }
+.task-plan-import-rows fieldset { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--ws-line); border-radius: 12px; }
+.task-plan-import-rows legend { padding: 0 5px; color: var(--ws-muted); font-size: 12px; }
+.task-plan-import-rows fieldset > p { grid-column: 1 / -1; }
+.task-plan-import-warning { color: #8a5a00 !important; }
+.task-plan-import-footer { justify-content: flex-end; position: sticky; bottom: 0; padding-top: 12px; background: var(--ws-surface); }
 @media (max-width: 900px) { .task-plan-form { grid-template-columns: 1fr 1fr; } .task-plans-heading { flex-direction: column; } }
-@media (max-width: 600px) { .task-plan-form { grid-template-columns: 1fr; } .task-plans-workspace { padding: 16px; } }
+@media (max-width: 900px) { .task-plan-import-fields { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 600px) { .task-plan-form, .task-plan-import-fields, .task-plan-import-rows fieldset { grid-template-columns: 1fr; } .task-plans-workspace { padding: 16px; } .task-plan-import { padding: 14px; } }

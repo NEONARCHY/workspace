@@ -1,9 +1,10 @@
 import { useState } from "react";
 
-import type { TaskPlan, TaskPlanWrite, WorkspaceTask } from "@yuksalish/contracts";
+import type { TaskPlan, TaskPlanWrite, WorkspacePerson, WorkspaceTask } from "@yuksalish/contracts";
 import { Button, Input } from "@fluentui/react-components";
 
 import { WorkspaceSelect } from "./WorkspaceSelect";
+import { TaskPlanImportView } from "./TaskPlanImportView";
 
 const kindLabels: Readonly<Record<TaskPlan["kind"], string>> = {
   work: "Иш режа",
@@ -14,6 +15,10 @@ const kindLabels: Readonly<Record<TaskPlan["kind"], string>> = {
 interface TaskPlansViewProps {
   readonly plans: readonly TaskPlan[];
   readonly tasks: readonly WorkspaceTask[];
+  readonly people?: readonly WorkspacePerson[];
+  readonly token?: string;
+  readonly currentUserId?: string;
+  readonly onImported?: (plan: TaskPlan) => Promise<void>;
   readonly loading: boolean;
   readonly error: string;
   readonly onRetry: () => void;
@@ -22,9 +27,10 @@ interface TaskPlansViewProps {
 }
 
 export function TaskPlansView({
-  plans, tasks, loading, error, onRetry, onCreate, onSelect,
+  plans, tasks, people = [], token, currentUserId, onImported, loading, error, onRetry, onCreate, onSelect,
 }: TaskPlansViewProps) {
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<TaskPlan["kind"]>("work");
   const [periodStart, setPeriodStart] = useState("");
@@ -60,9 +66,11 @@ export function TaskPlansView({
       <div><h2>Планы</h2><p>Одна задача может входить в несколько планов. Региональный план — вид, без выбора региона.</p></div>
       <div className="task-plans-actions">
         <Button appearance="secondary" onClick={onRetry} disabled={loading}>Обновить</Button>
+        {token && currentUserId && onImported ? <Button appearance="secondary" onClick={() => { setCreating(false); setImporting((value) => !value); }}>{importing ? "Закрыть импорт" : "Импортировать план"}</Button> : null}
         <Button appearance="primary" onClick={() => setCreating((value) => !value)}>{creating ? "Закрыть форму" : "Новый план"}</Button>
       </div>
     </div>
+    {importing && token && currentUserId && onImported ? <TaskPlanImportView token={token} currentUserId={currentUserId} people={people} tasks={tasks} onImported={onImported} onClose={() => setImporting(false)} /> : null}
     {creating ? <div className="task-plan-form" role="region" aria-label="Новый план">
       <label>Название<Input value={title} maxLength={240} onChange={(_, data) => setTitle(data.value)} placeholder="Например, иш режа на 2026 год" /></label>
       <label>Вид<WorkspaceSelect value={kind} onChange={(event) => setKind(event.target.value as TaskPlan["kind"])}>
