@@ -130,4 +130,5 @@ class IdentityRecognition(ApiModel):
     full_name: str | None = None
     pinfl: str | None = None
     passport: str | None = None
+    name_complete: bool = True
     warnings: list[str] = Field(default_factory=list)

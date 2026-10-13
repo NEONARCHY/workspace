@@ -97,7 +97,7 @@ async def test_engine_receives_only_normalised_stdin_and_bounded_result(
     process = AsyncMock()
     process.stdin.write = lambda value: None
     process.stdin.close = lambda: None
-    process.stdout.read.side_effect = [output, b""]
+    process.stdout.read.side_effect = [output, b""] * 8
     process.returncode = 0
     run = AsyncMock(return_value=process)
     monkeypatch.setattr("yuksalish_api.hr_identity.asyncio.create_subprocess_exec", run)

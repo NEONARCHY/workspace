@@ -52,3 +52,25 @@ it("never guesses between contradictory sides", () => {
   expect(merged.fullName).toBe(result.fullName);
   expect(merged.warnings.join(" ")).toContain("разные значения");
 });
+
+it("adds sides one by one, retains the first preview and sends the chosen rotation", async () => {
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить лицевую сторону" })); choose();
+  fireEvent.click(screen.getByRole("button", { name: "Добавить обратную сторону" })); choose();
+  expect(screen.getByText("Лицевая сторона")).toBeInTheDocument();
+  expect(screen.getByText("Обратная сторона")).toBeInTheDocument();
+  expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Повернуть фото 2" }));
+  fireEvent.click(screen.getByRole("button", { name: "Распознать данные" }));
+  await screen.findByLabelText("ФИО с ID-карты");
+  expect(recognizeHiringIdentity).toHaveBeenCalledTimes(2);
+  expect(vi.mocked(recognizeHiringIdentity).mock.calls.map(call => call[2])).toEqual([0, 90]);
+});
+
+it("combines an incomplete MRZ name with a matching complete front name", () => {
+  const merged = mergeIdentityResults([{ ...result, fullName: "TESTOV ALI", nameComplete: false },
+    { ...result, fullName: "TESTOV ALI TESTOVICH", nameComplete: true }]);
+  expect(merged.fullName).toBe("TESTOV ALI TESTOVICH");
+  expect(merged.nameComplete).toBe(true);
+  expect(merged.warnings).toEqual([]);
+});

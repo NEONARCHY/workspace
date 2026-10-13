@@ -105,12 +105,16 @@ async def put_signature(user: User, connection: Connection, request: Request) ->
 
 @router.post("/identity-card/recognize", response_model=IdentityRecognition)
 async def recognise_card(
-    user: User, connection: Connection, request: Request
+    user: User,
+    connection: Connection,
+    request: Request,
+    rotation: Literal[0, 90, 180, 270] = Query(default=0),
 ) -> IdentityRecognition:
     await require_hr(connection, user)
     return await recognise_identity(
         await bounded_body(request, MAX_ID_BYTES),
         request.app.state.settings.hr_identity_ocr_executable,
+        rotation,
     )
 
 
