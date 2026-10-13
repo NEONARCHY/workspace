@@ -5,8 +5,10 @@ Every candidate is reviewed before a separate confirm request writes anything.
 """
 
 import re
+from collections.abc import Iterator
 from io import BytesIO
 from pathlib import PurePath
+from typing import Protocol
 from zipfile import ZipFile
 
 import openpyxl  # type: ignore[import-untyped]
@@ -14,12 +16,28 @@ from defusedxml import ElementTree
 from pypdf import PdfReader
 
 from .project_import_documents import checked_zip, document_type
-from .task_plan_schemas import TaskPlanImportPreview, TaskPlanImportRow
+from .task_plan_schemas import MAX_PLAN_IMPORT_ITEMS, TaskPlanImportPreview, TaskPlanImportRow
 
 MAX_PLAN_BYTES = 10 * 1024 * 1024
-MAX_ROWS = 100
+MAX_ROWS = MAX_PLAN_IMPORT_ITEMS
 MAX_TEXT_CHARS = 50_000
-_NUMBER = re.compile(r"^\s*(?:\d+[.)]|\d+(?:\.\d+)+[.)]?|[•●▪-])\s*")
+_NUMBER = re.compile(r"^\s*(?:\d+[.)]|\d+(?:\.\d+)+[.)]?|[•●▪◦‣-])\s*")
+_TABLE_BULLET = re.compile(r"^\s*(?:[•●▪◦‣]\s*|-\s+)")
+
+
+class _XmlNode(Protocol):
+    tag: str
+    text: str | None
+
+    def iter(self) -> Iterator["_XmlNode"]: ...
+
+
+def _docx_paragraph_text(paragraph: _XmlNode, ns: str) -> str:
+    separators = {ns + "br", ns + "cr", ns + "tab"}
+    return "".join(
+        " " if node.tag in separators else node.text or ""
+        for node in paragraph.iter() if node.tag == ns + "t" or node.tag in separators
+    )
 
 
 def _text_rows(text: str, location: str) -> list[tuple[str, str]]:
@@ -40,8 +58,32 @@ def _docx_rows(content: bytes) -> list[tuple[str, str]]:
     with ZipFile(BytesIO(content)) as archive:
         root = ElementTree.fromstring(archive.read("word/document.xml"))
     ns = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
-    paragraphs = ["".join(node.text or "" for node in paragraph.iter(ns + "t"))
-                  for paragraph in root.iter(ns + "p")]
+    paragraphs = [_docx_paragraph_text(paragraph, ns) for paragraph in root.iter(ns + "p")]
+    if sum(len(paragraph) for paragraph in paragraphs) > MAX_TEXT_CHARS:
+        raise ValueError("Document text exceeds extraction limits")
+
+    # In weekly-plan tables, each cell can contain several real tasks. Do not turn
+    # the week, names, co-executors and KPI cells into candidate tasks.
+    table_rows: list[tuple[str, str]] = []
+    body = root.find(ns + "body")
+    if body is not None:
+        for table_number, table in enumerate(body.findall(ns + "tbl"), 1):
+            for row_number, row in enumerate(table.findall(ns + "tr"), 1):
+                for column_number, cell in enumerate(row.findall(ns + "tc"), 1):
+                    for paragraph in cell.iter(ns + "p"):
+                        line = _docx_paragraph_text(paragraph, ns)
+                        if not _TABLE_BULLET.match(line):
+                            continue
+                        title = _NUMBER.sub("", " ".join(line.split())).strip()
+                        if len(title) < 5:
+                            continue
+                        source = (f"DOCX, таблица {table_number}, строка {row_number}, "
+                                  f"столбец {column_number}")
+                        table_rows.append((title[:240], source))
+                        if len(table_rows) > MAX_ROWS:
+                            return table_rows
+    if table_rows:
+        return table_rows
     return _text_rows("\n".join(paragraphs), "DOCX")
 
 
@@ -100,7 +142,7 @@ def preview_plan_document(filename: str, content: bytes) -> TaskPlanImportPrevie
             if len(candidates) > MAX_ROWS:
                 break
     if len(candidates) > MAX_ROWS:
-        raise ValueError("Plan has more than 100 candidate items; split the document")
+        raise ValueError(f"План содержит более {MAX_ROWS} пунктов. Разделите файл на части.")
     seen: set[str] = set()
     rows: list[TaskPlanImportRow] = []
     for title, source in candidates:
