@@ -7,6 +7,7 @@ import { TaskRecords } from "./TaskRecords";
 import { TasksView } from "./TasksView";
 import { workspaceTheme } from "./workspace-theme";
 import { initialTasks, people } from "./test-fixtures/demo-data";
+import { taskDeadlineLabel } from "./task-deadline";
 
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 const wrap = (node: React.ReactNode) => <FluentProvider theme={workspaceTheme}>{node}</FluentProvider>;
@@ -31,6 +32,15 @@ function freeze(date = new Date(2026, 9, 12, 12)) {
 }
 
 describe("Task list deadline colours and overdue filter", () => {
+  it("updates the open card from the approved exact deadline, ignoring a stale server label", () => {
+    const original = task("extension", 1, { dueAt: new Date(2026, 9, 13, 13).toISOString(), dueLabel: "13.10.2026, 13:00" });
+    const p = {...props([original]), focusTaskId: original.id};
+    const view = render(wrap(<TasksView {...p} />));
+    const approved = {...original, dueAt: new Date(2026, 9, 13, 18).toISOString()};
+    view.rerender(wrap(<TasksView {...p} tasks={[approved]} />));
+    expect(document.querySelector(".task-detail .detail-meta")).toHaveTextContent(taskDeadlineLabel(approved));
+    expect(document.querySelector(".task-detail .detail-meta")).not.toHaveTextContent(original.dueLabel);
+  });
   it("colours deadlines, not priority, and preserves priority text", () => {
     freeze();
     const tasks = [task("two", 2), task("tomorrow", 1), task("today", 0),

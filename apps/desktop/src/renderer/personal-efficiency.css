@@ -40,7 +40,7 @@
   .personal-eff-commandbar > button:last-child { justify-self: end; }
   .personal-eff-commandbar label { grid-column: 1 / -1; order: 2; margin-left: 0; min-width: 0; }
   .personal-eff-lead { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 16px; }
-  .personal-eff-lead > .eff-gauge { justify-self: center; }
+  .personal-eff-lead > .eff-score-gauge { justify-self: center; }
   .personal-eff-metrics, .personal-eff-workload { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .personal-eff-panel { padding: 14px; }
 }

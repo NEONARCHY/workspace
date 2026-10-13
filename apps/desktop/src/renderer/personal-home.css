@@ -80,10 +80,10 @@
 .home-reactions li { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--ws-line); border-radius: 12px; font-size: 13px; }
 .home-reactions span { font-size: 20px; }
 .home-efficiency { display: flex; align-items: center; gap: 20px; min-width: 0; }
-.personal-home .eff-score-gauge { flex: none; width: 128px; height: 128px; }
+.personal-home .eff-score-gauge { --eff-gauge-size: 128px; flex: none; }
 .personal-home .eff-score-gauge svg { width: 100%; height: 100%; }
 .home-efficiency > div:last-child { min-width: 0; }
-.home-efficiency strong { font-size: 20px; }
+.home-efficiency > div:last-child > strong { font-size: 20px; }
 .home-efficiency p, .home-efficiency small { font-size: 12px; line-height: 1.6; margin: 4px 0; color: var(--ws-muted); }
 .personal-home .eff-history-chart { min-width: 0; }
 .personal-home .eff-history-chart svg { display: block; width: 100%; height: auto; }

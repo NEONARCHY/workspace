@@ -71,6 +71,7 @@ from yuksalish_api.repository import (
     delete_feed_comment,
     delete_feed_post,
     delete_task,
+    delete_task_attachment,
     delete_task_checklist_item,
     dismiss_notification,
     extend_task_deadline,
@@ -1610,6 +1611,26 @@ async def _attachment_content(
     except ObjectStorageError as error:
         raise HTTPException(status_code=503, detail=str(error)) from error
     return metadata, content
+
+
+@router.delete("/tasks/{task_id}/attachments/{attachment_id}", status_code=204)
+async def remove_task_attachment(
+    task_id: UUID,
+    attachment_id: UUID,
+    request: Request,
+    current_user: Annotated[AuthenticatedUser, Depends(require_user)],
+    connection: Annotated[AsyncConnection, Depends(get_connection)],
+) -> Response:
+    await ensure_module_action(connection, current_user, "tasks", "view")
+    try:
+        await delete_task_attachment(connection, current_user, task_id, attachment_id)
+    except WorkspaceRepositoryError as error:
+        raise _translate(error) from error
+    await connection.commit()
+    await _event_bus(request).publish({
+        "type": "attachment.deleted", "entityId": str(attachment_id),
+    })
+    return Response(status_code=204)
 
 
 @router.get("/attachments/{attachment_id}")

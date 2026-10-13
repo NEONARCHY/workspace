@@ -51,6 +51,7 @@ import {
   TaskListSquareLtr24Regular,
 } from "@fluentui/react-icons";
 import { AttachmentChips } from "./AttachmentPanel";
+import { PendingMessageFiles } from "./PendingMessageFiles";
 import { ChatManagement, type ChatActions } from "./ChatManagement";
 import { OrganizedChatList } from "./OrganizedChatList";
 import { BrowserChatActions } from "./BrowserChatActions";
@@ -1219,28 +1220,8 @@ function Conversation({
               </div>}
             </div> : null}
             <div className="composer-input">
-              {!!pendingFiles.length && (
-                <div className="pending-files">
-                  {pendingFiles.map((file, index) => (
-                    <Button
-                      key={`${file.name}-${index}`}
-                      size="small"
-                      appearance="subtle"
-                      disabled={busy}
-                      aria-label={`Убрать файл ${file.name}`}
-                      onClick={() =>
-                        setPendingFiles(
-                          pendingFiles.filter(
-                            (_, fileIndex) => fileIndex !== index,
-                          ),
-                        )
-                      }
-                    >
-                      {file.name} ×
-                    </Button>
-                  ))}
-                </div>
-              )}
+              <PendingMessageFiles files={pendingFiles} disabled={busy}
+                onRemove={index => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index))} />
               <div className={`composer-field-shell${vanishRequest ? " is-message-animating" : ""}`}>
                 <Input
                   input={{ ref: composerInputRef }}

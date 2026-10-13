@@ -131,6 +131,31 @@ Relevant endpoints:
 - `PUT|DELETE /api/v1/tasks/{task_id}/dependencies[...]`
 - `PUT /api/v1/tasks/{task_id}/cycle`
 - `PUT /api/v1/attachments/task/{task_id}`
+- `DELETE /api/v1/tasks/{task_id}/attachments/{attachment_id}`
+
+## Task attachment removal and deadline labels — 13 October 2026
+
+The uploader may remove a task attachment while still having task read access;
+admin and superadmin may remove any task attachment they can access. Managers do
+not acquire this power over colleagues' files. The API checks module visibility,
+task access, the exact task/attachment pair and uploader/administrator authority,
+then locks and removes the metadata and writes an audit record atomically.
+Ordinary download and preview access ends immediately. The private stored object
+is retained for administrative recovery; it is not physically purged. UI removal
+requires confirmation, waits for server success, and retains the file on failure.
+Other document workflows and message attachments are not changed by this endpoint.
+
+Task files already have no count cap in the current upload/read paths. Multiple
+selection and subsequent batches remain unrestricted; a regression covers a batch
+of 50 files and 50 rendered records. Ordinary per-file size remains 25 MiB (audio
+uses the existing separate limit). No new artificial count limit is introduced.
+
+Deadline cards format the authoritative `dueAt` in the same client timezone as
+chat dates instead of relying on a server-local `dueLabel`. The server fallback
+label explicitly uses Asia/Tashkent, independently of its host timezone. A UTC
+13:00 deadline is therefore 18:00 in Tashkent, not a lost extension. Approval and
+efficiency rules, stored instants and historical decisions are unchanged.
+No database migration is required; deploy API before using the new delete button.
 
 ## Atomic creation
 

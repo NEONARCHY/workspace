@@ -107,7 +107,7 @@ it("does not download list attachments before the user opens them",()=>{
   expect(load).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"Открыть изображение: photo.png"})); expect(open).toHaveBeenCalledOnce();
 });
-it("loads a photo thumbnail only while visible and aborts/releases it on exit",async()=>{
+it.each(["image", "video"])("loads a %s thumbnail only while visible and aborts/releases it on exit",async kind=>{
   let notify: (visible: boolean) => void = () => {};
   const disconnect=vi.fn();
   vi.stubGlobal("IntersectionObserver",class {
@@ -115,11 +115,13 @@ it("loads a photo thumbnail only while visible and aborts/releases it on exit",a
     observe() {}
     disconnect=disconnect;
   });
-  const load=vi.fn().mockResolvedValue(new Blob(["photo"]));
-  const view=render(wrap(<AttachmentChips attachments={[{...file,fileName:"photo.png",contentType:"image/png"}]} onLoad={load} onDownload={vi.fn()}/>));
+  const attachment = {...file,fileName:kind === "image" ? "photo.png" : "clip.mp4",contentType:kind === "image" ? "image/png" : "video/mp4"};
+  const load=vi.fn().mockResolvedValue(new Blob(["media"]));
+  const view=render(wrap(<AttachmentChips attachments={[attachment]} onLoad={load} onDownload={vi.fn()}/>));
   expect(load).not.toHaveBeenCalled();
   act(()=>notify(true));
-  await screen.findByRole("img",{name:"photo.png"});
+  if (kind === "image") await screen.findByRole("img",{name:"photo.png"});
+  else await waitFor(()=>expect(document.querySelector("video")).toHaveAttribute("src", "blob:preview"));
   const signal=load.mock.calls[0]![1] as AbortSignal;
   act(()=>notify(false));
   expect(signal.aborted).toBe(true);

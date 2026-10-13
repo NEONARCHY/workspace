@@ -58,13 +58,15 @@ export function ScoreGauge({ employee }: { readonly employee: EmployeeEfficiency
   const filled = circumference * score / 100;
   const hasData = employee.percentage != null;
   return <div className={`eff-score-gauge ${hasData ? "has-data" : "no-data"}`} role="img" aria-label={`Выполнение задач в срок: ${percentageLabel(employee)}; ${employee.onTimeCount} из ${employee.eligibleCount} задач`}>
-    <svg viewBox="0 0 176 176" aria-hidden="true">
-      <defs><filter id="eff-gauge-glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="5" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-      <circle className="eff-gauge-track" cx="88" cy="88" r="67" />
-      <circle className="eff-gauge-progress" cx="88" cy="88" r="67" strokeDasharray={`${filled} ${circumference - filled}`} />
-      {!hasData ? <circle className="eff-gauge-placeholder" cx="88" cy="88" r="67" strokeDasharray="3 9" /> : null}
-    </svg>
-    <div><strong>{hasData ? percentageLabel(employee) : "—"}</strong><span>{hasData ? `${employee.onTimeCount} из ${employee.eligibleCount} задач в срок` : "Нет данных"}</span></div>
+    <div className="eff-gauge-ring">
+      <svg viewBox="0 0 176 176" aria-hidden="true">
+        <circle className="eff-gauge-track" cx="88" cy="88" r="67" />
+        <circle className="eff-gauge-progress" cx="88" cy="88" r="67" strokeDasharray={`${filled} ${circumference - filled}`} />
+        {!hasData ? <circle className="eff-gauge-placeholder" cx="88" cy="88" r="67" strokeDasharray="3 9" /> : null}
+      </svg>
+      <strong>{hasData ? percentageLabel(employee) : "—"}</strong>
+    </div>
+    <span className="eff-gauge-caption">{hasData ? `${employee.onTimeCount} из ${employee.eligibleCount} задач в срок` : "Нет данных"}</span>
   </div>;
 }
 

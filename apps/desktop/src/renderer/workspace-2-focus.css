@@ -1,18 +1,19 @@
-/* Product choice: keyboard traversal remains functional, but clickable surfaces do not
+/* Legacy light-theme choice: keyboard traversal remains functional, but clickable surfaces do not
    draw an extra focus halo. Selected, active and validation states remain unchanged.
-   Palette navigation/choices retain their scoped keyboard focus indicators. */
-.app-provider :is(
+   Dark flat controls need their explicit keyboard-only focus outline; never suppress it.
+   Palette navigation/choices, light approval tools and calendar controls retain scoped keyboard focus. */
+html:not([data-color-theme="dark"]) .app-provider :is(
   button,
   a,
   [role="button"],
   [role="menuitem"],
   [role="tab"],
   [tabindex="0"]
-):not(.sidebar-palette *, .sidebar-theme-choice):is(:focus, :focus-visible) {
+):not(.sidebar-palette *, .sidebar-theme-choice, .approval-view-toolbar *, .approval-metric-actionable, .calendar-agenda-drawer *, .calendar-ux .calendar-day, .calendar-ux .browser-calendar-agenda, .calendar-ux .calendar-filter-toggle):is(:focus, :focus-visible) {
   outline: 0 !important;
   outline-offset: 0 !important;
 }
 
-.app-provider :is(.chat-row, .message, .task-row, .calendar-day):focus-visible {
+html:not([data-color-theme="dark"]) .app-provider :is(.chat-row, .message, .task-row, .calendar-day):focus-visible {
   box-shadow: none !important;
 }
