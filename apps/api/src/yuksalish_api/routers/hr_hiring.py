@@ -108,9 +108,13 @@ async def recognise_card(
     user: User,
     connection: Connection,
     request: Request,
-    rotation: Literal[0, 90, 180, 270] = Query(default=0),
+    rotation: int = Query(default=0),
 ) -> IdentityRecognition:
     await require_hr(connection, user)
+    if rotation not in (0, 90, 180, 270):
+        raise HTTPException(
+            422, "Поворот фото должен быть 0, 90, 180 или 270 градусов", headers=PRIVATE
+        )
     return await recognise_identity(
         await bounded_body(request, MAX_ID_BYTES),
         request.app.state.settings.hr_identity_ocr_executable,

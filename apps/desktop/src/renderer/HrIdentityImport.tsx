@@ -119,6 +119,11 @@ export function HrIdentityImport({ token, current, disabled, onApply }: {
       <Button disabled={disabled || busy} onClick={() => choosePhoto("back")}>Добавить обратную сторону</Button>
       {files.length ? <><Button appearance="primary" disabled={disabled || busy} onClick={() => void analyse()}>{result ? "Распознать повторно" : "Распознать данные"}</Button>
         <Button icon={<Dismiss20Regular />} disabled={busy || disabled} onClick={clear}>Убрать фото</Button></> : null}</div>
+    {busy ? <div className="hr-identity-feedback" role="status"><Spinner label="Распознаём ID-карту локально…" /></div> : null}
+    {error ? <p className="hr-identity-feedback hr-identity-error" role="alert">{error} Ручное заполнение остаётся доступным.</p> : null}
+    {result ? <p className="hr-identity-feedback" role="status">{result.fullName || result.pinfl || result.passport
+      ? "Распознавание завершено. Проверьте найденные значения ниже и выберите поля для заполнения."
+      : "Не удалось прочитать данные на фото. Попробуйте более чёткий снимок или заполните поля вручную."}</p> : null}
     {files.length ? <div className="hr-identity-photos">{files.map((file, index) => <figure key={`${file.name}-${index}`}>
       <div className="hr-identity-photo-frame">{previews[index] ? <img style={{ transform: `rotate(${rotations[index] ?? 0}deg) scale(${(rotations[index] ?? 0) % 180 ? .65 : 1})` }} src={previews[index]} alt={`Фото ID-карты, сторона ${index + 1}`} /> : null}</div><figcaption>{photoLabels[index]}</figcaption>
       <div className="hr-identity-photo-actions"><Button disabled={busy || disabled} onClick={() => setExpanded(index)}>Увеличить фото {index + 1}</Button>
@@ -128,8 +133,6 @@ export function HrIdentityImport({ token, current, disabled, onApply }: {
           setFiles(files.filter((_, i) => i !== index)); setPreviews(previews.filter((_, i) => i !== index));
           setPhotoLabels(photoLabels.filter((_, i) => i !== index)); setRotations(rotations.filter((_, i) => i !== index)); setResult(undefined); setChecked(false);
         }}>Убрать фото {index + 1}</Button></div></figure>)}</div> : null}
-    {busy ? <Spinner label="Распознаём ID-карту локально…" /> : null}
-    {error ? <p role="alert">{error} Ручное заполнение остаётся доступным.</p> : null}
     {result ? <div className="hr-identity-review"><h4>Проверьте по оригиналу карты</h4>
       {result.warnings.length ? <ul>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul> : null}
       {keys.map(key => <div className="hr-identity-field" key={key}>

@@ -36,6 +36,8 @@
 .hr-identity h4 { margin: 0 0 6px; font-size: 14px; }
 .hr-identity p, .hr-identity small, .hr-identity li { color: var(--ws-muted); font-size: 12px; line-height: 1.6; }
 .hr-identity p { margin: 0 0 12px; }
+.hr-identity .hr-identity-feedback { margin: 12px 0 0; padding: 10px 12px; border: 1px solid var(--ws-line); border-radius: 10px; background: var(--ws-theme-surface, #fff); }
+.hr-identity p.hr-identity-error { color: var(--ws-theme-ink-danger, #9e3c43); border-color: var(--ws-theme-line-danger, #e8a3a9); background: var(--ws-theme-wash-danger, #fff2f3); }
 .hr-identity > small { display: block; margin-top: 12px; }
 .hr-identity-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-block: 16px; }
 .hr-identity-photos figure { margin: 0; min-width: 0; }
