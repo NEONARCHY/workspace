@@ -36,6 +36,7 @@ from yuksalish_api.absence_service import (
 )
 from yuksalish_api.access_control import ModuleAction, ensure_module_action
 from yuksalish_api.ai_referent_authority import workspace_write_guard
+from yuksalish_api.ai_referent_docx_safety import has_disallowed_external_relationships
 from yuksalish_api.auth import (
     AuthenticatedUser,
     InvalidTokenError,
@@ -1528,18 +1529,10 @@ async def put_attachment(
                 names = {name.lower() for name in package.namelist()}
                 if sum(item.file_size for item in package.infolist()) > 100 * 1024 * 1024:
                     raise HTTPException(422, "DOCX слишком большой после распаковки.")
-                external_relationships = any(
-                    item.filename.lower().endswith(".rels")
-                    and (
-                        b'targetmode="external"' in package.read(item).lower()
-                        or b"targetmode='external'" in package.read(item).lower()
-                    )
-                    for item in package.infolist()
-                )
                 if (
                     "word/document.xml" not in names
                     or any("vbaproject" in name for name in names)
-                    or external_relationships
+                    or has_disallowed_external_relationships(package)
                 ):
                     raise HTTPException(422, "DOCX повреждён или содержит недопустимые элементы.")
         except BadZipFile as error:

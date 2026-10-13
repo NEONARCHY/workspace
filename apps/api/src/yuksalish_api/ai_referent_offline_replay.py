@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from .ai_referent_audio import decision_audio
 from .ai_referent_deletion import purge_letter
+from .ai_referent_docx_safety import has_disallowed_external_relationships
 from .ai_referent_preflight import ensure_check, require_passed
 from .ai_referent_schemas import (
     CreateAIReferentLetterRequest,
@@ -124,14 +125,7 @@ async def _replay_attachment(
                     "word/document.xml" not in names
                     or sum(item.file_size for item in package.infolist()) > 100 * 1024 * 1024
                     or any("vbaproject" in item for item in names)
-                    or any(
-                        item.filename.lower().endswith(".rels")
-                        and (
-                            b'targetmode="external"' in package.read(item).lower()
-                            or b"targetmode='external'" in package.read(item).lower()
-                        )
-                        for item in package.infolist()
-                    )
+                    or has_disallowed_external_relationships(package)
                 ):
                     raise HTTPException(422, "DOCX повреждён или содержит недопустимые элементы.")
         except BadZipFile as error:
