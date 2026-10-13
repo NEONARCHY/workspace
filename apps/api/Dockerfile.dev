@@ -1,6 +1,9 @@
 FROM python:3.11-slim
 
 WORKDIR /workspace
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus tesseract-ocr-uzb tesseract-ocr-uzb-cyrl \
+    && apt-get clean
 COPY pyproject.toml README.md ./
 # Install runtime requirements before mounting source, so edits do not rebuild dependencies.
 RUN python -c "import subprocess, sys, tomllib; deps = tomllib.load(open('pyproject.toml', 'rb'))['project']['dependencies']; subprocess.check_call([sys.executable, '-m', 'pip', 'install', '--no-cache-dir', *deps])" \

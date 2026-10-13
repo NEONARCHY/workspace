@@ -3,6 +3,7 @@ import type { HiringActionName, HiringDetail, HiringDocumentKind, HiringFields, 
 import { Button, Checkbox, DialogActions, DialogBody, DialogContent, DialogSurface, DialogTitle, Field, Input, Select, Spinner, Textarea } from "@fluentui/react-components";
 import { WorkspaceDialog } from "./WorkspaceDialog";
 import { LocalFileViewer } from "./FileViewer";
+import { HrIdentityImport } from "./HrIdentityImport";
 import { ApiHttpError, actHiringCase, downloadHiringDocument, loadHiringCase, loadHiringRegistry, saveHiringCase, saveHiringSignature, uploadHiringDocument } from "./workspace-api";
 import "./hr-hiring.css";
 
@@ -78,9 +79,10 @@ export function HrHiringView({ token }: { readonly token: string }) {
     <Input type="number" min={min} max={max} value={String(fields[key])} disabled={!editable || busy}
       onChange={(_, data) => { setFields({ ...fields, [key]: Number(data.value) }); setDirty(true); }} /></Field>;
 
+  const stage = selected?.status === "completed" ? 4 : selected?.status === "awaiting_employee" ? 3 : selected?.status === "pending" ? 2 : 1;
   return <section className="hr-hiring" aria-label="Приём на работу">
     <div className="hr-hiring-toolbar"><div><h2>Приём на работу</h2><p>Договор, приказ и ариза в одном пакете. Сотрудник подписывает договор после распечатки.</p></div>
-      <div><Button disabled={busy} onClick={() => void run(refresh)}>Обновить</Button>{registry?.canCreate ? <Button appearance="primary" disabled={busy} onClick={start}>Новый приём</Button> : null}</div></div>
+      <div><span className="hr-hiring-count">{registry ? `${registry.total} оформлений` : "Загрузка"}</span><Button disabled={busy} onClick={() => void run(refresh)}>Обновить</Button>{registry?.canCreate ? <Button appearance="primary" disabled={busy} onClick={start}>Новый приём</Button> : null}</div></div>
     {error ? <div role="alert" className="hr-alert hr-error">{error}</div> : null}
     {!registry && !error ? <Spinner label="Загружаем оформления…" /> : null}
     {registry ? <><div className="hr-hiring-signature"><span>Руководитель: {registry.signerName}. {registry.signatureReady ? "Личная подпись настроена." : "Личная подпись ещё не настроена."}</span>
@@ -94,7 +96,12 @@ export function HrHiringView({ token }: { readonly token: string }) {
           <span>{registry.total} всего</span><Button disabled={busy || offset + 50 >= registry.total || dirty} onClick={() => setOffset(offset + 50)}>Далее</Button></div>
       </aside><div className="hr-hiring-detail">
         {!draftId ? <p>Выберите оформление или начните новый приём.</p> : <>
-          <h3>{selected ? `${selected.fullName} · ${labels[selected.status]}` : "Новый сотрудник"}</h3>
+          <div className="hr-hiring-record-title"><div><span className="hr-kicker">КАДРОВОЕ ОФОРМЛЕНИЕ</span><h3>{selected ? selected.fullName : "Новый сотрудник"}</h3></div>
+            <span className="hr-hiring-state">{selected ? labels[selected.status] : "Новый черновик"}</span></div>
+          <ol className="hr-hiring-steps" aria-label="Этапы оформления">{["Данные и документы", "Решение руководителя", "Подпись сотрудника", "Завершено"].map((label, index) =>
+            <li key={label} aria-current={stage === index + 1 ? "step" : undefined} data-complete={stage > index + 1}><span>{index + 1}</span>{label}</li>)}</ol>
+          {editable ? <HrIdentityImport key={draftId} token={token} current={fields} disabled={busy}
+            onApply={values => { setFields({ ...fields, ...values }); setDirty(true); }} /> : null}
           {selected?.returnComment ? <p className="hr-alert">Причина возврата: {selected.returnComment}</p> : null}
           <fieldset disabled={!editable || busy}><legend>Данные сотрудника</legend><div className="hr-hiring-grid">
             {text("fullName", "Фамилия, имя и отчество")}{text("passport", "Паспорт / ID-карта")}{text("pinfl", "JSHSHIR — 14 цифр")}{text("phone", "Телефон")}{text("address", "Адрес проживания")}
