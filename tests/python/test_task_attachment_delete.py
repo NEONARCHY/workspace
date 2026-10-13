@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.sql.dml import Delete, Insert
 
 from yuksalish_api import repository
 from yuksalish_api.auth import AuthenticatedUser
@@ -28,9 +29,11 @@ def test_only_uploader_or_admin_can_remove_task_file(monkeypatch, role, own, all
     if allowed:
         asyncio.run(repository.delete_task_attachment(connection, actor, task_id, attachment_id))
         assert connection.execute.await_count == 3  # locked read, removal, audit
-        statements = [str(call.args[0]) for call in connection.execute.await_args_list]
-        assert "DELETE FROM attachments" in statements[1]
-        assert "core_audit_events" in statements[2]
+        statements = [call.args[0] for call in connection.execute.await_args_list]
+        assert isinstance(statements[1], Delete)
+        assert statements[1].table is repository.attachments
+        assert isinstance(statements[2], Insert)
+        assert statements[2].table is repository.audit_events
     else:
         with pytest.raises(repository.WorkspaceRepositoryError) as error:
             asyncio.run(repository.delete_task_attachment(
