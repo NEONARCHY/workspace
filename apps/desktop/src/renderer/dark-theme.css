@@ -110,12 +110,7 @@ html[data-color-theme="dark"] .eff-chart-dot { fill: #162635; }
    authored colours intact. Never invert photographs, PDF pixels or logos. */
 html[data-color-theme="dark"] .file-viewer-document { color: #293a55; background: #fff; color-scheme: light; }
 html[data-color-theme="dark"] .file-viewer-pdf-page canvas { background: #fff; }
-html[data-color-theme="dark"] :is(.app-provider, .fui-FluentProvider) {
-  scrollbar-color: #648096 transparent;
-}
-html[data-color-theme="dark"] *::-webkit-scrollbar-thumb {
-  background-color: #648096;
-}
+/* Scrollbar colours and opacity gradients are owned by scrollbars.css. */
 html[data-color-theme="dark"] .assistant-thinking,
 html[data-color-theme="dark"] .assistant-status {
   color: var(--ws-link);

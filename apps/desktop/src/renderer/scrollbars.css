@@ -1,7 +1,10 @@
-/* One native scrollbar treatment, including Fluent portals. Keep browser input intact. */
+/* One native scrollbar treatment, including Fluent portals. Keep browser input intact.
+   Every gradient stop uses the same theme colour; only edge opacity changes. */
+html { --ws-scrollbar-thumb-rgb: 141 164 170; }
+html[data-color-theme="dark"] { --ws-scrollbar-thumb-rgb: 100 128 150; }
 html body :is(.app-provider, .fui-FluentProvider) * {
   scrollbar-width: thin;
-  scrollbar-color: #8da4aa transparent;
+  scrollbar-color: rgb(var(--ws-scrollbar-thumb-rgb)) transparent;
 }
 
 @supports selector(::-webkit-scrollbar) {
@@ -20,31 +23,31 @@ html body :is(.app-provider, .fui-FluentProvider) * {
     border: 0;
     border-radius: 999px;
     background: linear-gradient(to bottom,
-      rgb(141 164 170 / var(--ws-scroll-start, 0)),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-quarter, min(32px, 8.75%)),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-half, min(64px, 17.5%)),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-three-quarters, min(96px, 26.25%)),
-      var(--ws-theme-wash-teal, #8da4aa) var(--ws-thumb-fade-length, min(128px, 35%)),
-      var(--ws-theme-wash-teal, #8da4aa) calc(100% - var(--ws-thumb-fade-length, min(128px, 35%))),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-three-quarters, min(96px, 26.25%))),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-half, min(64px, 17.5%))),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-quarter, min(32px, 8.75%))),
-      rgb(141 164 170 / var(--ws-scroll-end, 1)));
+      rgb(var(--ws-scrollbar-thumb-rgb) / var(--ws-scroll-start, 0)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.15625 + .84375 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-quarter, min(32px, 8.75%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.5 + .5 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-half, min(64px, 17.5%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.84375 + .15625 * var(--ws-scroll-start, 0))) var(--ws-thumb-fade-three-quarters, min(96px, 26.25%)),
+      rgb(var(--ws-scrollbar-thumb-rgb)) var(--ws-thumb-fade-length, min(128px, 35%)),
+      rgb(var(--ws-scrollbar-thumb-rgb)) calc(100% - var(--ws-thumb-fade-length, min(128px, 35%))),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.84375 + .15625 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-three-quarters, min(96px, 26.25%))),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.5 + .5 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-half, min(64px, 17.5%))),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.15625 + .84375 * var(--ws-scroll-end, 1))) calc(100% - var(--ws-thumb-fade-quarter, min(32px, 8.75%))),
+      rgb(var(--ws-scrollbar-thumb-rgb) / var(--ws-scroll-end, 1)));
   }
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal:hover,
   html body :is(.app-provider.app-provider, .fui-FluentProvider.fui-FluentProvider) *::-webkit-scrollbar-thumb:horizontal:active {
     background: linear-gradient(to right,
-      rgb(141 164 170 / var(--ws-scroll-left, 0)),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-left, 0))) min(32px, 8.75%),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-left, 0))) min(64px, 17.5%),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-left, 0))) min(96px, 26.25%),
-      var(--ws-theme-wash-teal, #8da4aa) min(128px, 35%),
-      var(--ws-theme-wash-teal, #8da4aa) calc(100% - min(128px, 35%)),
-      rgb(141 164 170 / calc(.84375 + .15625 * var(--ws-scroll-right, 1))) calc(100% - min(96px, 26.25%)),
-      rgb(141 164 170 / calc(.5 + .5 * var(--ws-scroll-right, 1))) calc(100% - min(64px, 17.5%)),
-      rgb(141 164 170 / calc(.15625 + .84375 * var(--ws-scroll-right, 1))) calc(100% - min(32px, 8.75%)),
-      rgb(141 164 170 / var(--ws-scroll-right, 1)));
+      rgb(var(--ws-scrollbar-thumb-rgb) / var(--ws-scroll-left, 0)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.15625 + .84375 * var(--ws-scroll-left, 0))) min(32px, 8.75%),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.5 + .5 * var(--ws-scroll-left, 0))) min(64px, 17.5%),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.84375 + .15625 * var(--ws-scroll-left, 0))) min(96px, 26.25%),
+      rgb(var(--ws-scrollbar-thumb-rgb)) min(128px, 35%),
+      rgb(var(--ws-scrollbar-thumb-rgb)) calc(100% - min(128px, 35%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.84375 + .15625 * var(--ws-scroll-right, 1))) calc(100% - min(96px, 26.25%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.5 + .5 * var(--ws-scroll-right, 1))) calc(100% - min(64px, 17.5%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / calc(.15625 + .84375 * var(--ws-scroll-right, 1))) calc(100% - min(32px, 8.75%)),
+      rgb(var(--ws-scrollbar-thumb-rgb) / var(--ws-scroll-right, 1)));
   }
   html body .app-provider.app-provider .task-kanban { scrollbar-width: none; }
   html body .app-provider .task-kanban::-webkit-scrollbar { height: 0; }
