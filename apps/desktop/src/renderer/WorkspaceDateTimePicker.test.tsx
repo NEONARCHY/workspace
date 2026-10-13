@@ -8,6 +8,13 @@ import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 describe("workspace date and file inputs", () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+  it("uses a compact numeric date only when requested, keeping the full date elsewhere", () => {
+    render(<><WorkspaceDateTimePicker mode="date" dateFormat="numeric" ariaLabel="Перейти к дате" value="2026-09-04" onChange={vi.fn()} />
+      <WorkspaceDateTimePicker mode="date" ariaLabel="Дата события" value="2026-09-04" onChange={vi.fn()} /></>);
+    expect(screen.getByRole("button", { name: "Перейти к дате: открыть выбор" })).toHaveTextContent("04.09.2026");
+    expect(screen.getByRole("button", { name: "Дата события: открыть выбор" })).toHaveTextContent("04 сентября 2026");
+  });
+
   it("routes a latched wheel event by cursor position and preserves the other value", () => {
     function Controlled() {
       const [value, setValue] = useState("14:10");

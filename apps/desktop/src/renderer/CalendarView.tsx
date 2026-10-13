@@ -727,7 +727,7 @@ export function CalendarView({
               <Button appearance="subtle" disabled={Boolean(draft) || busy} onClick={goToToday}>Сегодня</Button>
               <Button appearance="subtle" icon={<ChevronRight24Regular />} aria-label="Следующий месяц" disabled={Boolean(draft) || busy || (view === "list" && Boolean(filters.from || filters.to))} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
             </div>
-            <WorkspaceDateTimePicker mode="date" ariaLabel="Перейти к дате" value={dayKey(selectedDay)}
+            <WorkspaceDateTimePicker mode="date" dateFormat="numeric" ariaLabel="Перейти к дате" value={dayKey(selectedDay)}
               disabled={Boolean(draft) || busy} onChange={value => { const date = new Date(`${value}T00:00:00`); if (Number.isFinite(date.getTime())) { setFilters(current => ({ ...current, from: "", to: "" })); setView("month"); chooseDay(date); } }} />
           <SlidingSegmented className="calendar-view-switch" aria-label="Вид календаря">
             <button type="button" disabled={Boolean(draft) || busy} aria-pressed={view === "month"} onClick={() => setView("month")}>Месяц</button>

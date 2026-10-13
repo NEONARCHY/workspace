@@ -35,7 +35,12 @@ it("does not reserve the chairman's time for a pending invitation", () => {
 });
 it("offers every requested icon, presets and a custom RGB color", () => {
   calendar("pending");
-  for (const name of ["Три дерева", "Сдача крови", "Слушание", "Собрание", "Встреча", "Поездка", "Проект", "Тимбилдинг", "Горы", "Договор", "Меморандум", "Тренинг", "Интервью"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  for (const name of ["Три дерева", "Сдача крови", "Слушание", "Собрание", "Встреча", "Поездка", "Проект", "Тимбилдинг", "Горы", "Договор", "Меморандум", "Тренинг", "Интервью"]) {
+    const button = screen.getByRole("button", { name });
+    expect(button).toHaveAttribute("aria-label", name);
+    expect(button.textContent).toBe("");
+    expect(button.querySelector("svg")).toBeInTheDocument();
+  }
   fireEvent.click(screen.getByRole("button", { name: "Тренинг" }));
   expect(screen.getByRole("button", { name: "Тренинг" })).toHaveAttribute("aria-pressed", "true");
   fireEvent.change(screen.getByLabelText("Свой цвет события"), { target: { value: "#669988" } });

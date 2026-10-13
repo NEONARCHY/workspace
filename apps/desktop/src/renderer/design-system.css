@@ -36,7 +36,7 @@ button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid
 .app-provider :is(.fui-Field__label, .fui-Label) { font-family: var(--ws-font); }
 .app-provider :is(.fui-Input, .fui-Textarea) :is(input, textarea)::placeholder { color: var(--ws-muted); opacity: 1; }
 .app-provider :is(.workspace-view, .account-panel, .fui-DialogSurface) :is(small, time) { font-size: 12px; line-height: 1.45; }
-.app-provider :is(.workspace-view, .account-panel) :is(input:not([type=checkbox]):not([type=radio]), select, textarea):not(.fui-Input__input):not(.fui-Textarea__textarea):not(.fui-Select__select) {
+.app-provider :is(.workspace-view, .account-panel) :is(input:not([type=checkbox]):not([type=radio]), select, textarea):not(.fui-Input__input):not(.fui-Combobox__input):not(.fui-Textarea__textarea):not(.fui-Select__select) {
   border-radius: var(--ws-radius-control); border-color: var(--ws-control-line); font-family: var(--ws-font); font-size: 14px;
 }
 .skip-to-content { position: fixed; z-index: 120; top: 8px; left: 12px; transform: translateY(-180%); padding: 12px 18px; border-radius: 10px; color: white; background: var(--ws-navy); }
