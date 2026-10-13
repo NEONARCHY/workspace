@@ -13,6 +13,7 @@ import { ConfirmActionDialog } from "./ConfirmActionDialog";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { useAssistantOrbJourney } from "./assistant-orb-journey";
 import { isDraftContinuation, isFormOpenSignal } from "./assistant-form-handoff";
+import { browserNavigationQuery } from "./browser-layout";
 
 const modelOptions: readonly { value: AssistantModel; label: string; description: string }[] = [
   { value: "flash-lite", label: "Лёгкий", description: "Повседневные вопросы · экономный режим" },
@@ -34,8 +35,14 @@ const fileTypes: Record<string, AssistantAttachmentInput["mime_type"]> = {
 };
 
 function assistantViewport() {
-  const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
-  return { width: window.innerWidth / zoom, height: window.innerHeight / zoom, zoom };
+  const root = document.documentElement;
+  const style = getComputedStyle(root);
+  const zoom = Number.parseFloat(style.zoom) || 1;
+  const browser = root.classList.contains("web-platform");
+  return { width: window.innerWidth / zoom,
+    height: browser ? (Number.parseFloat(style.getPropertyValue("--ws-browser-height")) || window.innerHeight) / zoom : window.innerHeight / zoom,
+    top: browser ? (Number.parseFloat(style.getPropertyValue("--ws-browser-top")) || 0) / zoom : 0,
+    browserCompact: browser && (window.matchMedia?.(browserNavigationQuery).matches ?? false), zoom };
 }
 
 function readFileAsBase64(file: File): Promise<string> {
@@ -228,7 +235,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
       setChatPickerOpen(false);
       setPresetsOpen(false);
       setViewport((current) => current.width === next.width && current.height === next.height
-        && current.zoom === next.zoom ? current : next);
+        && current.zoom === next.zoom && current.top === next.top && current.browserCompact === next.browserCompact ? current : next);
     };
     window.addEventListener("resize", updateViewport);
     const observer = new MutationObserver(updateViewport);
@@ -630,7 +637,7 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
   const thinkingState = /юксалиш|yuksalish|источ|найди|поиск/i.test(messages.at(-1)?.content ?? "")
     ? "searching" : /задач|проект|заявк|анализ/i.test(messages.at(-1)?.content ?? "")
       ? "solving" : "composing";
-  const compact = viewport.width <= 600;
+  const compact = viewport.browserCompact || viewport.width <= 600;
   const canShowChatSidebar = expanded && viewport.width > CHAT_SIDEBAR_MIN_WIDTH;
   const showChatSidebar = canShowChatSidebar && !sidebarCollapsed;
   const orderedChats = [...chats].sort((left, right) => Number(Boolean(right.isPinned)) - Number(Boolean(left.isPinned)));
@@ -656,7 +663,10 @@ export function YuksalishAssistant({ token, onOpenReference, onPrepareAction }: 
         transition={{ duration: reducedMotion ? 0 : 0.16, ease: [0.2, 0, 0, 1] }}
         data-orb-phase={orbPhase === "closed" ? "waiting" : orbPhase}
         inert={!["ready", "docking"].includes(orbPhase)}
-        style={{ width: panelWidth, height: panelHeight, right: edge, bottom: edge,
+        style={{ width: viewport.browserCompact ? `calc(${viewport.width}px - max(8px, env(safe-area-inset-left)) - max(8px, env(safe-area-inset-right)))` : panelWidth,
+          height: viewport.browserCompact ? `calc(${viewport.height}px - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)))` : panelHeight,
+          right: viewport.browserCompact ? "max(8px, env(safe-area-inset-right))" : edge, bottom: viewport.browserCompact ? "auto" : edge,
+          top: viewport.browserCompact ? `calc(${viewport.top}px + max(8px, env(safe-area-inset-top)))` : undefined,
           borderRadius: expanded ? 22 : 26 }}
         ref={panelRef}
         onDragEnter={(event) => {

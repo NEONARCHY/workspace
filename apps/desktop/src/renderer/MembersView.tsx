@@ -49,18 +49,18 @@ function MembersRecords({ members, filterKey, onOpen }: {
   const changeSort = (key: string) => setSort({ key, descending: sort.key === key && !sort.descending });
   return <div className="record-table-frame members-records">
     <div className="record-table-scroll" role="region" aria-label="Реестр членов" tabIndex={0}>
-      <table className="record-table members-record-table" aria-label="Члены организации">
-        <thead><tr>
+      <table role="table" className="record-table members-record-table" aria-label="Члены организации">
+        <thead role="rowgroup"><tr role="row">
           {[['name', 'Член'], ['region', 'Регион'], ['sphere', 'Сфера'], ['gender', 'Пол'], ['createdAt', 'Регистрация'], ['status', 'Статус']].map(([column, label]) =>
             <SortHeading key={column} column={column!} sort={sort} onSort={changeSort}>{label}</SortHeading>)}
         </tr></thead>
-        <tbody>{pageMembers.map((member) => <tr key={member.id} className="record-row member-row">
-          <td><span className="record-person"><Avatar name={displayName(member)} size={36} color="colorful" aria-hidden="true" /><span><button type="button" className="record-open" onClick={() => onOpen(member)}><strong>{displayName(member)}</strong></button><small>{member.username ? `@${member.username}` : `ID ${member.id}`}</small></span></span></td>
-          <td>{member.regionNameRu ?? "Не указан"}</td>
-          <td>{member.sphereNameRu ?? "Не указана"}</td>
-          <td>{genderLabel[member.gender ?? ""] ?? "Не указан"}</td>
-          <td className="record-deadline">{dateText(member.createdAt)}</td>
-          <td><Badge appearance="tint" color={member.status === "active" ? "success" : "subtle"}>{member.status === "active" ? "Активен" : member.status}</Badge></td>
+        <tbody role="rowgroup">{pageMembers.map((member) => <tr role="row" key={member.id} className="record-row member-row">
+          <td role="cell" className="record-title"><span className="record-person"><Avatar name={displayName(member)} size={36} color="colorful" aria-hidden="true" /><span><button type="button" className="record-open" onClick={() => onOpen(member)}><strong>{displayName(member)}</strong></button><small>{member.username ? `@${member.username}` : `ID ${member.id}`}</small></span></span></td>
+          <td role="cell"><span className="record-mobile-label">Регион</span>{member.regionNameRu ?? "Не указан"}</td>
+          <td role="cell"><span className="record-mobile-label">Сфера</span>{member.sphereNameRu ?? "Не указана"}</td>
+          <td role="cell"><span className="record-mobile-label">Пол</span>{genderLabel[member.gender ?? ""] ?? "Не указан"}</td>
+          <td role="cell" className="record-deadline"><span className="record-mobile-label">Регистрация</span>{dateText(member.createdAt)}</td>
+          <td role="cell"><span className="record-mobile-label">Статус</span><Badge appearance="tint" color={member.status === "active" ? "success" : "subtle"}>{member.status === "active" ? "Активен" : member.status}</Badge></td>
         </tr>)}</tbody>
       </table>
       {!members.length ? <div className="record-table-empty"><strong>Члены не найдены</strong><span>Измените условия поиска или фильтры.</span></div> : null}

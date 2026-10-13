@@ -7,6 +7,9 @@ import {
 } from "./AudioDeviceSettings";
 import {
   supportsCompressedVoiceRecording,
+  supportedVoiceMimeType,
+  voiceRecordingExtension,
+  sendMessengerRecording,
   nextVoicePlaybackRate,
   VOICE_BITS_PER_SECOND,
   VOICE_MAX_DURATION_MS,
@@ -18,6 +21,29 @@ const storageKey = "yuksalish.audio-devices.v1";
 const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
 
 describe("voice message media policy", () => {
+  it("routes Safari MP4 as an audio file, never as an Opus voice", async () => {
+    const audio = vi.fn().mockResolvedValue({ id: "audio" }), voice = vi.fn();
+    const file = new File(["synthetic"], "voice.m4a", { type: "audio/mp4;codecs=mp4a.40.2" });
+    expect(await sendMessengerRecording(file, 1200, audio, voice)).toEqual({ id: "audio" });
+    expect(audio).toHaveBeenCalledWith(file);
+    expect(voice).not.toHaveBeenCalled();
+  });
+  it("preserves the voice duration and rejection for WebM retry", async () => {
+    const audio = vi.fn(), voice = vi.fn().mockRejectedValue(new Error("Upload failed"));
+    const file = new File(["synthetic"], "voice.webm", { type: VOICE_MIME_TYPE });
+    await expect(sendMessengerRecording(file, 1200, audio, voice)).rejects.toThrow("Upload failed");
+    expect(voice).toHaveBeenCalledWith(file, 1200);
+    expect(audio).not.toHaveBeenCalled();
+  });
+  it("permits MP4 in messenger while preserving Referent's WebM-only recording contract", () => {
+    vi.stubGlobal("MediaRecorder", { isTypeSupported: (type: string) => type === "audio/mp4" });
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: vi.fn() } });
+    expect(supportsCompressedVoiceRecording()).toBe(false);
+    expect(supportsCompressedVoiceRecording(true)).toBe(true);
+    expect(supportedVoiceMimeType(true)).toBe("audio/mp4");
+    expect(voiceRecordingExtension("audio/mp4;codecs=mp4a.40.2")).toBe("m4a");
+    expect(voiceRecordingExtension(VOICE_MIME_TYPE)).toBe("webm");
+  });
   beforeEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();

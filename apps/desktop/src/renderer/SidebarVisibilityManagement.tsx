@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DirectoryBootstrap, NavigationKey, SidebarVisibility, WorkspacePerson } from "@yuksalish/contracts";
 import { Button, Checkbox, DialogSurface, Field, Spinner } from "@fluentui/react-components";
 import { Dismiss20Regular, Navigation24Regular } from "@fluentui/react-icons";
@@ -29,6 +29,14 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const formRef = useRef<HTMLFormElement>(null);
+  const restoreSaveFocus = useRef(false);
+  useEffect(() => {
+    if (busy || !restoreSaveFocus.current) return;
+    restoreSaveFocus.current = false;
+    const selector = error ? 'button[type="submit"]' : 'button[aria-label="Закрыть настройку меню"]';
+    formRef.current?.querySelector<HTMLButtonElement>(selector)?.focus({ preventScroll: true });
+  }, [busy, error, notice]);
   const selectEmployee = (id: string) => {
     setUserId(id); setSaved(undefined); setHidden([]); setError(""); setNotice(""); setLoading(!!id);
   };
@@ -48,6 +56,7 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
   const changed = saved?.userId === userId && (hidden.length !== saved.hiddenKeys.length || hidden.some((key) => !saved.hiddenKeys.includes(key)));
   const save = async () => {
     if (!saved || busy || !changed) return;
+    restoreSaveFocus.current = true;
     setBusy(true); setError(""); setNotice("");
     try {
       const value = await saveSidebarVisibility(token, userId, hidden, saved.revision);
@@ -56,7 +65,7 @@ export function SidebarVisibilityManagement({ token, directory, currentUser, ini
       setError(cause instanceof Error ? cause.message : "Не удалось сохранить меню. Повторите попытку.");
     } finally { setBusy(false); }
   };
-  return <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") onClose(); }}><DialogSurface className="sidebar-visibility-dialog" aria-label="Настройка меню сотрудника"><form className="sidebar-visibility-management" aria-label="Меню сотрудника" onSubmit={(event) => { event.preventDefault(); void save(); }} aria-busy={busy || loading}>
+  return <Dialog open onOpenChange={(_, data) => { if (!data.open && !busy && data.type === "escapeKeyDown") onClose(); }}><DialogSurface className="sidebar-visibility-dialog" aria-label="Настройка меню сотрудника"><form ref={formRef} className="sidebar-visibility-management" aria-label="Меню сотрудника" onSubmit={(event) => { event.preventDefault(); void save(); }} aria-busy={busy || loading}>
     <header><span className="sidebar-visibility-icon" aria-hidden="true"><Navigation24Regular /></span><div><h2>Меню сотрудника</h2><p>Оставьте в боковом меню только нужные разделы.</p></div><Button type="button" appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть настройку меню" disabled={busy} onClick={onClose} /></header>
     <div className="sidebar-visibility-scroll">
       <Field label="Сотрудник"><PersonPicker token={token} people={people} departments={directory.departments} value={userId} label="Сотрудник для настройки меню" disabled={busy} onChange={selectEmployee} /></Field>

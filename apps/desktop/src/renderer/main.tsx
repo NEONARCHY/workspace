@@ -64,6 +64,7 @@ import "./section-headers.css";
 import "./sidebar-theme.css";
 import "./page-canvas.css";
 import "./browser-responsive.css";
+import "./browser-secondary.css";
 import { workspacePlatform } from "./platform-adapter";
 import { observeBrowserViewport } from "./browser-layout";
 

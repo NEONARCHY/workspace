@@ -171,28 +171,44 @@ function VoicePlayerSurface({ ariaLabel, durationMs, waveform, url = "", loading
   </>;
 }
 
-export function supportsCompressedVoiceRecording() {
+export function supportsCompressedVoiceRecording(allowMp4 = false) {
   return typeof MediaRecorder !== "undefined"
     && typeof MediaRecorder.isTypeSupported === "function"
     && (MediaRecorder.isTypeSupported(VOICE_MIME_TYPE)
-      || MediaRecorder.isTypeSupported(VOICE_MIME_FALLBACK))
+      || MediaRecorder.isTypeSupported(VOICE_MIME_FALLBACK)
+      || (allowMp4 && MediaRecorder.isTypeSupported("audio/mp4")))
     && Boolean(navigator.mediaDevices?.getUserMedia);
 }
 
-function supportedVoiceMimeType() {
+export function supportedVoiceMimeType(allowMp4 = false) {
   return MediaRecorder.isTypeSupported(VOICE_MIME_TYPE)
     ? VOICE_MIME_TYPE
-    : VOICE_MIME_FALLBACK;
+    : allowMp4 && !MediaRecorder.isTypeSupported(VOICE_MIME_FALLBACK)
+      ? "audio/mp4" : VOICE_MIME_FALLBACK;
+}
+
+export function voiceRecordingExtension(mimeType: string) {
+  return mimeType.split(";", 1)[0]?.toLowerCase() === "audio/mp4" ? "m4a" : "webm";
+}
+
+/** MP4/AAC must use the generic attachment path, not WebM/Opus metadata. */
+export function sendMessengerRecording<T>(file: File, durationMs: number,
+  sendAudio: (file: File) => T | Promise<T>,
+  sendVoice: (file: File, durationMs: number) => Promise<T>) {
+  return file.type.split(";", 1)[0]?.toLowerCase() === "audio/mp4"
+    ? sendAudio(file) : sendVoice(file, durationMs);
 }
 
 interface VoiceRecorderProps {
+  /** Generic messenger attachments accept MP4; Referent's WebM contract does not. */
+  readonly allowMp4?: boolean;
   readonly disabled?: boolean;
   readonly maxDurationMs?: number;
   readonly onClose: () => void;
   readonly onSend: (file: File, durationMs: number) => Promise<boolean>;
 }
 
-export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS, onClose, onSend }: VoiceRecorderProps) {
+export function VoiceRecorder({ disabled, allowMp4 = false, maxDurationMs = VOICE_MAX_DURATION_MS, onClose, onSend }: VoiceRecorderProps) {
   const [state, setState] = useState<"requesting" | "recording" | "ready" | "error">("requesting");
   const [durationMs, setDurationMs] = useState(0);
   const [blob, setBlob] = useState<Blob>();
@@ -262,9 +278,9 @@ export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS,
         setError("Браузер не разрешает микрофон на недоверенном адресе. Откройте защищённую LAN-ссылку или desktop-приложение.");
         return;
       }
-      if (!supportsCompressedVoiceRecording()) {
+      if (!supportsCompressedVoiceRecording(allowMp4)) {
         setState("error");
-        setError("Формат голосовой записи не поддерживается на этом компьютере. Обновите приложение или Chromium.");
+        setError("Браузер не поддерживает доступный формат голосовой записи. Обновите браузер или используйте desktop-приложение.");
         return;
       }
       try {
@@ -313,7 +329,7 @@ export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS,
           analyserFrameRef.current = requestAnimationFrame(measure);
         }
         const recorder = new MediaRecorder(stream, {
-          mimeType: supportedVoiceMimeType(),
+          mimeType: supportedVoiceMimeType(allowMp4),
           audioBitsPerSecond: VOICE_BITS_PER_SECOND,
         });
         recorderRef.current = recorder;
@@ -335,7 +351,7 @@ export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS,
           const elapsed = Math.min(maxDurationMs, Math.max(0, performance.now() - startedAtRef.current));
           setDurationMs(elapsed);
           const recorded = new Blob(chunksRef.current, {
-            type: recorder.mimeType || supportedVoiceMimeType(),
+            type: recorder.mimeType || supportedVoiceMimeType(allowMp4),
           });
           if (elapsed < VOICE_MIN_DURATION_MS || !recorded.size) {
             setState("error");
@@ -382,7 +398,7 @@ export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS,
       }
       releaseStream();
     };
-  }, [attempt, maxDurationMs]);
+  }, [allowMp4, attempt, maxDurationMs]);
 
   useEffect(() => subscribeToAudioDevicePreferences(setPreferences), []);
 
@@ -397,7 +413,7 @@ export function VoiceRecorder({ disabled, maxDurationMs = VOICE_MAX_DURATION_MS,
     try {
       const file = new File(
         [blob],
-        `voice-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`,
+        `voice-${new Date().toISOString().replace(/[:.]/g, "-")}.${voiceRecordingExtension(blob.type)}`,
         { type: blob.type || VOICE_MIME_TYPE },
       );
       if (await onSend(file, Math.round(durationMs))) onClose();

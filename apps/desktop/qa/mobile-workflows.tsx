@@ -69,6 +69,7 @@ import "../src/renderer/section-headers.css";
 import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
 import "../src/renderer/browser-responsive.css";
+import "../src/renderer/browser-secondary.css";
 
 const now = new Date();
 now.setHours(10, 0, 0, 0);

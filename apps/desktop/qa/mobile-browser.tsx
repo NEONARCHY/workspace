@@ -33,6 +33,7 @@ import "../src/renderer/workday-presence.css";
 import "../src/renderer/yuksalish-assistant.css";
 import "../src/renderer/assistant-chat.css";
 import "../src/renderer/browser-responsive.css";
+import "../src/renderer/browser-secondary.css";
 
 const sections = ["Главная", "Мессенджер", "Задачи", "Заявки на оплату", "Лента", "Календарь", "Сотрудники", "Проекты", "Проектные заявки", "Согласование поездок", "Отсутствия", "Zoom-конференции", "Работа с членами", "Уведомления", "Входящие письма", "Аналитика опросов", "HR", "Настройки"];
 const keys: NavigationKey[] = ["home", "messenger", "tasks", "payment_requests", "feed", "calendar", "employees", "project_hub", "project_funding", "trip_approvals", "absences", "zoom_meetings", "members", "notifications", "incoming_letters", "survey_analytics", "hr", "settings"];

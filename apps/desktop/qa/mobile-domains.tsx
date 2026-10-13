@@ -69,6 +69,7 @@ import "../src/renderer/section-headers.css";
 import "../src/renderer/sidebar-theme.css";
 import "../src/renderer/page-canvas.css";
 import "../src/renderer/browser-responsive.css";
+import "../src/renderer/browser-secondary.css";
 
 const tasks = Array.from({ length: 31 }, (_, i) => ({ ...initialTasks[0]!, id: `mobile-task-${i}`, title: `Тестовая задача ${i + 1}: длинное название для проверки переноса без потери текста` }));
 const employees: DirectoryEmployee[] = Array.from({ length: 31 }, (_, i) => ({ id: `mobile-person-${i}`, name: `Тестовый сотрудник ${i + 1}`, username: `synthetic-${i}`, jobTitle: "Длинная тестовая должность сотрудника регионального подразделения", role: "employee", status: "active" }));
@@ -89,7 +90,7 @@ function Fixture() {
       <main className="app-content" id="workspace-content" tabIndex={-1}>
         <div style={{ display: page === "messenger" ? "contents" : "none" }}><MessengerView token="synthetic-only" currentUserId="aziza" currentUserRole="employee"
           chats={initialChats} messages={initialMessages} tasks={initialTasks} people={people} attachments={[]} chatActions={chatActions}
-          onSendMessage={async () => { throw new Error("Тестовая ошибка отправки"); }} onSendVoiceMessage={async () => undefined}
+          onSendMessage={async (_chat, _body, files) => { if (files[0]?.type.startsWith("audio/")) { document.documentElement.dataset.qaVoiceMime = files[0].type; document.documentElement.dataset.qaVoiceRoute = "file"; } throw new Error("Тестовая ошибка отправки"); }} onSendVoiceMessage={async (_chat, file) => { document.documentElement.dataset.qaVoiceMime = file.type; document.documentElement.dataset.qaVoiceRoute = "voice"; return undefined; }}
           onReactMessage={async () => undefined} onPinMessage={async () => undefined} onEditMessage={async () => undefined}
           onDeleteMessage={async () => undefined} onCreateTaskFromMessage={async () => undefined}
           onDownloadAttachment={async () => undefined} onLoadAttachment={async () => new Blob()}
