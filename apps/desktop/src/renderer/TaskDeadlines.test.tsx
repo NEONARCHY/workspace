@@ -24,7 +24,7 @@ const props = (tasks: WorkspaceTask[]): ComponentProps<typeof TasksView> => ({
   onSetDependency: vi.fn(), onRemoveDependency: vi.fn(), onSetCycle: vi.fn(),
   renderTaskChat: vi.fn(), onReturnForRevision: vi.fn(), onSubmitResult: vi.fn(),
   onAcceptResult: vi.fn(), onSetEfficiencyExclusion: vi.fn(), onExtendDeadline: vi.fn(),
-  onUploadAttachments: vi.fn(), onDownloadAttachment: vi.fn(),
+  onUploadAttachments: vi.fn(), onDeleteAttachment: vi.fn(), onDownloadAttachment: vi.fn(),
 });
 function freeze(date = new Date(2026, 9, 12, 12)) {
   vi.useFakeTimers(); vi.setSystemTime(date);

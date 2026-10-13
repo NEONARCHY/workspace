@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { WorkspaceAttachment } from "@yuksalish/contracts";
 import { Button, Spinner } from "@fluentui/react-components";
-import { ArrowDownload24Regular, ArrowExpand24Regular, Attach24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
+import { ArrowDownload24Regular, ArrowExpand24Regular, Attach24Regular, Delete24Regular, Document24Regular, Pause24Filled, Play24Filled } from "@fluentui/react-icons";
 import { MediaVolumeControl } from "./MediaVolumeControl";
 import { WorkspaceFileDropzone } from "./WorkspaceFileDropzone";
 import { fileViewerKind } from "./file-viewer-kind";
@@ -12,6 +12,9 @@ interface AttachmentChipsProps {
   readonly attachments: readonly WorkspaceAttachment[];
   readonly onDownload: (attachment: WorkspaceAttachment) => void | Promise<void>;
   readonly onLoad?: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
+  readonly canDelete?: (attachment: WorkspaceAttachment) => boolean;
+  readonly onRequestDelete?: (attachment: WorkspaceAttachment) => void;
+  readonly deleting?: boolean;
 }
 
 function ImageAttachment({attachment, onLoad, onOpen}: {
@@ -211,13 +214,13 @@ export function InlineAudioPlayer({ url, blob, fileName, onError }: { readonly u
   </div>;
 }
 
-export function AttachmentChips({ attachments, onDownload, onLoad }: AttachmentChipsProps) {
+export function AttachmentChips({ attachments, onDownload, onLoad, canDelete, onRequestDelete, deleting }: AttachmentChipsProps) {
   if (attachments.length === 0) return null;
   return (
     <div className="attachment-chips" aria-label="Вложения">
-      {attachments.map((attachment) => onLoad && fileViewerKind(attachment) === "image" ? <ImageAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
+      {attachments.map((attachment) => {
+        const file = onLoad && fileViewerKind(attachment) === "image" ? <ImageAttachment attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
         <button
-          key={attachment.id}
           type="button"
           title={`${fileViewerKind(attachment) === "unsupported" ? "Скачать" : "Открыть"}: ${attachment.fileName}, ${fileSize(attachment.byteSize)}`}
           onClick={() => void onDownload(attachment)}
@@ -227,7 +230,12 @@ export function AttachmentChips({ attachments, onDownload, onLoad }: AttachmentC
           <small>{fileSize(attachment.byteSize)}</small>
           {fileViewerKind(attachment) === "unsupported" ? <ArrowDownload24Regular /> : <ArrowExpand24Regular />}
         </button>
-      ))}
+        );
+        return onRequestDelete ? <div className="attachment-chip-item" key={attachment.id}>
+          {file}
+          {canDelete?.(attachment) ? <button className="attachment-chip-delete" type="button" disabled={deleting} aria-label={`Удалить вложение ${attachment.fileName}`} title={`Удалить ${attachment.fileName}`} onClick={() => onRequestDelete(attachment)}><Delete24Regular /></button> : null}
+        </div> : <Fragment key={attachment.id}>{file}</Fragment>;
+      })}
     </div>
   );
 }
@@ -238,6 +246,7 @@ interface AttachmentPanelProps extends AttachmentChipsProps {
   readonly onUpload: (files: readonly File[]) => void | Promise<void>;
   readonly dropzone?: boolean;
   readonly headingAccessory?: ReactNode;
+  readonly onDelete?: (attachment: WorkspaceAttachment) => Promise<void>;
 }
 
 export function AttachmentPanel({
@@ -248,9 +257,28 @@ export function AttachmentPanel({
   title = "Вложения",
   dropzone = false,
   headingAccessory,
+  canDelete,
+  onDelete,
 }: AttachmentPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<WorkspaceAttachment>();
+  const [deleteError, setDeleteError] = useState("");
+
+  const remove = async () => {
+    if (!pendingDelete || !onDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await onDelete(pendingDelete);
+      setPendingDelete(undefined);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Не удалось удалить вложение.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const upload = async (files: readonly File[]) => {
     if (files.length === 0) return;
@@ -298,7 +326,12 @@ export function AttachmentPanel({
         disabled={busy}
         onFiles={(files) => void upload(files)}
       /> : null}
-      <AttachmentChips attachments={attachments} onDownload={onDownload} />
+      <AttachmentChips attachments={attachments} onDownload={onDownload} canDelete={canDelete} deleting={deleting} onRequestDelete={onDelete ? (attachment) => { setPendingDelete(attachment); setDeleteError(""); } : undefined} />
+      {pendingDelete ? <div className="attachment-delete-confirm" role="group" aria-label="Подтверждение удаления вложения">
+        <p>Удалить «{pendingDelete.fileName}» из задачи? Файл нельзя будет восстановить из карточки.</p>
+        {deleteError ? <p role="alert">{deleteError}</p> : null}
+        <div><Button appearance="primary" disabled={deleting} onClick={() => void remove()}>{deleting ? "Удаляем…" : "Удалить файл"}</Button><Button disabled={deleting} onClick={() => { setPendingDelete(undefined); setDeleteError(""); }}>Отмена</Button></div>
+      </div> : null}
       {attachments.length === 0 && (!dropzone || !canUpload) ? <p className="attachment-empty">Файлов пока нет</p> : null}
     </section>
   );

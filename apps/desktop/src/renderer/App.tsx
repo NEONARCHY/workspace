@@ -142,6 +142,7 @@ import {
   createWorkspaceFeedPost,
   deleteWorkspaceFeedPost,
   deleteWorkspaceTask,
+  deleteWorkspaceTaskAttachment,
   decideWorkspaceTaskDeadline,
   createWorkspaceProject,
   createWorkspaceTask,
@@ -1363,6 +1364,16 @@ export function App() {
     }
   };
 
+  const handleDeleteTaskAttachment = async (task: WorkspaceTask, attachment: WorkspaceAttachment) => {
+    if (session === undefined) throw new Error("Войдите снова, чтобы удалить файл.");
+    await deleteWorkspaceTaskAttachment(session.accessToken, task.id, attachment.id);
+    setWorkspace((current) => ({
+      ...current,
+      attachments: current.attachments.filter((item) => item.id !== attachment.id),
+    }));
+    setPreviewAttachment((current) => current?.id === attachment.id ? undefined : current);
+  };
+
   const handleUploadApprovalAttachments = async (
     request: ApprovalRequestSummary,
     files: readonly File[],
@@ -2222,6 +2233,7 @@ export function App() {
                 onExtendDeadline={handleExtendTaskDeadline}
                 onSetEfficiencyExclusion={handleTaskEfficiencyExclusion}
                 onUploadAttachments={handleUploadTaskAttachments}
+                onDeleteAttachment={handleDeleteTaskAttachment}
                 onDownloadAttachment={handleDownloadAttachment}
                 focusTaskId={focusTarget?.section === "tasks" ? focusTarget.entityId : undefined}
               />

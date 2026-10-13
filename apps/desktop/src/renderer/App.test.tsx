@@ -629,6 +629,13 @@ function mockServer(
       attachments.push(attachment);
       return response(attachment);
     }
+    if (url.includes("/attachments/task/") && options?.method === "DELETE") {
+      const attachmentId = url.split("/").at(-1);
+      const index = attachments.findIndex((item) => item.id === attachmentId);
+      if (index < 0) return response({ detail: "Attachment was not found" }, 404);
+      attachments.splice(index, 1);
+      return response(null, 204);
+    }
     if (url.endsWith("/tasks") && options?.method === "POST") {
       const payload = JSON.parse(String(options.body)) as {
         title: string;
@@ -1751,6 +1758,14 @@ describe("corporate workspace authentication alpha", () => {
       expect.objectContaining({ method: "PUT" }),
     ));
     expect(await screen.findByText("report.txt")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить вложение report.txt" }));
+    expect(screen.getByRole("group", { name: "Подтверждение удаления вложения" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/attachments/task/"),
+      expect.objectContaining({ method: "DELETE" }),
+    ));
+    await waitFor(() => expect(screen.queryByText("report.txt")).not.toBeInTheDocument());
   }, 30_000);
 
   it("creates a subtask from the task card", async () => {

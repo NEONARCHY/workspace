@@ -231,6 +231,7 @@ interface TasksViewProps {
   readonly onSetEfficiencyExclusion: (task: WorkspaceTask, excluded: boolean, reasonCode?: TaskEfficiencyExclusionReason, reasonText?: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onExtendDeadline: (task: WorkspaceTask, proposedDueAt: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
+  readonly onDeleteAttachment: (task: WorkspaceTask, attachment: WorkspaceAttachment) => Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }
 
@@ -247,7 +248,7 @@ export function TasksView(props: TasksViewProps) {
     tasks, attachments, people, departments, currentUserId, focusTaskId, onCreateTask, onCreateSubtask, onChangeStatus, onUpdateTask, onDeleteTask,
     onSetParticipant, onRemoveParticipant, onAddChecklistItem, onToggleChecklistItem,
     onDeleteChecklistItem, onAddComment, onReactToComment, onSetDependency, onRemoveDependency, onSetCycle, renderTaskChat,
-    onExtendDeadline, onUploadAttachments, onDownloadAttachment, efficiency,
+    onExtendDeadline, onUploadAttachments, onDeleteAttachment, onDownloadAttachment, efficiency,
     efficiencyLoading, efficiencyError, onLoadEfficiency, onReturnForRevision,
     onSubmitResult, onAcceptResult,
     onSetEfficiencyExclusion,
@@ -769,7 +770,7 @@ export function TasksView(props: TasksViewProps) {
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
-        <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} dropzone headingAccessory={<TaskHelp title="Вложения">Файлы хранятся вместе с задачей. Перетащите их в область загрузки или выберите с компьютера; нажмите на загруженный файл, чтобы скачать его.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment} />
+        <AttachmentPanel key={selectedTask.id} attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} canDelete={(attachment) => canEdit && (canDelete || attachment.uploadedByUserId === currentUserId)} onDelete={(attachment) => onDeleteAttachment(selectedTask, attachment)} dropzone headingAccessory={<TaskHelp title="Вложения">Файлы хранятся вместе с задачей. Перетащите их в область загрузки или выберите с компьютера; нажмите на загруженный файл, чтобы скачать его.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment} />
 
         <div className="detail-section task-subtasks-section"><TaskSectionHeading title="Подзадачи" help="Большую задачу можно разбить на отдельные шаги с собственным исполнителем и сроком. Открытая подзадача блокирует окончательное принятие родительской задачи." meta={`${selectedSubtasks.filter((task) => task.status === "completed").length}/${selectedSubtasks.length}`} />
           {!selectedSubtasks.length ? <p className="task-section-empty">Пока нет отдельных шагов. Добавьте подзадачу, если работу нужно разделить.</p> : null}

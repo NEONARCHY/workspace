@@ -2295,6 +2295,17 @@ export async function downloadWorkspaceAttachment(
   }, (response) => response.blob(), 120_000);
 }
 
+export function deleteWorkspaceTaskAttachment(
+  token: string,
+  taskId: string,
+  attachmentId: string,
+): Promise<void> {
+  return apiRequest<void>(
+    `/attachments/task/${encodeURIComponent(taskId)}/${encodeURIComponent(attachmentId)}`,
+    { method: "DELETE" }, token,
+  );
+}
+
 export function loadOfficeFilePreview(token: string, id: string, sheet = 0, offset = 0, signal?: AbortSignal): Promise<OfficeFilePreview> {
   return apiRequest<OfficeFilePreview>(`/attachments/${encodeURIComponent(id)}/preview?sheet=${sheet}&offset=${offset}`, {signal}, token);
 }

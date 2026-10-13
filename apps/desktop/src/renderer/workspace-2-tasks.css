@@ -301,6 +301,15 @@
 .task-record-dialog .attachment-panel-dropzone .ws-file-dropzone { width: 100%; }
 .task-record-dialog .attachment-panel-dropzone .attachment-chips { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px !important; margin-top: 12px; }
 .task-record-dialog .attachment-panel-dropzone .attachment-chips > button { min-height: 50px; padding: 9px 11px; border-color: var(--ws-theme-line, #d5e5e6); border-radius: 11px; background: var(--ws-theme-surface, #fff); }
+.task-record-dialog .attachment-chip-item { display: flex; min-width: 0; gap: 4px; }
+.task-record-dialog .attachment-chip-item > :first-child { flex: 1 1 auto; min-width: 0; }
+.task-record-dialog .attachment-chip-item > .attachment-chip-delete { display: grid; flex: 0 0 36px; place-items: center; grid-template-columns: 1fr; min-height: 44px; padding: 0; border-radius: 10px; }
+.task-record-dialog .attachment-chip-item > .attachment-chip-delete:hover { color: var(--ws-danger, #a4262c); border-color: currentColor; }
+.task-record-dialog .attachment-chip-item > .attachment-chip-delete:focus-visible { outline: 2px solid var(--ws-link); outline-offset: 2px; }
+.task-record-dialog .attachment-delete-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--ws-theme-line, #d5e5e6); border-radius: 11px; background: var(--ws-theme-surface, #fff); }
+.task-record-dialog .attachment-delete-confirm p { margin: 0 0 10px; overflow-wrap: anywhere; }
+.task-record-dialog .attachment-delete-confirm p[role="alert"] { color: var(--ws-danger, #a4262c); }
+.task-record-dialog .attachment-delete-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .task-record-dialog .participant-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 205px), 1fr)); gap: 8px; margin-top: 12px; }
 .task-record-dialog .participant-chip { min-width: 0; min-height: 52px; padding: 8px 10px; border-color: var(--ws-theme-line, #dce8ec); border-radius: 12px; background: var(--ws-theme-surface, #fff); }
 .task-record-dialog .participant-chip > .employee-profile-link { display: inline-flex; min-width: 0; align-items: center; gap: 9px; }

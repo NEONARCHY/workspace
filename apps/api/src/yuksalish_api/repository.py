@@ -6802,6 +6802,39 @@ async def get_attachment(
     return _attachment(row), row["storage_key"]
 
 
+async def delete_task_attachment(
+    connection: AsyncConnection,
+    current_user: AuthenticatedUser,
+    task_id: UUID,
+    attachment_id: UUID,
+) -> str:
+    """Remove one task file; keep a record of who removed it."""
+    row = (
+        (await connection.execute(
+            select(attachments).where(
+                attachments.c.id == attachment_id,
+                attachments.c.owner_type == "task",
+                attachments.c.owner_id == task_id,
+            ).with_for_update()
+        )).mappings().first()
+    )
+    if row is None:
+        raise WorkspaceRepositoryError(404, "Attachment was not found")
+    task = await _task_access_row(connection, current_user, task_id, edit=True)
+    if current_user.role not in {"admin", "superadmin"} and current_user.id not in {
+        row["uploaded_by_user_id"], task["author_user_id"]
+    }:
+        raise WorkspaceRepositoryError(403, "Only the uploader or task author can remove this file")
+    await connection.execute(delete(attachments).where(attachments.c.id == attachment_id))
+    await connection.execute(insert(audit_events).values(
+        id=uuid4(), actor_user_id=current_user.id, action="task.attachment_deleted",
+        target_type="task", target_id=task_id,
+        details={"attachmentId": str(attachment_id), "fileName": row["file_name"]},
+        created_at=datetime.now(UTC),
+    ))
+    return str(row["storage_key"])
+
+
 async def _project_response(
     connection: AsyncConnection,
     current_user: AuthenticatedUser,

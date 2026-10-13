@@ -1,6 +1,50 @@
-import { describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { WorkspaceAttachment } from "@yuksalish/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { embeddedMp3Artwork, isAudioAttachment } from "./AttachmentPanel";
+import { AttachmentPanel, embeddedMp3Artwork, isAudioAttachment } from "./AttachmentPanel";
+
+const taskAttachment: WorkspaceAttachment = {
+  id: "file-1", ownerType: "task", ownerId: "task-1", fileName: "report.pdf",
+  contentType: "application/pdf", byteSize: 512, sha256: "a".repeat(64),
+  uploadedByUserId: "author-1", documentRole: "general", createdAt: "2026-10-13T10:00:00Z",
+};
+
+afterEach(cleanup);
+
+describe("task attachment removal", () => {
+  it("requires confirmation and calls deletion once", async () => {
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    render(<AttachmentPanel attachments={[taskAttachment]} canUpload={false} canDelete={() => true}
+      onDelete={onDelete} onUpload={vi.fn()} onDownload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить вложение report.pdf" }));
+    expect(onDelete).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(screen.queryByRole("group", { name: "Подтверждение удаления вложения" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить вложение report.pdf" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл" }));
+    await waitFor(() => expect(onDelete).toHaveBeenCalledTimes(1));
+    expect(onDelete).toHaveBeenCalledWith(taskAttachment);
+    await waitFor(() => expect(screen.queryByRole("group", { name: "Подтверждение удаления вложения" })).toBeNull());
+  });
+
+  it("keeps the file and shows the server error for a retry", async () => {
+    const onDelete = vi.fn().mockRejectedValue(new Error("Нет права удалить файл"));
+    render(<AttachmentPanel attachments={[taskAttachment]} canUpload={false} canDelete={() => true}
+      onDelete={onDelete} onUpload={vi.fn()} onDownload={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Удалить вложение report.pdf" }));
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Нет права удалить файл");
+    expect(screen.getByRole("button", { name: "report.pdf 512 Б" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить файл" })).toBeEnabled();
+  });
+
+  it("does not offer deletion without permission", () => {
+    render(<AttachmentPanel attachments={[taskAttachment]} canUpload={false} canDelete={() => false}
+      onDelete={vi.fn()} onUpload={vi.fn()} onDownload={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Удалить вложение report.pdf" })).toBeNull();
+  });
+});
 
 function bytes(blob: Blob): Promise<number[]> {
   return new Promise((resolve, reject) => {
