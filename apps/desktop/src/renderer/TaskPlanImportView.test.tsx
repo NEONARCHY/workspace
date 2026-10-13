@@ -39,7 +39,9 @@ it("keeps extracted rows local until confirmation and supports excluding an item
   const actions = screen.getAllByLabelText("Действие");
   const secondAction = actions[1];
   if (!secondAction) throw new Error("Second candidate action is missing");
-  fireEvent.change(secondAction, { target: { value: "skip" } });
+  fireEvent.click(secondAction);
+  fireEvent.click(await screen.findByRole("option", { name: "Не включать" }));
+  await waitFor(() => expect(secondAction).toHaveAttribute("value", "skip"));
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить и создать план" }));
   await waitFor(() => expect(confirmTaskPlanImport).toHaveBeenCalledTimes(1));
   const payload = vi.mocked(confirmTaskPlanImport).mock.calls[0]?.[1];
