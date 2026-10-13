@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from yuksalish_api.access_control import request_module_action
 from yuksalish_api.auth import AuthenticatedUser
 from yuksalish_api.repository import WorkspaceRepositoryError, create_task
-from yuksalish_api.tables import task_plans, tasks, users
+from yuksalish_api.tables import task_participants, task_plans, tasks, users
 from yuksalish_api.task_plan_schemas import TaskPlanImportConfirm, TaskPlanWrite
 from yuksalish_api.task_plan_service import change_link, confirm_import, create_plan, list_plans
 from yuksalish_api.workspace_schemas import CreateTaskRequest
@@ -93,7 +93,7 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
     if not database_url:
         pytest.skip("YUKSALISH_TEST_DATABASE_URL is not configured")
     engine = create_async_engine(database_url)
-    manager_id = uuid4()
+    manager_id, co_assignee_id = uuid4(), uuid4()
     try:
         async with engine.connect() as connection:
             transaction = await connection.begin()
@@ -101,6 +101,11 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 await connection.execute(insert(users).values(
                     id=manager_id, username=f"plan-import-{manager_id.hex[:12]}",
                     full_name="Plan Import", role="manager", status="active",
+                    created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
+                ))
+                await connection.execute(insert(users).values(
+                    id=co_assignee_id, username=f"plan-member-{co_assignee_id.hex[:12]}",
+                    full_name="Plan Co-assignee", role="employee", status="active",
                     created_at=datetime.now(UTC), updated_at=datetime.now(UTC),
                 ))
                 manager = actor(manager_id, "manager")
@@ -112,7 +117,8 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                     "plan": {"title": "Imported plan", "kind": "work"},
                     "items": [
                         {"title": "New task", "source": "TXT, строка 1", "mode": "create",
-                         "assigneeId": str(manager_id)},
+                         "assigneeId": str(manager_id),
+                         "coAssigneeIds": [str(co_assignee_id)]},
                         {"title": "Existing task", "source": "TXT, строка 2", "mode": "link",
                          "taskId": unrelated.id},
                     ],
@@ -120,6 +126,10 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 created = await confirm_import(connection, manager, payload)
                 assert created.task_ids[1] == unrelated.id
                 assert created.task_ids[0] != unrelated.id
+                assert (await connection.execute(select(task_participants.c.user_id).where(
+                    task_participants.c.task_id == UUID(created.task_ids[0]),
+                    task_participants.c.participant_role == "co_assignee",
+                ))).scalar_one() == co_assignee_id
                 assert (await confirm_import(connection, manager, payload)).task_ids == (
                     created.task_ids
                 )
@@ -156,6 +166,18 @@ async def test_import_confirm_is_atomic_idempotent_and_checks_links() -> None:
                 )) is None
                 assert await connection.scalar(select(tasks.c.id).where(
                     tasks.c.title == "Must roll back",
+                )) is None
+                bad_participant = TaskPlanImportConfirm.model_validate({
+                    "operationId": str(uuid4()), "plan": {"title": "Invalid participant"},
+                    "items": [{"title": "Reject inactive participant", "source": "DOCX",
+                               "mode": "create", "assigneeId": str(manager_id),
+                               "coAssigneeIds": [str(uuid4())]}],
+                })
+                with pytest.raises(WorkspaceRepositoryError):
+                    async with connection.begin_nested():
+                        await confirm_import(connection, manager, bad_participant)
+                assert await connection.scalar(select(task_plans.c.id).where(
+                    task_plans.c.id == bad_participant.operation_id,
                 )) is None
             finally:
                 await transaction.rollback()

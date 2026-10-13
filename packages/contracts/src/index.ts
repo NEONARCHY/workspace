@@ -1606,6 +1606,9 @@ export interface TaskPlanImportRow {
   readonly title: string;
   readonly source: string;
   readonly warning: string | null;
+  readonly assigneeHint?: string | null;
+  readonly coexecutorsHint?: string | null;
+  readonly groupKey?: string | null;
 }
 
 export interface TaskPlanImportPreview {
@@ -1618,6 +1621,7 @@ export interface TaskPlanImportItem {
   readonly source: string;
   readonly mode: "create" | "link";
   readonly assigneeId?: string | null;
+  readonly coAssigneeIds?: readonly string[];
   readonly dueAt?: string | null;
   readonly taskId?: string | null;
 }
