@@ -1,9 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 import { observeScrollbarEdges, scrollbarEdgeOpacity } from "./ScrollbarEdges";
 
 afterEach(() => { document.body.replaceChildren(); vi.unstubAllGlobals(); });
 
 describe("scrollbar edges", () => {
+  it("uses one theme-aware thumb colour for both complete opacity gradients", () => {
+    const css = readFileSync("src/renderer/scrollbars.css", "utf8");
+    expect(css).toContain("html { --ws-scrollbar-thumb-rgb: 141 164 170; }");
+    expect(css).toContain('html[data-color-theme="dark"] { --ws-scrollbar-thumb-rgb: 100 128 150; }');
+    expect(css).not.toContain("--ws-theme-wash-teal");
+    expect(css).not.toContain("rgb(141 164 170 /");
+    const gradients = [...css.matchAll(/background: linear-gradient\(to (bottom|right),([\s\S]*?)\);/g)];
+    expect(gradients).toHaveLength(2);
+    for (const [, , gradient] of gradients) {
+      expect(gradient!.match(/rgb\(var\(--ws-scrollbar-thumb-rgb\)/g)).toHaveLength(10);
+    }
+    expect(css).toContain("background: CanvasText");
+  });
+  it("does not paint an opaque dark backing under the fading thumb", () => {
+    const css = readFileSync("src/renderer/dark-theme.css", "utf8");
+    expect(css).not.toContain("::-webkit-scrollbar-thumb");
+  });
   it("fades only the reached edge and stays solid in the middle", () => {
     expect(scrollbarEdgeOpacity(0, 100, 400)).toEqual({ start: 0, end: 1 });
     expect(scrollbarEdgeOpacity(150, 100, 400)).toEqual({ start: 1, end: 1 });
