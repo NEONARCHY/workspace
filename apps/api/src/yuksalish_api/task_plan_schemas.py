@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import Field, model_validator
 
@@ -32,3 +33,40 @@ class TaskPlanResponse(TaskPlanWrite):
     created_at: datetime
     updated_at: datetime
     task_ids: list[str] = Field(default_factory=list)
+
+
+class TaskPlanImportRow(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    source: str = Field(max_length=300)
+    warning: str | None = None
+
+
+class TaskPlanImportPreview(ApiModel):
+    suggested_title: str
+    rows: list[TaskPlanImportRow]
+
+
+class TaskPlanImportItem(ApiModel):
+    title: str = Field(min_length=1, max_length=240)
+    source: str = Field(max_length=300)
+    mode: Literal["create", "link"]
+    assignee_id: UUID | None = None
+    due_at: datetime | None = None
+    task_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_mode(self) -> "TaskPlanImportItem":
+        self.title = self.title.strip()
+        if not self.title:
+            raise ValueError("Task title must not be blank")
+        if self.mode == "link" and self.task_id is None:
+            raise ValueError("Select a task to link")
+        if self.mode == "create" and self.task_id is not None:
+            raise ValueError("New task cannot reference an existing task")
+        return self
+
+
+class TaskPlanImportConfirm(ApiModel):
+    operation_id: UUID
+    plan: TaskPlanWrite
+    items: list[TaskPlanImportItem] = Field(min_length=1, max_length=100)
