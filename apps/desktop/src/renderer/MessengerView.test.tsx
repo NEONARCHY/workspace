@@ -150,7 +150,7 @@ describe("Private messenger", () => {
     const input = screen.getByLabelText("Новое сообщение");
     expect(fireEvent.paste(input, { clipboardData: { types: ["text/plain"], files: [], items: [] } })).toBe(true);
     const transfer = fileTransfer([new File(["no"], "outside.txt")]);
-    expect(fireEvent.paste(screen.getByPlaceholder("Найти сообщение в этом чате"), { clipboardData: transfer })).toBe(true);
+    expect(fireEvent.paste(screen.getByPlaceholderText("Найти сообщение в этом чате"), { clipboardData: transfer })).toBe(true);
     expect(fireEvent.paste(document.querySelector(".list-pane")!, { clipboardData: transfer })).toBe(true);
     expect(screen.queryByRole("button", { name: "Убрать файл outside.txt" })).not.toBeInTheDocument();
   });
