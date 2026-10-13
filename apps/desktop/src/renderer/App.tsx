@@ -2206,6 +2206,7 @@ export function App() {
                 efficiencyLoading={efficiencyLoading}
                 efficiencyError={efficiencyError}
                 onLoadEfficiency={handleLoadEfficiency}
+                onRefreshTasks={() => refreshWorkspace(session.accessToken)}
                 onCreateTask={handleCreateTask}
                 onCreateSubtask={handleCreateSubtask}
                 onChangeStatus={handleTaskStatus}

@@ -111,6 +111,8 @@ import type {
   TaskProjectOption,
   TaskPlan,
   TaskPlanWrite,
+  TaskPlanImportConfirm,
+  TaskPlanImportPreview,
   TripAction,
   TripStage,
   TripRequest,
@@ -1624,6 +1626,23 @@ export function createTaskPlan(token: string, payload: TaskPlanWrite): Promise<T
   return apiRequest<TaskPlan>("/task-plans", {
     method: "POST", body: JSON.stringify(payload),
   }, token);
+}
+
+export function previewTaskPlanImport(token: string, file: File): Promise<TaskPlanImportPreview> {
+  if (file.size > 10 * 1024 * 1024) throw new Error("План не должен превышать 10 МБ");
+  return boundedRequest(
+    `${getApiBaseUrl()}/api/v1/task-plans/import/preview?fileName=${encodeURIComponent(file.name)}`,
+    { method: "POST", body: file, headers: {
+      Authorization: `Bearer ${token}`, "Content-Type": file.type || "application/octet-stream",
+    } },
+    (response) => response.json() as Promise<TaskPlanImportPreview>, 120_000,
+  );
+}
+
+export function confirmTaskPlanImport(token: string, payload: TaskPlanImportConfirm): Promise<TaskPlan> {
+  return apiRequest<TaskPlan>("/task-plans/import/confirm", {
+    method: "POST", body: JSON.stringify(payload),
+  }, token, 120_000);
 }
 
 export function setTaskPlanLink(

@@ -232,6 +232,8 @@ def request_module_action(path: str, method: str) -> tuple[str, ModuleAction] | 
         "/survey-analyses",
         "/tasks",
         "/task-plans",
+        "/task-plans/import/preview",
+        "/task-plans/import/confirm",
         "/approval-requests",
         "/ai-referent/letters",
         "/projects",

@@ -212,6 +212,7 @@ interface TasksViewProps {
   readonly efficiencyLoading: boolean;
   readonly efficiencyError?: string;
   readonly onLoadEfficiency: (period?: string) => void | Promise<void>;
+  readonly onRefreshTasks?: () => Promise<void>;
   readonly onCreateTask: (payload: WorkspaceTaskCreateInput) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onCreateSubtask: (parent: WorkspaceTask, payload: { readonly title: string; readonly assigneeId: string; readonly dueAt?: string }) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onChangeStatus: (taskId: string, status: TaskStatus) => void | Promise<void>;
@@ -723,7 +724,7 @@ export function TasksView(props: TasksViewProps) {
 
         {mode !== "plans" && plansError ? <div className="task-plan-error" role="alert">{plansError} <Button appearance="secondary" onClick={() => setPlansRevision((revision) => revision + 1)}>Повторить</Button></div> : null}
 
-        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
+        {mode === "efficiency" ? <EfficiencyView token={props.token} overview={efficiency} loading={efficiencyLoading} error={efficiencyError} onPeriodChange={onLoadEfficiency} /> : mode === "plans" ? <TaskPlansView plans={plans} tasks={tasks} people={people} token={props.token} currentUserId={currentUserId} loading={plansLoading} error={plansError} onRetry={() => setPlansRevision((revision) => revision + 1)} onCreate={createPlan} onImported={async () => { setPlansRevision((revision) => revision + 1); await props.onRefreshTasks?.(); }} onSelect={(planId) => { setPlanFilter(planId); setFilter("active"); setMode("list"); }} /> : mode === "list" ? <TaskRecords tasks={visibleTasks} people={people} token={props.token} currentUserId={currentUserId} selectedId={detailOpen ? selectedTask?.id : undefined} filterKey={`${filter}:${query}:${roleFilter}:${planFilter}`} onSelect={setSelectedId} /> : mode === "calendar" ? <TaskCalendarView tasks={visibleTasks} onSelect={setSelectedId} toolbarTarget={calendarToolbarTarget} /> : (
           <SpatialBoard canDrop={(id, status) => { const task = visibleTasks.find(item => item.id === id); return !!task && canEditTask(task) && !["awaiting_review", "completed", "cancelled"].includes(task.status) && ["new", "in_progress"].includes(status) && task.status !== status; }} onMove={(id, status) => onChangeStatus(id, status as TaskStatus)}>
           <div className="task-kanban" role="region" tabIndex={0} aria-label="Kanban задач: горизонтальная прокрутка">
             {kanbanStatuses.map((status) => {

@@ -1602,6 +1602,32 @@ export interface TaskPlanWrite {
   readonly periodEnd?: string | null;
 }
 
+export interface TaskPlanImportRow {
+  readonly title: string;
+  readonly source: string;
+  readonly warning: string | null;
+}
+
+export interface TaskPlanImportPreview {
+  readonly suggestedTitle: string;
+  readonly rows: readonly TaskPlanImportRow[];
+}
+
+export interface TaskPlanImportItem {
+  readonly title: string;
+  readonly source: string;
+  readonly mode: "create" | "link";
+  readonly assigneeId?: string | null;
+  readonly dueAt?: string | null;
+  readonly taskId?: string | null;
+}
+
+export interface TaskPlanImportConfirm {
+  readonly operationId: string;
+  readonly plan: TaskPlanWrite;
+  readonly items: readonly TaskPlanImportItem[];
+}
+
 export type EfficiencyHistoryCompleteness = "complete" | "partial" | "unavailable";
 
 export interface EfficiencyHistoryPoint {
