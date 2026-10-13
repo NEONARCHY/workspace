@@ -12,7 +12,7 @@ vi.mock("./workspace-api", async (original) => {
   return { ...actual, loadHiringRegistry: vi.fn(), loadHiringCase: vi.fn(), saveHiringCase: vi.fn(),
     actHiringCase: vi.fn(), uploadHiringDocument: vi.fn(), saveHiringSignature: vi.fn(), downloadHiringDocument: vi.fn() };
 });
-const fields: HiringFields = { fullName: "Тестовый сотрудник", department: "Тестовый отдел", jobTitle: "Специалист", startDate: "2026-10-12", documentDate: "2026-10-12", contractNumber: "TEST-1", orderNumber: "TEST-2", workType: "primary", term: "indefinite", endDate: null, fixedTermReason: "", probationMonths: 0, probationEligible: false, workRegime: "Нормальный", daysPerWeek: 5, hoursPerWeek: 40, annualLeave: 21, additionalLeave: 0, salaryTerms: "По штатному расписанию", allowances: "", passport: "TEST00000", pinfl: "00000000000000", address: "Тестовый адрес", phone: "+998000000000", additionalTerms: "" };
+const fields: HiringFields = { fullName: "Тестовый сотрудник", department: "Тестовый отдел", jobTitle: "Специалист", startDate: "2026-10-12", documentDate: "2026-10-12", contractNumber: "TEST-1", orderNumber: "TEST-2", workType: "primary", term: "indefinite", endDate: null, fixedTermReason: "", probationMonths: 0, probationEligible: false, workRegime: "Нормальный", daysPerWeek: 5, hoursPerWeek: 40, annualLeave: 21, additionalLeave: 0, salaryTerms: "По штатному расписанию", accountantDative: "Тест Бухгалтерга", allowances: "", passport: "TEST00000", pinfl: "00000000000000", address: "Тестовый адрес", phone: "+998000000000", additionalTerms: "" };
 const item: HiringDetail = { id: "test-case", fullName: fields.fullName, jobTitle: fields.jobTitle, status: "draft", revision: 1, updatedAt: "2026-10-12T00:00:00Z", canEdit: true, canSign: false, fields, applicationBox: { page: 1, x: .58, y: .78, width: .3, height: .1 }, hasApplication: true, applicationPages: 1, hasEmployeeScan: false, returnComment: "", signerName: "Тестовый руководитель", approvedAt: null, documentHashes: {} };
 const registry: HiringRegistry = { items: [item], total: 1, canCreate: true, canConfigureSignature: false, signatureReady: true, signerName: item.signerName };
 beforeEach(() => {
@@ -34,6 +34,17 @@ async function openCase() { fireEvent.click(await screen.findByRole("button", { 
 async function focusClick(control: HTMLElement) { await act(async () => { control.focus(); }); fireEvent.click(control); }
 
 describe("HR hiring", () => {
+  it("requires the accountant addressee from the supplied order before saving", async () => {
+    vi.mocked(loadHiringCase).mockResolvedValue({ ...item, fields: { ...fields, accountantDative: "" } });
+    mount(); await openCase();
+    fireEvent.change(screen.getByLabelText(/Фамилия, имя и отчество/), { target: { value: "Другое имя" } });
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Начальник бухгалтерии для приказа/), { target: { value: "Тест Бухгалтерга" } });
+    expect(screen.getByRole("button", { name: "Сохранить черновик" })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить черновик" }));
+    await waitFor(() => expect(saveHiringCase).toHaveBeenCalledWith("synthetic-token", "test-case", 1,
+      expect.objectContaining({ accountantDative: "Тест Бухгалтерга" }), item.applicationBox));
+  });
   it("loads privately and retains a failed save without claiming success", async () => {
     mount(); await openCase();
     fireEvent.change(screen.getByLabelText(/Фамилия, имя и отчество/), { target: { value: "Исправленное имя" } });

@@ -33,6 +33,7 @@ class HiringFields(StrictModel):
     annual_leave: int = Field(default=21, ge=21, le=90)
     additional_leave: int = Field(default=0, ge=0, le=90)
     salary_terms: str = Field(min_length=3, max_length=1000)
+    accountant_dative: str = Field(default="", max_length=160)
     allowances: str = Field(default="", max_length=1000)
     passport: str = Field(min_length=5, max_length=80)
     pinfl: str = Field(pattern=r"^\d{14}$")

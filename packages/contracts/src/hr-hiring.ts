@@ -18,6 +18,7 @@ export interface HiringFields {
   readonly annualLeave: number;
   readonly additionalLeave: number;
   readonly salaryTerms: string;
+  readonly accountantDative: string;
   readonly allowances: string;
   readonly passport: string;
   readonly pinfl: string;

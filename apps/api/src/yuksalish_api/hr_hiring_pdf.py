@@ -1,42 +1,20 @@
 """Deterministic A4 documents; no AI, Word macros or shared-drive dependency."""
 
-import json
 import warnings
-from html import escape
 from io import BytesIO
-from pathlib import Path
-from threading import Lock
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader, PdfWriter, apply_configuration
 from pypdf.errors import PdfReadError
 from pypdf.generic import DictionaryObject
 from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
-from reportlab.lib.styles import ParagraphStyle  # type: ignore[import-untyped]
 from reportlab.lib.utils import ImageReader  # type: ignore[import-untyped]
-from reportlab.pdfbase import pdfmetrics  # type: ignore[import-untyped]
-from reportlab.pdfbase.ttfonts import TTFont  # type: ignore[import-untyped]
 from reportlab.pdfgen.canvas import Canvas  # type: ignore[import-untyped]
-from reportlab.platypus import (  # type: ignore[import-untyped]
-    Flowable,
-    KeepTogether,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-)
 
-from .hr_hiring_schemas import HiringFields, SignatureBox
+from .hr_hiring_schemas import SignatureBox
+from .hr_hiring_templates import documents as documents
 
 MAX_BYTES = 10 * 1024 * 1024
-_FONT_LOCK = Lock()
-
-
-def fonts() -> None:
-    with _FONT_LOCK:
-        if "HRSerif" not in pdfmetrics.getRegisteredFontNames():
-            root = Path(__file__).parent / "hr_assets"
-            pdfmetrics.registerFont(TTFont("HRSerif", str(root / "SourceSerif4-Regular.ttf")))
-            pdfmetrics.registerFont(TTFont("HRSerifBold", str(root / "SourceSerif4-Bold.ttf")))
 
 
 def validate_signature(content: bytes) -> bytes:
@@ -134,196 +112,6 @@ def _application_pdf(content: bytes) -> tuple[bytes, int]:
         raise ValueError("Не удалось прочитать документ") from error  # noqa: RUF001 - intentional Cyrillic document text
 
 
-class SigningLine(Flowable):  # type: ignore[misc]
-    def __init__(
-        self,
-        signer: str,
-        signature: bytes | None,
-        location: list[SignatureBox],
-        *,
-        employee: bool = False,
-    ) -> None:
-        super().__init__()
-        self.signer, self.signature, self.employee = signer, signature, employee
-        self.location = location
-        self.width, self.height = 450, 82
-        self.name_paragraph = Paragraph(
-            escape(signer), ParagraphStyle("hr-signer", fontName="HRSerif", fontSize=11, leading=14)
-        )
-        _, self.name_height = self.name_paragraph.wrap(225, 400)
-        self.height = max(82, self.name_height + 42)
-
-    def draw(self) -> None:
-        x, y = self.canv.absolutePosition(230, 24)
-        self.location[:] = [
-            SignatureBox(
-                page=self.canv.getPageNumber(),
-                x=x / A4[0],
-                y=1 - (y + 55) / A4[1],
-                width=140 / A4[0],
-                height=55 / A4[1],
-            )
-        ]
-        self.canv.setFont("HRSerif", 11)
-        self.canv.drawString(0, self.height - 20, "Иш берувчи" if self.employee else "Раис")
-        self.name_paragraph.drawOn(self.canv, 0, self.height - 28 - self.name_height)
-        if self.signature:
-            self.canv.drawImage(
-                ImageReader(BytesIO(self.signature)),
-                230,
-                24,
-                width=140,
-                height=55,
-                preserveAspectRatio=True,
-                anchor="c",
-                mask="auto",
-            )
-        else:
-            self.canv.drawString(240, 24, "____________________")
-        if self.employee:
-            self.canv.drawString(0, 6, "Ходимнинг имзоси: ____________________  Сана: __________")
-
-
-def documents(
-    fields: HiringFields,
-    signer: str,
-    signature: bytes | None = None,
-    *,
-    employer: str = "“Юксалиш” ҳаракати – халқаро нодавлат нотижорат ташкилоти",  # noqa: RUF001 - intentional Cyrillic document text
-    employer_address: str = "Тошкент ш. Шайхонтоҳур тумани Фурқат кўчаси, 1",
-    employer_phone: str = "+998 95 230 33 23",
-) -> dict[str, bytes]:
-    fonts()
-    normal = ParagraphStyle("hr-body", fontName="HRSerif", fontSize=11, leading=14, spaceAfter=6)
-    title = ParagraphStyle(
-        "hr-title", parent=normal, fontName="HRSerifBold", fontSize=13, alignment=1, spaceAfter=16
-    )
-    f = fields
-    employee_duties, employer_duties = contract_duties()
-    date_label = f.document_date.strftime("%d.%m.%Y")
-    probation = (
-        f"{f.probation_months} ойлик дастлабки синов муддати" if f.probation_months else "Синовсиз"
-    )
-
-    def paragraph(text: str, heading: bool = False) -> Flowable:
-        return Paragraph(escape(text).replace("\n", "<br/>"), title if heading else normal)
-
-    def build(content: list[Flowable], location: list[SignatureBox]) -> bytes:
-        output = BytesIO()
-        SimpleDocTemplate(
-            output,
-            pagesize=A4,
-            leftMargin=55,
-            rightMargin=45,
-            topMargin=40,
-            bottomMargin=40,
-            title="",
-            author="",
-        ).build(content)
-        writer = PdfWriter()
-        writer.append(PdfReader(BytesIO(output.getvalue())))
-        writer.add_metadata({"/HRSignatureBox": location[0].model_dump_json()})
-        result = BytesIO()
-        writer.write(result)
-        return result.getvalue()
-
-    contract_location: list[SignatureBox] = []
-    order_location: list[SignatureBox] = []
-
-    contract = [
-        paragraph("Вазирлар Маҳкамасининг 2024 йил 14 ноябрдаги 758-сон қарорига 2-илова"),
-        paragraph(f"{f.contract_number}-сон МЕҲНАТ ШАРТНОМАСИ", True),
-        paragraph(f"Тошкент шаҳри                         {date_label}"),
-        paragraph(
-            f"1. {employer} раиси {signer} номидан, кейинги ўринларда «Иш берувчи» деб "
-            f"аталади ва фуқаро {f.full_name}, кейинги ўринларда «Ходим» деб аталади, "
-            "мазкур шартномани қуйидагилар ҳақида туздик:"
-        ),
-        paragraph(
-            f"2. Ходим {f.full_name} {f.department} бўлинмасида {f.job_title} "
-            "лавозимига ишга қабул қилинади."
-        ),
-        paragraph(
-            "3. Шартнома "
-            + ("асосий иш" if f.work_type == "primary" else "ўриндошлик")
-            + " бўйича ҳисобланади."
-        ),
-        paragraph(
-            "4. Шартнома муддати: "
-            + (
-                "номуайян муддатга"
-                if f.term == "indefinite"
-                else f"{f.end_date} гача. Асос: {f.fixed_term_reason}"  # noqa: RUF001 - intentional Cyrillic document text
-            )
-        ),
-        paragraph(f"5. Шартнома бўйича ишлаш бошланиши: {f.start_date.strftime('%d.%m.%Y')}."),
-        paragraph(f"6. Синов муддати: {probation}."),
-        paragraph("7. Ходимнинг мажбуриятлари:"),
-        *[paragraph(text) for text in employee_duties],
-        paragraph("8. Иш берувчининг мажбуриятлари:"),
-        *[paragraph(text) for text in employer_duties],
-        paragraph(f"9. Иш куни режими: {f.work_regime}."),
-        paragraph(
-            f"10. Ходим учун {f.days_per_week} кунлик иш ҳафтаси белгиланади. Иш вақтининг "
-            f"давомийлиги ҳафтасига {f.hours_per_week} соатгача этиб белгиланади."
-        ),
-        paragraph(
-            f"11. Меҳнатга ҳақ тўлаш: {f.salary_terms}. Қўшимча ҳақ, устама ва "
-            f"компенсациялар: {f.allowances or 'белгиланмаган'}."
-        ),
-        paragraph(
-            f"12. Ходимга асосий йиллик меҳнат таътили {f.annual_leave} календарь кун, "
-            f"қўшимча таътил {f.additional_leave} календарь кун белгиланади."
-        ),
-        paragraph(
-            "13. Меҳнат шартномасининг меҳнат шароитлари ва унга ҳақ тўлаш хусусиятлари, "
-            "ижтимоий ҳимоя, имтиёзлар, кафолатлар ва бошқалар билан боғлиқ бўлган шартлари "
-            "тарафлар учун қонунчилик ҳужжатларида белгиланган тартибда амал қилади."
-        ),
-        paragraph(
-            "14. Шартнома бир хил кучга эга бўлган камида икки нусхада ёзма шаклда "
-            "тузилиб, уларнинг ҳар бири тарафлар томонидан имзоланади, меҳнат шартномасининг "
-            "бир нусхаси ходимга берилади, бошқаси иш берувчида сақланади."
-        ),
-    ]
-    if f.additional_terms:
-        contract.append(paragraph(f"Қўшимча шартлар: {f.additional_terms}"))
-    contract.append(
-        KeepTogether(
-            [
-                paragraph(
-                    f"Ходим: {f.full_name}\nПаспорт / ID-карта: {f.passport}\nЖШШИР: {f.pinfl}"  # noqa: RUF001 - intentional Cyrillic document text
-                    f"\nЯшаш манзили: {f.address}\nТелефон: {f.phone}"  # noqa: RUF001 - intentional Cyrillic document text
-                ),
-                paragraph(f"Иш берувчи манзили: {employer_address}\nТелефон: {employer_phone}"),  # noqa: RUF001 - intentional Cyrillic document text
-                SigningLine(signer, signature, contract_location, employee=True),
-            ]
-        )
-    )
-    order = [
-        paragraph(employer, True),
-        paragraph("БУЙРУҚ", True),
-        paragraph(f"{f.order_number}-сон ш/т\n{date_label}                         Тошкент шаҳри"),
-        paragraph("Ишга қабул қилиш тўғрисида", True),
-        paragraph(
-            f"{f.full_name} {f.start_date.strftime('%d.%m.%Y')} дан {f.department} "
-            f"бўлинмасининг {f.job_title} лавозимига {probation.lower()} билан "
-            "ишга қабул қилинсин."
-        ),
-        paragraph(
-            "Бухгалтерия бўлимига ходимга штат жадвали ва меҳнат шартномасига "
-            "мувофиқ меҳнат ҳақини ҳисоблаш ва тўлаш вазифаси юклатилсин."
-        ),
-        paragraph(
-            f"Асос: ходимнинг аризаси; {date_label} да тузилган "  # noqa: RUF001 - intentional Cyrillic document text
-            f"{f.contract_number}-сонли меҳнат шартномаси."
-        ),
-        Spacer(1, 20),
-        SigningLine(signer, signature, order_location),
-    ]
-    return {"contract": build(contract, contract_location), "order": build(order, order_location)}
-
-
 def sign_generated(content: bytes, signature: bytes) -> bytes:
     reader = PdfReader(BytesIO(content))
     if not reader.metadata or not reader.metadata.get("/HRSignatureBox"):
@@ -363,10 +151,3 @@ def place_signature(content: bytes, box: SignatureBox, signature: bytes | None) 
     result = BytesIO()
     writer.write(result)
     return result.getvalue()
-
-
-def contract_duties() -> tuple[list[str], list[str]]:
-    data = json.loads(
-        (Path(__file__).parent / "hr_assets" / "contract-clauses.json").read_text(encoding="utf-8")
-    )
-    return list(data["employee"]), list(data["employer"])

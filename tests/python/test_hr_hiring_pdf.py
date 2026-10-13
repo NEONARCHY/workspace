@@ -2,6 +2,7 @@
 
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from PIL import Image, ImageDraw
@@ -10,7 +11,6 @@ from pypdf import PdfReader, PdfWriter
 
 from yuksalish_api.hr_hiring_pdf import (
     application_pdf,
-    contract_duties,
     documents,
     place_signature,
     sign_generated,
@@ -29,6 +29,7 @@ def fields() -> HiringFields:
         contract_number="TEST-1",
         order_number="TEST-2",
         salary_terms="Штат жадвалига мувофиқ",
+        accountant_dative="Тест Бухгалтерга",
         passport="TEST00000",
         pinfl="00000000000000",
         address="Тестовый адрес",
@@ -51,15 +52,20 @@ def test_unicode_contract_order_slots_and_safe_signature() -> None:
     assert "МЕҲНАТ ШАРТНОМАСИ" in text
     assert "00000000000000" in text
     assert "21" in text and "40" in text
-    assert "Ходимнинг имзоси" in text
-    assert len(reader.pages) >= 2
+    assert "(сана ва имзо)" in text
+    assert len(reader.pages) == 2
+    assert len(PdfReader(BytesIO(packet["order"])).pages) == 1
     for name, content in packet.items():
         signed = PdfReader(BytesIO(sign_generated(content, signature())))
         assert len(signed.pages) == len(PdfReader(BytesIO(content)).pages)
         assert any(page.images for page in signed.pages), name
-    employee, employer = contract_duties()
-    assert len(employee) == 11 and len(employer) == 10
-    assert "ЎР МК" in text  # noqa: RUF001 - literal source wording
+    assert "Меҳнатга ҳақ тўлаш" in text
+    assert "ЖЭЖЗ қаршилик билдириш" in text
+    order_text = "\n".join(
+        page.extract_text() for page in PdfReader(BytesIO(packet["order"])).pages
+    )
+    assert "Бухгалтерия бўлими бошлиғи Тест Бухгалтерга" in order_text
+    assert "Меҳнат кодексининг 127, 129 ва 130-моддалари" in " ".join(order_text.split())
 
 
 def test_document_fields_are_text_not_paragraph_markup() -> None:
@@ -70,11 +76,67 @@ def test_document_fields_are_text_not_paragraph_markup() -> None:
     for name, content in packet.items():
         text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
         assert values.full_name in text, name
-        assert 'Руководитель <i>текст</i> & "имя"' in text, name
+        assert 'Руководитель <i>текст</i> & "имя"' in " ".join(text.split()), name
     contract = "\n".join(
         page.extract_text() for page in PdfReader(BytesIO(packet["contract"])).pages
     )
     assert values.address in contract
+
+
+def test_original_backgrounds_have_no_sample_employee_or_extra_page() -> None:
+    root = Path(__file__).parents[2] / "apps/api/src/yuksalish_api/hr_assets"
+    contract = PdfReader(root / "contract-original-blank.pdf")
+    order = PdfReader(root / "order-original-blank.pdf")
+    assert len(contract.pages) == 2 and len(order.pages) == 1
+    content = "\n".join(page.extract_text() for page in [*contract.pages, *order.pages])
+    assert "Муталиева" not in content
+    assert "Турдалиева" not in content
+    assert "Бекмуродов" not in content
+    assert "Тошкент шаҳри" in content and "HARAKAT" in content
+
+
+def test_original_form_rejects_fields_with_no_room_or_no_slot() -> None:
+    with pytest.raises(ValueError, match="начальника бухгалтерии"):
+        documents(fields().model_copy(update={"accountant_dative": ""}), "Тестовый руководитель")
+    with pytest.raises(ValueError, match="нет места для дополнительных условий"):
+        documents(
+            fields().model_copy(update={"additional_terms": "Новый пункт"}), "Тестовый руководитель"
+        )
+    with pytest.raises(ValueError, match="не помещается"):
+        documents(
+            fields().model_copy(update={"salary_terms": "длинное поле " * 100}),
+            "Тестовый руководитель",
+        )
+
+
+def test_fixed_term_reason_is_printed_inside_existing_contract_slot() -> None:
+    current = fields().model_copy(
+        update={
+            "term": "fixed",
+            "end_date": date(2027, 1, 1),
+            "fixed_term_reason": "Тест лойиҳа муддати",
+        }
+    )
+    packet = documents(current, "Тестовый руководитель")
+    text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(packet["contract"])).pages)
+    assert "Тест лойиҳа муддати" in text
+    assert "01.01.2027" in text
+
+
+def test_source_length_order_fits_its_original_three_line_first_clause() -> None:
+    current = fields().model_copy(
+        update={
+            "department": "Ташкилий ва инсон капитали билан ишлаш тармоғи",
+            "job_title": "Канцелярия мутахассиси",
+            "probation_months": 2,
+            "probation_eligible": True,
+            "full_name": "Тестова Сабина Юнусовна",
+        }
+    )
+    result = documents(current, "Тестовый руководитель")
+    assert len(PdfReader(BytesIO(result["order"])).pages) == 1
+    text = " ".join(PdfReader(BytesIO(result["order"])).pages[0].extract_text().split())
+    assert "икки ойлик дастлабки синов муддати билан ишга қабул қилинсин" in text
 
 
 @pytest.mark.parametrize(

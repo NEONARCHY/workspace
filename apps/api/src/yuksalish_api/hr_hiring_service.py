@@ -446,10 +446,13 @@ async def act_case(
             box = SignatureBox.model_validate(row["application_box"])
             if box.page > row["application_pages"]:
                 raise Error(422, "Выбранной страницы подписи нет в аризе")
-            async with PDF_LIMIT:
-                previews = await run_in_threadpool(
-                    documents, HiringFields.model_validate(row["fields"]), row["signer_name"]
-                )
+            try:
+                async with PDF_LIMIT:
+                    previews = await run_in_threadpool(
+                        documents, HiringFields.model_validate(row["fields"]), row["signer_name"]
+                    )
+            except ValueError as error:
+                raise Error(422, str(error)) from error
             preview_keys: dict[str, str] = {}
             preview_hashes = dict(row["document_hashes"])
             for name, content in previews.items():
@@ -538,12 +541,15 @@ async def read_document(
     elif kind in row["preview_keys"] and row["status"] == "pending":
         content = await storage.get(row["preview_keys"][kind])
     elif kind in {"contract", "order"}:
-        async with PDF_LIMIT:
-            content = (
-                await run_in_threadpool(
-                    documents, HiringFields.model_validate(row["fields"]), row["signer_name"]
-                )
-            )[kind]
+        try:
+            async with PDF_LIMIT:
+                content = (
+                    await run_in_threadpool(
+                        documents, HiringFields.model_validate(row["fields"]), row["signer_name"]
+                    )
+                )[kind]
+        except ValueError as error:
+            raise Error(422, str(error)) from error
     elif kind in {"application", "application-placement"}:
         if not row["application_key"]:
             raise Error(404, "Ариза ещё не загружена")

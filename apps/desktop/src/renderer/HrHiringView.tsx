@@ -14,9 +14,9 @@ const blank = (): HiringFields => {
   return { fullName: "", jobTitle: "", department: "", startDate: date, documentDate: date, contractNumber: "", orderNumber: "",
     workType: "primary", term: "indefinite", endDate: null, fixedTermReason: "", probationMonths: 0, probationEligible: false,
     workRegime: "Иш вақтининг нормал давомийлиги", daysPerWeek: 5, hoursPerWeek: 40, annualLeave: 21, additionalLeave: 0,
-    salaryTerms: "Штат жадвалига мувофиқ", allowances: "", passport: "", pinfl: "", address: "", phone: "", additionalTerms: "" };
+    salaryTerms: "Штат жадвалига мувофиқ", accountantDative: "", allowances: "", passport: "", pinfl: "", address: "", phone: "", additionalTerms: "" };
 };
-const required: readonly (keyof HiringFields)[] = ["fullName", "jobTitle", "department", "contractNumber", "orderNumber", "startDate", "documentDate", "salaryTerms", "passport", "pinfl", "address", "phone"];
+const required: readonly (keyof HiringFields)[] = ["fullName", "jobTitle", "department", "contractNumber", "orderNumber", "startDate", "documentDate", "salaryTerms", "accountantDative", "passport", "pinfl", "address", "phone"];
 type TextKey = { [K in keyof HiringFields]: HiringFields[K] extends string ? K : never }[keyof HiringFields];
 type NumberKey = "probationMonths" | "daysPerWeek" | "hoursPerWeek" | "annualLeave" | "additionalLeave";
 
@@ -44,7 +44,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
   useEffect(() => { let active = true; void loadHiringRegistry(token, offset).then((value) => { if (active) setRegistry(value); })
     .catch((value: unknown) => { if (active) setError(errorMessage(value)); }); return () => { active = false; }; }, [token, offset]);
   const noOfficePreview = useCallback(async () => { throw new Error("Кадровые документы открываются в PDF"); }, []);
-  const accept = (value: HiringDetail) => { setSelected(value); setDraftId(value.id); setFields(value.fields); setBox(value.applicationBox); setDirty(false); };
+  const accept = (value: HiringDetail) => { setSelected(value); setDraftId(value.id); setFields({ ...blank(), ...value.fields }); setBox(value.applicationBox); setDirty(false); };
   const run = async (operation: () => Promise<void>) => { if (busy) return; setBusy(true); setError(undefined);
     try { await operation(); } catch (value) { setError(errorMessage(value)); } finally { setBusy(false); } };
   const selectCase = (id: string) => { if (dirty || pendingAction) { setError("Сначала сохраните изменения или завершите повтор неизвестного действия."); return; }
@@ -52,7 +52,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
   const start = () => { if (dirty || pendingAction) { setError("Сначала сохраните текущий черновик."); return; }
     setSelected(undefined); setDraftId(crypto.randomUUID()); setFields(blank()); setBox(defaultBox); setDirty(true); setError(undefined); };
   const editable = Boolean(draftId && (!selected || selected.canEdit));
-  const valid = required.every((key) => String(fields[key]).trim()) && /^\d{14}$/.test(fields.pinfl)
+  const valid = required.every((key) => String(fields[key]).trim()) && !fields.additionalTerms.trim() && /^\d{14}$/.test(fields.pinfl)
     && (!fields.probationMonths || fields.probationEligible)
     && (fields.term !== "fixed" || Boolean(fields.endDate && fields.fixedTermReason.trim()));
   const save = () => { if (!draftId) return; void run(async () => { accept(await saveHiringCase(token, draftId, selected?.revision ?? 0, fields, box)); await refresh(); }); };
@@ -108,6 +108,7 @@ export function HrHiringView({ token }: { readonly token: string }) {
           </div></fieldset>
           <fieldset disabled={!editable || busy}><legend>Должность и договор</legend><div className="hr-hiring-grid">
             {text("department", "Подразделение")}{text("jobTitle", "Должность")}{text("contractNumber", "Номер договора")}{text("orderNumber", "Номер приказа")}
+            {text("accountantDative", "Начальник бухгалтерии для приказа (в дательном падеже)")}
             {text("documentDate", "Дата документов", "date")}{text("startDate", "Дата начала работы", "date")}
             <Field label="Вид работы"><Select value={fields.workType} onChange={(_, data) => { setFields({ ...fields, workType: data.value === "secondary" ? "secondary" : "primary" }); setDirty(true); }}><option value="primary">Основная работа</option><option value="secondary">Совместительство</option></Select></Field>
             <Field label="Срок договора"><Select value={fields.term} onChange={(_, data) => { setFields({ ...fields, term: data.value === "fixed" ? "fixed" : "indefinite", endDate: null, fixedTermReason: "" }); setDirty(true); }}><option value="indefinite">Бессрочный</option><option value="fixed">Срочный</option></Select></Field>
@@ -118,7 +119,8 @@ export function HrHiringView({ token }: { readonly token: string }) {
             {number("daysPerWeek", "Дней в неделю", 1, 6)}{number("hoursPerWeek", "Часов в неделю", 1, 40)}{number("annualLeave", "Основной отпуск, календарных дней", 21, 90)}{number("additionalLeave", "Дополнительный отпуск, дней", 0, 90)}
             {text("salaryTerms", "Зарплата / основание по штатному расписанию")}{text("allowances", "Доплаты и компенсации")}
           </div>{fields.probationMonths > 0 ? <Checkbox checked={fields.probationEligible} label="Я проверил(а) допустимость испытательного срока для этого сотрудника" onChange={(_, data) => { setFields({ ...fields, probationEligible: data.checked === true }); setDirty(true); }} /> : null}
-            <Field label="Дополнительные условия"><Textarea value={fields.additionalTerms} onChange={(_, data) => { setFields({ ...fields, additionalTerms: data.value }); setDirty(true); }} /></Field></fieldset>
+            <p>Договор и приказ заполняются по исходным бланкам. Дополнительные условия вне бланка не печатаются; очистите их в старом черновике перед сохранением.</p>
+            {fields.additionalTerms ? <Field label="Дополнительные условия старого черновика — очистить"><Textarea value={fields.additionalTerms} onChange={(_, data) => { setFields({ ...fields, additionalTerms: data.value }); setDirty(true); }} /></Field> : null}</fieldset>
           {editable ? <Button appearance="primary" disabled={busy || !valid || !dirty} onClick={save}>Сохранить черновик</Button> : null}
           {editable && dirty ? <Button disabled={busy} onClick={() => setDiscardOpen(true)}>Отменить изменения</Button> : null}
           {selected && !dirty ? <Button disabled={busy || Boolean(pendingAction)} onClick={() => selectCase(selected.id)}>Обновить карточку</Button> : null}
