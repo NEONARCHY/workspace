@@ -101,3 +101,40 @@ blue/teal banner family with distinct restrained motifs. Working controls keep
 contrasting surfaces; dense employee administration tools remain in a separate
 light row. Dialog, record and account headings are not converted. See
 [section-gradient-headers.md](section-gradient-headers.md) for scope and checks.
+
+## Complete colour themes — 2026-10-13
+
+The shared web/Electron renderer supports light, dark and system preferences,
+plus a quick sun/moon action in the global bar. This adds dark mode to the
+historical light-only packages described above; it does not change their layout,
+business rules, permissions, metrics, API or original company artwork.
+
+- `color-theme.ts` owns validated per-employee local preferences, cross-tab and
+  system synchronisation. The last preference is also cached for an external,
+  CSP-compatible classic pre-paint script. It must run before the React bundle;
+  Vite deliberately copies it as a public asset rather than bundling/defering it.
+- The HTML `data-color-theme` attribute is the common scope for lazy styles and
+  portals. `workspaceDarkTheme` supplies Fluent tokens. Custom surfaces/text use
+  semantic `--ws-theme-*` roles, with their exact original light values retained
+  as fallbacks. New UI should reuse these roles rather than add light-only
+  literals. Do not recolour/invert logos, photos, emblems or authored documents.
+- Dark canvas is `#0b1724`, working surfaces `#162635` / `#1b2e3f`, text
+  `#e5eef4` / `#a3b7c7`, interactive turquoise `#7cdae1`. Status washes and
+  readable status inks are paired; control borders meet 3:1 on tested surfaces.
+  Source PDF/Office paper remains light, while the viewer controls are themed.
+- Theme changes fade the live document out/in over 120/200 ms without remounting
+  React. A newer choice retargets the animation. Reduced motion, forced colours
+  or a hidden document apply immediately, including interruptions mid-fade.
+  Hover glow is bounded and excludes disabled controls; no new animated blur,
+  text scaling, broad `!important` or `transition: all` is introduced.
+- Recognition rarity and optical artwork are retained. Dark foil/glare are
+  restrained; locked emblems are subdued without lowering text opacity.
+  AI thinking uses its existing canvas renderer with the resolved theme and a
+  static forced-colours alternative. Sidebar palette choices remain independent.
+
+The colour and motion decisions follow the Color Expert and Emil Design
+Engineering guidance linked in [dark-theme-roadmap.md](dark-theme-roadmap.md).
+That roadmap records real-component screenshots, dark/light regressions,
+contrast measurements and release status. Automated contrast checks cannot
+resolve all gradients/optical layers; they complement visual review, not a
+claim of full accessibility certification or physical-device/Electron testing.

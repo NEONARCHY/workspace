@@ -14,7 +14,7 @@
   top: 0;
   left: 0;
   border-radius: 10px;
-  background: var(--sliding-indicator-background, #fff);
+  background: var(--sliding-indicator-background, var(--ws-theme-surface, #fff));
   box-shadow: 0 4px 12px rgb(31 62 72 / 10%);
   opacity: 0;
   pointer-events: none;
@@ -36,9 +36,9 @@
   min-width: 0;
 }
 .sliding-segmented.notification-kind-filters {
-  --sliding-indicator-background: #fff;
+  --sliding-indicator-background: var(--ws-theme-surface, #fff);
   border-radius: 15px;
-  background: #eaf1f1;
+  background: var(--ws-theme-surface-soft, #eaf1f1);
 }
 .sliding-segmented.notification-kind-filters > button:first-child {
   position: relative;
@@ -52,19 +52,19 @@
   gap: 3px;
   padding: 3px;
   border-radius: 11px;
-  background: #eaf1f1;
+  background: var(--ws-theme-surface-soft, #eaf1f1);
 }
 .sliding-segmented.approval-detail-tabs {
-  --sliding-indicator-background: #e1f0ed;
+  --sliding-indicator-background: var(--ws-theme-surface-soft, #e1f0ed);
 }
 .sliding-segmented.task-team-modes {
   display: inline-flex;
   gap: 3px;
   width: fit-content;
   padding: 4px;
-  border: 1px solid #d9e4e7;
+  border: 1px solid var(--ws-theme-line, #d9e4e7);
   border-radius: 11px;
-  background: #edf4f3;
+  background: var(--ws-theme-surface-soft, #edf4f3);
 }
 .sliding-segmented.task-team-modes > button {
   min-height: 34px;
@@ -74,21 +74,21 @@
   border-radius: 8px;
 }
 .sliding-segmented.task-team-scopes {
-  --sliding-indicator-background: #fff;
+  --sliding-indicator-background: var(--ws-theme-surface, #fff);
   width: fit-content;
   padding: 3px;
   border-radius: 11px;
-  background: #edf4f3;
+  background: var(--ws-theme-surface-soft, #edf4f3);
 }
 .sliding-segmented.task-team-scopes > button[aria-pressed="true"] { color: var(--ws-text); }
 .sliding-segmented.task-filter-tabs {
-  --sliding-indicator-background: #fff;
+  --sliding-indicator-background: var(--ws-theme-surface, #fff);
 }
 .task-filters > .task-search {
   margin-left: auto;
 }
 .sliding-segmented.ws-time-period {
-  --sliding-indicator-background: #fff;
+  --sliding-indicator-background: var(--ws-theme-surface, #fff);
 }
 
 @media (prefers-reduced-motion: reduce) {

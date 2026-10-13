@@ -1,7 +1,7 @@
 /* Page roots are layout, not a universal white surface. Keep the ambient shell,
    original rounded panels and blue headers; replace only glass behind white work panels. */
 .app-shell {
-  --ws-page-panel: #fff;
+  --ws-page-panel: var(--ws-theme-surface, #fff);
   --ws-page-trailing-gutter: 20px;
   padding-inline-end: 0;
 }

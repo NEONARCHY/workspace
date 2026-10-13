@@ -1,6 +1,6 @@
 /* Account-only shell: white working surfaces, quiet navigation, no masonry or
    sticky anchor overlays. Hidden pages stay mounted to preserve form drafts. */
-.account-scrim.account-settings-redesigned { --ws-surface: #fff; display: flex; align-items: center; justify-content: center; }
+.account-scrim.account-settings-redesigned { --ws-surface: var(--ws-theme-surface, #fff); display: flex; align-items: center; justify-content: center; }
 .account-settings-redesigned .account-panel {
   display: flex;
   flex-direction: column;
@@ -37,7 +37,7 @@
   padding: 16px 20px;
   border: 1px solid var(--ws-line);
   border-radius: 18px;
-  background: linear-gradient(100deg, color-mix(in srgb, var(--ws-selected) 70%, white), var(--ws-muted-surface) 60%, white);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--ws-selected) 70%, var(--ws-theme-surface, white)), var(--ws-muted-surface) 60%, var(--ws-theme-surface, white));
   box-shadow: none;
   overflow: visible;
 }
@@ -63,8 +63,8 @@
   cursor: pointer;
 }
 .account-settings-redesigned .account-profile-status button:hover { border-color: var(--ws-control-line); }
-.account-settings-redesigned .account-profile-status .needs-attention { color: #85521a; background: #fff8ec; border-color: #ead9ba; }
-.account-settings-redesigned .account-profile-status .is-secure { color: #286143; background: #f0f8f2; border-color: #cde3d3; }
+.account-settings-redesigned .account-profile-status .needs-attention { color: var(--ws-theme-ink-warning, #85521a); background: var(--ws-theme-wash-warning, #fff8ec); border-color: var(--ws-theme-line-warning, #ead9ba); }
+.account-settings-redesigned .account-profile-status .is-secure { color: var(--ws-theme-ink, #286143); background: var(--ws-theme-surface, #f0f8f2); border-color: var(--ws-theme-line, #cde3d3); }
 .account-settings-redesigned .account-profile-status svg { width: 16px; height: 16px; color: currentColor; }
 .account-settings-redesigned .account-avatar-action { margin: 0; min-height: 40px; border-color: var(--ws-control-line); background: var(--ws-surface); box-shadow: none; }
 .account-settings-redesigned .account-avatar-action:hover { transform: none; }
@@ -112,7 +112,7 @@
 }
 .account-settings-redesigned .account-section-nav button svg { width: 20px; height: 20px; }
 .account-settings-redesigned .account-section-nav button:hover { background: var(--ws-surface); color: var(--ws-link); transform: none; }
-.account-settings-redesigned .account-section-nav button.is-active { color: var(--ws-link); background: var(--ws-selected); border-color: color-mix(in srgb, var(--ws-link) 25%, white); font-weight: 700; box-shadow: none; }
+.account-settings-redesigned .account-section-nav button.is-active { color: var(--ws-link); background: var(--ws-selected); border-color: color-mix(in srgb, var(--ws-link) 25%, var(--ws-theme-line, white)); font-weight: 700; box-shadow: none; }
 .account-settings-redesigned .account-section-nav button:focus-visible { outline-color: var(--ws-link); outline-offset: -2px; }
 .account-settings-redesigned .account-compact-navigation { display: none; }
 .account-settings-redesigned .account-settings-content {
@@ -162,13 +162,13 @@
 .account-settings-redesigned .session-list strong { font-size: 14px; }
 .account-settings-redesigned .session-list .fui-Button { background: var(--ws-surface); }
 .account-settings-redesigned :is(.security-warning, .security-ok) { display: inline-flex; align-items: center; min-height: 30px; padding: 6px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5; }
-.account-settings-redesigned .security-warning { color: #85521a; background: #fff4db; }
-.account-settings-redesigned .security-ok { color: #286143; background: #edf7ef; }
+.account-settings-redesigned .security-warning { color: var(--ws-theme-ink-warning, #85521a); background: var(--ws-theme-wash-warning, #fff4db); }
+.account-settings-redesigned .security-ok { color: var(--ws-theme-ink, #286143); background: var(--ws-theme-surface-soft, #edf7ef); }
 .account-settings-redesigned :is(.totp-setup, .invite-result, .account-session-confirm, .account-retry) { display: grid; gap: 12px; margin-top: 16px; padding: 16px; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-muted-surface); }
 .account-settings-redesigned :is(.totp-setup, .invite-result) code { display: block; padding: 12px; background: var(--ws-surface); border: 1px solid var(--ws-control-line); border-radius: 8px; overflow-wrap: anywhere; font-size: 14px; }
 .account-settings-redesigned :is(.account-session-confirm, .account-retry) p { margin: 0; line-height: 1.5; }
 .account-settings-redesigned .account-session-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
-.account-settings-redesigned .account-retry { color: #8b342e; background: #fff5f3; }
+.account-settings-redesigned .account-retry { color: var(--ws-theme-ink-danger, #8b342e); background: var(--ws-theme-surface, #fff5f3); }
 .account-settings-redesigned .account-empty-state { padding: 16px; border-radius: 12px; background: var(--ws-muted-surface); color: var(--ws-muted); }
 .account-settings-redesigned .desktop-update-settings { display: grid; gap: 16px; }
 .account-settings-redesigned .desktop-update-step { padding: 20px; background: var(--ws-muted-surface); border: 1px solid var(--ws-line); border-radius: 12px; }

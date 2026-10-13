@@ -1,4 +1,4 @@
-.app-provider .file-viewer-surface { width: min(1180px, calc(100vw - 40px)); max-width: none; height: min(880px, calc(100dvh - 40px)); padding: 22px; border-radius: 22px; background: var(--ws-surface, white); }
+.app-provider .file-viewer-surface { width: min(1180px, calc(100vw - 40px)); max-width: none; height: min(880px, calc(100dvh - 40px)); padding: 22px; border-radius: 22px; background: var(--ws-surface, var(--ws-theme-surface, white)); }
 .file-viewer-surface .fui-DialogBody { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
 .file-viewer-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex: none; }
 .file-viewer-header .fui-DialogTitle { min-width: 0; flex: 1; }
@@ -20,13 +20,13 @@ body .app-provider .file-viewer-surface .file-viewer-content { flex: 1; min-heig
 .file-viewer-audio-art { display: grid; place-items: center; width: 112px; height: 112px; border-radius: 28px; background: var(--ws-selected); color: var(--ws-link); font-size: 52px; }
 .file-viewer-audio-stage h2 { max-width: 100%; overflow-wrap: anywhere; font-size: 18px; text-align: center; }
 .file-viewer-audio-stage audio { width: min(100%, 520px); }
-.file-viewer-document { width: min(100%, 800px); margin: auto; padding: clamp(20px, 4vw, 56px); background: white; color: var(--ws-text); border-radius: 4px; line-height: 1.75; overflow-wrap: anywhere; }
+.file-viewer-document { width: min(100%, 800px); margin: auto; padding: clamp(20px, 4vw, 56px); background: var(--ws-theme-surface, white); color: var(--ws-text); border-radius: 4px; line-height: 1.75; overflow-wrap: anywhere; }
 .file-viewer-document p { white-space: pre-wrap; margin: 0 0 .8em; }
 .file-viewer-document table { width: 100%; border-collapse: collapse; }
 .file-viewer-document td { border: 1px solid var(--ws-line); padding: 8px; }
 .file-viewer-sheets { display: flex; flex: none; overflow-x: auto; gap: 6px; padding-bottom: 6px; }
 .file-viewer-sheets button { flex: none; }
-.file-viewer-grid { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: white; }
+.file-viewer-grid { min-width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; background: var(--ws-theme-surface, white); }
 .file-viewer-grid th, .file-viewer-grid td { min-width: 100px; max-width: 400px; padding: 8px 12px; border-right: 1px solid var(--ws-line); border-bottom: 1px solid var(--ws-line); white-space: pre-wrap; overflow-wrap: anywhere; }
 .file-viewer-grid th { background: var(--ws-muted-surface); color: var(--ws-muted); font-weight: 500; text-align: center; }
 .file-viewer-grid thead th { position: sticky; top: 0; z-index: 2; }
@@ -38,9 +38,9 @@ body .app-provider .file-viewer-surface .file-viewer-pdf { overflow: hidden; dis
 .file-viewer-pdf-tools { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; justify-content: center; flex: none; }
 .file-viewer-pdf-tools .fui-Input { width: 80px; }
 .file-viewer-pdf-page { flex: 1; min-height: 0; overflow: auto; padding: 16px; scrollbar-gutter: stable; position: relative; }
-.file-viewer-pdf-page canvas { display: block; margin-inline: auto; background: white; }
+.file-viewer-pdf-page canvas { display: block; margin-inline: auto; background: var(--ws-theme-surface, white); }
 .file-viewer-pdf-loading { position: sticky; top: 12px; z-index: 1; padding: 12px; background: var(--ws-surface); border-radius: 12px; }
-.file-viewer-pdf-text { padding: 20px; margin-top: 16px; background: white; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.file-viewer-pdf-text { padding: 20px; margin-top: 16px; background: var(--ws-theme-surface, white); border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 640px) { .app-provider .file-viewer-surface { width: calc(100vw - 16px); height: calc(100dvh - 16px); padding: 14px; } .file-viewer-toolbar, .file-viewer-footer { flex-wrap: wrap; } body .app-provider .file-viewer-surface .file-viewer-content { padding: 12px; } }
 @media (prefers-reduced-motion: reduce) { .file-viewer-image-stage img { transition: none; } }
 @media (forced-colors: active) { body .app-provider .file-viewer-surface .file-viewer-content, .file-viewer-document, .file-viewer-grid { background: Canvas; color: CanvasText; } }

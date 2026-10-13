@@ -4,6 +4,7 @@ import { useModalFocus } from "./useModalFocus";
 import { RecordComposer, RecordSummary } from "./RecordComposer";
 import { SpatialBoard, SpatialCard, SpatialLane } from "./SpatialBoard";
 import { useHorizontalBoardScroll } from "./useHorizontalBoardScroll";
+import { useFrameNodeChanges } from "./useFrameNodeChanges";
 import { WorkspaceSelect } from "./WorkspaceSelect";
 import { PaymentCalendarEventPicker } from "./PaymentCalendarEventPicker";
 import { WorkflowStageColorPicker } from "./WorkflowStageColorPicker";
@@ -967,7 +968,8 @@ export function ApprovalsView({
 }: ApprovalsViewProps) {
   const boardScrollRef = useHorizontalBoardScroll<HTMLDivElement>();
   const [mode, setMode] = useState<ApprovalMode>("requests");
-  const [nodes, setNodes, onNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
+  const [nodes, setNodes, applyNodesChange] = useNodesState<ApprovalNode>(flowNodes(workflow));
+  const onNodesChange = useFrameNodeChanges(applyNodesChange);
   const [edges, setEdges, onEdgesChange] = useEdgesState<ApprovalEdge>(flowEdges(workflow));
   const [selectedNodeId, setSelectedNodeId] = useState<string>("");
   const [saved, setSaved] = useState(true);

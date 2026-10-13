@@ -1,7 +1,7 @@
 .calendar-event-composer .record-composer-fields { gap: 18px; }
 .calendar-audience-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
 .calendar-audience-actions .fui-Button { min-width: 0; padding-inline: 8px; }
-.calendar-audience-actions .fui-Button[aria-pressed="true"] { color: var(--ws-link); background: #e3f1f0; border-color: var(--ws-link); }
+.calendar-audience-actions .fui-Button[aria-pressed="true"] { color: var(--ws-link); background: var(--ws-theme-surface-soft, #e3f1f0); border-color: var(--ws-link); }
 .calendar-audience p, .calendar-attendee-count { color: var(--ws-muted); font-size: 12px; line-height: 1.5; }
 @media (forced-colors: active) { .calendar-audience-actions .fui-Button[aria-pressed="true"] { color: HighlightText; background: Highlight; border-color: Highlight; } }
 .calendar-event-composer .record-section > .fui-Button { margin-top: 14px; }
@@ -17,7 +17,7 @@
   .calendar-project-fields { grid-template-columns: minmax(0, 1fr); }
 }
 .calendar-composer-preview > span { color: var(--ws-link); font-size: 12px; font-weight: 600; }
-.calendar-composer-preview > strong { color: var(--ws-navy); font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
+.calendar-composer-preview > strong { color: var(--ws-text); font-size: 21px; line-height: 1.25; overflow-wrap: anywhere; }
 .calendar-composer-preview > p { margin: 0; color: var(--ws-muted); line-height: 1.45; overflow-wrap: anywhere; }
 .calendar-composer-preview .record-summary-facts { margin-top: 8px; }
 .calendar-composer-attendees { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 12px; max-height: 220px; margin-top: 12px; padding: 10px; overflow-y: auto; border: 1px solid var(--ws-line); border-radius: 12px; background: var(--ws-surface); scrollbar-width: thin; }
@@ -27,7 +27,7 @@
 .calendar-composer-tasks { display: grid; gap: 12px; margin-top: 14px; }
 .calendar-composer-task { min-width: 0; padding: 16px; border: 1px solid var(--ws-line); border-radius: 14px; background: var(--ws-surface); }
 .calendar-composer-task > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.calendar-composer-task > header strong { color: var(--ws-navy); font-size: 14px; }
+.calendar-composer-task > header strong { color: var(--ws-text); font-size: 14px; }
 .calendar-composer-task .record-field-grid { gap: 12px; }
 .calendar-composer-empty { margin: 12px 0 0; color: var(--ws-muted); font-size: 13px; }
 @media (max-width: 700px) {

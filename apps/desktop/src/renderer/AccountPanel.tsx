@@ -37,6 +37,7 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { useContextMotion } from "./useContextMotion";
 import { SidebarAppearanceSettings } from "./SidebarAppearanceSettings";
+import { ColorThemeSettings } from "./ColorThemeSettings";
 
 import {
   changeOwnPassword,
@@ -453,7 +454,8 @@ export function AccountPanel({ token, user, onClose, onLogout, onAvatarChanged, 
         </div>
 
         <div id="account-page-appearance" className="account-settings-page" hidden={activeSection !== "appearance"}>
-          <div className="account-page-heading"><Color24Regular /><div><h3>Оформление</h3><p>Цвет меню под ваш вкус.</p></div></div>
+          <div className="account-page-heading"><Color24Regular /><div><h3>Оформление</h3><p>Тема пространства и цвет меню под ваш вкус.</p></div></div>
+          <ColorThemeSettings userId={user.id} />
           <SidebarAppearanceSettings userId={user.id} />
         </div>
         <div id="account-page-audio" className="account-settings-page" hidden={activeSection !== "audio"}><AudioDeviceSettings /></div>

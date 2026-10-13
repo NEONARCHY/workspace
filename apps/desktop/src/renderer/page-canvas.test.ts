@@ -19,7 +19,7 @@ describe("Scoped work-panel surfaces", () => {
   });
   it("reserves the trailing gutter without painting or flattening page roots", () => {
     const css = read("page-canvas.css");
-    expect(css).toContain("--ws-page-panel: #fff");
+    expect(css).toContain("--ws-page-panel: var(--ws-theme-surface, #fff)");
     expect(css).toContain("--ws-page-trailing-gutter: 20px");
     expect(css).toContain("padding-inline-end: var(--ws-page-trailing-gutter)");
     const roots = css.match(/^\.app-content > :is\(\.workspace-view, \.team-dashboard, \.telegram-access-view\) \{([^}]+)\}/m)?.[1];
@@ -46,7 +46,7 @@ describe("Scoped work-panel surfaces", () => {
     const css = read("page-canvas.css");
     expect(css).not.toContain("border-radius: 0");
     expect(css).not.toMatch(/^\.calendar-(?:main|side|board|day-summary|detail)/m);
-    expect(read("workspace-calendar.css")).toContain("background: #fff");
+    expect(read("workspace-calendar.css")).toContain("background: var(--ws-theme-surface, #fff)");
     expect(read("ai-referent-workspace.css")).toContain("border-radius: var(--ws-radius, 22px)");
     expect(read("ai-hisobot.css")).toContain("border-radius: var(--ws-radius, 22px)");
   });
@@ -76,7 +76,7 @@ describe("Scoped work-panel surfaces", () => {
     expect(content).toBeDefined();
     expect(shell).not.toMatch(/background(?:-color|-image)?\s*:/);
     expect(content).not.toMatch(/background(?:-color|-image)?\s*:/);
-    expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, #dfedea 0, transparent 48%), var(--ws-canvas)");
+    expect(read("spatial-workspace.css")).toContain("background: radial-gradient(ellipse at 84% 0%, var(--ws-theme-surface-soft, #dfedea) 0, transparent 48%), var(--ws-canvas)");
   });
   it("lets the shell show through page-local washes without repainting work panels", () => {
     const css = read("page-canvas.css");

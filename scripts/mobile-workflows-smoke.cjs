@@ -3,7 +3,9 @@ const { chromium } = require('playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
-const output = path.resolve('tmp/mobile-workflows');
+const output = path.resolve(process.env.QA_THEME === 'dark' ? 'tmp/dark-theme/workflows' : 'tmp/mobile-workflows');
+const { inspect } = require('./dark-theme-smoke.cjs');
+const audits = [];
 fs.mkdirSync(output, { recursive: true });
 const cases = [[320,700,true],[390,844,true],[768,1024,true],[1024,768,true],[1180,820,true],[1440,900,false]];
 const report = [];
@@ -26,6 +28,9 @@ const report = [];
       const shot = async suffix => {
         await page.evaluate(() => Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {}))));
         await page.screenshot({ path: path.join(output, `${width}x${height}-${suffix}.png`) });
+        if (process.env.QA_THEME === 'dark') {
+          audits.push(await inspect(page, `${width}x${height}-${suffix}`)); fs.writeFileSync(path.join(output, 'visual-audit.json'), JSON.stringify(audits, null, 2));
+        }
       };
       const noOverflow = async () => assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Document X overflow');
       const bounds = async selector => {
@@ -66,7 +71,7 @@ const report = [];
         await page.locator(surface).waitFor({ state: 'hidden' });
       };
       try {
-        await page.goto('http://127.0.0.1:5173/qa/mobile-workflows.html');
+        await page.goto('http://127.0.0.1:5173/qa/mobile-workflows.html' + (process.env.QA_THEME === 'dark' ? '?theme=dark' : ''));
         await page.locator('.project-hub-project').first().waitFor();
         await noOverflow();
         await bounds('.project-hub-canvas');

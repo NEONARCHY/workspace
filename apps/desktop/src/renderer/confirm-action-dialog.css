@@ -68,12 +68,12 @@
   background: var(--ws-accent-wash);
 }
 .confirm-action-dialog .fui-Button.confirm-action-danger {
-  border-color: #a7434b;
+  border-color: var(--ws-theme-line-danger, #a7434b);
   color: #fff;
   background: #a7434b;
 }
 .confirm-action-dialog .fui-Button.confirm-action-danger:hover:not(:disabled) {
-  border-color: #923740;
+  border-color: var(--ws-theme-line-danger, #923740);
   background: #923740;
 }
 .confirm-action-dialog .fui-Button:disabled {

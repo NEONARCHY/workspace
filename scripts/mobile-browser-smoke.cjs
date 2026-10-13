@@ -6,7 +6,7 @@ const { chromium, webkit } = require(process.env.PLAYWRIGHT_MODULE || 'playwrigh
 
 async function exercise(browser, engine) {
   const results = [];
-  const out = path.resolve('tmp/mobile-browser');
+  const out = path.resolve(process.env.QA_THEME === 'dark' ? 'tmp/dark-theme/shell' : 'tmp/mobile-browser');
   await fs.mkdir(out, { recursive: true });
   for (const [width, height, touch] of [[320, 700, true], [360, 800, true], [390, 844, true], [768, 1024, true], [1024, 768, true], [1180, 820, true], [1440, 900, false]]) {
     const context = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: touch, reducedMotion: 'reduce' });
@@ -18,7 +18,7 @@ async function exercise(browser, engine) {
       await route.fulfill({ json: request.url().includes('/workday/me') ? { status: 'not_started', schedule: { userId: 'mobile-qa', startsAt: '09:00:00', endsAt: '18:00:00' }, session: null, absenceKind: null, asOf: '2026-10-13T09:00:00Z' } : [] });
     });
     try {
-      await page.goto('http://127.0.0.1:5173/qa/mobile-browser.html');
+      await page.goto('http://127.0.0.1:5173/qa/mobile-browser.html' + (process.env.QA_THEME === 'dark' ? '?theme=dark' : ''));
       if (width === 390) await page.emulateMedia({ reducedMotion: 'no-preference' });
       await page.getByRole('button', { name: 'Начать работу', exact: true }).waitFor();
       const compact = width < 1440;
@@ -95,7 +95,7 @@ async function main() {
   try { webkitBrowser = await webkit.launch({ headless: true }); }
   catch (error) { console.log('WebKit runtime unavailable:', error.message.split('\n')[0]); }
   if (webkitBrowser) { try { results.push(...await exercise(webkitBrowser, 'webkit')); } finally { await webkitBrowser.close(); } }
-  await fs.writeFile(path.resolve('tmp/mobile-browser/report.json'), JSON.stringify(results, null, 2));
+  await fs.writeFile(path.resolve(process.env.QA_THEME === 'dark' ? 'tmp/dark-theme/shell/report.json' : 'tmp/mobile-browser/report.json'), JSON.stringify(results, null, 2));
   console.log(JSON.stringify(results));
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

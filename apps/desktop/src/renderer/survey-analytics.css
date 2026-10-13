@@ -7,7 +7,7 @@
 .survey-analytics p { line-height: 1.6; overflow-wrap: anywhere; }
 .survey-analytics .survey-eyebrow { color: var(--ws-link); font-size: 12px; font-weight: 700; letter-spacing: .05em; }
 .survey-analytics .survey-layout { display: grid; grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); gap: 18px; align-items: start; }
-.survey-analytics .survey-panel { background: var(--ws-surface, white); border: 1px solid var(--ws-line); border-radius: 22px; padding: 22px; min-width: 0; }
+.survey-analytics .survey-panel { background: var(--ws-surface, var(--ws-theme-surface, white)); border: 1px solid var(--ws-line); border-radius: 22px; padding: 22px; min-width: 0; }
 .survey-analytics .survey-library { display: flex; flex-direction: column; gap: 16px; }
 .survey-analytics .survey-analysis-list { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow-y: auto; }
 .survey-analytics .survey-analysis-item { text-align: start; justify-content: start; padding: 12px; }
@@ -29,7 +29,7 @@
 .survey-analytics .survey-metrics strong { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
 .survey-analytics .survey-metrics span { display: block; margin-top: 6px; font-size: 12px; }
 .survey-analytics .survey-note, .survey-analytics .survey-methodology { background: var(--ws-muted-surface); padding: 14px; border-radius: 12px; line-height: 1.6; }
-.survey-analytics .survey-error { padding: 14px; border: 1px solid var(--ws-line); border-inline-start: 4px solid var(--ws-danger, #a4262c); border-radius: 12px; margin-bottom: 16px; }
+.survey-analytics .survey-error { padding: 14px; border: 1px solid var(--ws-line); border-inline-start: 4px solid var(--ws-danger, var(--ws-theme-line-danger, #a4262c)); border-radius: 12px; margin-bottom: 16px; }
 .survey-analytics .survey-methodology { margin-top: 24px; font-size: 12px; }
 .survey-analytics .survey-table-scroll { max-width: 100%; max-height: 420px; overflow: auto; margin: 16px 0; }
 .survey-analytics table { width: 100%; border-collapse: collapse; text-align: start; font-variant-numeric: tabular-nums; }

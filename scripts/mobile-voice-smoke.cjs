@@ -2,7 +2,8 @@
 const { chromium, webkit } = require('playwright');
 const fs = require('node:fs');
 const assert = require('node:assert/strict');
-fs.mkdirSync('tmp/mobile-voice',{recursive:true});
+const output=process.env.QA_THEME==='dark'?'tmp/dark-theme/voice':'tmp/mobile-voice';
+fs.mkdirSync(output,{recursive:true});
 (async()=>{
   for(const engine of ['edge','webkit']){
     const browser=await(engine==='edge'?chromium.launch({channel:'msedge',headless:true}):webkit.launch({headless:true}));
@@ -11,7 +12,7 @@ fs.mkdirSync('tmp/mobile-voice',{recursive:true});
       await context.route('**/api/**',route=>route.fulfill({json:[]}));
       const page=await context.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
-      await page.goto('http://127.0.0.1:5173/qa/mobile-domains.html');
+      await page.goto('http://127.0.0.1:5173/qa/mobile-domains.html'+(process.env.QA_THEME==='dark'?'?theme=dark':''));
       await page.locator('.chat-row').first().click();
       await page.getByLabel('Записать голосовое сообщение').waitFor();
       const media = await page.evaluate(()=>({ recorder:typeof MediaRecorder, devices:typeof navigator.mediaDevices }));
@@ -62,7 +63,7 @@ fs.mkdirSync('tmp/mobile-voice',{recursive:true});
       assert(mime.startsWith(engine==='webkit'?'audio/mp4':'audio/webm'),'correct MIME '+mime);
       await page.getByRole('button',{name:'Отправить',exact:true}).click();
       await recorder.getByRole('alert').waitFor();
-      await page.screenshot({path:'tmp/mobile-voice/'+engine+'-retry.png'});
+      await page.screenshot({path:output+'/'+engine+'-retry.png'});
       await page.getByRole('button',{name:'Удалить запись',exact:true}).click();
       await recorder.waitFor({state:'detached'});
       await page.getByLabel('Записать голосовое сообщение').click();

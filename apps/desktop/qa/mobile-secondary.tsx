@@ -24,7 +24,9 @@ import { IncomingLettersView } from "../src/renderer/IncomingLettersView";
 import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
 import { initialTasks, people } from "../src/renderer/test-fixtures/demo-data";
 import { observeBrowserViewport } from "../src/renderer/browser-layout";
-import { workspaceTheme } from "../src/renderer/workspace-theme";
+import { useQaTheme } from "./color-theme";
+import { ThemeExtraPages } from "./dark-components";
+import type { SurveyAnalysisDetail } from "@yuksalish/contracts";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
 import "../src/renderer/context-colors.css";
@@ -88,6 +90,9 @@ import "../src/renderer/incoming-letters.css";
 import "../src/renderer/browser-secondary.css";
 const stamp = new Date().toISOString();
 const user: WorkspacePerson = { ...people[0]!, role: "superadmin" };
+if (new URLSearchParams(location.search).has("theme")) {
+  localStorage.setItem("yuksalish:color-theme:" + user.id, new URLSearchParams(location.search).get("theme") === "dark" ? "dark" : "light");
+}
 const feed: FeedPost[] = Array.from({ length: 24 }, (_, i) => ({
   id: "qa-post-" + i, authorUserId: people[0]!.id, systemKind: null, title: "Тестовая публикация " + i,
   body: "Длинный тестовый текст и ссылка: https://example.test/" + "long".repeat(30), isPinned: i === 0,
@@ -109,6 +114,11 @@ const hiring: HiringRegistry = { items: [item], total: 1, canCreate: true, canCo
 const directory: DirectoryBootstrap = { roles: [{ key: "employee", label: "Сотрудник", description: "" }], modules: [{ key: "tasks", label: "Задачи", status: "available" }], accessRules: [], positions: [], departments: [], employees: people.map<DirectoryBootstrap["employees"][number]>(item => ({ id: item.id, username: item.username ?? item.id, name: item.name, role: "employee", jobTitle: item.jobTitle, status: "active" })) };
 const support: SupportRegistry = { mode: "support", requests: [], unreadResponseCount: 0 };
 const localFile = new File(["Тестовый документ"], "Длинное тестовое имя файла.txt", { type: "text/plain" });
+const survey: SurveyAnalysisDetail = {
+  analysis: { id: "qa-survey", title: "Тестовый опрос команды", fileName: "answers.csv", revision: 1, archived: false, createdAt: stamp, updatedAt: stamp,
+    configuration: { sheet: 0, headerRow: 0, types: {}, separator: ";", missingValues: [], query: "", filters: [], savedViews: [] } },
+  workbook: { warnings: [], sheets: [{ name: "Ответы", rows: [["Группа", "Возраст"], ["A", "20"], ["B", "30"], ["A", "25"]] }] },
+};
 const hr: HrOverview = { settings: { hrUserId: user.id, chairUserId: people[1]!.id, accountantUserId: people[2]!.id }, calculatedAt: stamp.slice(0, 10),
   profiles: Array.from({ length: 40 }, (_, i) => ({ id: "qa-hr-" + i, fullName: "Тестовый сотрудник " + i, jobTitle: "Тестовая длинная должность",
     employmentDate: "2020-01-01", serviceAnchorDate: "2026-01-01", serviceYears: 6, serviceMonths: 0, serviceDays: 0, allowancePercent: 20,
@@ -201,7 +211,13 @@ const reports: HisobotReport[] = Array.from({ length: 32 }, (_, i) => ({ id: "qa
 const profile: EmployeeRecognitionProfile = { person: user, departmentName: "Тестовый отдел", employmentDate: null, activeTaskCount: 3, activeTaskCountVisible: true,
   rewards: [], rewardCatalog: [], canIssueReward: false, canManageSettings: false,
   achievements: Array.from({ length: 24 }, (_, i) => ({ code: "qa-achievement-" + i, title: "Тестовое достижение " + i, description: "Подтверждённый тестовый критерий",
-    category: "tasks", tier: "bronze", iconKey: "check", progress: 1, target: 1, unlocked: true })) };
+    category: "tasks", tier: (["bronze", "silver", "gold", "platinum", "sapphire", "amethyst", "prism", "cosmic"] as const)[i % 8]!, iconKey: "check", progress: 1, target: 1, unlocked: true })) };
+const rewardIcons = ["appreciation", "leadership", "rescue", "mentorship", "innovation", "reliability", "teamwork", "initiative", "mastery"] as const;
+const richProfile: EmployeeRecognitionProfile = { ...profile,
+  achievements: [...profile.achievements, ...profile.achievements.slice(0, 8).map(item => ({ ...item, code: item.code + "-locked", title: item.title + " — в процессе", unlocked: false, progress: 1, target: 3 }))],
+  rewards: rewardIcons.map((iconKey, i) => ({ id: "qa-reward-" + i, iconKey, title: "Тестовая награда " + i, description: "Признание тестового вклада", recipientUserId: user.id, issuerUserId: people[1]!.id, issuerName: people[1]!.name, createdAt: stamp })),
+  rewardCatalog: rewardIcons.map((iconKey, i) => ({ iconKey, title: "Тестовая награда " + i, description: "Признание тестового вклада" })),
+};
 const task: PersonalEfficiencyTask = { id: "task-1", title: "Подготовить отчёт", status: "awaiting_review", dueAt: "2026-10-05T09:00:00Z", updatedAt: "2026-10-04T09:00:00Z", onTimeCount: 1, overdueCount: 0, excludedCount: 0, returnedForRevisionCount: 0 };
 const summary: PersonalEfficiency = {
   employee: { userId: people[0]!.id, name: "Сотрудник", jobTitle: "Специалист", period: "2026-10", timezone: "Asia/Tashkent", percentage: 75, onTimeCount: 3, eligibleCount: 4, overdueCount: 1, awaitingReviewCount: 1, noDueDateCount: 1, returnedForRevisionCount: 1, excludedCount: 1, sampleSize: 4, methodologyVersion: "EFF-2.0", trackingStartedAt: "2026-09-01T00:00:00Z", historyCompleteness: "complete", smallSample: true, history: [] },
@@ -224,9 +240,14 @@ const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.href), route = url.pathname.replace(/^\/api\/v1/, "");
   if (!url.pathname.startsWith("/api/")) return originalFetch(input, init);
-  if ((init?.method ?? (input instanceof Request ? input.method : "GET")) !== "GET") return Response.json({ detail: "QA: тестовый отказ, черновик сохранён" }, { status: 503 });
-  if (route.startsWith("/recognition/profiles/")) return Response.json(profile);
+  if ((init?.method ?? (input instanceof Request ? input.method : "GET")) !== "GET") {
+    if (route.startsWith("/assistant/") && new URLSearchParams(location.search).has("thinking")) await new Promise(resolve => setTimeout(resolve, 1500));
+    return Response.json({ detail: "QA: тестовый отказ, черновик сохранён" }, { status: 503 });
+  }
+  if (route.startsWith("/recognition/profiles/")) return Response.json(new URLSearchParams(location.search).has("recognition") ? richProfile : profile);
   if (route === "/profile/me/efficiency") return Response.json(summary);
+  if (route === "/home/reactions") return Response.json({ totalCount: 7, reactions: [{ emoji: "👍", count: 4 }, { emoji: "❤️", count: 3 }] });
+  if (route === "/workday/team") return Response.json({ asOf: stamp, workingCount: 4, members: people.map(person => ({ userId: person.id, name: person.name, jobTitle: person.jobTitle, status: "working", schedule: { userId: person.id, startsAt: "09:00:00", endsAt: "18:00:00" }, session: null, absenceKind: null, canEditSchedule: true })) });
   if (route === "/efficiency") return Response.json({ period: stamp.slice(0, 7), timezone: "Asia/Tashkent", methodologyVersion: "EFF-2.0", trackingStartedAt: stamp, currentUserId: user.id, employees: [summary.employee] });
   if (route === "/hr") return Response.json(hr);
   if (route === "/hr/hiring") return Response.json(hiring);
@@ -254,19 +275,23 @@ window.fetch = async (input, init) => {
   if (route.includes("totp")) return Response.json({ enabled: false });
   if (route.includes("birthday")) return Response.json({ month: null, day: null });
   if (route === "/directory") return Response.json(directory);
+  if (route === "/survey-analyses") return Response.json([survey.analysis]);
+  if (route === "/survey-analyses/qa-survey") return Response.json(survey);
   if (route === "/updates/policy") return Response.json({ publishedVersion: null, minimumVersion: null, mandatory: false, updatedAt: null, release: null });
   return Response.json([]);
 };
 function Fixture() {
+  const workspaceTheme = useQaTheme();
   const [section, setSection] = useState("feed"), [account, setAccount] = useState(false), [person, setPerson] = useState(false), [sidebar, setSidebar] = useState(false), [supportOpen, setSupportOpen] = useState(false), [fileOpen, setFileOpen] = useState(false);
   useEffect(() => { document.documentElement.classList.add("web-platform"); return observeBrowserViewport(); }, []);
   return <FluentProvider theme={workspaceTheme} className="app-provider"><EmployeeProfileProvider onOpenProfile={() => setPerson(true)}>
     <div className="app-shell browser-compact"><div className="app-stage">
       <header style={{ display: "flex", flexWrap: "wrap", gap: 4, paddingBottom: 8 }}>
         <select aria-label="QA раздел" value={section} onChange={event => setSection(event.target.value)} style={{ minHeight: 48, minWidth: 0, maxWidth: "100%", fontSize: 16 }}>
-          {["feed", "notifications", "hr", "members", "zoom", "absences", "referent", "hisobot", "bots", "incoming", "employees", "tasks"].map(key => <option key={key}>{key}</option>)}
-        </select><Button onClick={() => setAccount(true)} style={{ minHeight: 48 }}>Настройки</Button><Button onClick={() => setPerson(true)} style={{ minHeight: 48 }}>Профиль</Button><button type="button" onClick={() => setSidebar(true)}>Меню сотрудника</button><button type="button" onClick={() => setSupportOpen(true)}>Поддержка QA</button><button type="button" onClick={() => setFileOpen(true)}>Файл QA</button>
+          {["feed", "notifications", "hr", "members", "zoom", "absences", "referent", "hisobot", "bots", "incoming", "employees", "tasks", "home", "team", "departments", "access", "components", "login", "surveys", "legacy-projects"].map(key => <option key={key}>{key}</option>)}
+        </select><Button onClick={() => setAccount(true)} style={{ minHeight: 48 }}>Настройки</Button><Button onClick={() => setPerson(true)} style={{ minHeight: 48 }}>Профиль</Button><Button onClick={() => setSidebar(true)}>Меню сотрудника</Button><Button onClick={() => setSupportOpen(true)}>Поддержка QA</Button><Button onClick={() => setFileOpen(true)}>Файл QA</Button>
       </header><main className="app-content">
+        <ThemeExtraPages section={section} directory={directory} />
         {section === "tasks" && <TasksView token="qa-only" tasks={initialTasks} attachments={[]} people={people} currentUserId={user.id} efficiencyLoading={false} onLoadEfficiency={() => {}}
           onCreateTask={rejectSave} onCreateSubtask={rejectSave} onChangeStatus={rejectSave} onUpdateTask={rejectSave} onDeleteTask={rejectSave}
           onSetParticipant={rejectSave} onRemoveParticipant={rejectSave} onAddChecklistItem={rejectSave} onToggleChecklistItem={rejectSave} onDeleteChecklistItem={rejectSave}

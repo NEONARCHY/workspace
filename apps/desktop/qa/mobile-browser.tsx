@@ -14,7 +14,8 @@ import { WorkspaceIdentity, ConnectionIndicator } from "../src/renderer/Workspac
 import { YuksalishAssistant } from "../src/renderer/YuksalishAssistant";
 import { CompanyLogo } from "../src/renderer/CompanyLogo";
 import { WorkspaceSectionHeader } from "../src/renderer/WorkspaceSectionHeader";
-import { workspaceTheme } from "../src/renderer/workspace-theme";
+import { useQaTheme } from "./color-theme";
+import { ColorThemeToggle } from "../src/renderer/ColorThemeToggle";
 import { defaultSidebarTheme } from "../src/renderer/sidebar-theme";
 import "../src/renderer/styles.css";
 import "../src/renderer/responsive.css";
@@ -43,6 +44,7 @@ const menuItems = groupAiNavigation(entries);
 const person = { id: "mobile-qa", name: "Тестовый сотрудник с длинным именем", initials: "ТС", role: "employee" as const, color: "#0091a8" };
 
 function Fixture() {
+  const workspaceTheme = useQaTheme();
   const compact = useBrowserCompactLayout(true);
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -63,7 +65,7 @@ function Fixture() {
       <div className="app-stage"><header className="global-bar">
         {compact ? <button ref={trigger} className="browser-menu-trigger" aria-label="Открыть меню" aria-expanded={open} aria-haspopup="dialog" onClick={(event) => { event.currentTarget.focus({ preventScroll: true }); setOpen(true); }}><Navigation24Regular /></button> : null}
         <SectionJump items={entries} onNavigate={select} />
-        <div className="workspace-top-context"><ConnectionIndicator detail="Тестовый сервер" error={false} /><WorkdayControl token="synthetic-only" /><YuksalishAssistant token="synthetic-only" onOpenReference={() => undefined} /><WorkspaceIdentity token="synthetic-only" person={person} onSupport={() => undefined} supportMode="support" onSettings={() => select("settings")} onLogout={() => undefined} /></div>
+        <div className="workspace-top-context"><ConnectionIndicator detail="Тестовый сервер" error={false} /><WorkdayControl token="synthetic-only" /><ColorThemeToggle userId="qa-theme" /><YuksalishAssistant token="synthetic-only" onOpenReference={() => undefined} /><WorkspaceIdentity token="synthetic-only" person={person} onSupport={() => undefined} supportMode="support" onSettings={() => select("settings")} onLogout={() => undefined} /></div>
       </header>
       <main className="app-content" id="workspace-content" tabIndex={-1}><section className="workspace-view" style={{ display: "flex", flexDirection: "column", overflow: "auto" }}>
         <WorkspaceSectionHeader motif="tasks" className="section-toolbar"><div><h1>{entries.find(item => item.key === active)?.label ?? active}</h1><p>Проверка оболочки · без рабочих данных</p></div><Button>Создать запись</Button></WorkspaceSectionHeader>
