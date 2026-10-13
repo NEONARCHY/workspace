@@ -137,11 +137,11 @@ describe("Window and UI recovery", () => {
     expect(within(dayPanel).queryByText("Подготовить материалы")).not.toBeInTheDocument();
     expect(screen.queryByText("Старый календарный срок")).not.toBeInTheDocument();
     fireEvent.click(within(dayPanel).getByRole("button", { name: /Планирование форума/i }));
-    expect(within(dayPanel).getByRole("button", { name: /Подготовить материалы/i })).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog", { name: meeting.title })).getByRole("button", { name: /Подготовить материалы/i })).toBeInTheDocument();
   });
 
-  it("blocks backdated creation but keeps past events editable", () => {
-    vi.useFakeTimers();
+  it("blocks backdated creation but keeps past events editable", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-08T08:00:00+05:00"));
     const pastEvent: CalendarEvent = {
       id: "past-event",
@@ -170,15 +170,18 @@ describe("Window and UI recovery", () => {
     expect(within(dayPanel).getByText(/задним числом недоступны/i)).toBeInTheDocument();
     expect(within(dayPanel).queryByRole("button", { name: "Добавить" })).not.toBeInTheDocument();
     fireEvent.click(within(dayPanel).getByRole("button", { name: /Архивная встреча/i }));
-    fireEvent.click(within(dayPanel).getByRole("button", { name: "Изменить" }));
-    expect(within(dayPanel).getByRole("textbox", { name: "Название события" })).toHaveValue("Архивная встреча");
-    expect(within(dayPanel).getByLabelText("Начало")).not.toHaveAttribute("min");
+    const dialog = screen.getByRole("dialog", { name: pastEvent.title });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Изменить" }));
+    expect(within(dialog).getByRole("textbox", { name: "Название события" })).toHaveValue("Архивная встреча");
+    expect(within(dialog).getByLabelText("Начало")).not.toHaveAttribute("min");
 
-    fireEvent.click(within(dayPanel).getByRole("button", { name: "Закрыть форму" }));
-    fireEvent.click(screen.getByRole("button", { name: "Новое событие" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Закрыть форму" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Закрыть событие" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Новое событие" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Название события" }), { target: { value: "Задним числом" } });
-    fireEvent.change(screen.getByLabelText("Начало"), { target: { value: "2026-09-07T10:00" } });
-    fireEvent.change(screen.getByLabelText("Окончание"), { target: { value: "2026-09-07T11:00" } });
+    const composer = screen.getByRole("dialog", { name: "Новое мероприятие" });
+    fireEvent.change(within(composer).getByLabelText("Начало"), { target: { value: "2026-09-07T10:00" } });
+    fireEvent.change(within(composer).getByLabelText("Окончание"), { target: { value: "2026-09-07T11:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Создать мероприятие" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Нельзя создавать новые события на прошедшие дни");
   });

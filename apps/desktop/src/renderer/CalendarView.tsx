@@ -15,13 +15,12 @@ import type {
   WorkspaceTaskCreateInput,
   ZoomMeeting,
 } from "@yuksalish/contracts";
-import { Avatar, Button, Checkbox, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Input, Textarea } from "@fluentui/react-components";
+import { Avatar, Button, Checkbox, DialogSurface, DialogBody, DialogTitle, DialogContent, DialogActions, Input, Textarea, useRestoreFocusTarget } from "@fluentui/react-components";
 import {
   Add24Regular,
   ArrowLeft20Regular,
   ChevronLeft24Regular,
   ChevronRight24Regular,
-  Dismiss20Regular,
 } from "@fluentui/react-icons";
 import { WorkspaceSelect as Select } from "./WorkspaceSelect";
 import { TaskComposer } from "./TaskComposer";
@@ -39,6 +38,14 @@ import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { useCalendarEventClock } from "./useCalendarEventClock";
 import { CalendarAppearance, CalendarIcon, calendarAppearanceStyle } from "./CalendarAppearance";
+import { CalendarFilters } from "./CalendarFilters";
+import { CalendarSchedule } from "./CalendarSchedule";
+import { CalendarAgendaDrawer } from "./CalendarAgendaDrawer";
+import { CalendarEventDialog } from "./CalendarEventDialog";
+import { CalendarZoomDetails } from "./CalendarZoomDetails";
+import { SlidingSegmented } from "./SlidingSegmented";
+import { calendarDayInRange, calendarItemsOnDay, emptyCalendarFilters, filterCalendarSchedule, type CalendarFilters as Filters } from "./calendar-filters";
+import "./calendar-ux.css";
 
 interface CalendarViewProps {
   readonly token?: string;
@@ -198,13 +205,25 @@ export function CalendarView({
   onCreatePayment,
   onRespond,
 }: CalendarViewProps) {
+  const eventFocusTarget = useRestoreFocusTarget();
+  const agendaFocusTarget = useRestoreFocusTarget();
+  const [agendaCompact, setAgendaCompact] = useState(false);
+  const [agendaDense, setAgendaDense] = useState(false);
+  const [agendaOpen, setAgendaOpen] = useState(false);
+  const agendaEventReturnTarget = useRef<HTMLElement | null>(null);
+  const agendaReturnTarget = useRef<HTMLElement | null>(null);
   const calendarNow = useCalendarEventClock(events);
   const focusedEvent = events.find((event) => event.id === focusEventId);
   const focusedDate = focusedEvent ? new Date(focusedEvent.startsAt) : new Date();
   const initialDate = Number.isFinite(focusedDate.getTime()) ? focusedDate : new Date();
   const [month, setMonth] = useState(() => new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
   const [selectedDay, setSelectedDay] = useState(() => startOfDay(initialDate));
+  const [filters, setFilters] = useState<Filters>(emptyCalendarFilters);
+  const [view, setView] = useState<"month" | "list">("month");
+  const [listLimit, setListLimit] = useState(100);
+  const pendingDayFocus = useRef<string | undefined>(undefined);
   const [selectedState, setSelected] = useState<CalendarEvent | undefined>(focusedEvent);
+  const [selectedZoomState, setSelectedZoom] = useState<ZoomMeeting>();
   const [draft, setDraft] = useState<CalendarEventInput>();
   const [editAttendeeScope, setEditAttendeeScope] = useState<EmployeeScope>("central");
   const activePeople = people.filter(person => !person.status || person.status === "active");
@@ -254,6 +273,17 @@ export function CalendarView({
     const frame = frameRef.current;
     if (!frame) return;
     const measure = () => {
+      // Measure the available work area, not a guessed device/viewport type.
+      const frameWidth = frame.offsetWidth || frame.clientWidth;
+      const frameHeight = Math.min(frame.offsetHeight || frame.clientHeight || window.innerHeight, window.innerHeight);
+      if (frameWidth > 0) {
+        // Border-box width is stable when a scrollbar appears/disappears;
+        // choosing the mode from clientWidth can oscillate at the breakpoint.
+        const compact = frameWidth < 720 || (frameWidth < 1000 && frameHeight < 560);
+        setAgendaCompact(compact);
+        setAgendaDense(frameWidth < 1000);
+        if (!compact) setAgendaOpen(false);
+      }
       const style = getComputedStyle(frame);
       const borders = (Number.parseFloat(style.borderLeftWidth) || 0) + (Number.parseFloat(style.borderRightWidth) || 0);
       const inset = `${Math.max(0, frame.offsetWidth - frame.clientWidth - borders)}px`;
@@ -268,53 +298,44 @@ export function CalendarView({
   }, []);
   const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(month);
   const selected = events.find((item) => item.id === selectedState?.id) ?? selectedState;
+  const selectedZoom = zoomMeetings?.find(item => item.id === selectedZoomState?.id) ?? selectedZoomState;
   const selectedDayIsPast = isPastDay(selectedDay);
-  const visibleEvents = useMemo(
-    () => events.filter((event) => event.eventType === "meeting" || event.eventType === "general"),
-    [events],
-  );
-
-  const eventsByDay = useMemo(() => {
-    const grouped = new Map<string, CalendarEvent[]>();
-    for (const event of visibleEvents) {
-      const start = new Date(event.startsAt);
-      const end = new Date(event.endsAt);
-      if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) continue;
-      const lastActiveDay = startOfDay(new Date(end.getTime() - 1));
-      const cursor = startOfDay(start);
-      for (let dayOffset = 0; cursor <= lastActiveDay && dayOffset < 370; dayOffset += 1) {
-        const key = dayKey(cursor);
-        const bucket = grouped.get(key) ?? [];
-        bucket.push(event);
-        grouped.set(key, bucket);
-        cursor.setDate(cursor.getDate() + 1);
+  const schedule = useMemo(() => filterCalendarSchedule(events, zoomMeetings ?? [], filters), [events, zoomMeetings, filters]);
+  const monthStart = month.getTime();
+  const monthEnd = new Date(month.getFullYear(), month.getMonth() + 1, 1).getTime();
+  const monthItems = schedule.filter(item => Date.parse(item.record.startsAt) < monthEnd && Date.parse(item.record.endsAt) > monthStart);
+  const listItems = filters.from || filters.to ? schedule : monthItems;
+  const selectedDayItems = calendarItemsOnDay(schedule, selectedDay, filters);
+  const hasFilters = Boolean(filters.employeeId || filters.query.trim() || filters.from || filters.to || !filters.showCancelled);
+  const changeFilters = (next: Filters) => {
+    setFilters(next); setListLimit(100); setSelected(undefined); setSelectedZoom(undefined); setError("");
+    if (next.from !== filters.from || next.to !== filters.to) {
+      setView("list"); setAgendaOpen(false);
+      const date = new Date(`${next.from || next.to}T00:00:00`);
+      if (Number.isFinite(date.getTime())) {
+        setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+        setSelectedDay(startOfDay(date));
       }
     }
-    for (const bucket of grouped.values()) {
-      bucket.sort((left, right) => {
-        if (left.status !== right.status) return left.status === "cancelled" ? 1 : -1;
-        return new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
-      });
-    }
-    return grouped;
-  }, [visibleEvents]);
-
-  const zoomByDay = useMemo(() => {
-    const grouped = new Map<string, ZoomMeeting[]>();
-    for (const meeting of zoomMeetings ?? []) {
-      if (meeting.status !== "scheduled") continue;
-      const start = new Date(meeting.startsAt);
-      if (!Number.isFinite(start.getTime())) continue;
-      const key = dayKey(start);
-      grouped.set(key, [...(grouped.get(key) ?? []), meeting]);
-    }
-    for (const bucket of grouped.values()) {
-      bucket.sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime());
-    }
-    return grouped;
-  }, [zoomMeetings]);
-  const selectedDayEvents = eventsByDay.get(dayKey(selectedDay)) ?? [];
-  const selectedDayZoom = zoomByDay.get(dayKey(selectedDay)) ?? [];
+  };
+  const resetFilters = () => { setFilters(emptyCalendarFilters); setListLimit(100); setSelected(undefined); setSelectedZoom(undefined); };
+  const openScheduleEvent = (event: CalendarEvent) => {
+    if (draft || busy) return;
+    agendaEventReturnTarget.current = agendaCompact && agendaOpen ? document.activeElement as HTMLElement : null;
+    setSelected(event); setSelectedZoom(undefined); setDraft(undefined); setError("");
+    if (view === "list") setSelectedDay(startOfDay(new Date(event.startsAt)));
+  };
+  const openZoomEvent = (meeting: ZoomMeeting) => {
+    if (draft || busy) return;
+    agendaEventReturnTarget.current = agendaCompact && agendaOpen ? document.activeElement as HTMLElement : null;
+    setSelected(undefined); setSelectedZoom(meeting); setError("");
+  };
+  useLayoutEffect(() => {
+    const key = pendingDayFocus.current;
+    if (!key) return;
+    frameRef.current?.querySelector<HTMLElement>(`[data-calendar-day="${key}"]`)?.focus();
+    pendingDayFocus.current = undefined;
+  }, [month, selectedDay]);
   const linkedTasks = selected
     ? (tasks ?? []).filter((task) => task.calendarEventId === selected.id)
     : [];
@@ -352,13 +373,6 @@ export function CalendarView({
   const visibleEventsPerDay = 2;
 
   useEffect(() => {
-    if (draft || selected?.id) {
-      const pane = sideRef.current?.querySelector<HTMLElement>(".calendar-detail") ?? sideRef.current;
-      pane?.scrollTo?.({ top: 0 });
-    }
-  }, [draft, selected?.id]);
-
-  useEffect(() => {
     if (!createFromChat || createFromChat.key === lastChatDraftKey.current) return;
     lastChatDraftKey.current = createFromChat.key;
     const today = new Date();
@@ -375,13 +389,18 @@ export function CalendarView({
     setError("");
   }, [createFromChat, currentUserId]);
 
-  const chooseDay = (day: Date) => {
+  const chooseDay = (day: Date, showAgenda = false) => {
     setSelectedDay(startOfDay(day));
+    setSelectedZoom(undefined);
     setSelected(undefined);
     setDraft(undefined);
     setPreparedTasks([]);
     setPreparedPayment(undefined);
     setError("");
+    if (showAgenda && agendaCompact) {
+      agendaReturnTarget.current = document.activeElement as HTMLElement;
+      setAgendaOpen(true);
+    }
     if (day.getMonth() !== month.getMonth() || day.getFullYear() !== month.getFullYear()) {
       setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
     }
@@ -399,6 +418,7 @@ export function CalendarView({
 
   const goToToday = () => {
     const today = new Date();
+    setFilters(current => ({ ...current, from: "", to: "" }));
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     chooseDay(today);
   };
@@ -646,24 +666,45 @@ export function CalendarView({
     }
   };
 
+  const agendaContent = <>
+    {error && !selected && !draft ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
+    <div className="calendar-day-panel">
+      <div className="calendar-side-heading calendar-day-heading">
+        <span>{selectedDayIsPast ? "Прошедший день" : dayKey(selectedDay) === dayKey(new Date()) ? "Сегодня" : "Выбранный день"}</span>
+        <h2>{dateLabel(selectedDay, false)}</h2>
+        <p>{dateLabel(selectedDay).split(",")[0]}</p>
+      </div>
+      <div className="calendar-day-summary">
+        <span>{selectedDayItems.length}</span><p>записей в расписании</p>
+        {!selectedDayIsPast ? <Button disabled={Boolean(draft) || busy} appearance="primary" icon={<Add24Regular />} onClick={() => createForDay(selectedDay)}>Добавить</Button> : null}
+      </div>
+      {selectedDayIsPast ? <div className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</div> : null}
+      <div className="calendar-day-agenda">
+        {selectedDayItems.length ? <CalendarSchedule items={selectedDayItems} currentUserId={currentUserId} disabled={Boolean(draft) || busy}
+          people={people} onEvent={openScheduleEvent} onZoom={openZoomEvent} /> : <div className="calendar-empty">
+          <span aria-hidden="true">{selectedDayIsPast ? "✓" : "+"}</span>
+          <h3>{hasFilters ? "Нет событий по фильтрам" : selectedDayIsPast ? "День без событий" : "Пока свободно"}</h3>
+          <p>{hasFilters ? "Это результат поиска, а не подтверждение свободного времени. Попробуйте изменить фильтры." : selectedDayIsPast ? "На эту дату событий не было." : "Выберите удобное время и добавьте событие."}</p>
+          {hasFilters && <Button disabled={Boolean(draft) || busy} onClick={resetFilters}>Сбросить фильтры</Button>}
+          {!selectedDayIsPast ? <Button disabled={Boolean(draft) || busy} onClick={() => createForDay(selectedDay)}>Создать событие</Button> : null}
+        </div>}
+      </div>
+    </div>
+  </>;
   return (
-    <section ref={frameRef} className="workspace-view calendar-view" aria-label="Календарь">
+    <section ref={frameRef} className={`workspace-view calendar-view calendar-ux ${agendaCompact ? "calendar-agenda-compact" : "calendar-agenda-inline"}${agendaDense ? " calendar-agenda-dense" : ""}${view === "list" ? " calendar-tiles-mode" : ""}`} aria-label="Календарь">
         <WorkspaceSectionHeader motif="calendar" className="calendar-toolbar">
           <div className="calendar-title">
             <span>Рабочий календарь</span>
             <h1>Календарь</h1>
-            <p>{monthLabel}</p>
+            <p>Встречи, мероприятия и Zoom</p>
           </div>
           <div className="calendar-toolbar-actions">
-            <div className="calendar-month-navigation" aria-label="Навигация по месяцам">
-              <Button appearance="subtle" icon={<ChevronLeft24Regular />} aria-label="Предыдущий месяц" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} />
-              <Button appearance="subtle" onClick={goToToday}>Сегодня</Button>
-              <Button appearance="subtle" icon={<ChevronRight24Regular />} aria-label="Следующий месяц" onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
-            </div>
             <Button
               className="ws-section-header-primary"
               appearance="primary"
               icon={<Add24Regular />}
+              disabled={Boolean(draft) || busy}
               onClick={() => {
                 const today = new Date();
                 setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
@@ -674,13 +715,47 @@ export function CalendarView({
             </Button>
           </div>
         </WorkspaceSectionHeader>
-
+      <CalendarFilters value={filters} onChange={changeFilters} onReset={resetFilters}
+        people={people} token={token} currentUserId={currentUserId} disabled={Boolean(draft) || busy} compact={agendaCompact} />
       <div className="calendar-main">
+        <div className="calendar-view-bar">
+          <div className="calendar-view-summary"><h2>{view === "list" && (filters.from || filters.to) ? "Выбранный период" : monthLabel}</h2>
+            <span role="status" aria-live="polite">Событий: {(view === "list" ? listItems : monthItems).length}{hasFilters ? " · По выбранным фильтрам" : ""}</span></div>
+          <div className="calendar-view-controls">
+            <div className="calendar-month-navigation" aria-label="Навигация по месяцам">
+              <Button appearance="subtle" icon={<ChevronLeft24Regular />} aria-label="Предыдущий месяц" disabled={Boolean(draft) || busy || (view === "list" && Boolean(filters.from || filters.to))} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} />
+              <Button appearance="subtle" disabled={Boolean(draft) || busy} onClick={goToToday}>Сегодня</Button>
+              <Button appearance="subtle" icon={<ChevronRight24Regular />} aria-label="Следующий месяц" disabled={Boolean(draft) || busy || (view === "list" && Boolean(filters.from || filters.to))} onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))} />
+            </div>
+            <WorkspaceDateTimePicker mode="date" ariaLabel="Перейти к дате" value={dayKey(selectedDay)}
+              disabled={Boolean(draft) || busy} onChange={value => { const date = new Date(`${value}T00:00:00`); if (Number.isFinite(date.getTime())) { setFilters(current => ({ ...current, from: "", to: "" })); setView("month"); chooseDay(date); } }} />
+          <SlidingSegmented className="calendar-view-switch" aria-label="Вид календаря">
+            <button type="button" disabled={Boolean(draft) || busy} aria-pressed={view === "month"} onClick={() => setView("month")}>Месяц</button>
+            <button type="button" disabled={Boolean(draft) || busy} aria-pressed={view === "list"} onClick={() => { setView("list"); setAgendaOpen(false); }}>Плитки</button>
+          </SlidingSegmented>
+          {view === "month" && agendaCompact && <Button {...agendaFocusTarget} className="browser-calendar-agenda" appearance="secondary"
+            disabled={Boolean(draft) || busy} aria-haspopup="dialog" aria-expanded={agendaOpen}
+            aria-label={`События выбранного дня · ${selectedDayItems.length}`}
+            onClick={click => {
+              click.currentTarget.focus({ preventScroll: true });
+              agendaReturnTarget.current = click.currentTarget;
+              setAgendaOpen(true);
+            }}>Расписание · {selectedDayItems.length}</Button>}
+          </div>
+        </div>
+        {view === "list" ? <section className="calendar-list-view" aria-label="События по датам">
+          {listItems.length ? <><CalendarSchedule items={listItems.slice(0, listLimit)} showDates periodStart={filters.from || (!filters.to ? dayKey(month) : undefined)} currentUserId={currentUserId} disabled={Boolean(draft) || busy}
+            people={people} onEvent={openScheduleEvent} onZoom={openZoomEvent} />
+            {listItems.length > listLimit && <Button onClick={() => setListLimit(limit => limit + 100)}>Показать ещё · {listItems.length - listLimit}</Button>}</>
+            : <div className="calendar-empty"><CalendarIcon iconKey="meeting" /><h3>События не найдены</h3>
+                <p>{hasFilters ? "Измените сотрудника, поиск или период. Фильтры не меняют ваше расписание." : "В этом месяце нет доступных событий."}</p>
+                {hasFilters && <Button onClick={resetFilters} disabled={Boolean(draft) || busy}>Сбросить фильтры</Button>}</div>}
+        </section> :
         <div className="calendar-board">
           <div className="calendar-weekdays" aria-hidden="true">
             {weekdayLabels.map((day) => <span key={day}>{day}</span>)}
           </div>
-          <div
+              <div
             className="calendar-grid"
             key={`${month.getFullYear()}-${month.getMonth()}`}
             role="grid"
@@ -689,12 +764,10 @@ export function CalendarView({
           >
             {days.map((day) => {
               const key = dayKey(day);
-              const dayEvents = eventsByDay.get(key) ?? [];
-              const dayZoom = zoomByDay.get(key) ?? [];
-              const dayItemCount = dayEvents.length + dayZoom.length;
-              const visibleEvents = dayEvents.slice(0, visibleEventsPerDay);
-              const zoomBudget = Math.max(0, visibleEventsPerDay - visibleEvents.length);
-              const visibleZoom = dayZoom.slice(0, zoomBudget);
+               const dayItems = calendarItemsOnDay(schedule, day, filters);
+               const dayItemCount = dayItems.length;
+               const previewCount = agendaDense ? 1 : visibleEventsPerDay;
+               const visibleItems = dayItems.slice(0, previewCount);
               const outside = day.getMonth() !== month.getMonth();
               const today = key === dayKey(new Date());
               const active = key === dayKey(selectedDay);
@@ -702,90 +775,95 @@ export function CalendarView({
               const label = dateLabel(day);
               return (
                 <div
-                  className={`calendar-day ${outside ? "muted" : ""} ${today ? "today" : ""} ${active ? "selected" : ""} ${past ? "past" : ""}`}
+                  className={`calendar-day ${outside ? "muted" : ""} ${today ? "today" : ""} ${active ? "selected" : ""} ${past ? "past" : ""} ${[0, 6].includes(day.getDay()) ? "weekend" : ""} ${calendarDayInRange(key, filters) ? "" : "outside-filter"}`}
+                  data-calendar-day={key}
+                  {...agendaFocusTarget}
                   key={key}
                   role="gridcell"
                   tabIndex={0}
                   aria-label={`${label}, событий: ${dayItemCount}`}
                   aria-selected={active}
-                  onClick={() => chooseDay(day)}
+                  aria-disabled={Boolean(draft) || busy}
+                  onClick={click => { if (!draft && !busy) {
+                    click.currentTarget.focus({ preventScroll: true });
+                    chooseDay(day, true);
+                  } }}
                   onKeyDown={(event) => {
+                    if (draft || busy) return;
+                    if (event.target !== event.currentTarget) return;
+                    const offset = ({ ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 } as Record<string, number>)[event.key];
+                    if (offset !== undefined) {
+                      event.preventDefault();
+                      const next = new Date(day); next.setDate(next.getDate() + offset);
+                      pendingDayFocus.current = dayKey(next); chooseDay(next); return;
+                    }
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      chooseDay(day);
+                      chooseDay(day, true);
                     }
                   }}
                 >
                   <div className="calendar-day-header">
                     <span className="calendar-day-number">{day.getDate()}</span>
                     {today ? <span className="calendar-today-label">Сегодня</span> : null}
-                    {dayItemCount > 0 ? <span className="calendar-day-count">{dayItemCount}</span> : null}
+                    {dayItemCount > previewCount && !agendaCompact ? <button {...agendaFocusTarget} type="button" className="calendar-more-events"
+                      title={`Показать все события: ${dayItemCount}`} aria-label={`Все события: ${label}`}
+                      disabled={Boolean(draft) || busy} onClick={event => { event.stopPropagation(); chooseDay(day); sideRef.current?.focus({ preventScroll: true }); }}>{agendaDense ? dayItemCount : `+${dayItemCount - previewCount}`}</button>
+                      : dayItemCount > 0 ? <span className="calendar-day-count">{dayItemCount}</span> : null}
                   </div>
                   <div className="calendar-day-events">
-                    {visibleEvents.map((event) => (
+                    {visibleItems.map((item) => (
                       <button
-                        className={`calendar-event-pill ${event.eventType} ${event.status}`}
-                        style={calendarAppearanceStyle(event)}
-                        aria-label={`${eventTime(event)} · ${event.title}`}
-                        key={event.id}
+                        {...eventFocusTarget}
+                        className={`calendar-event-pill ${item.kind === "zoom" ? "zoom" : `${item.record.eventType} ${item.record.status}`}`}
+                        style={item.kind === "event" ? calendarAppearanceStyle(item.record) : undefined}
+                        aria-label={`${item.kind === "event" ? eventTime(item.record) : `Zoom · ${new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`} · ${item.title}`}
+                        title={`${item.title} · ${new Date(item.record.startsAt).toLocaleString("ru-RU")}`}
+                        key={item.key}
                         type="button"
                         onClick={(clickEvent) => {
                           clickEvent.stopPropagation();
+                          if (draft || busy) return;
+                          if (item.kind === "zoom") { openZoomEvent(item.record); return; }
                           setSelectedDay(startOfDay(day));
-                          setSelected(event);
+                          setSelected(item.record);
                           setDraft(undefined);
                           setError("");
                         }}
                       >
-                        <span>{event.allDay ? "День" : dayKey(new Date(event.startsAt)) === key ? new Date(event.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
-                        <CalendarIcon iconKey={event.iconKey} /><strong>{event.title}</strong>
+                        <span>{item.kind === "event" && item.record.allDay ? "День" : dayKey(new Date(item.record.startsAt)) === key ? new Date(item.record.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "↳"}</span>
+                        <CalendarIcon zoom={item.kind === "zoom"} iconKey={item.kind === "event" ? item.record.iconKey : undefined} /><strong>{item.title}</strong>
                       </button>
                     ))}
-                    {visibleZoom.map((meeting) => (
-                      <button
-                        className="calendar-event-pill zoom"
-                        aria-label={`${new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })} · Zoom · ${meeting.topic}`}
-                        key={meeting.id}
-                        type="button"
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation();
-                          onOpenZoomMeeting?.(meeting.id);
-                        }}
-                      >
-                        <span>{new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</span>
-                        <CalendarIcon zoom /><strong>{meeting.topic}</strong>
-                      </button>
-                    ))}
-                    {dayItemCount > visibleEventsPerDay ? <span className="calendar-more-events">Ещё {dayItemCount - visibleEventsPerDay}</span> : null}
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
-        <Button className="browser-calendar-agenda" appearance="subtle" onClick={() => {
-          sideRef.current?.scrollIntoView?.({ block: "nearest" });
-          sideRef.current?.focus({ preventScroll: true });
-        }}>События выбранного дня · {selectedDayEvents.length + selectedDayZoom.length}</Button>
+        </div>}
       </div>
 
-      <aside className="calendar-side" ref={sideRef} tabIndex={-1} aria-label="События выбранного дня"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && !event.defaultPrevented && selected && !draft) {
-            event.stopPropagation();
-            setSelected(undefined);
+      {/* Parent agenda portal precedes the event portal so nested cards remain above it. */}
+      <CalendarAgendaDrawer open={agendaCompact && agendaOpen && view === "month"} onClose={() => setAgendaOpen(false)}
+        onExited={() => {
+          if (agendaCompact && !agendaOpen && agendaReturnTarget.current?.isConnected) {
+            agendaReturnTarget.current.focus({ preventScroll: true });
           }
-        }}>
-        {error && (selected || !draft) ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
+        }}>{agendaContent}</CalendarAgendaDrawer>
+      <CalendarEventDialog open={Boolean(selected || selectedZoom)} title={selected?.title ?? selectedZoom?.topic ?? ""} editing={Boolean(draft)} busy={busy}
+        onExited={() => {
+          // Nested modal exit can leave the parent inactive after pointer dismissal.
+          // Restore only after Fluent finishes, without guessing an animation timer.
+          if (agendaCompact && agendaOpen && agendaEventReturnTarget.current?.isConnected) {
+            agendaEventReturnTarget.current.focus({ preventScroll: true });
+          }
+        }}
+        onClose={() => { if (draft) { closeDraft(); return; } setSelected(undefined); setSelectedZoom(undefined); setError(""); }}>
+        {error && selected ? <div className="auth-error calendar-error" role="alert">{error}</div> : null}
         {draft && selected ? (
           <div className="calendar-form">
             <div className="calendar-side-nav">
-              <Button appearance="subtle" icon={<ArrowLeft20Regular />} onClick={closeDraft}>К событию</Button>
-              <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть форму" onClick={closeDraft} />
-            </div>
-            <div className="calendar-side-heading">
-              <span>Редактирование</span>
-              <h2>{selected.title}</h2>
+              <Button appearance="subtle" disabled={busy} icon={<ArrowLeft20Regular />} onClick={closeDraft}>К событию</Button>
             </div>
             <Input aria-label="Название события" placeholder="Название события" value={draft.title} onChange={(_event, data) => setDraft({ ...draft, title: data.value })} />
             <Select aria-label="Тип события" value={draft.eventType} onChange={(event) => setDraft({ ...draft, eventType: event.target.value as CalendarEventType })}>
@@ -853,13 +931,9 @@ export function CalendarView({
           </div>
         ) : selected ? (
           <div className="calendar-detail">
-            <div className="calendar-side-nav">
-              <Button appearance="subtle" icon={<ArrowLeft20Regular />} onClick={() => setSelected(undefined)}>К событиям дня</Button>
-              <Button appearance="subtle" icon={<Dismiss20Regular />} aria-label="Закрыть событие" onClick={() => setSelected(undefined)} />
-            </div>
-            <div className="calendar-detail-hero">
+            <div className="calendar-detail-hero" style={calendarAppearanceStyle(selected)}>
+              <CalendarIcon iconKey={selected.iconKey} />
               <span className={`calendar-type ${selected.eventType}`}>{typeLabels[selected.eventType]}</span>
-              <h2>{selected.title}</h2>
               <p className="calendar-detail-time">{eventTime(selected)}</p>
             </div>
             <dl className="calendar-detail-list">
@@ -868,7 +942,7 @@ export function CalendarView({
               {selected.projectId && canLinkProjects ? <div><dt>Проект</dt><dd>{projectTargets.projects.find((project) => project.id === selected.projectId)?.title ?? "Связанный проект"}</dd></div> : null}
               {selected.workstreamId && canLinkProjects ? <div><dt>Направление</dt><dd>{projectTargets.workstreams.find((row) => row.id === selected.workstreamId)?.title ?? "Связанное направление"}</dd></div> : null}
               {selected.projectItemId && canLinkProjects ? <div><dt>Работа</dt><dd>{projectTargets.items.find((item) => item.id === selected.projectItemId)?.title ?? "Связанная работа"}</dd></div> : null}
-              <div>
+              <div className="calendar-detail-attendees">
                 <dt>Участники</dt>
                 <dd className="calendar-attendee-list">
                   {selected.attendeeIds.map((id) => {
@@ -919,7 +993,7 @@ export function CalendarView({
             {selected.status === "cancelled" ? <span className="calendar-cancelled">Событие отменено</span> : null}
             {selected.canEdit && selected.status === "scheduled" ? (
               <div className="calendar-form-actions">
-                <Button appearance="primary" onClick={() => { setError(""); setDraft(editDraft(selected)); }}>Изменить</Button>
+                <Button appearance="primary" disabled={busy} onClick={() => { setError(""); setDraft(editDraft(selected)); }}>Изменить</Button>
                 <Button appearance="subtle" disabled={busy} onClick={() => void cancel(selected)}>Отменить событие</Button>
               </div>
             ) : null}
@@ -930,57 +1004,10 @@ export function CalendarView({
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="calendar-day-panel">
-            <div className="calendar-side-heading calendar-day-heading">
-              <span>{selectedDayIsPast ? "Прошедший день" : dayKey(selectedDay) === dayKey(new Date()) ? "Сегодня" : "Выбранный день"}</span>
-              <h2>{dateLabel(selectedDay, false)}</h2>
-              <p>{dateLabel(selectedDay).split(",")[0]}</p>
-            </div>
-            <div className="calendar-day-summary">
-              <span>{selectedDayEvents.length + selectedDayZoom.length}</span>
-              <p>записей в расписании</p>
-              {!selectedDayIsPast ? <Button appearance="primary" icon={<Add24Regular />} onClick={() => createForDay(selectedDay)}>Добавить</Button> : null}
-            </div>
-            {selectedDayIsPast ? <div className="calendar-past-note">Новые события задним числом недоступны. Уже созданные события можно открыть и изменить.</div> : null}
-            <div className="calendar-day-agenda">
-              {selectedDayZoom.map((meeting) => (
-                <button
-                  className="calendar-agenda-card zoom"
-                  key={meeting.id}
-                  type="button"
-                  onClick={() => onOpenZoomMeeting?.(meeting.id)}
-                >
-                  <span className="calendar-agenda-time">
-                    <CalendarIcon zoom />
-                    {new Date(meeting.startsAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                  <strong>{meeting.topic}</strong>
-                  <small>Zoom-конференция · <EmployeeProfileLink
-                    userId={meeting.organizerUserId ?? undefined}
-                    personName={meeting.organizerName}
-                  >{meeting.organizerName}</EmployeeProfileLink></small>
-                </button>
-              ))}
-              {selectedDayEvents.length > 0 ? selectedDayEvents.map((event) => (
-                <button className={`calendar-agenda-card ${event.eventType} ${event.status}`} style={calendarAppearanceStyle(event)} key={event.id} type="button" onClick={() => { setSelected(event); setError(""); }}>
-                  <span className="calendar-agenda-time"><CalendarIcon iconKey={event.iconKey} />{eventTime(event)}</span>
-                  <strong>{event.title}</strong>
-                  <small>{typeLabels[event.eventType]}{event.location ? ` · ${event.location}` : ""}</small>
-                  {event.status === "cancelled" ? <em>Отменено</em> : null}
-                </button>
-              )) : selectedDayZoom.length > 0 ? null : (
-                <div className="calendar-empty">
-                  <span aria-hidden="true">{selectedDayIsPast ? "✓" : "+"}</span>
-                  <h3>{selectedDayIsPast ? "День без событий" : "Пока свободно"}</h3>
-                  <p>{selectedDayIsPast ? "На эту дату событий не было." : "Выберите удобное время и добавьте событие."}</p>
-                  {!selectedDayIsPast ? <Button onClick={() => createForDay(selectedDay)}>Создать событие</Button> : null}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </aside>
+        ) : selectedZoom ? <CalendarZoomDetails meeting={selectedZoom} people={people}
+          onOpen={onOpenZoomMeeting ? () => { setSelectedZoom(undefined); onOpenZoomMeeting(selectedZoom.id); } : undefined} /> : null}
+      </CalendarEventDialog>
+      {!agendaCompact && view === "month" && <aside className="calendar-side" ref={sideRef} tabIndex={-1} aria-label="События выбранного дня">{agendaContent}</aside>}
       {draft && !selected ? <CalendarEventComposer
         draft={draft}
         canInviteCalendarAudience={canInviteCalendarAudience}
