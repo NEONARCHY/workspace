@@ -2362,7 +2362,9 @@ describe("corporate workspace authentication alpha", () => {
       target: { value: "250000" },
     });
     fireEvent.click(form.getByRole("button", { name: "Создать мероприятие" }));
-    expect(await screen.findByRole("heading", { name: "Встреча BP-8" })).toBeInTheDocument();
+    // The agenda can show the new title before linked records finish saving and the details open.
+    const eventDialog = await screen.findByRole("dialog", { name: "Встреча BP-8" });
+    expect(within(eventDialog).getByText("Встреча BP-8")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining("/calendar/events"),
       expect.objectContaining({ method: "POST" }),
@@ -2394,7 +2396,7 @@ describe("corporate workspace authentication alpha", () => {
       workstreamId: "hub-stream-1",
       projectItemId: "hub-item-1",
     });
-    fireEvent.click(screen.getByRole("button", { name: "Отменить событие" }));
+    fireEvent.click(within(eventDialog).getByText("Отменить событие"));
     expect(await screen.findByText("Событие отменено")).toBeInTheDocument();
   });
 
