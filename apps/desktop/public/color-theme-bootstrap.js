@@ -10,5 +10,5 @@
   const root = document.documentElement;
   root.dataset.colorTheme = dark ? "dark" : "light";
   root.style.colorScheme = dark ? "dark" : "light";
-  if (dark) root.style.backgroundColor = "#0b1724";
+  if (dark) root.style.backgroundColor = "#101115";
 })();

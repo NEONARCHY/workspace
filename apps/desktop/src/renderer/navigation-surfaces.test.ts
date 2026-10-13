@@ -3,6 +3,7 @@ import { expect, it } from "vitest";
 
 const headerCss = readFileSync("src/renderer/section-headers.css", "utf8");
 const messengerCss = readFileSync("src/renderer/workspace-2-messenger.css", "utf8");
+const approvalsCss = readFileSync("src/renderer/workspace-2-payments.css", "utf8");
 const tabs = ".ws-section-header :is(.view-switch, .process-view-tabs, .approval-mode-switch, .ws2-segmented)";
 function block(css: string, selector: string) {
   const start = css.indexOf(`${selector} {`);
@@ -39,4 +40,28 @@ it("renders tidy borderless background swatches while preserving selection and f
   expect(preview).toContain("overflow: hidden;");
   expect(messengerCss).toContain('.chat-background-options > button[aria-pressed="true"]');
   expect(messengerCss).toContain(".chat-background-options > button:focus-visible");
+});
+
+it("separates light approval tools from the canvas without changing dark or high-contrast styles", () => {
+  const scope = 'html:not([data-color-theme="dark"]) .approvals-view';
+  const tokens = block(approvalsCss, scope);
+  const color = (role: string) => tokens.match(new RegExp(`--approval-${role}: (#[a-f0-9]{6});`))![1]!;
+  const summary = color("summary-surface"), control = color("control-surface"), selected = color("control-selected");
+  const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+  expect(summary).toBe("#ffffff");
+  expect(selected).toBe("#ffffff");
+  expect(contrast(control, selected)).toBeGreaterThan(1.25);
+  expect(contrast(control, "#edf2f1")).toBeGreaterThan(1.1);
+  for (const surface of [summary, control, selected, color("control-hover"), color("action-selected")]) {
+    expect(contrast("#293a55", surface)).toBeGreaterThanOrEqual(4.5);
+  }
+  expect(contrast("#006779", color("action-surface"))).toBeGreaterThanOrEqual(4.5);
+  expect(approvalsCss).toMatch(/@media \(forced-colors: none\)\s*\{\s*html:not\(\[data-color-theme="dark"\]\)/);
+  expect(block(approvalsCss, `${scope} .approval-commandbar`)).toContain("background: var(--approval-summary-surface);");
+  expect(block(approvalsCss, `${scope} .approval-view-toolbar .ws2-segmented`)).toContain("--sliding-indicator-background: var(--approval-control-selected);");
+  expect(block(approvalsCss, `${scope} .approval-view-toolbar .ws2-segmented > button:not([aria-pressed="true"]):hover`)).toContain("background: var(--approval-control-hover);");
+  expect(approvalsCss).toContain("outline: 2px solid var(--ws-link);");
+  expect(block(approvalsCss, `${scope} .approval-view-toolbar .ws2-segmented .approval-filter-count`)).toContain("color: var(--ws-link);");
+  const focusCss = readFileSync("src/renderer/workspace-2-focus.css", "utf8");
+  expect(focusCss).toContain(".approval-view-toolbar *, .approval-metric-actionable");
 });

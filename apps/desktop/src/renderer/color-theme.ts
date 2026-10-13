@@ -60,7 +60,7 @@ export function useDocumentColorTheme(): ColorTheme {
 export function applyColorTheme(theme: ColorTheme) {
   document.documentElement.dataset.colorTheme = theme;
   document.documentElement.style.colorScheme = theme;
-  document.documentElement.style.backgroundColor = theme === "dark" ? "#0b1724" : "";
+  document.documentElement.style.backgroundColor = theme === "dark" ? "#101115" : "";
 }
 export function initializeColorTheme() { applyColorTheme(resolveColorTheme(readPreference(undefined))); }
 
