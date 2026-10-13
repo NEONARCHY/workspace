@@ -54,7 +54,7 @@ import { WorkspaceDateTimePicker } from "./WorkspaceDateTimePicker";
 import { EmployeeScopeSwitch } from "./EmployeeScopeSwitch";
 import { employeeScope, type EmployeeScope } from "./employee-scope";
 import { loadTaskProjectOptions } from "./workspace-api";
-import { isTaskOverdue } from "./task-deadline";
+import { isTaskOverdue, taskDeadlineLabel } from "./task-deadline";
 import { useTaskDeadlineClock } from "./useTaskDeadlineClock";
 
 const statusLabels: Readonly<Record<TaskStatus, string>> = {
@@ -232,6 +232,7 @@ interface TasksViewProps {
   readonly onExtendDeadline: (task: WorkspaceTask, proposedDueAt: string) => WorkspaceTask | undefined | Promise<WorkspaceTask | undefined>;
   readonly onUploadAttachments: (task: WorkspaceTask, files: readonly File[]) => void | Promise<void>;
   readonly onDownloadAttachment: (attachment: WorkspaceAttachment) => void | Promise<void>;
+  readonly onDeleteAttachment?: (attachment: WorkspaceAttachment) => Promise<void>;
 }
 
 function localDateTime(value?: string | null): string {
@@ -709,7 +710,7 @@ export function TasksView(props: TasksViewProps) {
           <span>Создана из сообщения · связь сохранена</span>
           <button type="button" aria-label="Закрыть уведомление" onClick={() => setSourceNoticeTaskId(null)}><Dismiss16Regular /></button>
         </div> : null}
-        <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{selectedTask.dueLabel}</strong></span></div></div>
+        <div className="detail-meta"><EmployeeProfileLink userId={selectedTask.assigneeId} personName={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}><Avatar name={personById(selectedTask.assigneeId)?.name ?? "Сотрудник"} size={36} color="colorful" /><span className="task-meta-copy"><small>Ответственный</small><strong>{personById(selectedTask.assigneeId)?.name ?? "Сотрудник"}</strong></span></EmployeeProfileLink><div><Calendar24Regular /><span className="task-meta-copy"><small>Срок</small><strong>{taskDeadlineLabel(selectedTask)}</strong></span></div></div>
         </div>
         <div ref={lifecycleRef} tabIndex={-1} className="task-lifecycle-summary"><span>Статус <TaskHelp title="Статус задачи">Показывает текущий этап. Действия рядом доступны только тем, у кого есть право менять состояние задачи.</TaskHelp></span><Badge appearance="tint" color={selectedTask.status === "completed" ? "success" : selectedTask.status === "overdue" ? "danger" : selectedTask.status === "awaiting_review" ? "warning" : "informative"}>{statusLabels[selectedTask.status]}</Badge>{canEdit && selectedTask.status === "new" ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "in_progress")}>Начать работу</Button> : canManageParticipants && ["in_progress", "overdue"].includes(selectedTask.status) ? <Button appearance="subtle" onClick={() => void onChangeStatus(selectedTask.id, "cancelled")}>Отменить задачу</Button> : null}</div>
         {canExtendDeadline ? <div className="task-deadline-control">
@@ -769,7 +770,9 @@ export function TasksView(props: TasksViewProps) {
           {selectedTask.participants.map((participant) => <ParticipantChip key={`${participant.userId}-${participant.role}`} person={personById(participant.userId)} label={participant.role === "co_assignee" ? "Соисполнитель" : "Наблюдатель"} onRemove={canManageParticipants ? () => void onRemoveParticipant(selectedTask, participant.userId) : undefined} />)}
         </div>{canManageParticipants ? <div className="inline-task-form">{departments ? <EmployeeScopeSwitch value={participantScope} onChange={(next) => { setParticipantScope(next); setParticipantId(""); }} label="Группа новых участников" /> : null}<WorkspaceSelect aria-label="Новый участник" value={participantId} onChange={(event) => setParticipantId(event.target.value)}><option value="">Выберите сотрудника</option>{people.filter((person) => inEmployeeScope(person, participantScope) && person.id !== selectedTask.assigneeId && !selectedTask.participants.some((item) => item.userId === person.id)).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</WorkspaceSelect><WorkspaceSelect aria-label="Роль участника" value={participantRole} onChange={(event) => setParticipantRole(event.target.value as TaskParticipantRole)}><option value="co_assignee">Соисполнитель</option><option value="observer">Наблюдатель</option></WorkspaceSelect><Button appearance="secondary" onClick={() => void addParticipant()} disabled={!participantId}>Добавить</Button></div> : null}</div>
 
-        <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} dropzone headingAccessory={<TaskHelp title="Вложения">Файлы хранятся вместе с задачей. Перетащите их в область загрузки или выберите с компьютера; нажмите на загруженный файл, чтобы скачать его.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment} />
+        <AttachmentPanel attachments={attachments.filter((attachment) => attachment.ownerType === "task" && attachment.ownerId === selectedTask.id)} canUpload={canEdit} dropzone headingAccessory={<TaskHelp title="Вложения">Откройте файл нажатием. Свой файл можно удалить; администратор может удалить любой файл задачи. Количество не ограничено, до 25 МБ на обычный файл.</TaskHelp>} onUpload={(files) => onUploadAttachments(selectedTask, files)} onDownload={onDownloadAttachment}
+          canDelete={attachment => attachment.uploadedByUserId === currentUserId || ["admin", "superadmin"].includes(people.find(person => person.id === currentUserId)?.role ?? "")}
+          onDelete={props.onDeleteAttachment} />
 
         <div className="detail-section task-subtasks-section"><TaskSectionHeading title="Подзадачи" help="Большую задачу можно разбить на отдельные шаги с собственным исполнителем и сроком. Открытая подзадача блокирует окончательное принятие родительской задачи." meta={`${selectedSubtasks.filter((task) => task.status === "completed").length}/${selectedSubtasks.length}`} />
           {!selectedSubtasks.length ? <p className="task-section-empty">Пока нет отдельных шагов. Добавьте подзадачу, если работу нужно разделить.</p> : null}
