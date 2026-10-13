@@ -440,6 +440,26 @@ tasks = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True)),
 )
 
+task_plans = sa.Table(
+    "task_plans", metadata,
+    sa.Column("id", uuid_type, primary_key=True),
+    sa.Column("title", sa.String(240)),
+    sa.Column("kind", sa.String(24)),
+    sa.Column("period_start", sa.Date()),
+    sa.Column("period_end", sa.Date()),
+    sa.Column("created_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+    sa.Column("updated_at", sa.DateTime(timezone=True)),
+)
+
+task_plan_links = sa.Table(
+    "task_plan_links", metadata,
+    sa.Column("plan_id", uuid_type, primary_key=True),
+    sa.Column("task_id", uuid_type, primary_key=True),
+    sa.Column("linked_by_user_id", uuid_type),
+    sa.Column("created_at", sa.DateTime(timezone=True)),
+)
+
 employee_efficiency_methodologies = sa.Table(
     "employee_efficiency_methodologies",
     metadata,
