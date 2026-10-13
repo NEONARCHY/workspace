@@ -14,13 +14,13 @@ interface AttachmentChipsProps {
   readonly onLoad?: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
 }
 
-function ImageAttachment({attachment, onLoad, onOpen}: {
+function MediaAttachment({attachment, onLoad, onOpen}: {
   readonly attachment: WorkspaceAttachment;
   readonly onLoad: (attachment: WorkspaceAttachment, signal?: AbortSignal) => Promise<Blob>;
   readonly onOpen: (attachment: WorkspaceAttachment) => void | Promise<void>;
 }) {
   const ref = useRef<HTMLElement>(null);
-  const [visibility, setVisibility] = useState({visible:false, epoch:0});
+  const [visibility, setVisibility] = useState({visible:typeof IntersectionObserver === "undefined", epoch:0});
   const [resource, setResource] = useState({epoch:-1, url:"", failed:false});
   useEffect(() => {
     if (!ref.current || typeof IntersectionObserver === "undefined") return;
@@ -44,10 +44,13 @@ function ImageAttachment({attachment, onLoad, onOpen}: {
     return () => {active = false; controller.abort(); if (url) URL.revokeObjectURL(url);};
   }, [attachment, onLoad, visibility]);
   const shown = visibility.visible && resource.epoch === visibility.epoch;
-  return <article ref={ref} className="attachment-media-preview attachment-image-card">
-    <button className="attachment-image-thumb" type="button" aria-label={`Открыть изображение: ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
-      {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={() => setResource(current => ({...current, url:"", failed:true}))} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : "Изображение · открыть"}</span>}
-    </button>
+  const video = fileViewerKind(attachment) === "video";
+  const failed = () => setResource(current => ({...current, url:"", failed:true}));
+  return <article ref={ref} className={`attachment-media-preview ${video ? "attachment-video-card" : "attachment-image-card"}`}>
+    {video && shown && resource.url ? <InlineVideoPlayer url={resource.url} fileName={attachment.fileName} onError={failed} /> :
+    <button className="attachment-image-thumb" type="button" aria-label={`Открыть ${video ? "видео" : "изображение"}: ${attachment.fileName}`} onClick={() => void onOpen(attachment)}>
+      {shown && resource.url ? <img src={resource.url} alt={attachment.fileName} onError={failed} /> : <span>{shown && resource.failed ? "Предпросмотр недоступен · открыть файл" : video ? "Видео · открыть" : "Изображение · открыть"}</span>}
+    </button>}
     <button type="button" title={`Открыть ${attachment.fileName}`} onClick={() => void onOpen(attachment)}><Document24Regular /><span>{attachment.fileName}</span><small>{fileSize(attachment.byteSize)}</small></button>
   </article>;
 }
@@ -121,16 +124,20 @@ export async function embeddedMp3Artwork(blob: Blob): Promise<Blob | null> {
   return null;
 }
 
-export function InlineVideoPlayer({ url, fileName }: { readonly url: string; readonly fileName: string }) {
+export function InlineVideoPlayer({ url, fileName, onError }: { readonly url: string; readonly fileName: string; readonly onError?: () => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  useEffect(() => {
+    const video = videoRef.current;
+    return () => { if (video) { video.pause(); video.removeAttribute("src"); video.load(); } };
+  }, [url]);
 
   const togglePlayback = () => {
     const video = videoRef.current;
     if (!video) return;
-    if (video.paused) void video.play().catch(() => undefined);
+    if (video.paused) void video.play().catch(() => onError?.());
     else video.pause();
   };
 
@@ -140,7 +147,9 @@ export function InlineVideoPlayer({ url, fileName }: { readonly url: string; rea
         ref={videoRef}
         src={url}
         preload="metadata"
+        playsInline
         aria-label={fileName}
+        onError={onError}
         onClick={togglePlayback}
         onLoadedMetadata={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
@@ -215,7 +224,7 @@ export function AttachmentChips({ attachments, onDownload, onLoad }: AttachmentC
   if (attachments.length === 0) return null;
   return (
     <div className="attachment-chips" aria-label="Вложения">
-      {attachments.map((attachment) => onLoad && fileViewerKind(attachment) === "image" ? <ImageAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
+      {attachments.map((attachment) => onLoad && ["image", "video"].includes(fileViewerKind(attachment)) ? <MediaAttachment key={attachment.id} attachment={attachment} onLoad={onLoad} onOpen={onDownload} /> : (
         <button
           key={attachment.id}
           type="button"
