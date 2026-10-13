@@ -414,13 +414,15 @@ describe("YuksalishAssistant", () => {
     expect(document.querySelector(".assistant-empty .assistant-empty-orb.assistant-orb-slot")).toBeInTheDocument();
     expect(document.querySelectorAll(".assistant-travelling-orb .gradient-orb-fallback")).toHaveLength(1);
     expect(document.querySelector(".assistant-header .gradient-orb-fallback")).toBeNull();
-    expect(screen.getByRole<HTMLButtonElement>("combobox", { name: "Режим" }).value).toBe("flash-lite");
-    fireEvent.click(screen.getByRole("combobox", { name: "Режим" }));
-    expect(screen.getByRole("option", { name: "Лёгкий" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Рабочий" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Фокус" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("option", { name: "Фокус" }));
-    expect(screen.getByRole("combobox", { name: "Режим" })).toHaveTextContent("Фокус");
+    expect(screen.queryByRole("slider", { name: "Мощность модели" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать мощность модели" }));
+    const modelSlider = screen.getByRole("slider", { name: "Мощность модели" });
+    expect(document.querySelector(".yuksalish-assistant-root")).not.toHaveAttribute("data-blocking-dialog");
+    expect(modelSlider).toHaveValue("0");
+    fireEvent.change(modelSlider, { target: { value: "2" } });
+    expect(modelSlider).toHaveAttribute("aria-valuetext", "Сильная");
+    fireEvent.keyDown(modelSlider, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Ассистент Yuksalish" })).toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Сообщение ассистенту" }), {
       target: { value: "Какие у меня задачи?" },
     });
